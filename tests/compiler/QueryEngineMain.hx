@@ -185,6 +185,7 @@ class QueryEngineMain {
 		computedKinds();
 		stageKinds();
 		summaries();
+		heldContributions();
 		computedSweep();
 		computedTransactions();
 		putKinds();
@@ -192,7 +193,7 @@ class QueryEngineMain {
 		Sys.println("PASS: query engine reuses, cuts off early, verifies reads in order, reports cycles, sweeps, checks reuse, "
 			+ "verifies recorded results through components, records a stage's reads in frames, tells input revisions from build revisions, "
 			+ "commits and rolls back written results, cuts computed values off by equality on demand and in a stage's run, updates "
-			+ "summaries per changed contribution with per-key reads, sweeps the computed memos a build did not use, and drops those "
+			+ "summaries per changed contribution with per-key reads, keeps contributions made of an unchanged input, sweeps the computed memos a build did not use, and drops those "
 			+ "computed over results a rollback undid, and keeps what a stage puts by identity or equality");
 	}
 
@@ -580,6 +581,64 @@ class QueryEngineMain {
 		counted.contribute(checked, 0, given);
 		expect(throwsInternal(() -> counted.close(checked)),
 			"check mode counts again and finds a contribution changed after it was given");
+	}
+
+	/**
+	 * A stage whose contributions are each made of its input alone keeps a contribution while the input holds (`holds`), and makes
+	 * one only for an input that changed; its rewrites read summary keys, which a verification reads inline between runs.
+	 */
+	static function heldContributions():Void {
+		var database = new QueryDatabase();
+		var inputs = database.register(new ComputedQueryKind<Box>("given", Box.same));
+		var summary = database.register(new QuerySummary("named"));
+		var rewrites = database.register(new ComputedQueryKind<Box>("rewrite", Box.same));
+		var made = 0, rewritten = 0;
+		// Input k's contribution names its value, and its rewrite reads whether the value after it is named.
+		function build(values:Array<Int>):Void {
+			database.newRevision();
+			for (key in 0...values.length)
+				inputs.put(database, key, new Box(values[key]));
+			summary.open(database);
+			for (key in 0...values.length)
+				if (!summary.holds(database, key, inputs)) {
+					made++;
+					summary.contribute(database, key, [inputs.get(database, key).value]);
+				}
+			summary.close(database);
+			for (key in 0...values.length)
+				if (!rewrites.current(database, key)) {
+					rewrites.begin(database, key);
+					var value = inputs.get(database, key).value;
+					rewritten++;
+					rewrites.end(database, key, new Box(summary.has(database, value + 1) ? 1 : 0));
+				}
+		}
+		build([1, 2, 5]);
+		expect(made == 3 && rewritten == 3, "a first run makes every contribution");
+		build([1, 2, 5]);
+		expect(made == 3 && rewritten == 3, "an input put again equal keeps its contribution, and its rewrite holds");
+		build([1, 3, 5]);
+		expect(made == 4 && rewritten == 5 && rewrites.value(0).value == 0,
+			"a changed input makes its contribution again; the rewrites reading a key it no longer names run again");
+		build([1, 3]);
+		expect(made == 4 && summary.has(database, 3) && !summary.has(database, 5),
+			"a contributor neither kept nor given is retracted");
+		build([1, 3, 2]);
+		expect(made == 5 && rewritten == 7 && rewrites.value(0).value == 1,
+			"one given again after it was retracted is made");
+
+		summary.open(database);
+		expect(summary.holds(database, 0, inputs), "a contribution of an input verified in the revision holds");
+		expect(throwsInternal(() -> summary.holds(database, 0, inputs)),
+			"a contributor kept twice in a run is an error");
+		summary.close(database);
+		database.newRevision();
+		summary.open(database);
+		expect(throwsInternal(() -> rewrites.current(database, 1)),
+			"a rewrite verified while its summary is open reads it through a call, which finds it open");
+		summary.close(database);
+		expect(throwsInternal(() -> summary.holds(database, 0, inputs)),
+			"a contribution is kept only while the summary is open");
 	}
 
 	/**

@@ -93,6 +93,7 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	 * last verified. Brings what it read up to date; records no read. A stage that finds it holds takes `value`.
 	 */
 	public function current(database:QueryDatabase, key:Int):Bool {
+		var verifiedAt = this.verifiedAt;
 		if (key >= verifiedAt.length)
 			return false;
 		var revision = database.revision, verified = verifiedAt[key];
@@ -100,21 +101,34 @@ class ComputedQueryKind<V> extends QueryKindBase {
 			return true;
 		if (verified == 0 || busy[key] == revision)
 			return false;
-		busy[key] = revision;
-		verifying++;
-		var held = true, index = readStart[key], last = index + readCount[key];
+		// The key is marked busy (a read that comes back to it is a cycle) and the pool kept in place only once a read needs a
+		// call, which may verify or compute other keys: a read answered inline reaches nothing.
+		var held = true,
+			called = false,
+			kinds = database.kinds,
+			pool = this.pool,
+			index = readStart[key],
+			last = index + readCount[key];
 		while (index < last) {
-			var read = pool[index++], kind = database.kindAt(QueryRead.kind(read)), target = QueryRead.key(read);
+			var read = pool[index++], kind = kinds[QueryRead.kind(read)], target = QueryRead.key(read);
 			var change = kind.changeIfVerified(target, revision);
-			if (change < 0)
+			if (change < 0) {
+				if (!called) {
+					called = true;
+					busy[key] = revision;
+					verifying++;
+				}
 				change = kind.changedAt(database, target);
+			}
 			if (change > verified) {
 				held = false;
 				break;
 			}
 		}
-		verifying--;
-		busy[key] = 0;
+		if (called) {
+			verifying--;
+			busy[key] = 0;
+		}
 		if (held) {
 			verifiedAt[key] = revision;
 			usedAt = revision;

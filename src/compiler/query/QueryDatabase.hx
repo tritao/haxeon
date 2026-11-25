@@ -39,6 +39,7 @@ class QueryDatabase {
 	/** By commit, the revision it was made at: what was computed after it was computed over results a rollback to it undoes. */
 	final commitRevisions:Array<Int> = [0];
 
+	@:allow(compiler.query)
 	final kinds:Array<QueryKindBase> = [];
 
 	/**

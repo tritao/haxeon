@@ -12,9 +12,12 @@ import compiler.query.QueryKind.QueryRead;
  *
  * A stage gives every contributor's contribution in each run, between `open` and `close`. A contribution that is the array it
  * gave last run (a memo that held) costs nothing, and a changed one is applied key by key, so a run updates the summary in the
- * time of what changed. A contributor not given in a run is retracted when it closes. The summary is read after `close`.
+ * time of what changed. A contribution that is a function of a contributor's input alone (what a function names, by the
+ * function's key) needs no memo: `holds` keeps it while the input has not changed since it was given. A contributor not given
+ * in a run is retracted when it closes. The summary is read after `close`.
  *
- * As a read, key `k` is `k + 1`, and 0 is the whole set.
+ * As a read, key `k` is `k + 1`, and 0 is the whole set. Between runs the summary is settled (`QueryKindBase.changeIfVerified`):
+ * the revision each read last changed at is in `changes`, which a verification reads without a call.
  */
 class QuerySummary extends QueryKindBase {
 	final keyName:Null<Int->String>;
@@ -22,16 +25,12 @@ class QuerySummary extends QueryKindBase {
 	/** How many contributions name each key. */
 	final counts:Array<Int> = [];
 
-	/** The revision at which each key last appeared or went; 0 for never. */
-	final keyChanges:Array<Int> = [];
-
-	/** The revision at which a key last appeared or went. */
-	var setChange = 0;
-
-	/** By contributor, its contribution, and the run that gave it. */
+	/** By contributor, its contribution, the run that gave it, and the revision it was given at (0 for none). */
 	final contributions:Array<Null<Array<Int>>> = [];
 
 	final givenIn:Array<Int> = [];
+
+	final givenAt:Array<Int> = [];
 
 	var contributors = 0;
 	var run = 0;
@@ -49,11 +48,14 @@ class QuerySummary extends QueryKindBase {
 	public function new(name:String, ?keyName:Int->String) {
 		super(name);
 		this.keyName = keyName;
+		changes.push(0);
+		settled = true;
 	}
 
 	/** Starts a run of contributions. A run left open by a build that stopped is started again: what it gave stays given. */
 	public function open(database:QueryDatabase):Void {
 		opened = true;
+		settled = false;
 		run++;
 		given = 0;
 	}
@@ -68,13 +70,11 @@ class QuerySummary extends QueryKindBase {
 		if (contributor >= givenIn.length) {
 			var length = contributor + 1 + (contributor >> 1);
 			QueryRead.extend(givenIn, length);
+			QueryRead.extend(givenAt, length);
 			contributions.resize(length);
 		}
-		if (givenIn[contributor] == run)
-			throw new InternalError("summary " + kindName + " is given contributor " + contributor
-				+ " twice in one run");
-		givenIn[contributor] = run;
-		given++;
+		markGiven(contributor);
+		givenAt[contributor] = database.revision;
 		var old = contributions[contributor];
 		if (old == keys)
 			return;
@@ -82,6 +82,36 @@ class QuerySummary extends QueryKindBase {
 			contributors++;
 		contributions[contributor] = keys;
 		replace(database.revision, old, keys);
+	}
+
+	/**
+	 * Keeps `contributor`'s contribution in this run, as if given again, when it was given from what `input` holds for the same key
+	 * as it stands now: that has not changed since. Brings `input`'s key up to date. A stage whose contributions are each made of
+	 * its input this way makes and gives one only where this is false; with `--check-reuse` it makes every one and compares.
+	 */
+	public function holds(database:QueryDatabase, contributor:Int, input:QueryKindBase):Bool {
+		if (!opened)
+			throw new InternalError("summary " + kindName + " takes contributions only while open");
+		if (contributor >= givenAt.length)
+			return false;
+		var at = givenAt[contributor];
+		if (at == 0)
+			return false;
+		var change = input.changeIfVerified(contributor, database.revision);
+		if (change < 0)
+			change = input.changedAt(database, contributor);
+		if (change > at)
+			return false;
+		markGiven(contributor);
+		return true;
+	}
+
+	inline function markGiven(contributor:Int):Void {
+		if (givenIn[contributor] == run)
+			throw new InternalError("summary " + kindName + " is given contributor " + contributor
+				+ " twice in one run");
+		givenIn[contributor] = run;
+		given++;
 	}
 
 	/** Ends the run: the contributors it did not give are retracted. `--check-reuse` counts keys again from the contributions. */
@@ -93,11 +123,13 @@ class QuerySummary extends QueryKindBase {
 				var old = contributions[contributor];
 				if (old != null && givenIn[contributor] != run) {
 					contributions[contributor] = null;
+					givenAt[contributor] = 0;
 					contributors--;
 					replace(database.revision, old, null);
 				}
 			}
 		opened = false;
+		settled = true;
 		if (database.checkReuse)
 			checkCounts();
 	}
@@ -121,9 +153,7 @@ class QuerySummary extends QueryKindBase {
 
 	override public function changedAt(database:QueryDatabase, key:Int):Int {
 		readable();
-		if (key == 0)
-			return setChange;
-		return key - 1 < keyChanges.length ? keyChanges[key - 1] : 0;
+		return key < changes.length ? changes[key] : 0;
 	}
 
 	override public function describe(key:Int):String
@@ -147,7 +177,7 @@ class QuerySummary extends QueryKindBase {
 				if (key >= counts.length) {
 					var length = key + 1 + (key >> 1);
 					QueryRead.extend(counts, length);
-					QueryRead.extend(keyChanges, length);
+					QueryRead.extend(changes, length + 1);
 					QueryRead.extend(inOld, length);
 				}
 				if (counts[key]++ == 0 && inOld[key] != mark)
@@ -160,8 +190,8 @@ class QuerySummary extends QueryKindBase {
 	}
 
 	inline function changed(key:Int, revision:Int):Void {
-		keyChanges[key] = revision;
-		setChange = revision;
+		changes[key + 1] = revision;
+		changes[0] = revision;
 	}
 
 	function checkCounts():Void {

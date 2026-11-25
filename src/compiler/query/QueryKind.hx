@@ -54,6 +54,12 @@ class QueryKindBase {
 
 	var changes:Array<Int> = [];
 
+	/**
+	 * Whether `changes` holds every key's change as it stands, with nothing to verify (a summary between its runs, `QuerySummary`):
+	 * a verification reads it without a call too, and a key past it never changed.
+	 */
+	var settled = false;
+
 	function new(name:String)
 		kindName = name;
 
@@ -66,9 +72,13 @@ class QueryKindBase {
 		this.index = index;
 	}
 
-	/** The revision at which `key`'s value last changed when it is known without a call: it was verified at `revision`; else -1. */
+	/**
+	 * The revision at which `key`'s value last changed when it is known without a call: it was verified at `revision`, or the kind
+	 * is settled; else -1.
+	 */
 	public inline function changeIfVerified(key:Int, revision:Int):Int
-		return key < verifiedAt.length && verifiedAt[key] == revision ? changes[key] : -1;
+		return settled ? (key < changes.length ? changes[key] : 0) : (key < verifiedAt.length
+			&& verifiedAt[key] == revision ? changes[key] : -1);
 
 	/** The revision at which `key`'s value last changed, bringing it up to date first. */
 	public function changedAt(database:QueryDatabase, key:Int):Int
