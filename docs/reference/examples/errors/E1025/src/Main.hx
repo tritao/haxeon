@@ -1,7 +1,7 @@
-enum Direction {
+enum Direction implements Equatable {
 	North;
 
-	public function label():String return "north";
+	public function equals(other:Direction):Bool return true;
 }
 
 class Main {

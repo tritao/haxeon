@@ -219,10 +219,10 @@ class Main {
 This umbrella code covers invalid or missing capabilities such as Equatable, Hashable, Flags, and RawRepresentable, including failed synthesis and recursive requirements. Check the required conformance, member signatures, and the types of fields or enum payloads.
 
 ```haxe
-enum Direction {
+enum Direction implements Equatable {
 	North;
 
-	public function label():String return "north";
+	public function equals(other:Direction):Bool return true;
 }
 
 class Main {
