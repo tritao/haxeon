@@ -45,6 +45,9 @@ typedef BackendOptions = {
 	 * (`haxeon/wasm/*.wasm`); `stdlib` in the working directory when not given.
 	 */
 	final ?standardLibrary:String;
+
+	/** The sources the program's locations count from (`Compiler.sourceAnchors`), for a program made from a compiler's modules. */
+	final ?sources:compiler.core.SourceAnchor.SourceAnchors;
 }
 
 /** Backend artifact returned after lowering a verified Haxeon program. */

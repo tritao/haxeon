@@ -750,6 +750,7 @@ class HotReloadMain {
 		var program = compiler.compile("Main").ir,
 			assembler = new HlModuleAssembler();
 		assembler.livePatching = true;
+		assembler.sources = compiler.sourceAnchors();
 		assembler.assemble(program, [for (fn in program.functions) fn.name], Patch);
 		var cacheBytes = HlFunctionCacheStateCodec.encode(assembler.cache.exportState());
 		for (_ in 0...100)
@@ -786,6 +787,7 @@ class HotReloadMain {
 		var edited = editedCompiler.compile("Main").ir;
 		// Both functions name the edited source snapshot, including the unchanged body.
 		restoredAssembler.livePatching = true;
+		uninterruptedAssembler.sources = restoredAssembler.sources = editedCompiler.sourceAnchors();
 		var uninterrupted = uninterruptedAssembler.assemble(edited, ["Main.add", "main"], Patch),
 			restored = restoredAssembler.assemble(edited, ["Main.add", "main"], Patch);
 		if (uninterrupted.revision != restored.revision

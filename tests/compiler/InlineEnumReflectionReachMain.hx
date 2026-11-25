@@ -41,7 +41,12 @@ class InlineEnumReflectionReachMain {
 			entry.returnValue(entry.constVoid());
 			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary));
 			program.entryPoint = "entry";
-			sys.io.File.saveBytes(module, new HlBackend().compile(program, {target: HashLink, debugNames: true}).bytes);
+			sys.io.File.saveBytes(module, new HlBackend().compile(program, {
+				target: HashLink,
+				debugNames: true,
+				sources: driver.sourceAnchors()
+			})
+				.bytes);
 			var vm = TestHashLink.directory(),
 				process = new sys.io.Process(vm == null ? TestHashLink.vm() : vm + "/hl", [module]),
 				error = process.stderr.readAll().toString(),

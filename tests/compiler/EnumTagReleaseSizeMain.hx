@@ -46,7 +46,7 @@ class EnumTagReleaseSizeMain {
 		if (nominal && Lambda.exists(compiler.ir.passes.enums.IrEnumRuntimeTypes.declarations(program),
 			entry -> entry.name == "Mode"))
 			throw "Unobserved tag retained a boxed descriptor";
-		return encode(program, target);
+		return encode(program, target, session.sourceAnchors());
 	}
 
 	static function checkReflection(target:String, inlining:Bool):Void {
@@ -67,13 +67,15 @@ class EnumTagReleaseSizeMain {
 		if (!Lambda.exists(compiler.ir.passes.enums.IrEnumRuntimeTypes.declarations(program),
 			entry -> entry.name == "Mode"))
 			throw "Transitive reflection lost its boxed enum descriptor";
-		run(target, encode(program, target));
+		run(target, encode(program, target, session.sourceAnchors()));
 		Sys.println("PASS: release tag reflection " + target + " inline=" + inlining);
 	}
 
-	static function encode(program:IrProgram, target:String):haxe.io.Bytes
+	static function encode(program:IrProgram, target:String,
+			sources:compiler.core.SourceAnchor.SourceAnchors):haxe.io.Bytes
 		return target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
+			sources: sources,
 			developmentMetadata: false,
 			debugNames: true
 		})

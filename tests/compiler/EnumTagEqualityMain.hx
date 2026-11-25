@@ -57,6 +57,7 @@ class EnumTagEqualityMain {
 			throw "Tag equality changed its scalar shape or nullable/field semantics";
 		var bytes = target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
+			sources: session.sourceAnchors(),
 			developmentMetadata: false,
 			debugNames: true
 		})

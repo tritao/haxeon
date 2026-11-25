@@ -135,7 +135,8 @@ class SourceEnumTagMain {
 		compiler.ir.verify.IrVerifier.verify(program);
 		var bytes = target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
-			debugNames: true
+			debugNames: true,
+			sources: session.sourceAnchors()
 		})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,

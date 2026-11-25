@@ -191,6 +191,7 @@ class DebugMetadataMain {
 		function identities(stableIds:Null<Map<String, Int>>, debug:compiler.hl.lower.HlDebugMetadataCache):Bytes {
 			var assembler = new compiler.hl.incremental.HlModuleAssembler(stableIds, debug);
 			assembler.irVerified = true;
+			assembler.sources = compiler.sourceAnchors();
 			assembler.loweredCache = new compiler.hl.incremental.HlLoweredCache(debug);
 			var module = assembler.assemble(program, names, Patch).module;
 			for (section in module.debugSections)

@@ -113,9 +113,11 @@ class HlPlainBuild {
 	}
 
 	/** Assembles `program` as a plain build with no session: reachable from the entry, a fresh assembler and an empty lowered cache. */
-	public static function assemble(program:IrProgram, developmentMetadata:Bool):HlModuleAssembler.HlAssemblyResult {
-		var plain = reachable(program).program;
-		return assembler(developmentMetadata).assemble(plain, [for (fn in plain.functions) fn.name], Patch);
+	public static function assemble(program:IrProgram, developmentMetadata:Bool,
+			?sources:compiler.core.SourceAnchor.SourceAnchors):HlModuleAssembler.HlAssemblyResult {
+		var plain = reachable(program).program, assembler = assembler(developmentMetadata);
+		assembler.sources = sources;
+		return assembler.assemble(plain, [for (fn in plain.functions) fn.name], Patch);
 	}
 
 	/** The fresh assembler of a plain build, with an empty lowered cache. */

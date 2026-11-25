@@ -674,6 +674,14 @@ class Compiler {
 		}
 	}
 
+	/**
+	 * The modules' sources, which place the anchors the last compile's IR locations count from: for lowering that IR by itself
+	 * (`HlLower.lower`, `BackendOptions.sources`).
+	 */
+	public function sourceAnchors():compiler.core.SourceAnchor.SourceAnchors
+		return new compiler.core.SourceAnchor
+			.SourceAnchors([for (module in state.modules) module.source.path => module.source]);
+
 	public function compile(entryModule:String, ?token:CancellationToken, ?indexSemantics = true):CompileResult {
 		refreshEmbeddedInputs();
 		var cached = cachedCompileResult, cachedEntry = cachedCompileEntry;

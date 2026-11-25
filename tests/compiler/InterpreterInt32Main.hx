@@ -51,7 +51,7 @@ class InterpreterInt32Main {
 		var stem = "out/interpreter-int32-" + target + inlining + "-" + Std.random(0x7fffffff),
 			path = stem + (target == "hl" ? ".hl" : ".wasm");
 		var bytes = target == "hl" ? new compiler.hl.HlBackend().compile(p,
-			{target: HashLink, debugNames: true})
+			{target: HashLink, debugNames: true, sources: c.sourceAnchors()})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,
 				debugNames: true

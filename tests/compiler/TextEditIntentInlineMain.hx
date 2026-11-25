@@ -63,7 +63,8 @@ class TextEditIntentInlineMain {
 			program.entryPoint = "entry";
 			sys.io.File.saveBytes(module, new compiler.hl.HlBackend().compile(program, {
 				target: HashLink,
-				debugNames: true
+				debugNames: true,
+				sources: driver.sourceAnchors()
 			}).bytes);
 			var vm = TestHashLink.directory(),
 				process = new sys.io.Process(vm == null ? TestHashLink.vm() : vm + "/hl", [module]),

@@ -92,7 +92,6 @@ class SourceFile {
 		anchorIds = ids;
 		anchorLines = lines;
 		anchorIndices = indices;
-		SourceAnchor.declared(this);
 	}
 
 	/** The declaration whose range holds `offset`, as an index for `anchorId` and the others, or `FILE_ANCHOR`. */

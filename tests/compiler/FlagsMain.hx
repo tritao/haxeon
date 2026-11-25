@@ -207,7 +207,7 @@ class FlagsMain {
 			p.entryPoint = "rawEntry";
 		}
 		var bytes = target == "hl" ? new compiler.hl.HlBackend().compile(p,
-			{target: HashLink, debugNames: true})
+			{target: HashLink, debugNames: true, sources: c.sourceAnchors()})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,
 				debugNames: true,

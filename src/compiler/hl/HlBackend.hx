@@ -22,7 +22,7 @@ class HlBackend implements Backend {
 			throw new InternalError('HashLink backend received target ${options.target}');
 		// A standalone backend can receive semantic IR, without the frontend's lowering of array allocation.
 		program = compiler.ir.passes.arrays.IrArrayFactory.physical(program);
-		var assembly = HlPlainBuild.assemble(program, options.developmentMetadata != false);
+		var assembly = HlPlainBuild.assemble(program, options.developmentMetadata != false, options.sources);
 		return {
 			target: HashLink,
 			bytes: HlWriter.encode(assembly.module).flatten(),

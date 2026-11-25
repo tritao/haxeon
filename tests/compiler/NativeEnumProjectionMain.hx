@@ -70,7 +70,8 @@ class NativeEnumProjectionMain {
 		var path = temp + "/native-enum-callback-" + Std.random(0x7fffffff) + ".hl";
 		sys.io.File.saveBytes(path, new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
-			debugNames: true
+			debugNames: true,
+			sources: compiler.sourceAnchors()
 		}).bytes);
 		try {
 			var child = new sys.io.Process(TestHashLink.vm(), [path]);
@@ -161,7 +162,12 @@ class NativeEnumProjectionMain {
 		}
 		compiler.ir.verify.IrVerifier.verify(program);
 		var bytes = target == "hl"
-			? new compiler.hl.HlBackend().compile(program, {target: HashLink, debugNames: true}).bytes
+			? new compiler.hl.HlBackend().compile(program, {
+				target: HashLink,
+				debugNames: true,
+				sources: session.sourceAnchors()
+			})
+			.bytes
 			: new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true,
 				wasmMemoryStats: target == "wasm32", wasmGcStress: target == "wasm32",

@@ -140,10 +140,14 @@ class HlLower {
 	final cDispatchNatives:Array<IrNative> = [];
 	final preparedRuntimeNatives:Null<Array<IrNative>>;
 
-	public static function lower(program:IrProgram, ?indices:Map<String, Int>):HlCode {
+	/** Lowers `program` by itself; its locations are placed in `sources`, which IR made from a compiler's modules needs. */
+	public static function lower(program:IrProgram, ?indices:Map<String, Int>,
+			?sources:compiler.core.SourceAnchor.SourceAnchors):HlCode {
 		IrVerifier.verify(program);
-		var lowerer = new HlLower(program, new HlSymbolTable(), null),
-			code = lowerer.lowerProgram(program);
+		var lowerer = new HlLower(program, new HlSymbolTable(), null);
+		if (sources != null)
+			lowerer.code.sources = sources;
+		var code = lowerer.lowerProgram(program);
 		if (code == null)
 			throw new InternalError("HashLink lowering: a lowering without a cache kept no tables");
 		if (indices != null)

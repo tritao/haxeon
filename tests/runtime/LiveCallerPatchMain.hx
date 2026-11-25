@@ -61,7 +61,9 @@ class LiveCallerPatchMain {
 		var assembler = new compiler.hl.incremental.HlModuleAssembler();
 		assembler.fieldReserve = 0;
 		assembler.livePatching = true;
+		assembler.sources = first.sourceAnchors();
 		assembler.assemble(before, [for (fn in before.functions) fn.name], Patch);
+		assembler.sources = second.sourceAnchors();
 		var assembly = assembler.assemble(after, ["Main.scale"], Patch);
 		if (assembly.requiresReload)
 			throw 'the assembler reloaded: ${assembly.layoutReasons.join(", ")}';

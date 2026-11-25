@@ -31,13 +31,6 @@ class SourceAnchor {
 	@:processWide("how many anchors are interned, written under the lock")
 	static var count = 0;
 
-	/**
-	 * By path, the text whose parse last declared the file's anchors: where a lowering given no build's sources places them (a
-	 * test, the stateless backend). A build always places them in its own sources.
-	 */
-	@:processWide("the last parsed text of each path, read only by a lowering given no build's sources, written under the lock")
-	static final declaredFiles:Map<String, SourceFile> = [];
-
 	public final id:Int;
 	public final path:String;
 
@@ -87,21 +80,6 @@ class SourceAnchor {
 		return chunk[id & (CHUNK_SIZE - 1)];
 	}
 
-	/** Records that `file`'s parse declared its anchors (`declaredFile`). */
-	public static function declared(file:SourceFile):Void {
-		lock.acquire();
-		declaredFiles.set(file.path, file);
-		lock.release();
-	}
-
-	/** The text whose parse last declared the anchors of `path`, if any did. */
-	public static function declaredFile(path:String):Null<SourceFile> {
-		lock.acquire();
-		var file = declaredFiles.get(path);
-		lock.release();
-		return file;
-	}
-
 	/** The anchor of the whole file at `path`, from which positions count as they do in the file. */
 	public static inline function file(path:String):Int
 		return of(path, "").id;
@@ -109,10 +87,10 @@ class SourceAnchor {
 
 /**
  * Where a build's sources put each anchor: its file, the offset and line it starts at, and the content hash of the file's text,
- * which names the snapshot a module carries of it. The files are the build's modules; without one at an anchor's path, the text
- * that last declared its anchors (`SourceAnchor.declaredFile`), for a lowering made without a build. An anchor no text places
- * any more is where the session last placed it (`SourceAnchorHistory`): a live module keeps the code of functions an edit removed.
- * An anchor of the whole file of anything else (generated code) starts at offset 0 on line 1 and has no snapshot.
+ * which names the snapshot a module carries of it. The files are the build's modules: whatever lowers IR made from modules by
+ * itself (a test of a compiler's output, the stateless backend) passes the compiler's (`Compiler.sourceAnchors`). An anchor no
+ * text places any more is where the session last placed it (`SourceAnchorHistory`): a live module keeps the code of functions an
+ * edit removed. An anchor of the whole file of anything else (generated code) starts at offset 0 on line 1 and has no snapshot.
  */
 @:nullSafety(Strict)
 class SourceAnchors {
@@ -132,7 +110,7 @@ class SourceAnchors {
 
 	/** Whether `anchor` has a place: in the build's sources, or where the session last placed it. */
 	public function places(anchor:Int):Bool {
-		var entry = SourceAnchor.at(anchor), file = fileAt(entry.path), known = history;
+		var entry = SourceAnchor.at(anchor), file = files.get(entry.path), known = history;
 		return (file == null ? entry.key == "" : file.anchorIndex(anchor) != SourceFile.NO_ANCHOR)
 			|| known != null && known.knows(anchor);
 	}
@@ -159,11 +137,8 @@ class SourceAnchors {
 		return hashes[anchor];
 	}
 
-	function fileAt(path:String):Null<SourceFile>
-		return files.get(path) ?? SourceAnchor.declaredFile(path);
-
 	function find(anchor:Int):Int {
-		var entry = SourceAnchor.at(anchor), file = fileAt(entry.path), offset = 0, line = 1, hash = 0;
+		var entry = SourceAnchor.at(anchor), file = files.get(entry.path), offset = 0, line = 1, hash = 0;
 		var index = file == null ? SourceFile.NO_ANCHOR : file.anchorIndex(anchor), known = history;
 		if (file != null && index != SourceFile.NO_ANCHOR) {
 			offset = file.anchorOffset(index);

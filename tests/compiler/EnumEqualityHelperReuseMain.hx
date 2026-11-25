@@ -51,7 +51,11 @@ class EnumEqualityHelperReuseMain {
 		if (new IrInterpreter(updated.ir).run("main") != 42)
 			throw 'adding an enum changed cached Dynamic equality for $target inline=$inlineEnabled';
 		switch target {
-			case "hl": new HlBackend().compile(updated.ir, {target: HashLink, debugNames: true});
+			case "hl": new HlBackend().compile(updated.ir, {
+				target: HashLink,
+				debugNames: true,
+				sources: compiler.sourceAnchors()
+			});
 			case "wasm32": new WasmBackend().compile(updated.ir, {target: Wasm32, debugNames: true});
 			case "wasm-gc": new WasmBackend().compile(updated.ir, {target: WasmGc, debugNames: true});
 			default: throw 'unsupported test target "$target"';
