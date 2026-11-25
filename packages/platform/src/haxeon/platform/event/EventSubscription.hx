@@ -1,7 +1,7 @@
 package haxeon.platform.event;
 
 import haxeon.platform.DisposalRegistration;
-import haxeon.platform.internal.DisposalRegistry;
+import haxeon.platform.DisposalRegistry;
 
 /** One registration in the runtime event pump. */
 class EventSubscription implements Disposable {

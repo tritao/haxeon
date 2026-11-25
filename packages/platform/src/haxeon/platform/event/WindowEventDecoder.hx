@@ -1,8 +1,5 @@
-package haxeon.platform.internal.event;
+package haxeon.platform.event;
 
-import haxeon.platform.event.PlatformEvent;
-import haxeon.platform.internal.event.EventBytes;
-import haxeon.platform.internal.event.EventSnapshot;
 import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.SurfaceResizeEvent;
 import nativekit.ffi.NativeKitTypes.WindowFramebufferResizeEvent;
@@ -11,7 +8,7 @@ import nativekit.ffi.NativeKitTypes.WindowResizeEvent;
 import nativekit.ffi.NativeKitTypes.WindowScaleEvent;
 import nativekit.ffi.NativeKitTypes.WindowState;
 
-class WindowEventDecoder {
+internal class WindowEventDecoder {
 	public static function decode(c:EventSnapshot):Null<PlatformEvent> {
 		return switch c.kind {
 			case EventKind.WindowClose: WindowClose(c.source);

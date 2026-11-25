@@ -2,7 +2,7 @@ import haxeon.platform.BindingError;
 import haxeon.platform.BindingErrorKind;
 import haxeon.platform.NativeKitError;
 import haxeon.platform.PlatformError;
-import haxeon.platform.internal.event.EventBytes;
+import haxeon.platform.event.EventBytes;
 import haxeon.platform.interop.TransportInterop;
 import nativekit.ffi.NativeKitTypes;
 

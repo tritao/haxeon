@@ -1,9 +1,9 @@
-import haxeon.platform.internal.event.EventBytes;
-import haxeon.platform.internal.event.EventSnapshot;
-import haxeon.platform.internal.event.InputEventDecoder;
-import haxeon.platform.internal.event.NativeEvent;
-import haxeon.platform.internal.event.ResourceEventDecoder;
-import haxeon.platform.internal.event.WindowEventDecoder;
+import haxeon.platform.event.EventBytes;
+import haxeon.platform.event.EventSnapshot;
+import haxeon.platform.event.InputEventDecoder;
+import haxeon.platform.event.NativeEvent;
+import haxeon.platform.event.ResourceEventDecoder;
+import haxeon.platform.event.WindowEventDecoder;
 
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;

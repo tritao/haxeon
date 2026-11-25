@@ -87,15 +87,15 @@ fi
         "$platform_dir/tests/NativeKitHttpEventTests.hx" \
         "$platform_dir/tests/NativeKitFileWatchTests.hx" \
         "$platform_dir/src/haxeon/platform/FileWatch.hx" \
-        "$platform_dir/src/haxeon/platform/internal/event/NativeEvent.hx" \
+        "$platform_dir/src/haxeon/platform/event/NativeEvent.hx" \
         "$platform_dir/src/haxeon/platform/event/PlatformEvent.hx" \
-        "$platform_dir/src/haxeon/platform/internal/event/HttpEventDecoder.hx" \
+        "$platform_dir/src/haxeon/platform/event/HttpEventDecoder.hx" \
         "$platform_dir/src/haxeon/platform/http/HttpResponse.hx" \
-        "$platform_dir/src/haxeon/platform/internal/event/EventSnapshot.hx" \
-		"$platform_dir/src/haxeon/platform/internal/event/EventBytes.hx" \
+        "$platform_dir/src/haxeon/platform/event/EventSnapshot.hx" \
+		"$platform_dir/src/haxeon/platform/event/EventBytes.hx" \
 		"$platform_dir/tests/NativeKitEventDecoderTests.hx" \
-        "$platform_dir/src/haxeon/platform/internal/event/WindowEventDecoder.hx" \
-        "$platform_dir/src/haxeon/platform/internal/event/InputEventDecoder.hx" \
+        "$platform_dir/src/haxeon/platform/event/WindowEventDecoder.hx" \
+        "$platform_dir/src/haxeon/platform/event/InputEventDecoder.hx" \
 		"$platform_dir/src/haxeon/platform/input/TextInput.hx" \
         "$platform_dir/src/haxeon/platform/Runtime.hx" \
         "$platform_dir/src/haxeon/platform/Window.hx" \
@@ -103,8 +103,8 @@ fi
         "$platform_dir/src/haxeon/platform/WebView.hx" \
         "$platform_dir/src/haxeon/platform/NativeKitError.hx" \
         "$platform_dir/src/haxeon/platform/interop/VulkanExtensions.hx" \
-        "$platform_dir/src/haxeon/platform/internal/event/ServiceEventDecoder.hx" \
-        "$platform_dir/src/haxeon/platform/internal/event/ResourceEventDecoder.hx" \
+        "$platform_dir/src/haxeon/platform/event/ServiceEventDecoder.hx" \
+        "$platform_dir/src/haxeon/platform/event/ResourceEventDecoder.hx" \
         "$platform_dir/src/haxeon/platform/async/Task.hx" \
         "$platform_dir/src/haxeon/platform/async/Requests.hx" \
         "$platform_dir/src/haxeon/platform/event/EventPump.hx"

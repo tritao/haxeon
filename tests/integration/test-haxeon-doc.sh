@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# haxeon doc (docs/reference/cli/build-run.md): a library package with no entry is described; its internal package is not,
-# nor is its dependency, though the types its API refers to are in the description; --output chooses the file.
+# haxeon doc (docs/reference/cli/build-run.md): a library package with no entry is described, its internal declarations
+# marked so, but not its dependency, though the types its API refers to are in the description; --output chooses the file.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -57,7 +57,7 @@ HAXE
 cat > "$work/library/src/library/internal/Layout.hx" <<'HAXE'
 package library.internal;
 
-class Layout {
+internal class Layout {
 	public static function area(size:shapes.Size):Int {
 		return size.width * size.height;
 	}
@@ -73,9 +73,10 @@ import json
 import sys
 
 model = json.load(open(sys.argv[1]))
-assert model["described"] == ["library.Panel"], model["described"]
+assert model["described"] == ["library.Panel", "library.internal.Layout"], model["described"]
 types = {entry["path"]: entry for entry in model["types"]}
 assert "shapes.Size" in types, "the dependency type the API names is missing"
+assert types["library.internal.Layout"]["source"]["visibility"] == "internal", types["library.internal.Layout"]["source"]
 panel = types["library.Panel"]
 constructor = next(member for member in panel["members"] if member["kind"] == "constructor")
 assert constructor["arguments"][0]["type"] == {"kind": "named", "path": "shapes.Size", "arguments": []}, constructor

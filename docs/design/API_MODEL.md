@@ -15,8 +15,8 @@ deleted.
 The model is built by an analysis, not a build: `--api-json` takes `--no-output`, so the sources are typed and nothing is
 generated. The modules it describes are the roots of that analysis, so the model covers all of them rather than what an
 entry reaches, and `--entry` is optional: a library has none. They are the modules loaded from the source roots given with
-`--api-source` (every module but the standard library's without it), except a package's internals: a module under a
-package named `internal`, at any depth, is not described, as in Go. The roots belong to the one analysis, so a compile
+`--api-source` (every module but the standard library's without it). What a package keeps to itself is written
+`internal`, and described with that visibility (below). The roots belong to the one analysis, so a compile
 server's later builds are unchanged. The model also holds every declaration the described ones refer to, from
 dependencies and the standard library included, and lists the described modules (`described`), so a reader can tell the
 API from what it uses.
@@ -76,8 +76,7 @@ the package's location joined with it. Without a package (the standard library, 
 | Argument | `name` (null for an unnamed enum payload), `type`, `optional`, `defaultValue` (source text or null) |
 
 A declaration written `internal` (docs/reference/LANGUAGE_SUPPORT.md) is described, with `visibility` `internal`: the
-editor shows it to its own package's code, and the reference and the documentation coverage leave it out, as they leave
-out a package named `internal`.
+editor shows it to its own package's code, and the reference and the documentation coverage leave it out.
 
 `overrides` is, for an instance member of a class or interface, the path of the supertype whose member of the same name it
 overrides or implements, and null otherwise (a static member, a new one, or one of an enum, abstract or module). It is

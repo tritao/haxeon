@@ -1,10 +1,7 @@
-package haxeon.platform.internal.event;
+package haxeon.platform.event;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.input.TextEdit as PlatformTextEdit;
-import haxeon.platform.internal.event.EventBytes;
-import haxeon.platform.internal.event.EventSnapshot;
 import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.GamepadAxisEvent;
 import nativekit.ffi.NativeKitTypes.GamepadButtonEvent;
@@ -19,7 +16,7 @@ import nativekit.ffi.NativeKitTypes.TextEditEvent;
 import nativekit.ffi.NativeKitTypes.TextInputEvent;
 import nativekit.ffi.NativeKitTypes.TouchEvent;
 
-class InputEventDecoder {
+internal class InputEventDecoder {
 	public static function decode(c:EventSnapshot):Null<PlatformEvent> return switch c.kind {
 		case EventKind.Key: EventBytes.requireSize(c.data, 16);
 			var v:KeyEvent = c.data;

@@ -1,13 +1,10 @@
-package haxeon.platform.internal.event;
+package haxeon.platform.event;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.event.PlatformEvent;
-import haxeon.platform.internal.event.EventBytes;
-import haxeon.platform.internal.event.EventSnapshot;
 import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.ResourceDrop;
 
-class ResourceEventDecoder {
+internal class ResourceEventDecoder {
 	public static function decode(c:EventSnapshot):Null<PlatformEvent> return switch c.kind {
 		case EventKind.DialogResourcesComplete:
 			var d = EventBytes.decodeResourceList(c.data, 0);

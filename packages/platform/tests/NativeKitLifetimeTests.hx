@@ -1,5 +1,6 @@
 import haxeon.async.Outcome;
 import haxeon.async.Promise;
+import haxeon.platform.DisposalRegistry;
 import haxeon.platform.RuntimeOptions;
 import haxeon.platform.SurfaceOptions;
 import haxeon.platform.WebViewOptions;
@@ -11,7 +12,6 @@ import haxeon.platform.dialog.FileDialogOptions;
 import haxeon.platform.dialog.MessageDialogOptions;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
-import haxeon.platform.internal.DisposalRegistry;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.FileDialogOptions as NativeFileDialogOptions;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;

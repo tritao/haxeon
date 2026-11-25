@@ -3,7 +3,6 @@ package haxeon.platform;
 import haxeon.platform.Window;
 import haxeon.platform.WindowOptions;
 import haxeon.platform.event.EventPump;
-import haxeon.platform.internal.DisposalRegistry;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.InitOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;

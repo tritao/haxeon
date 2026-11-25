@@ -1,4 +1,4 @@
-package haxeon.platform.internal.event;
+package haxeon.platform.event;
 
 import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.Handle;
@@ -6,7 +6,7 @@ import nativekit.ffi.NativeKitTypes.Result;
 
 /** Managed payload snapshot whose storage remains valid after the native event is released. */
 
-class EventSnapshot {
+internal class EventSnapshot {
 	public final kind:EventKind;
 	public final source:Handle;
 	public final request:haxe.Int64;

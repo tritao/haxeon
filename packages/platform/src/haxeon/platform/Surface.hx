@@ -25,7 +25,7 @@ class Surface implements Disposable {
 	final ownsHandle:Bool;
 	var disposed:Bool = false;
 	var owner:Null<DisposalRegistration>;
-	final dependents = new haxeon.platform.internal.DisposalRegistry();
+	final dependents = new haxeon.platform.DisposalRegistry();
 	var frameSubscription:Null<SurfaceFrameSubscription>;
 
 	@:allow(haxeon.platform.Window)

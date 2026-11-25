@@ -1,12 +1,9 @@
-package haxeon.platform.internal.event;
+package haxeon.platform.event;
 
 import haxeon.platform.BindingError;
 import haxeon.platform.NativeKitError;
-import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.http.HttpHeader;
 import haxeon.platform.http.HttpResponse;
-import haxeon.platform.internal.event.EventBytes;
-import haxeon.platform.internal.event.NativeEvent;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitNet;
 import nativekit.ffi.NativeKitNetTypes.HttpProgress;
@@ -16,7 +13,7 @@ import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.Result;
 
 /** Copies NativeKit HTTP event views into managed values before event release. */
-class HttpEventDecoder {
+internal class HttpEventDecoder {
 	public static function decode(event:NativeEvent):Null<PlatformEvent> {
 		return switch event.kind {
 			case EventKind.HttpHeaders:

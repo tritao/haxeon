@@ -1,11 +1,9 @@
-package haxeon.platform.internal.event;
+package haxeon.platform.event;
 
-import haxeon.platform.event.PlatformEvent;
-import haxeon.platform.internal.event.EventSnapshot;
 import nativekit.ffi.NativeKitTypes.EventKind;
 
 /** Decodes lifecycle, completion, and concurrency events emitted by the optional audio module. */
-class AudioEventDecoder {
+internal class AudioEventDecoder {
 	public static function decode(c:EventSnapshot):Null<PlatformEvent>
 		return switch c.kind {
 			case EventKind.AudioClipReady: AudioClipReady(c.source, c.request);

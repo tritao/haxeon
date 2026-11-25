@@ -1,12 +1,9 @@
-package haxeon.platform.internal.event;
+package haxeon.platform.event;
 
-import haxeon.platform.event.PlatformEvent;
-import haxeon.platform.internal.event.EventBytes;
-import haxeon.platform.internal.event.EventSnapshot;
 import nativekit.ffi.NativeKitTypes.ClipboardFiles;
 import nativekit.ffi.NativeKitTypes.EventKind;
 
-class ServiceEventDecoder {
+internal class ServiceEventDecoder {
 	public static function decode(c:EventSnapshot):Null<PlatformEvent> return switch c.kind {
 		case EventKind.None: None;
 		case EventKind.ClipboardTextComplete: ClipboardText(c.request, c.result, c.data.toString());

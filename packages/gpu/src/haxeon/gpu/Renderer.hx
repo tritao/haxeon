@@ -29,7 +29,7 @@ import haxeon.gpu.Shader.ShaderBuilder;
 class Renderer implements Disposable {
 	final surface:Surface;
 	final registration:haxeon.platform.DisposalRegistration;
-	final resources = new haxeon.platform.internal.DisposalRegistry();
+	final resources = new haxeon.platform.DisposalRegistry();
 	var value:nkgpu_renderer;
 	var disposed:Bool = false;
 	var frameActive:Bool = false;

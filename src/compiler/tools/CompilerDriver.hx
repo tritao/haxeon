@@ -272,14 +272,13 @@ class CompilerDriver {
 
 	/**
 	 * The modules an API description covers, typed as the roots of its analysis: those loaded from `sources` (every module but
-	 * the standard library's when it is empty), except a package's internals: a module under a package named `internal`, at any
-	 * depth, is not part of its API, as in Go.
+	 * the standard library's when it is empty). What a package keeps to itself is written `internal`, and described so.
 	 */
 	static function describedModules(compiler:compiler.Compiler, sources:Array<String>):Array<String> {
 		var directories = [for (source in sources) Path.addTrailingSlash(absolutePath(source))],
 			result:Array<String> = [];
 		for (name => state in compiler.modules) {
-			if (state.source.isStandardLibrarySource || name.split(".").slice(0, -1).indexOf("internal") >= 0)
+			if (state.source.isStandardLibrarySource)
 				continue;
 			var file = absolutePath(state.source.physicalPath);
 			if (directories.length == 0

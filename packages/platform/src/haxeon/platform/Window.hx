@@ -9,7 +9,6 @@ import haxeon.platform.WebViewOptions;
 import haxeon.platform.WindowDecorationRegion;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
-import haxeon.platform.internal.DisposalRegistry;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.InputAction;

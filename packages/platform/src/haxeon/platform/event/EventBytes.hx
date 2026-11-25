@@ -1,11 +1,11 @@
-package haxeon.platform.internal.event;
+package haxeon.platform.event;
 
 import haxeon.platform.BindingError;
 import haxeon.platform.resource.Resource;
 import nativekit.ffi.NativeKit;
 
 /** Validates and decodes byte-oriented NativeKit event payloads. */
-class EventBytes {
+internal class EventBytes {
 	public static function requireSize(data:haxe.io.Bytes, size:Int):Void
 		if (data.length != size) throw BindingError.invalidData("EventBytes.requireSize",
 			"NativeKit event payload has an invalid size");

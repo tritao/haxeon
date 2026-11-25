@@ -29,9 +29,9 @@ actual_path, expected_path = sys.argv[1:]
 actual = json.loads(open(actual_path).read())
 # The writer's own field order, which the schema fixes, is compared as it is: no re-sorting.
 described = [path for path in actual["described"] if path.startswith("sample.")]
-# A package named internal is not described, even when the API refers to one of its types.
-assert described == ["sample.Main"], described
-assert any(entry["path"] == "sample.internal.Detail" for entry in actual["types"]), "the referenced internal type is missing"
+# A package named internal is a package like any other: what a package keeps to itself is written `internal`.
+assert described == ["sample.Main", "sample.internal.Detail"], described
+assert any(entry["path"] == "sample.internal.Detail" for entry in actual["types"]), "the referenced type is missing"
 modules = [entry for entry in actual["modules"] if entry["path"] == "sample.Main"]
 declarations = [entry for entry in actual["types"] if entry["module"] == "sample.Main"]
 line = lambda entry: json.dumps(entry, ensure_ascii=False, separators=(",", ":"))

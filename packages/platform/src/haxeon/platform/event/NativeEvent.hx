@@ -1,14 +1,6 @@
-package haxeon.platform.internal.event;
+package haxeon.platform.event;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.event.PlatformEvent;
-import haxeon.platform.internal.event.AudioEventDecoder;
-import haxeon.platform.internal.event.EventSnapshot;
-import haxeon.platform.internal.event.HttpEventDecoder;
-import haxeon.platform.internal.event.InputEventDecoder;
-import haxeon.platform.internal.event.ResourceEventDecoder;
-import haxeon.platform.internal.event.ServiceEventDecoder;
-import haxeon.platform.internal.event.WindowEventDecoder;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Event;
 import nativekit.ffi.NativeKitTypes.EventKind;
@@ -16,7 +8,7 @@ import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.Result;
 
 /** Owns one polled NativeKit event and releases its native payload exactly once. */
-class NativeEvent {
+internal class NativeEvent {
 	final event:Event;
 	public final kind:EventKind;
 	public final source:Handle;
@@ -72,7 +64,7 @@ class NativeEvent {
 		return decodeSnapshot(snapshot());
 	}
 
-	@:allow(haxeon.platform.internal.event.HttpEventDecoder)
+	@:allow(haxeon.platform.event.HttpEventDecoder)
 	private function nativeEvent():Event {
 		ensureOpen();
 		return event;
