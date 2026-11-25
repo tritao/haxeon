@@ -22,6 +22,7 @@ import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.model.Ir.IrStaticField;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
 import compiler.ir.pipeline.IrProgramAssembler;
 import compiler.ir.tools.IrInstrumentation.IrInstrumentationScope;
 import compiler.modules.ModuleReachability;
@@ -165,6 +166,9 @@ private class FrontendBuild {
 	public var regenerated:Array<String>;
 	public var currentSpecializedOwners:Map<String, Bool>;
 	public var currentObjects:Array<IrObject>;
+
+	/** The value objects' layouts on the canonical ABI, by name, which the inline enum lowering reads (`publishObjects`). */
+	public var canonicalObjects:Map<String, IrObject>;
 	public var allocationAfterObjects:AllocationSnapshot;
 	public var typedByName:Map<String, compiler.types.TypedAst.TypedFunction>;
 	public var touchedModules:Map<String, Bool>;
@@ -652,16 +656,19 @@ class FrontendCompilation {
 		build.allocationAfterIndexRebuild = AllocationMeter.sample();
 	}
 
-	/** The object layouts of the typed classes, in the object caches, and the generator that lowers against them. */
+	/**
+	 * The object layouts of the typed classes and structures, among the program's objects (`SessionState.objects`), with each
+	 * structure's printer, and the generator that lowers against them.
+	 */
 	static function publishObjects(build:FrontendBuild):Void {
 		var context = build.context,
+			state = context.state,
 			typedNew = build.typed(),
 			generator = build.generator,
-			objectCache = context.state.objectCache,
-			canonicalObjectCache = context.state.canonicalObjectCache;
+			objects = state.objects;
 		build.retyped = [];
 		build.regenerated = [];
-		var previousTyped = context.state.lastTypedProgram;
+		var previousTyped = state.lastTypedProgram;
 		build.currentSpecializedOwners = [
 			for (classDecl in typedNew.classes)
 				if (classDecl.specializationOrigin != null) classDecl.name => true
@@ -669,28 +676,34 @@ class FrontendCompilation {
 		if (previousTyped != null) {
 			var currentClasses = [for (classDecl in typedNew.classes) classDecl.name => true];
 			for (classDecl in previousTyped.classes)
-				if (!currentClasses.exists(classDecl.name)) {
-					objectCache.remove(classDecl.name);
-					canonicalObjectCache.remove(classDecl.name);
-				}
+				if (!currentClasses.exists(classDecl.name))
+					objects.remove(classDecl.name);
 		}
 		// The objects a function makes for its closures and captured variables are named by source offsets. When the function
 		// is typed again they are made again under their new names, and the old ones must not stay behind.
 		var retypedNames:Map<String, Bool> = [for (fn in typedNew.functions) fn.name => true];
-		for (name in [for (name in objectCache.keys()) name])
-			if (isGeneratedObjectOfRetypedFunction(name, retypedNames)) {
-				objectCache.remove(name);
-				canonicalObjectCache.remove(name);
-			}
-		for (classDecl in typedNew.classes)
-			canonicalObjectCache.remove(classDecl.name);
+		for (name in [for (name in objects.keys()) name])
+			if (isGeneratedObjectOfRetypedFunction(name, retypedNames))
+				objects.remove(name);
 		var typedObjects = IrProgramAssembler.objectsFrom(generator, typedNew, null, false, printsStructures(context));
-		keepStructureObjects(build, generator, typedObjects);
-		var canonicalAbi = compiler.ir.passes.enums.IrInlineEnumLayout.CANONICAL_ABI;
+		// An object made again the same is the one the program had. One this build did not make is the one an earlier build put,
+		// which a structure's printer reads (`structurePrinter`).
+		for (index in 0...typedObjects.length) {
+			var object = state.irObjects.put(state.queries, IrSymbol.of(typedObjects[index].name).id,
+				typedObjects[index]);
+			typedObjects[index] = object;
+			objects.set(object.name, object);
+		}
+		var currentObjects:Array<IrObject> = [for (object in objects) object];
+		if (printsStructures(context))
+			for (anonymous in typedNew.anonymousTypes)
+				structurePrinter(build, generator, anonymous);
+		var canonicalAbi = compiler.ir.passes.enums.IrInlineEnumLayout.CANONICAL_ABI,
+			canonicalObjects:Map<String, IrObject> = [];
 		if (typedNew.nativeAbiTarget == canonicalAbi) {
 			for (object in typedObjects)
 				if (object.isValue && object.nativeLayout != null)
-					canonicalObjectCache.set(object.name, object);
+					canonicalObjects.set(object.name, object);
 		} else {
 			var sameLayout:Map<String, Bool> = [
 				for (classDecl in typedNew.classes)
@@ -700,7 +713,7 @@ class FrontendCompilation {
 			];
 			for (object in typedObjects)
 				if (object.isValue && object.nativeLayout != null && sameLayout.exists(object.name))
-					canonicalObjectCache.set(object.name, {
+					canonicalObjects.set(object.name, {
 						name: object.name,
 						isValue: object.isValue,
 						base: object.base,
@@ -714,43 +727,59 @@ class FrontendCompilation {
 						}
 					});
 			for (object in IrProgramAssembler.objectsFrom(generator, typedNew, canonicalAbi, true))
-				canonicalObjectCache.set(object.name, object);
+				canonicalObjects.set(object.name, object);
 		}
-		for (object in typedObjects)
-			objectCache.set(object.name, object);
-		var currentObjects:Array<IrObject> = [for (name in objectCache.keys()) objectCache.get(name)];
+		build.canonicalObjects = canonicalObjects;
 		build.currentObjects = currentObjects;
 		build.generator = generator.withObjects(currentObjects);
 		build.allocationAfterObjects = AllocationMeter.sample();
 	}
 
 	/**
-	 * The anonymous structures' objects among `typedObjects` (`IrProgramAssembler.objectsFrom` lists them last, in the typed
-	 * program's order), with their printers. An object the same as the one the cache holds is that one, and its printer is the
-	 * one made from it (`SessionState.structurePrinters`), since the printer reads nothing else of the structure: its fields'
-	 * names and lowered types, in order. A later build may take an object from the cache without typing its structure again, so
-	 * a printer is kept as long as its object.
+	 * The printer of structure `anonymous` (`IrProgramAssembler.anonymousString`), a result in the session's database: it reads
+	 * nothing of the structure but its object (its fields' names and lowered types, in order), so last build's is kept while the
+	 * object is (`SessionState.irObjects`). A later build may take the object without typing the structure again, and its printer
+	 * with it (`assembleTables`).
 	 */
-	static function keepStructureObjects(build:FrontendBuild, generator:IrGenerator,
-			typedObjects:Array<IrObject>):Void {
-		var context = build.context,
-			anonymousTypes = build.typed().anonymousTypes,
-			objectCache = context.state.objectCache,
-			printers = printsStructures(context) ? context.state.structurePrinters : null,
-			first = typedObjects.length - anonymousTypes.length;
-		if (printers != null)
-			printers.checks = context.options.checkReuse;
-		for (index in 0...anonymousTypes.length) {
-			var anonymous = anonymousTypes[index], object = typedObjects[first + index];
-			if (object.name != anonymous.name)
-				throw new InternalError('Anonymous structure "${anonymous.name}" has no object where objectsFrom lists it');
-			var cached = objectCache.get(object.name);
-			if (cached != null && compiler.ir.model.IrDeclarationEquality.sameObject(cached, object))
-				typedObjects[first + index] = object = cached;
-			if (printers != null)
-				printers.made(IrProgramAssembler.anonymousStringName(anonymous.name), [object],
-					() -> IrProgramAssembler.anonymousString(generator, anonymous));
+	static function structurePrinter(build:FrontendBuild, generator:IrGenerator,
+			anonymous:compiler.types.TypedAst.TypedAnonymous):IrFunction {
+		var state = build.context.state,
+			queries = state.queries,
+			generation = state.irGeneration,
+			key = IrSymbol.of(IrProgramAssembler.anonymousStringName(anonymous.name)).id,
+			object = IrSymbol.of(anonymous.name).id;
+		if (generation.current(queries, key)) {
+			if (queries.checkReuse) {
+				generation.begin(queries, key);
+				state.irObjects.get(queries, object);
+				generation.check(queries, key, IrProgramAssembler.anonymousString(generator, anonymous));
+			}
+			return generation.value(key);
 		}
+		generation.begin(queries, key);
+		state.irObjects.get(queries, object);
+		return generation.end(queries, key, IrProgramAssembler.anonymousString(generator, anonymous));
+	}
+
+	/**
+	 * The boot function `name` made from `from` (`IrProgramAssembler.staticInitializersFrom`), a result in the session's database:
+	 * last build's while it is made from the same typed fields (`SessionState.initializerInputs`), else made now.
+	 */
+	static function bootFunction(state:SessionState, name:String, from:Array<compiler.types.TypedAst.TypedField>,
+			make:() -> IrFunction):IrFunction {
+		var queries = state.queries, generation = state.irGeneration, key = IrSymbol.of(name).id;
+		state.initializerInputs.put(queries, key, from);
+		if (generation.current(queries, key)) {
+			if (queries.checkReuse) {
+				generation.begin(queries, key);
+				state.initializerInputs.get(queries, key);
+				generation.check(queries, key, make());
+			}
+			return generation.value(key);
+		}
+		generation.begin(queries, key);
+		state.initializerInputs.get(queries, key);
+		return generation.end(queries, key, make());
 	}
 
 	/**
@@ -816,7 +845,9 @@ class FrontendCompilation {
 				retyped.push(fn.name);
 			touchedModules.set(module, true);
 			if (lowerToIr) {
-				var ir = generator.generateFunction(fn), key = ir.symbol.id, kept = generation.kept(key),
+				var ir = generator.generateFunction(fn),
+					key = ir.symbol.id,
+					kept = generation.kept(key),
 					previous = state.pendingIrFunctions.exists(fn.name) ? null : state.irFunctions.get(fn.name);
 				// A helper is owned by the module of the code that asked for it first, which another build can ask from elsewhere:
 				// the IR it had is the database's, under its name.
@@ -840,9 +871,6 @@ class FrontendCompilation {
 		publishUnitReads(build);
 		publishDeclarationTypeDigests(build);
 		publishInferredSignatures(build);
-		var objectCache = context.state.objectCache;
-		for (object in build.currentObjects)
-			objectCache.set(object.name, object);
 		build.allocationAfterFunctions = AllocationMeter.sample();
 	}
 
@@ -1401,7 +1429,7 @@ class FrontendCompilation {
 		var context = build.context,
 			generator = build.generator,
 			typedNew = build.typed();
-		var resolvedObjects = resolvedObjectsFrom(context.state.objectCache, typedNew,
+		var resolvedObjects = resolvedObjectsFrom(context.state.objects, typedNew,
 			functionNamesOf(build.cachedNames, typedNew));
 		var objectNames = [for (name in resolvedObjects.keys()) name];
 		objectNames.sort(Reflect.compare);
@@ -1438,25 +1466,27 @@ class FrontendCompilation {
 		build.enums = IrProgramAssembler.enumsFrom(generator, typedNew);
 		build.staticFields = IrProgramAssembler.staticFieldsFrom(generator, typedNew);
 		var generationWarnings:Array<compiler.core.Diagnostic> = [];
-		context.state.initializerFunctions.checks = context.options.checkReuse;
-		build.initializers = IrProgramAssembler.staticInitializersFrom(generator, typedNew, build.initializationClasses,
-			build.cached, generationWarnings, context.state.staticReferences, context.state.initializerFunctions)
-			.concat(liveInitializers);
+		var state = context.state, queries = state.queries, generation = state.irGeneration;
+		var initializers = IrProgramAssembler.staticInitializersFrom(generator, typedNew, build.initializationClasses,
+			build.cached, generationWarnings, context.state.staticReferences,
+			(name, from, make) -> bootFunction(state, name, from, make)).concat(liveInitializers);
+		// `__init`, made from names alone, and the live initializers are made every build: one made the same is last build's.
+		for (index in 0...initializers.length)
+			initializers[index] = generation.put(queries, initializers[index].symbol.id, initializers[index]);
+		build.initializers = initializers;
 		context.state.staticReferences.endBuild();
-		context.state.initializerFunctions.sweep();
 		TypingWarnings.publishGeneration(context, build.names, generationWarnings, build.rollbackModules);
-		// The printers made with the objects (`context.state.structurePrinters`), for every structure the program has.
+		// The printers made with the objects (`structurePrinter`), for every structure the program has.
 		if (printsStructures(context)) {
-			var printers = context.state.structurePrinters;
 			// Every object whose `__string` objectsFrom pointed at a generated printer.
 			for (object in build.objects)
 				for (method in object.methods)
 					if (method.name == "__string"
 						&& method.functionName.name == IrProgramAssembler.anonymousStringName(object.name)) {
-						var printer = printers.kept(method.functionName.name, [object]);
-						if (printer == null)
+						var printer = method.functionName.id;
+						if (!generation.current(queries, printer))
 							throw new InternalError('Anonymous structure "${object.name}" has no generated __string');
-						build.cached.push(printer);
+						build.cached.push(generation.value(printer));
 					}
 		}
 		build.reflectable = IrProgramAssembler.reflectableObjectsFrom(typedNew);
@@ -1496,7 +1526,7 @@ class FrontendCompilation {
 			ir = reusedPipeline.ir;
 			inlinerChanged = [];
 		} else {
-			var canonicalObjectCache = context.state.canonicalObjectCache;
+			var canonicalObjects = build.canonicalObjects;
 			var meter = new compiler.core.IrPassMeter();
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, objects, build.interfaces,
 				build.enums, build.staticFields,
@@ -1506,7 +1536,7 @@ class FrontendCompilation {
 				!context.livePatching && !context.isWasmTarget() && context.options.earlyPrune,
 				[for (object in objects) {
 					if (object.isValue && object.nativeLayout != null) {
-						var canonical = canonicalObjectCache.get(object.name);
+						var canonical = canonicalObjects.get(object.name);
 						if (canonical == null)
 							throw new InternalError('Missing canonical layout for "${object.name}"');
 						canonical;
@@ -1651,7 +1681,7 @@ class FrontendCompilation {
 	 * `--check-reuse` of what the frontend kept from earlier builds (typed bodies, their IR, objects): the frontend run again on the
 	 * same sources from a fresh state (`SessionState.freshFromSources`) must give the IR pipeline the same inputs, positions
 	 * included. The IR and backend checks recompute from these inputs, so a body kept typed against a declaration's old position
-	 * passes them. The object cache may also hold content-named objects an edit left unused (`isGeneratedObjectOfRetypedFunction`),
+	 * passes them. The program's objects may also hold content-named objects an edit left unused (`isGeneratedObjectOfRetypedFunction`),
 	 * which nothing reads and a fresh state has not made: those and their printers are left out. A live build is not checked: it
 	 * keeps the layouts and identities of the module it patches, which a fresh state has not.
 	 */
@@ -2279,12 +2309,12 @@ class FrontendCompilation {
 	 * kept for when their module becomes reachable again; only objects whose layout resolves
 	 * against this program's declarations are lowered.
 	 */
-	static function resolvedObjectsFrom(objectCache:Map<String, IrObject>, typed:TypedProgram,
+	static function resolvedObjectsFrom(programObjects:Map<String, IrObject>, typed:TypedProgram,
 			functionNames:Map<String, Bool>):Map<String, IrObject> {
 		var enums = [for (decl in typed.enums) decl.name => true],
 			interfaces = [for (decl in typed.interfaces) decl.name => true],
 			objects = [
-				for (name => object in objectCache)
+				for (name => object in programObjects)
 					if (!isOrphanedEnvironment(name, functionNames)) name => object
 			];
 		var removed = true;

@@ -114,18 +114,19 @@ class IrProgramAssembler {
 	 * order Haxe runs them (`StaticInitializationOrder`). `classOrder` names the classes in module order; without it the typed
 	 * program's order is used. Each class the order reaches in a loop is Haxe's warning, added to `warnings` when given.
 	 *
-	 * With `generated`, each function is kept with the typed fields it initializes, and `__init` by the names of the functions it
-	 * calls, and taken again by a build that makes it from the same ones: a typed field is the same object while its initializer's
-	 * unit is current, and a field belongs to one class.
+	 * With `generated`, a function made from typed fields is asked for by its key, with the fields it initializes, so a session can
+	 * give the one it made from the same fields (`FrontendCompilation.bootFunction`): a typed field is the same object while its
+	 * initializer's unit is current, and a field belongs to one class.
 	 */
 	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram,
 			classOrder:Null<Array<String>>,
 			program:Array<IrFunction>, ?warnings:Array<compiler.core.Diagnostic>,
 			?references:compiler.ir.reuse
 		.IrFunctionMemo<StaticInitializationOrder.IrStaticReferences>,
-			?generated:compiler.ir.reuse.IrGeneratedFunctions<compiler.types.TypedAst.TypedField>):Array<IrFunction> {
+			?generated:(String, Array<compiler.types.TypedAst.TypedField>,
+		() -> IrFunction) -> IrFunction):Array<IrFunction> {
 		function made(key:String, from:Array<compiler.types.TypedAst.TypedField>, make:() -> IrFunction):IrFunction
-			return generated == null ? make() : generated.made(key, from, make);
+			return generated == null ? make() : generated(key, from, make);
 		function assign(classDecl:compiler.types.TypedAst.TypedClass,
 				field:compiler.types.TypedAst.TypedField):TypedStatement
 			return TStaticFieldAssign(classDecl.name, field.name, field.initializer, field.span);
@@ -179,13 +180,12 @@ class IrProgramAssembler {
 		}
 		var calls =
 			[for (fn in functions.slice(0, bindingCount).concat(inits).concat(functions.slice(bindingCount))) fn.name];
-		functions.unshift(made("__init:" + calls.join(","), [], function():IrFunction {
-			var bindings = new IrBuilder(), lastCall:Null<IrValue> = null;
-			for (name in calls)
-				lastCall = bindings.call(name, [], Void);
-			bindings.returnValue(lastCall);
-			return new IrFunction("__init", [], Void, bindings.blocks, Ordinary);
-		}));
+		// Made from names alone, it is made every build: a session keeps last build's while it is the same.
+		var bindings = new IrBuilder(), lastCall:Null<IrValue> = null;
+		for (name in calls)
+			lastCall = bindings.call(name, [], Void);
+		bindings.returnValue(lastCall);
+		functions.unshift(new IrFunction("__init", [], Void, bindings.blocks, Ordinary));
 		return functions;
 	}
 

@@ -4,6 +4,7 @@ import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
 import compiler.ir.pipeline.IrProgramAssembler;
 import compiler.runtime.CompilerIntrinsics;
 
@@ -43,10 +44,10 @@ class StructurePrinterWarmEditMain {
 
 	/** The printer the session keeps for the structure whose first field is `field`. */
 	static function printer(compiler:Compiler, field:String):IrFunction {
-		for (name => object in compiler.state.objectCache)
+		for (name => object in compiler.state.objects)
 			if (StringTools.startsWith(name, "$anon:") && object.fields.length > 0 && object.fields[0].name == field) {
-				var kept = compiler.state.structurePrinters.kept(IrProgramAssembler.anonymousStringName(name),
-					[object]);
+				var kept =
+					compiler.state.irGeneration.kept(IrSymbol.of(IrProgramAssembler.anonymousStringName(name)).id);
 				if (kept == null)
 					throw 'the structure "$name" has no printer kept with its object';
 				return kept;

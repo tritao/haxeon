@@ -72,10 +72,10 @@ class CompilerMemoryCensus {
 					name: "inline cache",
 					release: () -> compiler.state.inlineCache = new IrInlineCache()
 				},
-				{name: "object cache",
+				{name: "objects",
 				release: () -> {
-					compiler.state.objectCache = [];
-					compiler.state.canonicalObjectCache = [];
+					compiler.state.objects = [];
+					compiler.state.irObjects.clear();
 				}
 			},
 				{name: "last typed program and semantic program",
@@ -91,9 +91,13 @@ class CompilerMemoryCensus {
 				}
 			},
 				{name: "IR functions of modules",
-				release: () -> for (state in compiler.modules) {
-					state.irFunctions = [];
-					state.pendingIrFunctions = [];
+				release: () -> {
+					for (state in compiler.modules) {
+						state.irFunctions = [];
+						state.pendingIrFunctions = [];
+					}
+					compiler.state.irGeneration.clear();
+					compiler.state.initializerInputs.clear();
 				}
 			},
 				{name: "canonical declarations of modules",

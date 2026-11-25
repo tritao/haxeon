@@ -37,22 +37,12 @@ class SessionState {
 
 	public var types(default, null):TypeRegistry;
 	public var genericSpecializations(default, null):GenericSpecializationRegistry;
-	public var objectCache(default, null):Map<String, IrObject> = [];
-	public var canonicalObjectCache(default, null):Map<String, IrObject> = [];
-
 	/**
-	 * The `__string` of each anonymous structure type a build has made (IrProgramAssembler.anonymousString), by function name, kept
-	 * with the structure's object in `objectCache` it was made from (`FrontendCompilation.keepStructureObjects`): a warm build
-	 * takes objects typed by earlier builds from the cache, and each needs its printer too.
+	 * The program's objects by name: those of the classes and structures this build typed, and those an earlier build made for a
+	 * function it typed (its closures' environments), which a function not typed again still names. A copy has its own, as a build
+	 * removes the objects of the functions it types again.
 	 */
-	public var structurePrinters(default, null) = new compiler.ir.reuse.IrGeneratedFunctions<IrObject>();
-
-	/**
-	 * The boot functions (`IrProgramAssembler.staticInitializersFrom`), kept with what they were made from. Copies share it: a
-	 * function is taken only when its inputs are the same objects, so whatever a failed build left is right or unused.
-	 */
-	public var initializerFunctions(default,
-		null) = new compiler.ir.reuse.IrGeneratedFunctions<compiler.types.TypedAst.TypedField>();
+	public var objects(default, null):Map<String, IrObject> = [];
 
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
@@ -97,6 +87,19 @@ class SessionState {
 	 * the state the build started from.
 	 */
 	public var irGeneration(default, null):compiler.query.ComputedQueryKind<compiler.ir.model.IrFunction>;
+
+	/**
+	 * Each object of the program (`objects`) by its name's symbol, put every build: one made again the same is last build's, so
+	 * what compares objects downstream finds the same object, and a structure's printer, which reads its object here, is kept.
+	 */
+	public var irObjects(default, null):compiler.query.ComputedQueryKind<IrObject>;
+
+	/**
+	 * What each boot function (`IrProgramAssembler.staticInitializersFrom`) is made from, the typed fields it initializes, by the
+	 * function's key: the same while each field is the same object, which it is while its initializer's unit is current.
+	 */
+	public var initializerInputs(default,
+		null):compiler.query.ComputedQueryKind<Array<compiler.types.TypedAst.TypedField>>;
 
 	/**
 	 * What the assembly stages before the encode point made of each function (`IrStageMemos`), keyed on the versions of their
@@ -150,8 +153,7 @@ class SessionState {
 		releaseGeneratedIr();
 		for (state in modules)
 			state.typedFunctions = [];
-		objectCache = [];
-		canonicalObjectCache = [];
+		objects = [];
 		lastTypedProgram = null;
 		semanticProgram = null;
 		programFacts = null;
@@ -172,11 +174,11 @@ class SessionState {
 		for (state in modules)
 			state.irFunctions = [];
 		irGeneration.clear();
+		irObjects.clear();
+		initializerInputs.clear();
 		irTypeMentions.clear();
 		irCalls.clear();
 		staticReferences.clear();
-		structurePrinters.clear();
-		initializerFunctions.clear();
 	}
 
 	/**
@@ -240,14 +242,22 @@ class SessionState {
 			queries = new compiler.query.QueryDatabase();
 			declarationFacts = new compiler.semantic.DeclarationFacts(queries);
 			inputs = new BuildInputs(queries);
+			var symbolName = (id:Int) -> compiler.ir.model.IrSymbol.at(id).name;
 			irGeneration =
 				queries.register(new compiler.query.ComputedQueryKind<compiler.ir.model.IrFunction>("ir-generation",
-				compiler.ir.codec.IrFunctionStateEquality.same, null, id -> compiler.ir.model.IrSymbol.at(id).name));
+				compiler.ir.codec.IrFunctionStateEquality.same, null, symbolName));
+			irObjects = queries.register(new compiler.query.ComputedQueryKind<IrObject>("ir-objects",
+				compiler.ir.model.IrDeclarationEquality.sameObject, null, symbolName));
+			initializerInputs = queries.register(new compiler.query
+				.ComputedQueryKind<Array<compiler.types.TypedAst.TypedField>>("initializer-inputs", sameFields, null,
+				symbolName));
 		} else {
 			queries = sharing.queries;
 			declarationFacts = sharing.declarationFacts;
 			inputs = sharing.inputs;
 			irGeneration = sharing.irGeneration;
+			irObjects = sharing.irObjects;
+			initializerInputs = sharing.initializerInputs;
 		}
 		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(queries, irGeneration);
 		this.types = types;
@@ -267,10 +277,7 @@ class SessionState {
 			(startingBackend == null ? backend : startingBackend).forCandidate(), this);
 		for (name => state in modules)
 			result.modules.set(name, state);
-		result.objectCache = objectCache.copy();
-		result.canonicalObjectCache = canonicalObjectCache.copy();
-		result.structurePrinters = structurePrinters.copy();
-		result.initializerFunctions = initializerFunctions;
+		result.objects = objects.copy();
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
 		result.programFacts = programFacts;
@@ -288,6 +295,17 @@ class SessionState {
 		result.reachabilityCache = reachabilityCache.copy();
 		result.declarationOwners = declarationOwners.copy();
 		return result;
+	}
+
+	/** Whether two lists hold the same typed fields, in order: a typed field is never changed once made. */
+	static function sameFields(left:Array<compiler.types.TypedAst.TypedField>,
+			right:Array<compiler.types.TypedAst.TypedField>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index] != right[index])
+				return false;
+		return true;
 	}
 
 	/**
