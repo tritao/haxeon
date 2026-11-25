@@ -1,8 +1,7 @@
 package haxeon.ui.debug;
 
-import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.Rect;
-import haxeon.ui.semantics.AccessibilityRole;
 
 import haxeon.ui.widgets.text.Text;
 
@@ -161,10 +160,10 @@ class UiInspector {
 			(node.states).contains(StyleState.Hovered) || hovered != null && hovered.equals(node.id),
 			(node.states).contains(StyleState.Pressed) || pressed != null && pressed.equals(node.id),
 			node.layout.style.zIndex,
-			role, semantics == null ? haxeon.ui.semantics.AccessibilityState.empty() : semantics.states,
+			role, semantics == null ? haxeon.ui.semantics.Semantics.AccessibilityState.empty() : semantics.states,
 			semantics == null ? null : semantics.label,
 			semantics == null ? null : semantics.value,
-			semantics == null ? haxeon.ui.semantics.AccessibilityAction.empty() : semantics.actions,
+			semantics == null ? haxeon.ui.semantics.Semantics.AccessibilityAction.empty() : semantics.actions,
 			node.states, node.styleType, node.computedStyle,
 			styleEntries, matchingStyleRules, isolated, overflow, paintBounds,
 			effectPasses, estimatedBytes,

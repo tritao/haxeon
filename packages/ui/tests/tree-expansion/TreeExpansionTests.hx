@@ -8,7 +8,7 @@ import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.collections.TreeView;
 import haxeon.ui.widgets.text.Text;
 

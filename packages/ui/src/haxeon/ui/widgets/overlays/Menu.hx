@@ -7,7 +7,7 @@ import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.text.MiddleEllipsisText;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.TextLayout;
-import haxeon.ui.TextWrap;
+import haxeon.ui.TextStyle;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.style.StyleTarget;
@@ -22,9 +22,6 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
-import haxeon.ui.semantics.AccessibilityAction;
-import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.scroll.ScrollView;
 

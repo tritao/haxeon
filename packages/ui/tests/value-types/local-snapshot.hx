@@ -1,7 +1,6 @@
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Transform2D;
 import haxeon.ui.style.ComputedStyle;

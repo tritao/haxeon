@@ -6,7 +6,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
-import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.collections.TreeView;
 import haxeon.ui.widgets.layout.Row;

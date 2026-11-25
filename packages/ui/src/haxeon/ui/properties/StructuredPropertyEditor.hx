@@ -351,7 +351,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 				}
 				if (simple) {
 					var rowStyle = style();
-					rowStyle.childAlignY = haxeon.ui.LayoutAlignmentY.Center;
+					rowStyle.childAlignY = haxeon.ui.LayoutStyle.LayoutAlignmentY.Center;
 					children.push(new KeyedView("item:" + index, new Row("item-row:" + index, row, rowStyle)));
 				}
 			}

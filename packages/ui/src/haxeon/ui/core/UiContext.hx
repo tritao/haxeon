@@ -10,7 +10,6 @@ import nativekit.ffi.NativeKitTypes.NativeCursorShape;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutChanges;
-import haxeon.ui.LayoutHitTestStats;
 import haxeon.ui.IntIndex;
 import haxeon.ui.Canvas;
 import haxeon.ui.DisplayList;
@@ -489,7 +488,7 @@ class UiContext implements Disposable {
 		} else visitGeometryChanged++;
 		// Resolved callbacks still run when geometry is retained.
 		node.setResolved(item);
-		if (node.layout.visualKind == haxeon.ui.LayoutVisualKind.Custom
+		if (node.layout.visualKind == haxeon.ui.LayoutNode.LayoutVisualKind.Custom
 			|| node.cachePolicy != CachePolicy.None) submittedPaintNodes.push(node);
 		nextTopology.append(node);
 	}
@@ -1211,8 +1210,8 @@ class UiContext implements Disposable {
 		if (request == null) return false;
 		var enabled = enabledAlongPath(node);
 		var actions = semantics.actions;
-		if (node.focusable && enabled) actions |= haxeon.ui.semantics.AccessibilityAction.Focus;
-		if (!enabled) actions = haxeon.ui.semantics.AccessibilityAction.empty();
+		if (node.focusable && enabled) actions |= haxeon.ui.semantics.Semantics.AccessibilityAction.Focus;
+		if (!enabled) actions = haxeon.ui.semantics.Semantics.AccessibilityAction.empty();
 		if (!actions.contains(request.capability)) return false;
 		var geometry:ResolvedLayoutItem = cast node.resolved;
 		if (action == AccessibilityRequest.Focus) return focusWidget(widgetId);
@@ -1663,14 +1662,14 @@ class UiContext implements Disposable {
 	function appendInspectionOverlay(tree:RenderNode, frame:LayoutFrame):Void {
 		if (inspectionNode != null && inspectionNode.parent == tree) return;
 		var style = new haxeon.ui.LayoutStyle();
-		style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+		style.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
 		style.width = haxeon.ui.LayoutAxis.fixed(frame.width);
 		style.height = haxeon.ui.LayoutAxis.fixed(frame.height);
 		style.zIndex = 32767;
 		style.clipToParent = false;
 		var id = buildContext.withScope(new haxeon.ui.core.Key("__devtools_inspection"),
 			function() return buildContext.id("overlay"));
-		var node = new RenderNode(id, haxeon.ui.LayoutVisualKind.Custom, style);
+		var node = new RenderNode(id, haxeon.ui.LayoutNode.LayoutVisualKind.Custom, style);
 		node.setStyleIdentity("devtools-overlay", null, null);
 		node.hitTestSelf = false;
 		node.onPaint(function(canvas, geometry) {

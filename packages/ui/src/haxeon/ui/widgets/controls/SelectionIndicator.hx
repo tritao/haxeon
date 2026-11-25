@@ -1,13 +1,11 @@
 package haxeon.ui.widgets.controls;
 
+import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutPositioning;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
-import haxeon.ui.LineCap;
-import haxeon.ui.LineJoin;
-import haxeon.ui.PathBuilder;
+import haxeon.ui.Path;
 import haxeon.ui.Rect;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;

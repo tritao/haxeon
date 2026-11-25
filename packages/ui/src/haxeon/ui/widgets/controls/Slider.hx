@@ -1,8 +1,8 @@
 package haxeon.ui.widgets.controls;
 
 import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.core.BuildContext;
@@ -13,9 +13,7 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
-import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityRequest;
-import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
@@ -107,7 +105,7 @@ class Slider implements View {
 		semantics.numericValue = value;
 		semantics.numericMinimum = minimum;
 		semantics.numericMaximum = maximum;
-		if (!enabled) semantics.states |= haxeon.ui.semantics.AccessibilityState.Disabled;
+		if (!enabled) semantics.states |= haxeon.ui.semantics.Semantics.AccessibilityState.Disabled;
 		node.semantics = semantics;
 
 		var invalidation:State<Float> = context.state(node.id, value);

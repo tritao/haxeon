@@ -10,7 +10,7 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
-import haxeon.ui.semantics.AccessibilityAction;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.widgets.collections.VirtualGrid;
 import haxeon.ui.widgets.controls.Button;

@@ -3,12 +3,11 @@ package haxeon.ui;
 import haxeon.ui.Paint.SolidPaint;
 
 import NativeKitUI;
-import haxeon.ui.CompositeMode;
-import haxeon.ui.LineCap;
-import haxeon.ui.LineJoin;
 import haxeon.ui.style.EffectChain;
 import haxeon.ui.style.Mask;
 
+import haxeon.ui.Paint;
+import haxeon.ui.Path;
 /** Stateful, typed immediate-mode graphics encoder. */
 class Canvas {
 	final commands:CanvasCommandBuffer;
@@ -473,3 +472,12 @@ private class CanvasState {
 		clip = value.clip;
 	}
 }
+
+/** Alpha compositing modes supported by the UI renderer. */
+typedef CompositeMode = NativeKitUI.UiCompositeMode;
+
+/** End-cap styles used by Canvas.stroke. */
+typedef LineCap = NativeKitUI.UiLineCap;
+
+/** Join styles used by Canvas.stroke. */
+typedef LineJoin = NativeKitUI.UiLineJoin;

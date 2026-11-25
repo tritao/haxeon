@@ -1,9 +1,7 @@
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
-import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutTransaction;
-import haxeon.ui.LayoutVisualKind;
 
 function main():Int {
 	var sizes = [LayoutSizing.Fit, LayoutSizing.Grow, LayoutSizing.Fixed, LayoutSizing.Percent];

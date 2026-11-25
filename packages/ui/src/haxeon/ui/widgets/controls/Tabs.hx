@@ -1,12 +1,10 @@
 package haxeon.ui.widgets.controls;
 
 import haxeon.ui.Insets;
-import haxeon.ui.LayoutAlignmentY;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
@@ -17,9 +15,6 @@ import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.semantics.AccessibilityAction;
-import haxeon.ui.semantics.AccessibilityOrientation;
-import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleTarget;
@@ -184,7 +179,7 @@ class Tabs implements View {
 			headerStyle.width = LayoutAxis.grow();
 			headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 			headerStyle.direction = LayoutDirection.LeftToRight;
-			headerStyle.childAlignY = haxeon.ui.LayoutAlignmentY.Center;
+			headerStyle.childAlignY = haxeon.ui.LayoutStyle.LayoutAlignmentY.Center;
 			var header = context.createNode(context.rootId("header-with-actions"), LayoutVisualKind.Box, headerStyle);
 			header.hitTestSelf = false;
 			strip.layout.style.width = LayoutAxis.grow();
@@ -283,7 +278,7 @@ class Tabs implements View {
 				var indicatorStyle = new LayoutStyle();
 				indicatorStyle.width = LayoutAxis.grow();
 				indicatorStyle.height = LayoutAxis.fixed(2.0);
-				indicatorStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
+				indicatorStyle.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
 				indicatorStyle.zIndex = 1;
 				indicatorStyle.clipToParent = true;
 				indicatorStyle.background = context.theme.tokens.accent;

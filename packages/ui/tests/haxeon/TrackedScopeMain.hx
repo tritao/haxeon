@@ -1,5 +1,5 @@
 import haxeon.reactive.Signal;
-import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;

@@ -1,6 +1,6 @@
 import Equatable;
 import haxeon.reactive.Signal;
-import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.component.BoundText;
 import haxeon.ui.component.EqualChild;
 import haxeon.ui.component.TrackedScope;

@@ -40,3 +40,6 @@ struct LayoutAxis implements Hashable implements Diffable {
 	public static function stretch():LayoutAxis
 		return percent(1.0);
 }
+
+/** Sizing policy for one layout axis. */
+typedef LayoutSizing = NativeKitUI.UiLayoutSizing;

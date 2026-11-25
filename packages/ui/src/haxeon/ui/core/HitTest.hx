@@ -1,6 +1,6 @@
 package haxeon.ui.core;
 
-import haxeon.ui.LayoutPositioning;
+import haxeon.ui.LayoutStyle;
 
 /** Hit testing and target paths derived from the resolved Haxe render tree. */
 class HitTest {

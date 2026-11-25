@@ -2,7 +2,7 @@ package haxeon.ui.widgets.text;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
-import haxeon.ui.PathBuilder;
+import haxeon.ui.Path;
 import haxeon.ui.Rect;
 import haxeon.ui.TextLayout.TextPosition;
 

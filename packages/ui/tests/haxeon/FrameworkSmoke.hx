@@ -15,45 +15,29 @@ import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 import haxeon.ui.LayoutSession;
 import haxeon.ui.Paint;
-import haxeon.ui.ParagraphStyle;
-import haxeon.ui.PathBuilder;
 
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.ui.Color;
 import haxeon.ui.Canvas;
 import haxeon.ui.DisplayList;
-import haxeon.ui.CompositeMode;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.FontCollection;
-import haxeon.ui.FontFamily;
-import haxeon.ui.GradientStop;
 import haxeon.ui.Image;
-import haxeon.ui.ImageFormat;
-import haxeon.ui.ImageFilter;
 import haxeon.ui.Insets;
 import haxeon.ui.Path;
 import haxeon.ui.Paint.SolidPaint;
 import haxeon.ui.icons.IconName;
-import haxeon.ui.LayoutAlignmentX;
-import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutFrame;
-import haxeon.ui.LayoutPositioning;
-import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
-import haxeon.ui.TextAlignment;
 import haxeon.ui.Rect;
 import haxeon.ui.Point;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.Transform2D;
 import haxeon.ui.TextLayout;
-import haxeon.ui.TextDirection;
 import haxeon.ui.TextStyle;
-import haxeon.ui.TextColorRange;
 import haxeon.ui.widgets.text.TextDecoration;
-import haxeon.ui.TextWrap;
 import NativeKitEventDecoderTests;
 import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.CursorShape as UiCursorShape;
@@ -117,12 +101,12 @@ import haxeon.ui.core.UiTouchData;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.core.View;
 import haxeon.ui.core.Shortcut;
-import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityBridge;
-import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.Semantics;
+import haxeon.ui.semantics.Semantics.AccessibilityAction;
+import haxeon.ui.semantics.Semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics.AccessibilityState;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.commands.CommandButton;
 import haxeon.ui.widgets.commands.CommandMenu;
@@ -254,7 +238,7 @@ class FrameworkSmoke {
 		var value = new StringBuf();
 		for (line in 0...20000) value.add(line % 500
 			== 250 ? "é🙂 emoji line " + line + "\n" : "plain unwrapped line " + line + "\n");
-		var style = new ParagraphStyle(haxeon.ui.TextWrap.None);
+		var style = new ParagraphStyle(haxeon.ui.TextStyle.TextWrap.None);
 		var editor = new TextEditorState(fonts, value.toString(), null, style);
 		editor.updateLayout(600.0);
 		var counts = editor.layout.shapedGroups();
@@ -406,7 +390,8 @@ class FrameworkSmoke {
 	static function unwrappedWidthChangesMatchFreshLayout(fonts:FontCollection):Bool {
 		var value = new StringBuf();
 		for (line in 0...200) value.add(line == 0 ? "שלום עולם " + line + "\n" : "unwrapped line " + line + "\n");
-		var editor = new TextEditorState(fonts, value.toString(), null, new ParagraphStyle(haxeon.ui.TextWrap.None));
+		var editor = new TextEditorState(fonts, value.toString(), null,
+			new ParagraphStyle(haxeon.ui.TextStyle.TextWrap.None));
 		// A group that starts with right-to-left text takes that direction, so its start alignment is the right edge.
 		var probes = [2, new haxeon.editor.TextDocument(editor.text).paragraphRangeAtIndex(120).start + 3];
 		for (width in [600.0, 900.0, 640.0]) {
@@ -415,7 +400,7 @@ class FrameworkSmoke {
 				editor.text,
 				width,
 				editor.textStyle,
-				new ParagraphStyle(haxeon.ui.TextWrap.None));
+				new ParagraphStyle(haxeon.ui.TextStyle.TextWrap.None));
 			var actual = editor.layout.visualRows(), fresh = expected.visualRows();
 			if (actual.length != fresh.length) throw "unwrapped rows at width " + width + " differ from a fresh layout";
 			for (index in 0...actual.length) if (actual[index].start != fresh[index].start

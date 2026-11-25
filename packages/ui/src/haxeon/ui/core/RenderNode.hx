@@ -8,7 +8,6 @@ import haxeon.ui.debug.RenderCost;
 
 import haxeon.ui.Color;
 import haxeon.ui.Paint;
-import haxeon.ui.ParagraphStyle;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 
@@ -18,9 +17,7 @@ import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutChanges;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Canvas;
-import haxeon.ui.CompositeMode;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.Point;
 import haxeon.ui.Rect;

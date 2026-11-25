@@ -1,27 +1,15 @@
 import haxeon.ui.Color;
 import haxeon.ui.FontCollection;
 import haxeon.ui.Image;
-import haxeon.ui.ImageFormat;
 import haxeon.ui.Insets;
-import haxeon.ui.LayoutAlignmentX;
-import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutChanges;
-import haxeon.ui.LayoutDistribution;
+import haxeon.ui.LayoutContent;
 import haxeon.ui.LayoutFrame;
-import haxeon.ui.LayoutImageContent;
-import haxeon.ui.LayoutMeasureConstraints;
-import haxeon.ui.LayoutMeasureResult;
-import haxeon.ui.LayoutMeasuredContent;
 import haxeon.ui.LayoutNode;
-import haxeon.ui.LayoutPositioning;
-import haxeon.ui.LayoutRenderableContent;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutTransaction;
-import haxeon.ui.LayoutVisualKind;
-import haxeon.ui.LayoutWrapMode;
-import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.TextStyle;
@@ -288,8 +276,9 @@ class LayoutSessionSmoke {
 		var infiniteLetterSpacing = LayoutNode.textNode(91, "letter spacing");
 		infiniteLetterSpacing.textStyle = infiniteLetterSpacing.textStyle.withLetterSpacing(-infinity);
 		var infiniteLineHeight = LayoutNode.textNode(92, "line height");
-		infiniteLineHeight.paragraphStyle = new haxeon.ui.ParagraphStyle(haxeon.ui.TextWrap.WordCharacter,
-			haxeon.ui.TextAlignment.Start,
+		infiniteLineHeight.paragraphStyle =
+			new haxeon.ui.TextStyle.ParagraphStyle(haxeon.ui.TextStyle.TextWrap.WordCharacter,
+			haxeon.ui.TextStyle.TextAlignment.Start,
 			infinity);
 		if (!rejectsTransaction(infiniteFontSize)
 			|| !rejectsTransaction(infiniteLetterSpacing) || !rejectsTransaction(infiniteLineHeight)) return 5;

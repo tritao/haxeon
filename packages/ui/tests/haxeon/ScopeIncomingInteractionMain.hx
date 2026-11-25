@@ -3,7 +3,6 @@ import haxeon.ui.LayoutChanges;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutSession;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;

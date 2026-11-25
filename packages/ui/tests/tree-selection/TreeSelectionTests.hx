@@ -9,8 +9,7 @@ import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
-import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilityState;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.collections.TreeView;
 import haxeon.ui.widgets.text.Text;
 

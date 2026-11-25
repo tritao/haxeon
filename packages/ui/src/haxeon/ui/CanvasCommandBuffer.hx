@@ -3,9 +3,7 @@ package haxeon.ui;
 import NativeKitUI;
 import haxe.io.Bytes;
 import haxeon.ui.Color;
-import haxeon.ui.CompositeMode;
-import haxeon.ui.LineCap;
-import haxeon.ui.LineJoin;
+import haxeon.ui.Canvas;
 import haxeon.ui.style.CustomEffect;
 import haxeon.ui.style.EffectChain;
 import haxeon.ui.style.Mask;
@@ -155,11 +153,26 @@ class CanvasCommandBuffer {
 			writeEffect(effect);
 	}
 
+	/**
+	 * The one UI choice with no single native counterpart: effects include operations normalization removes before they
+	 * reach the native compositor.
+	 */
+	static function nativeEffectKind(value:EffectKind):NativeKitUI.UiEffectKind {
+		return switch value {
+			case EffectKind.Blur: NativeKitUI.UiEffectKind.Blur;
+			case EffectKind.DropShadow: NativeKitUI.UiEffectKind.DropShadow;
+			case EffectKind.Custom: NativeKitUI.UiEffectKind.Custom;
+			case EffectKind.ColorMatrix: NativeKitUI.UiEffectKind.ColorMatrix;
+			case EffectKind.Brightness | EffectKind.Contrast | EffectKind.Saturate | EffectKind.HueRotate:
+				throw "Effect chain normalization left an unsupported operation";
+		};
+	}
+
 	function writeEffect(value:VisualEffect):Void {
 		var matrix:Array<Float> = [];
 		for (index in 0...20)
 			matrix.push(0.0);
-		var kind = NativeEnums.effectKind(value.kind);
+		var kind = nativeEffectKind(value.kind);
 		switch value.kind {
 			case EffectKind.Blur:
 				var blur:BlurEffect = cast value;

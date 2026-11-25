@@ -1,7 +1,7 @@
 package haxeon.ui.host;
 
 import haxe.io.Bytes;
-import haxeon.ui.FontFamily;
+import haxeon.ui.FontCollection;
 
 /** Settings shared by desktop and browser UI hosts. */
 class UiHostOptions {

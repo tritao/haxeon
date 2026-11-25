@@ -1,10 +1,8 @@
 package haxeon.ui.debug;
 
-import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.Rect;
-import haxeon.ui.semantics.AccessibilityAction;
-import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilityState;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.InkOverflow;
 import haxeon.ui.style.StyleState;

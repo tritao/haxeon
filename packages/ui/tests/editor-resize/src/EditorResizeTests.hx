@@ -1,10 +1,7 @@
 import haxeon.editor.TextDocument.TextDocumentBuffer;
 import haxeon.ui.FontCollection;
-import haxeon.ui.ParagraphStyle;
-import haxeon.ui.TextAlignment;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextStyle;
-import haxeon.ui.TextWrap;
 import haxeon.ui.widgets.text.TextEditorLayout;
 
 class EditorResizeTests {

@@ -1,11 +1,11 @@
 import haxeon.ui.Color;
-import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.icons.IconName;
-import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleValue;
 import haxeon.ui.theme.Theme;

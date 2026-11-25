@@ -1,12 +1,8 @@
 package haxeon.ui.widgets.controls;
 
-import haxeon.ui.LayoutDirection;
-import haxeon.ui.LayoutDistribution;
-import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.LayoutNode;
 
 import haxeon.ui.Insets;
-import haxeon.ui.LayoutAlignmentX;
-import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
@@ -36,7 +32,7 @@ class CountBadge implements View {
 		node.add(new Text(Std.string(count),
 			null,
 			context.theme.tokens.textPrimary,
-			new TextStyleOverride(null, 11, null, haxeon.ui.TextWrap.None)).build(context));
+			new TextStyleOverride(null, 11, null, haxeon.ui.TextStyle.TextWrap.None)).build(context));
 		node.walk(function(child) child.hitTestSelf = false);
 		return node;
 	}

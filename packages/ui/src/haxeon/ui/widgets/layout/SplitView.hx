@@ -1,14 +1,9 @@
 package haxeon.ui.widgets.layout;
 
 import haxeon.ui.Color;
-import haxeon.ui.LayoutAlignmentX;
-import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDirection;
-import haxeon.ui.LayoutDistribution;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
-import haxeon.ui.LayoutWrapMode;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.CursorShape;
 import haxeon.ui.core.Key;
@@ -18,9 +13,7 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
-import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityRequest;
-import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleTarget;
 
@@ -180,7 +173,7 @@ class SplitView implements View {
 					var anchor = context.createNode(context.rootId("divider-anchor"), LayoutVisualKind.Box,
 						anchorStyle);
 					anchor.hitTestSelf = false;
-					divider.layout.style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+					divider.layout.style.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
 					divider.layout.style.positionX = horizontal ? -dividerExtent / 2 : 0;
 					divider.layout.style.positionY = horizontal ? 0 : -dividerExtent / 2;
 					divider.layout.style.zIndex = 1;
@@ -284,7 +277,7 @@ class SplitView implements View {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.grow();
-		style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+		style.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
 		style.clipToParent = true;
 		var root = context.createNode(context.rootId(key), LayoutVisualKind.Box, style);
 		root.hitTestSelf = false;

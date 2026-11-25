@@ -1,7 +1,7 @@
 package inspector;
 
 import haxeon.ui.Image;
-import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.LayoutNode;
 
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.Checkbox;
@@ -18,9 +18,7 @@ import haxeon.ui.widgets.text.TextField;
 
 
 import haxeon.ui.Rect;
-import haxeon.ui.semantics.AccessibilityAction;
-import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilityState;
+import haxeon.ui.semantics.Semantics;
 
 /** API synopsis keyed by the UI enum case index stored in inspector snapshots. */
 class WidgetDocsRegistry {

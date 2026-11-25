@@ -16,7 +16,6 @@ import haxeon.ui.properties.PropertyDescriptor;
 import haxeon.ui.properties.PropertyEditorRegistry;
 import haxeon.ui.properties.PropertyInspectorSection;
 import haxeon.ui.properties.PropertyValue;
-import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 
 /**

@@ -6,9 +6,8 @@ import haxeon.ui.Color;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
-import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.TextStyle;
@@ -23,7 +22,6 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.icons.IconName;
-import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
@@ -61,7 +59,7 @@ private class DecoratedControl implements View {
 		var overlayStyle = new LayoutStyle();
 		overlayStyle.width = LayoutAxis.fixed(5.5);
 		overlayStyle.height = LayoutAxis.fixed(7.5);
-		node.add(new RenderNode(context.id("caller-overlay"), haxeon.ui.LayoutVisualKind.Box, overlayStyle));
+		node.add(new RenderNode(context.id("caller-overlay"), haxeon.ui.LayoutNode.LayoutVisualKind.Box, overlayStyle));
 		return node;
 	}
 }
@@ -562,7 +560,7 @@ private class PopupRig implements View {
 		var overlay = new LayoutStyle();
 		overlay.width = LayoutAxis.fixed(3);
 		overlay.height = LayoutAxis.fixed(3);
-		overlay.positioning = haxeon.ui.LayoutPositioning.Absolute;
+		overlay.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
 		caller = new RenderNode(context.id("popup-caller"), LayoutVisualKind.Box, overlay);
 		menu.node.add(caller);
 		return root;
@@ -688,7 +686,7 @@ private class UpdatingResources implements View {
 		check(fork.getAxis(width).value == 7 && original.getAxis(width).value == 9, "Inline axes leaked across a fork");
 		var constructed = new haxeon.ui.style.ComputedStyle(fork);
 		fork.setAxis(height, LayoutAxis.fixed(11), null);
-		check(constructed.getAxis(height).sizing == haxeon.ui.LayoutSizing.Grow,
+		check(constructed.getAxis(height).sizing == haxeon.ui.LayoutAxis.LayoutSizing.Grow,
 			"Constructed style lost its axis snapshot");
 		var copy = constructed.copy();
 		check(!haxeon.ui.style.ComputedStyle.StyleDiff.compare(constructed, copy).changed,
@@ -1196,7 +1194,8 @@ private class UpdatingResources implements View {
 			var root = ui.submitCached(build, frame, "list-selection-" + selected.value), count = 0;
 			root.walk(node -> {
 				if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem
-					&& node.semantics.states.contains(haxeon.ui.semantics.AccessibilityState.Selected)) count++;
+					&& node.semantics.states.contains(haxeon.ui.semantics.Semantics.AccessibilityState.Selected))
+					count++;
 			});
 			check(count == (selected.value < 0 || selected.value >= 40 ? 0 : 1), "Controlled list selection is stale");
 			check(notifications == 0, "External list selection notified its owner");
@@ -1408,11 +1407,11 @@ private class UpdatingResources implements View {
 			&& !haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0),
 			new haxeon.ui.Rect(1.0, 2.0, 3.0, 5.0)),
 			"Rect equality is wrong");
-		var caret = new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Ltr);
+		var caret = new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextStyle.TextDirection.Ltr);
 		check(haxeon.Equality.equals(caret,
-			new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Ltr))
+			new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextStyle.TextDirection.Ltr))
 			&& !haxeon.Equality.equals(caret,
-			new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Rtl)),
+			new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextStyle.TextDirection.Rtl)),
 			"Caret geometry equality ignores a field");
 		var metrics = new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4);
 		check(haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4))
@@ -1484,8 +1483,8 @@ private class UpdatingResources implements View {
 			var current:Dynamic = Reflect.field(changed, name), next:Dynamic;
 			if (Std.isOfType(current, AccessibilityRole)) next = AccessibilityRole.Text;
 			else if (Std.isOfType(current,
-				haxeon.ui.semantics.AccessibilityOrientation)) next =
-				haxeon.ui.semantics.AccessibilityOrientation.Horizontal;
+				haxeon.ui.semantics.Semantics.AccessibilityOrientation)) next =
+				haxeon.ui.semantics.Semantics.AccessibilityOrientation.Horizontal;
 			else if (Std.isOfType(current, String)) next = current + "!";
 			else if (Std.isOfType(current, Bool)) next = !current;
 			else if (Std.isOfType(current, Int)) next = current + 1;

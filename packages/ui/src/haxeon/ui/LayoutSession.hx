@@ -1,13 +1,14 @@
 package haxeon.ui;
 
-import haxeon.ui.debug.RenderCost;
-
 import NativeKitUI;
 import NativeKitUI.nkui_layout_measure_callbackCallback;
 import haxe.io.Bytes;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
 import haxeon.platform.SurfaceFrameStep;
+import haxeon.ui.LayoutContent;
+import haxeon.ui.LayoutNode;
+import haxeon.ui.debug.RenderCost;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
@@ -413,5 +414,26 @@ class LayoutSession implements Disposable {
 		var callback = measureCallback;
 		measureCallback = null;
 		callback.close();
+	}
+}
+
+/** Snapshot of native geometric hit-test traversal activity. */
+class LayoutHitTestStats {
+	public final hitTestCount:haxe.Int64;
+	public final nodesVisited:haxe.Int64;
+	public final subtreesRejected:haxe.Int64;
+	public final preciseHitTests:haxe.Int64;
+	public final maxNodesVisited:haxe.Int64;
+	public final hitTestTimeNanoseconds:haxe.Int64;
+
+	public function new(hitTestCount:haxe.Int64, nodesVisited:haxe.Int64,
+			subtreesRejected:haxe.Int64, preciseHitTests:haxe.Int64,
+			maxNodesVisited:haxe.Int64, hitTestTimeNanoseconds:haxe.Int64) {
+		this.hitTestCount = hitTestCount;
+		this.nodesVisited = nodesVisited;
+		this.subtreesRejected = subtreesRejected;
+		this.preciseHitTests = preciseHitTests;
+		this.maxNodesVisited = maxNodesVisited;
+		this.hitTestTimeNanoseconds = hitTestTimeNanoseconds;
 	}
 }

@@ -2,7 +2,6 @@ package haxeon.ui;
 
 /** Collection of fonts used to create text layouts. */
 import haxe.io.Bytes;
-import haxeon.ui.FontFamily;
 
 class FontCollection extends NativeKitUIResource {
 	private function new(value:nkui_resource)
@@ -27,3 +26,6 @@ class FontCollection extends NativeKitUIResource {
 		UiResult.check(NativeKitUI.nkui_font_collection_add_default_fonts(nativeHandle()),
 			"fonts.addDefaultFonts");
 }
+
+/** Font roles used by a FontCollection. */
+typedef FontFamily = NativeKitUI.UiFontFamily;

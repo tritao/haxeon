@@ -4,7 +4,6 @@ import UiExplorer;
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;

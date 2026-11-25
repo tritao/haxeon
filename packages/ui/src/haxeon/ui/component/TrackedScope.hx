@@ -1,7 +1,6 @@
 package haxeon.ui.component;
 
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;

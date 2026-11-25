@@ -1,8 +1,8 @@
 package haxeon.ui.widgets.layout;
 
 import haxeon.ui.Insets;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;

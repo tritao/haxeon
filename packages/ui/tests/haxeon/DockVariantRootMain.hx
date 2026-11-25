@@ -7,7 +7,7 @@ import haxeon.ui.docking.DockNode;
 import haxeon.ui.docking.DockPanelDescriptor;
 import haxeon.ui.docking.DockSplitAxis;
 import haxeon.ui.docking.DockWorkspaceModel;
-import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.docking.DockPanelContent;
 import haxeon.ui.widgets.docking.DockWorkspace;
 import haxeon.ui.widgets.text.Text;

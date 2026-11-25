@@ -1,11 +1,7 @@
-import haxeon.ui.CompositeMode;
-import haxeon.ui.ImageFilter;
-import haxeon.ui.ImageFormat;
-import haxeon.ui.LineCap;
-import haxeon.ui.LineJoin;
+import haxeon.ui.Canvas;
+import haxeon.ui.Image;
 import haxeon.ui.core.CachePolicy;
-import haxeon.ui.semantics.AccessibilityOrientation;
-import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.Mask;
 
 struct NativeBoundaryChoices implements Hashable {

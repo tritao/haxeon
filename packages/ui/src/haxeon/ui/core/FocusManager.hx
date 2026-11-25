@@ -101,7 +101,7 @@ class FocusManager {
 		var found:Null<RenderNode> = null;
 		for (node in eligible) {
 			var semantics = node.semantics;
-			if (semantics == null || semantics.role != haxeon.ui.semantics.AccessibilityRole.TreeItem
+			if (semantics == null || semantics.role != haxeon.ui.semantics.Semantics.AccessibilityRole.TreeItem
 				|| semantics.label != label) continue;
 			if (found != null) return null;
 			found = node;

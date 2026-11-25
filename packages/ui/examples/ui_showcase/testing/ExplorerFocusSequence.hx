@@ -7,7 +7,7 @@ import haxeon.ui.widgets.text.TextField;
 import UiExplorer;
 import haxeon.ui.core.State;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.text.TextEditorState;
 import nativekit.ffi.NativeKitTypes.TextEditAction;
 

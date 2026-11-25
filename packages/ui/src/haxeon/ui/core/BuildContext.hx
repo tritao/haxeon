@@ -478,7 +478,7 @@ class BuildContext implements Disposable {
 
 	/** Scope ownership is stored only on actual body roots, without an additional render/layout node. */
 	public function createNode(id:WidgetId,
-			kind:haxeon.ui.LayoutVisualKind = haxeon.ui.LayoutVisualKind.Box,
+			kind:haxeon.ui.LayoutNode.LayoutVisualKind = haxeon.ui.LayoutNode.LayoutVisualKind.Box,
 			?style:LayoutStyle):RenderNode {
 		var owner = rootOwner(id);
 		var node = owner != null ? new ScopeRootNode(id, kind, style, owner) : new RenderNode(id, kind, style);

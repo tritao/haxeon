@@ -11,9 +11,8 @@ import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
 
-import haxeon.ui.LayoutAlignmentY;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.CommandContext;
@@ -28,7 +27,6 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.style.StyleTarget;
 
 /** Descriptor-driven inspector that routes edits through the active document. */
@@ -514,7 +512,7 @@ private class PropertyEditorRowContent implements View {
 			owner.options.searchQuery,
 			errorStyle,
 			context.theme.tokens.textSecondary,
-			haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextWrap.WordCharacter),
+			haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextStyle.TextWrap.WordCharacter),
 			haxeon.ui.theme.TextRole.Caption)));
 		if (StringTools.trim(owner.options.searchQuery).length > 0) details.push(new KeyedView("path",
 			new haxeon.ui.widgets.text.HighlightedText(descriptor.id,

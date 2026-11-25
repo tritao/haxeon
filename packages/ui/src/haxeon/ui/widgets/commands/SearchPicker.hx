@@ -1,7 +1,6 @@
 package haxeon.ui.widgets.commands;
 
 import haxeon.ui.Insets;
-import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.TextStyle;
@@ -233,13 +232,16 @@ private class SearchPickerRow implements View {
 	}
 	public function build(context:BuildContext):RenderNode {
 		var node = child.build(context);
-		node.semantics = new haxeon.ui.semantics.Semantics(haxeon.ui.semantics.AccessibilityRole.Button, label);
+		node.semantics = new haxeon.ui.semantics.Semantics(haxeon.ui.semantics.Semantics.AccessibilityRole.Button,
+			label);
 		node.semantics.states = selected
-			? haxeon.ui.semantics.AccessibilityState.Selected : haxeon.ui.semantics.AccessibilityState.empty();
+			? haxeon.ui.semantics.Semantics.AccessibilityState.Selected
+			: haxeon.ui.semantics.Semantics.AccessibilityState.empty();
 		node.enabled = enabled;
-		if (!enabled) node.semantics.states |= haxeon.ui.semantics.AccessibilityState.Disabled;
+		if (!enabled) node.semantics.states |= haxeon.ui.semantics.Semantics.AccessibilityState.Disabled;
 		node.semantics.actions = enabled
-			? haxeon.ui.semantics.AccessibilityAction.Activate : haxeon.ui.semantics.AccessibilityAction.empty();
+			? haxeon.ui.semantics.Semantics.AccessibilityAction.Activate
+			: haxeon.ui.semantics.Semantics.AccessibilityAction.empty();
 		node.on(UiEventKind.Click, function(event) {
 			if (event.button != 0) return;
 			activate();

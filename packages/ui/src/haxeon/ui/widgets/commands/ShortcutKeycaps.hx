@@ -2,7 +2,6 @@ package haxeon.ui.widgets.commands;
 
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
-import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
@@ -55,7 +54,8 @@ class ShortcutKeycaps implements View {
 		style.childGap = 10.0;
 		style.childAlignY = LayoutAlignmentY.Center;
 		var node = new Row("shortcut-keycaps", children, style).build(context);
-		node.semantics = new haxeon.ui.semantics.Semantics(haxeon.ui.semantics.AccessibilityRole.Text, shortcut);
+		node.semantics = new haxeon.ui.semantics.Semantics(haxeon.ui.semantics.Semantics.AccessibilityRole.Text,
+			shortcut);
 		node.hitTestSelf = false;
 		return node;
 	}
@@ -76,7 +76,7 @@ private class ShortcutKeycap implements View {
 		style.height = LayoutAxis.fixed(24.0);
 		style.padding = new Insets(5.0, 0.0, 5.0, 0.0);
 		// A Row distributes spare horizontal space through childDistribution.
-		style.childDistribution = haxeon.ui.LayoutDistribution.Center;
+		style.childDistribution = haxeon.ui.LayoutStyle.LayoutDistribution.Center;
 		style.childAlignY = LayoutAlignmentY.Center;
 		var base = selected ? tokens.accent : tokens.surface;
 		var ink = selected ? tokens.textOnAccent : tokens.textPrimary;
@@ -98,7 +98,9 @@ private class ShortcutKeycap implements View {
 		var content:View = arrow == null ? new Text(label,
 			null,
 			foreground,
-			new TextStyleOverride(null, 12.0, null, haxeon.ui.TextWrap.None, haxeon.ui.TextAlignment.Center, 16.0))
+			new TextStyleOverride(null, 12.0, null, haxeon.ui.TextStyle.TextWrap.None,
+			haxeon.ui.TextStyle.TextAlignment.Center,
+			16.0))
 			: new haxeon.ui.widgets.Icon("arrow",
 			arrow,
 			14.0,
@@ -107,18 +109,18 @@ private class ShortcutKeycap implements View {
 		var surfaceStyle = new LayoutStyle();
 		surfaceStyle.width = LayoutAxis.grow();
 		surfaceStyle.height = LayoutAxis.grow();
-		surfaceStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
-		var surface = context.createNode(context.rootId("keycap-surface"), haxeon.ui.LayoutVisualKind.Custom,
+		surfaceStyle.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
+		var surface = context.createNode(context.rootId("keycap-surface"), haxeon.ui.LayoutNode.LayoutVisualKind.Custom,
 			surfaceStyle);
 		surface.hitTestSelf = false;
 		var border = blend(base, ink, selected ? 0.35 : 0.20);
 		surface.onPaint(function(canvas, geometry) {
 			if (geometry.width <= 2 || geometry.height <= 3) return;
-			canvas.strokeTransient(new haxeon.ui.PathBuilder().roundRect(0.5, 0.5, geometry.width - 1,
+			canvas.strokeTransient(new haxeon.ui.Path.PathBuilder().roundRect(0.5, 0.5, geometry.width - 1,
 				geometry.height - 1, 3.5).build(),
 				border,
 				1.0);
-			canvas.strokeTransient(new haxeon.ui.PathBuilder().moveTo(4,
+			canvas.strokeTransient(new haxeon.ui.Path.PathBuilder().moveTo(4,
 				geometry.height - 1.5).lineTo(geometry.width - 4, geometry.height - 1.5).build(),
 				border,
 				1.0);

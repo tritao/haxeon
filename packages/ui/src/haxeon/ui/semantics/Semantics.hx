@@ -138,3 +138,15 @@ interface SemanticsValueSource {
 	/** A number that changes whenever `semanticsValue` would return something different. */
 	function semanticsValueRevision():Int;
 }
+
+/** Roles already understood by NativeKit's virtual accessibility tree. */
+typedef AccessibilityRole = nativekit.ffi.NativeKitTypes.NativeAccessibilityRole;
+
+/** State bits shared with NativeKit's accessibility backend. */
+typedef AccessibilityState = nativekit.ffi.NativeKitTypes.AccessibilityStates;
+
+/** Action capability bits shared with NativeKit's accessibility backend. */
+typedef AccessibilityAction = nativekit.ffi.NativeKitTypes.AccessibilityActions;
+
+/** Generic orientation values shared with NativeKit's accessibility ABI. */
+typedef AccessibilityOrientation = nativekit.ffi.NativeKitTypes.NativeAccessibilityOrientation;

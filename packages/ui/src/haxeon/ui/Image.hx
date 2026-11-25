@@ -1,7 +1,6 @@
 package haxeon.ui;
 
 import haxe.io.Bytes;
-import haxeon.ui.ImageFormat;
 
 /** An immutable image resource uploaded to the UI renderer. */
 class Image extends NativeKitUIResource {
@@ -48,3 +47,9 @@ class Image extends NativeKitUIResource {
 			ImageFormat.Rgba8, filter);
 	}
 }
+
+/** Texture sampling used when an image is drawn larger or smaller than its source. */
+typedef ImageFilter = NativeKitUI.UiImageFilter;
+
+/** Pixel formats accepted by Image.create. */
+typedef ImageFormat = NativeKitUI.UiImageFormat;

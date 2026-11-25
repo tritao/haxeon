@@ -2,11 +2,7 @@ package haxeon.ui.widgets.navigation;
 
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
-import haxeon.ui.LayoutAlignmentX;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDirection;
-import haxeon.ui.LayoutDistribution;
-import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Transform2D;
 import haxeon.ui.animation.AnimationController;
@@ -19,9 +15,6 @@ import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.semantics.AccessibilityAction;
-import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 
 /** Slide and drag state of one sheet, kept across rebuilds. */

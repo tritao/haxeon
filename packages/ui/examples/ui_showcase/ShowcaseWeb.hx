@@ -2,7 +2,7 @@ import haxe.CallStack;
 import haxeon.platform.BindingError;
 import haxeon.platform.SurfaceFrame;
 import haxeon.platform.event.EventSubscription;
-import haxeon.ui.FontFamily;
+import haxeon.ui.FontCollection;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.core.RenderNode;

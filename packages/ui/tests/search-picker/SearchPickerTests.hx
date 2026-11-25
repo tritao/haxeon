@@ -10,8 +10,6 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
-import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.commands.CommandPalette;
 import haxeon.ui.widgets.commands.SearchPicker;

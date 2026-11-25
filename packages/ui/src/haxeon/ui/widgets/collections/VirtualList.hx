@@ -1,17 +1,14 @@
 package haxeon.ui.widgets.collections;
 
-import haxeon.ui.LayoutSizing;
+import haxeon.ui.LayoutNode;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.View;
-import haxeon.ui.semantics.AccessibilityOrientation;
-import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
@@ -169,7 +166,7 @@ private class VirtualCollectionRow implements View {
 			if (metadata != null) {
 				semantics.label = metadata.labelAt(index);
 				node.enabled = metadata.enabledAt(index);
-				if (!node.enabled) semantics.states |= haxeon.ui.semantics.AccessibilityState.Disabled;
+				if (!node.enabled) semantics.states |= haxeon.ui.semantics.Semantics.AccessibilityState.Disabled;
 			}
 			node.semantics = semantics;
 			node.add(new KeyedView('item:$itemKey', child).build(context));

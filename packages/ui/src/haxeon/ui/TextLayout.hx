@@ -3,6 +3,7 @@ package haxeon.ui;
 import Equatable;
 import NativeKitUI;
 
+import haxeon.ui.TextStyle;
 /** A shaped text layout resource with a stable handle and mutable UTF-8 content. */
 class TextLayout extends NativeKitUIResource {
 	public var text(default, null):String;

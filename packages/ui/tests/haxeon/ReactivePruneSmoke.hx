@@ -1,6 +1,6 @@
 import haxeon.reactive.ReactiveRuntime;
 import haxeon.reactive.Signal;
-import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.BuildContext.SelfUpdatingBuild;
 import haxeon.ui.core.BuildContext.UpdatingDependencies;

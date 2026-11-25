@@ -10,11 +10,8 @@ import haxeon.editor.TextDocument.TextDocumentBuffer;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.FontCollection;
-import haxeon.ui.LayoutMeasureConstraints;
-import haxeon.ui.LayoutMeasureResult;
-import haxeon.ui.ParagraphStyle;
+import haxeon.ui.LayoutContent;
 import haxeon.ui.Rect;
-import haxeon.ui.TextColorRange;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 
@@ -151,7 +148,7 @@ class TextEditorLayout implements Disposable {
 			}
 			width = nextWidth;
 			clearRangeGeometryCache();
-			recomputeMetrics(paragraphStyle.wrap != haxeon.ui.TextWrap.None);
+			recomputeMetrics(paragraphStyle.wrap != haxeon.ui.TextStyle.TextWrap.None);
 			return;
 		}
 		textStyle = nextTextStyle;
@@ -415,11 +412,12 @@ class TextEditorLayout implements Disposable {
 	function fitsWidth(record:TextEditorParagraphRecord, nextWidth:Float):Bool {
 		if (!record.laidOut || record.layout.width == nextWidth)
 			return true;
-		if (paragraphStyle.wrap != haxeon.ui.TextWrap.None || paragraphStyle.alignment != haxeon.ui.TextAlignment.Start)
+		if (paragraphStyle.wrap != haxeon.ui.TextStyle.TextWrap.None
+			|| paragraphStyle.alignment != haxeon.ui.TextStyle.TextAlignment.Start)
 			return false;
 		return switch paragraphStyle.direction {
-			case haxeon.ui.TextDirection.Ltr: true;
-			case haxeon.ui.TextDirection.Rtl: false;
+			case haxeon.ui.TextStyle.TextDirection.Ltr: true;
+			case haxeon.ui.TextStyle.TextDirection.Rtl: false;
 			case _: !record.hasRightToLeftText();
 		};
 	}
@@ -471,8 +469,8 @@ class TextEditorLayout implements Disposable {
 			else merged.push(range);
 		}
 		if (mode != "all" && merged.length == 0) return;
-		var dots = [new haxeon.ui.PathBuilder(), new haxeon.ui.PathBuilder()];
-		var arrows = [new haxeon.ui.PathBuilder(), new haxeon.ui.PathBuilder()];
+		var dots = [new haxeon.ui.Path.PathBuilder(), new haxeon.ui.Path.PathBuilder()];
+		var arrows = [new haxeon.ui.Path.PathBuilder(), new haxeon.ui.Path.PathBuilder()];
 		var dotCounts = [0, 0], arrowCounts = [0, 0];
 		var rangeIndex = 0;
 		var low = 0, high = paragraphs.length;
@@ -1008,7 +1006,7 @@ class TextEditorLayout implements Disposable {
 			var rows = first.rows == null ? (first.rows = measureRows(first)) : first.rows;
 			estimatedRowHeight = Math.max(1.0, first.height / Math.max(1, rows.length - 1));
 		}
-		var estimate = paragraphStyle.wrap == haxeon.ui.TextWrap.None;
+		var estimate = paragraphStyle.wrap == haxeon.ui.TextStyle.TextWrap.None;
 		for (record in paragraphs) {
 			record.y = contentHeight;
 			if (record.laidOut || !estimate) measureRecord(record);

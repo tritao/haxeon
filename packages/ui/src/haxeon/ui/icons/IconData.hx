@@ -1,7 +1,6 @@
 package haxeon.ui.icons;
 
 import haxeon.ui.Path;
-import haxeon.ui.PathBuilder;
 
 /** Generated 24×24 vector paths derived from the vendored Lucide SVG assets. */
 class IconData {

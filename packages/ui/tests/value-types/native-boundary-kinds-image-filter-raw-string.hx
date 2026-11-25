@@ -1,4 +1,4 @@
-import haxeon.ui.ImageFilter;
+import haxeon.ui.Image;
 function main():Int {
 	var state:ImageFilter = "invalid";
 	return 42;

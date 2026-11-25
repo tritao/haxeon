@@ -1,12 +1,8 @@
 package haxeon.ui.theme;
 
 import haxeon.ui.Color;
-import haxeon.ui.FontFamily;
-import haxeon.ui.ParagraphStyle;
-import haxeon.ui.TextAlignment;
-import haxeon.ui.TextDirection;
+import haxeon.ui.FontCollection;
 import haxeon.ui.TextStyle;
-import haxeon.ui.TextWrap;
 import haxeon.ui.core.TextStyleOverride;
 
 /** Semantic typography roles resolved by the NativeKit UI framework. */

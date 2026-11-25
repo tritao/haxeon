@@ -4,9 +4,7 @@ import Observable;
 import haxeon.ui.core.UiEventPhase;
 
 import haxeon.ui.Insets;
-import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
@@ -194,7 +192,8 @@ class SettingsPanel implements View implements Observable implements Disposable 
 				if (first == null && child.focusable && child.enabled
 					&& child.styleClasses.indexOf("inspector-section-header")
 					< 0 && child.styleType != "scrollbar-thumb" && (child.semantics == null
-					|| child.semantics.role != haxeon.ui.semantics.AccessibilityRole.ScrollArea)) first = child.id;
+					|| child.semantics.role != haxeon.ui.semantics.Semantics.AccessibilityRole.ScrollArea)) first =
+					child.id;
 			});
 			return first;
 		}
@@ -277,7 +276,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 				+ [for (setting in restart) setting.label].join(", "),
 				summaryStyle,
 				null,
-				haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextWrap.WordCharacter))));
+				haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextStyle.TextWrap.WordCharacter))));
 		}
 		if (restart.length > 0 || restartOnly) children.push(new KeyedView("restart-action",
 			new haxeon.ui.widgets.controls.Button(restartOnly ? "Show all settings" : "Show changed settings",

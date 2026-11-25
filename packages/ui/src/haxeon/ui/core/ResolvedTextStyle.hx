@@ -1,6 +1,5 @@
 package haxeon.ui.core;
 
-import haxeon.ui.ParagraphStyle;
 import haxeon.ui.TextStyle;
 
 import haxeon.ui.Color;

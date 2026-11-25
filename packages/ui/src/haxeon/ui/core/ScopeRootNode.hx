@@ -1,7 +1,7 @@
 package haxeon.ui.core;
 
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 
 /** A component's actual body root carries its native owner; ordinary descendants carry no owner field. */
 internal class ScopeRootNode extends RenderNode {

@@ -1,5 +1,6 @@
 package haxeon.ui;
 
+
 /**
  * Haxe-owned mutable layout, paint, visibility, and transform inputs. Field masks are generated from the
  * declaration; the scalar cache fingerprint is explicit and is not a map-key hash.
@@ -89,4 +90,28 @@ class LayoutStyle implements Diffable {
 	public function copy():LayoutStyle
 		return haxeon.Diff.copy(this);
 
+}
+
+/** Child flow direction used by the native layout engine. */
+typedef LayoutDirection = NativeKitUI.UiLayoutDirection;
+
+/** Cross-axis alignment for children in a top-to-bottom layout. */
+typedef LayoutAlignmentX = NativeKitUI.UiLayoutAlignmentX;
+
+/** Cross-axis alignment for children in a left-to-right layout. */
+typedef LayoutAlignmentY = NativeKitUI.UiLayoutAlignmentY;
+
+/** Main-axis free-space distribution policy. */
+typedef LayoutDistribution = NativeKitUI.UiLayoutDistribution;
+
+/** Optional per-child cross-axis alignment override. */
+typedef LayoutSelfAlignment = NativeKitUI.UiLayoutSelfAlignment;
+
+/** Child flow policy for layout containers. */
+typedef LayoutWrapMode = NativeKitUI.UiLayoutWrapMode;
+
+/** Whether a node participates in parent flow or floats over sibling layout. */
+enum LayoutPositioning implements Hashable {
+	Flow;
+	Absolute;
 }

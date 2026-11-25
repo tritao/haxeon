@@ -8,8 +8,6 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.debug.AccessibilityAudit;
 import haxeon.ui.semantics.AccessibilityRequest;
-import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.ComboBox;
 import haxeon.ui.widgets.controls.Select;

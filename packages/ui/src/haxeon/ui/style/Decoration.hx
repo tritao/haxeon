@@ -2,8 +2,8 @@ package haxeon.ui.style;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
-import haxeon.ui.GradientStop;
 import haxeon.ui.Image;
+import haxeon.ui.Paint;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 

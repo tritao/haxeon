@@ -1,6 +1,6 @@
 import haxeon.ui.LayoutFrame;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutSession;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;

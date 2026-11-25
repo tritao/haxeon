@@ -1,14 +1,13 @@
 package haxeon.ui.widgets.text;
 
 import haxeon.ui.Color;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleTarget;

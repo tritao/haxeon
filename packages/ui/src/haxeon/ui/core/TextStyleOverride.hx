@@ -1,15 +1,11 @@
 package haxeon.ui.core;
 
-import haxeon.ui.ParagraphStyle;
-import haxeon.ui.TextAlignment;
-import haxeon.ui.TextDirection;
+import haxeon.ui.FontCollection;
 import haxeon.ui.TextStyle;
-import haxeon.ui.TextWrap;
 
 
 
 import haxeon.ui.Color;
-import haxeon.ui.FontFamily;
 
 /**
  * Sparse typography changes applied to the current inherited text style.

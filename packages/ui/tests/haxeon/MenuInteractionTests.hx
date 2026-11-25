@@ -3,7 +3,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.overlays.Menu;
 

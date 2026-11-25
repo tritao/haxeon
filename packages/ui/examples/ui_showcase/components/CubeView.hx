@@ -6,8 +6,8 @@ import ShowcaseCube;
 import haxeon.ui.Canvas;
 import haxeon.ui.GraphicsSurface;
 import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.animation.Animation;
@@ -17,7 +17,6 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.View;
-import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 
 /** Retained native 3D surface composited as an ordinary UI view. */

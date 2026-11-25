@@ -1,5 +1,7 @@
 package haxeon.ui;
 
+
+import haxeon.ui.TextStyle;
 /** Render/layout node submitted to NativeUI. Haxe semantics live above it. */
 class LayoutNode {
 	public final id:Int;
@@ -153,3 +155,6 @@ private class LayoutTextStyles {
 		this.paragraph = paragraph;
 	}
 }
+
+/** Rendering/layout representation, independent from semantic role. */
+typedef LayoutVisualKind = NativeKitUI.UiLayoutVisualKind;

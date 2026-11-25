@@ -4,10 +4,8 @@ import haxeon.ui.widgets.text.TextField;
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDirection;
-import haxeon.ui.LayoutSizing;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
@@ -15,9 +13,6 @@ import haxeon.ui.core.State;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
-import haxeon.ui.semantics.AccessibilityAction;
-import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 
 import haxeon.ui.widgets.controls.Button;
@@ -306,7 +301,7 @@ class ComboBox<T> implements View {
 				enabled ? context.theme.text : context.theme.disabledText,
 				isOpen), null, null, null, isOpen ? "Hide options" : "Show options", null, arrowSemantics);
 			var arrowNode = context.withScope(new Key("toggle"), function() return arrow.build(context));
-			arrowNode.layout.style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+			arrowNode.layout.style.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
 			arrowNode.layout.style.positionX = -32;
 			arrowNode.layout.style.zIndex = 3;
 			arrowNode.layout.style.clipToParent = false;
