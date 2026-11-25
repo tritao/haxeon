@@ -50,6 +50,7 @@ class GenericElaboration extends TypedTypeMap {
 		var made = switch kind {
 			case Coerce: typer.coerce(value, type(item.type), "a generic body's conversion");
 			case Boundary: typer.elaborateBoundary(value, type(item.type));
+			case Cast: typer.elaborateCast(value, type(item.type), item.span);
 		};
 		if (made == value)
 			return made;

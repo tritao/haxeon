@@ -254,9 +254,12 @@ class ClosureTyper {
 				outer.declaration, outer.temporary).keyPathConstant = pathConstants.get(name);
 		}
 		// A lambda that captures is named after what it captures too, so an edit that changes its environment makes a new
-		// function with a new environment type: closures made before the edit keep the code that reads their environment.
+		// function with a new environment type: closures made before the edit keep the code that reads their environment. The
+		// environment holds the captures as the body represents them (`localTypeRepresentation`).
+		var capturedRepresentation = outerContext.localTypeRepresentation;
 		var capturedIdentity = LambdaName.withCaptures(identity, [for (capture in captures)
-			capture.field + ":" + compiler.types.DeclarationIndex.typeKey(capture.storageType)]);
+			capture.field + ":" + compiler.types.DeclarationIndex.typeKey(capturedRepresentation == null
+			? capture.storageType : capturedRepresentation(capture.storageType))]);
 		var lambdaName = LambdaName.of(outerContext.name, capturedIdentity),
 			lambdaContext = session.enterBody(lambdaName, lambdaSubstitutions, null),
 			context = session.currentContext,

@@ -261,6 +261,9 @@ class BodyTyper implements BodyTyping {
 		if (functionContext == null)
 			functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
 				specializedName == null ? null : owner == null ? fn.name : owner + "." + fn.name);
+		// Typed with its own type parameters, the body still stands for its specialization (`localTypeRepresentation`).
+		if (elaboration != null)
+			context.localTypeRepresentation = elaboration.type;
 		// The body's names, resolved once: the analyses below read them (docs/design/BODY_RESOLUTION.md).
 		var resolution = compiler.types.analysis.BodyResolution.of(fn.arguments, fn.statements);
 		context.resolution = resolution;
@@ -414,6 +417,10 @@ class BodyTyper implements BodyTyping {
 	/** `value` crossing to `target`, of substituted types, as `TypeRepresentation.boundaryCast` makes it (`GenericElaboration`). */
 	public function elaborateBoundary(value:TypedExpression, target:CompilerType):TypedExpression
 		return session.representation.boundaryCast(value, target);
+
+	/** `value` cast to `target` at `span`, of substituted types, as an unsafe `cast` makes it (`GenericElaboration`). */
+	public function elaborateCast(value:TypedExpression, target:CompilerType, span:SourceSpan):TypedExpression
+		return conversionResolver.adaptFunction(value, target, span);
 
 	public function stringifyMap(value:TypedExpression):Null<TypedExpression>
 		return callResolver.stringifyMap(value, value.span, new Scope());

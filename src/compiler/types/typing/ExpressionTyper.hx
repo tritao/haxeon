@@ -2153,6 +2153,12 @@ class ExpressionTyper {
 				return coerceCastNull(typedValue, targetType);
 			typedValue = coerceCastNull(typedValue, TDynamic);
 		}
+		// Where a type parameter is on either side, what the cast makes depends on what the parameter stands for (a Dynamic
+		// value cast to a structure keeps or copies the record): it is recorded, and the elaboration pass makes it.
+		if (TypeRepresentation.mentionsTypeParameter(typedValue.type)
+			|| TypeRepresentation.mentionsTypeParameter(targetType))
+			return new TypedExpression(TParameterConversion(typedValue, Cast), targetType, span,
+				typedValue.stableFlowValue);
 		return conversionResolver.adaptFunction(typedValue, targetType, span);
 	}
 

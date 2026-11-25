@@ -17,6 +17,11 @@ class TypingContext {
 	public var name(get, never):String;
 	public var lexicalOwner(get, never):Null<String>;
 	public final typeSubstitutions:Map<String, CompilerType>;
+	/**
+	 * What the body's own types are in its code, where they are not themselves: a local generic function's erased types, or an
+	 * elaborated generic body's specialization (`GenericElaboration`). The structures it registers, the lambdas it names and the
+	 * generic calls it makes are of these types, as typing the body at them gives.
+	 */
 	public var localTypeRepresentation:Null<CompilerType->CompilerType> = null;
 
 	/**

@@ -76,6 +76,7 @@ interface BodyTyping {
 			?elaboration:GenericElaboration):TypedFunction;
 	function argumentTypesOf(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType>;
 	function elaborateBoundary(value:TypedExpression, target:CompilerType):TypedExpression;
+	function elaborateCast(value:TypedExpression, target:CompilerType, span:SourceSpan):TypedExpression;
 	function stringifyMap(value:TypedExpression):Null<TypedExpression>;
 	function elaborateOperation(operation:compiler.types.TypedAst.ParameterOperation, arguments:Array<TypedExpression>,
 			span:compiler.core.Source.SourceSpan):TypedExpression;

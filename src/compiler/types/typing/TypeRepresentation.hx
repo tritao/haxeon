@@ -931,7 +931,7 @@ class TypeRepresentation {
 			arguments:Array<TypedExpression>,
 			argumentTypesOf:GenericArgumentTypesResolver, ?receiver:AstType,
 			?owner:CompilerType):GenericCallRepresentationResult {
-		// A generic call inside a local closure uses the types its shared body can pass.
+		// A generic call inside a local closure, or an elaborated body, uses the types its body is represented with.
 		var localRepresentation = session.currentContext.localTypeRepresentation,
 			physicalSubstitutions = localRepresentation == null ? copyMap(semanticSubstitutions)
 				: [for (parameter => type in semanticSubstitutions) parameter => localRepresentation(type)],
@@ -940,7 +940,8 @@ class TypeRepresentation {
 		switch owner {
 			case TInstance(Class, name, values):
 				ownerParameters = session.classDecls.required(name).typeParameters;
-				ownerArguments = values;
+				ownerArguments = localRepresentation == null
+					? values : [for (value in values) localRepresentation(value)];
 				for (index in 0...ownerParameters.length)
 					physicalSubstitutions.set(ownerParameters[index], ownerArguments[index]);
 			default:

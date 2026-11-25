@@ -243,3 +243,15 @@ output stays byte-identical. They go to the service lane.
   - an iteration argument a specialization makes concrete (4) and a constant key-path argument (2);
   - owner specializations with an enum, `Null<T>`, a generic base class or a constrained owner's nullable result (4);
   - a `[shape]` body's field (1).
+
+### As built (stage 2, a body stands for its specialization)
+
+- **The body's own types are represented.** An elaborated body's context has the pass's substitution as its
+  `TypingContext.localTypeRepresentation`, as a local generic function's erased body has its erasure. What the typer makes
+  of a type while it types the body is of the representation's types: the structures it registers (an object literal of
+  `{key:K, value:V}` in `ObjectMap.keyValueIterator` registered the structure of `K` and reached lowering), the names of
+  its lambdas, which hash their captures' types, and its nested generic calls, whose callee is specialized at the
+  representation and the owner's representation, as typing the body again specializes it.
+- **Casts.** An unsafe `cast` where a type parameter is on either side is `TParameterConversion(value, Cast)`; the pass
+  makes it at the substituted types (`ObjectMap.get`'s cast from `Dynamic` to a structure `V` keeps the record it is).
+- With the option, 34 programs are still listed. Of item 4, nested generic calls (3) and lambda names (5) remain.

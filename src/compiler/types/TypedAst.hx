@@ -78,6 +78,9 @@ enum ParameterConversionKind {
 
 	/** A value crossing between its physical and semantic type (`TypeRepresentation.boundaryCast`). */
 	Boundary;
+
+	/** An unsafe `cast` of a value to a type (`ExpressionTyper.typeCast`). */
+	Cast;
 }
 
 /** Type-checked expression operations consumed by IR generation. */

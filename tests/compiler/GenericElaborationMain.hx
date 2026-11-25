@@ -73,6 +73,35 @@ class GenericElaborationMain {
 		}
 		sameBytes("a member that returns a structure of its parameter", structured.compile("Main"),
 			structuredPlain.compile("Main"));
+		// A specialization's body builds a structure of its parameters and a lambda that captures one (as
+		// `ObjectMap.keyValueIterator` does), and casts a Dynamic value to one (as `ObjectMap.get` does): the program has the
+		// structure and the lambda name of the substituted types, not of the parameters, and the cast keeps the record a Dynamic
+		// structure is, as it does at those types.
+		var entries = [
+			"class Entries<K, V> {",
+			"	public function new() {}",
+			"	public function entry(key:K, value:Dynamic):{key:K, value:V} return {key: key, value: cast value};",
+			"	public function later(key:K):() -> K return () -> key;",
+			"}"
+		],
+			keyed = [
+				"class Key {",
+				"	public function new() {}",
+				"}",
+				"class Main {",
+				"	static function main():Int {",
+				"		var entries = new Entries<Key, {x:Int}>(), key = new Key();",
+				"		return entries.later(key)() == key ? entries.entry(key, {x: 1}).value.x : 0;",
+				"	}",
+				"}"
+			];
+		var built = compiler(true), builtPlain = compiler(false);
+		for (c in [built, builtPlain]) {
+			c.update("Entries.hx", entries.join("\n"));
+			c.update("Main.hx", keyed.join("\n"));
+		}
+		sameBytes("a specialization that builds, captures and casts values of its parameters", built.compile("Main"),
+			builtPlain.compile("Main"));
 		Sys.println("PASS: a generic class's elaborated code is the code typed again, and its boundaries name their type parameter");
 	}
 
