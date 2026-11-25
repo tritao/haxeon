@@ -114,11 +114,11 @@ try {
     await page.setViewportSize({ width, height: 900 });
     showcaseRequests.length = 0;
     assert.equal((await page.goto(origin + '/ui/')).status(), 200);
-    const start = page.getByRole('button', { name: 'Start live Showcase' });
+    const start = page.getByRole('button', { name: 'Start the live Showcase' });
     await start.waitFor();
     assert.deepEqual(showcaseRequests, [], 'Showcase requested assets before activation');
     await start.click();
-    const frame = page.locator('iframe[title="Haxeon UI Showcase"]');
+    const frame = page.locator('iframe[title="UI Showcase"]');
     await frame.waitFor({ timeout: 60_000 });
     await frame.scrollIntoViewIfNeeded();
     const box = await frame.boundingBox();
@@ -133,9 +133,9 @@ try {
   // A load failure leaves the preview available and the user can retry.
   await page.route('**/nativekit_ui_haxeon.wasm', route => route.abort());
   await page.goto(origin + '/ui/');
-  await page.getByRole('button', { name: 'Start live Showcase' }).click();
+  await page.getByRole('button', { name: 'Start the live Showcase' }).click();
   await page.getByText('The Showcase could not load.').waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Start live Showcase' }).isEnabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Start the live Showcase' }).isEnabled(), true);
   console.log('Verified click-to-start Showcase rendering at desktop and mobile widths and recovery after a load failure.');
 } finally {
   await browser.close();
