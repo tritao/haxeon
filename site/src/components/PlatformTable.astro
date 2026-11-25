@@ -1,33 +1,38 @@
 ---
 import StatusBadge, { type Status } from './StatusBadge.astro';
 
-const platforms: { platform: string; icon: string; status: Status; live: string }[] = [
+const platforms: { platform: string; detail?: string; icon: string; status: Status; live: string }[] = [
   {
-    platform: 'Linux (x86-64, arm64)',
+    platform: 'Linux',
+    detail: 'x86-64, arm64',
     icon: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M7 9l3 2-3 2M12 13h4M9 20h6"/>',
     status: 'Supported',
     live: 'Yes',
   },
   {
-    platform: 'macOS (Intel, Apple Silicon)',
+    platform: 'macOS',
+    detail: 'Intel, Apple Silicon',
     icon: '<path d="M5 6h14v10H5z"/><path d="M2 19h20"/>',
     status: 'Supported',
     live: 'Yes',
   },
   {
-    platform: 'Windows (x86-64)',
+    platform: 'Windows',
+    detail: 'x86-64',
     icon: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M3 8h18M9 20h6"/>',
     status: 'Supported',
     live: 'Yes',
   },
   {
-    platform: 'Android (arm64-v8a, x86_64)',
+    platform: 'Android',
+    detail: 'arm64-v8a, x86_64; debug APKs',
     icon: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
-    status: 'Supported',
+    status: 'Preview',
     live: 'Yes',
   },
   {
-    platform: 'Web (WebAssembly)',
+    platform: 'Web',
+    detail: 'WebAssembly',
     icon: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>',
     status: 'Experimental',
     live: 'Not yet',
@@ -41,7 +46,7 @@ const platforms: { platform: string; icon: string; status: Status; live: string 
 ];
 ---
 
-<div class="platforms">
+<div class="table-scroll">
   <table aria-label="Platforms">
     <thead>
       <tr
@@ -51,12 +56,12 @@ const platforms: { platform: string; icon: string; status: Status; live: string 
     </thead>
     <tbody>
       {
-        platforms.map(({ platform, icon, status, live }) => (
+        platforms.map(({ platform, detail, icon, status, live }) => (
           <tr>
             <th scope="row">
               <span class="platform">
                 <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" set:html={icon} />
-                {platform}
+                <span>{platform}{detail && <small>{detail}</small>}</span>
               </span>
             </th>
             <td>
@@ -71,9 +76,6 @@ const platforms: { platform: string; icon: string; status: Status; live: string 
 </div>
 
 <style>
-  .platforms {
-    overflow-x: auto;
-  }
   .platform {
     display: inline-flex;
     align-items: center;

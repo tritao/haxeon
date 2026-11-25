@@ -1,0 +1,149 @@
+---
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { Code } from '@astrojs/starlight/components';
+import { parse } from 'yaml';
+import SplashPage from '../layouts/SplashPage.astro';
+import StatusBadge from '../components/StatusBadge.astro';
+import { docsUrl, projectRepo, repositorySource } from '../../docs.mjs';
+
+// The newest published release, as its tag names it without the `v`; null until the first one is published.
+const latest: string | null = null;
+
+// The archives are the release workflow's build matrix, so the page lists exactly what a release builds.
+const releaseWorkflow = '.github/workflows/release.yml';
+const workflow = parse(readFileSync(join(__SITE_ROOT__, '..', releaseWorkflow), 'utf8'));
+const builds: { platform: string; aot: boolean; experimental: boolean }[] = workflow.jobs.package.strategy.matrix.include;
+const platformNames: Record<string, string> = {
+  'linux-x86_64': 'Linux x86-64',
+  'windows-x86_64': 'Windows x86-64',
+  'macos-arm64': 'macOS Apple Silicon',
+};
+const archives = builds.map(({ platform, aot, experimental }) => {
+  const name = platformNames[platform];
+  if (!name) throw new Error(`${releaseWorkflow} builds ${platform}, which the download page does not name`);
+  const file = `haxeon-${latest}-${platform}.${platform.startsWith('windows') ? 'zip' : 'tar.gz'}`;
+  return {
+    name,
+    status: experimental ? ('Experimental' as const) : ('Supported' as const),
+    note: aot ? 'Compiler and CLI built ahead of time.' : 'Compiler and CLI run on the included VM, so commands start more slowly.',
+    href: latest && `${projectRepo}/releases/download/v${latest}/${file}`,
+    file,
+  };
+});
+
+const fromSource = `git clone ${projectRepo}.git
+cd haxeon
+./scripts/bootstrap-tools.sh     # pinned tools (Windows: scripts/setup.ps1)
+cmake --preset release
+cmake --build --preset release   # the VM and the runtime
+./scripts/haxeon doctor          # builds the CLI, then checks your native toolchain
+export PATH="$PWD/out/sdk/bin:$PATH"`;
+const extension = `cd extensions/vscode
+npm ci && npm run build`;
+---
+
+<SplashPage
+  title="Download"
+  description="Download Haxeon for Linux, macOS or Windows, or build it from source."
+>
+  <section class="page-intro">
+    <div class="wrap">
+      <div class="intro">
+        <h1 id="_top" tabindex="-1">Download Haxeon</h1>
+        <p class="lede">
+          One archive per platform holds the <code>haxeon</code> command, the VM, the compiler, the standard library and
+          the project templates. Haxeon is pre-1.0: the language, the CLI and the packages may change between releases.
+        </p>
+        {
+          !latest && (
+            <p class="notice">
+              No release has been published yet. Until the first one, <a href="#from-source">build Haxeon from source</a>:
+              it takes a few minutes and gives you the same <code>haxeon</code> command.
+            </p>
+          )
+        }
+      </div>
+    </div>
+  </section>
+
+  <section id="archives">
+    <div class="wrap">
+      <div class="head">
+        <h2>Release archives</h2>
+        <p class="lede">
+          Unpack an archive anywhere and put its <code>bin</code> directory on your <code>PATH</code>.{' '}
+          <code>haxeon doctor</code> then checks the C toolchain and CMake that app builds need.
+        </p>
+      </div>
+      <div class="table-scroll">
+        <table aria-label="Release archives">
+          <thead>
+            <tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Archive</th></tr>
+          </thead>
+          <tbody>
+            {
+              archives.map(({ name, status, note, href, file }) => (
+                <tr>
+                  <th scope="row">{name}<small>{note}</small></th>
+                  <td><StatusBadge status={status} /></td>
+                  <td>{href ? <a href={href}>{file}</a> : 'Not yet published'}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="note">
+        On other machines, including Linux arm64 and Intel Macs, build from source. <a
+          href={docsUrl('reference/RELEASES.md')}>What an archive holds</a
+        > · <a href={`${projectRepo}/releases`}>All releases</a>
+      </p>
+    </div>
+  </section>
+
+  <section id="from-source">
+    <div class="wrap">
+      <div class="head">
+        <h2>Build from source</h2>
+        <p class="lede">
+          You need Git, CMake and a C/C++ toolchain. The setup script installs the pinned Haxe, HashLink and Ninja tools
+          inside the checkout.
+        </p>
+      </div>
+      <Code code={fromSource} lang="sh" frame="terminal" />
+      <p class="note">
+        Then <a href={docsUrl('guides/00-get-started.md')}>create your first app</a>. Working on Haxeon itself? See <a
+          href={repositorySource('docs/DEVELOPMENT.md')}>the development guide</a
+        >.
+      </p>
+    </div>
+  </section>
+
+  <section id="editor">
+    <div class="wrap">
+      <div class="head">
+        <h2>Editor support</h2>
+        <p class="lede">
+          The VS Code extension adds the language server, the debugger and the realtime profiler. It is not in the
+          Marketplace yet: build it from the checkout and run it from VS Code.
+        </p>
+      </div>
+      <Code code={extension} lang="sh" frame="terminal" />
+      <p class="note">
+        Then open <code>extensions/vscode</code> in VS Code and press F5. The debugger runs on x64 Linux, Windows and
+        Intel macOS. <a href={repositorySource('extensions/vscode/README.md')}>Extension guide</a>
+      </p>
+    </div>
+  </section>
+</SplashPage>
+
+<style>
+  .notice {
+    padding: var(--hx-space-3) var(--hx-space-4);
+    border: 1px solid var(--sl-color-gray-5);
+    border-left: 3px solid var(--sl-color-accent);
+    border-radius: var(--hx-radius-s);
+    background: var(--sl-color-bg-sidebar);
+  }
+</style>

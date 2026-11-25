@@ -30,6 +30,7 @@ const output = `- Buy milk
           See live editing
         </a>
       </div>
+      <p class="maturity">Pre-1.0 and changing fast. <a href="/download/">Download or build from source</a></p>
     </div>
     <CodeCard
       lang="haxe"
@@ -45,5 +46,10 @@ const output = `- Buy milk
 <style>
   .hero {
     --hero-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  }
+  .maturity {
+    margin: 0;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
   }
 </style>

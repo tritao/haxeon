@@ -1,5 +1,5 @@
 ---
-export type Status = 'Supported' | 'Experimental' | 'In progress' | 'Planned';
+export type Status = 'Supported' | 'Preview' | 'Experimental' | 'In progress' | 'Planned';
 
 interface Props {
   status: Status;
@@ -20,6 +20,7 @@ const { status } = Astro.props;
     background: var(--sl-color-green-low);
     color: var(--sl-color-green-high);
   }
+  .preview,
   .experimental {
     background: var(--sl-color-accent-low);
     color: var(--sl-color-white);

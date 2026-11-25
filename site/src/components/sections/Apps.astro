@@ -19,8 +19,10 @@ import { docsUrl, repositorySource } from '../../../docs.mjs';
 
     <LiveDemo />
     <div class="steps">
-      <span><b>Patched in place:</b> logic, data, native calls and UI.</span><span>
-        <b>Kept:</b> every object the app made.
+      <span><b>Patched in place:</b> edits to logic, UI and native calls.</span><span>
+        <b>Kept:</b> the app's state, or what <code>saveState</code> returns when an edit <a
+          href={docsUrl('guides/02-live-editing.md') + '#what-patches-and-what-reloads'}>needs a reload</a
+        >.
       </span><span><b>A broken edit:</b> the app keeps running the last good code.</span>
     </div>
 

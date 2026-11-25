@@ -283,6 +283,16 @@
     font-size: var(--sl-text-xs);
   }
 }
+:where(.landing-content th[scope='row'] small) {
+  display: block;
+  font-weight: 400;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+}
+/* A table wider than a narrow screen scrolls inside this wrapper instead of widening the page. */
+:where(.landing-content .table-scroll) {
+  overflow-x: auto;
+}
 :where(.landing-content thead th) {
   font: 600 var(--sl-text-2xs) var(--sl-font-mono);
   letter-spacing: 0.06em;

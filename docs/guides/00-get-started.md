@@ -3,6 +3,8 @@
 This page installs what you need to build apps with Haxeon: a C and C++ toolchain with CMake, then Haxeon itself from a
 release archive. No checkout of Haxeon's sources is needed. Then [Your first app](01-first-app.md) makes an app with it.
 
+Haxeon is pre-1.0: the language, the CLI and the packages may change between releases.
+
 ## Install a C and C++ toolchain and CMake
 
 An app uses Haxeon's UI package, which is partly written in C and C++. Haxeon builds that code on your machine, once,
@@ -43,6 +45,10 @@ A full Visual Studio with the "Desktop development with C++" workload serves as 
 is no need to start a developer prompt.
 
 ## Install Haxeon
+
+No release has been published yet. Until the first one, build Haxeon from source as the
+[README's Quick start](https://github.com/tritao/haxeon#-quick-start) shows, which gives you the same `haxeon` command,
+and skip the rest of this section.
 
 Download the release archive for your system from the [releases page](https://github.com/tritao/haxeon/releases):
 `haxeon-VERSION-linux-x86_64.tar.gz`, `haxeon-VERSION-macos-arm64.tar.gz` or `haxeon-VERSION-windows-x86_64.zip`. An

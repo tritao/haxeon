@@ -23,7 +23,7 @@ const particles = 'docs/guides/examples/06-gpu-basics/particles/';
 // shaders to for it.
 const backends: { platform: string; api: string; short?: string; shaders?: string; status: Status; compute: string; timestamps: string }[] = [
   { platform: 'Linux', api: 'OpenGL 4.1 core', short: 'OpenGL', shaders: 'GLSL 4.1', status: 'Supported', compute: 'GL 4.3+ drivers', timestamps: 'Yes' },
-  { platform: 'Web', api: 'WebGL2', short: 'WebGL2', shaders: 'GLSL ES 3.0', status: 'Supported', compute: 'No', timestamps: 'No' },
+  { platform: 'Web', api: 'WebGL2', short: 'WebGL2', shaders: 'GLSL ES 3.0', status: 'Experimental', compute: 'No', timestamps: 'No' },
   { platform: 'macOS', api: 'Metal', short: 'Metal', shaders: 'Metal', status: 'Supported', compute: 'Yes', timestamps: 'Depends on GPU' },
   { platform: 'Windows', api: 'Direct3D 11', short: 'D3D11', shaders: 'HLSL 5', status: 'Supported', compute: 'Yes', timestamps: 'Yes' },
   { platform: 'Web', api: 'WebGPU', status: 'Planned', compute: '–', timestamps: '–' },
@@ -194,14 +194,16 @@ const generatedExcerpt = [
       </div>
       <div class="split">
         <div>
-          <table aria-label="GPU backends">
-            <thead><tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Compute</th><th scope="col">Timestamps</th></tr></thead>
-            <tbody>
-              {backends.map(({ platform, api, status, compute, timestamps }) => (
-                <tr><th scope="row">{platform}<span class="api-name">{api}</span></th><td><StatusBadge status={status} /></td><td>{compute}</td><td>{timestamps}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <div class="table-scroll">
+            <table aria-label="GPU backends">
+              <thead><tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Compute</th><th scope="col">Timestamps</th></tr></thead>
+              <tbody>
+                {backends.map(({ platform, api, status, compute, timestamps }) => (
+                  <tr><th scope="row">{platform}<small>{api}</small></th><td><StatusBadge status={status} /></td><td>{compute}</td><td>{timestamps}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <p class="note">Image and buffer readback work on every backend.</p>
         </div>
         <LayerDiagram
@@ -250,7 +252,6 @@ const generatedExcerpt = [
   .shader-flow li + li::before { content: '→'; color: var(--sl-color-accent); }
   .shader-flow span { padding: 4px 10px; border: 1px solid var(--sl-color-gray-5); border-radius: var(--hx-radius-s); background: var(--sl-color-bg-sidebar); }
   .nowrap { white-space: nowrap; }
-  .api-name { display: block; font-weight: 400; font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); }
   .hero { --hero-columns: minmax(0, 1fr) minmax(0, 34rem); }
 </style>
 
