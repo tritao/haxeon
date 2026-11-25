@@ -59,6 +59,14 @@ with tempfile.TemporaryDirectory() as directory:
     log.write_text('SIZE_CENSUS ' + json.dumps(row) + '\n')
     result = subprocess.run([report, module, log], text=True, capture_output=True)
     assert result.returncode != 0 and 'accounts for 9 of 10 bytes' in result.stderr
+    # A module of sections (HLB 9) has no trailing debug sections to decode; its parts come from the census as they are.
+    module.write_bytes(b'HLB\x09' + bytes(6))
+    sectioned = {'target': 'hl', 'header, directory and program record': 6, 'function instructions': 6,
+                 'taken off by compression': -2, 'sections': [], 'topTypes': [], 'topStrings': [], 'topStringUses': [],
+                 'topFunctionDebug': []}
+    log.write_text('SIZE_CENSUS ' + json.dumps(sectioned) + '\n')
+    result = subprocess.run([report, module, log], check=True, text=True, capture_output=True)
+    assert json.loads(result.stdout)['categories']['taken off by compression'] == -2
     # A precise span associates a source hash with its embedded snapshot.
     source_hash = struct.pack('<I', 0x1234)
     spans = (bytes([1, 3]) + b'x.h' + bytes([1, 1, 1, 0, 0, 1, 2, 1, 1, 1, 2])

@@ -328,7 +328,9 @@ def main():
         names = {fn['index']: fn['name'] for fn in functions}
         contributors['functionDebug'] = [dict(entry, name=names.get(entry['index'], '#' + str(entry['index'])))
                                          for entry in row['topFunctionDebug']]
-        contributors['debug'] = hl_debug_contributors(module, row['debugSections'], sections)
+        # A module of sections (HLB 9) has no trailing debug sections: each section carries its own.
+        contributors['debug'] = (hl_debug_contributors(module, row['debugSections'], sections)
+                                 if module[3] != 9 else {})
         metadata = {}
         data_details = None
         target = 'hl'

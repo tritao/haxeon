@@ -61,12 +61,15 @@ class HlSectionWriter {
 	static inline final CONSTANT = -1;
 
 	/**
-	 * Writes `code` as HLB 9. `compression` is the LZ4 level of the sections (HlLz4), or null to store them as they are; without
-	 * the HashLink natives they are stored as they are. `checkReuse` links the result as the loader does (`HlStaticLink`).
+	 * Writes `code` as HLB 9. `modules` gives the module of each source file by its path (`SourceFile.path`); text in no module
+	 * file belongs to the shared section. `compression` is the LZ4 level of the sections (HlLz4), or null to store them as they
+	 * are; without the HashLink natives they are stored as they are. `checkReuse` links the result as the loader does
+	 * (`HlStaticLink`).
 	 */
-	public static function write(code:HlCode, ?compression:Int, checkReuse:Bool = false):HlSectionOutput {
+	public static function write(code:HlCode, modules:Map<String, String>, ?compression:Int,
+			checkReuse:Bool = false):HlSectionOutput {
 		HlValidator.validate(code, null, checkReuse);
-		var writer = new HlSectionWriter(code, compression);
+		var writer = new HlSectionWriter(code, modules, compression);
 		var output = writer.encode();
 		if (checkReuse)
 			HlStaticLink.link(output.bytes.flatten());
@@ -74,6 +77,7 @@ class HlSectionWriter {
 	}
 
 	final code:HlCode;
+	final modules:Map<String, String>;
 	final compression:Null<Int>;
 	final hasDebug:Bool;
 	final spans:Bool;
@@ -120,8 +124,9 @@ class HlSectionWriter {
 	final local = new HlSectionIndices();
 	var tables:HlSectionTables = new HlSectionTables();
 
-	function new(code:HlCode, compression:Null<Int>) {
+	function new(code:HlCode, modules:Map<String, String>, compression:Null<Int>) {
 		this.code = code;
+		this.modules = modules;
 		this.compression = compression;
 		var debug = false;
 		for (fn in code.functions)
@@ -179,12 +184,9 @@ class HlSectionWriter {
 
 	// ---- homes
 
-	/** The module of the source file at `path` (`a/b/C.hx` is `a.b.C`), or null for text no module file holds. */
-	static function modulePath(path:String):Null<String> {
-		if (!StringTools.endsWith(path, ".hx") || path.length <= 3)
-			return null;
-		return path.substr(0, path.length - 3).split("/").join(".");
-	}
+	/** The module of the source file at `path`, or null for text no module file holds (generated code). */
+	inline function modulePath(path:String):Null<String>
+		return modules.get(path);
 
 	function assignHomes():Void {
 		var sources = code.sources, moduleOf:Array<Null<String>> = [], named:Map<String, Bool> = [];

@@ -281,7 +281,6 @@ class HashLinkBackendSession implements BackendSession {
 			if (difference != null)
 				throw new InternalError('--check-reuse: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)');
 		}
-		compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSnapshots = AllocationMeter.sample();
 		if (token != null)
@@ -307,8 +306,9 @@ class HashLinkBackendSession implements BackendSession {
 			sections:Null<haxeon.io.SegmentedBytes> = null;
 		if (context.options.moduleSections && !context.livePatching) {
 			// The loader numbers a module of sections itself, and a function's stable id is its index there.
-			var written = compiler.hl.HlSectionWriter.write(assembly.module, compiler.hl.HlLz4.FAST,
-				context.options.checkReuse);
+			var modules = [for (name => state in context.state.modules) state.source.path => name],
+				written = compiler.hl.HlSectionWriter.write(assembly.module, modules, compiler.hl.HlLz4.FAST,
+					context.options.checkReuse);
 			sections = written.bytes;
 			functionIndices = [];
 			for (name => index in assembly.functionIndices) {
@@ -318,6 +318,7 @@ class HashLinkBackendSession implements BackendSession {
 			}
 			stableIds = functionIndices;
 		}
+		compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices, sections);
 		return {
 			artifact: HashLinkBuild({
 				module: assembly.module,
