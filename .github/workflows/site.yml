@@ -51,6 +51,9 @@ jobs:
       - run: nice -n 10 npm run check:embeds
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+      - run: nice -n 10 npm run check:download
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
       - run: nice -n 10 npm run check:links
       - run: nice -n 10 npm run check:template-web
         env:

@@ -11,6 +11,7 @@ npm run dev
 npm run build
 npm run check:commands
 npm run check:embeds
+npm run check:download
 npm run check:links
 npm run check:template-web
 npm run check:grammars
@@ -71,7 +72,8 @@ transcripts can use the Expressive Code `frame="code"` option. With Google Chrom
 and clipboard contents.
 
 After building the Showcase and Circuit Run, run `npm run check:embeds` to start every live embed in Chrome at desktop
-and mobile widths and check that a failed load can be retried. `npm run check:template-web` builds the app template for
+and mobile widths and check that a failed load can be retried. `npm run check:download` visits the download page as
+several kinds of visitor and checks which archive it offers each one first. `npm run check:template-web` builds the app template for
 the web and clicks its counter. The browser checks use `CHROME_BIN` when it is set, and save what they saw under
 `SCREENSHOT_DIR` when that is set.
 

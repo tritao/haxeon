@@ -12,6 +12,7 @@
     "preview": "astro preview",
     "check:commands": "node scripts/check-commands.mjs",
     "check:embeds": "node scripts/check-embeds.mjs",
+    "check:download": "node scripts/check-download.mjs",
     "check:examples": "node scripts/check-examples.mjs",
     "check:links": "node scripts/check-links.mjs",
     "check:grammars": "node scripts/check-grammars.mjs",

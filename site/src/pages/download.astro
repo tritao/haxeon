@@ -25,8 +25,11 @@ const archives = builds.map(({ platform, aot, experimental }) => {
   const names = platformNames[platform];
   if (!names) throw new Error(`${releaseWorkflow} builds ${platform}, which the download page does not name`);
   const file = `haxeon-${latest}-${platform}.${platform.startsWith('windows') ? 'zip' : 'tar.gz'}`;
+  const [os, arch] = platform.split('-');
   return {
     ...names,
+    os,
+    arch,
     status: experimental ? ('Experimental' as const) : ('Supported' as const),
     note: aot ? 'Compiler and CLI built ahead of time.' : 'Compiler and CLI run on the included VM, so commands start more slowly.',
     href: latest && `${projectRepo}/releases/download/v${latest}/${file}`,
@@ -58,6 +61,19 @@ npm ci && npm run build`;
           the project templates. Haxeon is pre-1.0: the language, the CLI and the packages may change between releases.
         </p>
         {
+          latest && (
+            <div class="detected">
+              <div data-detected hidden>
+                <a class="btn primary" data-detected-download href="#archives">Download</a>
+                <a href="#archives">Other platforms</a>
+              </div>
+              <p class="note" data-no-archive hidden>
+                There is no archive for your system yet: <a href="#from-source">build Haxeon from source</a>.
+              </p>
+            </div>
+          )
+        }
+        {
           !latest && (
             <p class="notice">
               No release has been published yet. Until the first one, <a href="#from-source">build Haxeon from source</a>:
@@ -80,23 +96,29 @@ npm ci && npm run build`;
       </div>
       <ul class="grid three archives" aria-label="Release archives">
         {
-          archives.map(({ name, architecture, icon, status, note, href, file }) => (
-            <Card as="li">
-              <div class="platform">
-                <PlatformIcon platform={icon} />
-                <div>
-                  <h3>{name}</h3>
-                  <span class="architecture">{architecture}</span>
+          archives.map(({ name, architecture, icon, os, arch, status, note, href, file }) => (
+            <li data-os={os} data-arch={arch} data-label={`${name} (${architecture})`}>
+              <Card>
+                <span class="yours" hidden>Your system</span>
+                <div class="platform">
+                  <PlatformIcon platform={icon} />
+                  <div>
+                    <h3>{name}</h3>
+                    <span class="architecture">{architecture}</span>
+                  </div>
+                  <StatusBadge status={status} />
                 </div>
-                <StatusBadge status={status} />
-              </div>
-              <p class="detail">{note}</p>
-              {href ? (
-                <a class="btn primary" href={href}>Download <span class="file">{file}</span></a>
-              ) : (
-                <span class="pending">Not yet published</span>
-              )}
-            </Card>
+                <p class="detail">{note}</p>
+                {href ? (
+                  <div class="get">
+                    <a class="btn primary" href={href}>Download</a>
+                    <span class="file">{file}</span>
+                  </div>
+                ) : (
+                  <span class="pending">Not yet published</span>
+                )}
+              </Card>
+            </li>
           ))
         }
       </ul>
@@ -144,6 +166,70 @@ npm ci && npm run build`;
   </section>
 </SplashPage>
 
+<script>
+  // Marks the visitor's platform among the archives, first, and with a release names it on the intro's button. Without
+  // JavaScript, or on a system it cannot tell, the page lists every archive as it is.
+  type System = { os?: string; arch?: string };
+
+  async function detect(): Promise<System> {
+    const agent = navigator.userAgent;
+    const hints = (navigator as Navigator & { userAgentData?: any }).userAgentData;
+    let os: string | undefined;
+    let arch: string | undefined;
+    if (hints) {
+      os = ({ Windows: 'windows', macOS: 'macos', Linux: 'linux', Android: 'android', iOS: 'ios', 'Chrome OS': 'chromeos' } as Record<string, string>)[hints.platform];
+      try {
+        const { architecture, bitness } = await hints.getHighEntropyValues(['architecture', 'bitness']);
+        arch = architecture === 'arm' ? 'arm64' : architecture === 'x86' && bitness === '64' ? 'x86_64' : undefined;
+      } catch {}
+    }
+    os ??= /Android/.test(agent)
+      ? 'android'
+      : /iPhone|iPad|iPod/.test(agent) || (/Macintosh/.test(agent) && navigator.maxTouchPoints > 1)
+        ? 'ios'
+        : /Windows/.test(agent)
+          ? 'windows'
+          : /Macintosh|Mac OS X/.test(agent)
+            ? 'macos'
+            : /CrOS/.test(agent)
+              ? 'chromeos'
+              : /Linux|X11/.test(agent)
+                ? 'linux'
+                : undefined;
+    arch ??= /aarch64|arm64/i.test(agent) ? 'arm64' : /x86_64|x64|Win64|WOW64|amd64/i.test(agent) ? 'x86_64' : undefined;
+    return { os, arch };
+  }
+
+  function show({ os, arch }: System) {
+    const list = document.querySelector<HTMLElement>('.archives')!;
+    // Browsers report every Mac as Intel, so a Mac matches the macOS archive whatever it says.
+    const match = [...list.querySelectorAll<HTMLElement>(':scope > li')].find(
+      (item) => item.dataset.os === os && (os === 'macos' || !arch || item.dataset.arch === arch),
+    );
+    if (match) {
+      match.dataset.yours = '';
+      match.querySelector<HTMLElement>('.yours')!.hidden = false;
+      list.prepend(match);
+      // The visitor's archive keeps the primary button; the others step back.
+      for (const other of list.querySelectorAll<HTMLElement>(':scope > li:not([data-yours]) .btn.primary'))
+        other.classList.replace('primary', 'ghost');
+    }
+    const detected = document.querySelector<HTMLElement>('[data-detected]');
+    const download = match?.querySelector<HTMLAnchorElement>('a.btn');
+    if (detected && download) {
+      const button = detected.querySelector<HTMLAnchorElement>('[data-detected-download]')!;
+      button.href = download.href;
+      button.textContent = `Download for ${match!.dataset.label}`;
+      detected.hidden = false;
+    } else if (os) {
+      const none = document.querySelector<HTMLElement>('[data-no-archive]');
+      if (none) none.hidden = false;
+    }
+  }
+
+  detect().then(show);
+</script>
+
 <style>
   .archives {
     list-style: none;
@@ -164,16 +250,45 @@ npm ci && npm run build`;
     font-size: var(--sl-text-sm);
     color: var(--sl-color-gray-3);
   }
-  /* The note takes the slack, so the cards' buttons line up. */
-  .archives > :global(li) {
+  .archives > li {
+    display: grid;
+  }
+  /* The note takes the slack, so the cards' buttons line up; the visitor's card has its label above. */
+  .archives :global(.card) {
     grid-template-rows: auto 1fr auto;
   }
-  .archives .btn {
-    justify-self: start;
+  .archives > li[data-yours] :global(.card) {
+    grid-template-rows: auto auto 1fr auto;
+    border-color: var(--sl-color-accent);
+    box-shadow: 0 0 0 1px var(--sl-color-accent);
+  }
+  .yours {
+    font: 600 var(--sl-text-2xs) var(--sl-font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sl-color-text-accent);
+  }
+  .archives :global(.card) > .yours[hidden] {
+    display: none;
+  }
+  .detected > [data-detected] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--hx-space-4);
+  }
+  .detected > [hidden] {
+    display: none;
+  }
+  .get {
+    display: grid;
+    justify-items: start;
+    gap: var(--hx-space-1);
   }
   .file {
     font: var(--sl-text-xs) var(--sl-font-mono);
-    opacity: 0.8;
+    color: var(--sl-color-gray-3);
+    overflow-wrap: anywhere;
   }
   .pending {
     font-size: var(--sl-text-sm);
