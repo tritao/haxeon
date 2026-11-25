@@ -67,15 +67,14 @@ class IrFunctionStages {
 			at:Array<Int> = [],
 			entries:Array<Null<IrStageEntry>> = [],
 			summaries:Array<Int> = [],
-			inputStage = name + ":input",
-			mark = lineage.startSettling();
+			inputStage = name + ":input";
 		at.resize(count);
 		entries.resize(count);
 		summaries.resize(count);
 		for (index in 0...count) {
 			var given = functions[index],
 				slot = slots.of(given),
-				fn = lineage.settleEntry(inputStage, slot, given, mark);
+				fn = lineage.settleEntry(inputStage, slot, given);
 			if (fn != given)
 				functions[index] = fn;
 			var version = lineage.versionAt(slot), entry = memo.last(slot);
@@ -85,13 +84,13 @@ class IrFunctionStages {
 			entries[index] = entry;
 			summaries[index] = entry != null ? entry.summary : pass.summarize(fn);
 		}
-		lineage.endSettling(mark, count);
+		lineage.endSettling(functions);
 		pass.prepare(functions, summaries, new IrFunctionIndex(name, functions, lineage));
 		var reader = new IrFactReader(name, pass, facts), output:Array<IrFunction> = [];
 		output.resize(count);
 		for (index in 0...count) {
 			var fn = functions[index], slot = at[index], entry = entries[index];
-			if (entry != null && facts.hold(entry.facts, pass)) {
+			if (entry != null && (entry.facts.length == 0 || facts.hold(entry.facts, pass))) {
 				var requests = entry.requests;
 				if (requests != null)
 					for (request in requests)
@@ -120,29 +119,29 @@ class IrFunctionStages {
 						version = memos.versions.next();
 				}
 				entry = new IrStageEntry(input, reader.recorded(), made, version, summaries[index], reader.requests());
+				entries[index] = entry;
 			}
 			memo.keep(slot, entry);
-			// A function the stage left alone stands for its name already, with its version.
+			// A function the stage left alone stands for its name already, with its version, which is its entry's.
 			var out = entry.output;
 			if (out != fn)
 				lineage.set(out, entry.outputVersion);
-			else if (entry.outputVersion != lineage.versionAt(slot))
-				lineage.setAt(slot, out, entry.outputVersion);
-			entries[index] = entry;
 			output[index] = out;
 		}
-		// What the stage made of each function stands for its name: only what `finish` added or replaced is settled.
-		var result = pass.finish(output);
-		mark = lineage.startSettling();
+		// What the stage made of each function stands for its name: while `finish` changes no cell, only what it added or moved is
+		// settled.
+		var writes = lineage.writes, result = pass.finish(output), untouched = lineage.writes == writes;
 		for (index in 0...result.length) {
 			var fn = result[index],
 				entry = index < count ? entries[index] : null,
-				slot = entry != null && entry.output == fn ? at[index] : slots.of(fn),
-				settled = lineage.settleEntry(name, slot, fn, mark);
+				made = entry != null && entry.output == fn;
+			if (made && untouched)
+				continue;
+			var settled = lineage.settleEntry(name, made ? at[index] : slots.of(fn), fn);
 			if (settled != fn)
 				result[index] = settled;
 		}
-		lineage.endSettling(mark, result.length);
+		lineage.endSettling(result);
 		return result;
 	}
 

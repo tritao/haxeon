@@ -30,10 +30,11 @@ class IrFunctionSlots {
 	inline function get_count():Int
 		return names.length;
 
-	/** The slot of `fn`'s name, given now when the name has none. */
-	public function of(fn:IrFunction):Int {
-		if (fn.slotEpoch == epoch)
-			return fn.slot;
+	/** The slot of `fn`'s name, given now when the name has none. Inline: the stages ask it for every function they read. */
+	public inline function of(fn:IrFunction):Int
+		return fn.slotEpoch == epoch ? fn.slot : lookUp(fn);
+
+	function lookUp(fn:IrFunction):Int {
 		var slot = named(fn.name);
 		fn.slot = slot;
 		fn.slotEpoch = epoch;

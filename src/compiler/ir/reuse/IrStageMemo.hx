@@ -82,15 +82,18 @@ class IrStageMemo {
 	public inline function last(slot:Int):Null<IrStageEntry>
 		return slot < entries.length ? entries[slot] : null;
 
-	/** Records `entry` as this run's for the function of `slot`. */
-	public function keep(slot:Int, entry:IrStageEntry):Void {
-		var known = last(slot);
-		if (known == null)
-			count++;
-		if (known != entry)
-			entries[slot] = entry;
+	/** Records `entry` as this run's for the function of `slot`. Inline: a stage keeps an entry for every function. */
+	public inline function keep(slot:Int, entry:IrStageEntry):Void {
+		if (last(slot) != entry)
+			replace(slot, entry);
 		entry.used = build;
 		kept++;
+	}
+
+	function replace(slot:Int, entry:IrStageEntry):Void {
+		if (last(slot) == null)
+			count++;
+		entries[slot] = entry;
 	}
 
 	/** Forgets the entry of `slot`, whose name is gone (`IrLineage.sweep`). */
@@ -236,8 +239,8 @@ class IrLineage {
 	public function enterBodies():Void
 		bodies = true;
 
-	// The cells, by slot: the function the name stands for in build `cellBuilds`, its version, and the last settling that found
-	// the name in the program (`settle`).
+	// The cells, by slot: the function the name stands for in build `cellBuilds`, its version, and the last settling that marked
+	// the name as in the program (`endSettling`).
 	final cellFunctions:Array<Null<IrFunction>> = [];
 	final cellVersions:Array<Int> = [];
 	final cellBuilds:Array<Int> = [];
@@ -251,6 +254,9 @@ class IrLineage {
 
 	/** How many names stand for a function in this build. */
 	var live = 0;
+
+	/** How many times a cell changed: while it does not move, every function that stood for its name still does. */
+	public var writes(default, null) = 0;
 
 	var settling = 0;
 
@@ -375,6 +381,7 @@ class IrLineage {
 		cellFunctions[slot] = fn;
 		cellVersions[slot] = version;
 		cellBuilds[slot] = memos.build;
+		writes++;
 		if (slot >= cellSeen.length)
 			cellSeen[slot] = 0;
 	}
@@ -385,46 +392,47 @@ class IrLineage {
 	 * is changed in place.
 	 */
 	public function settle(stage:String, functions:Array<IrFunction>):Void {
-		var mark = startSettling();
 		for (index in 0...functions.length) {
-			var fn = functions[index], settled = settleEntry(stage, slots.of(fn), fn, mark);
+			var fn = functions[index], settled = settleEntry(stage, slots.of(fn), fn);
 			if (settled != fn)
 				functions[index] = settled;
 		}
-		endSettling(mark, functions.length);
+		endSettling(functions);
 	}
 
 	/**
-	 * Starts settling a list (`settle`), entry by entry (`settleEntry`) where the caller knows the slots, until `endSettling`; the
-	 * mark returned tells the names the list has.
+	 * The function of `slot` at its place in a list being settled (`settle`, which a caller that knows the slots does entry by
+	 * entry, then `endSettling`): `fn` when it already stands for its name, else `fn` settled as `settle` does. Inline: every
+	 * stage settles every function.
 	 */
-	public function startSettling():Int
-		return ++settling;
+	public inline function settleEntry(stage:String, slot:Int, fn:IrFunction):IrFunction {
+		var stands = slot < cellFunctions.length && cellFunctions[slot] == fn && cellBuilds[slot] == memos.build;
+		return stands ? fn : settleChanged(stage, slot, fn);
+	}
 
-	/**
-	 * The function of `slot` at its place in the list being settled with `mark`: `fn` when it already stands for its name, else
-	 * `fn` settled as `settle` does.
-	 */
-	public function settleEntry(stage:String, slot:Int, fn:IrFunction, mark:Int):IrFunction {
-		if (slot >= cellFunctions.length || cellFunctions[slot] != fn || cellBuilds[slot] != memos.build) {
-			if (bodies)
-				setAt(slot, fn, memos.versions.next());
-			else
-				fn = settleAt(memos.stage(stage), slot, fn, versionAt(slot));
-		}
-		cellSeen[slot] = mark;
+	function settleChanged(stage:String, slot:Int, fn:IrFunction):IrFunction {
+		if (!bodies)
+			return settleAt(memos.stage(stage), slot, fn, versionAt(slot));
+		setAt(slot, fn, memos.versions.next());
 		return fn;
 	}
 
-	/** Ends settling a list of `count` functions: a name it does not have stands for nothing from here on. */
-	public function endSettling(mark:Int, count:Int):Void {
-		if (live <= count)
+	/**
+	 * Ends settling `functions`: a name they do not have stands for nothing from here on. Each of them stands for its name, so
+	 * only more names than functions can mean one to drop, and only then are the names they have marked.
+	 */
+	public function endSettling(functions:Array<IrFunction>):Void {
+		if (live <= functions.length)
 			return;
-		var build = memos.build;
+		var mark = ++settling, build = memos.build;
+		for (fn in functions)
+			cellSeen[slots.of(fn)] = mark;
 		for (slot in 0...cellFunctions.length)
-			if (cellBuilds[slot] == build && cellSeen[slot] != mark)
+			if (cellBuilds[slot] == build && cellSeen[slot] != mark) {
 				cellBuilds[slot] = 0;
-		live = count;
+				writes++;
+			}
+		live = functions.length;
 	}
 
 	/** `fn`, made from the function of version `input` (0 for none), settled with `memo` and recorded. */
