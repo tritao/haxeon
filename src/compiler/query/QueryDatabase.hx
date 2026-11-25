@@ -41,21 +41,24 @@ class QueryDatabase {
 
 	final kinds:Array<QueryKindBase> = [];
 
-	/** The queries being computed or verified, innermost last, as (kind index, key) pairs; -1, -1 for a stage's frame. */
-	final stack:Array<Int> = [];
+	/**
+	 * The queries being computed or verified, innermost last, `FRAME` Ints each: the query (kind index and key; -1 and -1 for a
+	 * stage's frame), where its reads start in `reads` (-1 for a verification, which records nothing), its stamp, with which it
+	 * marks the keys it recorded (`QueryKindBase.firstRecord`), and `marks` when it began. Ints, not an object or an array per
+	 * frame: a computation allocates nothing for its frame, and an element of an array of arrays is checked on each read.
+	 */
+	final frames:Array<Int> = [];
 
-	/** The reads of each frame on the stack (`QueryRead`): null for a verification, which records nothing. */
-	final frames:Array<Null<Array<Int>>> = [];
+	static inline final FRAME = 5;
 
-	/** Each frame's stamp, with which a frame marks the keys it recorded (`QueryKindBase.firstRecord`). */
-	final stamps:Array<Int> = [];
+	/** The reads of the frames on the stack (`QueryRead`), each recording frame's after those of the frames below it. */
+	@:allow(compiler.query)
+	final reads:Array<Int> = [];
 
 	var lastStamp = 0;
 
-	/** How many reads were recorded since the database was made, and how many when each frame on the stack began. */
+	/** How many reads were recorded since the database was made. */
 	var marks = 0;
-
-	final marksAtEnter:Array<Int> = [];
 
 	public function new(checkReuse = false) {
 		this.checkReuse = checkReuse;
@@ -84,10 +87,8 @@ class QueryDatabase {
 	 * that stopped on an error left its stage's frames open; they are dropped, with what they read.
 	 */
 	public function newRevision():Int {
-		stack.resize(0);
 		frames.resize(0);
-		stamps.resize(0);
-		marksAtEnter.resize(0);
+		reads.resize(0);
 		buildRevision = ++revision;
 		return revision;
 	}
@@ -147,23 +148,23 @@ class QueryDatabase {
 
 	/** Ends the frame `beginRecording` started last: what it read, in order, each read once. */
 	public function endRecording():Array<Int> {
-		if (frames.length == 0 || stack[stack.length - 2] != -1)
+		var top = frames.length - FRAME;
+		if (top < 0 || frames[top] != -1 || frames[top + 2] < 0)
 			throw new compiler.core.InternalError("no stage frame is recording");
-		var reads = leave();
-		return reads == null ? [] : reads;
+		return leaveWithReads();
 	}
 
 	/** Whether a frame records reads: a read now is recorded. */
 	public var recording(get, never):Bool;
 
 	inline function get_recording():Bool
-		return frames.length > 0 && frames[frames.length - 1] != null;
+		return frames.length > 0 && frames[frames.length - FRAME + 2] >= 0;
 
 	/** How many frames are on the stack. */
 	public var depth(get, never):Int;
 
 	inline function get_depth():Int
-		return frames.length;
+		return Std.int(frames.length / FRAME);
 
 	/** A stamp no frame has, for a caller that marks keys itself (`QueryKindBase.firstRecord`), as merging two read lists does. */
 	public function newStamp():Int
@@ -171,11 +172,8 @@ class QueryDatabase {
 
 	/** Records that the frame on top read `key` of `kind`, once per frame. */
 	public function record(kind:QueryKindBase, key:Int):Void {
-		var top = frames.length - 1;
-		if (top < 0)
-			return;
-		var reads = frames[top];
-		if (reads != null && kind.firstRecord(key, stamps[top])) {
+		var frames = this.frames, top = frames.length - FRAME;
+		if (top >= 0 && frames[top + 2] >= 0 && kind.firstRecord(key, frames[top + 3])) {
 			if (key > QueryRead.KEY_MASK)
 				throw new compiler.core.InternalError("query key " + key + " of " + kind.kindName
 					+ " does not fit a read");
@@ -205,55 +203,75 @@ class QueryDatabase {
 
 	@:allow(compiler.query)
 	function enter(kind:Int, key:Int, recording:Bool):Void {
-		stack.push(kind);
-		stack.push(key);
-		frames.push(recording ? [] : null);
-		stamps.push(++lastStamp);
-		marksAtEnter.push(marks);
+		var frames = this.frames;
+		frames.push(kind);
+		frames.push(key);
+		frames.push(recording ? reads.length : -1);
+		frames.push(++lastStamp);
+		frames.push(marks);
 	}
 
+	/** Where the reads of the frame on top start in `reads`: they run to its end. */
+	@:allow(compiler.query)
+	inline function topReads():Int
+		return frames[frames.length - FRAME + 2];
+
 	/**
-	 * Pops the top frame, giving its reads. When it or a frame inside it recorded anything, the nearest recording frame below takes
-	 * its marks again, which those overwrote.
+	 * Pops the top frame, and its reads with it. When it or a frame inside it recorded anything, the nearest recording frame below
+	 * takes its marks again, which those overwrote.
 	 */
 	@:allow(compiler.query)
-	function leave():Null<Array<Int>> {
-		stack.pop();
-		stack.pop();
-		stamps.pop();
-		var reads = frames.pop(), recordedInside = marksAtEnter.pop() != marks;
-		if (reads != null && recordedInside) {
-			var below = frames.length - 1;
-			while (below >= 0 && frames[below] == null)
-				below--;
-			if (below >= 0) {
-				var stamp = stamps[below];
-				for (read in frames[below])
-					kinds[QueryRead.kind(read)].firstRecord(QueryRead.key(read), stamp);
+	function leave():Void {
+		var frames = this.frames,
+			top = frames.length - FRAME,
+			from = frames[top + 2],
+			recordedInside = frames[top + 4] != marks;
+		frames.resize(top);
+		if (from < 0)
+			return;
+		reads.resize(from);
+		if (!recordedInside)
+			return;
+		var below = top - FRAME;
+		while (below >= 0 && frames[below + 2] < 0)
+			below -= FRAME;
+		if (below >= 0) {
+			var stamp = frames[below + 3];
+			for (index in frames[below + 2]...from) {
+				var read = reads[index];
+				kinds[QueryRead.kind(read)].firstRecord(QueryRead.key(read), stamp);
 			}
 		}
-		return reads;
+	}
+
+	/** Pops the top frame (`leave`), giving a copy of its reads; null for a verification. */
+	@:allow(compiler.query)
+	function leaveWithReads():Null<Array<Int>> {
+		var from = topReads();
+		var taken = from < 0 ? null : [for (index in from...reads.length) reads[index]];
+		leave();
+		return taken;
 	}
 
 	/** Whether the frame on top is the computation of (`kind`, `key`). */
 	@:allow(compiler.query)
 	inline function computing(kind:Int, key:Int):Bool {
-		var top = stack.length - 2;
-		return top >= 0 && stack[top] == kind && stack[top + 1] == key && frames[frames.length - 1] != null;
+		var top = frames.length - FRAME;
+		return top >= 0 && frames[top] == kind && frames[top + 1] == key && frames[top + 2] >= 0;
 	}
 
 	/** The queries from the first time (`kind`, `key`) is on the stack to the top, then (`kind`, `key`) again. */
 	@:allow(compiler.query)
 	function activePath(kind:Int, key:Int):Array<String> {
 		var start = 0;
-		while (start < stack.length && !(stack[start] == kind && stack[start + 1] == key))
-			start += 2;
+		while (start < frames.length && !(frames[start] == kind && frames[start + 1] == key))
+			start += FRAME;
 		var path = [];
 		var index = start;
-		while (index < stack.length) {
-			if (stack[index] >= 0)
-				path.push(kinds[stack[index]].describe(stack[index + 1]));
-			index += 2;
+		while (index < frames.length) {
+			if (frames[index] >= 0)
+				path.push(kinds[frames[index]].describe(frames[index + 1]));
+			index += FRAME;
 		}
 		path.push(kinds[kind].describe(key));
 		return path;

@@ -15,9 +15,10 @@ import compiler.query.QueryKind.QueryRead;
  *
  * The memos are columns by key and their reads one pool of Ints, so verifying a key whose reads did not change reads a few Ints
  * and allocates nothing: no frame, no handler, no element of an array of arrays (which HashLink casts on each read), and no call
- * for a read of a key verified in the revision (`QueryKindBase.changeIfVerified`). A computation that throws ends the build: the
- * next build drops the frames it left (`QueryDatabase.newRevision`), and the marks of the keys it was busy with are of the
- * revision it ended in.
+ * for a read of a key verified in the revision (`QueryKindBase.changeIfVerified`); computing one allocates nothing of the
+ * engine's either, as its reads go from the database's frame into the pool. A computation that throws ends the build: the next
+ * build drops the frames it left (`QueryDatabase.newRevision`), and the marks of the keys it was busy with are of the revision it
+ * ended in.
  *
  * `@:generic`, so each value type has a kind of its own: an erased one reads its values through the any-array accessor and casts
  * them at the caller, calls `same` through an adapter that casts both arguments, and compares two values dynamically.
@@ -144,10 +145,10 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	 * cutoff), which keeps the revision it changed at; else `value`, changed now.
 	 */
 	public function end(database:QueryDatabase, key:Int, value:V):V {
-		var recorded = finish(database, key), revision = database.revision, verified = verifiedAt[key];
+		var revision = database.revision, verified = verifiedAt[key];
+		finish(database, key, true);
 		database.countComputation();
 		usedAt = revision;
-		keepReads(key, verified != 0, recorded);
 		verifiedAt[key] = revision;
 		computedAt[key] = revision;
 		if (verified != 0 && (values[key] == value || same(values[key], value)))
@@ -208,17 +209,19 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	 * hold. The memo is left as it was.
 	 */
 	public function check(database:QueryDatabase, key:Int, fresh:V):Void {
-		finish(database, key);
+		finish(database, key, false);
 		if (!same(values[key], fresh))
 			throw new QueryReuseMismatch(describe(key));
 	}
 
-	function finish(database:QueryDatabase, key:Int):Array<Int> {
+	/** Ends the frame `begin` started for `key`, keeping what it read as the memo's reads when `keep`. */
+	function finish(database:QueryDatabase, key:Int, keep:Bool):Void {
 		if (!database.computing(index, key))
 			throw new InternalError("query " + describe(key) + " ends a computation it did not begin");
 		busy[key] = 0;
-		var recorded = database.leave();
-		return recorded == null ? [] : recorded;
+		if (keep)
+			keepReads(key, verifiedAt[key] != 0, database.reads, database.topReads());
+		database.leave();
 	}
 
 	/**
@@ -281,9 +284,9 @@ class ComputedQueryKind<V> extends QueryKindBase {
 		readCount[key] = 0;
 	}
 
-	/** Puts `reads` in the pool as `key`'s: in place of its old ones when they fit (`had`), else at the end. */
-	function keepReads(key:Int, had:Bool, reads:Array<Int>):Void {
-		var count = reads.length, start = readStart[key];
+	/** Puts `reads` from `from` on in the pool as `key`'s: in place of its old ones when they fit (`had`), else at the end. */
+	function keepReads(key:Int, had:Bool, reads:Array<Int>, from:Int):Void {
+		var count = reads.length - from, start = readStart[key], pool = this.pool;
 		if (had && count <= readCount[key])
 			garbage += readCount[key] - count;
 		else {
@@ -291,11 +294,12 @@ class ComputedQueryKind<V> extends QueryKindBase {
 				garbage += readCount[key];
 			if (verifying == 0 && garbage > (pool.length >> 1) + 4096)
 				compact();
+			pool = this.pool;
 			start = pool.length;
 			pool.resize(start + count);
 		}
 		for (index in 0...count)
-			pool[start + index] = reads[index];
+			pool[start + index] = reads[from + index];
 		readStart[key] = start;
 		readCount[key] = count;
 	}

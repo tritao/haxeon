@@ -363,7 +363,7 @@ class QueryKind<V> extends QueryKindBase {
 
 	function end(database:QueryDatabase, key:Int):Null<Array<Int>> {
 		active[key] = false;
-		return database.leave();
+		return database.leaveWithReads();
 	}
 
 	inline function isActive(key:Int):Bool
