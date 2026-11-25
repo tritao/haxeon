@@ -192,7 +192,7 @@ const generatedExcerpt = [
         <p class="lede">Rendering goes through <a href="https://github.com/floooh/sokol">sokol_gfx</a>, a small C library that targets each platform’s native graphics API. It also has WebGPU and Vulkan backends, which are planned here.</p>
       </div>
       <div class="split">
-        <div class="backend-table">
+        <div>
           <table aria-label="GPU backends">
             <thead><tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Compute</th><th scope="col">Timestamps</th></tr></thead>
             <tbody>
@@ -249,14 +249,7 @@ const generatedExcerpt = [
   .shader-flow li + li::before { content: '→'; color: var(--sl-color-accent); }
   .shader-flow span { padding: 4px 10px; border: 1px solid var(--sl-color-gray-5); border-radius: var(--hx-radius-s); background: var(--sl-color-bg-sidebar); }
   .nowrap { white-space: nowrap; }
-  .top { align-items: start; }
   .api-name { display: block; font-weight: 400; font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); }
-  .backend-table { display: grid; gap: var(--hx-space-3); align-content: start; }
   .hero { --hero-columns: minmax(0, 1fr) minmax(0, 34rem); }
-  .chips { display: flex; flex-wrap: wrap; gap: var(--hx-space-2); list-style: none; padding: 0; }
-  @media (max-width: 30rem) {
-    th, td { padding-inline: var(--hx-space-1); }
-    tbody :is(th, td) { font-size: var(--sl-text-xs); }
-  }
 </style>
 

@@ -217,6 +217,18 @@
 :where(.landing-content .four) {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
+/* Items keep their own height instead of stretching to the row's, as code beside a taller column does. */
+:where(.landing-content .grid.top) {
+  align-items: start;
+}
+/* A wrapping row of tags or badges. */
+:where(.landing-content .chips) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hx-space-2);
+  list-style: none;
+  padding: 0;
+}
 :where(.landing-content .split) {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
@@ -262,6 +274,14 @@
   text-align: left;
   padding: 10px 12px;
   border-bottom: 1px solid var(--sl-color-gray-5);
+}
+@media (max-width: 30rem) {
+  :where(.landing-content :is(th, td)) {
+    padding-inline: var(--hx-space-1);
+  }
+  :where(.landing-content tbody :is(th, td)) {
+    font-size: var(--sl-text-xs);
+  }
 }
 :where(.landing-content thead th) {
   font: 600 var(--sl-text-2xs) var(--sl-font-mono);
