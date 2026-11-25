@@ -42,9 +42,8 @@ that is kept or new reads it any more.
   bug, a named type's kind. Naming a type is a read of its kind.
 - **Reach:** a shared or generated result (a specialization, a helper, an anonymous-type printer) is kept while some kept
   or new unit records a use of it. That is a reverse edge, computed from the units' records, never by scanning the program.
-- **Generated code:** artifacts that are rebuilt every build today (the `__string` printers, `__init` parts) become
-  results with recorded inputs, so they are kept like any other unit. This removes most of what is left of
-  `IrLineage.start` (about 2.4% of a body edit).
+- **Generated code (done):** the artifacts that were rebuilt every build (the `__string` printers, `__init` parts) are
+  results with recorded inputs in the query database, kept like any other result (QUERY_ENGINE.md, "Slice 2 as built").
 - **Checks:** `--check-reuse` already compares every kept result with a fresh one. The edit replay (`test-edit-replay.py`)
   is the test that finds these bugs, because it edits the way people do. It belongs in CI over a longer slice of history
   than the local default (item 5).

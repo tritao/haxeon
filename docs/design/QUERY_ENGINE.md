@@ -4,9 +4,11 @@ Status: steps 1 and 2 are done and step 3 is under way. The engine core is in `c
 the build inputs (step 2, `BuildInputs`) and, as a kind of its own, the facts typed units read: the typer records its reads in
 the engine's frames, and a unit's reads are verified by the engine (step 3, slice 3a). What each unit read is a result of that
 kind, written in a transaction the taken build commits (slice 3b). The IR stages, lowering and encoding still keep results
-through their own mechanisms; "Steps 4 onward" lists them, what each becomes, and the order they move in. Its slice 1 is done:
-the engine has the kinds they move onto (`ComputedQueryKind`, `QuerySummary`), and no stage uses them yet. ADR 0003
-decisions 1, 10 and 14 are the requirements; this note is how. The pass framework (M2) is built on this engine.
+through their own mechanisms; "Steps 4 onward" lists them, what each becomes, and the order they move in. Its slices 1 and 2
+are done: the engine has the kinds they move onto (`ComputedQueryKind`, `QuerySummary`), and IR generation, the functions the
+frontend generates, the program's objects and what the frontend reads of each IR function are results in the database; the
+assembly stages are next. ADR 0003 decisions 1, 10 and 14 are the requirements; this note is how. The pass framework (M2) is
+built on this engine.
 
 ## Why now
 
@@ -157,8 +159,10 @@ engine reads. An edit re-decides the changed functions and the readers of any ca
   nothing retained after the build.
 - **Sweep.** After a build that brought up to date everything it keeps, the memos of the computed kinds it used that it did
   not verify since it began (`QueryDatabase.buildRevision`, not the latest revision, which inputs set during a build move)
-  are dropped (`QueryDatabase.sweep`); a kind the build did not use, as a stage that did not run, keeps its memos. Roots
-  that keep memos a build did not use (the language server's open documents) come with their first user. Memory is reported per build: the worker's resident size after a warm
+  are dropped (`QueryDatabase.sweep`, run when the build is taken, `Compiler.adoptCandidate`); a kind the build did not use,
+  as a stage that did not run, keeps its memos, and so does a kind that gained no memo since its last sweep, which holds no
+  more than that sweep left (no-op and body edits add no key). Roots that keep memos a build did not use (the language
+  server's open documents) come with their first user. Memory is reported per build: the worker's resident size after a warm
   build (ADR 0003, Consequences).
 - **Scratch regions** (ADR 0004 section 6) come per query kind once that kind's outputs are proven owned and release is
   cheap.
@@ -240,14 +244,14 @@ Everything below keeps results across builds outside the engine. Lines are the f
 | Mechanism | Lines | Keyed on; kept until | Read by | Becomes |
 |---|---|---|---|---|
 | `IrStageMemo`, `IrStageMemos`, `IrStageEntry` | 526 (the file, with `IrLineage` and the contribution memos) | stage and function slot; input version, fact reads, output, summary, helper requests; dropped when the stage's last run did not use it | `IrFunctionStages.run`, the ~25 `IrFunctionPass` stages | a computed kind per stage, keyed by function symbol |
-| `IrLineage`, `IrFunctionVersions`, `IrFunctionSlots`, `ModuleState.irVersions` | (above), 17, 95 | slot → function object and version; a version is never given twice; slots swept when cells exceed twice the functions | every stage (`settle`, `versionOf`), `IrStage` | a memo's identity and `changedAt`; `settle`'s equality check becomes early cutoff by `IrFunctionStateEquality.same` |
+| `IrLineage`, `IrFunctionSlots` | (above), 95 | slot → function object and version; a version is never given twice; slots swept when cells exceed twice the functions | every stage (`settle`, `versionOf`), `IrStage` | a memo's identity and `changedAt`; `settle`'s equality check becomes early cutoff by `IrFunctionStateEquality.same`. The generator's versions (`IrFunctionVersions`, `ModuleState.irVersions`) went in slice 2: the input is numbered by identity |
 | `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests) |
 | Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemo.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrTypeAwareWalk.SUMMARIES`, `IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name |
 | `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | summary queries; tables read as table results |
 | Reuse code inside passes | ~750 lines naming the above in 49 files; est. 1,000–1,400 with the code around them | — | — | query declarations (est. a third of it); fact reads stay as engine reads |
-| `IrGeneratedFunctions` (structure printers, initializers) | 95 | key and identity of the input objects; swept when untouched | `FrontendCompilation`, `IrProgramAssembler` | derived query per generated function |
-| `objectCache`, `canonicalObjectCache` (`SessionState`) | ~40 in `FrontendCompilation` | class name; while the declaration is unchanged | frontend, walks' table copies | table results: an equal table is last build's object |
-| `IrFunctionMemo` and its users: `irTypeMentions`, `irCalls`, `staticReferences`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo` | 46; 41 (`HlFunctionSummaries`), ~12, ~25 | `IrFunction` identity; one build past last use | frontend, `StaticInitializationOrder`, `RuntimeAbi`, `IrReachability`, `HlLower`, `IrNonNullFields` | contribution queries |
+| ~~`IrGeneratedFunctions` (structure printers, initializers)~~ | 95 | key and identity of the input objects; swept when untouched | `FrontendCompilation`, `IrProgramAssembler` | done (slice 2): results in the generation kind with their reads |
+| ~~`objectCache`, `canonicalObjectCache` (`SessionState`)~~ | ~40 in `FrontendCompilation` | class name; while the declaration is unchanged | frontend, walks' table copies | done (slice 2): objects by name in a computed kind, one made the same is last build's; the object set stays state (below) |
+| `IrFunctionMemo` and its users: ~~`irTypeMentions`, `irCalls`, `staticReferences`~~, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo` | 46; 41 (`HlFunctionSummaries`), ~12, ~25 | `IrFunction` identity; one build past last use | frontend, `StaticInitializationOrder`, `RuntimeAbi`, `IrReachability`, `HlLower`, `IrNonNullFields` | contribution queries; the frontend's three are (slice 2) |
 | `IrSourceRehash`, `irSources` | 130 | function → file hashes its locations name | frontend | gone with relative positions (the hash is added at encode), else a derived query |
 | `IrVerifyMemo` | 190 | function name → function and answer facts | `IrVerifier` | computed query per function |
 | `IrInlineCache` and the inliner's memo plumbing | ~170, ~100 | name → original body, instrumented form, published form, object facts, positional prints; maps replaced per run | `IrInliner`, `Compiler` (published) | inlined form per function; a call cycle is one component query; `published` moves to the live state |
@@ -318,7 +322,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 | A | Relative positions (in progress elsewhere) | — | `IrSourceRehash` (likely) | blank-line edit: most of the inliner and lowering 4.7G | — |
 | B | Module sections and load-time linking ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), its slices 1–5) | −3,300 / +1,200, fork +650 net | link and replay, published slots and stable ids, symbol persistence | 0.1 / 1.4 / 0 | A; checks also ci-tier debug-metadata and hot-reload, self-compile oracle takes a new base |
 | 1 | **Done** (below): engine for per-function stages: a computed kind keyed by function symbol with equality cutoff, contributions and summaries with per-key reads, sweep of computed memos | +400 | `QueryKind.computed` | none; verifying the memos must keep the body edit at today's cost (`IrLineage.start` alone is 2.4% of it) | — |
-| 2 | IR generation, generated functions, object tables as results | −450 / +250 | `IrFunctionVersions`, `IrGeneratedFunctions`, `objectCache` maps, `IrLineage.start`, frontend `IrFunctionMemo` users | 0.1 / 0.1 / 0.1 | 1 |
+| 2 | **Done** (below): IR generation, generated functions, object tables as results | −450 / +250; built −437 / +527 | `IrFunctionVersions`, `IrGeneratedFunctions`, `canonicalObjectCache` (`objectCache` stays as the object set), the INPUT settling of `IrLineage.start`, frontend `IrFunctionMemo` users | 0.1 / 0.1 / 0.1; built 0.03 / 0.02 / not measured (no-op 0.03) | 1 |
 | 3 | Assembly stages before the encode point | −2,000 / +500 | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05 | 2 |
 | 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4) | −400 / +250 | their whole-program rereads | 0.2 / 1.2 / 0.2 | 3 |
 | 5 | Inliner | −300 / +150 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A | 4 |
@@ -382,8 +386,75 @@ reads no fact, costs 421 per function and stage (89.5M a build). The engine cost
 318 with two (its input and a summary key), before the stage driver's own loop. Slice 3 measures its driver against today's;
 should the held path cost more, a stage visits only the keys whose reads changed.
 
-Left for slices 2 and 3: helpers by name (`IrStageMemos.helper`) as computed keys of interned names; a summary's contributors
-per key, if a step needs which functions name a key and not only whether one does; roots for the sweep.
+Left for slice 3: helpers by name (`IrStageMemos.helper`) as computed keys of interned names; a summary's contributors per key,
+if a step needs which functions name a key and not only whether one does.
+
+### Slice 2 as built
+
+IR generation, the functions the frontend and the assembler generate, the program's objects and what the frontend reads of each
+IR function are results in the session's database (`SessionState`), each keyed by the symbol of a name (`IrSymbol`):
+
+| Kind | Holds | Made by | Reads |
+|---|---|---|---|
+| `irGeneration` | every function the assembly starts from | the generator (`publishFunctions`, `generatePendingIr`); `IrLineage.start` puts the assembler's own | a printer its object, a boot function its inputs |
+| `irObjects` | each object of the typed program | `publishObjects` | — |
+| `initializerInputs` | the typed fields each boot function (probe, method binding, part) is made from | `bootFunction`, for `IrProgramAssembler.staticInitializersFrom` | — |
+| `irTypeMentions`, `irCalls`, `staticReferences` | what `retainedFromPrevious`, the helper retention and the static initialization order read of a function | computed on demand | the function in `irGeneration` |
+
+Deleted: `IrFunctionVersions` with `ModuleState.irVersions`, `SessionState.irVersions`, `IrPipelineContext.generatedVersion` and
+the callback that read them; the INPUT stage memo of `IrLineage.start`, which settled the assembler's functions by equality;
+`IrGeneratedFunctions` with `SessionState.structurePrinters`, `initializerFunctions` and `keepStructureObjects`;
+`canonicalObjectCache`; the search for the module that held a helper before; the frontend's three `IrFunctionMemo` users and
+their per-build swaps. Lines in `src/`: 437 deleted and 527 added, against the estimated −450 / +250. Of the added, 91 are the
+engine's (below), about 100 the assembly order (below, not in the plan), and the rest the kinds' declarations and the two
+results computed with their reads (`structurePrinter`, `bootFunction`), which the estimate left out.
+
+Engine additions: `ComputedQueryKind.put` (a value a stage makes from what it is given, reading nothing through the database:
+the kept one when `same`, so an equal value is the same object downstream), `kept` (the memo's value, brought up to date or
+not), `clear` (a compile that keeps no session lets the memos go with the IR, `SessionState.releaseGeneratedIr`),
+`QueryDatabase.advance` and `QueryRead.extend`. The sweep runs when a build is taken (`Compiler.adoptCandidate`).
+
+Design changes from the plan, with the reasons:
+
+- **Keys are symbols, not slots.** A self-compile interns 21,974 symbols for the 9,705 functions it generates, so a kind's
+  columns (about 36 bytes a key) take about 1.2 MB, against 0.5 MB by slot; with their values the kinds add about 2.8 MB to a
+  self-compile's live tables (`live_bytes_tables`, +1.2%). A slot is given to another name once freed, which would make every
+  kind drop the keys the lineage frees; a symbol is never given again, and slice 3's stages key by symbols too.
+- **`IrLineage.start` stays, reduced.** It puts the input into `irGeneration` and numbers each function by identity: a version
+  names one object, and an equal function is now the same object. The cells and versions go with the lineage in slice 3. Its
+  cost (settling the frontend's functions by equality) had already gone with `IrGeneratedFunctions` (240ee8a5c).
+- **The object set stays state.** `objectCache` also held the objects an earlier build made for a function it typed (closure
+  environments), which a function not typed again still names: a set a candidate copies and a rejected build must not change, so
+  it stays, as `SessionState.objects`. What was a cache in it, an equal object being the one kept, is `irObjects`, now for every
+  object and not only structures. `canonicalObjectCache` was remade from the typed classes every build: it is the build's.
+- **`__init` is made every build** and put, so one made the same is last build's. It is made from names alone, which
+  `IrGeneratedFunctions` joined into its key; interning such a key would grow the symbol table with every change to the
+  initialization order.
+- **A put of a key read in the revision starts a revision of its own** (`advance`; not an input's revision, which would make the
+  next build miss the no-op result): `retainedFromPrevious` reads functions before typing, which the generator may then change.
+- **`regenerated` stays relative to the state the build started from**: the module's own IR, or the database's for a helper
+  another module held. The list of changed functions is against what was published.
+- **Identity is checked typed, at the caller.** An `==` on the kind's type parameter is a dynamic comparison (it cost 2.4% of a
+  body edit inside `put`), so `put` compares with `same` only, and the frontend's readers, which put the module's function
+  before reading what it contributes, first check `kept(key) == fn` themselves (`FrontendCompilation.generated`,
+  `IrLineage.start`). Even so a contribution read through the engine costs more than the `IrFunctionMemo` lookup it replaced:
+  the generic code's closures for `same` and the casts of its columns.
+- **The order of the assembly's input is a result** (`AssemblyOrder`): sorting the names of all functions every build was most
+  of collecting them, about 1.9% of a body edit, and the order is a function of the names alone. It is kept and taken while the
+  program has the same names, checked by symbol id; a name two modules hold (a helper the module that asked for it first held
+  before, about 20 of them warm) is the owner's copy, as before. This was not in the plan; it pays for the engine's overhead
+  above.
+- **A kind that gained no memo since its last sweep is not swept**: it holds no more than that sweep left, and no-op and body
+  edits add no key, so they scan nothing.
+- **The engine runs under the Haxe interpreter too** (`haxe --run` in the HXI tests), whose `resize` fills an `Array<Int>` with
+  null: the columns are lengthened with zeros (`QueryRead.extend`).
+
+Measured with perf-guard on one machine against origin/main (main-thread instructions of the compile server, and the
+self-compile): the no-op rebuild 0.834G → 0.804G (−3.7%), the body edit 2.328G → 2.296G (−1.3%), the signature edit 18.37G →
+18.34G (−0.1%); allocation of the no-op 85.0 → 82.1 MB and of the body edit 242.6 → 239.6 MB; the server's live data 787.0 →
+788.2 MB. The self-compile: 50.46G → 50.50G instructions (+0.1%), live tables 243.4 → 246.2 MB (the kinds' columns, released
+with the IR before the passes), live IR 237.8 → 237.6 MB, backend 267.0 → 266.7 MB. Without the assembly order the body edit was
++0.2% and the no-op +0.7%; the blank-line edit is not measured by perf-guard.
 
 **Net lines (estimate):** about 5,450 deleted and 2,350 added in `src/`, about 3,100 fewer, plus the test mains of
 deleted mechanisms (`IrVerifyMemoMain`, `WarmStageFactsMain`, `StaticNullCheckReuseMain`, `InlinerSession`,
