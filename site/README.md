@@ -17,8 +17,8 @@ npm run check:grammars
 npm run check:examples
 ```
 
-The Website workflow (`.github/workflows/site.yml`) runs these after `npm run build:gpu-modules`, `npm run build`,
-`npm run build:showcase` and `npm run build:circuit-run`; run the same list before pushing a site change.
+The Website workflow (`.github/workflows/site.yml`) runs these after `npm run build:gpu-modules`, `npm run build:api`,
+`npm run build:showcase`, `npm run build:circuit-run` and `npm run build`; run the same list before pushing a site change.
 
 `npm run build:gpu-modules`, before `npm run build`, generates the shader module the GPU page
 quotes from the Triangle example into the git-ignored `generated/`. It needs the native Haxeon
@@ -29,15 +29,13 @@ CLI from `scripts/build-native.sh`; without it the page build stops and names th
 package's API from it (`api.mjs`, `src/pages/reference/api/`), with signatures as the source writes them, linked types and
 links to the source. It needs the native CLI too; without it each package's reference page says how to generate it.
 
-`npm run build:showcase`, after `npm run build`, builds the live WebGL2 UI Showcase on /ui/ from
-source with CMake, Ninja, the pinned Emscripten toolchain and Python FontTools, into `dist/`. It
-installs Emscripten on its first run and reuses the build directory under `out/site-showcase`
-afterwards. CI and the deploy run it; without it /ui/ shows the Showcase's preview image. Use
-`npm run preview` after both to exercise the live Showcase.
-
-`npm run build:circuit-run` adds the playable WebGL2 Circuit Run example to /gpu/ after the static build.
-It uses the same Emscripten SDK and requires the native Haxeon CLI from `scripts/build-native.sh`.
-The Website workflow builds it. The static page shows the desktop capture and source links on its own.
+`npm run build:showcase`, before `npm run build`, builds the live WebGL2 UI Showcase on /ui/ from
+source with CMake, Ninja, the pinned Emscripten toolchain and Python FontTools, into the git-ignored
+`public/ui/showcase/`. It installs Emscripten on its first run and reuses the build directory under
+`out/site-showcase` afterwards. `npm run build:circuit-run`, also before `npm run build`, builds the playable
+WebGL2 Circuit Run example on /gpu/ into `public/gpu/circuit-run/` with the same Emscripten SDK and the native
+Haxeon CLI from `scripts/build-native.sh`. The site build copies both into `dist/` and shows a start button for
+each embed it finds; without one, its page shows the preview image only. `npm run dev` serves them too.
 
 Open the URL printed by Astro. The production build is static HTML in `dist/`. Use
 `npm run preview` to serve it locally. Set `ASTRO_TELEMETRY_DISABLED=1` in environments with a

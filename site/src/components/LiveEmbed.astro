@@ -1,4 +1,7 @@
 ---
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 interface Props {
   /** The page to embed; it loads only when the visitor starts it. */
   src: string;
@@ -11,15 +14,14 @@ interface Props {
   minHeight?: string;
   /** Lay the page out at least this wide, scaled down to fit narrower columns. */
   minWidth?: number;
-  as?: 'div' | 'figure';
 }
-const { src, title, name, button, aspect, minHeight = '0px', minWidth, as: Tag = 'div' } = Astro.props;
+const { src, title, name, button, aspect, minHeight = '0px', minWidth } = Astro.props;
 const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+// The embeds are built into public/ before the site; a site built without one shows only its poster.
+const built = existsSync(join(__SITE_ROOT__, 'public', new URL(src, 'file:').pathname));
 ---
 
-<Tag
-  class="live-embed"
-  data-live-embed
+<live-embed
   data-src={src}
   data-title={title}
   data-min-width={minWidth}
@@ -28,88 +30,85 @@ const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
   style={`--embed-aspect: ${aspect}; --embed-min-height: ${minHeight}`}
 >
   <slot name="poster" />
-  <button class="btn primary" type="button" data-start data-pending>{button}</button>
+  {built && <button class="btn primary" type="button" data-start>{button}</button>}
   <p role="status" hidden></p>
   <slot />
-</Tag>
+</live-embed>
 
 <script>
   // The SDK's web host, and the UI Showcase's shell, post this when the app is ready or has failed.
   const appState = (data: any): string | undefined => (data?.type === 'haxeon-app' ? data.state : undefined);
 
-  for (const wrapper of document.querySelectorAll<HTMLElement>('[data-live-embed]')) {
-    const start = wrapper.querySelector<HTMLButtonElement>('[data-start]')!;
-    const status = wrapper.querySelector<HTMLElement>('[role="status"]')!;
-    const { src, title, minWidth, loading, failed: failedText } = wrapper.dataset;
+  class LiveEmbed extends HTMLElement {
+    connectedCallback() {
+      const start = this.querySelector<HTMLButtonElement>('[data-start]');
+      if (!start) return;
+      const status = this.querySelector<HTMLElement>('[role="status"]')!;
+      const { src, title, minWidth, loading, failed: failedText } = this.dataset;
 
-    // The button keeps its space while the check runs, so a present build does not shift the layout; a site built
-    // without this embed hides it instead of offering a load that cannot finish.
-    fetch(src!, { method: 'HEAD' })
-      .then((response) => { start.hidden = !response.ok; })
-      .catch(() => { start.hidden = true; })
-      .finally(() => { delete start.dataset.pending; });
-
-    start.addEventListener('click', () => {
-      const frame = document.createElement('iframe');
-      frame.title = title!;
-      frame.src = src!;
-      start.disabled = true;
-      status.hidden = false;
-      status.textContent = loading!;
-
-      const resize = minWidth
-        ? new ResizeObserver(([entry]) => {
-            const available = entry.contentRect.width;
-            const width = Math.max(Number(minWidth), available);
-            frame.style.width = `${width}px`;
-            frame.style.zoom = String(available / width);
-          })
-        : undefined;
-      resize?.observe(wrapper);
-
-      function finish() {
-        window.clearTimeout(timeout);
-        window.removeEventListener('message', receive);
-      }
-
-      function failed() {
-        finish();
-        resize?.disconnect();
-        delete wrapper.dataset.running;
-        frame.remove();
+      start.addEventListener('click', () => {
+        const frame = document.createElement('iframe');
+        frame.title = title!;
+        frame.src = src!;
+        start.disabled = true;
         status.hidden = false;
-        status.textContent = failedText!;
-        start.hidden = false;
-        start.disabled = false;
-      }
+        status.textContent = loading!;
 
-      function receive(event: MessageEvent) {
-        if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
-        const state = appState(event.data);
-        if (state === 'ready') {
+        const resize = minWidth
+          ? new ResizeObserver(([entry]) => {
+              const available = entry.contentRect.width;
+              const width = Math.max(Number(minWidth), available);
+              frame.style.width = `${width}px`;
+              frame.style.zoom = String(available / width);
+            })
+          : undefined;
+        resize?.observe(this);
+
+        const finish = () => {
+          window.clearTimeout(timeout);
+          window.removeEventListener('message', receive);
+        };
+
+        const fail = () => {
           finish();
-          wrapper.dataset.running = '';
-          status.hidden = true;
-          start.hidden = true;
-          frame.contentDocument?.querySelector('canvas')?.focus();
-        } else if (state === 'failed') {
-          failed();
-        }
-      }
+          resize?.disconnect();
+          delete this.dataset.running;
+          frame.remove();
+          status.hidden = false;
+          status.textContent = failedText!;
+          start.hidden = false;
+          start.disabled = false;
+        };
 
-      // Generous enough for the larger embeds on a slow connection.
-      const timeout = window.setTimeout(failed, 60000);
-      window.addEventListener('message', receive);
-      wrapper.prepend(frame);
-    });
+        const receive = (event: MessageEvent) => {
+          if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
+          const state = appState(event.data);
+          if (state === 'ready') {
+            finish();
+            this.dataset.running = '';
+            status.hidden = true;
+            start.hidden = true;
+            frame.contentDocument?.querySelector('canvas')?.focus();
+          } else if (state === 'failed') {
+            fail();
+          }
+        };
+
+        // Generous enough for the larger embeds on a slow connection.
+        const timeout = window.setTimeout(fail, 60000);
+        window.addEventListener('message', receive);
+        this.prepend(frame);
+      });
+    }
   }
+
+  customElements.define('live-embed', LiveEmbed);
 </script>
 
 <style>
-  .live-embed { position: relative; display: grid; justify-items: start; gap: var(--hx-space-3); }
-  .live-embed [hidden] { display: none; }
-  .live-embed [data-pending] { visibility: hidden; }
-  .live-embed :global(iframe) {
+  live-embed { position: relative; display: grid; justify-items: start; gap: var(--hx-space-3); }
+  live-embed [hidden] { display: none; }
+  live-embed :global(iframe) {
     width: 100%;
     height: auto;
     aspect-ratio: var(--embed-aspect);
@@ -117,6 +116,6 @@ const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
     border: 0;
     border-radius: var(--hx-radius-m);
   }
-  .live-embed:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
-  .live-embed[data-running] > :global(img) { display: none; }
+  live-embed:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
+  live-embed[data-running] > :global(img) { display: none; }
 </style>

@@ -41,10 +41,10 @@ jobs:
         working-directory: .
       - run: nice -n 10 npm run build:gpu-modules
       - run: nice -n 10 npm run build:api
-      - run: nice -n 10 npm run build
-      # The live UI Showcase on /ui/: Emscripten and the toolkit's Wasm build, so only here and in the deploy.
+      # The live embeds on /ui/ and /gpu/: Emscripten and Wasm builds into public/, which the site build copies.
       - run: nice -n 10 npm run build:showcase
       - run: nice -n 10 npm run build:circuit-run
+      - run: nice -n 10 npm run build
       - run: nice -n 10 npm run check:commands
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}

@@ -4,7 +4,8 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 nativekit="$root/vendor/nativekit"
 app="$root/packages/gpu/examples/circuit-run"
-destination="$root/site/dist/gpu/circuit-run"
+# Into the git-ignored public/, before the site build, which copies it to dist/ and shows the play button for it.
+destination="$root/site/public/gpu/circuit-run"
 
 # The app links the SDK's WebGL2 host, which needs Emscripten. The host build is incremental, so it always runs: a host
 # left from an earlier NativeKit would load but never present a frame.

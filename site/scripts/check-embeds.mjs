@@ -12,8 +12,10 @@ const dist = fileURLToPath(new URL('../dist/', import.meta.url));
 const embeds = [];
 for (const file of globSync('**/*.html', { cwd: dist }).sort()) {
   const $ = load(await readFile(join(dist, file), 'utf8'));
-  for (const element of $('[data-live-embed]').toArray()) {
+  for (const element of $('live-embed').toArray()) {
     const src = $(element).attr('data-src');
+    // The page offers the button only when the embed was built into public/ before the site.
+    assert.ok($(element).find('[data-start]').length, `${src} on /${file} was not built: run its npm run build: script before npm run build`);
     const path = new URL(src, origin).pathname;
     embeds.push({
       page: '/' + file.replace(/index\.html$/, ''),
@@ -30,14 +32,13 @@ assert.ok(embeds.length > 0, 'Expected live embeds on the built site');
 const browser = await launchChrome();
 try {
   for (const embed of embeds) {
-    const wrapper = (page) => page.locator(`[data-live-embed][data-src="${embed.src}"]`);
+    const wrapper = (page) => page.locator(`live-embed[data-src="${embed.src}"]`);
     for (const [size, width] of [['desktop', 1440], ['mobile', 390]]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       await serveDirectory(page, dist);
       const loads = [];
       page.on('request', (request) => {
-        // The page may ask whether the embed is built (a HEAD request); only fetching it counts as loading.
-        if (request.method() !== 'HEAD' && new URL(request.url()).pathname.startsWith(embed.directory)) loads.push(request.url());
+        if (new URL(request.url()).pathname.startsWith(embed.directory)) loads.push(request.url());
       });
       assert.equal((await page.goto(origin + embed.page)).status(), 200);
       const start = wrapper(page).locator('[data-start]');

@@ -70,17 +70,18 @@ const generatedExcerpt = [
           <a class="btn ghost" href={repositorySource(circuit + 'src')}>Circuit Run source</a>
         </div>
       </div>
-      <LiveEmbed
-        as="figure"
-        src="/gpu/circuit-run/index.html"
-        title="Circuit Run"
-        name="Circuit Run"
-        button="Play in the browser"
-        aspect="540 / 510"
-      >
-        <img slot="poster" src="/gpu/circuit-run.webp" width="540" height="452" alt="Circuit Run: a teal runner and a pink drone in a maze, with a node counter, sound toggle and restart button." />
+      <figure>
+        <LiveEmbed
+          src="/gpu/circuit-run/index.html"
+          title="Circuit Run"
+          name="Circuit Run"
+          button="Play in the browser"
+          aspect="540 / 510"
+        >
+          <img slot="poster" src="/gpu/circuit-run.webp" width="540" height="452" alt="Circuit Run: a teal runner and a pink drone in a maze, with a node counter, sound toggle and restart button." />
+        </LiveEmbed>
         <figcaption>Circuit Run draws its maze and actors with one GPU draw per frame, with UI controls on top.</figcaption>
-      </LiveEmbed>
+      </figure>
     </div>
   </section>
 

@@ -294,7 +294,7 @@
 :where(.landing-content figure) {
   margin: 0;
 }
-:where(.landing-content :is(figure, .live-embed) > img) {
+:where(.landing-content :is(figure, live-embed) > img) {
   display: block;
   width: 100%;
   height: auto;
