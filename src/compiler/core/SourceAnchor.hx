@@ -14,8 +14,9 @@ import sys.thread.Mutex;
  */
 @:nullSafety(Strict)
 class SourceAnchor {
+	/** By path, then by name in the file: a map per file, so the path is not spelled again in every declaration's key. */
 	@:processWide("interned anchors: a path and name always denote the same anchor, and the table only grows")
-	static final byName:Map<String, SourceAnchor> = [];
+	static final byPath:Map<String, Map<String, SourceAnchor>> = [];
 
 	@:processWide("guards interning, which the parse threads and the compile thread may both do")
 	static final lock = new Mutex();
@@ -51,9 +52,13 @@ class SourceAnchor {
 
 	/** The anchor of declaration `key` of the file at `path`, made the first time it is asked for. */
 	public static function of(path:String, key:String):SourceAnchor {
-		var name = path + "\n" + key;
 		lock.acquire();
-		var anchor = byName.get(name);
+		var inFile = byPath.get(path);
+		if (inFile == null) {
+			inFile = [];
+			byPath.set(path, inFile);
+		}
+		var anchor = inFile.get(key);
 		if (anchor == null) {
 			var id = count, chunk = chunks[id >> CHUNK_BITS];
 			if (chunk == null) {
@@ -67,7 +72,7 @@ class SourceAnchor {
 			}
 			anchor = new SourceAnchor(id, path, key);
 			chunk[id & (CHUNK_SIZE - 1)] = anchor;
-			byName.set(name, anchor);
+			inFile.set(key, anchor);
 			count = id + 1;
 		}
 		lock.release();
