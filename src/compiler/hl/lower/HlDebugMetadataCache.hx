@@ -86,16 +86,13 @@ private class HlIdentityEntry {
 
 /**
  * Where a function's code is, per anchor its instructions name (terminators aside): the least start, the greatest end and the
- * least line, counted from the anchor, and the anchor of its first location. The identity takes the least and greatest of those
- * over all anchors once each is placed, which is what it takes over the placed locations.
+ * least line, counted from the anchor, and the anchor of its first location; in one array of rows of four. The identity takes the
+ * least and greatest of those over all anchors once each is placed, which is what it takes over the placed locations.
  */
 @:nullSafety(Strict)
 class HlFunctionPlace {
 	final first:Int;
-	final anchors:Array<Int> = [];
-	final starts:Array<Int> = [];
-	final ends:Array<Int> = [];
-	final lines:Array<Int> = [];
+	final rows:Array<Int> = [];
 
 	function new(first:Int)
 		this.first = first;
@@ -118,20 +115,22 @@ class HlFunctionPlace {
 	}
 
 	function add(anchor:Int, start:Int, end:Int, line:Int):Void {
-		var index = anchors.indexOf(anchor);
-		if (index < 0) {
-			anchors.push(anchor);
-			starts.push(start);
-			ends.push(end);
-			lines.push(line);
+		var index = 0;
+		while (index < rows.length && rows[index] != anchor)
+			index += 4;
+		if (index == rows.length) {
+			rows.push(anchor);
+			rows.push(start);
+			rows.push(end);
+			rows.push(line);
 			return;
 		}
-		if (start < starts[index])
-			starts[index] = start;
-		if (end > ends[index])
-			ends[index] = end;
-		if (line < lines[index])
-			lines[index] = line;
+		if (start < rows[index + 1])
+			rows[index + 1] = start;
+		if (end > rows[index + 2])
+			rows[index + 2] = end;
+		if (line < rows[index + 3])
+			rows[index + 3] = line;
 	}
 
 	public function identity(name:String, functionIndex:Int, stableId:Int, sources:SourceAnchors):HlFunctionIdentity {
@@ -158,31 +157,34 @@ class HlFunctionPlace {
 		return first < 0 ? "" : sources.path(first);
 
 	function start(sources:SourceAnchors):Int {
-		var result = -1;
-		for (index in 0...anchors.length) {
-			var start = sources.offset(anchors[index]) + starts[index];
+		var result = -1, index = 0;
+		while (index < rows.length) {
+			var start = sources.offset(rows[index]) + rows[index + 1];
 			if (result < 0 || start < result)
 				result = start;
+			index += 4;
 		}
 		return result;
 	}
 
 	function end(sources:SourceAnchors):Int {
-		var result = -1;
-		for (index in 0...anchors.length) {
-			var end = sources.offset(anchors[index]) + ends[index];
+		var result = -1, index = 0;
+		while (index < rows.length) {
+			var end = sources.offset(rows[index]) + rows[index + 2];
 			if (result < end)
 				result = end;
+			index += 4;
 		}
 		return result;
 	}
 
 	function line(sources:SourceAnchors):Int {
-		var result = 0;
-		for (index in 0...anchors.length) {
-			var line = sources.line(anchors[index]) + lines[index];
+		var result = 0, index = 0;
+		while (index < rows.length) {
+			var line = sources.line(rows[index]) + rows[index + 3];
 			if (result == 0 || line < result)
 				result = line;
+			index += 4;
 		}
 		return result;
 	}

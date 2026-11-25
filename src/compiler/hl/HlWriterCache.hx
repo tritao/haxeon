@@ -65,20 +65,13 @@ class HlWriterCache {
 		for (index in 0...entry.paths.length)
 			if (fileIndices.get(entry.paths[index]) != entry.indices[index])
 				return null;
-		var places = entry.places;
-		for (index in 0...places.anchors.length) {
-			var anchor = places.anchors[index];
-			if (sources.offset(anchor) != places.offsets[index] || sources.line(anchor) != places.lines[index]
-				|| sources.hash(anchor) != places.hashes[index])
-				return null;
-		}
-		return entry.bytes;
+		return entry.places.hold(sources) ? entry.bytes : null;
 	}
 
 	public function setSpanGroup(locations:Array<HlDebugLocation>, stableId:Int, bytes:Bytes,
 			fileIndices:Map<String, Int>, sources:SourceAnchors):Void {
 		var paths:Array<String> = [], indices:Array<Int> = [], places = AnchorPlaces.of(locations, sources, true);
-		for (anchor in places.anchors) {
+		for (anchor in places.anchors()) {
 			var path = sources.path(anchor);
 			if (paths.indexOf(path) < 0) {
 				paths.push(path);
@@ -108,11 +101,7 @@ class HlWriterCache {
 		if (entry == null)
 			return null;
 		var places = entry.places;
-		if (places != null)
-			for (index in 0...places.anchors.length)
-				if (sources.line(places.anchors[index]) != places.lines[index])
-					return null;
-		return entry.bytes;
+		return places == null || places.hold(sources) ? entry.bytes : null;
 	}
 
 	/** Keeps the encoding of `fn`, with the lines its anchors had in `sources` when it was written with debug lines. */
@@ -238,30 +227,58 @@ private class EncodedFunction {
 	}
 }
 
-/** The distinct anchors of some debug locations, each with its line (and with `full`, its offset and file hash) in a build's sources. */
+/**
+ * The distinct anchors of some debug locations, each with its line (and with `full`, its offset and file hash) in a build's
+ * sources, in one array of rows: a writer cache holds one for every function.
+ */
 private class AnchorPlaces {
-	public final anchors:Array<Int> = [];
-	public final lines:Array<Int> = [];
-	public final offsets:Array<Int> = [];
-	public final hashes:Array<Int> = [];
+	final rows:Array<Int> = [];
+	final width:Int;
 
-	function new() {}
+	function new(full:Bool)
+		width = full ? 4 : 2;
 
 	public static function of(locations:Array<HlDebugLocation>, sources:SourceAnchors, full:Bool):AnchorPlaces {
-		var result = new AnchorPlaces(), previous = -1;
+		var result = new AnchorPlaces(full), rows = result.rows, previous = -1;
 		for (location in locations) {
 			var anchor = location.anchor;
-			if (anchor == previous || result.anchors.indexOf(anchor) >= 0)
+			if (anchor == previous || result.has(anchor))
 				continue;
 			previous = anchor;
-			result.anchors.push(anchor);
-			result.lines.push(sources.line(anchor));
+			rows.push(anchor);
+			rows.push(sources.line(anchor));
 			if (full) {
-				result.offsets.push(sources.offset(anchor));
-				result.hashes.push(sources.hash(anchor));
+				rows.push(sources.offset(anchor));
+				rows.push(sources.hash(anchor));
 			}
 		}
 		return result;
+	}
+
+	function has(anchor:Int):Bool {
+		var index = 0;
+		while (index < rows.length) {
+			if (rows[index] == anchor)
+				return true;
+			index += width;
+		}
+		return false;
+	}
+
+	public function anchors():Array<Int>
+		return [for (index in 0...Std.int(rows.length / width)) rows[index * width]];
+
+	/** Whether every anchor is where `sources` puts it now. */
+	public function hold(sources:SourceAnchors):Bool {
+		var index = 0;
+		while (index < rows.length) {
+			var anchor = rows[index];
+			if (sources.line(anchor) != rows[index + 1]
+				|| width == 4 && (sources.offset(anchor) != rows[index + 2] || sources.hash(anchor) != rows[index + 3]))
+				return false;
+			index += width;
+		}
+		return true;
 	}
 }
 
