@@ -3,7 +3,7 @@
 # Listing the modules by search keeps the scripts independent of how the package arranges its directories; every
 # module is compiled, so one a program does not reach is still type-checked.
 
-ui_source_roots=("$1/haxe" "$1/bindings/haxe")
+ui_source_roots=("$1/src")
 
 ui_root_flags=()
 for ui_root in "${ui_source_roots[@]}"; do

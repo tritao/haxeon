@@ -12,8 +12,8 @@ export LD_LIBRARY_PATH="$native:$native/nativekit:$native/nativekit/modules/gpu:
 export NKUI_TEST_FONT_PATH=${NKUI_TEST_FONT_PATH:-"$ui/native/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
 for inline in 0 1; do
   "$runtime/hl" "$compiler" $( ((inline)) || echo --no-inline ) --output="$work/test.hl" \
-    --entry=NativeScopeFeedbackMain --root="$ui/tests/haxeon" --root="$ui/haxe" \
-    --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+    --entry=NativeScopeFeedbackMain --root="$ui/tests/haxeon" --root="$ui/src" \
+    --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
     --ffi-interface="$root/packages/platform/bindings/nativekit.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
     --ffi-interface="$root/packages/platform/bindings/nativekit-net.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
     --ffi-interface="$ui/bindings/nativekit-ui.hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \

@@ -146,8 +146,8 @@ ordering and test each descendant's resolved clip rather than rejecting an
 escaped floating subtree at an ancestor clip.
 
 
-The Haxe framework lives separately from the low-level generated bindings in
-`haxe/haxeon/ui/`. Its current foundation includes:
+The Haxe framework lives in `src/haxeon/ui/`, its subpackages above the binding layer in the package
+root. Its current foundation includes:
 
 - rebuilt `View` trees, one `RenderNode` per visual/interactive identity,
   scoped keys, duplicate-ID checks, and persistent `State<T>` storage;

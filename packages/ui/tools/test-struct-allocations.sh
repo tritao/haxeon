@@ -6,7 +6,7 @@ tmp=$(mktemp -d "${TMPDIR:-$root/out}/haxeon-state-census.XXXXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
 compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-roots=(--root=stdlib --root=packages/ui/haxe --root=packages/ui/bindings/haxe --root=packages/platform/src --root=packages/editor/src --root=packages/ui/tests/haxeon)
+roots=(--root=stdlib --root=packages/ui/src --root=packages/platform/src --root=packages/editor/src --root=packages/ui/tests/haxeon)
 for fixture in state pointer; do
   if [[ "$fixture" == state ]]; then entry=StructStateAllocations; census=StateAllocationCensus; else entry=PointerLocationAllocations; census=PointerAllocationCensus; fi
   source_file="packages/ui/tests/haxeon/$entry.hx"

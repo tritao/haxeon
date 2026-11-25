@@ -682,8 +682,7 @@ if(NK_BUILD_EXAMPLES)
             endif()
             file(GLOB_RECURSE NKUI_HAXEON_GUEST_HX_DEPS CONFIGURE_DEPENDS
                 "${NKUI_PACKAGE_DIR}/examples/ui_showcase/*.hx"
-                "${NKUI_PACKAGE_DIR}/haxe/haxeon/ui/*.hx"
-                "${NKUI_PACKAGE_DIR}/bindings/haxe/haxeon/ui/*.hx"
+                "${NKUI_PACKAGE_DIR}/src/haxeon/ui/*.hx"
                 "${NKUI_HAXEON_DIR}/packages/platform/src/haxeon/platform/*.hx"
                 "${NKUI_HAXEON_DIR}/packages/gpu/src/haxeon/gpu/*.hx"
                 "${NKUI_HAXEON_DIR}/packages/editor/src/haxeon/editor/*.hx")

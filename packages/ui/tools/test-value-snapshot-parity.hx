@@ -89,7 +89,7 @@ function main() {
 				"--wasm-import-memory",
 				'--wasm-memory-contract=$memory'
 			] : []).concat([
-				'--root=$fixtures', '--root=$ui/haxe', '--root=$ui/bindings/haxe', '--root=$root/packages/editor/src',
+				'--root=$fixtures', '--root=$ui/src', '--root=$root/packages/editor/src',
 				'--root=$root/packages/platform/src',
 				'--ffi-interface=$root/packages/platform/bindings/nativekit$bindings.hxi',
 				'--ffi-projection=$root/packages/platform/bindings/nativekit.hxmap',

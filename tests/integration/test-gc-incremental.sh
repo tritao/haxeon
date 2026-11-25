@@ -82,7 +82,7 @@ fi
 # Haxe toolchain's other standard types intact.
 mkdir -p "$work/stdlib/hl"
 cp "$root/stdlib/hl/Gc.hx" "$work/stdlib/hl/Gc.hx"
-"$root/.tools/haxe/haxe" -cp "$root/tests/native" -cp "$root/packages/ui/haxe" -cp "$work/stdlib" -hl "$work/frame.hl" -main FrameGcSchedulerProbe
+"$root/.tools/haxe/haxe" -cp "$root/tests/native" -cp "$root/packages/ui/src" -cp "$work/stdlib" -hl "$work/frame.hl" -main FrameGcSchedulerProbe
 if [[ $kernel_available == 1 ]]; then
  LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/frame.hl"
 fi

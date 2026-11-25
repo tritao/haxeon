@@ -11,7 +11,7 @@ cmake --build "$native" --target nativekit_ui
 compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 export LD_LIBRARY_PATH="$native:$native/nativekit/modules/gpu:$native/nativekit:$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$hl" "$compiler" --output="$work/test.hl" --entry=IdleMetricsMain \
-  --root="$ui/tests/haxeon" --root="$ui/haxe" --root="$ui/bindings/haxe" \
+  --root="$ui/tests/haxeon" --root="$ui/src" \
   --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
   --ffi-interface="$root/packages/platform/bindings/nativekit.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
   --ffi-interface="$root/packages/platform/bindings/nativekit-net.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \

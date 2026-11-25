@@ -39,7 +39,7 @@ for target in hl wasm32 wasm-gc; do
     [[ $target != wasm-gc ]] || options+=(--wasm-legacy-exceptions)
     artifact="$work/showcase-$target"
     if ! "$hl" "$compiler" "${options[@]}" --entry="$entry" --output="$artifact" \
-            --root="$ui/examples/ui_showcase" --root="$ui/haxe" --root="$ui/bindings/haxe" \
+            --root="$ui/examples/ui_showcase" --root="$ui/src" \
             --root="$root/packages/editor/src" --root="$root/packages/platform/src" --root="$root/packages/gpu/src" \
             --ffi-interface="$root/packages/platform/bindings/nativekit$suffix.hxi" \
             --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \

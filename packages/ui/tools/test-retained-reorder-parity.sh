@@ -25,8 +25,8 @@ for inline in 0 1; do
         fi
         artifact="$tmp/$inline-$target"
         if ! "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --output="$artifact" \
-                --entry=RetainedReorderMain --root="$ui/tests/haxeon" --root="$ui/haxe" \
-                --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+                --entry=RetainedReorderMain --root="$ui/tests/haxeon" --root="$ui/src" \
+                --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                 --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                 --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
                 --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \

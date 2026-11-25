@@ -18,7 +18,7 @@ for inline in 0 1; do
       else flags+=(--wasm-gc-allocation-count); fi
     fi
     "$hl" "$compiler" $( ((inline)) || echo --no-inline ) --target="$target" --output="$work/test" --entry=IdleReuseParity \
-      --root="$ui/tests/haxeon" --root="$ui/haxe" --root="$ui/bindings/haxe" \
+      --root="$ui/tests/haxeon" --root="$ui/src" \
       --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
       --ffi-interface="$root/packages/platform/bindings/nativekit$suffix.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
       --ffi-interface="$root/packages/platform/bindings/nativekit-net$suffix.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \

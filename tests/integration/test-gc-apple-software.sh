@@ -30,7 +30,7 @@ fi
 mkdir -p "$work/stdlib/hl"
 cp "$root/stdlib/hl/Gc.hx" "$work/stdlib/hl/Gc.hx"
 for probe in FrameGcSchedulerProbe GcWriteBarrierProbe GcRuntimeWriteProbe; do
- "$root/.tools/haxe/haxe" -cp "$root/tests/native" -cp "$root/packages/ui/haxe" -cp "$work/stdlib" -hl "$work/$probe.hl" -main "$probe"
+ "$root/.tools/haxe/haxe" -cp "$root/tests/native" -cp "$root/packages/ui/src" -cp "$work/stdlib" -hl "$work/$probe.hl" -main "$probe"
  for threads in 1 4; do HL_GC_THREADS=$threads "$vm" "$work/$probe.hl"; done
 done
 "${CC:-cc}" -dynamiclib "$root/tests/native/native_call_fixture.c" -lpthread -o "$work/fixture.dylib"

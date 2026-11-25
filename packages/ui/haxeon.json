@@ -5,8 +5,7 @@
     "friends": ["haxeon-ui-property-tests", "ui-restyle-in-place-tests"]
   },
   "sourceRoots": [
-    "haxe",
-    "bindings/haxe"
+    "src"
   ],
   "scopeSourceRoots": false,
   "dependencies": {

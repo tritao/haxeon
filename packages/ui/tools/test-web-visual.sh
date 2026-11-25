@@ -65,7 +65,7 @@ if [[ -z "$haxeon_dir" && -f "$build_dir/build.ninja" ]]; then
 fi
 haxeon_dir=${haxeon_dir:-"$(cd "$repo_dir/../.." && pwd)"}
 haxe_source_dirs=(
-    "$repo_dir/haxe"
+    "$repo_dir/src"
     "$repo_dir/bindings"
     "$repo_dir/examples/ui_showcase"
     "$haxeon_dir/packages/platform/bindings"

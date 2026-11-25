@@ -352,7 +352,7 @@ The Haxe code Haxeon rejects or runs differently is listed in
   fields as its parameters by name. Haxeon has no `@:structInit`. Lower the
   literal to `new` plus the field stores, through the expected-type path that
   object literals already use. Then convert the UI style classes
-  (`packages/ui/bindings/haxe/haxeon/ui/LayoutStyle.hx` and similar: their
+  (`packages/ui/src/haxeon/ui/LayoutStyle.hx` and similar: their
   defaults move from `new()` to field initializers; check the generated
   `Diffable` field masks) and the guides that write `new LayoutStyle()`
   followed by field sets.

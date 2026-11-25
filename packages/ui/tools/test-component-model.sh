@@ -44,8 +44,8 @@ for fixture in "${fixtures[@]}"; do
         fi
         artifact="$tmp/$inline-$target"
         if ! "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --output="$artifact" \
-                --entry=${fixture} --root="$ui/tests/haxeon" --root="${HAXEON_UI_SOURCE:-"$ui/haxe"}" \
-                --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+                --entry=${fixture} --root="$ui/tests/haxeon" --root="${HAXEON_UI_SOURCE:-"$ui/src"}" \
+                --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                 --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                 --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
                 --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
@@ -113,8 +113,8 @@ JS
                 negative_options+=(--wasm-import-memory --wasm-memory-contract="$tmp/memory.json")
             fi
             if "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${negative_options[@]}" --output="$tmp/invalid-$target" \
-                    --entry=KeyScopeString --root="$ui/tests/haxeon/negative" --root="${HAXEON_UI_SOURCE:-"$ui/haxe"}" \
-                    --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+                    --entry=KeyScopeString --root="$ui/tests/haxeon/negative" --root="${HAXEON_UI_SOURCE:-"$ui/src"}" \
+                    --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                     --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
                     --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
@@ -131,8 +131,8 @@ JS
         if [[ $fixture == UiEventPhaseMain ]]; then
             for invalid in UiEventPhaseAssignment UiEventPhaseRegistration; do
                 if "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --output="$tmp/invalid-$target" \
-                    --entry="$invalid" --root="$ui/tests/haxeon/negative" --root="$ui/haxe" \
-                    --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+                    --entry="$invalid" --root="$ui/tests/haxeon/negative" --root="$ui/src" \
+                    --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                     --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
                     --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
@@ -155,8 +155,8 @@ JS
         if [[ $fixture == ScopeResourceIdMain ]]; then
             for invalid in ScopeOwnerWidgetId ScopeOwnerInt WidgetStateScopeId; do
                 if "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --output="$tmp/invalid-$target" \
-                    --entry="$invalid" --root="$ui/tests/haxeon/negative" --root="$ui/haxe" \
-                    --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+                    --entry="$invalid" --root="$ui/tests/haxeon/negative" --root="$ui/src" \
+                    --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                     --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
                     --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \

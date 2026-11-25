@@ -278,7 +278,7 @@ for inline in 0 1; do
 			--entry=declared-equality --root=tests/programs tests/programs/declared-equality.hx
 		haxeon_compile_async $( ((inline)) || echo --no-inline ) \
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-observable-tracking-inline-$inline.wasm" \
-			--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/haxe --root=tests/programs \
+			--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/src --root=tests/programs \
 			tests/programs/wasm-observable-tracking.hx
 		haxeon_compile_async $( ((inline)) || echo --no-inline ) \
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-observable-generic-runtime-inline-$inline.wasm" \
@@ -456,7 +456,7 @@ for inline in 0 1; do
 	done
 	haxeon_compile $( ((inline)) || echo --no-inline ) \
 		--target=hl --output="$parity_output_dir/observable-tracking-inline-$inline.hl" \
-		--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/haxe --root=tests/programs \
+		--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/src --root=tests/programs \
 		tests/programs/wasm-observable-tracking.hx
 	haxeon_compile $( ((inline)) || echo --no-inline ) \
 		--target=hl --output="$parity_output_dir/observable-generic-runtime-inline-$inline.hl" \
