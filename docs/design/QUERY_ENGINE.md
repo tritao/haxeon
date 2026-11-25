@@ -4,7 +4,8 @@ Status: steps 1 and 2 are done and step 3 is under way. The engine core is in `c
 the build inputs (step 2, `BuildInputs`) and, as a kind of its own, the facts typed units read: the typer records its reads in
 the engine's frames, and a unit's reads are verified by the engine (step 3, slice 3a). What each unit read is a result of that
 kind, written in a transaction the taken build commits (slice 3b). The IR stages, lowering and encoding still keep results
-through their own mechanisms; "Steps 4 onward" lists them, what each becomes, and the order they move in. ADR 0003
+through their own mechanisms; "Steps 4 onward" lists them, what each becomes, and the order they move in. Its slice 1 is done:
+the engine has the kinds they move onto (`ComputedQueryKind`, `QuerySummary`), and no stage uses them yet. ADR 0003
 decisions 1, 10 and 14 are the requirements; this note is how. The pass framework (M2) is built on this engine.
 
 ## Why now
@@ -45,7 +46,8 @@ order of its first read.
   check mode (below).
 - **Keys** are typed per kind and interned to dense ids, as `IrSymbol` interns names. A key is never a concatenated
   string on a hot path.
-- **Kinds are classes** (`QueryKindBase`, `QueryKind<V>`, `RecordedQueryKind`), not interfaces: HashLink calls an interface
+- **Kinds are classes** (`QueryKindBase`, `QueryKind<V>`, `RecordedQueryKind`, `ComputedQueryKind<V>`, `QuerySummary`), not
+  interfaces: HashLink calls an interface
   method by name, a class method through its table, and verification calls a kind's `changedAt` once per read.
 - **Recorded kinds** hold results a stage computes outside the engine, in its own order, as the typer types units
   (`RecordedQueryKind`, below).
@@ -69,11 +71,12 @@ normal builds; check mode compares whole values. A kind digests its values one o
 
 - **By content** (`QueryKind.derived`, every input): the value type feeds its parts. Values that are interned (types,
   symbols) digest by id. This is what early cutoff needs.
-- **By computation** (`QueryKind.computed`): the kind, the key and the digests of the reads, in order. It costs nothing
-  and is sound, since a computation is a function of its reads, but a recomputed value always counts as changed, so its
-  readers get no early cutoff.
+- **By equality** (`ComputedQueryKind`), for values too large to digest: a value computed again is compared with the one kept
+  by the kind's `same`, and an equal one keeps the kept object and the revision it changed at. It costs a comparison only
+  where a key was computed again, and readers get early cutoff. It replaced digesting by computation (the kind, the key and
+  the reads' digests), which cost nothing but counted every recomputed value as changed, so its readers had no cutoff.
 
-IR functions are digested by computation. Measured on the compiler's own sources (2026-11-19): the full encoding of all
+IR functions are cut off by equality (`IrFunctionStateEquality.same`, which `IrLineage.settle` compares today). Measured on the compiler's own sources (2026-11-19): the full encoding of all
 8,538 functions at the scalar replacement stage (`IrFunctionStateCodec.encode`, which `IrFunctionDigest` hashes) is
 98.5 MB and takes 3.1 s to make and 0.4 s to hash, while the pass itself takes 30 ms. A content digest per function per
 pass would cost a hundred times the work it saves. `IrFunctionDigest` stays for inputs set once per build where a
@@ -109,7 +112,9 @@ driven by the engine (step 3, later slices), its units are results of a **record
   starts from that state (`SessionState.copyForCandidate`) or the compiler returns to it (a rejected or retracted publication).
   What undoes a commit is kept while a state before it can be returned to: the state the last build replaced and the
   publications' snapshots (`keepRollbackTo`). Computed memos take no part: a memo is a function of its reads, whichever build
-  made it.
+  made it. But an undone result takes back the older revision it changed at, against which a memo computed over the undone
+  one would verify, so a rollback that undid anything drops the memos computed after the commit it returns to
+  (`forgetComputedAfter`).
 - **Revisions.** A build starts a revision of its own (`QueryDatabase.newRevision`), since prints move while it runs and a
   unit is current when nothing it read changed after the revision it was typed at. Input changes advance the **input
   revision** besides; a result reused whole (`Compiler.compile`'s no-op result) is current while the input revision is.
@@ -136,6 +141,13 @@ reads are per-function **contributions**, themselves queries. A summary's digest
 rewrites that read it rerun. A rewrite reads only the summary fields it uses, per key (a closure type, a candidate), so one
 new key does not rerun every function (`IR_PASS_INVENTORY.md`, Interface, rule 2).
 
+The engine's summary is `QuerySummary`: which keys some contributor names, each contribution an array of keys (a computed
+memo, so one that held is the same array). A stage gives every contributor's contribution in each run between `open` and
+`close`; a contribution that is the array kept costs one comparison, a changed one is applied key by key, and a contributor
+not given is retracted at `close`. A reader reads one key's presence (`has`), or the whole set (`keys`), which changes with
+any key; only a key that appears or goes changes. A walk over the program (reachability, `IrWalkRecord` today) is a computed
+memo whose reads are the contributions of the functions it reached and the tables it read, verified like any other.
+
 Fixpoint passes (`IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`) record their candidacy reads as
 engine reads. An edit re-decides the changed functions and the readers of any candidacy that flips (ADR 0003 decision 4).
 
@@ -143,8 +155,10 @@ engine reads. An edit re-decides the changed functions and the readers of any ca
 
 - The database lives with the session (compile server, language server). A one-shot compile uses the same engine with
   nothing retained after the build.
-- **Sweep.** After each build, memos not verified in that revision and not reachable from a root (the build's outputs,
-  the language server's open documents) are dropped. Memory is reported per build: the worker's resident size after a warm
+- **Sweep.** After a build that brought up to date everything it keeps, the memos of the computed kinds it used that it did
+  not verify since it began (`QueryDatabase.buildRevision`, not the latest revision, which inputs set during a build move)
+  are dropped (`QueryDatabase.sweep`); a kind the build did not use, as a stage that did not run, keeps its memos. Roots
+  that keep memos a build did not use (the language server's open documents) come with their first user. Memory is reported per build: the worker's resident size after a warm
   build (ADR 0003, Consequences).
 - **Scratch regions** (ADR 0004 section 6) come per query kind once that kind's outputs are proven owned and release is
   cheap.
@@ -303,7 +317,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 |---|---|---|---|---|---|
 | A | Relative positions (in progress elsewhere) | — | `IrSourceRehash` (likely) | blank-line edit: most of the inliner and lowering 4.7G | — |
 | B | Module sections and load-time linking ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), its slices 1–5) | −3,300 / +1,200, fork +650 net | link and replay, published slots and stable ids, symbol persistence | 0.1 / 1.4 / 0 | A; checks also ci-tier debug-metadata and hot-reload, self-compile oracle takes a new base |
-| 1 | Engine for per-function stages: a computed kind keyed by function symbol with equality cutoff, contributions and summaries with per-key reads, sweep of computed memos | +400 | — | none; verifying the memos must keep the body edit at today's cost (`IrLineage.start` alone is 2.4% of it) | — |
+| 1 | **Done** (below): engine for per-function stages: a computed kind keyed by function symbol with equality cutoff, contributions and summaries with per-key reads, sweep of computed memos | +400 | `QueryKind.computed` | none; verifying the memos must keep the body edit at today's cost (`IrLineage.start` alone is 2.4% of it) | — |
 | 2 | IR generation, generated functions, object tables as results | −450 / +250 | `IrFunctionVersions`, `IrGeneratedFunctions`, `objectCache` maps, `IrLineage.start`, frontend `IrFunctionMemo` users | 0.1 / 0.1 / 0.1 | 1 |
 | 3 | Assembly stages before the encode point | −2,000 / +500 | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05 | 2 |
 | 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4) | −400 / +250 | their whole-program rereads | 0.2 / 1.2 / 0.2 | 3 |
@@ -314,6 +328,62 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 B touches only `hl/` and can land beside 1–3. The largest part of the signature edit, typing and IR generation (6.8G), is
 step 3c's and the frontend's, not this plan's. Estimated together: the body edit from 2.44G to about 1.9G, the signature
 edit from 18.5G to about 13.8G.
+
+### Slice 1 as built
+
+Two kinds in `compiler.query`, tested on synthetic queries in `QueryEngineMain`; no stage uses them yet.
+
+**`ComputedQueryKind<V>`** (`new(name, same, ?compute, ?keyName)`): values per Int key, cut off by equality (Digests,
+above). Computed on demand when the kind has `compute` (`get`), or by a stage in its own run:
+
+```
+if (kind.current(db, key))           // held: nothing it read changed since it was verified
+    out = kind.value(key);            // check mode: kind.begin(db, key); kind.check(db, key, rewrite())
+else {
+    kind.begin(db, key);              // a frame records what the rewrite reads through the database
+    out = kind.end(db, key, rewrite()); // the kept object when `same`, else the new one, changed now
+}
+```
+
+The rewrite reads its input as `previous.get(db, key)`, and what else it depends on through the database: summary keys,
+facts. A stage without a memo of its own (today's `IrLineage.settle` of its outputs) writes them with `begin`/`end`, reading
+only its input, which gives the identity and the change revision settling gives. `get` of a key its stage has not computed
+or verified in the revision is an error, and to a verification such a key counts as changed. Keys are any dense Int: the
+plan keys by function symbol (`IrSymbol` ids), and the columns are sized by the largest key a kind holds, which slice 2
+measures against slots (`IrFunctionSlots`, dense per session).
+
+**`QuerySummary`** (Whole-program steps, above): `open`, `contribute(db, contributor, keys)`, `close`; `has(db, key)` and
+`keys(db)` after `close`. Reading while open and giving a contributor twice in a run are errors; a run a stopped build left
+open is started again. `--check-reuse` counts the keys again from the contributions at `close`. Today's contribution memos
+(`summarize`, `IrContributionMemo` per version) map onto a computed kind per contribution whose arrays feed a summary; a
+whole-program step's state, which `prepare` computes now and `fact` answers from, becomes reads of summary keys, so a rewrite
+records the keys it depends on instead of a fact print.
+
+Design decisions:
+
+- **Equality, not a digest by computation**, which `QueryKind.computed` did and which is gone with `QueryKindBase.feedDigest`:
+  it gave readers no cutoff, and IR functions are too large to digest by content (Digests, above).
+- **Columns and one pool of reads.** A memo is columns by key (value, verified, changed, computed revisions, where its reads
+  start in the kind's Int pool, how many), not an object with an array of reads, and the base kind holds the verified and
+  changed columns so a verification answers a read of a key verified in the revision inline (`changeIfVerified`). On
+  HashLink an element of an `Array<Null<Array<Int>>>` costs about 75 instructions (it is cast on each read) and the call to
+  `changedAt` about 20. The pool's garbage (runs a memo replaced) is compacted at a sweep, or when it passes half the pool
+  with no verification of the kind under way.
+- **No frame, no handler, no allocation on a held key.** A verification marks the key busy, stamped with the revision, which
+  catches a cycle through recorded reads; a computation that throws ends the build, whose frames the next build drops and
+  whose marks expire with the revision.
+- **Rollback drops what was computed after the commit** (Results and transactions, above): found while writing the tests; a
+  memo over a recorded result a rollback undid verified against the older revision the undone result took back.
+- **Sweep** per kind and from the build's first revision (Lifetime and memory, above).
+
+Measured (main-thread instructions, a synthetic warm build of 25 stages over 8,500 functions, compiled by Haxeon, every key
+held): today's `IrFunctionStages.run` with `IrLineage` and `IrStageMemo`, for a stage that leaves every function alone and
+reads no fact, costs 421 per function and stage (89.5M a build). The engine costs 226 per key with one read (its input) and
+318 with two (its input and a summary key), before the stage driver's own loop. Slice 3 measures its driver against today's;
+should the held path cost more, a stage visits only the keys whose reads changed.
+
+Left for slices 2 and 3: helpers by name (`IrStageMemos.helper`) as computed keys of interned names; a summary's contributors
+per key, if a step needs which functions name a key and not only whether one does; roots for the sweep.
 
 **Net lines (estimate):** about 5,450 deleted and 2,350 added in `src/`, about 3,100 fewer, plus the test mains of
 deleted mechanisms (`IrVerifyMemoMain`, `WarmStageFactsMain`, `StaticNullCheckReuseMain`, `InlinerSession`,
