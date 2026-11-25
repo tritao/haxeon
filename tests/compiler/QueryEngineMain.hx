@@ -3,6 +3,38 @@ import compiler.query.QueryDatabase;
 import compiler.query.QueryErrors.QueryCycle;
 import compiler.query.QueryErrors.QueryReuseMismatch;
 import compiler.query.QueryKind;
+import compiler.query.QueryKind.QueryRead;
+import compiler.query.RecordedQueryKind;
+
+/** Results a test stage computes itself: each node's own change, its reads, and which reads see only a part (`partOf`). */
+class TestRecorded extends RecordedQueryKind {
+	public final own:Array<Int> = [];
+	public final reads:Array<Null<Array<Int>>> = [];
+
+	/** For a read of a node by another that sees only a part of it, that part's change, by target; -1 for all of it. */
+	public final partOf:Array<Int> = [];
+
+	public function new(database:QueryDatabase) {
+		super("recorded", database);
+		database.register(this);
+	}
+
+	public function node(change:Int, ?through:Array<Int>):Int {
+		own.push(change);
+		reads.push(through);
+		partOf.push(-1);
+		return own.length - 1;
+	}
+
+	override function ownChange(key:Int):Int
+		return own[key];
+
+	override function readsOf(key:Int):Null<Array<Int>>
+		return reads[key];
+
+	override function partialChange(source:Int, target:Int):Int
+		return partOf[target];
+}
 
 /** The query engine on synthetic queries: reuse without computing, early cutoff, read order, cycles, sweep, check mode. */
 class QueryEngineMain {
@@ -136,6 +168,102 @@ class QueryEngineMain {
 		expect(mismatch != null && mismatch.query == "leaky(0)",
 			"check mode names the query that read unrecorded state");
 
-		Sys.println("PASS: query engine reuses, cuts off early, digests by computation, verifies reads in order, reports cycles, sweeps and checks reuse");
+		recordedResults();
+		stageFrames();
+		inputRevisions();
+
+		Sys.println("PASS: query engine reuses, cuts off early, digests by computation, verifies reads in order, reports cycles, sweeps, checks reuse, "
+			+ "verifies recorded results through components, records a stage's reads in frames, and tells input revisions from build revisions");
+	}
+
+	/** Results a stage computes itself change when they or anything they read did, transitively; a component changes as one. */
+	static function recordedResults():Void {
+		var database = new QueryDatabase();
+		var recorded = new TestRecorded(database);
+		var outside = database.register(QueryKind.input("outside", digestInt, sameInt));
+		database.set(outside, 0, 1);
+		var outsideRead = QueryRead.of(outside.index, 0);
+		var start = database.newRevision();
+		// a reads b; b and c read each other; c reads d; e is read by a only in part; f reads the outside input.
+		var d = recorded.node(start), e = recorded.node(start);
+		var b = recorded.node(start), c = recorded.node(start);
+		recorded.reads[b] = [QueryRead.of(recorded.index, c)];
+		recorded.reads[c] = [QueryRead.of(recorded.index, b), QueryRead.of(recorded.index, d)];
+		var a = recorded.node(start, [QueryRead.of(recorded.index, b), QueryRead.of(recorded.index, e)]);
+		var f = recorded.node(start, [outsideRead]);
+		expect(recorded.latestChange(a) == start, "nothing changed after the start");
+		expect(recorded.currentSince([QueryRead.of(recorded.index, a)], start), "a is current");
+
+		var later = database.newRevision();
+		recorded.own[d] = later;
+		expect(recorded.latestChange(c) == later && recorded.latestChange(b) == later, "a component changes as one");
+		expect(recorded.latestChange(a) == later, "through the component");
+		expect(!recorded.currentSince([QueryRead.of(recorded.index, a)], start), "a is no longer current");
+
+		var partial = database.newRevision();
+		recorded.own[d] = start;
+		recorded.own[e] = partial;
+		recorded.partOf[e] = start;
+		expect(recorded.latestChange(e) == partial, "e itself changed");
+		expect(recorded.latestChange(a) == start, "a reads only the part of e that did not change");
+		recorded.partOf[e] = partial;
+		expect(recorded.latestChange(a) == start, "memoized for the revision");
+		database.newRevision();
+		expect(recorded.latestChange(a) == partial, "a new revision walks again");
+
+		expect(recorded.latestChange(f) == start, "an input read before the start");
+		database.set(outside, 0, 2);
+		expect(recorded.latestChange(f) == database.revision, "a read of another kind changes with it");
+	}
+
+	/** A stage's frames record each read once, nest, and leave the frame below them recording each read once too. */
+	static function stageFrames():Void {
+		var database = new QueryDatabase();
+		var recorded = new TestRecorded(database);
+		for (_ in 0...4)
+			recorded.node(0);
+		expect(!database.recording, "nothing records outside a frame");
+		database.record(recorded, 0);
+		database.beginRecording();
+		database.record(recorded, 1);
+		database.record(recorded, 0);
+		database.record(recorded, 1);
+		database.beginRecording();
+		database.record(recorded, 1);
+		database.record(recorded, 2);
+		var inner = database.endRecording();
+		expect(inner.join(",") == [QueryRead.of(recorded.index, 1), QueryRead.of(recorded.index, 2)].join(","),
+			"the inner frame records its own reads");
+		database.record(recorded, 1);
+		database.record(recorded, 3);
+		var outer = database.endRecording();
+		expect(outer.join(",") == [1, 0, 3].map(key -> QueryRead.of(recorded.index, key)).join(","),
+			"each read once, in order, also after an inner frame");
+		var thrown = false;
+		try
+			database.endRecording()
+		catch (_:compiler.core.InternalError)
+			thrown = true;
+		expect(thrown, "ending a frame that was not begun is an error");
+		database.beginRecording();
+		database.record(recorded, 0);
+		database.newRevision();
+		expect(!database.recording && database.depth == 0, "a new build drops the frames a stopped one left open");
+	}
+
+	/** Inputs advance the input revision; a build's own revision does not, so a result kept whole is current across builds. */
+	static function inputRevisions():Void {
+		var database = new QueryDatabase();
+		var source = database.register(QueryKind.input("source", digestInt, sameInt));
+		database.set(source, 0, 1);
+		var inputs = database.inputRevision;
+		database.newRevision();
+		expect(database.inputRevision == inputs && database.revision > inputs, "a build's revision is no input change");
+		database.set(source, 0, 1);
+		expect(database.inputRevision == inputs, "an equal input changes nothing");
+		database.remove(source, 1);
+		expect(database.inputRevision == inputs, "removing an input that is not set changes nothing");
+		database.remove(source, 0);
+		expect(database.inputRevision > inputs && source.peek(0) == null, "removing one is a change");
 	}
 }

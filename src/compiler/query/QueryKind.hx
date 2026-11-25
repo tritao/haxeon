@@ -3,20 +3,80 @@ package compiler.query;
 import compiler.query.QueryErrors.QueryCycle;
 import compiler.query.QueryErrors.QueryReuseMismatch;
 
-/** What the database needs of a kind without knowing its value type. */
-interface AnyQueryKind {
-	var name(default, null):String;
+/**
+ * A recorded read: a kind's index and a key in one Int, so that a memo's reads are one array of Ints. A kind registered first has
+ * index 0, so its reads are its keys.
+ */
+class QueryRead {
+	public static inline final KEY_BITS = 24;
+	public static inline final KEY_MASK = 0xFFFFFF;
+
+	public static inline function of(kind:Int, key:Int):Int
+		return (kind << KEY_BITS) | key;
+
+	public static inline function kind(read:Int):Int
+		return read >>> KEY_BITS;
+
+	public static inline function key(read:Int):Int
+		return read & KEY_MASK;
+}
+
+/**
+ * What the database needs of a kind without knowing its value type. A class, not an interface: HashLink calls an interface method
+ * by name, a class method through its table.
+ */
+class QueryKindBase {
+	public var kindName(default, null):String;
+
+	/** The kind's position in its database; -1 until registered. */
+	public var index(default, null):Int = -1;
+
+	/** The recording frame that last recorded each key (`QueryDatabase.record`), so that a frame records a read once. */
+	var recordedBy:Array<Int> = [];
+
+	function new(name:String)
+		kindName = name;
+
+	@:allow(compiler.query.QueryDatabase)
+	function register(index:Int):Void {
+		if (this.index >= 0)
+			throw new compiler.core.InternalError("query kind " + kindName + " is registered twice");
+		if (index > (0xFF:Int))
+			throw new compiler.core.InternalError("a query database holds at most 256 kinds");
+		this.index = index;
+	}
 
 	/** The revision at which `key`'s value last changed, bringing it up to date first. */
-	function changedAt(database:QueryDatabase, key:Int):Int;
+	public function changedAt(database:QueryDatabase, key:Int):Int
+		throw new compiler.core.InternalError("query kind " + kindName + " has no changedAt");
 
 	/** Drops the memos not verified at `revision`; returns how many. Inputs are kept. */
-	function sweep(revision:Int):Int;
+	public function sweep(revision:Int):Int
+		return 0;
 
-	function describe(key:Int):String;
+	public function describe(key:Int):String
+		return kindName + "(" + key + ")";
 
-	/** Feeds the digest of `key`'s current value; a read that closed a cycle, and has no value yet, feeds a mark of its own. */
-	function feedDigest(key:Int, digest:Digest):Void;
+	/**
+	 * Feeds the digest of `key`'s current value, for a reader digested by its computation; a read that closed a cycle, and has no
+	 * value yet, feeds a mark of its own.
+	 */
+	public function feedDigest(key:Int, digest:Digest):Void
+		throw new compiler.core.InternalError("query kind " + kindName + " has no digest");
+
+	/** Whether recording frame `stamp` has not recorded `key` yet, marking it recorded. */
+	public inline function firstRecord(key:Int, stamp:Int):Bool {
+		while (recordedBy.length <= key)
+			recordedBy.push(0);
+		if (recordedBy[key] == stamp)
+			return false;
+		recordedBy[key] = stamp;
+		return true;
+	}
+
+	/** Forgets which frames recorded which keys, for a kind that forgets its keys. */
+	function clearRecorded():Void
+		recordedBy = [];
 }
 
 /** One query's result, with what its computation read and when it last changed. */
@@ -27,7 +87,7 @@ class Memo<V> {
 	public var verifiedAt:Int;
 	public var changedAt:Int;
 
-	/** The reads of the computation that made `value`, as (kind index, key) pairs, in order. */
+	/** The reads of the computation that made `value` (`QueryRead`), in order. */
 	public var reads:Array<Int>;
 
 	public function new(value:V, first:Int, second:Int, revision:Int, reads:Array<Int>) {
@@ -45,12 +105,7 @@ class Memo<V> {
  * the database. Keys are dense ids; a kind with richer keys interns them first. Values are owned (ADR 0003 decision 14) and
  * never mutated once returned.
  */
-class QueryKind<V> implements AnyQueryKind {
-	public var name(default, null):String;
-
-	/** The kind's position in its database; -1 until registered. */
-	public var index(default, null):Int = -1;
-
+class QueryKind<V> extends QueryKindBase {
 	final compute:Null<(QueryDatabase, Int) -> V>;
 	/** Null for a kind digested by its computation (`computed`). */
 	final digestValue:Null<(V, Digest) -> Void>;
@@ -63,7 +118,7 @@ class QueryKind<V> implements AnyQueryKind {
 
 	function new(name:String, compute:Null<(QueryDatabase, Int) -> V>, digestValue:Null<(V, Digest) -> Void>,
 			sameValue:(V, V) -> Bool, onCycle:Null<Int->V>, keyName:Null<Int->String>) {
-		this.name = name;
+		super(name);
 		this.compute = compute;
 		this.digestValue = digestValue;
 		this.sameValue = sameValue;
@@ -94,14 +149,7 @@ class QueryKind<V> implements AnyQueryKind {
 			?keyName:Int->String):QueryKind<V>
 		return new QueryKind<V>(name, compute, null, same, onCycle, keyName);
 
-	@:allow(compiler.query.QueryDatabase)
-	function register(index:Int):Void {
-		if (this.index >= 0)
-			throw new compiler.core.InternalError("query kind " + name + " is registered twice");
-		this.index = index;
-	}
-
-	public function feedDigest(key:Int, digest:Digest):Void {
+	override public function feedDigest(key:Int, digest:Digest):Void {
 		var memo = memoAt(key);
 		digest.int(index).int(key);
 		if (memo == null)
@@ -110,12 +158,18 @@ class QueryKind<V> implements AnyQueryKind {
 			digest.digest(memo.first, memo.second);
 	}
 
-	public function describe(key:Int):String
-		return name + "(" + (keyName == null ? Std.string(key) : keyName(key)) + ")";
+	override public function describe(key:Int):String
+		return kindName + "(" + (keyName == null ? Std.string(key) : keyName(key)) + ")";
+
+	/** The value of input `key` as last set, or null when it is not set; records no read. */
+	public function peek(key:Int):Null<V> {
+		var memo = memoAt(key);
+		return memo == null ? null : memo.value;
+	}
 
 	@:allow(compiler.query.QueryDatabase)
 	function get(database:QueryDatabase, key:Int):V {
-		database.record(index, key);
+		database.record(this, key);
 		if (isActive(key)) {
 			var recover = onCycle;
 			if (recover == null)
@@ -135,12 +189,14 @@ class QueryKind<V> implements AnyQueryKind {
 			return;
 		var digestInput = digestValue;
 		if (digestInput == null)
-			throw new compiler.core.InternalError("input kind " + name + " has no digest");
+			throw new compiler.core.InternalError("input kind " + kindName + " has no digest");
 		scratch.reset();
 		digestInput(value, scratch);
-		if (memo != null && memo.first == scratch.first && memo.second == scratch.second)
+		if (memo != null && memo.first == scratch.first && memo.second == scratch.second) {
+			memo.value = value;
 			return;
-		var revision = database.newRevision();
+		}
+		var revision = database.inputChanged();
 		if (memo == null)
 			memos[key] = new Memo(value, scratch.first, scratch.second, revision, []);
 		else {
@@ -152,14 +208,25 @@ class QueryKind<V> implements AnyQueryKind {
 		}
 	}
 
-	public function changedAt(database:QueryDatabase, key:Int):Int {
+	/** Removes input `key`, as a module that leaves the program; a removed input starts a new revision. */
+	@:allow(compiler.query.QueryDatabase)
+	function remove(database:QueryDatabase, key:Int):Void {
+		if (compute != null)
+			throw new compiler.core.InternalError("query " + describe(key) + " is derived, not an input");
+		if (memoAt(key) == null)
+			return;
+		memos[key] = null;
+		database.inputChanged();
+	}
+
+	override public function changedAt(database:QueryDatabase, key:Int):Int {
 		// A read of a query on the stack is a cycle the reader's recomputation will meet: count it as changed.
 		if (isActive(key))
 			return database.revision;
 		return ensure(database, key).changedAt;
 	}
 
-	public function sweep(revision:Int):Int {
+	override public function sweep(revision:Int):Int {
 		if (compute == null)
 			return 0;
 		var dropped = 0;
@@ -196,16 +263,14 @@ class QueryKind<V> implements AnyQueryKind {
 
 	/** Whether nothing `memo`'s computation read has changed since it was last verified. */
 	function unchanged(database:QueryDatabase, key:Int, memo:Memo<V>):Bool {
-		var reads = memo.reads, index = 0, result = true;
-		begin(database, key, null);
+		var reads = memo.reads, result = true;
+		begin(database, key, false);
 		try {
-			while (index < reads.length) {
-				if (database.kindAt(reads[index]).changedAt(database, reads[index + 1]) > memo.verifiedAt) {
+			for (read in reads)
+				if (database.kindAt(QueryRead.kind(read)).changedAt(database, QueryRead.key(read)) > memo.verifiedAt) {
 					result = false;
 					break;
 				}
-				index += 2;
-			}
 		} catch (error:haxe.Exception) {
 			end(database, key);
 			throw error;
@@ -216,8 +281,15 @@ class QueryKind<V> implements AnyQueryKind {
 
 	function recompute(database:QueryDatabase, key:Int, memo:Null<Memo<V>>,
 			computeValue:(QueryDatabase, Int) -> V):Memo<V> {
-		var reads:Array<Int> = [];
-		var value = run(database, key, reads, computeValue);
+		begin(database, key, true);
+		var value;
+		try
+			value = computeValue(database, key)
+		catch (error:haxe.Exception) {
+			end(database, key);
+			throw error;
+		}
+		var reads = end(database, key);
 		database.countComputation();
 		scratch.reset();
 		var digestResult = digestValue;
@@ -225,11 +297,8 @@ class QueryKind<V> implements AnyQueryKind {
 			digestResult(value, scratch);
 		else {
 			scratch.int(index).int(key);
-			var read = 0;
-			while (read < reads.length) {
-				database.kindAt(reads[read]).feedDigest(reads[read + 1], scratch);
-				read += 2;
-			}
+			for (read in reads)
+				database.kindAt(QueryRead.kind(read)).feedDigest(QueryRead.key(read), scratch);
 		}
 		var revision = database.revision;
 		if (memo == null) {
@@ -250,32 +319,30 @@ class QueryKind<V> implements AnyQueryKind {
 	}
 
 	function checkReused(database:QueryDatabase, key:Int, memo:Memo<V>, computeValue:(QueryDatabase, Int) -> V):Void {
-		var fresh = run(database, key, [], computeValue);
-		if (!sameValue(memo.value, fresh))
-			throw new QueryReuseMismatch(describe(key));
-	}
-
-	function run(database:QueryDatabase, key:Int, reads:Array<Int>, computeValue:(QueryDatabase, Int) -> V):V {
-		begin(database, key, reads);
-		var value;
+		begin(database, key, true);
+		var fresh;
 		try
-			value = computeValue(database, key)
+			fresh = computeValue(database, key)
 		catch (error:haxe.Exception) {
 			end(database, key);
 			throw error;
 		}
 		end(database, key);
-		return value;
+		if (!sameValue(memo.value, fresh))
+			throw new QueryReuseMismatch(describe(key));
 	}
 
-	function begin(database:QueryDatabase, key:Int, reads:Null<Array<Int>>):Void {
+	/** Puts `key` on the stack; a computation records its reads, a verification records none. */
+	function begin(database:QueryDatabase, key:Int, recording:Bool):Void {
+		while (active.length <= key)
+			active.push(false);
 		active[key] = true;
-		database.enter(index, key, reads);
+		database.enter(index, key, recording);
 	}
 
-	function end(database:QueryDatabase, key:Int):Void {
+	function end(database:QueryDatabase, key:Int):Null<Array<Int>> {
 		active[key] = false;
-		database.leave();
+		return database.leave();
 	}
 
 	inline function isActive(key:Int):Bool
