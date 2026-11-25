@@ -1,3 +1,5 @@
+import compiler.core.InternalError;
+import compiler.query.ComputedQueryKind;
 import compiler.query.Digest;
 import compiler.query.QueryDatabase;
 import compiler.query.QueryErrors.QueryCycle;
@@ -48,6 +50,17 @@ class TestWritten extends RecordedQueryKind {
 
 	override function ownChange(key:Int):Int
 		return key < own.length ? own[key] : 0;
+}
+
+/** A boxed value: identity tells a value kept by early cutoff from an equal one computed again. */
+class Box {
+	public final value:Int;
+
+	public function new(value:Int)
+		this.value = value;
+
+	public static function same(left:Box, right:Box):Bool
+		return left.value == right.value;
 }
 
 /** The query engine on synthetic queries: reuse without computing, early cutoff, read order, cycles, sweep, check mode. */
@@ -102,25 +115,6 @@ class QueryEngineMain {
 		expect(database.get(total, 0) == 6, "same magnitude");
 		expect(callsOf("magnitude") == 4 && callsOf("total") == 2, "early cutoff: an equal magnitude reuses the total");
 
-		// A kind digested by its computation: free to digest, but a recomputed value always counts as changed.
-		var computedMagnitude = database.register(QueryKind.computed("computed-magnitude", function(db, key) {
-			count("computed-magnitude");
-			var value = db.get(source, key);
-			return value < 0 ? -value : value;
-		}, sameInt));
-		var computedReader = database.register(QueryKind.derived("computed-reader", function(db, key) {
-			count("computed-reader");
-			return db.get(computedMagnitude, key) + 1;
-		}, digestInt, sameInt));
-		database.set(source, 4, 3);
-		expect(database.get(computedReader, 4) == 4, "a reader of a computed digest");
-		database.set(source, 5, 1);
-		expect(database.get(computedReader, 4) == 4 && callsOf("computed-reader") == 1, "unrelated change: reused");
-		database.set(source, 4, -3);
-		expect(database.get(computedReader, 4) == 4, "same magnitude");
-		expect(callsOf("computed-magnitude") == 2 && callsOf("computed-reader") == 2,
-			"no early cutoff through a computed digest: its reader is recomputed");
-
 		// Reads are verified in order: a guard that changes stops verification before the reads behind it.
 		var guarded = database.register(QueryKind.derived("guarded", function(db, _) {
 			count("guarded");
@@ -154,7 +148,8 @@ class QueryEngineMain {
 		}, digestInt, sameInt, function(_) return 100));
 		expect(database.get(recovering, 0) == 102, "a read closing a cycle takes the kind's recovery value");
 
-		// Sweep drops what the last revision did not use.
+		// Sweep drops what the build did not use.
+		database.newRevision();
 		database.set(source, 0, 5);
 		database.get(total, 0);
 		expect(database.sweep() > 0, "unused results are dropped");
@@ -186,10 +181,15 @@ class QueryEngineMain {
 		stageFrames();
 		inputRevisions();
 		transactions();
+		computedKinds();
+		stageKinds();
+		computedSweep();
+		computedTransactions();
 
-		Sys.println("PASS: query engine reuses, cuts off early, digests by computation, verifies reads in order, reports cycles, sweeps, checks reuse, "
+		Sys.println("PASS: query engine reuses, cuts off early, verifies reads in order, reports cycles, sweeps, checks reuse, "
 			+ "verifies recorded results through components, records a stage's reads in frames, tells input revisions from build revisions, "
-			+ "and commits and rolls back written results");
+			+ "commits and rolls back written results, cuts computed values off by equality on demand and in a stage's run, sweeps the computed memos a build did not use, and drops those "
+			+ "computed over results a rollback undid");
 	}
 
 	/** Results a stage computes itself change when they or anything they read did, transitively; a component changes as one. */
@@ -334,5 +334,237 @@ class QueryEngineMain {
 		expect(refused && written.result(0) == null, "a rollback before what is kept is refused");
 		database.rollBack(fourth);
 		expect(written.result(0) == null && written.result(1) != null, "returning to the kept commit changes nothing");
+	}
+
+	static function throwsInternal(action:() -> Void):Bool {
+		try
+			action()
+		catch (_:InternalError)
+			return true;
+		return false;
+	}
+
+	/** Computed on demand: reuse without computing, early cutoff by equality that keeps the old object, recompute on change. */
+	static function computedKinds():Void {
+		var database = new QueryDatabase();
+		var source = database.register(QueryKind.input("source", digestInt, sameInt));
+		var magnitudes = 0, readers = 0;
+		var magnitude = database.register(new ComputedQueryKind<Box>("magnitude", Box.same, function(db, key) {
+			magnitudes++;
+			var value = db.get(source, key);
+			return new Box(value < 0 ? -value : value);
+		}));
+		var reader = database.register(new ComputedQueryKind<Box>("reader", Box.same, function(db, key) {
+			readers++;
+			return new Box(magnitude.get(db, key).value + 1);
+		}));
+		database.newRevision();
+		database.set(source, 0, 3);
+		database.set(source, 1, 5);
+		var first = reader.get(database, 0);
+		expect(first.value == 4 && magnitudes == 1 && readers == 1, "computed once each");
+		expect(reader.get(database, 0) == first && readers == 1, "same revision: reused");
+		database.set(source, 1, 6);
+		expect(reader.get(database, 0) == first && magnitudes == 1 && readers == 1,
+			"an unrelated change: verified without computing");
+		var kept = magnitude.get(database, 0);
+		database.set(source, 0, -3);
+		expect(reader.get(database, 0) == first && magnitudes == 2 && readers == 1,
+			"early cutoff: an equal magnitude keeps its reader");
+		expect(magnitude.get(database, 0) == kept, "and keeps the object it had");
+		database.set(source, 0, 7);
+		expect(reader.get(database, 0).value == 8 && magnitudes == 3 && readers == 2, "a change recomputes through");
+		var digested = database.register(QueryKind.derived("digested", (db, key) -> magnitude.get(db, key).value * 2,
+			digestInt, sameInt));
+		expect(database.get(digested, 0) == 14, "a kind digested by content reads a computed one");
+		database.set(source, 0, -7);
+		expect(database.get(digested, 0) == 14 && magnitudes == 4, "and is cut off by its equality");
+
+		var loop:Null<ComputedQueryKind<Box>> = null;
+		loop = database.register(new ComputedQueryKind<Box>("loop", Box.same, function(db, key) {
+			var self = loop;
+			return self == null ? new Box(0) : self.get(db, 1 - key);
+		}));
+		var cycle:Null<QueryCycle> = null;
+		try
+			loop.get(database, 0)
+		catch (error:QueryCycle)
+			cycle = error;
+		expect(cycle != null && cycle.path.join(" ") == "loop(0) loop(1) loop(0)",
+			"a cycle is an error naming its path");
+
+		// Check mode computes what held again: a computation that read state it did not record differs.
+		var checked = new QueryDatabase(true);
+		var input = checked.register(QueryKind.input("input", digestInt, sameInt));
+		var leaky = checked.register(new ComputedQueryKind<Box>("leaky", Box.same,
+			(db, key) -> new Box(db.get(input, key) + hidden)));
+		checked.set(input, 0, 1);
+		hidden = 0;
+		expect(leaky.get(checked, 0).value == 1, "leaky first");
+		checked.set(input, 1, 1);
+		expect(leaky.get(checked, 0).value == 1, "held and checked");
+		hidden = 2;
+		checked.set(input, 1, 2);
+		var mismatch:Null<QueryReuseMismatch> = null;
+		try
+			leaky.get(checked, 0)
+		catch (error:QueryReuseMismatch)
+			mismatch = error;
+		expect(mismatch != null && mismatch.query == "leaky(0)",
+			"check mode names the computed query that read unrecorded state");
+		hidden = 0;
+	}
+
+	/**
+	 * Computed in a stage's own run, as a pass rewrites functions: a rewrite holds while its input does, an equal one computed again
+	 * keeps the object so the next stage holds, and one its stage has not brought up to date counts as changed.
+	 */
+	static function stageKinds():Void {
+		var database = new QueryDatabase();
+		var functions = database.register(QueryKind.input("function", digestInt, sameInt));
+		var first = database.register(new ComputedQueryKind<Box>("first", Box.same));
+		var second = database.register(new ComputedQueryKind<Box>("second", Box.same));
+		var firstRuns = 0, secondRuns = 0;
+		function absolute(db:QueryDatabase, key:Int):Box {
+			firstRuns++;
+			var value = db.get(functions, key);
+			return new Box((value < 0 ? -value : value) + hidden);
+		}
+		function successor(db:QueryDatabase, key:Int):Box {
+			secondRuns++;
+			return new Box(first.get(db, key).value + 1);
+		}
+		function stage(kind:ComputedQueryKind<Box>, count:Int, transform:(QueryDatabase, Int) -> Box):Array<Box>
+			return [for (key in 0...count)
+				if (kind.current(database, key)) {
+					if (database.checkReuse) {
+						kind.begin(database, key);
+						kind.check(database, key, transform(database, key));
+					}
+					kind.value(key);
+				} else {
+				kind.begin(database, key);
+				kind.end(database, key, transform(database, key));
+			}];
+		function build(values:Array<Int>):Array<Box> {
+			database.newRevision();
+			for (key in 0...values.length)
+				database.set(functions, key, values[key]);
+			stage(first, values.length, absolute);
+			return stage(second, values.length, successor);
+		}
+		var output = build([1, 2, 3]);
+		expect(output.map(box -> box.value).join(",") == "2,3,4" && firstRuns == 3 && secondRuns == 3,
+			"a first run computes all");
+		var again = build([1, 2, 3]);
+		expect(firstRuns == 3 && secondRuns == 3 && again[1] == output[1], "an unchanged build computes nothing");
+		var cut = build([1, -2, 3]);
+		expect(firstRuns == 4 && secondRuns == 3 && cut[1] == output[1],
+			"an equal rewrite keeps the next stage's memo");
+		var changed = build([1, -2, 4]);
+		expect(firstRuns == 5 && secondRuns == 4 && changed[2].value == 5 && changed[0] == output[0],
+			"a change recomputes only its own function");
+
+		database.newRevision();
+		database.set(functions, 0, 9);
+		expect(!second.current(database, 0), "a read its stage has not brought up to date counts as changed");
+		expect(second.current(database, 1), "a read its stage would keep holds");
+		expect(throwsInternal(() -> first.get(database, 0)), "reading what its stage has not computed is an error");
+		expect(throwsInternal(() -> first.end(database, 0, new Box(9))), "ending what was not begun is an error");
+		first.begin(database, 0);
+		var cycle = false;
+		try
+			first.begin(database, 0)
+		catch (_:QueryCycle)
+			cycle = true;
+		expect(cycle, "beginning a key being computed is a cycle");
+		first.end(database, 0, new Box(9));
+		expect(first.get(database, 0).value == 9, "a computed key is read back");
+
+		var checked = new QueryDatabase(true);
+		database = checked;
+		functions = checked.register(QueryKind.input("function", digestInt, sameInt));
+		first = checked.register(new ComputedQueryKind<Box>("first", Box.same));
+		second = checked.register(new ComputedQueryKind<Box>("second", Box.same));
+		build([1, 2]);
+		build([1, 2]);
+		hidden = 1;
+		var mismatch:Null<QueryReuseMismatch> = null;
+		try
+			build([1, 2])
+		catch (error:QueryReuseMismatch)
+			mismatch = error;
+		hidden = 0;
+		expect(mismatch != null && mismatch.query == "first(0)",
+			"check mode computes a held rewrite again and compares");
+	}
+
+	/** Sweep drops the computed memos a build did not use, of the kinds it used; a dropped memo is computed again when read. */
+	static function computedSweep():Void {
+		var database = new QueryDatabase();
+		var source = database.register(QueryKind.input("source", digestInt, sameInt));
+		var used = database.register(new ComputedQueryKind<Box>("used", Box.same,
+			(db, key) -> new Box(db.get(source, key))));
+		var idle = database.register(new ComputedQueryKind<Box>("idle", Box.same,
+			(db, key) -> new Box(db.get(source, key))));
+		database.newRevision();
+		for (key in 0...3)
+			database.set(source, key, key);
+		for (key in 0...3)
+			used.get(database, key);
+		idle.get(database, 0);
+		database.newRevision();
+		used.get(database, 0);
+		expect(database.sweep() == 2,
+			"the keys the build did not use are dropped, and a kind it did not use is left alone");
+		var computations = database.computations;
+		idle.get(database, 0);
+		used.get(database, 0);
+		expect(database.computations == computations, "what is kept holds");
+		used.get(database, 1);
+		expect(database.computations == computations + 1, "what was dropped is computed again");
+	}
+
+	/**
+	 * Computed memos take no part in transactions, but a rollback that undid results drops those computed after the commit it
+	 * returns to: an undone result takes back an older change, against which they would hold.
+	 */
+	static function computedTransactions():Void {
+		var database = new QueryDatabase();
+		var written = new TestWritten(database);
+		var source = database.register(QueryKind.input("source", digestInt, sameInt));
+		for (_ in 0...2)
+			written.own.push(0);
+		var runs = 0;
+		var reader = database.register(new ComputedQueryKind<Box>("over-written", Box.same, function(db, key) {
+			runs++;
+			db.record(written, key);
+			return new Box(db.get(source, key) + written.latestChange(key));
+		}));
+		var start = database.newRevision();
+		database.set(source, 0, 1);
+		database.set(source, 1, 1);
+		written.write(0, new RecordedResult(start, [QueryRead.of(written.index, 1)]));
+		reader.get(database, 0);
+		reader.get(database, 1);
+		var taken = database.commit();
+		expect(runs == 2, "computed in the build that is taken");
+
+		var later = database.newRevision();
+		written.own[1] = later;
+		written.write(0, new RecordedResult(later, []));
+		written.own[0] = later;
+		reader.get(database, 0);
+		expect(runs == 3, "a written result that changed recomputes its reader");
+		database.rollBack(taken);
+		written.own[0] = 0;
+		written.own[1] = 0;
+		reader.get(database, 0);
+		expect(runs == 4, "what was computed over a result a rollback undid is computed again");
+		reader.get(database, 1);
+		expect(runs == 4, "what was computed before the commit holds");
+		database.rollBack(taken);
+		reader.get(database, 0);
+		expect(runs == 4, "a rollback that undoes nothing drops nothing");
 	}
 }

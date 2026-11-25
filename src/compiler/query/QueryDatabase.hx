@@ -21,6 +21,9 @@ class QueryDatabase {
 	/** The revision at which an input last changed: what a whole result reused across builds is current with. */
 	public var inputRevision(default, null) = 1;
 
+	/** The revision the build in progress started (`newRevision`): what a build used was verified at it or later (`sweep`). */
+	public var buildRevision(default, null) = 1;
+
 	/** Check mode (ADR 0003 decision 10): every reused result is computed again and must be equal. */
 	public var checkReuse:Bool;
 
@@ -32,6 +35,9 @@ class QueryDatabase {
 
 	/** The oldest commit `rollBack` can return to (`keepRollbackTo`). */
 	var rollbackFloor = 0;
+
+	/** By commit, the revision it was made at: what was computed after it was computed over results a rollback to it undoes. */
+	final commitRevisions:Array<Int> = [0];
 
 	final kinds:Array<QueryKindBase> = [];
 
@@ -82,12 +88,14 @@ class QueryDatabase {
 		frames.resize(0);
 		stamps.resize(0);
 		marksAtEnter.resize(0);
-		return ++revision;
+		buildRevision = ++revision;
+		return revision;
 	}
 
 	/** Takes the results the build in progress wrote: they stay unless a rollback returns before the commit this returns. */
 	public function commit():Int {
 		lastCommit++;
+		commitRevisions.push(revision);
 		for (kind in kinds)
 			kind.commitWrites(lastCommit);
 		return lastCommit;
@@ -96,7 +104,8 @@ class QueryDatabase {
 	/**
 	 * Returns the written results to what commit `commit` left: the commits after it, and the writes of a build no commit took,
 	 * are undone. Anything found for the revision was found over the results undone, so a rollback that undid something starts a
-	 * revision.
+	 * revision. A result undone takes back the revision it changed at, older than what was computed over the undone one, so what
+	 * was computed after the commit is dropped too: verified against the older revision, it would hold.
 	 */
 	public function rollBack(commit:Int):Void {
 		if (commit < rollbackFloor)
@@ -106,8 +115,12 @@ class QueryDatabase {
 		for (kind in kinds)
 			if (kind.undoAfter(commit))
 				undone = true;
-		if (undone)
-			revision++;
+		if (!undone)
+			return;
+		revision++;
+		var since = commitRevisions[commit];
+		for (kind in kinds)
+			kind.forgetComputedAfter(since);
 	}
 
 	/** Keeps what returns to commit `commit` or a later one (`rollBack`), and forgets what returns before it. */
@@ -117,11 +130,14 @@ class QueryDatabase {
 			kind.forgetUndo(commit);
 	}
 
-	/** Drops the derived results not used since the last revision began; returns how many. */
+	/**
+	 * Drops the computed results the build in progress did not use, of the kinds it used: call it once a build has brought up to
+	 * date everything it keeps. Returns how many.
+	 */
 	public function sweep():Int {
 		var dropped = 0;
 		for (kind in kinds)
-			dropped += kind.sweep(revision);
+			dropped += kind.sweep(buildRevision);
 		return dropped;
 	}
 
@@ -168,22 +184,21 @@ class QueryDatabase {
 		}
 	}
 
-	@:allow(compiler.query.QueryKind)
+	@:allow(compiler.query)
 	function countComputation():Void
 		computations++;
 
-	@:allow(compiler.query.QueryKind)
-	@:allow(compiler.query.RecordedQueryKind)
+	@:allow(compiler.query)
 	inline function kindAt(index:Int):QueryKindBase
 		return kinds[index];
 
-	@:allow(compiler.query.QueryKind)
+	@:allow(compiler.query)
 	function inputChanged():Int {
 		inputRevision = ++revision;
 		return revision;
 	}
 
-	@:allow(compiler.query.QueryKind)
+	@:allow(compiler.query)
 	function enter(kind:Int, key:Int, recording:Bool):Void {
 		stack.push(kind);
 		stack.push(key);
@@ -196,7 +211,7 @@ class QueryDatabase {
 	 * Pops the top frame, giving its reads. When it or a frame inside it recorded anything, the nearest recording frame below takes
 	 * its marks again, which those overwrote.
 	 */
-	@:allow(compiler.query.QueryKind)
+	@:allow(compiler.query)
 	function leave():Null<Array<Int>> {
 		stack.pop();
 		stack.pop();
@@ -215,8 +230,15 @@ class QueryDatabase {
 		return reads;
 	}
 
+	/** Whether the frame on top is the computation of (`kind`, `key`). */
+	@:allow(compiler.query)
+	inline function computing(kind:Int, key:Int):Bool {
+		var top = stack.length - 2;
+		return top >= 0 && stack[top] == kind && stack[top + 1] == key && frames[frames.length - 1] != null;
+	}
+
 	/** The queries from the first time (`kind`, `key`) is on the stack to the top, then (`kind`, `key`) again. */
-	@:allow(compiler.query.QueryKind)
+	@:allow(compiler.query)
 	function activePath(kind:Int, key:Int):Array<String> {
 		var start = 0;
 		while (start < stack.length && !(stack[start] == kind && stack[start + 1] == key))

@@ -50,9 +50,13 @@ class QueryKindBase {
 	public function changedAt(database:QueryDatabase, key:Int):Int
 		throw new compiler.core.InternalError("query kind " + kindName + " has no changedAt");
 
-	/** Drops the memos not verified at `revision`; returns how many. Inputs are kept. */
-	public function sweep(revision:Int):Int
+	/** Drops the computed memos not used since revision `since`, when the kind was used since; returns how many. Inputs are kept. */
+	public function sweep(since:Int):Int
 		return 0;
+
+	/** Drops the computed memos computed after revision `since`: a rollback undid results they may have read (`QueryDatabase.rollBack`). */
+	@:allow(compiler.query.QueryDatabase)
+	function forgetComputedAfter(since:Int):Void {}
 
 	/**
 	 * Marks the results the build in progress wrote as taken by commit `commit` (`QueryDatabase.commit`). A computed memo is a
@@ -72,13 +76,6 @@ class QueryKindBase {
 
 	public function describe(key:Int):String
 		return kindName + "(" + key + ")";
-
-	/**
-	 * Feeds the digest of `key`'s current value, for a reader digested by its computation; a read that closed a cycle, and has no
-	 * value yet, feeds a mark of its own.
-	 */
-	public function feedDigest(key:Int, digest:Digest):Void
-		throw new compiler.core.InternalError("query kind " + kindName + " has no digest");
 
 	/** Whether recording frame `stamp` has not recorded `key` yet, marking it recorded. */
 	public inline function firstRecord(key:Int, stamp:Int):Bool {
@@ -103,6 +100,9 @@ class Memo<V> {
 	public var verifiedAt:Int;
 	public var changedAt:Int;
 
+	/** The revision `value` was computed at, which a verification does not move. */
+	public var computedAt:Int;
+
 	/** The reads of the computation that made `value` (`QueryRead`), in order. */
 	public var reads:Array<Int>;
 
@@ -112,6 +112,7 @@ class Memo<V> {
 		this.second = second;
 		verifiedAt = revision;
 		changedAt = revision;
+		computedAt = revision;
 		this.reads = reads;
 	}
 }
@@ -123,8 +124,7 @@ class Memo<V> {
  */
 class QueryKind<V> extends QueryKindBase {
 	final compute:Null<(QueryDatabase, Int) -> V>;
-	/** Null for a kind digested by its computation (`computed`). */
-	final digestValue:Null<(V, Digest) -> Void>;
+	final digestValue:(V, Digest) -> Void;
 	final sameValue:(V, V) -> Bool;
 	final onCycle:Null<Int->V>;
 	final keyName:Null<Int->String>;
@@ -132,7 +132,7 @@ class QueryKind<V> extends QueryKindBase {
 	final active:Array<Bool> = [];
 	final scratch = new Digest();
 
-	function new(name:String, compute:Null<(QueryDatabase, Int) -> V>, digestValue:Null<(V, Digest) -> Void>,
+	function new(name:String, compute:Null<(QueryDatabase, Int) -> V>, digestValue:(V, Digest) -> Void,
 			sameValue:(V, V) -> Bool, onCycle:Null<Int->V>, keyName:Null<Int->String>) {
 		super(name);
 		this.compute = compute;
@@ -154,25 +154,6 @@ class QueryKind<V> extends QueryKindBase {
 	public static function derived<V>(name:String, compute:(QueryDatabase, Int) -> V, digest:(V, Digest) -> Void,
 			same:(V, V) -> Bool, ?onCycle:Int->V, ?keyName:Int->String):QueryKind<V>
 		return new QueryKind<V>(name, compute, digest, same, onCycle, keyName);
-
-	/**
-	 * A derived kind whose digest is that of its computation: the kind, the key and the digests of what it read, in order.
-	 * For values too large to digest by content, such as IR functions: free to compute, and sound since a computation is a
-	 * function of its reads, but a recomputed value always counts as changed, so its readers get no early cutoff.
-	 */
-	public static function computed<V>(name:String, compute:(QueryDatabase, Int) -> V, same:(V, V) -> Bool,
-			?onCycle:Int->V,
-			?keyName:Int->String):QueryKind<V>
-		return new QueryKind<V>(name, compute, null, same, onCycle, keyName);
-
-	override public function feedDigest(key:Int, digest:Digest):Void {
-		var memo = memoAt(key);
-		digest.int(index).int(key);
-		if (memo == null)
-			digest.int(-1);
-		else
-			digest.digest(memo.first, memo.second);
-	}
 
 	override public function describe(key:Int):String
 		return kindName + "(" + (keyName == null ? Std.string(key) : keyName(key)) + ")";
@@ -203,11 +184,8 @@ class QueryKind<V> extends QueryKindBase {
 		// The same object is the same value: a stage that changes nothing hands back what it was given.
 		if (memo != null && memo.value == value)
 			return;
-		var digestInput = digestValue;
-		if (digestInput == null)
-			throw new compiler.core.InternalError("input kind " + kindName + " has no digest");
 		scratch.reset();
-		digestInput(value, scratch);
+		digestValue(value, scratch);
 		if (memo != null && memo.first == scratch.first && memo.second == scratch.second) {
 			memo.value = value;
 			return;
@@ -242,18 +220,27 @@ class QueryKind<V> extends QueryKindBase {
 		return ensure(database, key).changedAt;
 	}
 
-	override public function sweep(revision:Int):Int {
+	override public function sweep(since:Int):Int {
 		if (compute == null)
 			return 0;
 		var dropped = 0;
 		for (key in 0...memos.length) {
 			var memo = memos[key];
-			if (memo != null && memo.verifiedAt < revision) {
+			if (memo != null && memo.verifiedAt < since) {
 				memos[key] = null;
 				dropped++;
 			}
 		}
 		return dropped;
+	}
+
+	override function forgetComputedAfter(since:Int):Void {
+		if (compute != null)
+			for (key in 0...memos.length) {
+				var memo = memos[key];
+				if (memo != null && memo.computedAt > since)
+					memos[key] = null;
+			}
 	}
 
 	/** The memo of `key`, current at the database's revision. */
@@ -308,14 +295,7 @@ class QueryKind<V> extends QueryKindBase {
 		var reads = end(database, key);
 		database.countComputation();
 		scratch.reset();
-		var digestResult = digestValue;
-		if (digestResult != null)
-			digestResult(value, scratch);
-		else {
-			scratch.int(index).int(key);
-			for (read in reads)
-				database.kindAt(QueryRead.kind(read)).feedDigest(QueryRead.key(read), scratch);
-		}
+		digestValue(value, scratch);
 		var revision = database.revision;
 		if (memo == null) {
 			var made = new Memo(value, scratch.first, scratch.second, revision, reads);
@@ -324,6 +304,7 @@ class QueryKind<V> extends QueryKindBase {
 		}
 		memo.reads = reads;
 		memo.verifiedAt = revision;
+		memo.computedAt = revision;
 		// Early cutoff: an equal value keeps the old one and its revision, so readers verify without recomputing.
 		if (memo.first != scratch.first || memo.second != scratch.second) {
 			memo.value = value;
