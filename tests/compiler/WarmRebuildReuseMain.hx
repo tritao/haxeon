@@ -208,6 +208,7 @@ class WarmRebuildReuseMain {
 			false,
 			files -> files.set("Lib.hx", StringTools.replace(libSource, "return a + b;", "return a + b + 0;")));
 		liveFieldInitializer(failures);
+		tryAfterEditAbove(failures);
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
@@ -301,6 +302,51 @@ class WarmRebuildReuseMain {
 		} catch (error:Dynamic) {
 			failures.push('a live build after a class gains an initialized field: ${Std.string(error)}');
 		}
+	}
+
+	/**
+	 * A try expression's local is named within the function it is written in, so an edit above that function in the same file
+	 * leaves the function's IR, and its lambda's, as they were: neither is generated again, a live build does not patch them, and
+	 * a plain build equals a fresh one.
+	 */
+	static function tryAfterEditAbove(failures:Array<String>):Void {
+		// Lines and columns are part of a function's IR, so the edit lengthens a line above without adding one.
+		var guardSource = "class Guard {\n\tpublic static function above(n:Int):Int return n + 1;\n"
+			+ "\tpublic static function parse(text:String):Int { var length = try text.length catch (error:Dynamic) -1; "
+			+ "var nested = () -> try length * 2 catch (error:Dynamic) 0; return length + nested(); }\n}";
+		var edited = StringTools.replace(guardSource, "return n + 1;", "return n + 1 + n * 0;");
+		for (live in [false, true])
+			try {
+				var files = [
+					"Guard.hx" => guardSource,
+					"Main.hx"
+						=> "class Main { static function main():Int return Guard.above(1) + Guard.parse(\"abc\"); }"
+				];
+				var compiler = newCompiler(files);
+				compiler.livePatching = live;
+				compiler.compile("Main");
+				var warm = rebuild(compiler, files, files -> files.set("Guard.hx", edited));
+				if (warm.regenerated.indexOf("Guard.above") < 0)
+					throw 'the edited function was not generated again: ${warm.regenerated}';
+				for (name in warm.regenerated)
+					if (StringTools.contains(name, "Guard.parse"))
+						throw 'an edit above the try expressions generated $name again: ${warm.regenerated}';
+				if (live) {
+					var ids = warm.artifact.hashLink().functionIds;
+					for (name in ids.keys())
+						if (StringTools.contains(name, "Guard.parse")
+							&& warm.changedFunctions.indexOf(ids.get(name)) >= 0)
+							throw 'the patch carries $name';
+				} else {
+					var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
+						freshBytes =
+							HlWriter.encode(newCompiler(files).compile("Main").artifact.hashLink().module).flatten();
+					if (warmBytes.compare(freshBytes) != 0)
+						throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
+				}
+			} catch (error:Dynamic) {
+				failures.push('an edit above a function with try expressions${live ? ", live" : ""}: ${Std.string(error)}');
+			}
 	}
 
 	/** The names of the anonymous types of the last typed program, sorted: a warm program lists what a fresh one does. */

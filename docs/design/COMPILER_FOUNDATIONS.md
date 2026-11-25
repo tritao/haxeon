@@ -124,8 +124,8 @@ another name. It is not urgent at these sizes; settle it with the bodies-only se
 ([TODO.md](../../TODO.md)), since both decide what the server holds.
 
 Two naming fixes are worth doing regardless, since they cut bytes and needless work:
-- **`$try` cells:** they are named by their absolute file offset (`Parser.parseTryExpression`). An edit above a `try`
-  renames its cell and lowers that function again. Number them within their function instead.
+- **`$try` cells (done):** they were named by their absolute file offset, so an edit above a `try` renamed its cell and
+  lowered that function again. They are now numbered within the body they are written in (`Parser.tryResultName`).
 - **Names that spell whole types:** a fixed-length digest would cut the dead bytes by about 80%. The generators are
   `SemanticSignature.anonymousTypeName`, `GeneratedNames.specializationKey`, the shared array helpers and
   `$iteration-adapter`.

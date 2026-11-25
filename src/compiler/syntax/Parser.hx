@@ -807,6 +807,23 @@ class Parser {
 		lambdaPath = outer == null ? new LambdaPath() : outer;
 	}
 
+	/** A body's count of try expressions, kept among its lambda anchors: `try` is a keyword, so it is no anchor. */
+	static inline final TRY_COUNT:String = "try";
+
+	/**
+	 * The local a try expression's value is kept in, numbered in source order within the body it is written in, as lambdas are
+	 * (`openLambda`): an edit elsewhere in the file leaves the name, and so the function's IR, as it was. The depth of the lambdas
+	 * around the body keeps a lambda's names apart from those of the body it is written in.
+	 */
+	function tryResultName():String {
+		var counts = lambdaCounts[lambdaCounts.length - 1],
+			known = counts.get(TRY_COUNT),
+			ordinal = known == null ? 0 : known;
+		lambdaUndo.record(counts, TRY_COUNT, known == null ? -1 : ordinal);
+		counts.set(TRY_COUNT, ordinal + 1);
+		return '$' + 'try:' + (lambdaCounts.length - 1) + ':' + ordinal;
+	}
+
 	static inline final LAMBDA_ANCHOR_LIMIT:Int = 48;
 
 	function lambdaAnchor():String {
@@ -3094,10 +3111,10 @@ class Parser {
 	 * allocated for it. The block's expected type is its result local's (`typeBlockExpression`).
 	 */
 	function parseTryExpression(start:SourceSpan):AstExpression {
-		var value = parseExpressionBranch(),
+		var result = tryResultName(),
+			value = parseExpressionBranch(),
 			catches:Array<compiler.syntax.Ast.AstCatch> = [],
-			end = expressionSpan(value),
-			result = '$' + 'try:${start.start}';
+			end = expressionSpan(value);
 		do {
 			var catchStart = spanOf(consume(TokenKind.Catch));
 			consume(TokenKind.LeftParen);
