@@ -324,6 +324,7 @@ class TestCatalog {
 		"LintThrowNonExceptionMain",
 		"LanguageServiceMain",
 		"ImplicitConstructorServiceMain",
+		"InheritedDocumentationServiceMain",
 		"ProtocolMain",
 		"LspProtocolMain",
 		"UtestDiscoveryMain",

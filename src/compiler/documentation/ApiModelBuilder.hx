@@ -9,6 +9,7 @@ import compiler.documentation.ApiModel.ApiSource;
 import compiler.documentation.ApiModel.ApiType;
 import compiler.documentation.ApiModel.ApiTypeParameter;
 import compiler.documentation.Documentation.DocumentationComment;
+import compiler.documentation.Documentation;
 import compiler.documentation.Documentation.DocumentationTools;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
@@ -292,7 +293,8 @@ class ApiModelBuilder {
 					name: field.name,
 					isStatic: field.isStatic,
 					isFinal: field.isFinal,
-					type: type
+					type: type,
+					overrides: field.isStatic ? null : overridden(owner.name, field.name)
 				});
 			else
 				members.push({
@@ -302,7 +304,8 @@ class ApiModelBuilder {
 					isStatic: field.isStatic,
 					type: type,
 					get: access(field.readAccess),
-					set: access(field.writeAccess)
+					set: access(field.writeAccess),
+					overrides: field.isStatic ? null : overridden(owner.name, field.name)
 				});
 		}
 		return members;
@@ -323,7 +326,8 @@ class ApiModelBuilder {
 				continue;
 			var signature = declared == null ? method : declared.get(method.name) ?? method,
 				member = callable(method, signature, method.name, method.name == "new" ? "constructor" : "method",
-					method.isStatic, owner.name + "." + method.name, parametersIn(owner.name, owner.typeParameters));
+					method.isStatic, owner.name + "." + method.name, parametersIn(owner.name, owner.typeParameters),
+					method.isStatic || method.name == "new" ? null : overridden(owner.name, method.name));
 			if (isPublic)
 				members.push(member);
 			if (operatorText.length > 0)
@@ -347,7 +351,7 @@ class ApiModelBuilder {
 	 */
 	function callable(method:AstFunction, signature:AstFunction, name:String, kind:String, isStatic:Bool,
 			qualified:String,
-			scope:Map<String, CompilerType>):ApiMember {
+			scope:Map<String, CompilerType>, ?overrides:String):ApiMember {
 		var scope = scope.copy();
 		for (parameter in method.typeParameters ?? [])
 			scope.set(parameter, TTypeParameter(qualified, parameter));
@@ -370,8 +374,90 @@ class ApiModelBuilder {
 				};
 			}],
 				result: typeOf(method.result, () -> types.resultType(signature, scope), method.span, scope),
-				typeParameters: parameters(method.typeParameters ?? [], method.typeConstraints, scope)};
+				typeParameters: parameters(method.typeParameters ?? [], method.typeConstraints, scope),
+				overrides: overrides};
 	}
+
+	/**
+	 * The supertype whose member `name` the member `name` of `owner` overrides or implements, which documents it when it
+	 * has no comment of its own: as Javadoc looks, the interfaces `owner` implements (each with its own bases) before its
+	 * superclass chain. Null for a member that declares something new.
+	 */
+	function overridden(owner:String, name:String):Null<String> {
+		for (supertype in directSupertypes(owner)) {
+			if (declares(supertype, name))
+				return supertype;
+			var found = overridden(supertype, name);
+			if (found != null)
+				return found;
+		}
+		return null;
+	}
+
+	/**
+	 * The comment that documents the instance member `name` of `owner` when it has none of its own: that of the member it
+	 * overrides or implements, followed up the hierarchy as `overridden` finds it. Null when none has a comment.
+	 */
+	public function inheritedDocumentation(owner:String, name:String):Null<Documentation> {
+		var current = owner;
+		while (true) {
+			var supertype = overridden(current, name);
+			if (supertype == null)
+				return null;
+			var declared = instanceMember(supertype, name);
+			var doc = declared == null ? null : commentAt(declared.span, declared.metadata);
+			if (doc != null && doc.lines.length > 0)
+				return doc;
+			current = supertype;
+		}
+	}
+
+	/** Where the class or interface `path` declares the instance member `name`, if it does. */
+	function instanceMember(path:String, name:String):Null<{span:SourceSpan, metadata:Null<Array<AstMetadata>>}> {
+		var tables = semantic.declarations, fields:Array<AstField> = [], methods:Array<AstFunction> = [];
+		if (tables.classes.exists(path)) {
+			fields = tables.classes.get(path).fields;
+			methods = tables.classes.get(path).methods;
+		} else if (tables.interfaces.exists(path)) {
+			fields = tables.interfaces.get(path).fields;
+			methods = tables.interfaces.get(path).methods;
+		}
+		for (field in fields)
+			if (field.name == name && !field.isStatic)
+				return {span: field.declarationSpan ?? field.span, metadata: field.metadata};
+		for (method in methods)
+			if (method.name == name && !method.isStatic)
+				return {span: method.span, metadata: method.metadata};
+		return null;
+	}
+
+	/** A class's or an interface's direct supertypes, its interfaces before its superclass. */
+	function directSupertypes(path:String):Array<String> {
+		var tables = semantic.declarations, types:Array<AstType> = [], span = null, scope = null;
+		if (tables.classes.exists(path)) {
+			var decl = tables.classes.get(path);
+			types = decl.interfaces.concat(decl.base == null ? [] : [decl.base]);
+			span = decl.span;
+			scope = parametersIn(decl.name, decl.typeParameters);
+		} else if (tables.interfaces.exists(path)) {
+			var decl = tables.interfaces.get(path);
+			types = decl.bases;
+			span = decl.span;
+			scope = parametersIn(decl.name, decl.typeParameters);
+		}
+		if (span == null || scope == null)
+			return [];
+		var paths:Array<String> = [];
+		for (type in types)
+			switch tables.resolve(type, span, scope) {
+				case TInstance(_, resolved, _): paths.push(resolved);
+				case _:
+			}
+		return paths;
+	}
+
+	function declares(path:String, name:String):Bool
+		return instanceMember(path, name) != null;
 
 	function inheritedVisibility(owner:String, name:String):Bool {
 		var decl = semantic.declarations.classes.get(owner);
@@ -477,16 +563,21 @@ class ApiModelBuilder {
 			case _: type;
 		};
 
-	function source(span:SourceSpan, metadata:Null<Array<AstMetadata>>):ApiSource {
+	/** The doc comment of the declaration at `span`, written before it or before its first annotation. */
+	function commentAt(span:SourceSpan, metadata:Null<Array<AstMetadata>>):Documentation {
 		var file = span.file, scanned = comments.get(file);
 		if (scanned == null) {
 			scanned = DocumentationTools.scan(file);
 			comments.set(file, scanned);
 		}
-		var doc = DocumentationTools.forSpan(file, scanned, span),
-			annotations:Array<ApiModel.ApiAnnotation> = [];
+		var doc = DocumentationTools.forSpan(file, scanned, span);
 		if (doc.lines.length == 0 && metadata != null && metadata.length > 0 && metadata[0].span.file == file)
 			doc = DocumentationTools.forSpan(file, scanned, metadata[0].span);
+		return doc;
+	}
+
+	function source(span:SourceSpan, metadata:Null<Array<AstMetadata>>):ApiSource {
+		var file = span.file, doc = commentAt(span, metadata), annotations:Array<ApiModel.ApiAnnotation> = [];
 		for (entry in metadata ?? []) {
 			switch entry.name {
 				case "deprecated" | "noCompletion":

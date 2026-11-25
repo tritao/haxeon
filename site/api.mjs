@@ -28,21 +28,58 @@ export const typeAnchor = (path) => shortName(path);
 
 /**
  * Where each described type is, over every package `entries` (the `api` collection) describes, and which directory holds
- * each package: a type name links to its page wherever it appears, and a declaration to its source.
+ * each package: a type name links to its page wherever it appears, and a declaration to its source. `declarations` holds
+ * every type the descriptions have, described or not, for the members that inherit their documentation.
  */
 export function apiIndex(entries) {
   const types = new Map();
   const directories = new Map();
+  const declarations = new Map();
   for (const { directory, model } of entries) {
     if (!model) continue;
     const described = new Set(model.described);
     for (const type of model.types) {
+      if (!declarations.has(type.path) || described.has(type.module)) declarations.set(type.path, type);
       if (!described.has(type.module)) continue;
       types.set(type.path, `${haxePackageUrl(directory, haxePackageOf(type.module))}#${typeAnchor(type.path)}`);
       if (type.package) directories.set(type.package, directory);
     }
   }
-  return { types, directories };
+  return { types, directories, declarations };
+}
+
+/**
+ * The doc comment that documents `member`: its own, or, for one without, that of the member it overrides or implements
+ * (`overrides`, docs/design/API_MODEL.md), followed up the hierarchy. `from` is the type it came from, null for its own.
+ */
+export function memberDocumentation(member, index) {
+  let current = member;
+  let from = null;
+  const seen = new Set();
+  while (current) {
+    if (current.source.documentation) return { source: current.source, from };
+    if (!current.overrides || seen.has(current.overrides)) return null;
+    seen.add(current.overrides);
+    from = current.overrides;
+    current = index.declarations.get(from)?.members.find((entry) => entry.name === member.name && !entry.isStatic);
+  }
+  return null;
+}
+
+/** How many of the declarations of `types` and `modules` have documentation, their own or one they inherit. */
+export function documentationCoverage(types, modules, index) {
+  let total = 0;
+  let documented = 0;
+  const count = (documentation) => {
+    total++;
+    if (documentation) documented++;
+  };
+  for (const type of types) {
+    count(type.source.documentation);
+    for (const member of type.members) count(memberDocumentation(member, index));
+  }
+  for (const module of modules) for (const member of module.members) count(member.source.documentation);
+  return { total, documented };
 }
 
 const escape = (text) =>

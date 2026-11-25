@@ -17,6 +17,17 @@ interface InternalContract {
 
 class Base {
 	public function new() {}
+
+	/** What the value is, in words. */
+	public function describe():String {
+		return "base";
+	}
+}
+
+class Special extends Base {
+	override public function describe():String {
+		return "special";
+	}
 }
 
 /** A generic item.

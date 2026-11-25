@@ -74,6 +74,12 @@ typedef ApiMember = {
 	final ?typeParameters:Array<ApiTypeParameter>;
 	final ?operatorText:String;
 	final ?conversion:String;
+
+	/**
+	 * For an instance field, property or method of a class or interface: the supertype whose member of the same name this
+	 * one overrides or implements (`ApiModelBuilder.overridden`), whose comment documents it when it has none of its own.
+	 */
+	final ?overrides:String;
 }
 
 typedef ApiArgument = {

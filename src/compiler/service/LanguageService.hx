@@ -198,7 +198,8 @@ typedef SignatureHelp = {
 /** What the API model says about a declaration symbol: a type, or a member of a type or of a module. */
 private enum ApiEntry {
 	TypeEntry(declaration:ApiDeclaration);
-	MemberEntry(member:ApiMember);
+	/** A member, and the type that declares it (null for a module's). */
+	MemberEntry(member:ApiMember, owner:Null<String>);
 }
 
 private typedef SemanticQueryContext = {
@@ -1157,7 +1158,7 @@ class LanguageService {
 		switch described {
 			case TypeEntry(declaration):
 				return ApiText.declaration(declaration);
-			case MemberEntry(member):
+			case MemberEntry(member, _):
 				return ApiText.member(member);
 			case null:
 		}
@@ -1205,7 +1206,18 @@ class LanguageService {
 		if (context == null || context.symbol == null)
 			return null;
 		var resolved = compiler.semanticWorkspace.indexedSymbol(context.symbol);
-		return resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
+		if (resolved == null)
+			return null;
+		var documentation = documentationFor(resolved.state, resolved.symbol.declaration);
+		if (documentation.lines.length > 0)
+			return documentation;
+		// A member without a comment of its own is documented by the one it overrides or implements, as the reference shows.
+		return switch apiEntry(context.symbol) {
+			case MemberEntry(member, owner) if (member.overrides != null && owner != null && apiBuilder != null):
+				apiBuilder.inheritedDocumentation(owner, member.name) ?? documentation;
+			case _:
+				documentation;
+		};
 	}
 
 	public function signatureHelp(path:String, position:Int):Null<SignatureHelp> {
@@ -1292,10 +1304,10 @@ class LanguageService {
 						if (member.name == name && found == null && member.kind != "operator"
 							&& member.kind != "conversion")
 							found = member;
-				found == null ? null : MemberEntry(found);
+				found == null || owner == null ? null : MemberEntry(found, owner.path);
 			case DeclarationKind.Function:
 				var member = builder.moduleMember(module, symbol.name);
-				member == null ? null : MemberEntry(member);
+				member == null ? null : MemberEntry(member, null);
 			case _:
 				null;
 		};
@@ -1304,7 +1316,7 @@ class LanguageService {
 	/** What a call of the symbol `id` takes: its function, or a type's constructor. */
 	function apiCallable(id:SemanticSymbolId):Null<ApiMember> {
 		return switch apiEntry(id) {
-			case MemberEntry(member):
+			case MemberEntry(member, _):
 				member.arguments == null ? null : member;
 			case TypeEntry(declaration):
 				var constructor:Null<ApiMember> = null;

@@ -11,10 +11,12 @@ import {
   apiBase,
   apiIndex,
   declarationHtml,
+  documentationCoverage,
   haxePackages,
   haxePackageSlug,
   haxePackageUrl,
   memberAnchor,
+  memberDocumentation,
   memberHtml,
   shortName,
   sourceUrl,
@@ -59,24 +61,18 @@ async function documentation(source) {
 if (current) {
   for (const type of current.types) {
     await documentation(type.source);
-    for (const member of type.members) await documentation(member.source);
+    for (const member of type.members) {
+      const inherited = memberDocumentation(member, index);
+      if (inherited) await documentation(inherited.source);
+    }
   }
   for (const module of current.modules) for (const member of module.members) await documentation(member.source);
 }
 
-const coverage = (types, modules) => {
-  let total = 0;
-  let documented = 0;
-  const count = (source) => {
-    total++;
-    if (source.documentation) documented++;
-  };
-  for (const type of types) {
-    count(type.source);
-    type.members.forEach((member) => count(member.source));
-  }
-  for (const module of modules) module.members.forEach((member) => count(member.source));
-  return { total, documented };
+// A member's documentation, its own or the one it inherits, with the type an inherited one is from.
+const memberDocs = (member) => {
+  const inherited = memberDocumentation(member, index);
+  return inherited ? { ...docs.get(inherited.source), from: inherited.from } : null;
 };
 const tagLabel = { param: 'Parameter', return: 'Returns', throws: 'Throws', see: 'See', deprecated: 'Deprecated', since: 'Since' };
 
@@ -114,7 +110,7 @@ const headings = current
           </thead>
           <tbody>
             {groups.map((entry) => {
-              const { total, documented } = coverage(entry.types, entry.modules);
+              const { total, documented } = documentationCoverage(entry.types, entry.modules, index);
               return (
                 <tr>
                   <td><a href={haxePackageUrl(directory, entry.name)}><code>{entry.name || '(top level)'}</code></a></td>
@@ -157,10 +153,21 @@ const headings = current
               {type.members.length > 0 && (
                 <ul class="api-members">
                   {type.members.map((member) => {
-                    const memberDoc = docs.get(member.source);
+                    const memberDoc = memberDocs(member);
+                    const fromUrl = memberDoc?.from ? index.types.get(memberDoc.from) : null;
                     return (
                       <li id={memberAnchor(type, member)}>
                         <code set:html={memberHtml(member, index)} />
+                        {memberDoc?.from && (
+                          <p class="api-inherited">
+                            From{' '}
+                            {fromUrl ? (
+                              <a href={fromUrl}><code>{shortName(memberDoc.from)}</code></a>
+                            ) : (
+                              <code>{shortName(memberDoc.from)}</code>
+                            )}
+                          </p>
+                        )}
                         {memberDoc && <div class="api-doc" set:html={memberDoc.html} />}
                         {memberDoc && memberDoc.tags.length > 0 && (
                           <dl class="api-tags">
@@ -222,6 +229,10 @@ const headings = current
   }
   .api-tags dt {
     font-weight: 600;
+  }
+  .api-inherited {
+    font-size: var(--sl-text-sm);
+    margin-block: 0.25rem 0;
   }
   .api-source {
     font-size: var(--sl-text-sm);

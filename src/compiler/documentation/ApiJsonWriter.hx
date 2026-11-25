@@ -100,12 +100,14 @@ class ApiJsonWriter {
 			case "field":
 				output.boolean("isFinal", required(value.isFinal, value.kind, "isFinal"));
 				output.field("type", () -> type(output, required(value.type, value.kind, "type")));
+				overrides(output, value);
 			case "enumValue":
 				output.field("type", () -> type(output, required(value.type, value.kind, "type")));
 			case "property":
 				output.field("type", () -> type(output, required(value.type, value.kind, "type")));
 				output.string("get", required(value.get, value.kind, "get"));
 				output.string("set", required(value.set, value.kind, "set"));
+				overrides(output, value);
 			case _:
 				output.list("typeParameters", required(value.typeParameters, value.kind, "typeParameters"),
 					typeParameter);
@@ -115,9 +117,14 @@ class ApiJsonWriter {
 					output.string("operatorText", required(value.operatorText, value.kind, "operatorText"));
 				if (value.kind == "conversion")
 					output.string("conversion", required(value.conversion, value.kind, "conversion"));
+				if (value.kind == "method")
+					overrides(output, value);
 		}
 		output.close();
 	}
+
+	static function overrides(output:JsonOutput, value:ApiMember):Void
+		output.field("overrides", () -> value.overrides == null ? output.nothing() : output.scalar(value.overrides));
 
 	static function argument(output:JsonOutput, value:ApiArgument):Void {
 		output.open();
