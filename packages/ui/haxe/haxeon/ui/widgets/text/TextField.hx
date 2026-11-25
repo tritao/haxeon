@@ -33,7 +33,7 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityAction;
-import haxeon.ui.semantics.AccessibilityActionData;
+import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;

@@ -7,10 +7,9 @@ import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
-import haxeon.ui.host.DesktopUiHostContext;
-import haxeon.ui.host.UiFontAsset;
-import haxeon.ui.host.UiFrameApplication;
+import haxeon.ui.host.UiApplication;
 import haxeon.ui.host.UiHost;
+import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostOptions;
 import nativekit.ffi.NativeKitTypes;
 

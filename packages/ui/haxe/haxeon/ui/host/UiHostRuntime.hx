@@ -1,18 +1,19 @@
 package haxeon.ui.host;
 
-import haxeon.platform.Surface;
-import haxeon.platform.SurfaceFrame;
-import haxeon.ui.style.Density;
-
 import NativeKitUI.UiStatus;
 import haxeon.ProfileCounter;
 import haxeon.ProfileRecording;
 import haxeon.ProfileSpan;
+import haxeon.platform.Surface;
+import haxeon.platform.SurfaceFrame;
 import haxeon.ui.Renderer;
 import haxeon.ui.UiResult.UiError;
 import haxeon.ui.debug.AllocationProbe;
+import haxeon.ui.host.UiApplication;
+import haxeon.ui.style.Density;
 import nativekit.ffi.NativeKitTypes;
 
+import haxeon.ui.host.UiSurfaceBinding;
 /** Shared application, input, frame, and disposal ownership used by host adapters. */
 class UiHostRuntime implements Disposable {
 	public final session:UiHostSession;
@@ -256,5 +257,184 @@ class UiHostRuntime implements Disposable {
 		frame = null;
 		if (ownedSurface != null)
 			try ownedSurface.releaseBorrowed() catch (error:Dynamic) session.cleanupFailed("surface-release", error);
+	}
+}
+
+/** Platform-neutral surface, viewport, scale, and frame-timing state. */
+class UiHostFrameState {
+	public var logicalWidth(default, null):Float;
+	public var logicalHeight(default, null):Float;
+	public var framebufferWidth(default, null):Int;
+	public var framebufferHeight(default, null):Int;
+	public var scale(default, null):Float = 1.0;
+	public var zoom(default, null):Float = 1.0;
+	public var layoutWidth(get, never):Float;
+	public var layoutHeight(get, never):Float;
+	public var renderScale(get, never):Float;
+	function get_layoutWidth():Float return logicalWidth / zoom;
+	function get_layoutHeight():Float return logicalHeight / zoom;
+	function get_renderScale():Float return scale * zoom;
+	public var surfaceAvailable(default, null):Bool = false;
+	var previousTime:Float = -1.0;
+
+	public function new(width:Int, height:Int) {
+		logicalWidth = width;
+		logicalHeight = height;
+		framebufferWidth = width;
+		framebufferHeight = height;
+	}
+
+	/** Dimension changes never imply that a native surface is available. */
+	public function resize(width:Float, height:Float, framebufferWidth:Int,
+			framebufferHeight:Int):Void {
+		logicalWidth = width;
+		logicalHeight = height;
+		this.framebufferWidth = framebufferWidth;
+		this.framebufferHeight = framebufferHeight;
+	}
+
+	public function setScale(value:Float):Void if (Math.isFinite(value) && value > 0.0) scale = value;
+	public function setZoom(value:Float):Void if (Math.isFinite(value) && value > 0.0) zoom = value;
+
+	public function setSurfaceAvailable(value:Bool):Void {
+		if (surfaceAvailable != value) previousTime = -1.0;
+		surfaceAvailable = value;
+	}
+
+	public function canRender():Bool {
+		return surfaceAvailable && logicalWidth > 0.0 && logicalHeight > 0.0 && framebufferWidth > 0
+			&& framebufferHeight > 0;
+	}
+
+	/** Elapsed time since the last frame, capped so a stall does not jump an animation. */
+	public function nextDelta(timeSeconds:Float, maxSeconds:Float = 0.1):Float {
+		var delta = previousTime < 0.0 ? 0.0 : Math.max(0.0, Math.min(maxSeconds, timeSeconds - previousTime));
+		previousTime = timeSeconds;
+		return delta;
+	}
+}
+
+/** Cancellation-aware request table used during asynchronous host startup. */
+class UiHostPendingResources<T> {
+	final values:Map<String, T> = new Map();
+	var active:Bool = true;
+	public var remaining(default, null):Int = 0;
+
+	public function new() {}
+
+	public function add(key:String, value:T):Void {
+		if (!active) return;
+		if (!values.exists(key)) remaining++;
+		values.set(key, value);
+	}
+
+	public function resolve(key:String):Null<T> {
+		if (!active) return null;
+		var value = values.get(key);
+		if (value != null) {
+			values.remove(key);
+			remaining--;
+		}
+		return value;
+	}
+
+	public function cancel():Void {
+		if (!active) return;
+		active = false;
+		values.clear();
+		remaining = 0;
+	}
+}
+
+/** Named states of a hosted application's lifetime; no numeric boundary representation. */
+enum UiHostLifecycle implements Equatable {
+	Starting;
+	LoadingResources;
+	Running;
+	Stopping;
+	Stopped;
+	Failed;
+}
+
+/** Structured host error retained after asynchronous startup or frame failure. */
+class UiHostError extends haxe.Exception {
+	public final stage:String;
+	public final cause:Dynamic;
+	public final diagnosticStack:String;
+
+	public function new(stage:String, cause:Dynamic) {
+		super(Std.string(cause), Std.isOfType(cause, haxe.Exception) ? cast cause : null);
+		this.stage = stage;
+		this.cause = cause;
+		this.diagnosticStack = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
+	}
+
+	override public function toString():String return stage + ": " + message;
+}
+
+/** Nonblocking handle for a hosted application's complete lifetime. */
+class UiHostSession implements Disposable {
+	public var state(default, null):UiHostLifecycle = UiHostLifecycle.Starting;
+	public var error(default, null):Null<UiHostError> = null;
+	public final cleanupErrors:Array<UiHostError> = [];
+	final stopCallback:Void->Void;
+	var disposed:Bool = false;
+	var stopNotified:Bool = false;
+
+	public function new(stopCallback:Void->Void) this.stopCallback = stopCallback;
+
+	@:allow(haxeon.ui.host.UiHostRuntime)
+	@:allow(haxeon.ui.host.DesktopUiHost)
+	@:allow(haxeon.ui.host.HostedUiApp)
+	function transition(next:UiHostLifecycle):Void {
+		if (state == next) return;
+		var valid = switch (state) {
+			case UiHostLifecycle.Starting:
+				next == UiHostLifecycle.LoadingResources || next == UiHostLifecycle.Running
+					|| next == UiHostLifecycle.Stopping || next == UiHostLifecycle.Failed;
+			case UiHostLifecycle.LoadingResources:
+				next == UiHostLifecycle.Running || next == UiHostLifecycle.Stopping || next == UiHostLifecycle.Failed;
+			case UiHostLifecycle.Running:
+				next == UiHostLifecycle.Stopping || next == UiHostLifecycle.Failed;
+			case UiHostLifecycle.Stopping:
+				next == UiHostLifecycle.Stopped || next == UiHostLifecycle.Failed;
+			case UiHostLifecycle.Stopped, UiHostLifecycle.Failed: false;
+		};
+		if (!valid) throw "Invalid UI host lifecycle transition";
+		state = next;
+	}
+
+	@:allow(haxeon.ui.host.UiHostRuntime)
+	@:allow(haxeon.ui.host.DesktopUiHost)
+	function fail(stage:String, cause:Dynamic):Void {
+		if (error == null) error = new UiHostError(stage, cause);
+		if (state != UiHostLifecycle.Stopped) state = UiHostLifecycle.Failed;
+	}
+
+	@:allow(haxeon.ui.host.UiHostRuntime)
+	@:allow(haxeon.ui.host.DesktopUiHost)
+	function cleanupFailed(stage:String, cause:Dynamic):Void
+		cleanupErrors.push(new UiHostError(stage, cause));
+
+	public function isActive():Bool return state == UiHostLifecycle.Starting
+		|| state == UiHostLifecycle.LoadingResources || state == UiHostLifecycle.Running;
+
+	/** Stops the hosted application. Browser hosts do not claim to close the tab. */
+	public function stop():Void {
+		if (disposed || stopNotified || state == UiHostLifecycle.Stopped || state == UiHostLifecycle.Failed) return;
+		stopNotified = true;
+		state = UiHostLifecycle.Stopping;
+		stopCallback();
+	}
+
+	public function dispose():Void {
+		if (disposed) return;
+		disposed = true;
+		if (state != UiHostLifecycle.Stopped && state != UiHostLifecycle.Failed)
+			state = UiHostLifecycle.Stopping;
+		if (!stopNotified) {
+			stopNotified = true;
+			stopCallback();
+		}
 	}
 }

@@ -2,7 +2,6 @@ package haxeon.ui.widgets.text;
 
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.animation.Animation;
-import haxeon.ui.animation.AnimationHandle;
 import haxeon.ui.animation.AnimationScheduler;
 
 /** Keeps selection scrolling while a captured pointer remains near a viewport edge. */

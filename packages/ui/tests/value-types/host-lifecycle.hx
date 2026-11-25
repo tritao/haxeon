@@ -1,5 +1,5 @@
-import haxeon.ui.host.UiHostSession;
-import haxeon.ui.host.UiHostSession.UiHostLifecycle;
+import haxeon.ui.host.UiHostRuntime;
+import haxeon.ui.host.UiHostRuntime.UiHostLifecycle;
 
 @:access(haxeon.ui.host.UiHostSession)
 private class LifecycleProbe {

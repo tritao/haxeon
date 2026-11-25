@@ -85,7 +85,6 @@ import haxeon.ui.docking.DockWorkspaceModel;
 import haxeon.ui.widgets.docking.DockWorkspaceInteraction;
 import haxeon.ui.editing.EditorDocument;
 import haxeon.ui.editing.EditHistory;
-import haxeon.ui.editing.EditOperation;
 import haxeon.ui.properties.PropertyDescriptor;
 import haxeon.ui.properties.PropertyDescriptorOptions;
 import haxeon.ui.properties.PropertyBinding;
@@ -219,11 +218,7 @@ import haxeon.ui.style.CustomEffect;
 import haxeon.ui.style.InkOverflow;
 import haxeon.ui.style.Mask;
 import haxeon.ui.style.StyleEnvironment;
-import haxeon.ui.gestures.GestureEvent;
-import haxeon.ui.gestures.TapRecognizer;
-import haxeon.ui.gestures.DoubleTapRecognizer;
-import haxeon.ui.gestures.LongPressRecognizer;
-import haxeon.ui.gestures.DragRecognizer;
+import haxeon.ui.gestures.GestureRecognizer;
 import haxeon.ui.widgets.GestureDetector;
 import haxeon.ui.widgets.controls.RadioGroup;
 import haxeon.ui.widgets.controls.RadioOption;
@@ -231,20 +226,15 @@ import haxeon.ui.widgets.controls.Tabs;
 import haxeon.ui.widgets.controls.TabItem;
 import haxeon.ui.animation.AnimationController;
 import haxeon.ui.animation.AnimationScheduler;
-import haxeon.ui.animation.SpringController;
-import haxeon.ui.animation.LoopAnimation;
-import haxeon.ui.animation.Easing;
+import haxeon.ui.animation.Animation;
 import haxeon.ui.debug.UiInspector;
 import haxeon.ui.debug.UiFrameMetrics;
 import haxeon.ui.debug.AccessibilityAudit;
 import AccessibilityContract;
-import haxeon.ui.host.UiHostFrameState;
-import haxeon.ui.host.UiHostSession;
-import haxeon.ui.host.UiHostSession.UiHostLifecycle;
+import haxeon.ui.host.UiHostRuntime.UiHostLifecycle;
 import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostRuntime;
 import haxeon.ui.host.UiApplication;
-import haxeon.ui.host.UiHostPendingResources;
 
 @:access(haxeon.ui.core.TextInputBridge)
 @:access(haxeon.platform.event.EventPump)
@@ -4867,13 +4857,13 @@ class FrameworkSmoke {
 		});
 		if (failedSession.state != UiHostLifecycle.Failed || failedSession.error == null
 			|| factoryCalls != 1) return false;
-		var originalError:haxeon.ui.host.UiHostSession.UiHostError = cast failedSession.error;
+		var originalError:haxeon.ui.host.UiHostRuntime.UiHostError = cast failedSession.error;
 		var originalFailure = originalError.message;
 		failedRuntime.start(function(_) {
 			factoryCalls++;
 			return new SmokeHostApplication(false);
 		});
-		var retainedError:haxeon.ui.host.UiHostSession.UiHostError = cast failedSession.error;
+		var retainedError:haxeon.ui.host.UiHostRuntime.UiHostError = cast failedSession.error;
 		if (factoryCalls != 1 || retainedError.message != originalFailure
 			|| originalError.stack.length == 0) return false;
 

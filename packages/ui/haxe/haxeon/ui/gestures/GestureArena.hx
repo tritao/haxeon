@@ -3,13 +3,7 @@ package haxeon.ui.gestures;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.gestures.DragRecognizer;
-import haxeon.ui.gestures.GestureEvent;
-import haxeon.ui.gestures.GestureKind;
 import haxeon.ui.gestures.GestureRecognizer;
-import haxeon.ui.gestures.PinchRecognizer;
-import haxeon.ui.gestures.SwipeRecognizer;
-import haxeon.ui.gestures.VelocityTracker;
 
 private class GestureSequence {
 	public final target:WidgetId;

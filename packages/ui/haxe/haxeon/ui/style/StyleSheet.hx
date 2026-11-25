@@ -1,6 +1,6 @@
 package haxeon.ui.style;
 
-import haxeon.ui.animation.Easing;
+import haxeon.ui.animation.AnimationController;
 import haxeon.ui.style.StyleEnvironment;
 import haxeon.ui.style.StyleProperty.StylePropertyBase;
 

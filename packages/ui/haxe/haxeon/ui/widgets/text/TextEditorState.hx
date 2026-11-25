@@ -18,8 +18,7 @@ import haxeon.ui.Rect;
 import haxeon.ui.TextColorRange;
 import haxeon.ui.TextStyle;
 import haxeon.ui.editing.EditHistory;
-import haxeon.ui.editing.EditOperation;
-import haxeon.ui.semantics.SemanticsValueSource;
+import haxeon.ui.semantics.Semantics;
 import nativekit.ffi.NativeKitTypes.TextEditAction;
 
 /** Persistent editable text, selection and IME composition state for one widget ID. */

@@ -93,13 +93,13 @@ class GenericScalarMapOwnerMain {
 		compiler.configure("owned-map-" + target + inlining, "owned-map",
 			CompilerDriver.targetDefines(target));
 		compiler.options = new CompileOptions({inlining: inlining});
-		compiler.update("haxeon/ui/host/UiHostPendingResources.hx",
-			File.getContent("packages/ui/haxe/haxeon/ui/host/UiHostPendingResources.hx"));
-		compiler.update("Main.hx", 'import haxeon.ui.host.UiHostPendingResources; function main():Int {'
-			+ 'var p=new UiHostPendingResources<String>(); p.add("first","font-a"); p.add("second","font-b"); '
+		compiler.update("PendingResources.hx",
+			File.getContent("tests/fixtures/generic-scalar-map-owner/PendingResources.hx"));
+		compiler.update("Main.hx", 'function main():Int {'
+			+ 'var p=new PendingResources<String>(); p.add("first","font-a"); p.add("second","font-b"); '
 			+ 'if(p.remaining!=2 || p.resolve("first")!="font-a" || p.remaining!=1)return 1; p.cancel(); '
 			+ 'if(p.remaining!=0 || p.resolve("second")!=null)return 2; '
-			+ 'var b=new UiHostPendingResources<Bool>(); b.add("false",false); b.add("true",true); '
+			+ 'var b=new PendingResources<Bool>(); b.add("false",false); b.add("true",true); '
 			+ 'if(b.resolve("false")!=false || b.remaining!=1)return 3; b.cancel(); '
 			+ 'return b.remaining==0 && b.resolve("true")==null ?42:4; }');
 		var result = compiler.compile("Main"), root = Sys.getEnv("TMPDIR");

@@ -1,8 +1,7 @@
 package haxeon.ui.widgets.scroll;
 
+import haxeon.ui.animation.Animation;
 import haxeon.ui.animation.AnimationScheduler;
-import haxeon.ui.animation.DelayedAnimation;
-import haxeon.ui.animation.RetainedAnimation;
 
 /**
  * Mount-owned scrollbar visibility, independent of scroll geometry and paint. Its changes edit the scrollbar's nodes in place

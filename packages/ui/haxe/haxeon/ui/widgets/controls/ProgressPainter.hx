@@ -6,10 +6,7 @@ import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.animation.Animation;
 import haxeon.ui.animation.AnimationController;
-import haxeon.ui.animation.AnimationHandle;
 import haxeon.ui.animation.AnimationScheduler;
-import haxeon.ui.animation.Easing;
-import haxeon.ui.animation.LoopAnimation;
 
 /** Retained animation state and drawing for determinate and indeterminate progress. */
 internal class ProgressPainter implements Disposable {

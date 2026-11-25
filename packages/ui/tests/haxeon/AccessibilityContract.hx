@@ -21,7 +21,6 @@ import haxeon.ui.semantics.AccessibilityBridge;
 import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.semantics.AccessibilitySnapshotNode;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.KeyedView;

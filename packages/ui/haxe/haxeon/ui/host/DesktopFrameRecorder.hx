@@ -16,6 +16,8 @@ import nativekit.ffi.NativeKitTypes.WindowHandle;
 import sys.FileSystem;
 import sys.io.File;
 
+import haxeon.ui.host.UiApplication;
+import haxeon.ui.host.UiHostOptions;
 /** Records desktop UI frame timing and writes capture artifacts. */
 class DesktopFrameRecorder {
 

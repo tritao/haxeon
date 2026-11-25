@@ -1,5 +1,5 @@
 package haxeon.ui.properties;
-import haxeon.ui.editing.EditOperation;
+import haxeon.ui.editing.EditHistory;
 import haxeon.ui.properties.PropertyDescriptorOptions.PropertyCommitter;
 
 import haxeon.ui.core.CommandContext;

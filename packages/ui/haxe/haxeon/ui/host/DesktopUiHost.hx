@@ -1,24 +1,25 @@
 package haxeon.ui.host;
 
+import haxe.Json;
+import haxe.io.Bytes;
+import haxeon.ProfileFrame;
+import haxeon.ProfileNativeTrace;
+import haxeon.ProfileSpan;
 import haxeon.platform.EventLoop;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrameSubscription;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
-import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
-import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
-
-import haxeon.ProfileFrame;
-import haxeon.ProfileNativeTrace;
-import haxeon.ProfileSpan;
-
-import haxe.Json;
-import haxe.io.Bytes;
 import haxeon.ui.FontCollection;
+import haxeon.ui.host.UiHostContext;
+import haxeon.ui.host.UiHostOptions;
+import haxeon.ui.host.UiHostRuntime;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import sys.io.File;
 
 /** Owns the complete NativeKit desktop lifecycle for one UIKit application. */
@@ -691,4 +692,29 @@ class DesktopUiHost {
 		};
 	}
 
+}
+
+/** A desktop host that yields to its caller after each event pump iteration. */
+class DesktopUiHostSession {
+	final pump:Void->Bool;
+	final shutdown:Void->Int;
+	var closed = false;
+	var result = 0;
+
+	public function new(pump:Void->Bool, shutdown:Void->Int) {
+		this.pump = pump;
+		this.shutdown = shutdown;
+	}
+
+	/** Returns false after the application requests close or the host fails. */
+	public function tick():Bool
+		return !closed && pump();
+
+	public function close():Int {
+		if (!closed) {
+			closed = true;
+			result = shutdown();
+		}
+		return result;
+	}
 }

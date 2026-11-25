@@ -6,7 +6,6 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.host.UiApplication;
-import haxeon.ui.host.UiDiagnosticsProvider;
 import haxeon.ui.host.UiHostContext;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.theme.Theme;

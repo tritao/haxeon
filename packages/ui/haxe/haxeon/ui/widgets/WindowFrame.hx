@@ -8,7 +8,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
-import haxeon.ui.host.WindowControls;
+import haxeon.ui.host.UiHostContext;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
 
 /** Invisible native resize regions, disabled while maximized or fullscreen. */

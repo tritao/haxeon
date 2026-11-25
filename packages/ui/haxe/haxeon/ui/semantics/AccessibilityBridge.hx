@@ -1,13 +1,13 @@
 package haxeon.ui.semantics;
 
 import haxeon.platform.Surface;
-import nativekit.ffi.NativeKitConstants;
-import nativekit.ffi.NativeKitTypes;
-
+import haxeon.ui.Rect;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.semantics.AccessibilityAction as UiAccessibilityAction;
+import haxeon.ui.semantics.AccessibilityAction;
 import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitConstants;
+import nativekit.ffi.NativeKitTypes;
 
 /** Projects Haxe semantics and resolved geometry into NativeKit's virtual tree. */
 class AccessibilityBridge implements Disposable {
@@ -184,9 +184,9 @@ class AccessibilityBridge implements Disposable {
 				states |= AccessibilityState.Focused;
 			var actions = semantics.actions;
 			if (node.focusable && enabled)
-				actions |= UiAccessibilityAction.Focus;
+				actions |= AccessibilityAction.Focus;
 			if (!enabled)
-				actions = UiAccessibilityAction.empty();
+				actions = AccessibilityAction.empty();
 			output.push(new AccessibilitySnapshotNode(node.id.value, semanticParent,
 				childIndex, semantics.role, states, actions,
 				node.resolved.clippedViewportBounds(), semantics));
@@ -210,4 +210,63 @@ class AccessibilityBridge implements Disposable {
 
 
 
+}
+
+/** Surface-local semantic record ready for projection into NativeKit. */
+class AccessibilitySnapshotNode {
+	public final id:Int;
+	public final parentId:Int;
+	public final childIndex:Int;
+	public final role:AccessibilityRole;
+	public final states:AccessibilityState;
+	public final actions:AccessibilityAction;
+	public final bounds:Rect;
+	public final semantics:Semantics;
+	public final setSize:Int;
+	public final positionInSet:Int;
+	public final rowCount:Int;
+	public final columnCount:Int;
+	public final rowIndex:Int;
+	public final columnIndex:Int;
+	public final rowSpan:Int;
+	public final columnSpan:Int;
+	public final hierarchyLevel:Int;
+	public final orientation:AccessibilityOrientation;
+
+	public function new(id:Int, parentId:Int, childIndex:Int, role:AccessibilityRole,
+			states:AccessibilityState, actions:AccessibilityAction, bounds:Rect, semantics:Semantics) {
+		this.id = id;
+		this.parentId = parentId;
+		this.childIndex = childIndex;
+		this.role = role;
+		this.states = states;
+		this.actions = actions;
+		this.bounds = bounds;
+		this.semantics = semantics;
+		setSize = semantics.setSize;
+		positionInSet = semantics.positionInSet;
+		rowCount = semantics.rowCount;
+		columnCount = semantics.columnCount;
+		rowIndex = semantics.rowIndex;
+		columnIndex = semantics.columnIndex;
+		rowSpan = semantics.rowSpan;
+		columnSpan = semantics.columnSpan;
+		hierarchyLevel = semantics.hierarchyLevel;
+		orientation = semantics.orientation;
+	}
+}
+
+/** Complete Haxe-owned input for one native accessibility update call. */
+class AccessibilityUpdateBatch {
+	public final nativeUpdate:AccessibilityUpdate;
+	/** Packed little-endian 32-bit node IDs consumed by the core binding helper. */
+	public final removedNodeIds:haxe.io.Bytes;
+	public final removedNodeCount:Int;
+
+	public function new(nativeUpdate:AccessibilityUpdate,
+			removedNodeIds:haxe.io.Bytes, removedNodeCount:Int) {
+		this.nativeUpdate = nativeUpdate;
+		this.removedNodeIds = removedNodeIds;
+		this.removedNodeCount = removedNodeCount;
+	}
 }

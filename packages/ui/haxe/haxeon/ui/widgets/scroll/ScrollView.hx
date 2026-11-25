@@ -18,7 +18,7 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.UiTouchData;
 import haxeon.ui.core.View;
-import haxeon.ui.gestures.VelocityTracker;
+import haxeon.ui.gestures.GestureRecognizer;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRole;

@@ -7,7 +7,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
-import haxeon.ui.host.WindowControls;
+import haxeon.ui.host.UiHostContext;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.ButtonVariant;

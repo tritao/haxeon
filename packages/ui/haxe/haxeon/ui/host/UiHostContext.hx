@@ -1,10 +1,12 @@
 package haxeon.ui.host;
 
-import haxeon.platform.event.EventPump;
-
 import haxe.Int64;
+import haxeon.platform.NativeKitError;
+import haxeon.platform.event.EventPump;
 import haxeon.ui.FontCollection;
+import haxeon.ui.host.UiHostOptions;
 import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes;
 
 /** Live, platform-neutral services available to a hosted application. */
 class UiHostContext {
@@ -101,5 +103,56 @@ class UiHostContext {
 	public function requestClose():Void {
 		if (onCloseRequested == null) close();
 		else onCloseRequested(close);
+	}
+}
+
+/** Live services, with the window and surface, available while constructing a hosted desktop or browser application. */
+class DesktopUiHostContext extends UiHostContext {
+	/** Borrowed window handle for application-owned native dialogs. */
+	public final window:WindowHandle;
+	/** Borrowed main graphics surface used to create compatible auxiliary renderers. */
+	public final surface:SurfaceHandle;
+	/** An application may defer closing while it asks to save a document. */
+	@:allow(haxeon.ui.host.DesktopUiHost)
+	@:allow(haxeon.ui.host.HostedUiApp)
+	private function new(fonts:FontCollection, events:EventPump, window:WindowHandle, surface:SurfaceHandle,
+			close:Void->Void, scheduleFrame:Void->Void) {
+		super(fonts, events, close, scheduleFrame);
+		this.window = window;
+		this.surface = surface;
+	}
+}
+
+/** Borrowed desktop window operations; close always uses the host's confirmation flow. */
+class WindowControls {
+	final window:WindowHandle;
+	final host:UiHostContext;
+	public var maximized(default, null):Bool = false;
+	public var fullscreen(default, null):Bool = false;
+	public var revision(default, null):Int = 0;
+	public function new(window:WindowHandle, host:UiHostContext) {
+		this.window = window;
+		this.host = host;
+		var state = NativeKit.nk_window_get_state(window);
+		check(state.status, "window.state");
+		observe(state.out_state.get_flags());
+	}
+	public function observe(flags:WindowStateFlags):Void {
+		var nextMaximized = flags.contains(WindowStateFlags.Maximized);
+		var nextFullscreen = flags.contains(WindowStateFlags.Fullscreen);
+		if (maximized == nextMaximized && fullscreen == nextFullscreen) return;
+		maximized = nextMaximized;
+		fullscreen = nextFullscreen;
+		revision++;
+		host.requestFrame();
+	}
+	public function minimize():Void check(NativeKit.nk_window_minimize(window), "window.minimize");
+	public function toggleMaximize():Void {
+		check(maximized ? NativeKit.nk_window_restore(window) : NativeKit.nk_window_maximize(window),
+			"window.maximize");
+	}
+	public function close():Void host.requestClose();
+	static function check(status:Result, operation:String):Void {
+		if (status != Result.Ok) throw new NativeKitError(status, operation, NativeKit.nk_last_error());
 	}
 }

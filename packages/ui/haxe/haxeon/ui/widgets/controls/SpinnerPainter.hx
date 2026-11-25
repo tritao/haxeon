@@ -9,10 +9,7 @@ import haxeon.ui.Path;
 import haxeon.ui.PathBuilder;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.animation.Animation;
-import haxeon.ui.animation.AnimationHandle;
 import haxeon.ui.animation.AnimationScheduler;
-import haxeon.ui.animation.DelayedAnimation;
-import haxeon.ui.animation.RetainedAnimation;
 
 /** Owns the reusable resources and command encoding for a procedural spinner. */
 internal class SpinnerPainter implements Disposable {

@@ -1,7 +1,5 @@
-package haxeon.ui.host;
-
-/** Cancellation-aware request table used during asynchronous host startup. */
-class UiHostPendingResources<T> {
+/** A generic owner of a scalar-valued map, as the UI host keeps its pending startup resources. */
+class PendingResources<T> {
 	final values:Map<String, T> = new Map();
 	var active:Bool = true;
 	public var remaining(default, null):Int = 0;
