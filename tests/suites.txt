@@ -181,11 +181,13 @@ condition-integration            ci          -- python3 tests/integration/test-c
 build-mode-metadata              ci          -- python3 tests/integration/test-build-mode-metadata.py
 binary-size-report               ci          -- python3 tests/integration/test-binary-size-report.py
 # The compiler compiling itself, once and incrementally in a compile server, costs no more than tests/perf/self-compile-baseline.json
-# and tests/perf/incremental-baseline.json allow (Linux x86-64; docs/DEVELOPMENT.md, "Performance guard").
-perf-guard                       ci          -- python3 scripts/perf-guard.py
+# and tests/perf/incremental-baseline.json allow (Linux x86-64; docs/DEVELOPMENT.md, "Performance guard"). CI runs it and
+# edit-replay in a workflow of their own (.github/workflows/compiler-guards.yml), whose runner has the history and perf they need;
+# ci.yml's jobs skip them.
+perf-guard                       ci          unless-env=SKIP_COMPILER_GUARDS -- python3 scripts/perf-guard.py
 # The last commits that change src/compiler replayed as edits in one compile server session with the reuse checks, each warm
 # build the bytes of a fresh one: the byte-identical self-compile never builds warm.
-edit-replay                      ci          -- python3 tests/integration/test-edit-replay.py
+edit-replay                      ci          unless-env=SKIP_COMPILER_GUARDS -- python3 tests/integration/test-edit-replay.py
 # The same with the last two commits, in the wave: a warm build that differs from a fresh one shows before CI.
 edit-replay-short                wave        -- python3 tests/integration/test-edit-replay.py 2
 fatal-stack-integration          ci          -- python3 tests/integration/test-fatal-stack.py

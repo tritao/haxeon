@@ -93,8 +93,9 @@ names, extracted with `git archive`, so every checkout is measured on the same p
 grow its own input. It measures allocated bytes and collections (from the driver's allocation phases), live data at the
 phase boundaries (from a heap census taken there in a second run), peak RSS (an outcome of the collection schedule, so gated
 loosely), and
-main-thread `instructions:u` (and `cycles:u`, printed, never compared) where perf is installed and `perf_event_paranoid` is at most 2 (on CI runners it is not, and the
-metric is skipped). Wall time is printed, never compared. It measures on Linux x86-64 only and passes elsewhere.
+main-thread `instructions:u` (and `cycles:u`, printed, never compared) where perf is installed, `perf_event_paranoid` is at most 2
+and the machine has hardware counters (some virtual machines have none; the guard tries one count first, and otherwise says why it
+skipped the metric). Wall time is printed, never compared. It measures on Linux x86-64 only and passes elsewhere.
 
 It then measures incremental builds, which the one-shot compile never exercises: the same build's compile server, whose session
 keeps its state, on a copy of the frozen input, through a cold build, two no-op rebuilds, a body-only edit of the entry module made
@@ -139,7 +140,7 @@ After a pin moves, the same command brings them back to it. The guard keeps the 
 between runs, and configures it again after a configure that failed.
 `--only=self-compile`, `--only=incremental`, `--only=small-project` or `--only=live` runs one part. The `edit-replay-short` suite (`wave`)
 replays the last two commits that change `src/compiler` as warm builds in one server, each checked against a fresh build;
-`edit-replay` (`ci`) replays four.
+`edit-replay` (`ci`) replays four. In a shallow clone each fetches the history it needs.
 
 Every metric fails the run beyond its tolerance, but the primary ones are what the compiler is optimized for, in this order:
 edit latency in the compile server (the no-op floor, the body edit, the signature edit), startup (the small project's cold build and check), and the server's live data, weighted
@@ -168,6 +169,42 @@ The incremental edits are anchored on a line of `HaxeonCompiler.main` and on `In
 `SIGNATURE_EDIT` in the script); a change that removes an anchor makes the suite say so, and picks another of the same kind.
 
 Say in the commit message what moved and why. A tolerance is changed by editing the file, with its `why`.
+
+### The compiler guards in CI
+
+`.github/workflows/compiler-guards.yml` runs the perf guard and the edit replay on a push to main or a pull request that changes
+what the compiler is built from or measured with: `src/compiler`, `src/build`, `src/project`, `src/runtime`, `src/tools`, `lib`,
+`stdlib`, the `vendor/hashlink` pin, `tests/perf`, and the two scripts. ci.yml's platform jobs skip both suites
+(`SKIP_COMPILER_GUARDS=1`): they need history a shallow clone lacks and perf allowed to count, and those jobs are long already.
+Each guard is a job of its own on `ubuntu-24.04`; the two run side by side, about ten minutes each with the runner's setup.
+
+- **perf guard** runs `scripts/perf-guard.py --machine-independent`, every part. A runner is not the machine the baselines were
+  measured on, so the run fails only on the metrics any machine measures alike: allocated bytes, collections, live bytes, peak
+  RSS, and the functions retyped, invalidated and regenerated and those a patch carries. Instructions and times (the live edits'
+  walls, the body edit's collection milliseconds) are compared and printed, and a regression among them is listed but never
+  fails the run. The job installs perf and lowers `perf_event_paranoid`, but whether the runner counts instructions varies from
+  one run to the next: some hosted runners' virtual machines expose hardware counters (Intel Xeon ones have), others none (AMD
+  EPYC ones), and where they count, the counts are another CPU's, several percent off the baselines' either way. The run's page
+  shows the verdict lines, the machine-dependent metrics that went past their tolerance, and which instructions were skipped
+  and why; the logs under `out/perf-guard` are uploaded when it fails.
+- **edit replay** runs `tests/integration/test-edit-replay.py 16`: four times the local `edit-replay` suite's slice of history,
+  checked out with `fetch-depth: 300` (the script deepens the clone when that falls short).
+
+A failure reproduces on a Linux x86-64 checkout at the same commit:
+
+```sh
+python3 scripts/perf-guard.py --machine-independent     # what CI ran; without the option the instructions and times fail too
+python3 scripts/perf-guard.py --only=incremental        # one part, when the failing metric is there
+python3 tests/integration/test-edit-replay.py 16        # the same edits; its logs are in out/edit-replay
+```
+
+The metrics that fail the job came out the same on Intel and AMD runners. A local checkout measures them a little differently
+(its paths and environment are not the runner's, and the census's live bytes can move by a few percent on a loaded machine), so
+a failure is confirmed locally against the commit before the change rather than against the runner's numbers. A cost taken on
+purpose is recorded the same way as locally: measure on the baselines' machine and commit the baseline with the change,
+`--raise=METRIC=REASON` for each metric that went up (`--machine-independent` refuses `--update` and `--raise`, since a runner's
+numbers are not the baselines'). An instruction regression the job lists is checked on the baselines' machine before anything is
+raised.
 
 ### The same commands on every platform
 

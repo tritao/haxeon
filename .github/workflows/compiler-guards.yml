@@ -1,0 +1,124 @@
+name: compiler-guards
+
+# What a compile server's edit costs (scripts/perf-guard.py) and whether its warm builds are fresh ones
+# (tests/integration/test-edit-replay.py), on a change to what the compiler is built from or measured with. ci.yml's platform jobs
+# skip both (SKIP_COMPILER_GUARDS): they need history a shallow clone lacks, perf allowed to count, and time those jobs do not have.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/compiler/**'
+      - 'src/build/**'
+      - 'src/project/**'
+      - 'src/runtime/**'
+      - 'src/tools/**'
+      - 'lib/**'
+      - 'stdlib/**'
+      - 'vendor/hashlink'
+      - 'scripts/perf-guard.py'
+      - 'tests/perf/**'
+      - 'tests/integration/test-edit-replay.py'
+      - '.github/workflows/compiler-guards.yml'
+  pull_request:
+    paths:
+      - 'src/compiler/**'
+      - 'src/build/**'
+      - 'src/project/**'
+      - 'src/runtime/**'
+      - 'src/tools/**'
+      - 'lib/**'
+      - 'stdlib/**'
+      - 'vendor/hashlink'
+      - 'scripts/perf-guard.py'
+      - 'tests/perf/**'
+      - 'tests/integration/test-edit-replay.py'
+      - '.github/workflows/compiler-guards.yml'
+  workflow_dispatch:
+
+concurrency:
+  # As ci.yml: a run on main is queued, never cancelled, so every push there gets a verdict; elsewhere a push cancels the run it
+  # supersedes.
+  group: compiler-guards-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    # With pipefail, so a piped guard's status is the step's.
+    shell: bash
+
+jobs:
+  perf-guard:
+    name: perf guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The live part builds the app template over haxeon-ui, whose native libraries are submodules.
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-host
+
+      # The runner has no perf, and its kernel allows no counting. Some runners' virtual machines have no counters at all: the
+      # guard probes, and says why it skipped the instructions.
+      - name: Allow perf to count instructions
+        run: |
+          sudo apt-get install -y -q linux-tools-common "linux-tools-$(uname -r)" >/dev/null \
+            || echo "::warning::no perf for kernel $(uname -r): instructions are not measured"
+          sudo sysctl -w kernel.perf_event_paranoid=2
+
+      - name: Native build
+        run: scripts/build-native.sh
+
+      # Instructions depend on the runner's CPU, which is not the baselines' and differs from run to run: they and the times are
+      # printed and never fail here; allocated and live bytes, collections, peak RSS and function counts do.
+      - name: Performance guard
+        run: python3 -u scripts/perf-guard.py --machine-independent 2>&1 | tee "$RUNNER_TEMP/perf-guard.txt"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '```'
+            grep -E '^perf-guard: (primary|regression guards|.*skipped|machine-dependent|FAILED|passed|better)|REGRESSION' \
+              "$RUNNER_TEMP/perf-guard.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the guard's logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-guard-logs
+          path: out/perf-guard/**/*.log
+          if-no-files-found: ignore
+
+  edit-replay:
+    name: edit replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # A longer slice of history than the local suite's.
+      REPLAYED_EDITS: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # Enough first-parent history for the replayed edits; the script deepens a clone that falls short.
+          fetch-depth: 300
+
+      - uses: ./.github/actions/setup-host
+
+      - name: Native build
+        run: scripts/build-native.sh
+
+      - name: Edit replay
+        run: python3 tests/integration/test-edit-replay.py "$REPLAYED_EDITS"
+
+      - name: Upload the replay's logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edit-replay-logs
+          path: out/edit-replay/*.log
+          if-no-files-found: ignore

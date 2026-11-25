@@ -9,6 +9,8 @@ compile server, and building a small project from a cold start.
     scripts/perf-guard.py --only=incremental       only one part (self-compile, incremental, small-project or live)
     scripts/perf-guard.py --quick                  only the edit-cost session, without its signature edit (see below): a few
                                                    minutes, for a change to the IR, the backends or the typer
+    scripts/perf-guard.py --machine-independent    on a machine other than the baselines' (CI): fail only on the metrics any
+                                                   machine measures alike; compare and print instructions and times
 
 A baseline never moves up by itself: a metric that got worse within its tolerance is not written, so a series of updates
 cannot ratchet it, and one raised on purpose carries why. A metric written as an improvement drops the raise reason it had.
@@ -1158,14 +1160,22 @@ def summary(heading, metrics, compared):
         print(f"perf-guard: {heading}: " + ", ".join(parts))
 
 
-def compare(path, metrics, update, raises, compared):
+def machine_dependent(name):
+    """Whether the metric depends on the machine that measures it as well as on the compiler: instructions (the C library picks
+    its routines by CPU, and a runner's CPU is not the baseline's) and times. Allocated and live bytes, collections, peak RSS and
+    function and artifact counts do not."""
+    return name.endswith("_instructions") or name.endswith("_ms")
+
+
+def compare(path, metrics, update, raises, compared, machine_independent=False):
     """Compares `metrics` with the baseline at `path` and writes each compared value and its change into `compared`, by (path,
     name). On `update` it writes into the baseline the metrics that improved beyond their tolerance; it writes a metric named in
-    `raises` (name to reason) that is higher with its reason. Returns (failures, improvements, raised), a raised metric not
-    counted as a failure."""
+    `raises` (name to reason) that is higher with its reason. With `machine_independent`, a machine-dependent metric beyond its
+    tolerance either way is printed and neither fails nor asks for an update. Returns (failures, improvements, raised, excused),
+    a raised metric not counted as a failure and an excused one a machine-dependent regression that did not fail."""
     with open(path) as source:
         baseline = json.load(source)
-    failures, improvements, raised = [], [], []
+    failures, improvements, raised, excused = [], [], [], []
     primary = {name for baseline_path, name, _ in PRIMARY if baseline_path == path}
     for name, entry in baseline["metrics"].items():
         if name not in metrics:
@@ -1178,6 +1188,10 @@ def compare(path, metrics, update, raises, compared):
             verdict = "raised: " + raises[name]
             raised.append(name)
             entry["value"], entry["raise_reason"] = value, raises[name]
+        elif machine_independent and machine_dependent(name) and abs(value - expected) > slack:
+            verdict = "beyond tolerance, machine-dependent: not failed"
+            if value > expected:
+                excused.append(name)
         elif value > expected + slack:
             verdict = "REGRESSION"
             failures.append(name)
@@ -1199,7 +1213,7 @@ def compare(path, metrics, update, raises, compared):
             json.dump(baseline, target, indent="\t")
             target.write("\n")
         print(f"perf-guard: wrote {', '.join(written)} to {os.path.relpath(path, ROOT)}")
-    return failures, improvements, raised
+    return failures, improvements, raised, excused
 
 
 def baseline_metrics():
@@ -1214,6 +1228,7 @@ def baseline_metrics():
 def main(arguments):
     update = "--update" in arguments
     quick = "--quick" in arguments
+    machine_independent = "--machine-independent" in arguments
     parts = ["self-compile", "incremental", "small-project", "live"]
     raises = {}
     for argument in arguments:
@@ -1226,8 +1241,11 @@ def main(arguments):
             if not reason.strip():
                 raise SystemExit(f"perf-guard: --raise={name} needs a reason: --raise={name}=REASON")
             raises[name] = reason.strip()
-        elif argument not in ("--update", "--quick"):
+        elif argument not in ("--update", "--quick", "--machine-independent"):
             raise SystemExit(__doc__)
+    if machine_independent and (update or raises):
+        raise SystemExit("perf-guard: --machine-independent measures on a machine other than the baselines'; "
+                         "--update and --raise write them from theirs")
     if quick:
         parts = ["edit-cost"]
     if platform.system() != "Linux" or platform.machine() != "x86_64":
@@ -1243,20 +1261,21 @@ def main(arguments):
     try:
         if "incremental" in parts or "small-project" in parts or "live" in parts:
             built_aot = build_aot(hl, out)
-        return measure_parts(hl, out, parts, update, raises)
+        return measure_parts(hl, out, parts, update, raises, machine_independent)
     finally:
         if built_aot:
             remove_aot(hl)
 
 
-def measure_parts(hl, out, parts, update, raises):
+def measure_parts(hl, out, parts, update, raises, machine_independent):
     """Measures `parts` and compares them with the baselines (compare); returns the exit status."""
-    failures, improvements, raised, compared = [], [], [], {}
+    failures, improvements, raised, excused, compared = [], [], [], [], {}
 
     def gather(found):
         failures.extend(found[0])
         improvements.extend(found[1])
         raised.extend(found[2])
+        excused.extend(found[3])
 
     if any(part in parts for part in ("self-compile", "incremental", "edit-cost")):
         tool = os.environ.get("HAXEON_COMPILER_HL") or run([os.path.join(ROOT, "scripts", "haxeon"), "dev", "tool-path",
@@ -1280,23 +1299,23 @@ def measure_parts(hl, out, parts, update, raises):
               + (f", main-thread cycles {cycles / 1e9:.2f}G" if cycles else "") + " (not compared)")
         if skip:
             print(f"perf-guard: instructions skipped: {skip}")
-        gather(compare(BASELINE, metrics, update, raises, compared))
+        gather(compare(BASELINE, metrics, update, raises, compared, machine_independent))
     if "incremental" in parts:
         started = time.monotonic()
         metrics, reported = measure_incremental(hl, compiler, out, frozen)
         print(f"perf-guard: incremental builds wall {time.monotonic() - started:.1f} s (not compared)")
         print("perf-guard: edit wall ahead of time (not compared): "
               + ", ".join(f"{name} {value:.2f} s" for name, value in reported.items()))
-        gather(compare(INCREMENTAL_BASELINE, metrics, update, raises, compared))
+        gather(compare(INCREMENTAL_BASELINE, metrics, update, raises, compared, machine_independent))
     if "edit-cost" in parts:
         started = time.monotonic()
         metrics = measure_edit_cost(hl, build_server(hl, compiler, out), frozen, out, signature_edit=False)
         print(f"perf-guard: edit-cost builds wall {time.monotonic() - started:.1f} s (not compared)")
-        gather(compare(INCREMENTAL_BASELINE, metrics, update, raises, compared))
+        gather(compare(INCREMENTAL_BASELINE, metrics, update, raises, compared, machine_independent))
     if "small-project" in parts:
-        gather(compare(SMALL_PROJECT_BASELINE, measure_small_project(hl, out), update, raises, compared))
+        gather(compare(SMALL_PROJECT_BASELINE, measure_small_project(hl, out), update, raises, compared, machine_independent))
     if "live" in parts:
-        gather(compare(LIVE_BASELINE, measure_live_edits(out), update, raises, compared))
+        gather(compare(LIVE_BASELINE, measure_live_edits(out), update, raises, compared, machine_independent))
     summary("primary", PRIMARY, compared)
     summary("regression guards", REGRESSION_GUARDS, compared)
     unmeasured = sorted(set(raises) - {name for _, name in compared})
@@ -1305,6 +1324,9 @@ def measure_parts(hl, out, parts, update, raises):
     not_higher = sorted(set(raises) - set(raised) - set(unmeasured))
     if not_higher:
         print(f"perf-guard: --raise names {', '.join(not_higher)}, which measured no higher than the baseline: not written")
+    if excused:
+        print(f"perf-guard: machine-dependent metrics above tolerance, not failed (--machine-independent): {', '.join(excused)}; "
+              "measure on the baselines' machine to tell a regression from the machine")
     if improvements and not update:
         print("perf-guard: better than the baseline beyond tolerance; lock the gain in with scripts/perf-guard.py --update "
               "and commit the baseline with the change")

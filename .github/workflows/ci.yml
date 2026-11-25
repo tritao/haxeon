@@ -60,6 +60,8 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
     env:
       TEST_JOBS: ${{ matrix.test_jobs }}
+      # The perf guard and the edit replay run in compiler-guards.yml, on the changes they guard.
+      SKIP_COMPILER_GUARDS: 1
     steps:
       - uses: actions/checkout@v4
         with:
