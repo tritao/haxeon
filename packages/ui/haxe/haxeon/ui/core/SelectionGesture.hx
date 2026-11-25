@@ -1,7 +1,7 @@
 package haxeon.ui.core;
 
 /** Shared editor/terminal pointer policy; adapters own text boundaries and storage. */
-class SelectionGesture {
+internal class SelectionGesture {
 	public var granularity:Int = 1;
 	var key = "";
 	var time = -1.0;

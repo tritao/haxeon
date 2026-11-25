@@ -145,10 +145,10 @@ class UiStyleInvalidationMetrics {
 class UiStyleInvalidationFrame {
 	public final context:BuildContext;
 	public final changes:LayoutChanges;
-	public var topology:RenderTreeTopology;
+	internal var topology:RenderTreeTopology;
 	public var preserveRevisions:Bool = false;
 
-	public function new(context:BuildContext, changes:LayoutChanges, topology:RenderTreeTopology) {
+	internal function new(context:BuildContext, changes:LayoutChanges, topology:RenderTreeTopology) {
 		this.context = context;
 		this.changes = changes;
 		this.topology = topology;

@@ -45,13 +45,28 @@ class UiContext implements Disposable {
 	final layoutChanges:LayoutChanges = new LayoutChanges();
 	final comparisonFrame:UiStyleInvalidationFrame;
 
+	/** The state widgets keep between builds (`BuildContext.state`), by widget and scope. */
 	public final stateStore:StateStore;
+
+	/** The clipboard text fields copy to and paste from. */
 	public final clipboard:ClipboardService;
+
+	/** What views build with: the theme, the state, the services; the same for every frame of this context. */
 	public final buildContext:BuildContext;
+
+	/** Which widget has keyboard focus, and the order Tab moves it in. */
 	public final focus:FocusManager;
+
+	/** Routes pointer, key and text input to the widgets it is for. */
 	public final events:EventDispatcher;
+
+	/** Decides which gesture recognizer gets a pointer sequence when several could. */
 	public final gestures:GestureArena;
+
+	/** Runs the UI's animations and says when they need another frame. */
 	public final animations:AnimationScheduler;
+
+	/** Each widget's hovered, pressed and focused states, which styles select on. */
 	public final interactionStates:InteractionStateStore;
 	/** Control sizing for the input in use; the host sets Touch when touch is primary. */
 	public var density:Density = Density.Pointer;
@@ -62,6 +77,7 @@ class UiContext implements Disposable {
 	/** Current document/selection context used by command-bound UI. */
 	public var commandContext(default, null):CommandContext;
 
+	/** The render tree of the last frame built, or null before the first. */
 	public var root(default, null):Null<RenderNode>;
 
 	/** Opt-in developer selection. Drawn after application paint and excluded from hit testing. */
@@ -83,6 +99,7 @@ class UiContext implements Disposable {
 	/** Modifier observation independent of keyboard focus (for pointer affordances). */
 	public var onModifiersChanged:Null<UiModifier->Void>;
 
+	/** The modifier keys held now, as the last input reported them. */
 	public var modifiers(default, null):UiModifier = UiModifier.empty();
 
 	function updateModifiers(value:UiModifier):Void {
@@ -162,11 +179,16 @@ class UiContext implements Disposable {
 	var frameNumber:Int;
 	var diagnosticStage:Int = 0;
 
+	/** The platform's text input: the on-screen keyboard, and input method composition. */
 	public final textInput:TextInputBridge;
 
 	/** Application layout to window logical coordinates for platform geometry. */
 	public var platformCoordinateScale:Float = 1.0;
 
+	/**
+	 * A UI context with its own state, focus and input routing. A host makes one per window; `session`, `fonts` and
+	 * `theme` default to fresh ones.
+	 */
 	public function new(?session:LayoutSession, ?fonts:FontCollection, ?theme:Theme) {
 		visitResolvedNode = collectResolvedNode;
 		this.session = session == null ? LayoutSession.create() : session;
@@ -910,7 +932,8 @@ class UiContext implements Disposable {
 		customCompositeKeys.clear();
 	}
 
-	public function getDiagnosticStage():Int return diagnosticStage;
+	/** How far the last frame submission got before it stopped, for a crash report: 0 when it completed. */
+	internal function getDiagnosticStage():Int return diagnosticStage;
 
 	/** Connects this frame's semantic projection to a NativeKit platform surface. */
 	public function updateAccessibility(surface:Surface):Void {
@@ -934,6 +957,7 @@ class UiContext implements Disposable {
 			&& geometry.height > 0.0 && geometry.clipBounds.width > 0.0 && geometry.clipBounds.height > 0.0;
 	}
 
+	/** Builds, lays out and draws the UI into `surface` for `frame`. */
 	public function render(renderer:Renderer, surface:Surface, frame:FrameInfo):Void {
 		prepareRender(renderer, surface, null, frame);
 	}
@@ -1128,6 +1152,7 @@ class UiContext implements Disposable {
 		render(renderer, surface, frame);
 	}
 
+	/** Moves keyboard focus to the widget `id`, if it can take focus. Returns whether it did. */
 	public function focusWidget(id:WidgetId):Bool {
 		ensureLive();
 		var previous = focus.focusedId;
@@ -1136,6 +1161,7 @@ class UiContext implements Disposable {
 		return true;
 	}
 
+	/** Moves focus to the next focusable widget, as Tab does, and returns it; null when there is none. */
 	public function focusNext():Null<WidgetId> {
 		ensureLive();
 		var previous = focus.focusedId;
@@ -1144,6 +1170,7 @@ class UiContext implements Disposable {
 		return next;
 	}
 
+	/** Moves focus to the previous focusable widget, as Shift+Tab does, and returns it; null when there is none. */
 	public function focusPrevious():Null<WidgetId> {
 		ensureLive();
 		var previous = focus.focusedId;
@@ -1152,6 +1179,7 @@ class UiContext implements Disposable {
 		return next;
 	}
 
+	/** Leaves no widget focused. */
 	public function clearFocus():Void {
 		ensureLive();
 		focusBeforeWindowBlur = null;
@@ -1243,6 +1271,9 @@ class UiContext implements Disposable {
 		}
 	}
 
+	/**
+	 * Reports the pointer at (`x`, `y`) in viewport coordinates; a host calls the pointer methods from platform input.
+	 */
 	public function pointerMove(x:Float,
 			y:Float,
 			modifiers:UiModifier = UiModifier.empty(),
@@ -1254,6 +1285,7 @@ class UiContext implements Disposable {
 		updateCursor();
 	}
 
+	/** Reports `button` pressed at (`x`, `y`). */
 	public function pointerDown(x:Float,
 			y:Float,
 			button:Int,
@@ -1267,6 +1299,7 @@ class UiContext implements Disposable {
 		updateCursor();
 	}
 
+	/** Reports `button` released at (`x`, `y`): a release over the widget pressed also clicks it. */
 	public function pointerUp(x:Float,
 			y:Float,
 			button:Int,
@@ -1279,6 +1312,7 @@ class UiContext implements Disposable {
 		updateCursor();
 	}
 
+	/** Reports that the pointer `pointerId`'s sequence ended without a release. */
 	public function pointerCancel(pointerId:Int,
 			x:Float,
 			y:Float,
@@ -1289,6 +1323,7 @@ class UiContext implements Disposable {
 		updateCursor();
 	}
 
+	/** Reports that the pointer `pointerId` left the window: nothing is hovered by it any more. */
 	public function pointerLeave(pointerId:Int = 0):Void {
 		ensureLive();
 		events.clearPointer(pointerId);
@@ -1314,6 +1349,7 @@ class UiContext implements Disposable {
 		events.setPointerCaptureHandler(handler);
 	}
 
+	/** Reports a scroll of (`deltaX`, `deltaY`) with the pointer at (`x`, `y`). */
 	public function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float,
 			modifiers:UiModifier = UiModifier.empty()):Void {
 		ensureLive();
@@ -1321,6 +1357,10 @@ class UiContext implements Disposable {
 		events.scroll(x, y, deltaX, deltaY, modifiers);
 	}
 
+	/**
+	 * Reports a key event (`UiEventKind.KeyDown`, `KeyUp` or `KeyRepeat`) for the focused widget. Returns whether the
+	 * UI used it, so the host can pass on a key it did not.
+	 */
 	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Bool {
 		ensureLive();
 		updateModifiers(modifiers);
@@ -1329,6 +1369,10 @@ class UiContext implements Disposable {
 		return events.key(kind, key, modifiers, scancode);
 	}
 
+	/**
+	 * Reports typed text (`UiEventKind.TextInput`) or an input method's composition (`TextEdit`) for the focused
+	 * widget.
+	 */
 	public function text(kind:String, value:Null<String>, data:Dynamic = null):Void {
 		ensureLive();
 		events.text(kind, value, data);
@@ -1552,6 +1596,7 @@ class UiContext implements Disposable {
 			right.transform);
 	}
 
+	/** Whether input or state changed something the next frame must show. */
 	public function isDirty():Bool return dirtyFlags != UiDirtyFlag.None;
 
 	/** Asks the host for a frame when input dirtied the submitted UI. */
@@ -1561,6 +1606,7 @@ class UiContext implements Disposable {
 			request();
 	}
 
+	/** Whether a running animation needs another frame. */
 	public var needsAnimationFrame(get, never):Bool;
 
 	inline function get_needsAnimationFrame():Bool return animations.needsFrame;

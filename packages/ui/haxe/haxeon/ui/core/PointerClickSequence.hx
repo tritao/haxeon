@@ -1,7 +1,7 @@
 package haxeon.ui.core;
 
 /** Recognizes a primary double click on the same item across UI rebuilds. */
-class PointerClickSequence {
+internal class PointerClickSequence {
 	var previousKey:String = "";
 	var previousTime:Float = -1.0;
 	var previousX:Float = 0.0;

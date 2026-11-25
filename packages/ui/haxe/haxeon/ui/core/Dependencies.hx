@@ -11,14 +11,14 @@ class Dependencies extends ReactiveDependencySet implements Disposable {
 	public function new(captureOnly:Bool = false)
 		super(captureOnly);
 
-	public function setInvalidationOwner(context:Null<BuildContext>, build:Null<SelfUpdatingBuild>):Void {
+	internal function setInvalidationOwner(context:Null<BuildContext>, build:Null<SelfUpdatingBuild>):Void {
 		// Retargeting invalidation only changes who is notified; the tracked inputs still decide validity.
 		invalidationContext = context;
 		invalidationBuild = build;
 	}
 
 	/** A reused dependency record belongs to its most recent updater. */
-	public function ownedBy(build:SelfUpdatingBuild):Bool
+	internal function ownedBy(build:SelfUpdatingBuild):Bool
 		return invalidationBuild == build;
 
 	/** Copies a frame-local slice into this retained record, reusing its subscriptions. */

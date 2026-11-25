@@ -40,7 +40,7 @@ class InteractionStateStore implements Disposable {
 	}
 
 	/** Net changes since submission; repeated edits preserve the transaction's original value. */
-	public function changes():Array<InteractionChange> {
+	internal function changes():Array<InteractionChange> {
 		if (changesRevision == revision) return changeScratch;
 		var count = 0;
 		for (index in 0...pendingCount) {
@@ -73,7 +73,7 @@ class InteractionStateStore implements Disposable {
 }
 
 /** One record per observed identity, shared by stored input and borrowed change lists. */
-@:allow(haxeon.ui.core.InteractionStateStore) class InteractionChange {
+@:allow(haxeon.ui.core.InteractionStateStore) internal class InteractionChange {
 	public final id:Int;
 	public var before(default, null):StyleState = StyleState.empty();
 	public var after(default, null):StyleState = StyleState.empty();

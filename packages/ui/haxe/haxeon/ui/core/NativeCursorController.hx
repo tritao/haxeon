@@ -7,7 +7,7 @@ import haxeon.ui.core.CursorShape as UiCursorShape;
 import nativekit.ffi.NativeKit;
 
 /** Applies UI cursor intent to one NativeKit window with lazy native resources. */
-class NativeCursorController {
+internal class NativeCursorController {
 	final window:WindowHandle;
 	final cursors:Map<NativeCursorShape, OwnedCursorHandle>;
 	var capabilityChecked:Bool;

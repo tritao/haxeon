@@ -5,7 +5,7 @@ package haxeon.ui.core;
  * make an accidental match between two different keys about as unlikely as a 64-bit hash collision. Reuse one instance
  * with `reset`: nothing here allocates. Floats count to a resolution of 2^-24.
  */
-class KeyHash {
+internal class KeyHash {
 	static inline var SeedA = 0x811c9dc5;
 	static inline var SeedB = 0x2545f491;
 	static inline var PrimeA = 16777619;

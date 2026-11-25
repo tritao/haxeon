@@ -4,7 +4,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 
 /** A component's actual body root carries its native owner; ordinary descendants carry no owner field. */
-class ScopeRootNode extends RenderNode {
+internal class ScopeRootNode extends RenderNode {
 	var owner:RenderScope;
 
 	public function new(id:WidgetId, kind:LayoutVisualKind, style:Null<LayoutStyle>, owner:RenderScope) {

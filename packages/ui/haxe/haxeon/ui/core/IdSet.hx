@@ -5,7 +5,7 @@ package haxeon.ui.core;
  * are filled for every node of every frame. Open addressing over two arrays; `clear` bumps a generation instead of touching the
  * slots, so it is constant time whatever the size.
  */
-class IdSet {
+internal class IdSet {
 	var keys:Array<Int>;
 	var stamps:Array<Int>;
 	var generation:Int = 1;

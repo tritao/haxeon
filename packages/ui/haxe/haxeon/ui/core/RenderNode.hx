@@ -34,9 +34,9 @@ import haxeon.ui.semantics.Semantics;
 /** One Haxe-owned node joins visual layout, interaction, focus, and state identity. */
 class RenderNode {
 	/** Ordinary nodes carry no scope field; only component body roots override this method. */
-	public function scopeOwner():Null<RenderScope> return null;
+	internal function scopeOwner():Null<RenderScope> return null;
 	/** A retained body root can acquire a new logical owner without allocating a replacement node. */
-	public function setScopeOwner(owner:RenderScope):Void throw "Only a reserved component root can own a render scope";
+	internal function setScopeOwner(owner:RenderScope):Void throw "Only a reserved component root can own a render scope";
 
 	public final id:WidgetId;
 	public final layout:LayoutNode;
@@ -352,7 +352,7 @@ class RenderNode {
 	 * What a builder made on this node when it returned it, to be taken before callers decorate the node: a later rebuild
 	 * (reconcile) replaces just that and leaves the listeners, paint callbacks, children and style changes callers add after.
 	 */
-	public function snapshotBuilt():BuiltNode {
+	internal function snapshotBuilt():BuiltNode {
 		var built = new BuiltNode(layout.style.copy(), children.copy(), semantics);
 		countCallbacks(built);
 		return built;
@@ -389,7 +389,7 @@ class RenderNode {
 	 * Properties of the node other than these (focusable, enabled, cursor, tab index, command scope) come from the widget
 	 * instance, which a rebuild keeps. Returns a stand-in for the node as it was, for the frame comparison.
 	 */
-	public function reconcile(fresh:RenderNode, built:BuiltNode, ?topology:RenderTreeTopology):RenderNode {
+	internal function reconcile(fresh:RenderNode, built:BuiltNode, ?topology:RenderTreeTopology):RenderNode {
 		if (fresh == this || fresh.replacedBy != null) throw "A reconcile requires a fresh render node";
 		// Native scopes replace their body root independently. The authored child remains the
 		// same child of this build, even when its original physical node has been detached.
@@ -1090,7 +1090,7 @@ class RenderNode {
 }
 
 /** What a builder made on a node, as taken by RenderNode.snapshotBuilt and kept up to date by RenderNode.reconcile. */
-class BuiltNode {
+internal class BuiltNode {
 	/** Reused by later patches; comparison consumes it before the next patch takes another snapshot. */
 	public var prior:Null<RenderNode> = null;
 	/** The style as the builder left it, before callers changed the node: the base of the next build's difference. */

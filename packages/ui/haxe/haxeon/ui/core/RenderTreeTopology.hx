@@ -3,7 +3,7 @@ package haxeon.ui.core;
 import haxeon.ui.IntIndex;
 
 /** Exact topology of a published frame. Rebuilding reparents retained nodes, so their old parent/children cannot be read live. */
-class RenderTreeTopology {
+internal class RenderTreeTopology {
 	final indices:IntIndex = new IntIndex();
 	final parents:Array<Int> = [];
 	final offsets:Array<Int> = [];

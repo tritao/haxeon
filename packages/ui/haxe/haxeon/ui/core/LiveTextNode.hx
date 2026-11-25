@@ -6,7 +6,7 @@ import haxeon.ui.style.StyleDiff;
 
 /** A text leaf owns its previous submitted value without a render-tree snapshot. */
 @:access(haxeon.ui.core.RenderNode)
-class LiveTextNode extends RenderNode {
+internal class LiveTextNode extends RenderNode {
 	var submittedText:String;
 	var announcedText:String;
 

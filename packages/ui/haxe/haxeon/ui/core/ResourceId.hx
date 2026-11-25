@@ -5,7 +5,8 @@ abstract ResourceId(Int) {
 	@:allow(haxeon.ui.core.StateStore) inline function new(value:Int) this = value;
 
 	public static inline function widget(id:WidgetId):ResourceId return new ResourceId(id.value << 1);
-	public static inline function scope(id:ScopeResourceId):ResourceId return new ResourceId((id.rawValue() << 1) | 1);
+	internal static inline function scope(id:ScopeResourceId):ResourceId return new ResourceId((id.rawValue() << 1)
+		| 1);
 
 	public inline function rawValue():Int return this;
 	public inline function isScope():Bool return (this & 1) != 0;

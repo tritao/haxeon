@@ -96,7 +96,7 @@ class StateStore implements Disposable {
 	}
 
 	/** Reserve one native instance lifetime before its body captures descendant resource usage. */
-	public function beginScope():ScopeResourceId {
+	internal function beginScope():ScopeResourceId {
 		var id = new ScopeResourceId(nextScopeId);
 		while (scopes.exists(id) || frameUsed.has(ResourceId.scope(id).rawValue())) {
 			nextScopeId = nextScopeId == 0x7fffffff ? 1 : nextScopeId + 1;
@@ -126,10 +126,10 @@ class StateStore implements Disposable {
 		for (child in node.children) retainBodyWidgetIds(child, mounted);
 	}
 
-	public function scopeOwner(id:ScopeResourceId):Null<RenderScope> return scopes.get(id);
+	internal function scopeOwner(id:ScopeResourceId):Null<RenderScope> return scopes.get(id);
 
 	/** Install one instance owner; cached instances with the same widget identity remain independent. */
-	public function installScope(owner:RenderScope):Void {
+	internal function installScope(owner:RenderScope):Void {
 		var id = owner.resourceId;
 		var previous = scopes.get(id);
 		if (previous != null && previous != owner) throw "Native scope resource already has an owner";
@@ -142,7 +142,7 @@ class StateStore implements Disposable {
 	}
 
 	/** Release a native record immediately, including independent updates outside a full-frame sweep. */
-	public function releaseScope(owner:RenderScope):Void {
+	internal function releaseScope(owner:RenderScope):Void {
 		var id = owner.resourceId, current = scopes.get(id);
 		if (current != null && current != owner) return;
 		scopes.remove(id);
@@ -225,7 +225,7 @@ class StateStore implements Disposable {
 		if (children != null) retain(children, false);
 	}
 
-	public function touchScope(id:ScopeResourceId):Void {
+	internal function touchScope(id:ScopeResourceId):Void {
 		if (!scopes.exists(id)) throw "Native scope has not been initialized";
 		var resource = ResourceId.scope(id);
 		markUsedResource(resource);

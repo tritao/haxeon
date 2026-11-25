@@ -1,7 +1,7 @@
 package haxeon.ui.core;
 
 /** Sorted path/ID pairs. Removing recycled rows compacts live pairs without growing a map freelist. */
-class WidgetIdCache {
+internal class WidgetIdCache {
 	final paths:Array<Null<String>> = [];
 	final ids:Array<Null<WidgetId>> = [];
 	public var count(default, null):Int = 0;

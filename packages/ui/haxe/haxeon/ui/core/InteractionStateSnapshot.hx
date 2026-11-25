@@ -3,7 +3,7 @@ package haxeon.ui.core;
 import haxeon.ui.style.StyleState;
 
 /** Interaction flags a retained subtree actually rendered when it was built. */
-class InteractionStateSnapshot implements Disposable {
+internal class InteractionStateSnapshot implements Disposable {
 	static final interactionMask:StyleState = StyleState.Hovered | StyleState.Pressed | StyleState.Focused;
 
 	static final NoIds:Array<WidgetId> = [];

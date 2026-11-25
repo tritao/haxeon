@@ -18,13 +18,26 @@ import haxeon.ui.theme.Theme;
 
 /** Frame-local identity scopes backed by a persistent UiContext state store. */
 class BuildContext implements Disposable {
+	/** The state widgets keep between builds; `state` reads it for the widget being built. */
 	public final stateStore:StateStore;
+
+	/** The fonts text is shaped with, or null before the host gives them. */
 	public var fonts(default, null):Null<FontCollection>;
-	public var platformSurface(default, null):Null<Surface>;
+	internal var platformSurface(default, null):Null<Surface>;
+
+	/** The platform's text input: the on-screen keyboard and input method composition, for text fields. */
 	public final textInput:TextInputBridge;
+
+	/** The clipboard text fields copy to and paste from. */
 	public final clipboard:ClipboardService;
+
+	/** Where a widget's gesture recognizers compete for a pointer sequence. */
 	public final gestures:GestureArena;
+
+	/** Runs the animations widgets start, and asks for frames while they run. */
 	public final animations:AnimationScheduler;
+
+	/** Each widget's hovered, pressed and focused states, which its style selects on. */
 	public final interactionStates:InteractionStateStore;
 
 	/** Application commands available to command-bound widgets. */
@@ -35,22 +48,33 @@ class BuildContext implements Disposable {
 
 	final commandFlagEntries:Array<{registry:CommandRegistry, id:String, value:Derived<Int>}> = [];
 
+	/** What commands act on now: the current document and selection. */
 	public var commandContext(get, never):CommandContext;
 
 	function get_commandContext():CommandContext return commandContextState.value;
 
+	/**
+	 * Resolves a widget's computed style from the theme, the style sheet and its own style; a widget calls it while it
+	 * builds.
+	 */
 	public final styleResolver:StyleResolver;
+
+	/** What styles can depend on: the viewport's size, the pointer in use, reduced motion and the like. */
 	public final environment:StyleEnvironment;
 
 	/** Optional diagnostic sink for named view builds: name, preparation, build, nodes. */
 	public var buildProbe:Null<String->Float->Float->Int->Void> = null;
 
+	/** The theme widgets draw with: its colors, type scale and generated style rules. */
 	public var theme(default, null):Theme;
+
+	/** The application's style rules, applied over the theme's. */
 	public var styleSheet(default, null):StyleSheet;
 
 	/** Logical viewport dimensions for frame-local placement decisions. */
 	public var viewportWidth(default, null):Float;
 
+	/** The height of the viewport the UI is built for, in logical pixels. */
 	public var viewportHeight(default, null):Float;
 
 	/** A resolved widget can request another native layout pass in this submit. */
@@ -118,6 +142,7 @@ class BuildContext implements Disposable {
 	var activeBuildRootId:Null<WidgetId>;
 	var buildingRoot:Null<RenderNode>;
 
+	/** The build context of a UI; `UiContext` makes it, so an application rarely does. */
 	public function new(stateStore:StateStore,
 			?fonts:FontCollection,
 			?textInput:TextInputBridge,
@@ -302,6 +327,7 @@ class BuildContext implements Disposable {
 		focusRequester = requester;
 	}
 
+	/** Asks for keyboard focus to move to the widget `id`. Returns whether it did. */
 	public function requestFocus(id:WidgetId):Bool return id != null && focusRequester(id);
 
 	/** Installs the focus route for targets revealed by the next layout. */
@@ -332,7 +358,7 @@ class BuildContext implements Disposable {
 		textInput.attach(surface);
 	}
 
-	public function clearPlatformSurface(surface:Surface):Void {
+	internal function clearPlatformSurface(surface:Surface):Void {
 		if (platformSurface == surface) {
 			textInput.detach();
 			platformSurface = null;
@@ -347,7 +373,7 @@ class BuildContext implements Disposable {
 		viewportHeight = height;
 	}
 
-	public function beginFrame():Void {
+	internal function beginFrame():Void {
 		layoutFeedbackRequested = false;
 		buildBeforeLayoutFeedbackRequested = false;
 		localObserved.clear();
@@ -377,21 +403,22 @@ class BuildContext implements Disposable {
 		buildBeforeLayoutFeedbackRequested = true;
 	}
 
-	public function consumeBuildFeedbackBeforeLayout():Bool {
+	internal function consumeBuildFeedbackBeforeLayout():Bool {
 		var requested = buildBeforeLayoutFeedbackRequested;
 		buildBeforeLayoutFeedbackRequested = false;
 		return requested;
 	}
 
-	public function consumeBuildFeedback():Bool {
+	internal function consumeBuildFeedback():Bool {
 		var requested = buildFeedbackRequested;
 		buildFeedbackRequested = false;
 		return requested;
 	}
 
+	/** Asks for the frame to be built again after layout, for a widget whose content depends on its laid-out size. */
 	public function requestLayoutFeedback():Void layoutFeedbackRequested = true;
 
-	public function consumeLayoutFeedback():Bool {
+	internal function consumeLayoutFeedback():Bool {
 		var requested = layoutFeedbackRequested;
 		layoutFeedbackRequested = false;
 		return requested;
@@ -460,7 +487,7 @@ class BuildContext implements Disposable {
 	}
 
 	/** Live text roots keep the same ownership protocol without adding a field to ordinary text leaves. */
-	public function createLiveTextNode(id:WidgetId, style:LayoutStyle, value:String):LiveTextNode {
+	internal function createLiveTextNode(id:WidgetId, style:LayoutStyle, value:String):LiveTextNode {
 		var owner = rootOwner(id);
 		var node:LiveTextNode = owner == null ? new LiveTextNode(id, style, value) : new ScopeTextRootNode(id,
 			style,
@@ -475,6 +502,10 @@ class BuildContext implements Disposable {
 
 	@:allow(haxeon.ui.core.RenderScope) function isBuildingRoot(node:RenderNode):Bool return buildingRoot == node;
 
+	/**
+	 * The id of the widget `localKey` names within the current scope, claimed for this build: two widgets of one scope
+	 * cannot share a key.
+	 */
 	public function id(localKey:String):WidgetId {
 		var result = resolveId(localKey);
 		claimId(result, localKey);
@@ -588,10 +619,11 @@ class BuildContext implements Disposable {
 	/** Pending run-once binding work asks the host for a frame without rebuilding its owner. */
 	public var bindingRequestRevision(default, null):Int = 0;
 
-	public var onBindingFrameRequested:Null<Void->Void>;
+	internal var onBindingFrameRequested:Null<Void->Void>;
 
 	var bindingFrameRequested:Bool = false;
 
+	/** Asks the host for a frame because bound state changed outside any build, as a `BoundText` does. */
 	public function requestBindingFrame():Void {
 		if (bindingFrameRequested) return;
 		bindingFrameRequested = true;
@@ -599,12 +631,12 @@ class BuildContext implements Disposable {
 		if (onBindingFrameRequested != null) onBindingFrameRequested();
 	}
 
-	public function consumeBindingFrameRequest():Int {
+	internal function consumeBindingFrameRequest():Int {
 		bindingFrameRequested = false;
 		return bindingRequestRevision;
 	}
 
-	public var hasPendingPatches(get, never):Bool;
+	internal var hasPendingPatches(get, never):Bool;
 
 	inline function get_hasPendingPatches():Bool return pendingPatches.length > 0;
 
@@ -639,13 +671,13 @@ class BuildContext implements Disposable {
 	}
 
 	/** The native owner is carried by the actual component body root. */
-	public function renderScopeAt(node:RenderNode):Null<RenderScope> {
+	internal function renderScopeAt(node:RenderNode):Null<RenderScope> {
 		var owner = node.scopeOwner();
 		return owner != null && owner.root == node && !owner.disposed ? owner : null;
 	}
 
 	/** Native bodies own interaction reads until a more local independent widget takes ownership. */
-	public function interactionRenderScope(node:RenderNode):Null<RenderScope> {
+	internal function interactionRenderScope(node:RenderNode):Null<RenderScope> {
 		var current:Null<RenderNode> = node, branch:Null<RenderNode> = null;
 		while (current != null) {
 			var owner = renderScopeAt(current);
@@ -658,7 +690,7 @@ class BuildContext implements Disposable {
 	}
 
 	/** The self-updating build for a node, while it is registered and current. */
-	public function updatingBuild(node:RenderNode):Null<SelfUpdatingBuild> {
+	internal function updatingBuild(node:RenderNode):Null<SelfUpdatingBuild> {
 		var entry = selfUpdatingBuilds.get(node.id.value);
 		return entry != null && entry.root == node ? entry : null;
 	}
@@ -671,7 +703,7 @@ class BuildContext implements Disposable {
 	 * Validation can be requested without registering anything, so a cache with several updaters either rearms all of
 	 * them or leaves the current registrations alone when any dependency no longer matches.
 	 */
-	public function rearm(id:WidgetId, entry:SelfUpdatingBuild):Bool {
+	internal function rearm(id:WidgetId, entry:SelfUpdatingBuild):Bool {
 		if (!canRearm(id, entry)) return false;
 		rearmValidated(id, entry);
 		return true;
@@ -716,7 +748,7 @@ class BuildContext implements Disposable {
 	}
 
 	/** Rebuild only owners still attached after ancestor/root structure has settled. */
-	public function applyPatches(submittedRoot:Null<RenderNode>, ?topology:RenderTreeTopology):Void {
+	internal function applyPatches(submittedRoot:Null<RenderNode>, ?topology:RenderTreeTopology):Void {
 		if (pendingPatches.length == 0) return;
 		var work = pendingPatches;
 		pendingPatches = [];
@@ -872,7 +904,7 @@ class BuildContext implements Disposable {
 		}
 	}
 
-	public function updatingStatesChanged(entry:SelfUpdatingBuild):Bool {
+	internal function updatingStatesChanged(entry:SelfUpdatingBuild):Bool {
 		var dependencies = entry.dependencies;
 		if (dependencies == null) return false;
 		if (dependencies.observed != null && dependencies.observed.trackedSourcesDirty()) return true;
@@ -880,7 +912,7 @@ class BuildContext implements Disposable {
 	}
 
 	/** Hidden dock caches keep the latest patched resources alive without rearming unmounted widgets. */
-	public function retainUpdatingState(entry:SelfUpdatingBuild):Void {
+	internal function retainUpdatingState(entry:SelfUpdatingBuild):Void {
 		var dependencies = entry.dependencies;
 		if (dependencies == null) return;
 		// A nested updater can change its own state IDs during an in-place patch. Refresh the flattened owner list from
@@ -949,7 +981,7 @@ class BuildContext implements Disposable {
 	/** Whether `node` was announced with willEditRetained since the last frame. */
 	public function editAnnounced(node:RenderNode):Bool return retainedEdits.indexOf(node) >= 0;
 
-	public var hasRetainedEdits(get, never):Bool;
+	internal var hasRetainedEdits(get, never):Bool;
 
 	inline function get_hasRetainedEdits():Bool return retainedEdits.length > 0;
 
@@ -967,7 +999,7 @@ class BuildContext implements Disposable {
 	/** The nodes patches replaced this frame, by ID, so the frame comparison can see what changed. */
 	public function patchedPriors():Map<Int, RenderNode> return patchPriors;
 
-	public function endPatchFrame():Void {
+	internal function endPatchFrame():Void {
 		patchPriors.clear();
 		submittedInstances = null;
 	}
@@ -1074,13 +1106,17 @@ class BuildContext implements Disposable {
 		return owner == null ? RenderNode.latest(root) : owner.currentRoot(root);
 	}
 
+	/**
+	 * Builds `build` in the scope `key` names within the current one, so the ids and state of what it builds are its
+	 * own.
+	 */
 	public function withScope<T>(key:Key, build:Void->T):T return withScopeUnder(scope, key, build);
 
 	/** The scope widgets built now are keyed under; withScopeUnder keys a deeper subtree by it. */
 	public function currentScope():KeyScope return scope;
 
 	/** A variant owns nested completed scopes, never the enclosing scope currently producing that variant. */
-	public function retainedRootScope(node:RenderNode):Null<RenderScope> {
+	internal function retainedRootScope(node:RenderNode):Null<RenderScope> {
 		var owner = node.scopeOwner();
 		if (owner == activeRenderScope) return null;
 		while (owner != null) {
@@ -1228,7 +1264,7 @@ class BuildContext implements Disposable {
 		return false;
 	}
 
-	public function flushRenderScopes(submittedRoot:Null<RenderNode>, deferUnmount:Bool = false):Void {
+	internal function flushRenderScopes(submittedRoot:Null<RenderNode>, deferUnmount:Bool = false):Void {
 		var previous = buildingRenderScope;
 		buildingRenderScope = true;
 		try {
@@ -1348,6 +1384,7 @@ class BuildContext implements Disposable {
 		}
 	}
 
+	/** The state the widget `id` keeps across builds, made with `initial` on its first build. */
 	public function state<T>(id:WidgetId, initial:T):State<T> {
 		stateStore.initialize(id, initial);
 		return stateStore.handle(id);
@@ -1396,7 +1433,7 @@ class BuildContext implements Disposable {
 		reactiveBuildPending = false;
 	}
 
-	public function rootDependenciesDirty():Bool return reactiveBuildPending || rootDependencies.dirty;
+	internal function rootDependenciesDirty():Bool return reactiveBuildPending || rootDependencies.dirty;
 
 	/** Records a reused subtree's reads again, so an enclosing cache depends on them too. */
 	public function retainDependencies(dependencies:Dependencies):Void {
@@ -1460,7 +1497,7 @@ class BuildContext implements Disposable {
 }
 
 /** How a self-updating widget rebuilds; retained caches hold the ones in their subtree (see InteractionStateSnapshot). */
-class SelfUpdatingBuild {
+internal class SelfUpdatingBuild {
 	public final idValue:Int;
 	public final build:Void->RenderNode;
 	public final scope:KeyScope;
@@ -1594,7 +1631,7 @@ private class RetainedEditCache {
 }
 
 /** Dependencies of a composite or stateful updater; leaf controls need no additional capture record. */
-class UpdatingDependencies {
+internal class UpdatingDependencies {
 	public var allStateIds:Null<Array<ResourceId>>;
 	public var stateIds:Null<Array<ResourceId>>;
 	public var observed:Null<Dependencies>;

@@ -5,7 +5,7 @@ import haxeon.ui.semantics.Semantics;
 
 /** The boundary between a component root and decorations added by its caller.
  * Stored by value on the native scope; it never reconciles or mutates the new body's contents. */
-@:access(haxeon.ui.core.RenderNode) struct ScopeRootBoundary {
+@:access(haxeon.ui.core.RenderNode) internal struct ScopeRootBoundary {
 	final style:LayoutStyle;
 	final children:Array<RenderNode>;
 	var semantics:Null<Semantics>;
