@@ -49,7 +49,10 @@ const built = existsSync(join(__SITE_ROOT__, 'public', new URL(src, 'file:').pat
       start.addEventListener('click', () => {
         const frame = document.createElement('iframe');
         frame.title = title!;
-        frame.src = src!;
+        // An embed that has light and dark palettes starts in the page's.
+        const url = new URL(src!, location.href);
+        url.searchParams.set('theme', document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+        frame.src = url.href;
         start.disabled = true;
         status.hidden = false;
         status.textContent = loading!;

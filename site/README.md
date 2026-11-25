@@ -37,6 +37,8 @@ source with CMake, Ninja, the pinned Emscripten toolchain and Python FontTools, 
 WebGL2 Circuit Run example on /gpu/ into `public/gpu/circuit-run/` with the same Emscripten SDK and the native
 Haxeon CLI from `scripts/build-native.sh`. The site build copies both into `dist/` and shows a start button for
 each embed it finds; without one, its page shows the preview image only. `npm run dev` serves them too.
+After a change to the Showcase's look, `npm run capture:posters` retakes its light and dark preview images from
+that build.
 
 Open the URL printed by Astro. The production build is static HTML in `dist/`. Use
 `npm run preview` to serve it locally. Set `ASTRO_TELEMETRY_DISABLED=1` in environments with a
