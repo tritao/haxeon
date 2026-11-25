@@ -3,7 +3,7 @@
 Status: agreed (2026-11-23). Steps 1 (out/sdk staged, one SDK lookup), 2 (runners use `find_package(Haxeon)` and a data-only
 fragment) and 3 (the launcher finds its SDK from its own path, the VM is published in `out/sdk/bin`, a release is its SDK,
 and Haxeon's home is the SDK everywhere) are built, with release builds through the runner; 4 (packages and the `haxeon` registry) is built, and a release's app template
-builds and runs from the archive (`scripts/smoke-test-release.sh`); 5 (a release is the install plus an archive) is built; 6 stages the Android host with an Android toolchain and stages the web loader on all hosts. Reviewed independently before adoption; the five changes from
+builds and runs from the archive (`scripts/smoke-test-release.hx`); 5 (a release is the install plus an archive) is built; 6 stages the Android host with an Android toolchain and stages the web loader on all hosts. Reviewed independently before adoption; the five changes from
 that review are folded in below.
 
 ## Problem
@@ -105,7 +105,7 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
 
 1. **Stage `out/sdk`, moving no paths.** Install rules and a target that stage `lib`, `include`, `cmake/HaxeonConfig.cmake`,
    `src` and the manifest, superseding `hlc-sdk`; one `HaxeonSdk.root(home)` replaces the three hlc SDK lookups; the
-   release copies the staged SDK; `scripts/smoke-test-release.sh` creates, builds and runs the app template from the archive.
+   release copies the staged SDK; `scripts/smoke-test-release.hx` creates, builds and runs the app template from the archive.
 2. **Runner:** `find_package(Haxeon)`, the data-only fragment, the version check, reconfigure on an SDK change.
 3. **Launcher and home:** the launcher finds its SDK from its own path and reads the manifest with its `source` field; the
    path table moves to `out/sdk/bin`, `hashlink-runtime` goes, and a release's root is its SDK, whose manifest replaces
@@ -139,7 +139,7 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
      `find_package(NativeKitPackage)` through `CMAKE_PREFIX_PATH` (`NativeCMakeProvider`), a tree is named by those trees
      too (`NativeCache`), and its published libraries find theirs in the sibling package directories. A program using
      native packages from a release's registry builds them in the shared native cache under the user's cache, with the
-     SDK's `cmake/` scripts (step 3); `scripts/smoke-test-release.sh` builds one with `nativekit` and one with `filesystem`.
+     SDK's `cmake/` scripts (step 3); `scripts/smoke-test-release.hx` builds one with `nativekit` and one with `filesystem`.
 5. **Release:** `haxeon dev package` becomes the install, the named roots materialized, and an archive; CI runs the template
    tests against the archive. Built as:
    - the install is a copy of the checkout's `out/sdk` as CMake staged it, without its manifest and live registry, so the
@@ -150,7 +150,7 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
      whose roles include the tools that carry the compiler (`haxeon lsp`, the typed lint rules, `haxeon ffi`), and the live
      development host in both flavors. So a release does everything a user does, live patching included; `haxeon dev`,
      `--self-hosted` and `haxeon heap inspect` stay with a checkout;
-   - the release workflow smoke-tests each platform's archive (`scripts/smoke-test-release.sh`), the app template where it
+   - the release workflow smoke-tests each platform's archive (`scripts/smoke-test-release.hx`), the app template where it
      has a runner for the platform, and a program and the app patched under `run --watch`.
 6. **Other targets:** `platforms/android` (the host AAR, per-ABI libraries) and `platforms/web` as their runners land; a
    network registry after that.

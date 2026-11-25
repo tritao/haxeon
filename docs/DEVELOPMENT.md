@@ -249,7 +249,7 @@ none of those can be, and no alias for any of them:
   `cmake/Bootstrap.cmake` includes;
 - the launchers of the checkout's builds: `haxeon` (`haxeon.cmd`, `haxeon.ps1`), `hl`, `hlprof-live`, with
   `hashlink-launch.sh` and `hashlink-path.sh` under them; `android-env.sh`, sourced to put the Android tools on `PATH`;
-- the test entry points: `test.sh`, `test-driver.sh`, `check-self-hosting.hx`, `perf-guard.py`, `smoke-test-release.sh`,
+- the test entry points: `test.sh`, `test-driver.sh`, `check-self-hosting.hx`, `perf-guard.py`, `smoke-test-release.hx` (a Haxeon script),
   `test-cli-launcher.sh` (the suite runner's `cli-launcher` option), `hooks/pre-push`, and `lib/`, which test scripts source;
 - tools that read what a run wrote: `alloc-sites.py` (the allocation census), `peak-timeline.py`, `check-pftrace.py`,
   `hlprof-report.py`, `hlprof-spans.py`, `report-binary-size.py`; and `compiler-class-paths.sh` for tools outside the tree,
@@ -429,7 +429,7 @@ From a checkout with the native build done (`scripts/build-native.sh`, or `scrip
 ```sh
 scripts/haxeon dev aot                         # optional: the CLI and compiler built ahead of time, included when current
 scripts/haxeon dev package [--version=V] [--output=DIR] [--no-archive]
-scripts/smoke-test-release.sh out/release/haxeon-V-PLATFORM.tar.gz --aot   # --no-aot for an archive without it
+scripts/haxeon scripts/smoke-test-release.hx out/release/haxeon-V-PLATFORM.tar.gz --aot   # --no-aot without it
 ```
 
 `haxeon dev package` (`tools.dev.ReleasePackage`) stages the directory in `out/release` in three steps. It installs the
@@ -444,7 +444,7 @@ archives the directory with `cmake -E tar`. The compiler's sources are not shipp
 VM directory. A stale `haxeon-aot` is an error, since the release would never run it: rebuild it or remove it. The
 version defaults to the CLI's (`project.PackageCompatibility.CURRENT_HAXEON`).
 
-`scripts/smoke-test-release.sh` unpacks the archive outside the checkout with a home directory of its own, so every cache
+`scripts/smoke-test-release.hx`, a Haxeon script the checkout's `haxeon` runs, unpacks the archive outside the checkout with a home directory of its own, so every cache
 starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script, a typed lint
 rule, `haxeon ffi audit` (with clang), `haxeon dev`'s refusal, and a program under `run --watch` that it edits while it
 runs, checking that the running program prints the new value and that the edit applied as a patch. Where the app template has a
