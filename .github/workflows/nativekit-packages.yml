@@ -67,7 +67,7 @@ jobs:
       - run: ./scripts/bootstrap-tools.sh
       - name: Configure the UI native runtime
         run: >-
-          cmake -S packages/ui -B out/packages/ui/native -GNinja
+          cmake -S packages/ui/native -B out/packages/ui/native -GNinja
           -DCMAKE_BUILD_TYPE=Debug -DNK_BUILD_SHARED=ON
           -DNK_BUILD_TESTS=OFF -DNK_BUILD_EXAMPLES=OFF
       - name: Run managed UI framework coverage

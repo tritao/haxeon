@@ -9,7 +9,7 @@ trap 'rm -rf -- "$work"' EXIT
 cmake --build "$native" --target nativekit_ui
 compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 export LD_LIBRARY_PATH="$native:$native/nativekit:$native/nativekit/modules/gpu:$root/out:$runtime${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export NKUI_TEST_FONT_PATH=${NKUI_TEST_FONT_PATH:-"$ui/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
+export NKUI_TEST_FONT_PATH=${NKUI_TEST_FONT_PATH:-"$ui/native/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
 for inline in 0 1; do
   "$runtime/hl" "$compiler" $( ((inline)) || echo --no-inline ) --output="$work/test.hl" \
     --entry=NativeScopeFeedbackMain --root="$ui/tests/haxeon" --root="$ui/haxe" \

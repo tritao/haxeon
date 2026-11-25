@@ -31,7 +31,7 @@ The `vendor/nativekit` submodule pins the native implementation. Initialize it
 and UI's private dependencies with:
 
 ```sh
-git submodule update --init --recursive vendor/nativekit packages/ui/vendor
+git submodule update --init --recursive vendor/nativekit packages/ui/native/vendor
 ```
 
 Package tooling accepts `NATIVEKIT_DIR` for a separate native checkout. The C

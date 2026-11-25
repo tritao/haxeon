@@ -51,8 +51,8 @@ guest_source_artifact="$build_dir/nativekit_ui_showcase_wasm32.wasm"
 guest_build_artifact="$guest_wasm_artifact"
 [[ ! -f "$guest_source_artifact" ]] || guest_build_artifact="$guest_source_artifact"
 nativekit_dir=${NATIVEKIT_DIR:-"$(cd "$repo_dir/../.." && pwd)/vendor/nativekit"}
-stale_native_source=$(find "$repo_dir/src" "$repo_dir/include" \
-    "$repo_dir/cmake" "$repo_dir/vendor" "$nativekit_dir/src" "$nativekit_dir/include" \
+stale_native_source=$(find "$repo_dir/native/src" "$repo_dir/native/include" \
+    "$repo_dir/native/cmake" "$repo_dir/native/vendor" "$nativekit_dir/src" "$nativekit_dir/include" \
     \( -type d \( -name .git -o -name build -o -name build-web -o -name build-ui \
         -o -name .tools \) -prune \) -o \
     \( -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \
@@ -74,7 +74,7 @@ haxe_source_dirs=(
 stale_haxe_source=$(find "${haxe_source_dirs[@]}" -type f \
     -name '*.hx' -newer "$guest_build_artifact" -print -quit)
 for guest_input in "$repo_dir/tools/showcase-wasm.sh" \
-    "$repo_dir/cmake/wasm_memory_contract.json.in"; do
+    "$repo_dir/native/cmake/wasm_memory_contract.json.in"; do
     if [[ -f "$guest_input" && "$guest_input" -nt "$guest_build_artifact" && \
         -z "$stale_haxe_source" ]]; then
         stale_haxe_source="$guest_input"

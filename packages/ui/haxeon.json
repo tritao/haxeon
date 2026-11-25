@@ -25,7 +25,7 @@
   },
   "native": {
     "cmake": {
-      "source": ".",
+      "source": "native",
       "target": "nativekit_ui",
       "library": "nativekit_ui"
     }
@@ -46,17 +46,17 @@
       "bench",
       "tools",
       "docs",
-      "vendor/harfbuzz/test",
-      "vendor/harfbuzz/perf",
-      "vendor/harfbuzz/docs",
-      "vendor/skribidi/example",
-      "vendor/skribidi/screenshots",
-      "vendor/skribidi/test",
-      "vendor/sheenbidi/Tools",
-      "vendor/sheenbidi/Tests",
-      "vendor/clay/examples",
-      "vendor/clay/bindings",
-      "vendor/nanovg/example"
+      "native/vendor/harfbuzz/test",
+      "native/vendor/harfbuzz/perf",
+      "native/vendor/harfbuzz/docs",
+      "native/vendor/skribidi/example",
+      "native/vendor/skribidi/screenshots",
+      "native/vendor/skribidi/test",
+      "native/vendor/sheenbidi/Tools",
+      "native/vendor/sheenbidi/Tests",
+      "native/vendor/clay/examples",
+      "native/vendor/clay/bindings",
+      "native/vendor/nanovg/example"
     ]
   },
   "target": "host"

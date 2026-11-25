@@ -26,7 +26,7 @@ if [[ ! -x "$haxeon_dir/.tools/haxe/haxe" ]]; then
     exit 1
 fi
 
-cmake -S "$module_dir" -B "$build_dir" -DNKUI_NATIVEKIT_DIR="$repo_dir" -DNK_BUILD_EXAMPLES=ON
+cmake -S "$module_dir/native" -B "$build_dir" -DNKUI_NATIVEKIT_DIR="$repo_dir" -DNK_BUILD_EXAMPLES=ON
 cmake --build "$build_dir" --target nativekit_ui
 HAXEON_DIR="$haxeon_dir" "$module_dir/tools/update-haxeon-hxi.sh" --check
 if [[ -x "$haxeon_dir/scripts/build-runtime.sh" ]]; then
@@ -81,8 +81,8 @@ if [[ "$build_only" == true ]]; then
     exit 0
 fi
 
-font_path=${NKUI_TEST_FONT_PATH:-"$module_dir/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
-emoji_path=${NKUI_COLOR_FONT_PATH:-"$module_dir/vendor/skribidi/example/data/NotoColorEmoji-Regular.ttf"}
+font_path=${NKUI_TEST_FONT_PATH:-"$module_dir/native/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
+emoji_path=${NKUI_COLOR_FONT_PATH:-"$module_dir/native/vendor/skribidi/example/data/NotoColorEmoji-Regular.ttf"}
 hashlink_dir=$("$haxeon_dir/scripts/hashlink-path.sh")
 hashlink_runtime="$hashlink_dir/hl"
 if [[ ! -x "$hashlink_runtime" ]]; then

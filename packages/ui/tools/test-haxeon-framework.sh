@@ -58,15 +58,15 @@ compiler_command=("$hashlink_runtime" "$compiler")
 runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 if command -v xvfb-run >/dev/null; then
 	(cd "$haxeon_dir/out" && \
-		NKUI_TEST_FONT_PATH="${NKUI_TEST_FONT_PATH:-$module_dir/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf}" \
-		NKUI_TEST_EMOJI_FONT_PATH="${NKUI_TEST_EMOJI_FONT_PATH:-$module_dir/vendor/skribidi/example/data/NotoEmoji-Regular.ttf}" \
+		NKUI_TEST_FONT_PATH="${NKUI_TEST_FONT_PATH:-$module_dir/native/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf}" \
+		NKUI_TEST_EMOJI_FONT_PATH="${NKUI_TEST_EMOJI_FONT_PATH:-$module_dir/native/vendor/skribidi/example/data/NotoEmoji-Regular.ttf}" \
 		NKUI_TEST_IMAGE_PATH="${NKUI_TEST_IMAGE_PATH:-$repo_dir/vendor/sokol/assets/logo_s_small.png}" \
 		xvfb-run -a env LD_LIBRARY_PATH="$runtime_library_path" \
 		"$hashlink_runtime" "$artifact")
 else
 	(cd "$haxeon_dir/out" && \
-		NKUI_TEST_FONT_PATH="${NKUI_TEST_FONT_PATH:-$module_dir/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf}" \
-		NKUI_TEST_EMOJI_FONT_PATH="${NKUI_TEST_EMOJI_FONT_PATH:-$module_dir/vendor/skribidi/example/data/NotoEmoji-Regular.ttf}" \
+		NKUI_TEST_FONT_PATH="${NKUI_TEST_FONT_PATH:-$module_dir/native/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf}" \
+		NKUI_TEST_EMOJI_FONT_PATH="${NKUI_TEST_EMOJI_FONT_PATH:-$module_dir/native/vendor/skribidi/example/data/NotoEmoji-Regular.ttf}" \
 		NKUI_TEST_IMAGE_PATH="${NKUI_TEST_IMAGE_PATH:-$repo_dir/vendor/sokol/assets/logo_s_small.png}" \
 		LD_LIBRARY_PATH="$runtime_library_path" \
 		"$hashlink_runtime" "$artifact")

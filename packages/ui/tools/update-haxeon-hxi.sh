@@ -27,7 +27,7 @@ fi
     --interface=NativeKitUI \
     --depends=NativeKit \
     --dependency-hxi="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
-    --include="$module_dir/include" \
+    --include="$module_dir/native/include" \
     --include="$module_dir/bindings" \
     --include="$repo_dir/include" \
     --exclude-header="$repo_dir/include/nativekit.h" \

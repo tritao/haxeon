@@ -5,6 +5,10 @@ project(UIKit VERSION 0.1.0 LANGUAGES C CXX)
 include(GNUInstallDirs)
 include(CTest)
 
+# The native project lives in the package's native/ directory; the Haxe sources, bindings, tools, examples and assets it
+# builds or ships sit beside it in the package.
+cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH NKUI_PACKAGE_DIR)
+
 # NativeKit comes from the nativekit package when UIKit is built as a package: its targets in an app's graph (the runner adds
 # it first), its build in the shared native cache otherwise (find_package(NativeKitPackage), from the CMAKE_PREFIX_PATH Haxeon
 # gives), and UIKit reads NativeKit's private headers from the package's sources. Built on its own, for its tools and tests,
@@ -18,7 +22,7 @@ else()
     set(NKUI_NATIVEKIT_DIR "$ENV{NATIVEKIT_DIR}" CACHE PATH
         "Path to the NativeKit source checkout")
     if(NOT NKUI_NATIVEKIT_DIR)
-        set(NKUI_NATIVEKIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../vendor/nativekit" CACHE PATH
+        set(NKUI_NATIVEKIT_DIR "${NKUI_PACKAGE_DIR}/../../vendor/nativekit" CACHE PATH
             "Path to the NativeKit source checkout" FORCE)
     endif()
 endif()
@@ -69,8 +73,8 @@ add_library(nativekit_ui ${NK_LIBRARY_TYPE}
     src/render/sealed_render_plan.cpp
     src/render/ui_renderer.cpp)
 if(EMSCRIPTEN)
-    set(NKUI_DEFAULT_FONT "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/IBMPlexSans-Regular.ttf")
-    set(NKUI_DEFAULT_FONT_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/IBM-Plex-OFL.txt")
+    set(NKUI_DEFAULT_FONT "${NKUI_PACKAGE_DIR}/assets/fonts/IBMPlexSans-Regular.ttf")
+    set(NKUI_DEFAULT_FONT_LICENSE "${NKUI_PACKAGE_DIR}/assets/fonts/IBM-Plex-OFL.txt")
     target_link_options(nativekit_ui INTERFACE
         "--embed-file=${NKUI_DEFAULT_FONT}@/ui/fonts/IBMPlexSans-Regular.ttf"
         "--embed-file=${NKUI_DEFAULT_FONT_LICENSE}@/ui/fonts/IBM-Plex-OFL.txt")
@@ -152,7 +156,7 @@ if(NK_BUILD_TESTS)
     add_test(NAME nativekit_ui_dependencies
         COMMAND "${CMAKE_COMMAND}"
             "-DNK_REPO_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/check-dependencies.cmake")
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/check-dependencies.cmake")
     if(WIN32 OR APPLE OR (UNIX AND NOT ANDROID AND NOT EMSCRIPTEN))
         add_executable(nativekit_ui_backend_smoke_test
             tests/backend_renderer_smoke.cpp)
@@ -550,7 +554,7 @@ if(NK_BUILD_EXAMPLES)
     set(NKUI_HAXEON_DIR "$ENV{HAXEON_DIR}" CACHE PATH
         "Haxeon checkout used to compile the NativeKit UI sources")
     if(NOT NKUI_HAXEON_DIR)
-        set(NKUI_HAXEON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." CACHE PATH
+        set(NKUI_HAXEON_DIR "${NKUI_PACKAGE_DIR}/../.." CACHE PATH
             "Haxeon checkout used to compile the NativeKit UI sources" FORCE)
     endif()
     set(NKUI_HAXEON_HAXE_BIN "$ENV{NATIVEKIT_HAXE_BIN}")
@@ -566,34 +570,34 @@ if(NK_BUILD_EXAMPLES)
             COMMAND ${CMAKE_COMMAND} -E env
                 "NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR}"
                 "HAXEON_DIR=${NKUI_HAXEON_DIR}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase.sh" --build-only
+                "${NKUI_PACKAGE_DIR}/tools/showcase.sh" --build-only
             DEPENDS nativekit_ui
-                "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-showcase.hxmap"
+                "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-showcase.hxmap"
             WORKING_DIRECTORY "${NKUI_NATIVEKIT_DIR}"
             USES_TERMINAL)
 
         if(NK_BUILD_TESTS)
             find_program(NKUI_SHOWCASE_XVFB_RUN xvfb-run)
             add_test(NAME nativekit_ui_framework_smoke
-                COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-haxeon-framework.sh")
+                COMMAND "${NKUI_PACKAGE_DIR}/tools/test-haxeon-framework.sh")
             set_tests_properties(nativekit_ui_framework_smoke PROPERTIES
                 LABELS "ui;haxe;framework"
                 TIMEOUT 120
                 ENVIRONMENT "NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR};HAXEON_DIR=${NKUI_HAXEON_DIR}")
             add_test(NAME nativekit_ui_tree_hover
-                COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-tree-hover.sh")
+                COMMAND "${NKUI_PACKAGE_DIR}/tools/test-tree-hover.sh")
             set_tests_properties(nativekit_ui_tree_hover PROPERTIES
                 LABELS "ui;haxe;framework;performance"
                 TIMEOUT 120
                 ENVIRONMENT "NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR};HAXEON_DIR=${NKUI_HAXEON_DIR}")
             add_test(NAME nativekit_ui_tree_selection
-                COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-tree-selection.sh")
+                COMMAND "${NKUI_PACKAGE_DIR}/tools/test-tree-selection.sh")
             set_tests_properties(nativekit_ui_tree_selection PROPERTIES
                 LABELS "ui;haxe;framework"
                 TIMEOUT 120
                 ENVIRONMENT "NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR};HAXEON_DIR=${NKUI_HAXEON_DIR}")
             add_test(NAME nativekit_ui_key_chords
-                COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-key-chords.sh")
+                COMMAND "${NKUI_PACKAGE_DIR}/tools/test-key-chords.sh")
             set_tests_properties(nativekit_ui_key_chords PROPERTIES
                 LABELS "ui;haxe;framework"
                 TIMEOUT 120
@@ -601,7 +605,7 @@ if(NK_BUILD_EXAMPLES)
             if(NKUI_SHOWCASE_XVFB_RUN)
                 add_test(NAME nativekit_ui_explorer_smoke
                     COMMAND ${NKUI_SHOWCASE_XVFB_RUN} -a
-                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase.sh"
+                        "${NKUI_PACKAGE_DIR}/tools/showcase.sh"
                         --ui-smoke-test)
                 set_tests_properties(nativekit_ui_explorer_smoke PROPERTIES
                     LABELS "ui;haxe;showcase;smoke"
@@ -610,7 +614,7 @@ if(NK_BUILD_EXAMPLES)
                         "LIBGL_ALWAYS_SOFTWARE=1;NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR};HAXEON_DIR=${NKUI_HAXEON_DIR}")
                 add_test(NAME nativekit_ui_window_chrome
                     COMMAND ${NKUI_SHOWCASE_XVFB_RUN} -a
-                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase.sh"
+                        "${NKUI_PACKAGE_DIR}/tools/showcase.sh"
                         --ui-window-chrome-test)
                 set_tests_properties(nativekit_ui_window_chrome PROPERTIES
                     LABELS "graphics;ui;showcase;window-chrome"
@@ -619,7 +623,7 @@ if(NK_BUILD_EXAMPLES)
                         "LIBGL_ALWAYS_SOFTWARE=1;NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR};HAXEON_DIR=${NKUI_HAXEON_DIR}")
                 add_test(NAME nativekit_ui_showcase_static
                     COMMAND ${NKUI_SHOWCASE_XVFB_RUN} -a
-                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase.sh"
+                        "${NKUI_PACKAGE_DIR}/tools/showcase.sh"
                         --static-frame --stats)
                 set_tests_properties(nativekit_ui_showcase_static PROPERTIES
                     LABELS "graphics;ui;showcase;visual"
@@ -677,9 +681,9 @@ if(NK_BUILD_EXAMPLES)
                     "NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT requires NKUI_HAXEON_TARGET=wasm-gc")
             endif()
             file(GLOB_RECURSE NKUI_HAXEON_GUEST_HX_DEPS CONFIGURE_DEPENDS
-                "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui_showcase/*.hx"
-                "${CMAKE_CURRENT_SOURCE_DIR}/haxe/haxeon/ui/*.hx"
-                "${CMAKE_CURRENT_SOURCE_DIR}/bindings/haxe/haxeon/ui/*.hx"
+                "${NKUI_PACKAGE_DIR}/examples/ui_showcase/*.hx"
+                "${NKUI_PACKAGE_DIR}/haxe/haxeon/ui/*.hx"
+                "${NKUI_PACKAGE_DIR}/bindings/haxe/haxeon/ui/*.hx"
                 "${NKUI_HAXEON_DIR}/packages/platform/src/haxeon/platform/*.hx"
                 "${NKUI_HAXEON_DIR}/packages/gpu/src/haxeon/gpu/*.hx"
                 "${NKUI_HAXEON_DIR}/packages/editor/src/haxeon/editor/*.hx")
@@ -723,21 +727,21 @@ if(NK_BUILD_EXAMPLES)
                     "NATIVEKIT_HAXEON_MEMORY_CONTRACT=${NKUI_HAXEON_MEMORY_CONTRACT}"
                     "NATIVEKIT_HAXEON_MEMORY_STATS=${NKUI_HAXEON_MEMORY_STATS_VALUE}"
                     "NATIVEKIT_HAXEON_WASM_GC_ALLOCATION_COUNT=${NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT_VALUE}"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase-wasm.sh"
+                    "${NKUI_PACKAGE_DIR}/tools/showcase-wasm.sh"
                 DEPENDS
-                    "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase-wasm.sh"
+                    "${NKUI_PACKAGE_DIR}/tools/showcase-wasm.sh"
                     "${NKUI_HAXEON_MEMORY_CONTRACT}"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-browser-wasm.hxi"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-wasm.hxi"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-showcase-wasm.hxi"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-showcase.hxmap"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-browser-wasm.hxi"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-wasm.hxi"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-showcase-wasm.hxi"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-showcase.hxmap"
                     "${NKUI_HAXEON_DIR}/common.hxml"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-wasm.hxi"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net-wasm.hxi"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net.hxmap"
                     "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
                     "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu.hxmap"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui.hxmap"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui.hxmap"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit.hxmap"
                     ${NKUI_HAXEON_GUEST_HX_DEPS}
                     ${NKUI_HAXEON_DEPS}
@@ -775,12 +779,12 @@ if(NK_BUILD_EXAMPLES)
                     COMMAND ${CMAKE_COMMAND} -E make_directory
                         "${NKUI_HAXEON_FONT_ASSET_DIR}"
                     COMMAND ${Python3_EXECUTABLE}
-                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/subset-showcase-fonts.py"
+                        "${NKUI_PACKAGE_DIR}/tools/subset-showcase-fonts.py"
                         --source-dir "${NKUI_HAXEON_FONT_DIR}"
-                        --showcase-dir "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui_showcase"
+                        --showcase-dir "${NKUI_PACKAGE_DIR}/examples/ui_showcase"
                         --output-dir "${NKUI_HAXEON_FONT_ASSET_DIR}"
                     DEPENDS
-                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/subset-showcase-fonts.py"
+                        "${NKUI_PACKAGE_DIR}/tools/subset-showcase-fonts.py"
                         ${NKUI_HAXEON_FONT_PATHS}
                         ${NKUI_HAXEON_GUEST_HX_DEPS}
                     COMMENT "Subsetting Haxeon showcase fonts"
@@ -805,18 +809,18 @@ if(NK_BUILD_EXAMPLES)
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net-wasm.hxi"
                     "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
                     "${NKUI_HAXEON_DIR}/packages/audio/bindings/nativekit-audio-wasm.hxi"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-wasm.hxi"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-browser-wasm.hxi")
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-wasm.hxi"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-browser-wasm.hxi")
             else()
                 set(NKUI_HAXEON_EXPORT_SOURCE "${NKUI_HAXEON_GUEST_WASM}")
                 set(NKUI_HAXEON_EXPORT_DEPS "${NKUI_HAXEON_GUEST_WASM}")
             endif()
             add_custom_command(OUTPUT "${NKUI_HAXEON_HOST_EXPORTS}"
                 COMMAND "${NKUI_NODE_EXECUTABLE}"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/tools/guest-host-exports.js"
+                    "${NKUI_PACKAGE_DIR}/tools/guest-host-exports.js"
                     "${NKUI_HAXEON_EXPORT_SOURCE}" "${NKUI_HAXEON_HOST_EXPORTS}" ${NKUI_HAXEON_HOST_INTERFACES}
                 DEPENDS ${NKUI_HAXEON_EXPORT_DEPS} ${NKUI_HAXEON_HOST_INTERFACES}
-                    "${CMAKE_CURRENT_SOURCE_DIR}/tools/guest-host-exports.js"
+                    "${NKUI_PACKAGE_DIR}/tools/guest-host-exports.js"
                 VERBATIM)
             add_custom_target(nativekit_ui_haxeon_exports DEPENDS "${NKUI_HAXEON_HOST_EXPORTS}")
             add_dependencies(nativekit_ui_haxeon nativekit_ui_haxeon_exports)

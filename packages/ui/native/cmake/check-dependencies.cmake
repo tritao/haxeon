@@ -1,5 +1,5 @@
 if(NOT DEFINED NK_REPO_DIR OR NOT EXISTS "${NK_REPO_DIR}/CMakeLists.txt")
-    message(FATAL_ERROR "NK_REPO_DIR must point to the Haxeon UI package")
+    message(FATAL_ERROR "NK_REPO_DIR must point to the UI package's native project")
 endif()
 
 set(dependencies budouxc clay harfbuzz libunibreak nanovg sheenbidi skribidi)

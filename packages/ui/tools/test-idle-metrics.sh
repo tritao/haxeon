@@ -18,7 +18,7 @@ export LD_LIBRARY_PATH="$native:$native/nativekit/modules/gpu:$native/nativekit:
   --ffi-interface="$ui/bindings/nativekit-ui.hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
   "$ui/tests/haxeon/IdleMetricsMain.hx" > "$capture/compile.log" 2>&1 || { cat "$capture/compile.log" >&2; exit 1; }
 set +e
-NKUI_TEST_FONT_PATH="$ui/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf" "$hl" "$work/test.hl" "$capture/census.json"
+NKUI_TEST_FONT_PATH="$ui/native/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf" "$hl" "$work/test.hl" "$capture/census.json"
 status=$?
 set -e
 if [[ $status != 42 ]]; then echo "FAIL: idle metrics fixture exited $status" >&2; exit 1; fi

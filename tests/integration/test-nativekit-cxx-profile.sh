@@ -19,7 +19,7 @@ if [[ -z "$build_dir" ]]; then
 fi
 build_dir=$(cd "$build_dir" && pwd)
 
-header="$repo_dir/packages/ui/src/display_list/display_list.h"
+header="$repo_dir/packages/ui/native/src/display_list/display_list.h"
 compile_commands="$build_dir/compile_commands.json"
 library=${NATIVEKIT_UI_LIBRARY:-}
 if [[ -z "$library" ]]; then
@@ -123,7 +123,7 @@ case "$(uname -s)" in
 	Linux)
 		positive_library="$positive_dir/libnativekit_display_list_fixture.so"
 		"$cxx" -std=c++20 -fPIC "$shared_flag" \
-			"$repo_dir/packages/ui/src/display_list/display_list.cpp" \
+			"$repo_dir/packages/ui/native/src/display_list/display_list.cpp" \
 			"$repo_dir/tests/ffi/nativekit_display_list_bridge.cpp" \
 			"$positive_thunks" \
 			-I"$repo_dir/packages/ui/src" \
@@ -132,7 +132,7 @@ case "$(uname -s)" in
 	Darwin)
 		positive_library="$positive_dir/libnativekit_display_list_fixture.dylib"
 		"$cxx" -std=c++20 -fPIC "$shared_flag" \
-			"$repo_dir/packages/ui/src/display_list/display_list.cpp" \
+			"$repo_dir/packages/ui/native/src/display_list/display_list.cpp" \
 			"$repo_dir/tests/ffi/nativekit_display_list_bridge.cpp" \
 			"$positive_thunks" \
 			-I"$repo_dir/packages/ui/src" \

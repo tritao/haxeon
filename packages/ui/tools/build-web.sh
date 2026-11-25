@@ -21,7 +21,7 @@ if [[ ! -f "$emsdk_dir/emsdk_env.sh" ]]; then
 fi
 source "$emsdk_dir/emsdk_env.sh" >/dev/null
 
-emcmake cmake -S "$repo_dir" -B "$build_dir" -G Ninja \
+emcmake cmake -S "$repo_dir/native" -B "$build_dir" -G Ninja \
     -DCMAKE_BUILD_TYPE="$build_type" \
     -DNK_BUILD_SHARED=OFF \
     -DNK_BUILD_TESTS=ON \

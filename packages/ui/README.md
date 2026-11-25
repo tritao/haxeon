@@ -19,7 +19,7 @@ names and are implementation details.
 Initialize the native dependencies from the Haxeon root:
 
 ```sh
-git submodule update --init --recursive vendor/nativekit packages/ui/vendor
+git submodule update --init --recursive vendor/nativekit packages/ui/native/vendor
 ```
 
 The text model comes from `../editor` (`haxeon.editor`). Direct compiler
@@ -145,13 +145,13 @@ into one ordered render plan. `UiRenderer` owns UI-specific drawing vocabulary
 such as paths, glyphs, images, and image composition, while NativeKit GPU owns
 passes, resources, GPU state, and backend submission.
 
-Configure this package directly; its standalone build adds Haxeon’s pinned
+Configure `native/` directly; its standalone build adds Haxeon’s pinned
 `vendor/nativekit` checkout and enables the GPU dependency. `NATIVEKIT_DIR` or
 `NKUI_NATIVEKIT_DIR` can select another native checkout. The public CMake targets are `NativeKit::nativekit`, `NativeKit::gpu`, and
 `NativeKit::ui`. Sokol headers, configuration, runtime ownership, and resource
 handles stay inside `modules/gpu`. The canonical UI shaders are split by family
 under `shaders/`; their GLSL, HLSL5, and MSL source variants are checked in as
-`src/render/ui_shader_sources.h`, so ordinary builds do not require
+`native/src/render/ui_shader_sources.h`, so ordinary builds do not require
 `sokol-shdc`. The generator is the standalone [Sokol shader compiler](https://github.com/floooh/sokol-tools/blob/master/docs/sokol-shdc.md).
 
 After editing a shader, regenerate the header with
@@ -160,7 +160,7 @@ After editing a shader, regenerate the header with
 generated header is current.
 
 ```sh
-cmake -S . -B build-ui -GNinja
+cmake -S native -B build-ui -GNinja
 cmake --build build-ui
 ctest --test-dir build-ui --output-on-failure
 ```

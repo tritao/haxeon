@@ -6,8 +6,15 @@ nativekit="$root/vendor/nativekit"
 build="$root/out/web-sdk"
 destination="$root/out/sdk/platforms/web/ui"
 
+source_dir="$root/packages/ui/native"
+# A build directory configured from another source tree cannot be reused; the UI's native project has moved before.
+if [[ -f "$build/CMakeCache.txt" ]] \
+    && ! grep -qxF "CMAKE_HOME_DIRECTORY:INTERNAL=$source_dir" "$build/CMakeCache.txt"; then
+    rm -rf "$build"
+fi
+
 EMSDK_QUIET=1 source "$nativekit/.tools/emsdk/emsdk_env.sh"
-emcmake cmake -S "$root/packages/ui" -B "$build" -G Ninja \
+emcmake cmake -S "$source_dir" -B "$build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DNK_BUILD_AUDIO=ON -DNK_BUILD_SHARED=OFF -DNK_BUILD_TESTS=OFF -DNK_BUILD_EXAMPLES=ON \
     -DNKUI_NATIVEKIT_DIR="$nativekit" -DNKUI_HAXEON_DIR="$root" \
@@ -25,5 +32,5 @@ IBM Plex Sans Arabic and IBM Plex Sans Hebrew: Copyright 2019 IBM Corp. All righ
 Noto Emoji: Copyright 2013 Google LLC.
 
 NOTICE
-    cat "$root/packages/ui/vendor/nanovg/example/LICENSE_OFL.txt"
+    cat "$root/packages/ui/native/vendor/nanovg/example/LICENSE_OFL.txt"
 } >"$destination/assets/OFL.txt"

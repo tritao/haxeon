@@ -16,8 +16,8 @@ python3 -c 'import PIL' || { echo "Missing Python Pillow" >&2; exit 1; }
 capture=$(mktemp --suffix=.png)
 trap 'rm -f "$capture"' EXIT
 
-export NKUI_TEST_FONT_PATH=${NKUI_TEST_FONT_PATH:-"$module_dir/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
-export NKUI_COLOR_FONT_PATH=${NKUI_COLOR_FONT_PATH:-"$module_dir/vendor/skribidi/example/data/NotoColorEmoji-Regular.ttf"}
+export NKUI_TEST_FONT_PATH=${NKUI_TEST_FONT_PATH:-"$module_dir/native/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
+export NKUI_COLOR_FONT_PATH=${NKUI_COLOR_FONT_PATH:-"$module_dir/native/vendor/skribidi/example/data/NotoColorEmoji-Regular.ttf"}
 export NKUI_SHOWCASE_IMAGE_PATH=${NKUI_SHOWCASE_IMAGE_PATH:-"$nativekit_dir/vendor/sokol/assets/logo_s_large.png"}
 export LD_LIBRARY_PATH="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh"):${LD_LIBRARY_PATH:-}"
 export INSPECTOR_CAPTURE="$capture"

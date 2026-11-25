@@ -12,7 +12,7 @@ if [[ ! -f "$nativekit/.tools/emsdk/emsdk_env.sh" ]]; then
     "$nativekit/tools/setup-web.sh"
 fi
 EMSDK_QUIET=1 source "$nativekit/.tools/emsdk/emsdk_env.sh"
-emcmake cmake -S "$ui" -B "$build" -G Ninja \
+emcmake cmake -S "$ui/native" -B "$build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DNK_BUILD_SHARED=OFF -DNK_BUILD_TESTS=OFF -DNK_BUILD_EXAMPLES=ON \
     -DNKUI_NATIVEKIT_DIR="$nativekit" -DNKUI_HAXEON_DIR="$root" \
