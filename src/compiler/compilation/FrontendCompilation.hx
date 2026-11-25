@@ -865,8 +865,16 @@ class FrontendCompilation {
 			// A unit no function holds (a generic body typed for its errors alone) is read by nothing.
 			if (module == null)
 				continue;
+			var specializations:Null<Array<Int>> = null;
+			for (fact in read)
+				if (facts.aspect(fact) == compiler.semantic.DeclarationFacts.FactAspect.Unit
+					&& compiler.semantic.GeneratedNames.isSpecialization(facts.name(fact))) {
+					if (specializations == null)
+						specializations = [];
+					specializations.push(fact);
+				}
 			context.state.writableState(module, build.rollbackModules).unitReads.set(unit,
-				new compiler.semantic.DeclarationFacts.UnitReads(facts.revision, read));
+				new compiler.semantic.DeclarationFacts.UnitReads(facts.revision, read, specializations));
 			facts.placeUnit(facts.id(compiler.semantic.DeclarationFacts.FactAspect.Unit, unit), module);
 		}
 	}
@@ -1044,11 +1052,13 @@ class FrontendCompilation {
 		// Shared generated helpers have one origin, but every retained caller needs their dependencies.
 		var calledGeneratedHelpers = generatedHelpersStillCalled(modules, names, build.typedByName, owners,
 			build.semanticAssembly.invalidated, context.state.irCalls);
+		var readSpecializations = specializationsStillRead(build);
 		for (name in names) {
 			checkCancelled(build.token);
 			if (!modules.exists(name))
 				continue;
-			pruneModule(build, name, modules.get(name), functionNamesByModule, calledGeneratedHelpers);
+			pruneModule(build, name, modules.get(name), functionNamesByModule, calledGeneratedHelpers,
+				readSpecializations);
 		}
 		pruneUnusedKeyPathHelpers(context, names, build.rollbackModules);
 		build.allocationAfterModulePrune = AllocationMeter.sample();
@@ -1056,9 +1066,63 @@ class FrontendCompilation {
 		build.allocationAfterPrune = AllocationMeter.sample();
 	}
 
+	/**
+	 * The specializations of generic functions that a unit this build keeps or typed still asks for, by name. A unit that calls one
+	 * reads it (`TypingSession.useSharedUnit`), so the reads recorded for the units (`ModuleState.unitReads`) name them. A
+	 * specialization typed in an earlier build and not again counts only while such a unit reads it: once the last of its callers
+	 * is typed without it, a fresh build would not make it.
+	 */
+	static function specializationsStillRead(build:FrontendBuild):Map<String, Bool> {
+		var modules = build.context.state.modules,
+			facts = build.context.state.declarationFacts,
+			typedByName = build.typedByName,
+			currentSpecializedOwners = build.currentSpecializedOwners;
+		// Whether `unit` was typed earlier and stays only while something asks for it: a generic function's specialization, or a
+		// member of a specialized owner this build no longer has.
+		function askedFor(state:ModuleState, unit:String):Bool {
+			if (typedByName.exists(unit))
+				return false;
+			var fn = state.typedFunctions.get(unit);
+			return fn != null && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
+				&& (fn.physicalOwner == null || !currentSpecializedOwners.exists(fn.physicalOwner));
+		}
+		var read:Map<String, Bool> = [],
+			pending:Array<compiler.semantic.DeclarationFacts.UnitReads> = [];
+		function readBy(record:compiler.semantic.DeclarationFacts.UnitReads):Void {
+			var asked = record.specializations;
+			if (asked != null)
+				for (fact in asked) {
+					var unit = facts.name(fact);
+					if (read.exists(unit))
+						continue;
+					read.set(unit, true);
+					// A specialization that stays asks for the ones its own body calls.
+					var module = facts.unitModule(fact),
+						state = module == null ? null : modules.get(module);
+					if (state != null) {
+						var kept = state.unitReads.get(unit);
+						if (kept != null && askedFor(state, unit))
+							pending.push(kept);
+					}
+				}
+		}
+		for (name in build.names) {
+			var state = modules.get(name);
+			if (state != null)
+				for (unit => record in state.unitReads)
+					if (record.specializations != null && !askedFor(state, unit))
+						readBy(record);
+		}
+		var next = 0;
+		while (next < pending.length)
+			readBy(pending[next++]);
+		return read;
+	}
+
 	/** Drops the cached functions of one module that neither this typing nor a retained owner still accounts for. */
 	static function pruneModule(build:FrontendBuild, name:String, state:ModuleState,
-			functionNamesByModule:Map<String, Array<String>>, calledGeneratedHelpers:Map<String, Bool>):Void {
+			functionNamesByModule:Map<String, Array<String>>, calledGeneratedHelpers:Map<String, Bool>,
+			readSpecializations:Map<String, Bool>):Void {
 		var owners = build.semanticAssembly.owners,
 			generatedByModule = build.semanticAssembly.generatedByModule,
 			invalidated = build.semanticAssembly.invalidated,
@@ -1107,10 +1171,12 @@ class FrontendCompilation {
 			var supersededOwner = typedByName.exists(cached) && owners.get(cached) != name;
 			// Even when the generic origin is unchanged, a specialization can depend on a changed type's
 			// representation. Its cached body and optional-value helpers are no longer valid in that case. A specialization is a
-			// unit of its own, invalidated by what it read, whatever retyped its generic function.
+			// unit of its own, invalidated by what it read, whatever retyped its generic function. A generic function's specialization
+			// also needs a caller that stays.
 			var specialization = fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization;
 			if (sourceOwner != null && owners.exists(sourceOwner)
 				&& (specialization || !invalidated.exists(sourceOwner))
+				&& (!specialization || fn.physicalOwner != null || readSpecializations.exists(cached))
 				&& !supersededOwner
 				&& !invalidated.exists(cached) && !supersededByRetyping) {
 				valid.set(cached, true);
@@ -1190,6 +1256,18 @@ class FrontendCompilation {
 		for (cached in retired.keys())
 			valid.remove(cached);
 		var removed = [for (cached in state.typedFunctions.keys()) if (!valid.exists(cached)) cached];
+		// A specialization dropped because nothing in the program asks for it changes for the units outside the program that still
+		// do: one that comes back unchanged is typed again, and asks for it again.
+		var facts = build.context.state.declarationFacts;
+		for (cached in removed) {
+			var fn = state.typedFunctions.get(cached);
+			if (fn != null && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
+				&& fn.physicalOwner == null && !typedByName.exists(cached) && !readSpecializations.exists(cached)) {
+				var unit = facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit, cached);
+				if (unit >= 0)
+					facts.changed(unit);
+			}
+		}
 		if (removed.length > 0)
 			removeCachedFunctions(build.context.state.writableState(name, build.rollbackModules), removed);
 	}

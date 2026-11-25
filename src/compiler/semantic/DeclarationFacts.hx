@@ -53,9 +53,16 @@ class UnitReads {
 	public final typedAt:Int;
 	public final facts:Array<Int>;
 
-	public function new(typedAt:Int, facts:Array<Int>) {
+	/**
+	 * Of `facts`, the units of the generic specializations the unit asks for, or null for none: what keeps a specialization that is
+	 * not typed again, found without reading every fact of every unit.
+	 */
+	public final specializations:Null<Array<Int>>;
+
+	public function new(typedAt:Int, facts:Array<Int>, ?specializations:Array<Int>) {
 		this.typedAt = typedAt;
 		this.facts = facts;
+		this.specializations = specializations;
 	}
 }
 

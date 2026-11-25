@@ -27,9 +27,13 @@ class WarmRebuildReuseMain {
 	static final libSource =
 		"class Lib { public static function add(a:Int, b:Int):Int return a + b; public static function name():String return \"lib\"; public static function boxed():Int return new Box<Int>(3).get(); }";
 
-	/** Field initializers register anonymous types (`{}`) when they are typed, which a warm build does not do again for an unchanged class. */
+	/**
+	 * Field initializers register anonymous types (`{}`) when they are typed, which a warm build does not do again for an unchanged
+	 * class. A static initializer is the only caller of a specialization (`Ops.first` for `Float`), which a warm build that keeps the
+	 * class keeps with it.
+	 */
 	static final configSource =
-		"class Config { public static var empty:Dynamic = {}; public var data:Dynamic = {a: 1}; public function new() {} }";
+		"class Config { public static var empty:Dynamic = {}; public static var ratio:Float = Ops.first([0.5]); public var data:Dynamic = {a: 1}; public function new() {} }";
 
 	/** An anonymous type that only an optional parameter's element type names, which no body constructs. */
 	static final encoderSource =
@@ -49,6 +53,9 @@ class WarmRebuildReuseMain {
 	static final opsSource =
 		"class Ops { public static inline function twice(x:Int):Int return step(x) * 2 + bump(x); static inline function step(x:Int):Int return x + 1; static function bump(x:Int):Int return x + 3; public static function first<T>(xs:Array<T>):T return pick(xs); static function pick<T>(xs:Array<T>):T return xs[0]; }";
 
+	/** The only caller of a specialization (`Ops.first` for `Array<Int>`), in a module that can leave the program and come back. */
+	static final pairsSource = "class Pairs { public static function count():Int return Ops.first([[1, 2]]).length; }";
+
 	/** A function whose result is a structure named through typedefs another module declares, and a caller that names none of them. */
 	static final reportSource =
 		"typedef Metrics = { final count:Int; final notes:Array<String>; } typedef Report = { final metrics:Metrics; final ok:Bool; }";
@@ -67,7 +74,7 @@ class WarmRebuildReuseMain {
 		"class Failure extends haxe.Exception { public function new(message:String, ?previous:haxe.Exception) super(message, previous); }";
 
 	static final mainSource =
-		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null && Encoder.encode(0) == 0 && Trail.size([Stop]) == 1 && Ops.twice(3) > 0 && Ops.first([5, 6]) > 0 && new Holder(Square(1)).shape != null && run() ? 42 : 1; } static function run():Bool { Driver.report(); return true; } }";
+		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null && Config.ratio > 0 && Encoder.encode(0) == 0 && Trail.size([Stop]) == 1 && Ops.twice(3) > 0 && Ops.first([5, 6]) > 0 && new Holder(Square(1)).shape != null && Pairs.count() == 2 && run() ? 42 : 1; } static function run():Bool { Driver.report(); return true; } }";
 
 	static function initialSources():Map<String, String>
 		return [
@@ -80,6 +87,7 @@ class WarmRebuildReuseMain {
 			"Encoder.hx" => encoderSource,
 			"Trail.hx" => trailSource,
 			"Ops.hx" => opsSource,
+			"Pairs.hx" => pairsSource,
 			"Report.hx" => reportSource,
 			"Driver.hx" => driverSource,
 			"Holder.hx" => holderSource,
@@ -144,6 +152,14 @@ class WarmRebuildReuseMain {
 			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return x + 1;", "return x + 2;")));
 		edit(failures, "after an edit of a private function an inline function calls",
 			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return x + 3;", "return x + 4;")));
+		// The specializations of `Ops.first` and `Ops.pick` for `Int` lose their last caller: a fresh build does not make them.
+		edit(failures, "after an edit removes the last call to a generic function's specialization",
+			files -> files.set("Main.hx",
+			StringTools.replace(mainSource, "Ops.first([5, 6]) > 0", "Ops.first([\"a\"]).length > 0")));
+		// The specialization goes with the last module that calls it, and is made again when that module, unchanged, comes back.
+		edit(failures, "after a module that calls a specialization comes back to the program",
+			files -> files.set("Main.hx", mainSource), false,
+			files -> files.set("Main.hx", StringTools.replace(mainSource, " && Pairs.count() == 2", "")));
 		edit(failures, "after an edit of a private generic function a generic function calls",
 			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return xs[0];", "return xs[xs.length - 1];")));
 		edit(failures,
