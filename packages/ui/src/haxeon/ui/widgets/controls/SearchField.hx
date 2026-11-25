@@ -62,7 +62,7 @@ class SearchField implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var icon = new Icon("search-icon", IconName.Search, 15.0, context.theme.mutedText);
+			var icon = new Icon("search-icon", IconName.Search, 15.0, context.theme.tokens.mutedText);
 			var leadingStyle = new LayoutStyle();
 			leadingStyle.width = LayoutAxis.fixed(18.0);
 			leadingStyle.height = LayoutAxis.fixed(18.0);

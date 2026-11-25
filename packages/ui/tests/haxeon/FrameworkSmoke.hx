@@ -3101,9 +3101,10 @@ class FrameworkSmoke {
 		}
 
 		var theme = new Theme();
-		if (theme.tokens.textPrimary != theme.text
-			|| theme.tokens.textSecondary != theme.mutedText || theme.tokens.surface != theme.panelBackground
-			|| theme.tokens.focusRing != theme.buttonFocused
+		if (theme.tokens.textPrimary != theme.tokens.text
+			|| theme.tokens.textSecondary != theme.tokens.mutedText
+			|| theme.tokens.surface != theme.tokens.panelBackground
+			|| theme.tokens.focusRing != theme.tokens.buttonFocused
 			|| theme.tokens.navigationFocused != theme.tokens.surfaceRaised
 			|| theme.tokens.radiusMedium != 6.0 || theme.tokens.spacingMedium != 8.0) return 225;
 		var originalButton = theme.tokens.buttonBackground;
@@ -3582,12 +3583,12 @@ class FrameworkSmoke {
 			lightNeutral,
 			theme.body.color) != theme.body.color || theme.buttonLabelColor(true,
 			accentButton) != theme.button.color || theme.buttonLabelColor(false,
-			accentButton) != theme.disabledButtonText)
+			accentButton) != theme.tokens.disabledButtonText)
 			throw "Button labels must retain readable preferences, choose contrasting defaults and honor disabled colors";
-		theme.buttonHover = Color.rgba(0.8, 0.1, 0.1, 1.0);
-		theme.buttonPressed = Color.rgba(0.7, 0.05, 0.05, 1.0);
-		theme.buttonFocused = Color.rgba(0.4, 0.2, 0.8, 1.0);
-		theme.buttonDisabled = Color.rgba(0.2, 0.2, 0.2, 1.0);
+		theme.tokens.buttonHover = Color.rgba(0.8, 0.1, 0.1, 1.0);
+		theme.tokens.buttonPressed = Color.rgba(0.7, 0.05, 0.05, 1.0);
+		theme.tokens.buttonFocused = Color.rgba(0.4, 0.2, 0.8, 1.0);
+		theme.tokens.buttonDisabled = Color.rgba(0.2, 0.2, 0.2, 1.0);
 		theme.body.textStyle = new TextStyle(17.0, FontFamily.Default, -0.25);
 		theme.body.paragraphStyle = new ParagraphStyle(TextWrap.Word, TextAlignment.Start, 21.0, TextDirection.Ltr);
 		theme.heading.textStyle = new TextStyle(26.0);
@@ -3922,7 +3923,7 @@ class FrameworkSmoke {
 		if (!frameMetricsValid(context, false)) return 236;
 		if (!context.focusWidget(themedRoot.id)) return 80;
 		themedRoot = context.submit(themedButton, themedFrame);
-		if (themedRoot.layout.style.background != theme.buttonBackground
+		if (themedRoot.layout.style.background != theme.tokens.buttonBackground
 			|| themedRoot.computedStyle.getColor(StyleProperty.BorderColor) != theme.tokens.textOnAccent
 			|| themedRoot.computedStyle.getNumber(StyleProperty.BorderWidth)
 			!= 1.0) throw "Focused primary buttons must retain their fill and show a contrasting border";

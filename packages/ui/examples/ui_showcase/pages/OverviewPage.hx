@@ -26,14 +26,14 @@ class OverviewPage {
 		items.push(explorer.keyed("overview-runtime", DemoGrid.build("overview-runtime-grid", [
 			explorer.keyed("framework-card", DemoCard.build("framework-card", "FRAMEWORK",
 				"Haxeon UI", "Widgets, state, styling, layout and semantics are owned in Haxe.",
-				explorer.panelStyle(), explorer.context.buildContext.theme.accent)),
+				explorer.panelStyle(), explorer.context.buildContext.theme.tokens.accent)),
 			explorer.keyed("host-card", DemoCard.build("host-card", "NATIVE DEPENDENCY",
 				explorer.platformLabel, "NativeKit supplies the window, platform input and graphics surface.",
-				explorer.panelStyle(), explorer.context.buildContext.theme.accent)),
+				explorer.panelStyle(), explorer.context.buildContext.theme.tokens.accent)),
 			explorer.keyed("viewport-card", DemoCard.build("viewport-card", "LIVE VIEWPORT",
 				'${Std.int(explorer.width)} × ${Std.int(explorer.height)}',
 				nodeSummary,
-				explorer.panelStyle(), explorer.context.buildContext.theme.accent))
+				explorer.panelStyle(), explorer.context.buildContext.theme.tokens.accent))
 		], explorer.rowStyle(10.0))));
 
 		items.push(explorer.keyed("overview-explore", explorer.panel("overview-explore-panel", [
@@ -107,6 +107,6 @@ class OverviewPage {
 	static function stage(explorer:UiExplorer, eyebrow:String, title:String,
 			description:String):Column {
 		return DemoCard.build("pipeline-" + title.toLowerCase().split(" ").join("-"), eyebrow,
-			title, description, explorer.panelStyle(), explorer.context.buildContext.theme.accent);
+			title, description, explorer.panelStyle(), explorer.context.buildContext.theme.tokens.accent);
 	}
 }

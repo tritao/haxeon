@@ -260,7 +260,7 @@ class WindowChromeDemo implements Disposable {
 		var contentStyle = new LayoutStyle();
 		contentStyle.width = LayoutAxis.grow();
 		contentStyle.height = LayoutAxis.grow();
-		contentStyle.background = theme.panelBackground;
+		contentStyle.background = theme.tokens.panelBackground;
 		var titleStyle = new LayoutStyle();
 		titleStyle.width = LayoutAxis.grow();
 		titleStyle.height = LayoutAxis.fixed(62.0);
@@ -268,7 +268,7 @@ class WindowChromeDemo implements Disposable {
 		titleStyle.direction = LayoutDirection.LeftToRight;
 		titleStyle.childAlignY = LayoutAlignmentY.Center;
 		titleStyle.childDistribution = LayoutDistribution.SpaceBetween;
-		titleStyle.background = theme.buttonBackground;
+		titleStyle.background = theme.tokens.buttonBackground;
 
 		var controls = new Row("demo-controls",
 			[new KeyedView("action", new WindowChrome("action-client", WindowDecorationRegionKind.Client,
@@ -282,7 +282,7 @@ class WindowChromeDemo implements Disposable {
 			WindowDecorationRegionKind.Drag,
 			new Row("titlebar",
 			[
-				new KeyedView("title", new Text("Window Chrome Demo", null, theme.buttonText)),
+				new KeyedView("title", new Text("Window Chrome Demo", null, theme.tokens.buttonText)),
 				new KeyedView("controls", controls)
 			],
 			titleStyle));
@@ -299,7 +299,7 @@ class WindowChromeDemo implements Disposable {
 					new Text("Drag the blue header, click the client button, and resize from any edge or corner.",
 					null,
 					theme.caption.color)),
-				new KeyedView("size", new Text('Client size: ${width} × ${height}', null, theme.accent)),
+				new KeyedView("size", new Text('Client size: ${width} × ${height}', null, theme.tokens.accent)),
 				new KeyedView("regions",
 					new Text("Drag · Client · ResizeNorth · ResizeSouth · ResizeEast · ResizeWest · corners",
 					null,
@@ -395,7 +395,7 @@ class WindowChromeDemo implements Disposable {
 		style.width = LayoutAxis.fit();
 		style.height = LayoutAxis.fixed(32.0);
 		style.padding = new Insets(9.0, 10.0, 9.0, 10.0);
-		style.background = theme.buttonBackground;
+		style.background = theme.tokens.buttonBackground;
 		style.radiusTopLeft = style.radiusTopRight = 4.0;
 		style.radiusBottomLeft = style.radiusBottomRight = 4.0;
 		var button = new Button(label, style, action, key, null, ButtonVariant.Primary);

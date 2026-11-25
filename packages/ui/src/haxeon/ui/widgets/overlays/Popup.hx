@@ -123,7 +123,7 @@ class Popup implements View {
 			backdropStyle.positioning = LayoutPositioning.Absolute;
 			backdropStyle.zIndex = layerZIndex;
 			backdropStyle.visible = modal || dismissOnOutside;
-			var color = backdropColor == null ? context.theme.overlayBackdrop : cast backdropColor;
+			var color = backdropColor == null ? context.theme.tokens.overlayBackdrop : cast backdropColor;
 			backdropStyle.background = modal && dimBackdrop ? color : Color.rgba(0.0, 0.0, 0.0, 0.0);
 			var backdropId = context.id("backdrop");
 			var backdropComputed = context.resolveStyle(new StyleTarget("popup-backdrop",

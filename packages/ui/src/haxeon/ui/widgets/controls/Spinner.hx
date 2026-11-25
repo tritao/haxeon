@@ -64,7 +64,7 @@ class Spinner implements View {
 			if (running) semantics.states = AccessibilityState.Busy;
 			node.semantics = semantics;
 
-			var resolvedColor = color == null ? context.theme.accent : color;
+			var resolvedColor = color == null ? context.theme.tokens.accent : color;
 			var stored:State<SpinnerPainter> = context.resourceState(node.id,
 				function() return new SpinnerPainter(context.animations,
 				resolvedColor,

@@ -7,19 +7,34 @@ import haxeon.ui.core.TextStyleOverride;
 
 /** Semantic typography roles resolved by the NativeKit UI framework. */
 enum TextRole implements Hashable {
+	/** Running text. */
 	Body;
+
+	/** Titles. */
 	Heading;
+
+	/** Short labels for controls; does not wrap. */
 	Label;
+
+	/** Small secondary text, such as hints and metadata. */
 	Caption;
+
+	/** Button labels; does not wrap. */
 	Button;
 }
 
 /** Complete concrete typography and color definition for one semantic role. */
 class TextRoleStyle {
+	/** The font, size and letter spacing. */
 	public var textStyle:TextStyle;
+
+	/** Wrapping, alignment, line height and direction. */
 	public var paragraphStyle:ParagraphStyle;
+
+	/** The text color. */
 	public var color:Color;
 
+	/** A role's style. Throws without a text or paragraph style. */
 	public function new(textStyle:TextStyle, paragraphStyle:ParagraphStyle, color:Color) {
 		if (textStyle == null || paragraphStyle == null)
 			throw "Text role styles require complete values";

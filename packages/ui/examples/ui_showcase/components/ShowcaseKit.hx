@@ -190,9 +190,9 @@ import haxeon.ui.widgets.text.TextField;
 		0.11,
 		0.17);
 
-	static function paletteText(explorer:UiExplorer):Color return explorer.context.buildContext.theme.text;
+	static function paletteText(explorer:UiExplorer):Color return explorer.context.buildContext.theme.tokens.text;
 
-	static function paletteMuted(explorer:UiExplorer):Color return explorer.context.buildContext.theme.mutedText;
+	static function paletteMuted(explorer:UiExplorer):Color return explorer.context.buildContext.theme.tokens.mutedText;
 
 	static inline function color(red:Float, green:Float, blue:Float, alpha:Float = 1.0):Color return Color.rgba(red,
 		green,

@@ -393,7 +393,7 @@ private class TableHeaderCell implements View {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(column.width);
 			style.height = LayoutAxis.fixed(headerHeight);
-			style.background = context.theme.controlUnselected;
+			style.background = context.theme.tokens.controlUnselected;
 			var node = context.createNode(context.rootId("table-header-cell"), LayoutVisualKind.Box, style);
 			node.focusable = true;
 			var semantics = new Semantics(AccessibilityRole.ColumnHeader, column.label);

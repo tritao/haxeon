@@ -185,7 +185,7 @@ class Select<T> implements View {
 				null,
 				null,
 				SelectionIndicator.chevron("trigger-indicator",
-				enabled ? context.theme.text : context.theme.disabledText,
+				enabled ? context.theme.tokens.text : context.theme.tokens.disabledText,
 				isOpen,
 				true),
 				null,

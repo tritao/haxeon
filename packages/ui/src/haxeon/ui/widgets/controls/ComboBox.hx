@@ -200,7 +200,7 @@ class ComboBox<T> implements View {
 			};
 
 			var inputStyle = style.copy();
-			if (usesDefaultStyle) inputStyle.background = context.theme.panelBackground;
+			if (usesDefaultStyle) inputStyle.background = context.theme.tokens.panelBackground;
 			inputStyle.width = LayoutAxis.grow();
 			var input = new TextField("input", query, function(next) {
 				query = next == null ? "" : next;
@@ -221,7 +221,7 @@ class ComboBox<T> implements View {
 			context.withStyleParent(inputNode.computedStyle, function() {
 				inputNode.add(SelectionIndicator.fieldFrame("input-frame").build(context));
 				inputNode.add(SelectionIndicator.search("input-search",
-					enabled ? context.theme.mutedText : context.theme.disabledText).build(context));
+					enabled ? context.theme.tokens.mutedText : context.theme.tokens.disabledText).build(context));
 			});
 			var inputSemantics:Semantics = cast inputNode.semantics;
 			inputSemantics.states |= AccessibilityState.HasPopup;
@@ -298,7 +298,7 @@ class ComboBox<T> implements View {
 				}
 			}, "toggle", enabled, ButtonVariant.Navigation, null, null, null, null, null,
 				SelectionIndicator.chevron("toggle-indicator",
-				enabled ? context.theme.text : context.theme.disabledText,
+				enabled ? context.theme.tokens.text : context.theme.tokens.disabledText,
 				isOpen), null, null, null, isOpen ? "Hide options" : "Show options", null, arrowSemantics);
 			var arrowNode = context.withScope(new Key("toggle"), function() return arrow.build(context));
 			arrowNode.layout.style.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;

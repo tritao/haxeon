@@ -19,38 +19,39 @@ import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleValue;
 
 import haxeon.ui.theme.TextRole;
-/** Theme tokens plus the stylesheet generated from those tokens. */
+/** The look of a UI: its tokens, text roles and the built-in rules generated from them. */
 class Theme {
+	/** The colors and metrics the theme is built from. */
 	public final tokens:ThemeTokens;
+
+	/** The built-in rules for the standard widgets, generated from `tokens` by `refreshStyles`. */
 	public final styles:StyleSheet;
 
+	/** The fill behind selected text in a focused field. */
 	public var textSelection:Color;
-	public var textSelectionInactive:Color;
-	public var textCaret:Color;
-	public var body:TextRoleStyle;
-	public var heading:TextRoleStyle;
-	public var label:TextRoleStyle;
-	public var caption:TextRoleStyle;
-	public var button:TextRoleStyle;
-	public var accent(get, set):Color;
-	public var text(get, set):Color;
-	public var mutedText(get, set):Color;
-	public var disabledText(get, set):Color;
-	public var buttonText(get, set):Color;
-	public var disabledButtonText(get, set):Color;
-	public var buttonBackground(get, set):Color;
-	public var buttonHover(get, set):Color;
-	public var buttonPressed(get, set):Color;
-	public var buttonFocused(get, set):Color;
-	public var buttonSelected(get, set):Color;
-	public var buttonDisabled(get, set):Color;
-	public var controlSelected(get, set):Color;
-	public var controlUnselected(get, set):Color;
-	public var controlDisabled(get, set):Color;
-	public var panelBackground(get, set):Color;
-	public var overlayBackdrop(get, set):Color;
-	public var tooltipBackground(get, set):Color;
 
+	/** The fill behind selected text in a field without focus. */
+	public var textSelectionInactive:Color;
+
+	/** The text caret's color. */
+	public var textCaret:Color;
+
+	/** The `Body` text role. */
+	public var body:TextRoleStyle;
+
+	/** The `Heading` text role. */
+	public var heading:TextRoleStyle;
+
+	/** The `Label` text role. */
+	public var label:TextRoleStyle;
+
+	/** The `Caption` text role. */
+	public var caption:TextRoleStyle;
+
+	/** The `Button` text role. */
+	public var button:TextRoleStyle;
+
+	/** A theme over `tokens`, or the default dark tokens when null. */
 	public function new(?tokens:ThemeTokens) {
 		this.tokens = tokens == null ? new ThemeTokens() : tokens;
 		styles = new StyleSheet("Theme");
@@ -67,10 +68,10 @@ class Theme {
 		refreshStyles();
 	}
 
-	/** Creates the canonical light palette used by UIKit applications. */
+	/** The built-in light theme. */
 	public static function light():Theme return palette(true);
 
-	/** Creates the canonical dark palette used by UIKit applications. */
+	/** The built-in dark theme. */
 	public static function dark():Theme return palette(false);
 
 	static function palette(light:Bool):Theme {
@@ -133,11 +134,11 @@ class Theme {
 	static inline function rgba(red:Float, green:Float, blue:Float,
 			alpha:Float = 1.0):Color return Color.rgba(red, green, blue, alpha);
 
-	/** Rebuilds built-in rules after callers change a compatibility token. */
+	/** Rebuilds `styles` after a change to `tokens`. */
 	public function refreshStyles():Void {
 		styles.clear();
 		styles.rule(StyleSelector.widget("button"), [
-			StyleValue.background(buttonBackground),
+			StyleValue.background(tokens.buttonBackground),
 			StyleValue.paddingSymmetric(tokens.spacingLarge, tokens.spacingMedium),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, tokens.radiusMedium),
 			StyleValue.radius(StyleProperty.RadiusTopRight, tokens.radiusMedium),
@@ -145,18 +146,18 @@ class Theme {
 			StyleValue.radius(StyleProperty.RadiusBottomLeft, tokens.radiusMedium)
 		]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Selected),
-			[StyleValue.background(buttonSelected)]);
+			[StyleValue.background(tokens.buttonSelected)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Focused),
 			[
 				StyleValue.borderColor(tokens.textOnAccent),
 				StyleValue.borderWidth(1.0)
 			]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Hovered),
-			[StyleValue.background(buttonHover)]);
+			[StyleValue.background(tokens.buttonHover)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Pressed),
-			[StyleValue.background(buttonPressed)]);
+			[StyleValue.background(tokens.buttonPressed)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Disabled),
-			[StyleValue.background(buttonDisabled)]);
+			[StyleValue.background(tokens.buttonDisabled)]);
 		styles.rule(StyleSelector.widget("button").className("navigation"),
 			[StyleValue.background(tokens.navigationBackground)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Hovered),
@@ -280,7 +281,7 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("select-trigger").state(StyleState.Pressed),
 			[StyleValue.background(tokens.selectionPressed)]);
 		styles.rule(StyleSelector.widget("button").className("select-trigger").state(StyleState.Focused), [
-			StyleValue.background(tokens.selectionField), StyleValue.borderColor(accent),
+			StyleValue.background(tokens.selectionField), StyleValue.borderColor(tokens.accent),
 			StyleValue.borderWidth(2.0)
 		]);
 		styles.rule(StyleSelector.widget("button").className("selection-option"), [
@@ -294,11 +295,11 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("selection-option").state(StyleState.Selected),
 			[StyleValue.background(tokens.selectionHighlight)]);
 		styles.rule(StyleSelector.widget("text-field"), [
-			StyleValue.textColor(text), StyleValue.background(tokens.surfaceSunken),
+			StyleValue.textColor(tokens.text), StyleValue.background(tokens.surfaceSunken),
 			StyleValue.borderColor(tokens.border), StyleValue.borderWidth(1.0)
 		]);
 		styles.rule(StyleSelector.widget("text-field").state(StyleState.Disabled),
-			[StyleValue.textColor(disabledText)]);
+			[StyleValue.textColor(tokens.disabledText)]);
 		styles.rule(StyleSelector.widget("text-field").state(StyleState.Focused),
 			[StyleValue.borderColor(tokens.focusRing)]);
 		styles.rule(StyleSelector.widget("text-field").className("search-input"), [
@@ -328,60 +329,60 @@ class Theme {
 		styles.rule(StyleSelector.widget("text-field").className("combo-trigger").state(StyleState.Hovered),
 			[StyleValue.background(tokens.selectionHover)]);
 		styles.rule(StyleSelector.widget("text-field").className("combo-trigger").state(StyleState.Focused), [
-			StyleValue.background(tokens.selectionField), StyleValue.borderColor(accent),
+			StyleValue.background(tokens.selectionField), StyleValue.borderColor(tokens.accent),
 			StyleValue.borderWidth(2.0)
 		]);
-		styles.rule(StyleSelector.widget("checkbox"), [StyleValue.textColor(text)]);
+		styles.rule(StyleSelector.widget("checkbox"), [StyleValue.textColor(tokens.text)]);
 		styles.rule(StyleSelector.widget("checkbox").state(StyleState.Disabled),
-			[StyleValue.textColor(disabledText)]);
-		styles.rule(StyleSelector.widget("toggle"), [StyleValue.textColor(text)]);
+			[StyleValue.textColor(tokens.disabledText)]);
+		styles.rule(StyleSelector.widget("toggle"), [StyleValue.textColor(tokens.text)]);
 		styles.rule(StyleSelector.widget("toggle").state(StyleState.Disabled),
-			[StyleValue.textColor(disabledText)]);
-		styles.rule(StyleSelector.widget("radio"), [StyleValue.textColor(text)]);
+			[StyleValue.textColor(tokens.disabledText)]);
+		styles.rule(StyleSelector.widget("radio"), [StyleValue.textColor(tokens.text)]);
 		styles.rule(StyleSelector.widget("radio").state(StyleState.Disabled),
-			[StyleValue.textColor(disabledText)]);
+			[StyleValue.textColor(tokens.disabledText)]);
 
 		styles.rule(StyleSelector.widget("checkbox-indicator"),
-			[StyleValue.background(controlUnselected)]);
+			[StyleValue.background(tokens.controlUnselected)]);
 		styles.rule(StyleSelector.widget("checkbox-indicator").state(StyleState.Checked),
-			[StyleValue.background(controlSelected)]);
+			[StyleValue.background(tokens.controlSelected)]);
 		styles.rule(StyleSelector.widget("checkbox-indicator").state(StyleState.Disabled),
-			[StyleValue.background(controlDisabled)]);
+			[StyleValue.background(tokens.controlDisabled)]);
 
 		styles.rule(StyleSelector.widget("toggle-indicator"), [
-			StyleValue.background(controlUnselected), StyleValue.alignX(LayoutAlignmentX.Start)
+			StyleValue.background(tokens.controlUnselected), StyleValue.alignX(LayoutAlignmentX.Start)
 		]);
 		styles.rule(StyleSelector.widget("toggle-indicator").state(StyleState.Checked), [
-			StyleValue.background(controlSelected), StyleValue.alignX(LayoutAlignmentX.End)
+			StyleValue.background(tokens.controlSelected), StyleValue.alignX(LayoutAlignmentX.End)
 		]);
 		styles.rule(StyleSelector.widget("toggle-indicator").state(StyleState.Disabled),
-			[StyleValue.background(controlDisabled)]);
+			[StyleValue.background(tokens.controlDisabled)]);
 		styles.rule(StyleSelector.widget("toggle-thumb"),
 			[StyleValue.background(Color.rgba(0.98, 0.98, 0.99, 1.0))]);
 
-		styles.rule(StyleSelector.widget("radio-indicator"), [StyleValue.background(controlUnselected)]);
+		styles.rule(StyleSelector.widget("radio-indicator"), [StyleValue.background(tokens.controlUnselected)]);
 		styles.rule(StyleSelector.widget("radio-indicator").state(StyleState.Selected),
-			[StyleValue.background(controlSelected)]);
+			[StyleValue.background(tokens.controlSelected)]);
 		styles.rule(StyleSelector.widget("radio-indicator").state(StyleState.Disabled),
-			[StyleValue.background(controlDisabled)]);
+			[StyleValue.background(tokens.controlDisabled)]);
 		styles.rule(StyleSelector.widget("radio-dot"),
-			[StyleValue.background(panelBackground)]);
+			[StyleValue.background(tokens.panelBackground)]);
 		styles.rule(StyleSelector.widget("radio-mark"),
 			[StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0))]);
 		styles.rule(StyleSelector.widget("radio-mark").state(StyleState.Selected),
-			[StyleValue.background(controlSelected)]);
+			[StyleValue.background(tokens.controlSelected)]);
 		styles.rule(StyleSelector.widget("radio-mark").state(StyleState.Selected).state(StyleState.Disabled),
-			[StyleValue.background(controlDisabled)]);
+			[StyleValue.background(tokens.controlDisabled)]);
 
 		styles.rule(StyleSelector.widget("slider"), [
-			StyleValue.sliderTrackColor(controlUnselected),
-			StyleValue.sliderFillColor(accent),
-			StyleValue.sliderThumbColor(text)
+			StyleValue.sliderTrackColor(tokens.controlUnselected),
+			StyleValue.sliderFillColor(tokens.accent),
+			StyleValue.sliderThumbColor(tokens.text)
 		]);
 		styles.rule(StyleSelector.widget("slider").state(StyleState.Disabled), [
-			StyleValue.sliderTrackColor(controlDisabled),
-			StyleValue.sliderFillColor(controlDisabled),
-			StyleValue.sliderThumbColor(disabledText)
+			StyleValue.sliderTrackColor(tokens.controlDisabled),
+			StyleValue.sliderFillColor(tokens.controlDisabled),
+			StyleValue.sliderThumbColor(tokens.disabledText)
 		]);
 		styles.rule(StyleSelector.widget("split-divider"),
 			[StyleValue.background(Color.rgba(tokens.textPrimary.red, tokens.textPrimary.green, tokens.textPrimary.blue,
@@ -398,14 +399,14 @@ class Theme {
 		]);
 		styles.rule(StyleSelector.widget("popup-content"), [
 			StyleValue.padding(new Insets(8.0, 8.0, 8.0, 8.0)),
-			StyleValue.background(panelBackground),
+			StyleValue.background(tokens.panelBackground),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, 5.0),
 			StyleValue.radius(StyleProperty.RadiusTopRight, 5.0),
 			StyleValue.radius(StyleProperty.RadiusBottomRight, 5.0),
 			StyleValue.radius(StyleProperty.RadiusBottomLeft, 5.0)
 		]);
 		styles.rule(StyleSelector.widget("selection-popup"), [
-			StyleValue.background(panelBackground), StyleValue.borderColor(tokens.selectionBorder),
+			StyleValue.background(tokens.panelBackground), StyleValue.borderColor(tokens.selectionBorder),
 			StyleValue.borderWidth(1.0), StyleValue.shadowColor(tokens.selectionPopupShadow),
 			StyleValue.number(StyleProperty.ShadowOffsetY, 3.0), StyleValue.shadowBlur(8.0),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, tokens.radiusMedium),
@@ -414,12 +415,12 @@ class Theme {
 			StyleValue.radius(StyleProperty.RadiusBottomLeft, tokens.radiusMedium)
 		]);
 		styles.rule(StyleSelector.widget("popup-backdrop"),
-			[StyleValue.background(overlayBackdrop)]);
+			[StyleValue.background(tokens.overlayBackdrop)]);
 		styles.rule(StyleSelector.widget("dialog-backdrop"),
-			[StyleValue.background(overlayBackdrop)]);
+			[StyleValue.background(tokens.overlayBackdrop)]);
 		styles.rule(StyleSelector.widget("dialog-panel"), [
 			StyleValue.padding(new Insets(24.0, 24.0, 24.0, 24.0)),
-			StyleValue.background(panelBackground),
+			StyleValue.background(tokens.panelBackground),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, 8.0),
 			StyleValue.radius(StyleProperty.RadiusTopRight, 8.0),
 			StyleValue.radius(StyleProperty.RadiusBottomRight, 8.0),
@@ -427,7 +428,7 @@ class Theme {
 			StyleValue.number(StyleProperty.ChildGap, 16.0)
 		]);
 		styles.rule(StyleSelector.widget("dialog-heading"),
-			[StyleValue.textColor(text)]);
+			[StyleValue.textColor(tokens.text)]);
 		styles.rule(StyleSelector.widget("tooltip"), [
 			StyleValue.fontSize(tokens.tooltipFontSize),
 			StyleValue.padding(new Insets(10.0, 7.0, 10.0, 7.0)),
@@ -444,16 +445,17 @@ class Theme {
 		]);
 	}
 
+	/** The body text color, or the disabled one. */
 	public function textColor(enabled:Bool):Color
 		return textRoleColor(TextRole.Body, enabled);
 
 	/** Resolves a role's normal color while applying the shared disabled state. */
 	public function textRoleColor(role:TextRole, enabled:Bool):Color
-		return enabled ? textRole(role).color : disabledText;
+		return enabled ? textRole(role).color : tokens.disabledText;
 
 	/** Resolve the foreground against the actual state background, including custom fills. */
 	public function buttonLabelColor(enabled:Bool, background:Null<Color>, ?preferred:Color):Color {
-		if (!enabled) return disabledButtonText;
+		if (!enabled) return tokens.disabledButtonText;
 		var fill = background == null ? tokens.surface
 			: Color.rgba(background.red * background.alpha + tokens.surface.red * (1 - background.alpha),
 			background.green * background.alpha + tokens.surface.green * (1 - background.alpha),
@@ -514,111 +516,11 @@ class Theme {
 	static inline function channelLuminance(channel:Float):Float
 		return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
 
+	/** The fill of a check box, toggle or radio indicator in the given state. */
 	public function controlColor(selected:Bool, enabled:Bool):Color {
 		if (!enabled)
-			return controlDisabled;
-		return selected ? controlSelected : controlUnselected;
+			return tokens.controlDisabled;
+		return selected ? tokens.controlSelected : tokens.controlUnselected;
 	}
 
-	function get_accent():Color return tokens.accent;
-	function set_accent(value:Color):Color {
-		tokens.accent = value;
-		return value;
-	}
-	function get_text():Color return body == null ? tokens.text : body.color;
-	function set_text(value:Color):Color {
-		tokens.text = value;
-		tokens.textPrimary = value;
-		if (body != null)
-			body.color = value;
-		return value;
-	}
-	function get_mutedText():Color return caption == null ? tokens.mutedText : caption.color;
-	function set_mutedText(value:Color):Color {
-		tokens.mutedText = value;
-		tokens.textSecondary = value;
-		if (caption != null)
-			caption.color = value;
-		return value;
-	}
-	function get_disabledText():Color return tokens.disabledText;
-	function set_disabledText(value:Color):Color {
-		tokens.disabledText = value;
-		tokens.textDisabled = value;
-		return value;
-	}
-	function get_buttonText():Color return button == null ? tokens.buttonText : button.color;
-	function set_buttonText(value:Color):Color {
-		tokens.buttonText = value;
-		tokens.textOnAccent = value;
-		if (button != null)
-			button.color = value;
-		return value;
-	}
-	function get_disabledButtonText():Color return tokens.disabledButtonText;
-	function set_disabledButtonText(value:Color):Color {
-		tokens.disabledButtonText = value;
-		return value;
-	}
-	function get_buttonBackground():Color return tokens.buttonBackground;
-	function set_buttonBackground(value:Color):Color {
-		tokens.buttonBackground = value;
-		return value;
-	}
-	function get_buttonHover():Color return tokens.buttonHover;
-	function set_buttonHover(value:Color):Color {
-		tokens.buttonHover = value;
-		return value;
-	}
-	function get_buttonPressed():Color return tokens.buttonPressed;
-	function set_buttonPressed(value:Color):Color {
-		tokens.buttonPressed = value;
-		return value;
-	}
-	function get_buttonFocused():Color return tokens.buttonFocused;
-	function set_buttonFocused(value:Color):Color {
-		tokens.buttonFocused = value;
-		return value;
-	}
-	function get_buttonSelected():Color return tokens.buttonSelected;
-	function set_buttonSelected(value:Color):Color {
-		tokens.buttonSelected = value;
-		return value;
-	}
-	function get_buttonDisabled():Color return tokens.buttonDisabled;
-	function set_buttonDisabled(value:Color):Color {
-		tokens.buttonDisabled = value;
-		return value;
-	}
-	function get_controlSelected():Color return tokens.controlSelected;
-	function set_controlSelected(value:Color):Color {
-		tokens.controlSelected = value;
-		return value;
-	}
-	function get_controlUnselected():Color return tokens.controlUnselected;
-	function set_controlUnselected(value:Color):Color {
-		tokens.controlUnselected = value;
-		return value;
-	}
-	function get_controlDisabled():Color return tokens.controlDisabled;
-	function set_controlDisabled(value:Color):Color {
-		tokens.controlDisabled = value;
-		return value;
-	}
-	function get_panelBackground():Color return tokens.panelBackground;
-	function set_panelBackground(value:Color):Color {
-		tokens.panelBackground = value;
-		tokens.surface = value;
-		return value;
-	}
-	function get_overlayBackdrop():Color return tokens.overlayBackdrop;
-	function set_overlayBackdrop(value:Color):Color {
-		tokens.overlayBackdrop = value;
-		return value;
-	}
-	function get_tooltipBackground():Color return tokens.tooltipBackground;
-	function set_tooltipBackground(value:Color):Color {
-		tokens.tooltipBackground = value;
-		return value;
-	}
 }

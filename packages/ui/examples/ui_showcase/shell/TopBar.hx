@@ -27,7 +27,7 @@ class TopBar {
 		style.background = explorer.paletteSidebar();
 		var brand = new Row("top-brand",
 			[
-				explorer.keyed("brand-mark", explorer.text("HX", explorer.context.buildContext.theme.accent)),
+				explorer.keyed("brand-mark", explorer.text("HX", explorer.context.buildContext.theme.tokens.accent)),
 				explorer.keyed("brand", explorer.heading("Haxeon UI Explorer"))
 			],
 			clusterStyle(12.0));
