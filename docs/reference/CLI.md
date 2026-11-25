@@ -31,11 +31,10 @@ forms); every command reads either, and a directory with both is a usage error t
 ## Build modes
 
 Desktop and Wasm builds default to `development`, retaining metadata for
-debuggers and other development tools. Use `--build-mode release` when building
-artifacts for packaging or distribution; `run --watch` of an app it patches live always selects development. An
-explicit release mode cannot be patched live: `run --watch --build-mode=release` of such an app asks for `--restart`. The
-Android debug host
-uses development metadata for live patching. Release HashLink
+debuggers and other development tools. Use `--build-mode release` to build a native executable
+for a host console project or desktop app, or to build a Wasm artifact for distribution.
+Use development mode for `run --watch` with a desktop app or host console project.
+The Android debug host uses development metadata for live patching. Release HashLink
 modules retain function names and line tables for profiler output and stack
 traces, and omit opcode spans and embedded source snapshots. The compiler CLI
 accepts the equivalent `--build-mode=release` or `--build-mode=development`.

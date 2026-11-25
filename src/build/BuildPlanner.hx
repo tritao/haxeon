@@ -29,9 +29,13 @@ class BuildPlanner {
 		return new BuildPlan([id], [new Artifact(id, dependencies)]);
 	}
 
-	/** The plan of `project`'s build; with `aheadOfTime` a native target's program is C (`CModule`) rather than bytecode. */
+	/**
+	 * The plan of `project`'s build; with `aheadOfTime` a native target's program is C (`CModule`) rather than bytecode, and
+	 * with `consoleProgram` too that C becomes an executable that ships with the shared libraries the module loads.
+	 */
 	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target,
-			nativeDemand:NativeArtifactDemand, aheadOfTime:Bool = false, providedByWebHost:Bool = false):BuildPlan {
+			nativeDemand:NativeArtifactDemand, aheadOfTime:Bool = false, providedByWebHost:Bool = false,
+			consoleProgram:Bool = false):BuildPlan {
 		NativeTargetSupport.validate(project, target, providedByWebHost);
 		var artifacts:Array<Artifact> = [],
 			nativeShared = new Map<String, ArtifactId>(),
@@ -136,6 +140,11 @@ class BuildPlanner {
 		var moduleId = new ArtifactId(project.rootPackage.name, kind, target);
 		artifacts.push(new Artifact(moduleId, libraryRequirements.concat(ffiArtifacts),
 			["entry" => project.manifest.entry == null ? "" : project.manifest.entry]));
+		if (kind == CModule && consoleProgram) {
+			var executable = new ArtifactId(project.rootPackage.name, Executable, target);
+			artifacts.push(new Artifact(executable, [moduleId].concat(libraryRequirements)));
+			return new BuildPlan([executable], artifacts);
+		}
 		return new BuildPlan([moduleId], artifacts);
 	}
 

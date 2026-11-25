@@ -1,10 +1,10 @@
 # Releases
 
 A release is one archive per platform that holds everything the `haxeon` command needs: unpack it anywhere and run
-`bin/haxeon`. No pinned Haxe or checkout is needed, and building and running a program needs no C compiler or CMake. A
-project that uses a package with C or C++ code (the UI package, for one), an executable built ahead of time
-(`--target hlc`) and an Android build do need them: `haxeon doctor` checks for them and names the command that installs
-them. [Get started](../guides/00-get-started.md) walks through installing one.
+`bin/haxeon`. No pinned Haxe or checkout is needed. A console development build with only Haxe code uses the
+included HashLink VM. Console release builds, desktop app builds, projects with C or C++ packages
+(such as UI), and Android builds require a native toolchain and CMake. `haxeon doctor` checks the tools and shows
+how to install them. [Get started](../guides/00-get-started.md) walks through installing one.
 
 ## What an archive holds
 
@@ -23,7 +23,7 @@ them. [Get started](../guides/00-get-started.md) walks through installing one.
 | `stdlib/` | The standard library. |
 | `templates/` | The project templates of `haxeon create` ([Create](cli/project.md#create)). |
 | `registry/` | The `haxeon` registry ([MANIFEST.md](MANIFEST.md)): `index.json` and each first-party package at `NAME/VERSION/` (`ui`, `platform`, `nativekit`, ...). |
-| `lib/<target>/`, `include/`, `src/`, `cmake/` | The VM libraries, runtime headers, entry points and the CMake package that an app's runner, or any build of a program compiled ahead of time (`haxeon_add_c_executable`), finds with `find_package(Haxeon)`. |
+| `lib/<target>/`, `include/`, `src/`, `cmake/` | The VM libraries, runtime headers, entry points and the CMake package that an app's runner, or any build of a program compiled ahead of time (`haxeon_add_c_executable`), finds with `find_package(Haxeon)`. The SDK also includes the CMake project that builds console release executables. |
 | `LICENSE`, `NOTICE`, `README.md` | |
 
 Platforms:

@@ -141,12 +141,17 @@ haxeon build --target wasm32
 node run-wasm.cjs
 ```
 
-The project CLI builds native executables ahead of time for desktop apps with a runner.
-This console project has no runner, so its native AOT build requires the direct compiler and
-SDK CMake integration. See [Shipping](../guides/05-shipping.md#desktop-a-development-build-and-a-release-build)
-for the desktop app release workflow.
+A release build compiles the program ahead of time into a native executable, which needs a C toolchain and CMake
+(`haxeon doctor` checks for them). It is written to `build/<os>/bin/`, here on Linux:
 
-The JIT and Wasm runs print the same two lines.
+```sh
+haxeon build --build-mode release
+./build/linux/bin/haxe
+```
+
+On macOS run `build/macos/bin/haxe`, and on Windows `build\windows\bin\haxe.exe`.
+
+Each run prints the same two lines.
 
 ```text title="Output"
 Duration:

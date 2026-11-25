@@ -338,6 +338,15 @@ foreach(_script IN ITEMS haxeon-native haxeon-frame-pointers haxeon-instrument h
     VERBATIM)
   list(APPEND _sdk_native_scripts "${HAXEON_SDK_DIR}/cmake/${_script}.cmake")
 endforeach()
+# The SDK's project for a program compiled ahead of time without a runner: a console program's release build uses it.
+set(_sdk_aot "${HAXEON_SDK_DIR}/cmake/aot/CMakeLists.txt")
+add_custom_command(OUTPUT "${_sdk_aot}"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${HAXEON_SDK_DIR}/cmake/aot"
+  COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/cmake/aot/CMakeLists.txt" "${_sdk_aot}"
+  COMMAND "${CMAKE_COMMAND}" -E touch "${_sdk_aot}"
+  DEPENDS "${CMAKE_SOURCE_DIR}/cmake/aot/CMakeLists.txt"
+  VERBATIM)
+list(APPEND _sdk_native_scripts "${_sdk_aot}")
 if(EXISTS "${CMAKE_SOURCE_DIR}/vendor/nativekit/modules/gpu/tools/CMakeLists.txt" AND NOT CMAKE_CROSSCOMPILING)
   add_subdirectory(vendor/nativekit/modules/gpu/tools shader-tools)
   set(_shader_tool "${HAXEON_HASHLINK_OUTPUT_DIR}/nkgpu-shaders${CMAKE_EXECUTABLE_SUFFIX}")

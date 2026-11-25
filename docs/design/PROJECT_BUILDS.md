@@ -114,8 +114,14 @@ calling the same function, so a runner never carries start-up code an SDK update
   `HAXEON_MODULE`, and `haxeon_add_app` compiles it with the SDK's `haxeon_add_c_executable`, which adds the SDK's
   `hlc_main.c` and links the VM without the JIT (`Haxeon::aot`), through CMake and the user's toolchain, with the generated
   code's flags. The compiler rewrites only the C files whose text changed, so the runner recompiles only those. A release
-  build cannot be watched or patched live. That function is the only build of generated C: `haxeon dev aot` and the AOT
-  tests call it too, through `cmake/aot` ([AOT_BACKEND.md](AOT_BACKEND.md), Building the C).
+  build cannot be watched or patched live. That function is the only build of generated C: `haxeon dev aot`, the AOT
+  tests and a console program's release build call it too, through `cmake/aot` ([AOT_BACKEND.md](AOT_BACKEND.md),
+  Building the C).
+- **A console program's release build** has no runner, so the build graph itself configures the SDK's `cmake/aot` in
+  `build/<platform>/` and builds the executable into `build/<platform>/bin/`, the directory to ship (`ConsoleProgram`).
+  Its native packages are the ones the graph already built for the program; they are not built again in a second CMake
+  graph, as an app's runner must so that it builds with `cmake` alone. One publish step copies their libraries beside the
+  executable, which finds them through `$ORIGIN` (`@executable_path` on macOS, the executable's directory on Windows).
 
 Where each platform puts the app (`haxeon_add_app`, `cmake/sdk/HaxeonApp.cmake`), all in `build/<platform>/app/`:
 

@@ -168,6 +168,12 @@ project_round "$root" "$work/projects/hello"
 aot_seconds=$build_seconds
 check_compiler "$root" "$expect_aot"
 
+echo "== console release executable"
+console=$work/projects/hello
+(cd "$console" && "$haxeon" build --build-mode release) || fail "console release build"
+output=$("$console/build/$platform/bin/hello$suffix") || fail "console release executable"
+[[ $output == "release smoke: 1,4,9" ]] || fail "console release executable printed: $output"
+
 echo "== haxeon script.hx"
 printf 'function main() {\n\tSys.println("script ok " + Sys.args().join(" "));\n}\n' >"$work/projects/hello-script.hx"
 output=$(cd "$work/projects" && "$haxeon" hello-script.hx a b) || fail "script run"

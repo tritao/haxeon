@@ -49,7 +49,8 @@ class HaxeonProjectBuild {
 			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, scope:BuildScope = Full,
 			live:Bool = false, instrument:Bool = false,
 			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String,
-			?style:ReportStyle, aheadOfTime:Bool = false, ?scriptModule:String, ?webHost:String):Int {
+			?style:ReportStyle, aheadOfTime:Bool = false, ?scriptModule:String, ?webHost:String,
+			consoleProgram:Bool = false):Int {
 		var shown = style == null ? ReportStyle.DEFAULT : style;
 		var buildTarget = target == null ? Target.detectHost() : target;
 		if (!buildTarget.isWasm() && !buildTarget.isAndroid() && !buildTarget.equals(Target.detectHost()))
@@ -63,7 +64,7 @@ class HaxeonProjectBuild {
 			instrument ? project.manifest.instrument : null),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target,
 				webHost != null ? NativeArtifactDemand.None : NativeArtifactDemand.Shared,
-				aheadOfTime, webHost != null),
+				aheadOfTime, webHost != null, consoleProgram),
 			lowerStarted = Sys.time() * 1000.0,
 			execution = PlanLowerer.lower(plan,
 				new LoweringContext(

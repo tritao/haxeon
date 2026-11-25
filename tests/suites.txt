@@ -53,6 +53,7 @@ haxe-command-line                ci          -- scripts/haxeon tests/integration
 project-verbs                    ci          -- scripts/haxeon tests/integration/test-project-verbs.hx
 # haxeon.toml and haxeon.json: init writes TOML, migrate converts JSON, both in one directory are refused, add keeps comments.
 project-manifests                ci          -- scripts/haxeon tests/integration/test-project-manifests.hx
+console-release                  ci          -- bash tests/integration/test-console-release.sh
 project-templates                ci          -- scripts/haxeon tests/integration/test-project-templates.hx
 vscode-debug                     ci          -- bash tests/integration/test-vscode-debug.sh
 # The guides (docs/guides/README.md): each code block is in the guide's example project, no guide or reference page links

@@ -7,6 +7,7 @@ import build.execution.ActionId;
 import build.execution.ActionMerge;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionPlan;
+import build.native.ConsoleProgram;
 import build.native.NativeCMakeProvider;
 import build.native.NativeSourcesProvider;
 import build.provider.CompilerProvider;
@@ -84,11 +85,12 @@ class PlanLowerer {
 						var destination = context.output == null ? (artifact.id.kind == ArtifactKind.WasmModule
 							? context.layout.wasmModulePath(artifact.id.packageId)
 							: context.layout.hashLinkModulePath(artifact.id.packageId)) : context.output;
-						actions.push(CompilerProvider.action(project, context,
-							new ActionId('compile-project:${artifact.id.key()}'), dependencies,
+						var actionId = new ActionId('compile-project:${artifact.id.key()}');
+						artifactActions.set(artifact.id.key(), [actionId]);
+						actions.push(CompilerProvider.action(project, context, actionId, dependencies,
 							destination, artifact.id.kind == ArtifactKind.CModule,
 							shaders == null ? null : shaderRoot));
-					case FfiInterface:
+					case FfiInterface | Executable:
 					default:
 						if (artifact.id.kind != ArtifactKind.NativeRuntime
 							&& artifact.id.kind != ArtifactKind.NativeObject
@@ -96,6 +98,15 @@ class PlanLowerer {
 							&& artifact.id.kind != ArtifactKind.NativeSharedLibrary
 							&& artifact.id.kind != ArtifactKind.FfiNativeSharedLibrary)
 							throw new InternalError('No build provider is registered for artifact ${artifact.id}');
+				}
+			// A console program's executable comes once its module and every library it ships with have actions.
+			for (artifact in plan.artifacts)
+				if (artifact.id.kind == ArtifactKind.Executable) {
+					var module = context.output;
+					if (module == null)
+						throw new InternalError("A console program's executable needs the path of its C module");
+					actions = actions.concat(ConsoleProgram.lower(artifact, module, buildDirectory, context, actions,
+						artifactActions));
 				}
 		} else if (actions.length == 0)
 			throw new InternalError('No build provider is registered for artifacts in this plan');

@@ -1,4 +1,6 @@
-# Copies the runtime libraries a shared native CMake tree produced (-DFROM) to a project's native directory (-DTO).
+# Copies the runtime libraries a shared native CMake tree produced (-DFROM) to a project's native directory (-DTO). FROM
+# can list several directories, as for the libraries a console program ships beside its executable: one name from two of
+# them is an error, never a silent overwrite.
 # Libraries that are already there with the same content are skipped, so one a running program holds is not rewritten.
 # Import libraries and exports stay in the tree; the FFI link steps read them there. The names published are recorded in
 # TO/.haxeon-published, so a library that the tree stopped producing is removed again without touching other files of
@@ -10,7 +12,20 @@
 # removed by the next publish.
 cmake_policy(SET CMP0057 NEW) # IN_LIST is not enabled by the caller's policy scope in cmake -P mode.
 file(MAKE_DIRECTORY "${TO}")
-file(GLOB libraries LIST_DIRECTORIES false RELATIVE "${FROM}" "${FROM}/*.dll" "${FROM}/*.hdll" "${FROM}/*.so" "${FROM}/*.so.*" "${FROM}/*.dylib")
+set(libraries "")
+set(sources "")
+foreach(from IN LISTS FROM)
+  file(GLOB found LIST_DIRECTORIES false RELATIVE "${from}" "${from}/*.dll" "${from}/*.hdll" "${from}/*.so" "${from}/*.so.*" "${from}/*.dylib")
+  foreach(library IN LISTS found)
+    list(FIND libraries "${library}" index)
+    if(NOT index EQUAL -1)
+      list(GET sources ${index} first)
+      message(FATAL_ERROR "Both ${first} and ${from} have ${library}; it can be published from only one of them")
+    endif()
+    list(APPEND libraries "${library}")
+    list(APPEND sources "${from}")
+  endforeach()
+endforeach()
 set(manifest "${TO}/.haxeon-published")
 
 file(GLOB replaced LIST_DIRECTORIES false "${TO}/*.replaced-*")
@@ -49,8 +64,10 @@ foreach(library IN LISTS previous)
   endif()
 endforeach()
 foreach(library IN LISTS libraries)
-  if(IS_SYMLINK "${FROM}/${library}")
-    file(READ_SYMLINK "${FROM}/${library}" link_target)
+  list(FIND libraries "${library}" index)
+  list(GET sources ${index} from)
+  if(IS_SYMLINK "${from}/${library}")
+    file(READ_SYMLINK "${from}/${library}" link_target)
     set(replace_link TRUE)
     if(IS_SYMLINK "${TO}/${library}")
       file(READ_SYMLINK "${TO}/${library}" current_target)
@@ -69,11 +86,11 @@ foreach(library IN LISTS libraries)
     if(IS_SYMLINK "${TO}/${library}")
       file(REMOVE "${TO}/${library}")
     endif()
-    execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${FROM}/${library}" "${TO}/${library}" RESULT_VARIABLE status ERROR_VARIABLE problem)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${from}/${library}" "${TO}/${library}" RESULT_VARIABLE status ERROR_VARIABLE problem)
     if(NOT status EQUAL 0)
       move_aside("${TO}/${library}")
       if(moved)
-        execute_process(COMMAND "${CMAKE_COMMAND}" -E copy "${FROM}/${library}" "${TO}/${library}" RESULT_VARIABLE status ERROR_VARIABLE retry)
+        execute_process(COMMAND "${CMAKE_COMMAND}" -E copy "${from}/${library}" "${TO}/${library}" RESULT_VARIABLE status ERROR_VARIABLE retry)
         string(APPEND problem "${retry}")
         if(NOT status EQUAL 0)
           # Put the old library back under its name: with nothing there the next start fails with DLL not found.

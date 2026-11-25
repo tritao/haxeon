@@ -1264,10 +1264,15 @@ class BuildSystemMain {
 		var failed = new Executor(environment, 1, _ -> {}).execute(plan);
 		expect(failed.exitCode != 0 && failed.actions[1].blocked && compilerRuns == 2,
 			"a failed ordering dependency blocks even cached bytecode");
+		// The provider says a package's stamp is not shareable: it cannot restore the runtime libraries the tree built.
 		var stampAction = new ExecutionAction(new ActionId("native-cmake-build:stamp"), [], [], [stamp], "stamp",
-			Process("cmake", [], root, new Map()));
+			Process("cmake", [], root, new Map()), true, false, false, null, false),
+			fileAction = new ExecutionAction(new ActionId("native-cmake-build:file"), [], [], [stamp], "file",
+				Process("cmake", [], root, new Map()));
 		expect(!build.execution.ArtifactCache.isShareable(stampAction),
-			"CMake package stamps cannot restore missing runtime libraries");
+			"an action that declares itself unshareable is never cached");
+		expect(build.execution.ArtifactCache.isShareable(fileAction),
+			"shareability comes from the action, not from its name");
 		FileTree.remove(root);
 	}
 

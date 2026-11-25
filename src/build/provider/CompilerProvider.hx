@@ -43,7 +43,7 @@ class CompilerProvider {
 			live = !context.checkOnly && (context.live || android),
 			target = aheadOfTime ? "hlc" : compilerInputs.target,
 			arguments = [
-				// A program compiled ahead of time is C, which the app's runner compiles (`ArtifactKind.CModule`).
+				// A program compiled ahead of time is C, which the native build compiles (`ArtifactKind.CModule`).
 					"--target=" + target,
 					"--build-mode=" + (live || context.developmentMetadata ? "development" : "release"),
 					"--output=" + output,
@@ -182,7 +182,11 @@ class CompilerProvider {
 		};
 		if (aheadOfTime && live)
 			throw new UsageError("A program compiled ahead of time cannot be patched live; build it in development mode");
-		var outputs = context.checkOnly ? [] : aheadOfTime ? [output + ".c/hlc.h", output + ".inputs.json"] : [
+		var outputs = context.checkOnly ? [] : aheadOfTime ? [
+			output + ".c/hlc.h",
+			output + ".c/image.c",
+			output + ".inputs.json"
+		] : [
 			output,
 			output + ".inputs.json",
 			output + ".functions",

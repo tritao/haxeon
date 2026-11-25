@@ -27,8 +27,10 @@ def main():
         output = root / 'main.hl'
         env = {**os.environ, 'HAXEON_COMPILER_SERVER': '0', 'XDG_CACHE_HOME': str(root / 'cache'), 'HAXEON_NATIVE_CACHE': str(root / 'native-cache')}
         def build(mode):
+            # Ask for release bytecode explicitly so hldump can inspect its metadata.
             subprocess.run([str(ROOT / 'scripts/haxeon'), 'build'] +
-                           ([] if mode is None else ['--build-mode', mode]) + ['--project', str(root / 'haxeon.json'), '--output', str(output)],
+                           ([] if mode is None else ['--build-mode', mode]) +
+                           (['--compiler-only'] if mode == 'release' else []) + ['--project', str(root / 'haxeon.json'), '--output', str(output)],
                            cwd=ROOT, env=env, check=True, capture_output=True, text=True)
             caches = list((root / 'native-cache').rglob('CMakeCache.txt'))
             assert caches, 'Native CMake probe did not configure'
@@ -37,8 +39,8 @@ def main():
             run = subprocess.run([str(ROOT / 'scripts/hl'), str(output)], cwd=ROOT, env=env, capture_output=True)
             assert run.returncode == 42, (mode, run.returncode, run.stderr)
             return output.read_bytes(), dump
-        release, release_dump = build('release')
         development, development_dump = build(None)
+        release, release_dump = build('release')
         explicit_development, _ = build('development')
         assert development == explicit_development
         release_again, _ = build('release')

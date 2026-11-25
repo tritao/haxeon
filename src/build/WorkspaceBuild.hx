@@ -171,7 +171,7 @@ class WorkspaceBuild {
 					Process("sh", [
 						"-c",
 						script
-					], member.project.root, environment), true, !(useCache && member.cacheTests)));
+					], member.project.root, environment), true, !(useCache && member.cacheTests), false, null, false));
 			}
 		}
 		return new ExecutionPlan(actions);

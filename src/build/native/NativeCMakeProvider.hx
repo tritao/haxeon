@@ -31,7 +31,6 @@ class NativeCMakeProvider {
 			scripts = build.HaxeonSdk.cmakeDirectory(home),
 			layout = context.layout,
 			ninja = ninjaAvailable(context.environment.target, context.compilerHome),
-			ninjaProgram = ninjaExecutable(home),
 			ownTree = tree(resolvedPackage, context),
 			source = ownTree.source,
 			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
@@ -88,10 +87,7 @@ class NativeCMakeProvider {
 				.concat(dependencyTrees.length == 0 ? [] : [
 					"-DCMAKE_PREFIX_PATH=" + [for (dependency in dependencyTrees) dependency.buildDirectory].join(";")
 				])
-				.concat(ninja ? [
-					"-G",
-					"Ninja"
-				].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
+				.concat(generatorArguments(context.environment.target, context.compilerHome, home)),
 			windowsNinja = ninja && context.environment.target.os == TargetOs.Windows,
 			configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
 			buildId = buildAction(identity, context),
@@ -103,10 +99,6 @@ class NativeCMakeProvider {
 		// A shared tree is checked under its lock, in the configure step (haxeon-locked.cmake).
 		if (!cached)
 			discardCacheOfOtherSource(buildDirectory, source);
-		// MSVC, as the Visual Studio generator would use, even when CC or CXX names another compiler.
-		if (windowsNinja)
-			for (argument in ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"])
-				configureArguments.push(argument);
 		for (argument in NativeCompilerCache.configureArguments(ccache))
 			configureArguments.push(argument);
 		if (native.cmake.libraries.length > 0) {
@@ -160,7 +152,7 @@ class NativeCMakeProvider {
 				locked("cmake", configureArguments, [
 					"-DCACHE_FILE=" + Path.join([buildDirectory, "CMakeCache.txt"]),
 					"-DSOURCE=" + source
-				]), false),
+				]), false, false, false, null, false),
 			new ExecutionAction(buildId, [configureId], [source], outputs,
 				'Build CMake target ${native.cmake.target} -> ${outputs.join(", ")}',
 				locked("cmake", [
@@ -170,7 +162,7 @@ class NativeCMakeProvider {
 					native.cmake.target,
 					"--config",
 					configuration
-				]), true, true, ninja)
+				]), true, true, ninja, null, false)
 		],
 			artifactActions:Map<String, Array<ActionId>> = [];
 		// The tree's runtime libraries, with the DLLs the package's targets leave beside them, reach the directory that programs
@@ -187,7 +179,7 @@ class NativeCMakeProvider {
 					"-DTO=" + publishedDirectory,
 					"-P",
 					publishScript
-				]), true, true));
+				]), true, true, false, null, false));
 		for (artifact in artifacts)
 			if (artifact.id.packageId == resolvedPackage.name && artifact.id.kind == ArtifactKind.NativeSharedLibrary)
 				artifactActions.set(artifact.id.key(), [cached ? publishId : buildId]);
@@ -384,7 +376,11 @@ class NativeCMakeProvider {
 	 * `core` became `native`), and CMake refuses to configure a cache that another source directory generated. The
 	 * cache can only be reused by that source, so it is dropped and the configure starts the tree over.
 	 */
-	static function discardCacheOfOtherSource(buildDirectory:String, source:String):Void {
+	/**
+	 * Deletes the CMake cache of `buildDirectory` when another source directory generated it (the SDK moved, or a package
+	 * resolved elsewhere), since CMake refuses to configure a tree for another source.
+	 */
+	public static function discardCacheOfOtherSource(buildDirectory:String, source:String):Void {
 		var cache = Path.join([buildDirectory, "CMakeCache.txt"]);
 		if (!sys.FileSystem.exists(cache))
 			return;
@@ -449,6 +445,19 @@ class NativeCMakeProvider {
 			major = Std.parseInt(parts[0]),
 			minor = parts.length > 1 ? Std.parseInt(parts[1]) : 0;
 		return major != null && minor != null && (major > 1 || (major == 1 && minor >= 13));
+	}
+
+	/**
+	 * The generator a CMake tree for `target` is configured with: Ninja when `ninjaAvailable`, with its executable from
+	 * `programHome` (default `home`), and then MSVC as the compiler, as the Visual Studio generator would use, even when CC
+	 * or CXX names another; otherwise nothing, which leaves CMake's default.
+	 */
+	public static function generatorArguments(target:Target, home:String, ?programHome:String):Array<String> {
+		if (!ninjaAvailable(target, home))
+			return [];
+		var program = ninjaExecutable(programHome == null ? home : programHome);
+		return ["-G", "Ninja"].concat(Path.isAbsolute(program) ? ["-DCMAKE_MAKE_PROGRAM=" + program] : [])
+			.concat(target.os == TargetOs.Windows ? ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"] : []);
 	}
 
 	/**

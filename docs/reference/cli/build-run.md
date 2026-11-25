@@ -13,8 +13,11 @@ cmake --build DIR` (or `macos`, `windows`) builds the same app once a build has 
 platform the app does not list, or without its
 runner, is a usage error that names `haxeon create .`.
 
-Paths in the project file are relative to that file. Console host builds go to
-`build/host/main.hl`. Web app bundles go to `build/web/wasm32/` or
+Paths in the project file are relative to that file. Console host builds write
+`build/host/main.hl`, which the VM runs. A console project's release build (`--build-mode release`) compiles it ahead of
+time into `build/OS/bin/NAME` (`linux`, `macos` or `windows`; `NAME.exe` on Windows), where `NAME` is the package name,
+with the shared libraries of its native packages beside it: that directory is what you ship, and the executable runs
+from wherever it is copied. It needs a C toolchain and CMake. Web app bundles go to `build/web/wasm32/` or
 `build/web/wasm-gc/`, ready to serve over HTTP. Console Wasm builds write just
 the module in `build/wasm32/` or `build/wasm-gc/`.
 Android builds package `build/android/app-debug.apk` through the app's Gradle
@@ -23,7 +26,7 @@ runner. Use `--gradle-inputs FILE` to prepare a standalone Gradle build.
 Android app runners build native CMake packages with Gradle's NDK toolchain once per ABI.
 The APK contains the resulting libraries, the generated Haxe assets and the SDK host.
 
-Serve web bundles over HTTP to run them in a browser. Host output runs through HashLink on the current machine.
+Serve web bundles over HTTP to run them in a browser. Host development modules run through HashLink on the current machine.
 
 ```sh
 haxeon build
@@ -117,8 +120,8 @@ Two names describe a build, and Haxeon keeps them apart:
   with linear memory) or `wasm-gc` (WebAssembly GC). The compiler takes it as `--target=NAME`, which is Haxe's sense of
   "target"; the project build passes it.
 
-The target chooses the backend: `host`, `android` and the other native targets build `hl`, and each Wasm target selects its corresponding backend.
-An app's release build (`--build-mode=release`) builds `hlc`, which its runner compiles into the executable.
+The target chooses the backend: host development builds and Android builds use `hl`, and each Wasm target selects its corresponding backend.
+Host console and desktop app release builds use `hlc`, then CMake compiles the C into an executable.
 For a standalone C build, the direct compiler's `--target=hlc` writes the C to `OUTPUT.c/` for a C toolchain. A CMake project builds it with the SDK's CMake package: after `find_package(Haxeon)`,
 `haxeon_add_c_executable(TARGET SOURCES_DIR OUTPUT.c [DEVELOPMENT])` makes the executable, with the C compiler CMake
 chooses (`CC`, `-DCMAKE_C_COMPILER`). Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
@@ -140,7 +143,9 @@ Checking my-app (host)…
 
 ## run
 
-`haxeon run` runs the app executable, and `--watch` runs the module it rebuilds in it.
+`haxeon run` runs the app executable, or a console project's module on the VM, and `--watch` runs the module it rebuilds
+in it. `haxeon run --build-mode release` builds and runs the release executable, passing the arguments after `--` to the
+program; a release build cannot be watched.
 
 ```sh
 haxeon run

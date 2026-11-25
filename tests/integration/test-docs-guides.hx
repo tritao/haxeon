@@ -134,6 +134,24 @@ function main() {
 				liveEditing(root, Path.join([root, "docs", example.section, "examples", example.slug]), project);
 			case ["guides", "03-ui-basics"]:
 				uiBasics(Path.join([root, "docs", example.section, "examples", example.slug]), project);
+			case ["coming-from", "haxe"]:
+				var buildLog = Path.join([project, "release-build.log"]),
+					runLog = Path.join([project, "release-run.log"]),
+					executable = Path.join([project,
+						"build",
+						switch Sys.systemName() {
+							case "Windows": "windows";
+							case "Mac": "macos";
+							case _: "linux";
+						},
+							"bin",
+							Sys.systemName() == "Windows" ? "haxe.exe" : "haxe"]);
+				expectStatus(haxeon(["build", "--build-mode", "release"], project, buildLog), 0, buildLog,
+					"building the Haxe migration example in release mode");
+				expectStatus(Script.run(executable, [], {cwd: project, log: runLog}), 0, runLog,
+					"running the Haxe migration example's executable");
+				if (normalize(content(runLog)) != normalize(content(Path.join([project, "expected-output.txt"]))))
+					Script.fail('FAIL: the Haxe migration executable printed:\n${File.getContent(runLog)}');
 			case ["guides", "05-shipping"]:
 				shipping(project);
 			case _:

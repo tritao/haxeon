@@ -120,17 +120,11 @@ class ArtifactCache {
 		if (ProcessRunner.environmentValue("HAXEON_DISABLE_ARTIFACT_CACHE") == "1"
 			|| action.outputs.length == 0
 			|| action.directoryOutputs.length > 0
-			|| action.alwaysRun)
-			return false;
-		// A test result describes this checkout's data and runtime, so it stays local.
-		if (StringTools.startsWith(action.id.key(), "test:"))
+			|| action.alwaysRun
+			|| !action.shareable)
 			return false;
 		return switch action.action {
-			case Process(_, _, _, _): !StringTools.startsWith(action.id.key(),
-				"cmake-configure:") && !StringTools.startsWith(action.id.key(),
-				"native-cmake-configure:") // A package's coarse artifact can be a stamp, not its complete runtime outputs.
-				&& !StringTools.startsWith(action.id.key(), "native-cmake-build:")
-				&& !StringTools.startsWith(action.id.key(), "native-cmake-publish:");
+			case Process(_, _, _, _): true;
 			case Compiler(_, _, _, _, _): false;
 		};
 	}

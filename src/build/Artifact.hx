@@ -4,7 +4,7 @@ enum ArtifactKind {
 	Diagnostics;
 	HashLinkModule;
 
-	/** The program as C on the HashLink runtime (`--target=hlc`), which an app's runner compiles and links (docs/design/PROJECT_BUILDS.md). */
+	/** The program as C on the HashLink runtime (`--target=hlc`), which a native build compiles and links (docs/design/PROJECT_BUILDS.md). */
 	CModule;
 
 	HashLinkPatch;

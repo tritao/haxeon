@@ -42,7 +42,7 @@ class RuntimeProvider {
 					preset,
 					"-S",
 					root
-				], root, new Map())),
+				], root, new Map()), true, false, false, null, false),
 			// Let CMake/Ninja check its full dependency graph. Recursively hashing
 			// HashLink's source and include trees here costs far more than an
 			// incremental `cmake --build` and duplicates the native build check.

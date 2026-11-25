@@ -18,6 +18,7 @@ import build.execution.Executor;
 import build.execution.JobServer;
 import build.execution.OutputCapture;
 import build.execution.ProcessRunner;
+import build.native.ConsoleProgram;
 import build.native.NativeCMakeProvider;
 import build.native.ToolchainCheck;
 import compiler.core.InternalError;
@@ -568,9 +569,8 @@ class HaxeonCli {
 		// A program builds without them; an app, a package with C or C++ code and a build ahead of time need them. So a
 		// missing tool names its install command but does not fail the check.
 		if (ToolchainCheck.report()) {
-			Sys.println("An app, or a package with C or C++ code, needs the C and C++ toolchain. Install what is missing with:");
-			for (command in ToolchainCheck.installCommands())
-				Sys.println('  $command');
+			Sys.println("Apps, programs built ahead of time, and packages with C or C++ code need native build tools.");
+			Sys.println(ToolchainCheck.installGuidance());
 		}
 		var androidSdk = androidSdkDirectory(home), ndk = androidVersion(home, "ndk");
 		reportPath("Android SDK", androidSdk, false);
@@ -945,19 +945,28 @@ class HaxeonCli {
 			if (app != null && !options.plan && !options.compilerOnly)
 				AppRunner.runnerDirectory(project, app, AppRunner.hostPlatform());
 			var appScope = app != null && !options.compilerOnly ? BuildScope.Module : scope(options);
-			// An app's release build is compiled ahead of time: its program is C, which the runner compiles into the executable
-			// (docs/design/PROJECT_BUILDS.md). A development build keeps the JIT, which --watch patches.
-			var aheadOfTime = app != null && options.buildMode == "release";
+			// A release build is compiled ahead of time: its program is C, which an app's runner compiles into the app's
+			// executable (docs/design/PROJECT_BUILDS.md) and which a console program's build compiles into one that ships with
+			// its native libraries (`ConsoleProgram`). A development build keeps the JIT, which --watch patches.
+			var consoleRelease = app == null && program == null && !options.compilerOnly
+				&& options.buildMode == "release",
+				aheadOfTime = options.buildMode == "release" && (app != null || consoleRelease);
 			if (aheadOfTime && options.watch)
-				throw new UsageError("An app's release build is compiled ahead of time and cannot be watched or patched live; "
-					+ "use the development build mode");
+				throw new UsageError((app == null ? "A console program's" : "An app's")
+					+ " release build is compiled ahead of time and cannot be watched or patched live; use the development build mode");
+			if (consoleRelease && options.profile)
+				throw new UsageError("Profiling a console program's release build is not supported yet; profile its development build");
 			// A watch patches the app in the live host when its entry class has the host's entry points, unless told to restart.
 			var live = options.patchable || options.watch && !options.restart && watchesLive(project, options);
 			var buildDirectory = HaxeonProjectBuild.outputDirectory(project, instrument);
 			// A program compiled ahead of time is C, written at `main.c/`.
 			var output = options.output == null
 				? Path.join([buildDirectory, "host", aheadOfTime ? "main" : "main.hl"]) : resolvePath(options.output,
-				project.root);
+				project.root),
+				executable = consoleRelease ? ConsoleProgram.executablePath(buildDirectory, Target.detectHost(),
+					project.rootPackage.name) : null;
+			if (consoleRelease && !options.plan)
+				ToolchainCheck.requireAheadOfTime();
 			// A stamp left by an earlier compiler would pin the live host to that revision if this compiler (a bootstrap
 			// one, say) writes none; without a stamp the host reads the description every tick.
 			if (live && FileSystem.exists(output + ".live.stamp"))
@@ -972,7 +981,8 @@ class HaxeonCli {
 				options.plan, options.explain, options.timings,
 				resolutionMs, options.selfHosted, appScope, live, instrument, session,
 				options.buildMode == "development", null, null, options.style,
-				aheadOfTime, program == null ? null : program.scriptModule) catch (error:haxe.Exception) {
+				aheadOfTime, program == null ? null : program.scriptModule, null,
+				consoleRelease) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
@@ -984,19 +994,22 @@ class HaxeonCli {
 				ensureDirectory(Path.directory(publishTo));
 				File.copy(output, publishTo);
 			}
-			reportBuilt(options, publishTo == null ? output : publishTo, buildStatus, started);
+			reportBuilt(options, executable != null ? executable : publishTo == null ? output : publishTo, buildStatus,
+				started);
 			releaseQuietOutput(options, buildStatus != 0);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			// Under the build's PATH, which chooses the worker the rebuilds will reach.
 			if (live && session != null)
 				session.warmLiveCompiler();
-			// An app runs as its runner's executable, which finds its native libraries beside itself.
-			var runner = app == null ? null : AppRunner.executable(project, AppRunner.hostPlatform());
+			// An app runs as its runner's executable and a console program's release as its own, each of which finds its native
+			// libraries beside itself.
+			var runner = app == null ? executable : AppRunner.executable(project, AppRunner.hostPlatform());
 			var hashlink = runner != null
 				? runner : Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]);
 			if (!FileSystem.exists(hashlink))
-				throw new InternalError('HashLink is missing: $hashlink (run scripts/build-native.sh)');
+				throw new InternalError(runner != null ? 'Executable is missing: $runner'
+					: 'HashLink is missing: $hashlink (run scripts/build-native.sh)');
 			var nativeDirectories = [
 				for (resolvedPackage in project.packages.packages)
 					if (resolvedPackage.nativeSources.length > 0
@@ -1017,8 +1030,9 @@ class HaxeonCli {
 				arguments.push(output);
 			arguments = arguments.concat(options.runtimeArguments);
 			var environment = launchEnvironment(),
-				libraryPath = runtimeLibraryPath(home, nativeDirectories);
-			environment.set(libraryPath.name, libraryPath.value);
+				libraryPath = consoleRelease ? null : runtimeLibraryPath(home, nativeDirectories);
+			if (libraryPath != null)
+				environment.set(libraryPath.name, libraryPath.value);
 			if (options.launchPlan != null) {
 				File.saveContent(resolvePath(options.launchPlan, invokedFrom), Json.stringify({
 					command: hashlink,
@@ -1034,7 +1048,8 @@ class HaxeonCli {
 			// that includes PATH. Rebuilds keep the PATH the first build had, so they reach the same worker and its module
 			// identity, and a live app can be patched instead of reloaded.
 			var buildPath = environmentCopy("PATH");
-			Sys.putEnv(libraryPath.name, libraryPath.value);
+			if (libraryPath != null)
+				Sys.putEnv(libraryPath.name, libraryPath.value);
 			var runPath = environmentCopy("PATH");
 			if (options.watch) {
 				var liveHost:Null<String> = null;

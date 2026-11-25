@@ -32,11 +32,19 @@ class ExecutionAction {
 	 */
 	public final jobserverClient:Bool;
 
+	/**
+	 * Whether the shared artifact cache may store the outputs and give them to another build with the same fingerprint. Not
+	 * when they depend on more than the declared inputs (a CMake tree's state), or describe this checkout (a test result),
+	 * or embed this project's paths (an executable's debug information).
+	 */
+	public final shareable:Bool;
+
 	public function new(id:ActionId, dependencies:Array<ActionId>, inputs:Array<String>, outputs:Array<String>,
 			description:String, action:ActionKind,
 			fingerprintDependencies:Bool = true, alwaysRun:Bool = false, jobserverClient:Bool = false,
-			?directoryOutputs:Array<String>) {
+			?directoryOutputs:Array<String>, shareable:Bool = true) {
 		this.jobserverClient = jobserverClient;
+		this.shareable = shareable;
 		this.id = id;
 		this.dependencies = dependencies.copy();
 		this.dependencies.sort((left, right) -> Reflect.compare(left.key(), right.key()));

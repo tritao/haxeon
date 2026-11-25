@@ -110,6 +110,25 @@ Settings; signing it with your Developer ID and notarizing it is not done for yo
 `build/windows/app/` directory: the executable finds its DLLs beside it. The machine that runs it needs the Microsoft
 Visual C++ runtime, which most Windows machines have; an installer is not made for you yet.
 
+## Command-line programs
+
+A console project (`haxeon create my_tool --template console`) has no runner. Its release build compiles the program
+ahead of time into an executable, with the shared libraries of the packages it uses beside it:
+
+```sh
+haxeon build --build-mode=release
+```
+
+```text
+build/linux/bin/
+  my_tool                     the program
+  libnativekit_filesystem.so  the native libraries of the packages it uses, when it uses any
+```
+
+The executable finds those libraries in its own directory, so distribute the whole directory: `build/macos/bin/` on
+macOS, `build/windows/bin/` (with `my_tool.exe`) on Windows. `haxeon run --build-mode=release -- ARGUMENTS` builds it and
+runs it with the arguments. As for an app, the C library on the build machine sets the oldest Linux it runs on.
+
 ## The runner is yours
 
 `linux/CMakeLists.txt` (and `macos/`, `windows/` beside it) is an ordinary CMake project that `haxeon create` wrote and

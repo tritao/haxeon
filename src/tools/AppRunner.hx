@@ -22,11 +22,7 @@ import sys.io.File;
 class AppRunner {
 	/** The platform this machine builds for, as `[app].platforms` names it. */
 	public static function hostPlatform():String
-		return switch Sys.systemName() {
-			case "Windows": "windows";
-			case "Mac": "macos";
-			case _: "linux";
-		};
+		return Target.osName(Target.detectHost().os);
 
 	/** The runner directory of `platform`, checked: the app lists the platform and has its runner. */
 	public static function runnerDirectory(project:ResolvedProject, app:AppManifest, platform:String):String {

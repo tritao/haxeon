@@ -15,9 +15,32 @@ class ToolchainCheck {
 
 	/** Prints an `ok:` or `missing:` line for each part of this machine's toolchain; true when something is missing. */
 	public static function report():Bool {
+		return check(false, (found, text) -> Sys.println('${found ? "ok" : "missing"}: $text'));
+	}
+
+	/**
+	 * Fails with what is missing and the commands that install it, as `haxeon doctor` prints them, when this machine cannot
+	 * build a program compiled ahead of time: a C compiler, CMake and a build tool. A console program needs neither the C++
+	 * compiler nor the GUI libraries an app's window does; packages that need them say so when they build.
+	 */
+	public static function requireAheadOfTime():Void {
+		var missing = [];
+		if (check(true, (found, text) -> {
+			if (!found)
+				missing.push('missing: $text');
+		}))
+			throw new compiler.core.UsageError(missing.join("\n") + "\n" + installGuidance());
+	}
+
+	/** The commands that install the missing tools on this machine, as one paragraph. */
+	public static function installGuidance():String
+		return "Install what is missing with:\n  " + installCommands().join("\n  ");
+
+	/** Reports each tool to `report`; with `program`, only what a program compiled ahead of time needs. */
+	static function check(program:Bool, report:(Bool, String) -> Void):Bool {
 		var host = Target.detectHost(), missing = false;
 		function line(found:Bool, text:String):Void {
-			Sys.println('${found ? "ok" : "missing"}: $text');
+			report(found, text);
 			if (!found)
 				missing = true;
 		}
@@ -32,9 +55,9 @@ class ToolchainCheck {
 				var developer = HostCommand.text("xcode-select", ["-p"]), tools = developer != null && developer != "";
 				line(tools, tools ? 'Xcode command line tools ($developer)' : "Xcode command line tools");
 				if (tools)
-					compilers(line);
+					compilers(line, program);
 			case _:
-				compilers(line);
+				compilers(line, program);
 		}
 		var version = cmakeVersion();
 		if (version == null)
@@ -52,7 +75,7 @@ class ToolchainCheck {
 					tool = name;
 			line(tool != null, 'build tool (${tool != null ? tool : "ninja or make"})');
 		}
-		if (host.os == TargetOs.Linux) {
+		if (!program && host.os == TargetOs.Linux) {
 			// The UI package's window is GTK 3 and draws with OpenGL; Fontconfig finds the system's fonts. pkg-config is how
 			// their CMake finds GTK and Fontconfig.
 			var pkgConfig = HostCommand.text("pkg-config", ["--version"]) != null;
@@ -87,10 +110,13 @@ class ToolchainCheck {
 		};
 	}
 
-	static function compilers(line:(Bool, String) -> Void):Void {
-		var c = compiler("CC", ["cc", "gcc", "clang"]), cxx = compiler("CXX", ["c++", "g++", "clang++"]);
+	static function compilers(line:(Bool, String) -> Void, program:Bool):Void {
+		var c = compiler("CC", ["cc", "gcc", "clang"]);
 		line(c != null, 'C compiler (${c != null ? c : "cc, gcc or clang"})');
-		line(cxx != null, 'C++ compiler (${cxx != null ? cxx : "c++, g++ or clang++"})');
+		if (!program) {
+			var cxx = compiler("CXX", ["c++", "g++", "clang++"]);
+			line(cxx != null, 'C++ compiler (${cxx != null ? cxx : "c++, g++ or clang++"})');
+		}
 	}
 
 	/** `CC` or `CXX` when set, else the first of `names` that runs: CMake's own order. Null when none runs. */
