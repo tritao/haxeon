@@ -17,7 +17,7 @@ import haxeon.ui.icons.IconName;
 import haxeon.ui.style.StyleProperty;
 
 /** Small font-independent affordances shared by selection controls. */
-class SelectionIndicator {
+internal class SelectionIndicator {
 	public static function search(key:String, color:Color):View return new SelectionIndicatorView(key,
 		0,
 		color,

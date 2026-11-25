@@ -15,7 +15,7 @@ import haxeon.ui.animation.DelayedAnimation;
 import haxeon.ui.animation.RetainedAnimation;
 
 /** Owns the reusable resources and command encoding for a procedural spinner. */
-class SpinnerPainter implements Disposable {
+internal class SpinnerPainter implements Disposable {
 	static inline var TwoPi:Float = 6.283185307179586;
 
 	public var kind(default, null):SpinnerKind;
@@ -218,7 +218,7 @@ class SpinnerPainter implements Disposable {
  * key), so its frames rebuild nothing. An editor waiting on a long background job therefore idles near zero CPU.
  */
 @:noCompletion
-class SpinnerClock implements DelayedAnimation implements RetainedAnimation {
+internal class SpinnerClock implements DelayedAnimation implements RetainedAnimation {
 	/** Visible steps per second; smooth enough for an indeterminate indicator. */
 	public static inline var StepsPerSecond:Float = 15.0;
 	/** A wake this close to a step boundary takes the step, so timer jitter does not cost an extra wake. */

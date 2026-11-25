@@ -32,7 +32,7 @@ import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollView;
 
 /** Mutable bridge for active-option visibility across rebuilt render trees. */
-class SelectionPopupVisibility {
+internal class SelectionPopupVisibility {
 	public var ensure:Int->Void;
 
 	public function new() {
@@ -41,7 +41,7 @@ class SelectionPopupVisibility {
 }
 
 /** Result of building a shared selection popup. */
-class SelectionPopupResult {
+internal class SelectionPopupResult {
 	public final node:RenderNode;
 	public final optionNodes:Array<RenderNode>;
 	public final ensureActiveVisible:Int->Void;
@@ -54,7 +54,7 @@ class SelectionPopupResult {
 }
 
 /** Internal popup/list kernel shared by Select and ComboBox. */
-class SelectionPopup {
+internal class SelectionPopup {
 	final options:Array<SelectOption<Dynamic>>;
 	final visibleIndices:Array<Int>;
 	public var selectedValue:Dynamic;
