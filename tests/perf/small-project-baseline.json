@@ -7,10 +7,10 @@
 			"why": "Instructions of every process the build starts on the VM, from perf: startup, which dominates a small project's build, and the compile. Compared only where perf is installed and allowed."
 		},
 		"vm_build_allocated_bytes": {
-			"value": 63321640,
+			"value": 68115360,
 			"tolerance": 0.02,
 			"why": "What the compile server on the VM allocated for the build (its worker allocations): deterministic for a given compiler and project.",
-			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (build about +1.7 and +0.7 MB)"
+			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (build about +1.7 and +0.7 MB); then stdlib typed in every program: 8b5e8403e (keyValueIterator on Array, Map and String, +0.4 MB), 0bf8f03af (Std's map formatter, +1.1 MB), ac8a1069b (ObjectMap's iteration methods nest V in {key, value}, so JsonPrinter's ObjectMap<Dynamic, Bool> is a specialized owner typed for every program, +2.2 MB after 07b95ac10 took back its repeated owner walks); 4ff774d3e's AST fields +0.3 MB after d3bb11835; smaller steps under 0.4 MB"
 		},
 		"vm_check_instructions": {
 			"value": 10345595459,
@@ -18,10 +18,10 @@
 			"why": "As vm_build_instructions, for a check, which types the project without writing a module."
 		},
 		"vm_check_allocated_bytes": {
-			"value": 65821600,
+			"value": 70440760,
 			"tolerance": 0.02,
 			"why": "What the compile server on the VM allocated for the check: deterministic for a given compiler and project.",
-			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (check about +2.4 and +0.9 MB)"
+			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (check about +2.4 and +0.9 MB); then stdlib typed in every program: 8b5e8403e (keyValueIterator on Array, Map and String, +0.4 MB), 0bf8f03af (Std's map formatter, +1.1 MB), ac8a1069b (ObjectMap's iteration methods nest V in {key, value}, so JsonPrinter's ObjectMap<Dynamic, Bool> is a specialized owner typed for every program, +2.2 MB after 07b95ac10 took back its repeated owner walks); 4ff774d3e's AST fields +0.3 MB after d3bb11835; smaller steps under 0.4 MB"
 		},
 		"vm_build_empty_store_instructions": {
 			"value": 14647488311,
@@ -34,10 +34,10 @@
 			"why": "Instructions of every process the build starts with haxeon-aot, from perf: startup, which dominates a small project's build, and the compile. Compared only where perf is installed and allowed."
 		},
 		"aot_build_allocated_bytes": {
-			"value": 40496712,
+			"value": 42160608,
 			"tolerance": 0.02,
 			"why": "What the compile server with haxeon-aot allocated for the build (its worker allocations): deterministic for a given compiler and project.",
-			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.42 MB ahead of time; haxeon-aot does not build in 41a2453b8's window)"
+			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.42 MB ahead of time; haxeon-aot does not build in 41a2453b8's window); then stdlib typed in every program: 8b5e8403e (+0.24 MB), 0bf8f03af (+0.67 MB), ac8a1069b (JsonPrinter's ObjectMap<Dynamic, Bool> now a specialized owner, +1.2 MB after 07b95ac10); the commits after 0bf8f03af took 0.7 to 0.9 MB back"
 		},
 		"aot_check_instructions": {
 			"value": 1290040326,
@@ -45,10 +45,10 @@
 			"why": "As aot_build_instructions, for a check, which types the project without writing a module."
 		},
 		"aot_check_allocated_bytes": {
-			"value": 38451128,
+			"value": 40029448,
 			"tolerance": 0.02,
 			"why": "What the compile server with haxeon-aot allocated for the check: deterministic for a given compiler and project.",
-			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.53 MB ahead of time)"
+			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.53 MB ahead of time); then stdlib typed in every program: 8b5e8403e (+0.24 MB), 0bf8f03af (+0.67 MB), ac8a1069b (JsonPrinter's ObjectMap<Dynamic, Bool> now a specialized owner, +1.2 MB after 07b95ac10); the commits after 0bf8f03af took 0.7 to 0.9 MB back"
 		},
 		"aot_build_empty_store_instructions": {
 			"value": 6651895150,

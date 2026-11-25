@@ -12,7 +12,7 @@
 			"why": "Save-to-applied wall of a changed static signature in the small program, which recompiles its callers and patches an adapter in; loose for the same reason."
 		},
 		"aot_ui_body_edit_ms": {
-			"value": 1769,
+			"value": 848,
 			"tolerance": 0.5,
 			"why": "Median save-to-applied wall of a body edit of the UI app, whose program is mostly haxeon-ui. Wall varies with the machine's load, so only a wait added on the edit's path (a poll, a write, a collection, work left from the last request) fails it."
 		},
@@ -42,10 +42,10 @@
 			"why": "The edited function, its callers and the adapter: deterministic."
 		},
 		"aot_small_server_live_bytes": {
-			"value": 34359738,
+			"value": 35433480,
 			"tolerance": 0.03,
 			"why": "The server's live data after the growth session's last edit (a full collection ends each build): what a live session keeps.",
-			"raise_reason": "The baseline was measured on a tree without recorded reads: at its own commit 0d4357594 the small session measures 33.3 MB on this machine. Since then two 1 MiB steps, bisected with the small growth session on the VM server: b62b5a39c (strict null safety in compiler.ir.passes.arrays, most likely its value-array accessor records, which now keep their names; not traced to one structure) 48.3 -> 49.4 MB, and 5ac1f3be1 (purity inference keeps each function's dependencies with the declaration facts it read, which a body edit reuses) 49.4 -> 50.5 MB. 540848a15 (recorded reads) itself lowered it, 63.4 -> 62.3 MB. Releasing the IR of the functions a live patch drops does not change it: the small session's edits drop none."
+			"raise_reason": "The baseline was measured on a tree without recorded reads: at its own commit 0d4357594 the small session measures 33.3 MB on this machine. Since then two 1 MiB steps, bisected with the small growth session on the VM server: b62b5a39c (strict null safety in compiler.ir.passes.arrays, most likely its value-array accessor records, which now keep their names; not traced to one structure) 48.3 -> 49.4 MB, and 5ac1f3be1 (purity inference keeps each function's dependencies with the declaration facts it read, which a body edit reuses) 49.4 -> 50.5 MB. 540848a15 (recorded reads) itself lowered it, 63.4 -> 62.3 MB. Releasing the IR of the functions a live patch drops does not change it: the small session's edits drop none; then ac8a1069b gives ObjectMap keyValueIterator, which nests V in {key, value}, so JsonPrinter's ObjectMap<Dynamic, Bool>, in every program's graph, is a specialized owner whose typed body and IR the session keeps: 33.3 -> 35.4 MB (2 MiB, bisected on haxeon-aot); a commit between 8de70024e and f0ca8de9f had taken 1 MiB back from the 34.4 MB baseline"
 		},
 		"aot_small_server_live_growth_bytes": {
 			"value": 0,
@@ -53,10 +53,9 @@
 			"why": "Live data growth over the growth session's edits after those that fill the session. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack absorbs the collector's page rounding."
 		},
 		"aot_ui_server_live_bytes": {
-			"value": 967441383,
+			"value": 857919717,
 			"tolerance": 0.03,
-			"why": "The server's live data after the growth session's last edit (a full collection ends each build): what a live session keeps.",
-			"raise_reason": "The baseline was measured on a tree without recorded reads: at its own commit 0d4357594 the ui session measures 971.7 MB on this machine. 540848a15 (typed units invalidated by what they recorded reading; the session keeps each unit's reads and each fact's print) adds 67.6 MB on the VM server, 1049.0 -> 1116.7 MB. Since 0d4357594 the VM server's figure fell 25 MB (991.1 MB there, 966.4 MB at e015e48d4), and 3d3bed2c6 (the inliner keeps what it made of each function with what it read of its callees) adds 7.5 MB (973.9 MB)."
+			"why": "The server's live data after the growth session's last edit (a full collection ends each build): what a live session keeps."
 		},
 		"aot_ui_server_live_growth_bytes": {
 			"value": 4294967,
