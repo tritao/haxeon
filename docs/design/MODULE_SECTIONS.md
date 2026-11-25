@@ -1,7 +1,8 @@
 # Module sections and load-time linking (design note)
 
-Status: designed 2026-11-25, not started. The user's decision: per-module sections and load-time linking replace "stable
-output indices" ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3, [QUERY_ENGINE.md](QUERY_ENGINE.md) row B).
+Status: designed 2026-11-25, not started; the open questions are decided (section 9). The user's decision: per-module
+sections and load-time linking replace "stable output indices" ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3,
+[QUERY_ENGINE.md](QUERY_ENGINE.md) row B).
 
 **Problem.** HashLink's function, type, global, string and constant tables are dense and numbered in first-use order, so a
 cold build's index depends on everything lowered before it. A warm build that adds an entry renumbers, relinks and
@@ -248,11 +249,13 @@ and perf-guard, including startup.
 
 Slice 3 can land before engine slices 1–6. Slice 7 then turns its per-section memo into the `ModuleSection` query.
 
-## 9. Open questions
+## 9. Decided
 
-1. **Import keys.** Text (module, member) pairs cost about +0.4 MB on the compiler and are robust. 64-bit hashes would
-   cost about 0.13 MB but need a collision rule. This note assumes text.
-2. **Unowned generated functions** (`$anon` printers, shared helpers). This note puts them in one shared section. A new
-   anonymous type then re-encodes that section, about 600 functions, est. 0.05G.
-3. **JIT cache by section digest.** The loader could keep the JIT code of sections whose digest is unchanged across a full
-   reload. This is out of scope here and relates to the deferred lazy JIT.
+Decided by the user on 2026-11-25:
+
+1. **Import keys are text** (module, member) pairs. They are robust and need no collision rule. Their size, about
+   +0.4 MB on the compiler against 0.13 MB for 64-bit hashes, shrinks under the LZ4 compression a section can carry.
+2. **Unowned generated functions** (`$anon` printers, shared helpers) go in **one shared section**. A new anonymous type
+   re-encodes it, about 600 functions, est. 0.05G, which is small. A section per printer would add about 512 directory
+   entries for little gain.
+3. **A JIT cache by section digest** across full reloads is **out of scope**. It comes later, with the deferred lazy JIT.
