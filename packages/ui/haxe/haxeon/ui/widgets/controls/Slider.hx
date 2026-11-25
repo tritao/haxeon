@@ -21,10 +21,14 @@ import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleTarget;
 
-/** Horizontal value slider with Haxe-owned pointer, keyboard, and semantic behavior. */
+/**
+ * Horizontal value slider with Haxe-owned pointer, keyboard, and semantic behavior. It draws only its track and thumb:
+ * show a visible label, usually with the value, beside it.
+ */
 class Slider implements View {
 	public final key:String;
-	public final label:String;
+	/** The name assistive technology announces; not drawn. */
+	public final accessibleName:String;
 	public var value:Float;
 	public final minimum:Float;
 	public final maximum:Float;
@@ -34,7 +38,7 @@ class Slider implements View {
 	public final style:LayoutStyle;
 
 	public function new(key:String,
-			label:String,
+			accessibleName:String,
 			value:Float,
 			minimum:Float = 0.0,
 			maximum:Float = 1.0,
@@ -46,7 +50,7 @@ class Slider implements View {
 			<= 0.0)
 			throw 'Slider "$key" values and range are invalid: value $value, range $minimum to $maximum, step $step';
 		this.key = key;
-		this.label = label == null ? "" : label;
+		this.accessibleName = accessibleName == null ? "" : accessibleName;
 		this.minimum = minimum;
 		this.maximum = maximum;
 		this.step = step;
@@ -78,7 +82,7 @@ class Slider implements View {
 		node.computedStyle = computed;
 		node.focusable = enabled;
 		node.enabled = enabled;
-		var semantics = new Semantics(AccessibilityRole.Slider, label, Std.string(value));
+		var semantics = new Semantics(AccessibilityRole.Slider, accessibleName, Std.string(value));
 		semantics.actions = AccessibilityAction.SetValue | AccessibilityAction.Increment
 			| AccessibilityAction.Decrement;
 		semantics.numericValue = value;
