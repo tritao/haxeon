@@ -689,11 +689,7 @@ class FrontendCompilation {
 		for (classDecl in typedNew.classes)
 			canonicalObjectCache.remove(classDecl.name);
 		var typedObjects = IrProgramAssembler.objectsFrom(generator, typedNew, null, false, printsStructures(context));
-		// The printers the anonymous structures among these objects name, made from the same typed program as the objects and kept
-		// beside them (`objectCache`): a later pass or build may take an object from the cache without typing its structure again.
-		if (printsStructures(context))
-			for (fn in IrProgramAssembler.anonymousStringsFrom(generator, typedNew))
-				context.state.anonymousStrings.set(fn.name, fn);
+		keepStructureObjects(build, generator, typedObjects);
 		var canonicalAbi = compiler.ir.passes.enums.IrInlineEnumLayout.CANONICAL_ABI;
 		if (typedNew.nativeAbiTarget == canonicalAbi) {
 			for (object in typedObjects)
@@ -730,6 +726,35 @@ class FrontendCompilation {
 		build.currentObjects = currentObjects;
 		build.generator = generator.withObjects(currentObjects);
 		build.allocationAfterObjects = AllocationMeter.sample();
+	}
+
+	/**
+	 * The anonymous structures' objects among `typedObjects` (`IrProgramAssembler.objectsFrom` lists them last, in the typed
+	 * program's order), with their printers. An object the same as the one the cache holds is that one, and its printer is the
+	 * one made from it (`SessionState.structurePrinters`), since the printer reads nothing else of the structure: its fields'
+	 * names and lowered types, in order. A later build may take an object from the cache without typing its structure again, so
+	 * a printer is kept as long as its object.
+	 */
+	static function keepStructureObjects(build:FrontendBuild, generator:IrGenerator,
+			typedObjects:Array<IrObject>):Void {
+		var context = build.context,
+			anonymousTypes = build.typed().anonymousTypes,
+			objectCache = context.state.objectCache,
+			printers = printsStructures(context) ? context.state.structurePrinters : null,
+			first = typedObjects.length - anonymousTypes.length;
+		if (printers != null)
+			printers.checks = context.options.checkReuse;
+		for (index in 0...anonymousTypes.length) {
+			var anonymous = anonymousTypes[index], object = typedObjects[first + index];
+			if (object.name != anonymous.name)
+				throw new InternalError('Anonymous structure "${anonymous.name}" has no object where objectsFrom lists it');
+			var cached = objectCache.get(object.name);
+			if (cached != null && compiler.ir.model.IrDeclarationEquality.sameObject(cached, object))
+				typedObjects[first + index] = object = cached;
+			if (printers != null)
+				printers.made(IrProgramAssembler.anonymousStringName(anonymous.name), [object],
+					() -> IrProgramAssembler.anonymousString(generator, anonymous));
+		}
 	}
 
 	/**
@@ -1460,7 +1485,7 @@ class FrontendCompilation {
 	}
 
 	/**
-	 * Whether this compile prints anonymous structures through generated `__string` methods (IrProgramAssembler.anonymousStringsFrom):
+	 * Whether this compile prints anonymous structures through generated `__string` methods (IrProgramAssembler.anonymousString):
 	 * when it has the `__std_string` intrinsic that string conversion lowers to, as every compile configured with the compiler's
 	 * intrinsics does.
 	 */
@@ -1510,22 +1535,24 @@ class FrontendCompilation {
 		build.enums = IrProgramAssembler.enumsFrom(generator, typedNew);
 		build.staticFields = IrProgramAssembler.staticFieldsFrom(generator, typedNew);
 		var generationWarnings:Array<compiler.core.Diagnostic> = [];
+		context.state.initializerFunctions.checks = context.options.checkReuse;
 		build.initializers = [
 			for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, build.initializationClasses,
-				build.cached, generationWarnings, context.state.staticReferences))
+				build.cached, generationWarnings, context.state.staticReferences, context.state.initializerFunctions))
 				compiler.ir.pipeline.IrSourceRehash.of(fn, currentHashes)
 		].concat(liveInitializers);
 		context.state.staticReferences.endBuild();
+		context.state.initializerFunctions.sweep();
 		TypingWarnings.publishGeneration(context, build.names, generationWarnings, build.rollbackModules);
-		// The printers made with the objects (`context.state.anonymousStrings`), for every structure the program has.
+		// The printers made with the objects (`context.state.structurePrinters`), for every structure the program has.
 		if (printsStructures(context)) {
-			var printers = context.state.anonymousStrings;
+			var printers = context.state.structurePrinters;
 			// Every object whose `__string` objectsFrom pointed at a generated printer.
 			for (object in build.objects)
 				for (method in object.methods)
 					if (method.name == "__string"
 						&& method.functionName.name == IrProgramAssembler.anonymousStringName(object.name)) {
-						var printer = printers.get(method.functionName.name);
+						var printer = printers.kept(method.functionName.name, [object]);
 						if (printer == null)
 							throw new InternalError('Anonymous structure "${object.name}" has no generated __string');
 						build.cached.push(printer);

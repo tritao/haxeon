@@ -265,9 +265,10 @@ class IrLineage {
 
 	/**
 	 * Starts a build's lineage from the assembly's input: a generator function has its version (`generated`, 0 for a function the
-	 * generator does not hold); any other one, which the frontend or the assembler makes each build (the initializers, the observable
-	 * field counts, the structure printers), is settled as a stage's output (`settle`), so it keeps its identity while it is made the
-	 * same. The cells of names the build does not have are dropped.
+	 * generator does not hold); any other one, which the frontend or the assembler makes (the initializers and structure printers,
+	 * kept while their inputs are the same objects, `IrGeneratedFunctions`; the observable field counts, made each build), is settled
+	 * as a stage's output (`settle`), so it keeps its identity while it is made the same. The cells of names the build does not
+	 * have are dropped.
 	 */
 	public static function start(memos:IrStageMemos, functions:Array<IrFunction>, generated:String->Int,
 			checks:Bool):IrLineage {

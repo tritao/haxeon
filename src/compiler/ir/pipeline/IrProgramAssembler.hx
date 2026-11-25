@@ -113,72 +113,79 @@ class IrProgramAssembler {
 	 * The boot functions: `__init` runs every class's `__init__`, then the static field initializers, in bounded parts, in the
 	 * order Haxe runs them (`StaticInitializationOrder`). `classOrder` names the classes in module order; without it the typed
 	 * program's order is used. Each class the order reaches in a loop is Haxe's warning, added to `warnings` when given.
+	 *
+	 * With `generated`, each function is kept with the typed fields it initializes, and `__init` by the names of the functions it
+	 * calls, and taken again by a build that makes it from the same ones: a typed field is the same object while its initializer's
+	 * unit is current, and a field belongs to one class.
 	 */
 	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram,
 			classOrder:Null<Array<String>>,
 			program:Array<IrFunction>, ?warnings:Array<compiler.core.Diagnostic>,
 			?references:compiler.ir.reuse
-		.IrFunctionMemo<StaticInitializationOrder.IrStaticReferences>):Array<IrFunction> {
+		.IrFunctionMemo<StaticInitializationOrder.IrStaticReferences>,
+			?generated:compiler.ir.reuse.IrGeneratedFunctions<compiler.types.TypedAst.TypedField>):Array<IrFunction> {
+		function made(key:String, from:Array<compiler.types.TypedAst.TypedField>, make:() -> IrFunction):IrFunction
+			return generated == null ? make() : generated.made(key, from, make);
+		function assign(classDecl:compiler.types.TypedAst.TypedClass,
+				field:compiler.types.TypedAst.TypedField):TypedStatement
+			return TStaticFieldAssign(classDecl.name, field.name, field.initializer, field.span);
 		var probes:Map<String, IrFunction> = [];
 		for (classDecl in typed.classes)
-			for (field in classDecl.fields) {
-				var initializer = field.initializer;
-				if (field.isStatic && !field.isInline && field.isDynamicMethod != true && initializer != null) {
+			for (field in classDecl.fields)
+				if (field.isStatic && !field.isInline && field.isDynamicMethod != true && field.initializer != null) {
 					var global = classDecl.name + "." + field.name;
-					probes.set(global, initializerFunction(generator, "__init$probe", [
-						TStaticFieldAssign(classDecl.name, field.name, initializer, field.span)
-					], field.span));
+					probes.set(global, made("__init$probe:" + global, [field],
+						() -> initializerFunction(generator, "__init$probe", [assign(classDecl, field)], field.span)));
 				}
-			}
 		var initialization = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, program,
 			references),
 			classes = initialization.order,
-			defined:Map<String, Bool> = [for (fn in program) fn.name => true],
-			inits = [
-				for (classDecl in classes)
-					if (defined.exists(StaticInitializationOrder.initFunction(classDecl.name)))
-					StaticInitializationOrder.initFunction(classDecl.name)
-			];
+			defined:Map<String, IrFunction> = [for (fn in program) fn.name => fn],
+			inits:Array<IrFunction> = [];
+		for (classDecl in classes) {
+			var init = defined.get(StaticInitializationOrder.initFunction(classDecl.name));
+			if (init != null)
+				inits.push(init);
+		}
 		if (warnings != null)
 			for (classDecl in initialization.loops)
 				warnings.push(StaticInitializationOrder.loopWarning(classDecl));
-		var bindings = new IrBuilder(),
-			lastCall:Null<IrValue> = null,
-			functions:Array<IrFunction> = [],
+		var functions:Array<IrFunction> = [],
 			statements:Array<TypedStatement> = [],
+			fields:Array<compiler.types.TypedAst.TypedField> = [],
 			spans:Array<compiler.core.Source.SourceSpan> = [];
 		// Static method closures must exist when class initialization begins, including calls from __init__.
 		for (classDecl in classes)
 			for (field in classDecl.fields)
 				if (field.isStatic && field.isDynamicMethod == true && field.initializer != null) {
 					var name = "__init$method" + functions.length;
-					functions.push(initializerFunction(generator, name, [
-						TStaticFieldAssign(classDecl.name, field.name, field.initializer, field.span)
-					], field.span));
-					lastCall = bindings.call(name, [], Void);
+					functions.push(made(name, [field],
+						() -> initializerFunction(generator, name, [assign(classDecl, field)], field.span)));
 				}
 		for (classDecl in classes)
-			for (field in classDecl.fields) {
-				var initializer = field.initializer;
-				if (field.isStatic && !field.isInline && field.isDynamicMethod != true && initializer != null) {
+			for (field in classDecl.fields)
+				if (field.isStatic && !field.isInline && field.isDynamicMethod != true && field.initializer != null) {
 					spans.push(field.span);
-					statements.push(TStaticFieldAssign(classDecl.name, field.name, initializer, field.span));
+					fields.push(field);
+					statements.push(assign(classDecl, field));
 				}
-			}
 		if (statements.length == 0 && inits.length == 0 && functions.length == 0)
 			return [];
 		var bindingCount = functions.length;
 		for (offset in 0...Std.int((statements.length + 7) / 8)) {
-			var start = offset * 8;
-			functions.push(initializerFunction(generator, "__init$part" + offset, statements.slice(start, start + 8),
-				spans[start]));
+			var start = offset * 8, name = "__init$part" + offset;
+			functions.push(made(name, fields.slice(start, start + 8),
+				() -> initializerFunction(generator, name, statements.slice(start, start + 8), spans[start])));
 		}
-		for (name in inits)
-			lastCall = bindings.call(name, [], Void);
-		for (index in bindingCount...functions.length)
-			lastCall = bindings.call(functions[index].name, [], Void);
-		bindings.returnValue(lastCall);
-		functions.unshift(new IrFunction("__init", [], Void, bindings.blocks, Ordinary));
+		var calls =
+			[for (fn in functions.slice(0, bindingCount).concat(inits).concat(functions.slice(bindingCount))) fn.name];
+		functions.unshift(made("__init:" + calls.join(","), [], function():IrFunction {
+			var bindings = new IrBuilder(), lastCall:Null<IrValue> = null;
+			for (name in calls)
+				lastCall = bindings.call(name, [], Void);
+			bindings.returnValue(lastCall);
+			return new IrFunction("__init", [], Void, bindings.blocks, Ordinary);
+		}));
 		return functions;
 	}
 
@@ -237,52 +244,48 @@ class IrProgramAssembler {
 		return functions;
 	}
 
-	/** The function that prints a value of the anonymous structure type `name` (see `anonymousStringsFrom`). */
+	/** The function that prints a value of the anonymous structure type `name` (see `anonymousString`). */
 	public static inline function anonymousStringName(name:String):String
 		return name + ".__string";
 
 	/**
-	 * The `__string` method of each anonymous structure type: `{a : 1, b : x}`, its fields in layout order (as Reflect.fields lists
+	 * The `__string` method of an anonymous structure type: `{a : 1, b : x}`, its fields in layout order (as Reflect.fields lists
 	 * them), each as Std.string converts it, as Haxe prints a structure. It is a runtime method only, with no `toString` field, so
 	 * Haxe code and Reflect do not see it; every backend's printer calls it as it calls a class's toString, and reachability keeps
 	 * it only for structures that are created while something converts values to strings. Only for a compile with the
 	 * `__std_string` intrinsic, as `objectsFrom` registers them (see `FrontendCompilation.printsStructures`).
 	 */
-	public static function anonymousStringsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrFunction> {
-		var functions:Array<IrFunction> = [];
-		for (anonymous in typed.anonymousTypes) {
-			var span = new compiler.core.Source.SourceSpan(new compiler.core.Source.SourceFile("<generated>", ""), 0,
-				0),
-				self = new TypedExpression(TLocal("this"), TAnonymous(anonymous.name, anonymous.fields), span);
-			function text(value:String):TypedExpression
-				return new TypedExpression(TStringLiteral(value), TString, span);
-			function join(left:TypedExpression, right:TypedExpression):TypedExpression
-				return new TypedExpression(TAdd(left, right), TString, span);
-			var line = text("{");
-			for (index in 0...anonymous.fields.length) {
-				var field = anonymous.fields[index],
-					value = new TypedExpression(TField(self, field.name), field.type, span);
-				line = join(line, text((index > 0 ? ", " : "") + field.name + " : "));
-				line = join(line, new TypedExpression(TCall("__std_string", [
-					new TypedExpression(TToDynamic(value), TDynamic, span)
-				]), TString, span));
-			}
-			functions.push(generator.generateFunction({
-				name: anonymousStringName(anonymous.name),
-				role: ProviderFunction(TAnonymous(anonymous.name, anonymous.fields),
-					compiler.core.Provides.ProviderOperation.StructureString),
-				owner: anonymous.name,
-				isStatic: false,
-				isConstructor: false,
-				arguments: [],
-				result: TString,
-				statements: [TReturn(join(line, text("}")), span)],
-				cells: [],
-				cellCaptures: [],
-				span: span
-			}));
+	public static function anonymousString(generator:IrGenerator,
+			anonymous:compiler.types.TypedAst.TypedAnonymous):IrFunction {
+		var span = new compiler.core.Source.SourceSpan(new compiler.core.Source.SourceFile("<generated>", ""), 0, 0),
+			self = new TypedExpression(TLocal("this"), TAnonymous(anonymous.name, anonymous.fields), span);
+		function text(value:String):TypedExpression
+			return new TypedExpression(TStringLiteral(value), TString, span);
+		function join(left:TypedExpression, right:TypedExpression):TypedExpression
+			return new TypedExpression(TAdd(left, right), TString, span);
+		var line = text("{");
+		for (index in 0...anonymous.fields.length) {
+			var field = anonymous.fields[index],
+				value = new TypedExpression(TField(self, field.name), field.type, span);
+			line = join(line, text((index > 0 ? ", " : "") + field.name + " : "));
+			line = join(line, new TypedExpression(TCall("__std_string", [
+				new TypedExpression(TToDynamic(value), TDynamic, span)
+			]), TString, span));
 		}
-		return functions;
+		return generator.generateFunction({
+			name: anonymousStringName(anonymous.name),
+			role: ProviderFunction(TAnonymous(anonymous.name, anonymous.fields),
+				compiler.core.Provides.ProviderOperation.StructureString),
+			owner: anonymous.name,
+			isStatic: false,
+			isConstructor: false,
+			arguments: [],
+			result: TString,
+			statements: [TReturn(join(line, text("}")), span)],
+			cells: [],
+			cellCaptures: [],
+			span: span
+		});
 	}
 
 	static function initializerFunction(generator:IrGenerator, name:String, statements:Array<TypedStatement>,
@@ -357,7 +360,7 @@ class IrProgramAssembler {
 
 	/**
 	 * With `printsStructures` (a compile that has the `__std_string` intrinsic), each anonymous structure type has the `__string`
-	 * method `anonymousStringsFrom` generates.
+	 * method `anonymousString` generates.
 	 */
 	public static function objectsFrom(generator:IrGenerator, typed:TypedProgram, ?layoutTarget:String,
 			canonicalValuesOnly:Bool = false, printsStructures:Bool = false):Array<IrObject> {

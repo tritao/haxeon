@@ -41,10 +41,18 @@ class SessionState {
 	public var canonicalObjectCache(default, null):Map<String, IrObject> = [];
 
 	/**
-	 * The `__string` of each anonymous structure type a build has made (IrProgramAssembler.anonymousStringsFrom), by function name:
-	 * a warm build takes objects typed by earlier builds from `objectCache`, and each needs its printer too.
+	 * The `__string` of each anonymous structure type a build has made (IrProgramAssembler.anonymousString), by function name, kept
+	 * with the structure's object in `objectCache` it was made from (`FrontendCompilation.keepStructureObjects`): a warm build
+	 * takes objects typed by earlier builds from the cache, and each needs its printer too.
 	 */
-	public var anonymousStrings(default, null):Map<String, compiler.ir.model.IrFunction> = [];
+	public var structurePrinters(default, null) = new compiler.ir.reuse.IrGeneratedFunctions<IrObject>();
+
+	/**
+	 * The boot functions (`IrProgramAssembler.staticInitializersFrom`), kept with what they were made from. Copies share it: a
+	 * function is taken only when its inputs are the same objects, so whatever a failed build left is right or unused.
+	 */
+	public var initializerFunctions(default,
+		null) = new compiler.ir.reuse.IrGeneratedFunctions<compiler.types.TypedAst.TypedField>();
 
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
@@ -126,7 +134,6 @@ class SessionState {
 			state.typedFunctions = [];
 		objectCache = [];
 		canonicalObjectCache = [];
-		anonymousStrings = [];
 		lastTypedProgram = null;
 		semanticProgram = null;
 		programFacts = null;
@@ -140,7 +147,8 @@ class SessionState {
 	/**
 	 * Releases the modules' generated IR functions, for a compile that keeps no session once its IR pipeline has its input: the
 	 * passes then hold the only copy of the program. The memos keyed by those functions are emptied with them, as their keys would
-	 * keep the functions alive. Changes the modules and the memos in place, as `releaseRetained` does.
+	 * keep the functions alive, and so are the printers and boot functions kept with their inputs. Changes the modules and the
+	 * memos in place, as `releaseRetained` does.
 	 */
 	public function releaseGeneratedIr():Void {
 		for (state in modules)
@@ -149,6 +157,8 @@ class SessionState {
 		irCalls.clear();
 		irSources.clear();
 		staticReferences.clear();
+		structurePrinters = new compiler.ir.reuse.IrGeneratedFunctions<IrObject>();
+		initializerFunctions = new compiler.ir.reuse.IrGeneratedFunctions<compiler.types.TypedAst.TypedField>();
 	}
 
 	/**
@@ -226,7 +236,8 @@ class SessionState {
 			result.modules.set(name, state);
 		result.objectCache = objectCache.copy();
 		result.canonicalObjectCache = canonicalObjectCache.copy();
-		result.anonymousStrings = anonymousStrings.copy();
+		result.structurePrinters = structurePrinters.copy();
+		result.initializerFunctions = initializerFunctions;
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
 		result.programFacts = programFacts;
