@@ -659,6 +659,7 @@ class StatementTyper {
 			return TExpression(propertyWrite, span);
 		PropertyWriteRules.rejectInstanceMutation(session, object.type, fieldName, span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
+		rejectEnumConstantMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		ValuePlaceRules.requireWritable(session, object, span);
 		return switch object.expression {
@@ -787,6 +788,18 @@ class StatementTyper {
 		return TExpression(call, span);
 	}
 
+	/** A per-case constant is the same for every value of its case, so it is never assigned. */
+	function rejectEnumConstantMutation(type:CompilerType, fieldName:String, span:SourceSpan):Void
+		switch type {
+			case TInstance(NominalKind.Enum, owner, _):
+				var enumDecl = session.enumDecls.header(owner);
+				if (enumDecl != null && compiler.semantic.EnumConstants.declared(enumDecl, fieldName) != null)
+					fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+						'Per-case constant "$owner.$fieldName" cannot be assigned',
+						span);
+			default:
+		}
+
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression,
 			span:SourceSpan,
 			scope:Scope, ?assigned:AssignedValue):TypedStatement {
@@ -806,6 +819,7 @@ class StatementTyper {
 			return TExpression(propertyWrite, span);
 		PropertyWriteRules.rejectInstanceMutation(session, object.type, fieldName, span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
+		rejectEnumConstantMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		ValuePlaceRules.requireWritable(session, object, span);
 		return switch object.expression {

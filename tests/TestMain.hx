@@ -1983,6 +1983,34 @@ class TestMain {
 		expectCompileError('enum Kind { A; public final function f():Int return 1; } function main():Int return 0;',
 			'Method "Kind.f" cannot be final');
 		Sys.println("PASS: enum members are checked as a class's are");
+		// Per-case constants are set by every case, once, to a compile-time constant of their type, and never assigned.
+		var constantErrors = [
+			['public final n:Int; A {n: 1}; B;', 'Case "E.B" must set per-case constant "n"'],
+			['public final n:Int; A {m: 1};', 'Enum "E" declares no per-case constant "m"'],
+			['public final n:Int; A {n: 1, n: 2};', 'Case "E.A" sets "n" twice'],
+			[
+				'public final n:Int; A {n: Std.random(3)};',
+				'Per-case constant "E.n" needs a compile-time constant value'
+			],
+			['public final n:Int; A {n: "x"};', 'Per-case constant "E.n" is Int, not String'],
+			[
+				'public final n:Array<Int>; A {n: 1};',
+				'Per-case constant "E.n" must be Int, Float, Bool, String, an enum without payloads, or Null of one'
+			],
+			['public var n:Int; A;', 'Enum "E": a per-case constant is final, and a variable is static'],
+			[
+				'public final n:Int; A {n: 1}; public function n():Int return 1;',
+				'Enum "E" declares both a method and a per-case constant named "n"'
+			],
+			['public final A:Int = 1; A;', 'Enum "E" declares both a case and a per-case constant named "A"']
+		];
+		for (entry in constantErrors)
+			expectCompileError('enum E { ${entry[0]} } function main():Int return 0;', entry[1], true);
+		expectCompileError('enum E { final n:Int; A {n: 1}; } function main():Int return A.n;',
+			"Cannot access private field n", true);
+		expectCompileError('enum E { public final n:Int; A {n: 1}; } function main():Int { var e:E = A; e.n = 2; return 0; }',
+			'Per-case constant "E.n" cannot be assigned', true);
+		Sys.println("PASS: per-case constants are checked at the declaration and read only");
 		Sys.println("PASS: a class used as a value is reported as unsupported, not a crash");
 		// A type's visibility is part of its declaration: making it internal is checked again in a session that analyzed it
 		// public, not taken for an edit of bodies alone.

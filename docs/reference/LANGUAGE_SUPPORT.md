@@ -21,6 +21,13 @@ The current subset includes:
   methods take the value as `this`, named or implicit (`switch this`, `components()`), static methods and `static var` or
   `final` fields belong to the enum (`Kind.parse("pair")`, `Kind.ALL`), and members are private unless written `public` or
   `internal`. A member cannot share a name with a case. See [ENUM_MEMBERS.md](../design/ENUM_MEMBERS.md).
+- An enum declares per-case constants (a Haxeon extension): `final components:Int;`, optionally with a default
+  (`final vector:Bool = true;`), which each case sets as a struct literal after its payload (`Pair {components: 2};`,
+  `Circle(radius:Float) {sides: 0};`). Every case sets every constant that has no default, once, to a compile-time
+  constant (a literal, `null` for a nullable constant, a case of a payload-free enum, or an operator over constants) of
+  type `Int`, `Float`, `Bool`, `String`, a payload-free enum or `Null` of one. A read (`value.components`, `Pair.components`,
+  `components` in the enum's methods) is the case's value, folded where the case is known; a constant is never
+  assigned.
 - An enum abstract that names its values (`RawRepresentable` or `Flags`) prints its name wherever it becomes a String:
   concatenation, interpolation, `Std.string` and `toString()` (`Button`, `Access[Read | Write]`; an undeclared raw value
   prints as `Kind(9)`, and a nullable one as `null`).

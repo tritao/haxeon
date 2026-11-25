@@ -1,6 +1,6 @@
 # Enum members and per-case constants
 
-Status: decided (2026-11-25). Members (stage 1) are implemented; per-case constants are next. Haxeon's `enum` becomes the one construct for a closed set of values:
+Status: decided (2026-11-25). Members (stage 1) and per-case constants (stage 2) are implemented; tools are next. Haxeon's `enum` becomes the one construct for a closed set of values:
 cases with optional payloads (as today), any methods and static members, and immutable per-case constants. This is a
 Haxeon extension; stock Haxe rejects it, so the compiler's own source does not use it (it still builds with stock
 Haxe).
@@ -44,7 +44,7 @@ enum EffectParameterType {
 
 ## Per-case constants
 
-An enum declares `final` fields; each case gives their values in a block after its name and payload:
+An enum declares `final` fields; each case gives their values as a struct literal after its name and payload:
 
 ```haxe
 enum EffectParameterType {
@@ -53,17 +53,17 @@ enum EffectParameterType {
 	/** The type's name, as shaders spell it. */
 	final label:String;
 
-	Float { componentCount = 1; label = "float"; }
-	Vec2 { componentCount = 2; label = "vec2"; }
-	Vec4 { componentCount = 4; label = "vec4"; }
-	Color { componentCount = 4; label = "color"; }
+	Float {componentCount: 1, label: "float"};
+	Vec2 {componentCount: 2, label: "vec2"};
+	Vec4 {componentCount: 4, label: "vec4"};
+	Color {componentCount: 4, label: "color"};
 }
 
 enum Shape {
 	final sides:Int = -1;
 
-	Circle(radius:Float) { sides = 0; }
-	Square(side:Float) { sides = 4; }
+	Circle(radius:Float) {sides: 0};
+	Square(side:Float) {sides: 4};
 	Polygon(points:Array<Point>);
 }
 ```

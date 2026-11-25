@@ -1128,6 +1128,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		for (constructor in declaration.cases)
 			if (constructor.params.length > 0)
 				hasPayload = true;
+		validateEnumConstants(declaration, substitutions);
 		var seenMethods:Map<String, Bool> = [];
 		if (declaration.methods != null)
 			for (method in declaration.methods) {
@@ -1200,6 +1201,150 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						'Cannot synthesize Hashable for "${declaration.name}": ${constructor.name}.$field does not conform to Hashable',
 						parameter.span);
 			}
+	}
+
+	/**
+	 * An enum's per-case constants (docs/design/ENUM_MEMBERS.md): each has a name of its own and a constant type, and each case
+	 * gives each a compile-time constant once, unless the constant has a default.
+	 */
+	function validateEnumConstants(declaration:compiler.syntax.Ast.AstEnum,
+			substitutions:Map<String, CompilerType>):Void {
+		var constants = declaration.constants ?? [], owner = declaration.name, declared:Map<String, CompilerType> = [];
+		var statics = session.classDecls.get(compiler.semantic.TypeStatics.storageName(owner));
+		for (constant in constants) {
+			if (declared.exists(constant.name))
+				BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+					'Duplicate per-case constant "$owner.${constant.name}"',
+					constant.span);
+			for (constructor in declaration.cases)
+				if (constructor.name == constant.name)
+					BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+						'Enum "$owner" declares both a case and a per-case constant named "${constant.name}"',
+						constant.span);
+			for (method in declaration.methods ?? [])
+				if (method.name == constant.name)
+					BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+						'Enum "$owner" declares both a method and a per-case constant named "${constant.name}"',
+						constant.span);
+			if (statics != null)
+				for (field in statics.fields)
+					if (field.name == constant.name)
+						BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+							'Enum "$owner" declares both a static and a per-case constant named "${constant.name}"',
+							constant.span);
+			var type = session.declarations.resolve(constant.type, constant.span, substitutions);
+			if (!constantType(type))
+				BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
+					'Per-case constant "$owner.${constant.name}" must be Int, Float, Bool, String, an enum without payloads, or Null of one',
+					constant.span);
+			declared.set(constant.name, type);
+			if (constant.defaultValue != null)
+				requireConstantValue(owner, constant.name, constant.defaultValue, type);
+		}
+		for (constructor in declaration.cases) {
+			var given:Map<String, Bool> = [];
+			for (value in constructor.constants ?? []) {
+				var type = declared.get(value.name);
+				if (type == null)
+					BodyTyper.fail(DiagnosticCode.NAME_OR_MEMBER,
+						'Enum "$owner" declares no per-case constant "${value.name}"', value.span);
+				if (given.exists(value.name))
+					BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+						'Case "$owner.${constructor.name}" sets "${value.name}" twice', value.span);
+				given.set(value.name, true);
+				requireConstantValue(owner, value.name, value.value, type);
+			}
+			for (constant in constants)
+				if (constant.defaultValue == null && !given.exists(constant.name))
+					BodyTyper.fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
+						'Case "$owner.${constructor.name}" must set per-case constant "${constant.name}"',
+						constructor.span);
+		}
+	}
+
+	/** Whether a per-case constant may have `type`: a value that is the same for every use of the case. */
+	function constantType(type:CompilerType):Bool {
+		return switch type {
+			case TInt, TFloat, TBool, TString: true;
+			case TNullable(element): constantType(element);
+			case TInstance(NominalKind.Enum, name, _):
+				var enumDecl = session.enumDecls.get(name);
+				enumDecl != null && !Lambda.exists(enumDecl.cases, constructor -> constructor.params.length > 0);
+			default: false;
+		};
+	}
+
+	/**
+	 * Requires that `value` is a compile-time constant of `type`: a literal, null for a nullable constant, a case of the enum
+	 * it holds, or an operator over constants. Its type is checked where the getter types it.
+	 */
+	function requireConstantValue(owner:String, constant:String, value:compiler.syntax.Ast.AstExpression,
+			type:CompilerType):Void {
+		var nullable = type.match(TNullable(_)),
+			element = switch type {
+				case TNullable(inner): inner;
+				default: type;
+			};
+		var span = compiler.syntax.Parser.expressionSpan(value);
+		if (!constantExpression(value, element, nullable))
+			BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
+				'Per-case constant "$owner.$constant" needs a compile-time constant value', span);
+		// The value's type, said of the constant rather than of the getter that returns it.
+		var given = constantValueType(value);
+		if (given != null && !TypeRelations.equals(given, element) && !(given.match(TInt) && element.match(TFloat))
+			&& !(given.match(TNull) && nullable))
+			BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
+				'Per-case constant "$owner.$constant" is ${compiler.semantic.SemanticSignature.display(element)}, not '
+				+ compiler.semantic.SemanticSignature.display(given), span);
+	}
+
+	/** The type of a constant value, or null for a case of an enum (checked by `constantExpression`). */
+	function constantValueType(value:compiler.syntax.Ast.AstExpression):Null<CompilerType> {
+		return switch value {
+			case IntegerLiteral(_, _): TInt;
+			case FloatLiteral(_, _): TFloat;
+			case StringLiteral(_, _): TString;
+			case BoolLiteral(_, _): TBool;
+			case NullLiteral(_): TNull;
+			case Not(_, _), And(_, _, _), Or(_, _, _): TBool;
+			case Negate(inner, _): constantValueType(inner);
+			case Add(left, right, _):
+				var l = constantValueType(left), r = constantValueType(right);
+				l != null && l.match(TString) || r != null && r.match(TString) ? TString : numeric(l, r);
+			case Sub(left, right, _), Mul(left, right, _), Mod(left, right, _):
+				numeric(constantValueType(left), constantValueType(right));
+			case Div(_, _, _): TFloat;
+			case BitAnd(_, _, _), BitOr(_, _, _), BitXor(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _),
+				UnsignedShiftRight(_, _, _): TInt;
+			default: null;
+		};
+	}
+
+	static function numeric(left:Null<CompilerType>, right:Null<CompilerType>):Null<CompilerType>
+		return left != null && left.match(TFloat) || right != null && right.match(TFloat) ? TFloat : left;
+
+	function constantExpression(value:compiler.syntax.Ast.AstExpression, type:CompilerType, nullable:Bool):Bool {
+		return switch value {
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _): true;
+			case NullLiteral(_): nullable;
+			case Negate(inner, _), Not(inner, _): constantExpression(inner, type, false);
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _),
+				Mod(left, right, _),
+				BitAnd(left, right, _), BitOr(left, right, _), BitXor(left, right, _), ShiftLeft(left, right, _),
+				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _), And(left, right, _), Or(left, right, _):
+				constantExpression(left, type, false) && constantExpression(right, type, false);
+			case Variable(name, _):
+				switch type {
+					case TInstance(NominalKind.Enum, enumName, _):
+						var caseName = name.indexOf(".") < 0 ? name : name.substr(name.lastIndexOf(".") + 1),
+							enumDecl = session.enumDecls.get(enumName);
+						enumDecl != null && Lambda.exists(enumDecl.cases, constructor -> constructor.name == caseName);
+					default: false;
+				}
+			case Member(Variable(prefix, span), name, _):
+				constantExpression(Variable(prefix + "." + name, span), type, false);
+			default: false;
+		};
 	}
 
 	/** A nullable value still contains its payload inline, so it cannot break a by-value cycle. */

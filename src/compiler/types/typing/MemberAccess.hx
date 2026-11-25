@@ -176,7 +176,8 @@ class MemberAccess {
 			span:SourceSpan):Void
 		require(session, {
 			owner: owner,
-			name: method.name,
+			// A per-case constant is reached by its name, not its getter's.
+			name: compiler.semantic.EnumConstants.constantOf(method.name) ?? method.name,
 			visibility: method.visibility,
 			declaredIn: method.span,
 			ownerMetadata: ownerMetadata(session, owner),

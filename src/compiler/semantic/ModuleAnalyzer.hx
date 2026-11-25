@@ -522,7 +522,7 @@ class ModuleAnalyzer {
 					fields: program.fields
 				};
 		}
-		program = ModuleFields.fold(TypeStatics.fold(program), state.name);
+		program = ModuleFields.fold(TypeStatics.fold(EnumConstants.fold(program)), state.name);
 		declareAnchors(state.source, program);
 		return new LookupParse(state.source, conditional.defines, tokens, program, embedded.inputs());
 	}

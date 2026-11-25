@@ -687,7 +687,8 @@ class Parser {
 			cases = [],
 			conformances = [],
 			methods = [],
-			fields:Array<compiler.syntax.Ast.AstField> = [];
+			fields:Array<compiler.syntax.Ast.AstField> = [],
+			constants:Array<compiler.syntax.Ast.AstEnumConstant> = [];
 		if (match(TokenKind.Colon))
 			fail(previous(), 'Enum "$name": use "implements" to declare conformance');
 		while (match(TokenKind.Implements)) {
@@ -726,8 +727,27 @@ class Parser {
 					isInline, memberVisibility));
 				continue;
 			}
+			if (!isStatic && check(TokenKind.Var))
+				fail(current(), 'Enum "$name": a per-case constant is final, and a variable is static');
+			if (isFinal && !isStatic) {
+				// A per-case constant: `final componentCount:Int;`, which each case sets (docs/design/ENUM_MEMBERS.md).
+				var constantName = textOf(consume(TokenKind.Identifier));
+				if (!check(TokenKind.Colon))
+					fail(current(), 'Per-case constant "$name.$constantName" requires a type');
+				advance();
+				var constantType = parseType(),
+					defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
+				constants.push({
+					name: constantName,
+					visibility: memberVisibility,
+					metadata: caseMetadata,
+					type: constantType,
+					defaultValue: defaultValue,
+					span: spanTo(memberStart, consume(TokenKind.Semicolon))
+				});
+				continue;
+			}
 			if (isFinal || check(TokenKind.Var)) {
-				if (!isStatic) fail(current(), 'Enum "$name": per-case constants are not supported yet');
 				fields.push(parseField(caseMetadata, memberVisibility, true, isInline, isFinal, memberStart));
 				continue;
 			}
@@ -755,10 +775,30 @@ class Parser {
 					} while (match(TokenKind.Comma));
 				consume(TokenKind.RightParen);
 			}
+			// The case's per-case constant values, written as a struct literal after its payload: `Pair {components: 2};`.
+			var caseConstants:Null<Array<compiler.syntax.Ast.AstEnumCaseConstant>> = null;
+			if (match(TokenKind.LeftBrace)) {
+				caseConstants = [];
+				if (!check(TokenKind.RightBrace))
+					do {
+						if (check(TokenKind.RightBrace))
+							break;
+						var constantToken = consume(TokenKind.Identifier);
+						consume(TokenKind.Colon);
+						var value = parseExpression();
+						caseConstants.push({
+							name: textOf(constantToken),
+							value: value,
+							span: spanTo(spanOf(constantToken), previous())
+						});
+					} while (match(TokenKind.Comma));
+				consume(TokenKind.RightBrace);
+			}
 			cases.push({
 				name: textOf(caseToken),
 				metadata: caseMetadata,
 				params: params,
+				constants: caseConstants,
 				span: spanBetween(caseToken, previous())
 			});
 			consume(TokenKind.Semicolon);
@@ -771,6 +811,7 @@ class Parser {
 			conformances: conformances,
 			methods: methods,
 			fields: fields,
+			constants: constants,
 			metadata: metadata,
 			cases: cases,
 			visibility: visibility,

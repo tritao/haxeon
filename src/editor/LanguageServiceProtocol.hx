@@ -68,7 +68,7 @@ class LanguageServiceProtocol {
 				case "update":
 					service.update(requiredString(request, "path"), requiredString(request, "source"));
 					result = cast {
-						updated:true
+						updated: true
 					};
 				case "compile":
 					var build = service.compile(requiredString(request, "entry"), token),
@@ -78,25 +78,25 @@ class LanguageServiceProtocol {
 						artifactKind = patch != null ? "patch" : build.requiresReload
 							|| initialLoad ? "module" : "none";
 					result = cast {
-						compatibility:{
-							schemaVersion:AbiChangeSchema.VERSION,
-							decision:build.requiresReload ? "reload_domain" : initialLoad ? "initial_load" : "patch",
-							baseRevision:artifactKind == "patch" ? build.baseRevision : 0,
-							targetRevision:build.revision,
-							domainIdentity:Base64.encode(hashLink.runtimeIdentity.sub(4, 16)),
-							artifactKind:artifactKind,
-							reasons:[for (reason in build.reloadReasons) AbiChangeSchema.encode(reason)]
+						compatibility: {
+							schemaVersion: AbiChangeSchema.VERSION,
+							decision: build.requiresReload ? "reload_domain" : initialLoad ? "initial_load" : "patch",
+							baseRevision: artifactKind == "patch" ? build.baseRevision : 0,
+							targetRevision: build.revision,
+							domainIdentity: Base64.encode(hashLink.runtimeIdentity.sub(4, 16)),
+							artifactKind: artifactKind,
+							reasons: [for (reason in build.reloadReasons) AbiChangeSchema.encode(reason)]
 						},
-							revision:build.revision,
-							retyped:build.retyped,
-							regenerated:build.regenerated,
-							changedFunctions:build.changedFunctions,
-							requiresReload:build.requiresReload,
-							patchAvailable:patch != null,
-							moduleBase64:Base64.encode(HlWriter.encode(hashLink.module).flatten()),
-							patchBase64:patch == null ? null : Base64.encode(patch),
-							runtimeIdentityBase64:Base64.encode(hashLink.runtimeIdentity),
-							metrics:build.metrics
+						revision: build.revision,
+						retyped: build.retyped,
+						regenerated: build.regenerated,
+						changedFunctions: build.changedFunctions,
+						requiresReload: build.requiresReload,
+						patchAvailable: patch != null,
+						moduleBase64: Base64.encode(HlWriter.encode(hashLink.module).flatten()),
+						patchBase64: patch == null ? null : Base64.encode(patch),
+						runtimeIdentityBase64: Base64.encode(hashLink.runtimeIdentity),
+						metrics: build.metrics
 					};
 				case "acknowledge":
 					service.compiler.acknowledgePublication(requiredInt(request, "revision"));
@@ -113,8 +113,8 @@ class LanguageServiceProtocol {
 						requiredString(request, "source"), requiredString(request, "entry"),
 						token);
 					result = cast {
-						valid:validation.valid,
-							diagnostic:validation.diagnostic == null ? null : diagnosticJson(validation.diagnostic)
+						valid: validation.valid,
+						diagnostic: validation.diagnostic == null ? null : diagnosticJson(validation.diagnostic)
 					};
 				case "diagnostics":
 					var diagnostics:Array<Dynamic> = [
@@ -148,10 +148,10 @@ class LanguageServiceProtocol {
 					result = cast[for (edit in service.rename(requiredString(request, "path"),
 						requiredInt(request, "position"), requiredString(request, "replacement")))
 						cast {
-							text:edit.path,
-								start:edit.span.start,
-								end:edit.span.end,
-								replacement:edit.replacement
+							text: edit.path,
+							start: edit.span.start,
+							end: edit.span.end,
+							replacement: edit.replacement
 						}];
 				default:
 					throw new InternalError('Unknown language-service method "$method"');

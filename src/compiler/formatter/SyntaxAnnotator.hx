@@ -270,6 +270,9 @@ class SyntaxAnnotator {
 			|| previous == TokenKind.Else)
 			&& !startsObjectLiteral(tokens, syntaxIndexes, position))
 			return true;
+		// So is a brace after a name that starts with `name:`: an enum case's constant values (`Pair {components: 2};`).
+		if (previous == TokenKind.Identifier && startsObjectLiteral(tokens, syntaxIndexes, position))
+			return false;
 		return switch previous {
 			case TokenKind.Assign, TokenKind.Colon, TokenKind.Comma, TokenKind.LeftParen, TokenKind.LeftBracket,
 				TokenKind.Arrow, TokenKind.Return, TokenKind.Question, TokenKind.RightParen, TokenKind.Else,

@@ -88,7 +88,12 @@ class ModuleChangeAnalyzer {
 							+ [
 								for (param in caseDecl.params)
 									(param.optional ? "?" : "") + SemanticSignature.parsed(param.type, ast.aliases)
-							].join(",") + ")"
+							].join(",")
+							+ ")" // Its per-case constant values; the constants themselves are their getters, among the methods.
+							+ [
+								for (value in caseDecl.constants ?? [])
+									"{" + value.name + "=" + sourceFingerprint(state, value.span) + "}"
+							].join("")
 					].join(";") + "}";
 			if (enumDecl.methods != null) for (method in enumDecl.methods)
 				signature += ";method:" + method.visibility.modifier() + (method.isStatic ? ":static:" : ":")

@@ -210,6 +210,30 @@ typedef AstEnumCase = {
 	final name:String;
 	final metadata:Array<AstMetadata>;
 	final params:Array<AstEnumParameter>;
+
+	/** The values it gives its enum's per-case constants (`Float {componentCount: 1}`), in the order written. */
+	final ?constants:Array<AstEnumCaseConstant>;
+
+	final span:SourceSpan;
+}
+
+/** A per-case constant an enum declares (`final componentCount:Int;`), which each case sets (docs/design/ENUM_MEMBERS.md). */
+typedef AstEnumConstant = {
+	final name:String;
+	final visibility:AstVisibility;
+	final metadata:Array<AstMetadata>;
+	final type:AstType;
+
+	/** The value of a case that does not set it; null when every case must. */
+	final defaultValue:Null<AstExpression>;
+
+	final span:SourceSpan;
+}
+
+/** One case's value for a per-case constant: `componentCount = 1`. */
+typedef AstEnumCaseConstant = {
+	final name:String;
+	final value:AstExpression;
 	final span:SourceSpan;
 }
 
@@ -226,6 +250,9 @@ typedef AstEnum = {
 
 	/** Its static variables; the module keeps them in a hidden class (`TypeStatics`). */
 	final ?fields:Array<AstField>;
+
+	/** Its per-case constants; each becomes a getter among its methods (`EnumConstants`). */
+	final ?constants:Array<AstEnumConstant>;
 
 	final metadata:Array<AstMetadata>;
 	final cases:Array<AstEnumCase>;

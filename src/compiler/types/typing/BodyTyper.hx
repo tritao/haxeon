@@ -3,6 +3,7 @@ package compiler.types.typing;
 import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.runtime.RuntimeType;
+import compiler.semantic.EnumConstants;
 import compiler.semantic.TypeStatics;
 import compiler.syntax.Ast.AstArgument;
 import compiler.types.TypeRelations;
@@ -1995,7 +1996,8 @@ class BodyTyper implements BodyTyping {
 						scope) : inlineValue;
 				}
 				var thisType = scope.receiverType();
-				if (thisType != null && findFieldType(thisType, name) != null)
+				if (thisType != null
+					&& (findFieldType(thisType, name) != null || enumConstantOwner(thisType, name) != null))
 					return typedMemberWithFlow(implicitReceiver(span, scope), name, span, scope);
 			}
 			var enumLiteral = sourceIsBareReference(span) ? expectedEnumLiteral(name, expectedType, span) : null;
@@ -2180,6 +2182,22 @@ class BodyTyper implements BodyTyping {
 					object;
 				}
 			}
+		};
+	}
+
+	/**
+	 * The enum that declares the per-case constant `name`, when `type` is that enum's: a read of the constant's getter, so code
+	 * that names it is typed again when the constant changes.
+	 */
+	function enumConstantOwner(type:CompilerType, name:String):Null<String> {
+		return switch type {
+			case TInstance(NominalKind.Enum, owner, _):
+				var declaration = session.enumDecls.header(owner);
+				if (declaration == null || declaration.constants == null)
+					return null;
+				session.readSignature(owner + "." + EnumConstants.getterName(name));
+				EnumConstants.declared(declaration, name) == null ? null : owner;
+			default: null;
 		};
 	}
 
@@ -2450,6 +2468,9 @@ class BodyTyper implements BodyTyping {
 		if (property != null)
 			return callResolver.typeAbstractAccessorCall(object, AbstractProperties.accessor(session, property, true,
 				span), [], span, scope);
+		// A per-case constant reads as a call of its getter (`EnumConstants`).
+		if (enumConstantOwner(object.type, name) != null)
+			return callResolver.typeMethodCall(object, EnumConstants.getterName(name), [], span, scope, null);
 		var member = typedMember(object, name, span);
 		return refinedFieldValue(member, scope.resolveAccess(member));
 	}

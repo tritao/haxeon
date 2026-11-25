@@ -170,6 +170,17 @@ class ModuleCanonicalizer {
 				? [] : [for (type in enumDecl.conformances) canonicalType(type, aliases, enumDecl.typeParameters)],
 			methods: enumDecl.methods == null ? [] : [for (method in enumDecl.methods) canonicalFunction(method, module,
 				entry, locals, method.name, enumAliases)],
+			fields: enumDecl.fields,
+			constants: enumDecl.constants == null ? null : [for (constant in enumDecl.constants)
+				{
+					name: constant.name,
+					visibility: constant.visibility,
+					metadata: constant.metadata,
+					type: canonicalType(constant.type, aliases, enumDecl.typeParameters),
+					defaultValue: canonicalOptionalExpression(constant.defaultValue, module, entry, locals,
+						enumAliases),
+					span: constant.span
+				}],
 			metadata: enumDecl.metadata,
 			visibility: enumDecl.visibility,
 			cases: [for (caseDecl in enumDecl.cases)
@@ -182,6 +193,12 @@ class ModuleCanonicalizer {
 							type: canonicalType(param.type, aliases, enumDecl.typeParameters),
 							optional: param.optional,
 							span: param.span
+						}],
+					constants: caseDecl.constants == null ? null : [for (value in caseDecl.constants)
+						{
+							name: value.name,
+							value: canonicalExpression(value.value, module, entry, locals, enumAliases),
+							span: value.span
 						}],
 					span: caseDecl.span
 				}],

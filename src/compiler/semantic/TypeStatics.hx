@@ -108,6 +108,7 @@ class TypeStatics {
 			conformances: declaration.conformances,
 			methods: declaration.methods,
 			fields: [],
+			constants: declaration.constants,
 			metadata: declaration.metadata,
 			cases: declaration.cases,
 			span: declaration.span

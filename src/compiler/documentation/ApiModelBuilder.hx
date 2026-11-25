@@ -14,6 +14,7 @@ import compiler.documentation.Documentation;
 import compiler.documentation.Documentation.DocumentationTools;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
+import compiler.semantic.EnumConstants;
 import compiler.semantic.TypeStatics;
 import compiler.semantic.InterfaceFieldAccessors;
 import compiler.semantic.ModuleFields;
@@ -228,7 +229,23 @@ class ApiModelBuilder {
 		if (storage != null)
 			members = members.concat(fields(ownerInfo(storage.name, storage.span, storage.typeParameters,
 				storage.typeConstraints), storage.fields, false));
-		addMethods(members, owner, decl.methods ?? [], false);
+		// A per-case constant reads as a final field; its getter is no method of the API (`EnumConstants`).
+		for (constant in decl.constants ?? [])
+			if (constant.visibility.reachable(false))
+				members.push({
+					source: source(constant.span, constant.metadata, constant.visibility.isInternal()),
+					kind: "field",
+					name: constant.name,
+					isStatic: false,
+					isFinal: true,
+					type: typeOf(constant.type,
+						() -> semantic.declarations.resolve(constant.type, constant.span, scope),
+						constant.span, scope),
+					overrides: null
+				});
+		addMethods(members, owner,
+			[for (method in decl.methods ?? []) if (!EnumConstants.isGetter(method.name)) method],
+			false);
 		return declaration(owner, "enum", decl.metadata, false, members, null, decl.conformances);
 	}
 
