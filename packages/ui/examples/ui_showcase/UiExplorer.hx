@@ -251,6 +251,17 @@ class UiExplorer implements Disposable {
 	}
 
 	/** Selects one of the deterministic browser screenshot states, 0-34. */
+	/** Shows catalog page `id`, as its navigation entry does; false when the catalog has no such page. */
+	public function openPage(id:String):Bool {
+		if (ExplorerCatalog.find(id) == null)
+			return false;
+		state.selectedPage = id;
+		state.inspector.selectedNodeId = 0;
+		state.inspector.hoveredNodeId = 0;
+		state.inspector.tab = "preview";
+		return true;
+	}
+
 	public function setVisualCase(caseId:Int):Bool {
 		return ExplorerVisualCases.apply(this, caseId);
 	}

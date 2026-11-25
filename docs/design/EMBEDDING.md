@@ -185,7 +185,7 @@ Which target fits which engine:
 |---|---|
 | `haxeon_runtime` | Math functions: `__math_sin`, `__math_pow`, ... |
 | `std` | `sys_exit`, `sys_time` |
-| `haxeon_host` | `print`, `write_output`, `flush_output`, `date_now`, `date_timezone_offset`, `callback_create`, `callback_close`, and `fuel_charge` in the runtime-neutral profile |
+| `haxeon_host` | `print`, `write_output`, `flush_output`, `date_now`, `date_timezone_offset`, `argument_count`, `argument`, `callback_create`, `callback_close`, and `fuel_charge` in the runtime-neutral profile |
 | one per HXI `@library` | The game API, e.g. `game` |
 
 Only what a module uses is imported. The sample script on wasm-gc imports exactly its seven `game` functions;

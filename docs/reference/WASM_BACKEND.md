@@ -74,12 +74,14 @@ Neither backend's value layout crosses the boundary, so one host serves both
 the wasm32 and wasm-gc targets.
 
 - `HaxeonHost` declares the host services (`print`,
-  `write_output`, `flush_output`, `date_now`, `date_timezone_offset`, `callback_create`,
-  `callback_close`). The compiler registers it for Wasm targets; `trace`
+  `write_output`, `flush_output`, `date_now`, `date_timezone_offset`, `argument_count`, `argument`,
+  `callback_create`, `callback_close`). The compiler registers it for Wasm targets; `trace`
   (which prints Haxe's `File.hx:line: message` lines), `Sys.print`, `Sys.stdout()`,
-  `Sys.stderr()` and `Date` use it.
+  `Sys.stderr()`, `Sys.args()` and `Date` use it.
   `write_output(text, error)` selects stdout with 0 or stderr with 1;
   `flush_output(error)` publishes an unterminated line on that stream.
+  `Sys.args()` returns the strings the host passes (`haxeon-host.js`'s `args` option); on wasm-gc it is
+  empty, since the strings would need linear memory.
 - The scalar `std` (`sys_time`, `sys_exit`, …) and `haxeon_runtime` math
   imports remain.
 - C functions bound through HXI follow the Wasm32 C ABI as clang and

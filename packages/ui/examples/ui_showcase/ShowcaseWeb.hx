@@ -90,6 +90,10 @@ class ShowcaseWeb implements UiFrameApplication {
 		defer if (!opened) dispose();
 		// A visual case sets its own theme.
 		if (config.visualCase < 0) explorer.setLightTheme(config.lightTheme);
+		// The page's start page, as `--page=<id>` (web_shell.html passes its `page` query).
+		for (argument in Sys.args())
+			if (StringTools.startsWith(argument, "--page=") && !explorer.openPage(argument.substr(7)))
+				throw BindingError.invalidArgument("ShowcaseWeb", 'The UI Explorer has no page ${argument.substr(7)}');
 		if (config.visualCase >= 0 && !explorer.setVisualCase(config.visualCase))
 			throw BindingError.invalidArgument("ShowcaseWeb", "UI Explorer rejected the visual case");
 		if (config.graphics) openGraphics();

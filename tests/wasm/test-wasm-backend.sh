@@ -335,8 +335,6 @@ const cases = [
     let shortStructImportCalled = false;
     let hostServicesCheck = null;
     const imports = {};
-    if (relative.endsWith("wasm-cli-memory-filesystem.wasm"))
-      imports.haxeon_runtime = {__sys_args: () => []};
     if (relative.endsWith("wasm-gc-raw-pointer.wasm"))
       imports.fixture = {inspect_raw_pointer: pointer => pointer};
     if (relative.includes("wasm-utf8-result-")) {
@@ -363,6 +361,7 @@ const cases = [
       if (unexpected.length !== 0)
         throw new Error(`${relative}: unexpected imports ${unexpected.map(entry => entry.module + "." + entry.name).join(", ")}`);
       let printed = "", errors = "", flushes = [];
+      const hostArguments = ["--page=controls", "λ 雪"];
       imports.haxeon_runtime = {__sys_monotonic_time: () => performance.now() / 1000};
       imports.haxeon_host = {
         print: pointer => {
@@ -381,7 +380,17 @@ const cases = [
         flush_output: error => flushes.push(error),
         date_now: () => Date.now(),
         // As haxeon-host.js: the guest's offset is local time minus UTC, JavaScript's the other way round.
-        date_timezone_offset: time => -new Date(time).getTimezoneOffset()
+        date_timezone_offset: time => -new Date(time).getTimezoneOffset(),
+        // The arguments as NUL-terminated UTF-8 at the end of memory, which this program's heap does not reach.
+        argument_count: () => hostArguments.length,
+        argument: index => {
+          const buffer = moduleInstance.exports.memory.buffer;
+          let pointer = buffer.byteLength - 256;
+          for (let i = 0; i < index; i++) pointer += new TextEncoder().encode(hostArguments[i]).length + 1;
+          const bytes = new TextEncoder().encode(hostArguments[index] + "\0");
+          new Uint8Array(buffer, pointer, bytes.length).set(bytes);
+          return pointer;
+        }
       };
       hostServicesCheck = () => {
         if (printed !== "wasm-host-services.hx:4: host trace\nhost println\nstdout λ" || errors !== "stderr 雪" || JSON.stringify(flushes) !== "[0,1]")
@@ -851,8 +860,11 @@ const cases = [
     const module = new WebAssembly.Module(fs.readFileSync(path.join(out, `wasm-cli-host-streams-${target}.wasm`)));
     const memory = new WebAssembly.Memory({initial: 256, maximum: 4096});
     const output = [], errors = [];
+    // The arguments go at the top of the shared memory, which the guest's heap does not reach.
+    let top = memory.buffer.byteLength;
     const guest = await context.adapter.instantiate(module, {memory, emscripten: {},
-      print: line => output.push(line), printError: line => errors.push(line)});
+      print: line => output.push(line), printError: line => errors.push(line),
+      args: ["--page=controls", "λ 雪"], allocate: size => (top -= size), release: () => {}});
     const result = guest.exports.main();
     if (result !== 42 || JSON.stringify(output) !== JSON.stringify(["wasm-host-services.hx:4: host trace", "host println", "stdout λ"])
         || JSON.stringify(errors) !== JSON.stringify(["stderr 雪"]) || guest.unavailable.length)

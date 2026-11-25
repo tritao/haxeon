@@ -479,7 +479,9 @@
         .then(module => {
           const instantiateStarted = performance.now();
           return HaxeonWasmHost.instantiate(module,
-              {emscripten: Module, memory: hostMemory, contract: memoryContract, wrap: timeHostCall})
+              // The explorer's start page, as the desktop build's --page option.
+              {emscripten: Module, memory: hostMemory, contract: memoryContract, wrap: timeHostCall,
+                args: query.has("page") ? ["--page=" + query.get("page")] : []})
             .then(started => {
               benchmarkGuestInstantiateMs = performance.now() - instantiateStarted;
               return started.instance;

@@ -21,6 +21,15 @@ interface HaxeonHost @target("portable-abi32") @library("haxeon_host") {
 	 */
 	extern fn date_timezone_offset(time: f64) -> i32;
 	/**
+	 * How many arguments the host started the program with (Sys.args): a page's, for example, which it can take from
+	 * its URL.
+	 */
+	extern fn argument_count() -> i32;
+	/**
+	 * Argument `index`, below argument_count(), which stays in shared memory while the program runs.
+	 */
+	extern fn argument(index: i32) -> utf8 @borrowed;
+	/**
 	 * Adds a function-table entry that native code can call as a C function of Wasm type `signature` (for
 	 * example "vii"). Calling it calls the guest export `entry` with `id` followed by the C arguments.
 	 * Returns the table index.

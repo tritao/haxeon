@@ -44,6 +44,11 @@ The native `--ui-visual-case=N` mode renders one deterministic Explorer page
 and exits, which is useful for headless captures and focused resize/regression
 checks. Case 33 is the Decorations page.
 
+`--page=<id>` starts on a catalog page (`controls`, `text`, `layout`, … as in
+`ExplorerCatalog.hx`). The WebGL host takes it from its URL, as
+`nativekit_ui_haxeon.html?page=controls`, and its theme as `?theme=dark` or
+`?theme=light`, following the browser's preference without one.
+
 The WebGL host starts in the UI Explorer. The visual suite captures both the
 Graphics Lab and deterministic UI Explorer states: overview, dark/light and
 focused controls, text editing, layout, a scrolled virtual list,

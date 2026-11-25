@@ -41,6 +41,7 @@ var HaxeonWasmHost = (() => {
    *   contract    the host's memory contract; the guest's must match it field for field
    *   print       receives each complete line the guest prints (default console.log)
    *   printError  receives each stderr line (default console.error); stream flush emits partial lines
+   *   args        the strings the guest's Sys.args() returns (default none); a wasm32 guest that reads them needs allocate
    *   wrap        optional (module, name, fn) => fn applied to each forwarded C function, e.g. to time calls
    *   allocate    optional size => address of shared memory for native arenas and host errors, with release(address);
    *   release     both default to the Emscripten module's malloc and free when it exports them
@@ -49,7 +50,7 @@ var HaxeonWasmHost = (() => {
    * like its own exceptions; a guest without exceptions gets a JavaScript Error, which stops it.
    */
   async function instantiate(source, {emscripten, memory, contract, print = line => console.log(line), printError = line => console.error(line), wrap = null,
-      allocate = emscripten && emscripten._malloc, release = emscripten && emscripten._free}) {
+      args = [], allocate = emscripten && emscripten._malloc, release = emscripten && emscripten._free}) {
     const module = source instanceof WebAssembly.Module ? source
       : await WebAssembly.compileStreaming(source instanceof Response || source instanceof Promise ? source : fetch(source));
     const guestContract = memoryContract(module);
@@ -93,6 +94,11 @@ var HaxeonWasmHost = (() => {
         date_now: () => Date.now(),
         // JavaScript's offset is UTC minus local time; the guest's is local time minus UTC.
         date_timezone_offset: time => -new Date(time).getTimezoneOffset(),
+        argument_count: () => args.length,
+        argument: index => {
+          if (!(index >= 0 && index < args.length)) return fail(`Argument ${index} is out of range`);
+          return argumentAddress(index);
+        },
         // Native code calls the table entry as a C function; it forwards to the guest's exported entry.
         callback_create: (entry, signature, id) => {
           const target = exports[cString(entry)];
@@ -134,6 +140,18 @@ var HaxeonWasmHost = (() => {
       }
     };
     const encoder = new TextEncoder();
+    // Each argument is written once, NUL-terminated, where it stays while the guest runs.
+    const argumentAddresses = [];
+    const argumentAddress = index => {
+      if (argumentAddresses[index] === undefined) {
+        if (typeof allocate !== "function") return fail("The host does not provide memory for the program's arguments");
+        const bytes = encoder.encode(String(args[index]) + "\0"), address = allocate(bytes.length);
+        if (!address) return fail("Allocating the program's arguments failed");
+        new Uint8Array(memory.buffer, address, bytes.length).set(bytes);
+        argumentAddresses[index] = address;
+      }
+      return argumentAddresses[index];
+    };
     // Throws `message` as a haxeon.wasm.HostError with the guest's exception tag when it can.
     const fail = message => {
       const tag = exports && exports.__haxeon_exception, create = exports && exports["haxeon.wasm.HostError.fromLinear"];

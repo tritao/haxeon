@@ -105,8 +105,12 @@ extern function sysGetPid():Int;
 extern function sysExit(code:Int):Void;
 
 #if wasmgc
+// The host's arguments are strings in linear memory, which a Wasm GC program does not have.
 function sysArgs():Array<String>
 	return [];
+#elseif wasm
+function sysArgs():Array<String>
+	return [for (index in 0...haxeon.wasm.HaxeonHost.argument_count()) haxeon.wasm.HaxeonHost.argument(index)];
 #else
 @:hlNative("haxeon_runtime", "__sys_args")
 extern function sysArgs():Array<String>;

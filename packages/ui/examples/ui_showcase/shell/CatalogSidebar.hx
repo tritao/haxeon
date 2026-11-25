@@ -72,10 +72,7 @@ class CatalogSidebar {
 		style.padding = new Insets(10.0, 8.0, 10.0, 8.0);
 		var navigationTitle = explorer.width < 760.0 ? page.compactTitle : page.title;
 		var item = new Button(navigationTitle, style, function() {
-			explorer.state.selectedPage = page.id;
-			explorer.state.inspector.selectedNodeId = 0;
-			explorer.state.inspector.hoveredNodeId = 0;
-			explorer.state.inspector.tab = "preview";
+			explorer.openPage(page.id);
 		}, "nav-" + page.id, null, ButtonVariant.Navigation, explorer.state.selectedPage == page.id);
 		children.push(explorer.keyed("nav-" + page.id, item));
 	}

@@ -66,6 +66,7 @@ class ShowcaseDesktop {
 		var uiWindowChromeTest = has(args, "--ui-window-chrome-test");
 		var staticFrame = has(args, "--static-frame");
 		var printStats = has(args, "--stats");
+		var startPage:Null<String> = null;
 		var uiVisualCase = -1;
 		var uiVisualFrameLimit = 1;
 		for (arg in args)
@@ -74,6 +75,8 @@ class ShowcaseDesktop {
 				if (parsed == null)
 					return 2;
 				uiVisualCase = parsed;
+			} else if (arg.indexOf("--page=") == 0) {
+				startPage = arg.substr(7);
 			} else if (arg.indexOf("--ui-visual-frames=") == 0) {
 				var parsed = Std.parseInt(arg.substr(19));
 				if (parsed == null || parsed <= 0)
@@ -86,7 +89,8 @@ class ShowcaseDesktop {
 		for (arg in args)
 			if (arg != "--smoke-test" && arg != "--ui-smoke-test" && arg != "--ui-static-frame"
 				&& arg != "--ui-window-chrome-test" && arg != "--static-frame" && arg != "--stats"
-				&& arg.indexOf("--ui-visual-case=") != 0 && arg.indexOf("--ui-visual-frames=") != 0)
+				&& arg.indexOf("--ui-visual-case=") != 0 && arg.indexOf("--ui-visual-frames=") != 0
+				&& arg.indexOf("--page=") != 0)
 				return 2;
 
 		var initialized = false;
@@ -213,6 +217,8 @@ class ShowcaseDesktop {
 				explorer.attachWindow(window);
 				explorerInput = explorer.attachInput(activePump, new Handle(window.rawValue()));
 				if (uiVisualCase >= 0 && !explorer.setVisualCase(uiVisualCase))
+					return 2;
+				if (startPage != null && !explorer.openPage(startPage))
 					return 2;
 				explorer.setViewport(frameState.logicalWidth, frameState.logicalHeight, initialWidth,
 					initialHeight, 1.0);

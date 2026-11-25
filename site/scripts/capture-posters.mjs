@@ -16,13 +16,12 @@ try {
     // Room for the page's margin around the canvas, which it otherwise shrinks to fit.
     const page = await browser.newPage({ viewport: { width: width + 80, height: height + 100 }, deviceScaleFactor: 2 });
     await serveDirectory(page, publicDirectory);
-    await page.goto(`${origin}/ui/showcase/?theme=${theme}`);
+    await page.goto(`${origin}/ui/showcase/?page=controls&theme=${theme}`);
     await page.waitForFunction(() => Number(document.documentElement.dataset.nativekitFrames) > 30, null, { timeout: 60_000 });
     const canvas = page.locator('canvas').first();
     const box = await canvas.boundingBox();
     assert.ok(box && box.width === width && box.height === height, `Expected a ${width}x${height} canvas, got ${JSON.stringify(box)}`);
-    // Controls, in the catalog; then the pointer rests on the page title so nothing shows hovered.
-    await page.mouse.click(box.x + 55, box.y + 259);
+    // The pointer rests on the page title, so nothing shows hovered.
     await page.mouse.move(box.x + 700, box.y + 100);
     await page.waitForTimeout(1000);
     const file = `ui/showcase-${theme}.webp`;

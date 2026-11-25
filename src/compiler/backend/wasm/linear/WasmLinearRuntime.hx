@@ -25,7 +25,7 @@ class WasmLinearRuntime {
 				switch native.symbol {
 					case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
 						"__math_exp", "__math_log",
-						"__sys_args", "sys_time", "__sys_monotonic_time", "sys_cpu_time",
+						"sys_time", "__sys_monotonic_time", "sys_cpu_time",
 						"sys_thread_cpu_time", "sys_process_memory",
 						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc", "native_free":
 						runtimeImport(module, native);
@@ -493,7 +493,7 @@ class WasmLinearRuntime {
 			]));
 			case "fun_compare": addCompareMethods(module, native.name);
 			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
-				"__math_exp", "__math_log", "__sys_args":
+				"__math_exp", "__math_log":
 				runtimeImportIndex(module, native);
 			case "__math_floor", "__math_ceil", "__math_round": addMathRoundToInt(module, native.name, native.symbol);
 			case "__math_is_finite": addMathIsFinite(module, native.name);
