@@ -1884,7 +1884,8 @@ class FrontendCompilation {
 				units: units
 			};
 		var functions:Map<String, IrFunction> = [],
-			physicalMethods:Map<String, String> = [];
+			physicalMethods:Map<String, String> = [],
+			lambdas:Map<String, String> = [];
 		for (module in modules) {
 			var state = context.state.modules.get(module);
 			if (state == null)
@@ -1894,6 +1895,18 @@ class FrontendCompilation {
 			for (name => fn in state.typedFunctions)
 				if (fn.physicalOwner != null)
 					physicalMethods.set(name, fn.physicalOwner);
+				else if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Lambda && fn.origin != null)
+					lambdas.set(name, fn.origin);
+		}
+		// A lambda belongs to the method it is written in: one in a generated class's method names that class as the method
+		// does, and retaining the class for it would keep the class alive through its own code.
+		for (name => origin in lambdas) {
+			var root = origin;
+			while (lambdas.exists(root))
+				root = lambdas.get(root);
+			var owner = physicalMethods.get(root);
+			if (owner != null)
+				physicalMethods.set(name, owner);
 		}
 		// Every function that stays in the program counts, not only those a source function reaches: later IR passes rewrite
 		// the cached bodies (a call to a key path helper is inlined into its callers), so the helpers and generated bodies

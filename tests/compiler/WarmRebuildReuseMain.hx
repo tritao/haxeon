@@ -212,6 +212,7 @@ class WarmRebuildReuseMain {
 		tryAfterEditAbove(failures);
 		afterValidation(failures);
 		linesInsertedAbove(failures);
+		specializationOfAnEditedStructure(failures);
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
@@ -475,6 +476,58 @@ class WarmRebuildReuseMain {
 				} catch (error:Dynamic) {
 					failures.push('${edit.label}${live ? ", live" : ""}: ${Std.string(error)}');
 				}
+	}
+
+	/**
+	 * A generic class specialized for a structure is another specialization once the structure's fields change. The old one's
+	 * lambdas (`ObjectMap.keyValueIterator`'s) name it, but they belong to its methods and do not keep it: the warm build has
+	 * only what a fresh one has.
+	 */
+	static function specializationOfAnEditedStructure(failures:Array<String>):Void {
+		var files = [
+			"Key.hx" => "typedef Key = { final name:String; final a:Int; }",
+			"Info.hx" => "class Info { public final n:Int; public function new(n:Int) this.n = n; }",
+			"Table.hx"
+				=> "class Table { public final types = new haxe.ds.ObjectMap<Key, Info>(); public function new() {} }",
+			"Main.hx"
+				=> "class Main { static function main():Int { var table = new Table(), key:Key = {name: \"x\", a: 1}; "
+				+ "table.types.set(key, new Info(41)); var total = 0; for (k => v in table.types) total += k.a + v.n; "
+				+ "trace([for (k in table.types.keys()) k.name]); return total; } }"
+		];
+		for (check in [false, true])
+			try {
+				var compiler = newCompiler(files);
+				compiler.options = new CompileOptions({checkReuse: check});
+				compiler.compile("Main");
+				var warm = rebuild(compiler, files, files -> {
+					files.set("Key.hx", "typedef Key = { final name:String; final a:Int; final b:Int; }");
+					files.set("Main.hx", StringTools.replace(files.get("Main.hx"), "a: 1}", "a: 1, b: 0}"));
+				}),
+					freshCompiler = newCompiler(files),
+					fresh = freshCompiler.compile("Main");
+				var warmClasses = specializedClasses(compiler), freshClasses = specializedClasses(freshCompiler);
+				if (warmClasses != freshClasses)
+					throw 'the warm typed program has other specializations than a fresh one\nwarm:  $warmClasses\nfresh: $freshClasses';
+				var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
+					freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+				if (warmBytes.compare(freshBytes) != 0)
+					throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
+			} catch (error:Dynamic) {
+				failures.push('after an edit of a structure a generic class is specialized for${check ? ", checked" : ""}: '
+					+ Std.string(error));
+			}
+	}
+
+	/** The specialized classes of the last typed program and the types the generic owners are named for, sorted. */
+	static function specializedClasses(compiler:Compiler):String {
+		var program = compiler.lastTypedProgram;
+		if (program == null)
+			throw "no typed program";
+		var names = [for (entry in program.classes) if (entry.specializationOrigin != null) entry.name],
+			aliases = [for (key in program.genericOwnerAliases.keys()) key];
+		names.sort(Reflect.compare);
+		aliases.sort(Reflect.compare);
+		return names.concat(aliases).join("\n");
 	}
 
 	/** The names of the anonymous types of the last typed program, sorted: a warm program lists what a fresh one does. */
