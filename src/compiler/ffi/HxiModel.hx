@@ -101,6 +101,10 @@ enum HxiDeclaration {
 }
 
 class HxiInterface {
+	/** The name an interface imported from `header` gets when its manifest names none: the header's file name. */
+	public static function defaultName(header:String):String
+		return StringTools.replace(StringTools.replace(header, "\\", "/").split("/").pop(), ".", "_");
+
 	public final name:String;
 	public final target:String;
 	public final library:Null<String>;

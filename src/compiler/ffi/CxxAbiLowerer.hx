@@ -114,7 +114,8 @@ class CxxAbiLowerer {
 			}
 		declarations.sort(function(left, right) return Reflect.compare(declarationName(left), declarationName(right)));
 		var source = model.span.file;
-		return new HxiInterface(interfaceName == null ? moduleName(model.header) : interfaceName, target, library,
+		return new HxiInterface(interfaceName == null ? HxiInterface.defaultName(model.header) : interfaceName, target,
+			library,
 			dependencies == null ? [] : dependencies.copy(), declarations, source.span(0, source.bytes.length));
 	}
 
@@ -425,9 +426,4 @@ class CxxAbiLowerer {
 				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
 				_): name;
 		};
-
-	static function moduleName(path:String):String {
-		var name = StringTools.replace(path, "\\", "/").split("/").pop();
-		return StringTools.replace(name, ".", "_");
-	}
 }

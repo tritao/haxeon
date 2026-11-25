@@ -235,6 +235,10 @@ class FfiImportManifest {
 
 /** FFI manifest paths resolved against the owning package. */
 class ResolvedFfiImport {
+	/** The interface this import generates: the manifest's `interface`, else the importer's default for the header. */
+	public function interfaceName():String
+		return config.interfaceName ?? compiler.ffi.HxiModel.HxiInterface.defaultName(header);
+
 	public final manifestPath:String;
 	public final packageRoot:String;
 	public final config:FfiImportManifest;

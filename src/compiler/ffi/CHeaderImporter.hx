@@ -159,7 +159,8 @@ class CHeaderImporter {
 				}
 		}
 		var source = sourceFile(FileSystem.fullPath(header));
-		return new HxiInterface(interfaceName == null ? moduleName(header) : interfaceName, target, library,
+		return new HxiInterface(interfaceName == null ? HxiInterface.defaultName(header) : interfaceName, target,
+			library,
 			dependencies == null ? [] : dependencies.copy(),
 			hxiDeclarations, source.span(0, source.bytes.length), documentation);
 	}
@@ -1117,11 +1118,6 @@ class CHeaderImporter {
 	static function key(value:Dynamic):String
 		return Std.string(field(value, "kind")) + ":"
 			+ Std.string(field(value, "name") == null ? field(value, "_hxiEnumName") : field(value, "name"));
-
-	static function moduleName(path:String):String {
-		var name = StringTools.replace(path, "\\", "/").split("/").pop();
-		return StringTools.replace(name, ".", "_");
-	}
 
 	static function isUserDeclaration(node:Dynamic, roots:Array<String>, currentFile:String):Bool {
 		var location:Dynamic = field(node, "loc");

@@ -125,17 +125,18 @@ class PackageResolver {
 				var web = platform == "web" && manifest.ffi.wasmInterfaces.length > 0;
 				ffiInterfaces = resolveFiles(resolvedRoot, web ? manifest.ffi.wasmInterfaces : manifest.ffi.interfaces,
 					manifest.packageName, "FFI interface");
-				ffiProjections = projectionsFor(manifest.packageName,
-					resolveFiles(resolvedRoot, manifest.ffi.projections, manifest.packageName, "FFI projection"),
-					ffiInterfaces,
-					resolveFiles(resolvedRoot, manifest.ffi.interfaces.concat(manifest.ffi.wasmInterfaces),
-					manifest.packageName,
-					"FFI interface"));
 				for (ffiPath in manifest.ffi.imports) {
 					var ffiManifestPath = resolveFiles(resolvedRoot, [ffiPath], manifest.packageName,
 						"FFI manifest")[0];
 					ffiImports.push(FfiImportManifest.resolve(ffiManifestPath, resolvedRoot));
 				}
+				ffiProjections = projectionsFor(manifest.packageName,
+					resolveFiles(resolvedRoot, manifest.ffi.projections, manifest.packageName, "FFI projection"),
+					ffiInterfaces,
+					resolveFiles(resolvedRoot, manifest.ffi.interfaces.concat(manifest.ffi.wasmInterfaces),
+					manifest.packageName,
+					"FFI interface"),
+					[for (ffiImport in ffiImports) ffiImport.interfaceName()]);
 			}
 			ffiImports.sort((left, right) -> Reflect.compare(left.config.name, right.config.name));
 
@@ -277,12 +278,15 @@ class PackageResolver {
 	 * The projections of the interfaces this build has (`interfaces`). A package lists each projection once, whatever targets
 	 * its interface exists on, so a Wasm build leaves out the projection of a native-only interface; a projection of no
 	 * interface the package declares for any target (`declared`) is a mistake, not a projection some other build uses.
+	 * Interfaces imported from headers (`imported`, by name) exist on every build.
 	 */
 	static function projectionsFor(packageName:String, projections:Array<String>, interfaces:Array<String>,
-			declared:Array<String>):Array<String> {
+			declared:Array<String>, imported:Array<String>):Array<String> {
 		inline function names(paths:Array<String>):Array<String>
 			return [for (path in paths) compiler.ffi.HxiParser.interfaceOf(path, File.getContent(path))];
-		var present = names(interfaces), known = names(declared), result:Array<String> = [];
+		var present = names(interfaces).concat(imported),
+			known = names(declared).concat(imported),
+			result:Array<String> = [];
 		for (path in projections) {
 			var projected = compiler.ffi.HxiProjectionProfile.interfaceOf(path, File.getContent(path));
 			if (known.indexOf(projected) < 0)
