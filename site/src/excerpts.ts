@@ -1,11 +1,19 @@
 /**
+ * The first match of `pattern` in `file`'s source. A page quotes or derives from what it matches, so a renamed or
+ * reshaped source fails the build instead of leaving stale code or facts on the page.
+ */
+export function sourceMatch(source: string, pattern: RegExp, file: string): RegExpMatchArray {
+  const found = source.match(pattern);
+  if (!found) throw new Error(`Missing ${pattern} in ${file}`);
+  return found;
+}
+
+/**
  * Cuts one class member out of its source, from the line that starts with `head` (after one indent) to the line that
- * closes it at the same indent. A renamed or reshaped member fails the build instead of leaving stale code on a page.
+ * closes it at the same indent.
  */
 export function memberSource(source: string, head: RegExp, file: string): string {
-  const found = source.match(new RegExp(`^\\t${head.source}[\\s\\S]*?^\\t\\};?$`, 'm'));
-  if (!found) throw new Error(`Missing ${head} in ${file}`);
-  return found[0];
+  return sourceMatch(source, new RegExp(`^\\t${head.source}[\\s\\S]*?^\\t\\};?$`, 'm'), file)[0];
 }
 
 /** One method, without its class's indent. */

@@ -10,7 +10,7 @@ import triangleShader from '../../../docs/guides/examples/06-gpu-basics/triangle
 import particlesScene from '../../../docs/guides/examples/06-gpu-basics/particles/src/Scene.hx?raw';
 import particlesShader from '../../../docs/guides/examples/06-gpu-basics/particles/src/shaders/Particles.glsl?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
-import { memberSource, methodSource } from '../excerpts';
+import { memberSource, methodSource, sourceMatch } from '../excerpts';
 
 // Where the page links and quotes from.
 const gpu = (file: string) => repositorySource('packages/gpu/src/haxeon/gpu/' + file + '.hx');
@@ -33,27 +33,22 @@ const available = backends.filter(({ status }) => status !== 'Planned');
 
 const ready = methodSource(triangleScene, 'new', triangle + 'src/Scene.hx');
 const frame = methodSource(triangleScene, 'draw', triangle + 'src/Scene.hx');
-const computeStage = particlesShader.match(/^@cs step_cs\n[\s\S]*?^@end$/m);
-if (!computeStage) throw new Error('Missing the compute stage in the Particles shader');
-const particleCount = particlesScene.match(/^\tstatic inline var count = (\d+);$/m);
-if (!particleCount) throw new Error(`Missing the particle count in ${particles}src/Scene.hx`);
+const [computeStage] = sourceMatch(particlesShader, /^@cs step_cs\n[\s\S]*?^@end$/m, particles + 'src/shaders/Particles.glsl');
+const particleCount = Number(sourceMatch(particlesScene, /^\tstatic inline var count = (\d+);$/m, particles + 'src/Scene.hx')[1]).toLocaleString('en-US');
 
-// The build generates shaders.Triangle; scripts/build-gpu-modules.sh copies it here before the site builds.
-const generatedModules = import.meta.glob<string>('../../generated/gpu/Triangle.hx', { query: '?raw', import: 'default', eager: true });
-const generated = Object.values(generatedModules)[0];
+// scripts/build-gpu-modules.sh generates shaders.Triangle from the guide's triangle into site/generated before the
+// site builds; a glob rather than an import, so a missing module can say how to make it.
 const generatedFile = 'site/generated/gpu/Triangle.hx';
-if (!generated) throw new Error('Missing the generated Triangle module: run npm run build:gpu-modules');
-const program = generated.match(/^\tpublic static final (\w+) = new ShaderProgram\(/m);
-if (!program) throw new Error(`Missing the shader program in ${generatedFile}`);
-const create = generated.match(/^\tpublic static function create\(.*$/m);
-if (!create) throw new Error(`Missing create() in ${generatedFile}`);
+const [generated] = Object.values(import.meta.glob<string>('../../generated/gpu/Triangle.hx', { query: '?raw', import: 'default', eager: true }));
+if (!generated) throw new Error(`Missing ${generatedFile}: run npm run build:gpu-modules`);
 // The vertex record and create() as generated; the program's compiled sources are elided.
+const [, program] = sourceMatch(generated, /^\tpublic static final (\w+) = new ShaderProgram\(/m, generatedFile);
 const generatedExcerpt = [
   'class Triangle {',
   memberSource(generated, /public static final Vertex = \{/, generatedFile),
   '\t// Compiled sources per backend.',
-  `\tpublic static final ${program[1]} = new ShaderProgram(...);`,
-  create[0],
+  `\tpublic static final ${program} = new ShaderProgram(...);`,
+  sourceMatch(generated, /^\tpublic static function create\(.*$/m, generatedFile)[0],
   '}',
 ].join('\n').replace(/\t/g, '  ');
 ---
@@ -178,13 +173,13 @@ const generatedExcerpt = [
     <div class="wrap">
       <div class="head">
         <h2>Compute</h2>
-        <p class="lede">A compute shader moves {Number(particleCount[1]).toLocaleString('en-US')} particles in a storage buffer. The draw reads the same buffer, so nothing goes back to the CPU.</p>
+        <p class="lede">A compute shader moves {particleCount} particles in a storage buffer. The draw reads the same buffer, so nothing goes back to the CPU.</p>
       </div>
       <div class="grid two top">
         <figure>
           <img src="/gpu/particles.webp" width="640" height="640" loading="lazy" alt="A fountain of small square particles, pink and fast near the spout, green and slow near the top." />
         </figure>
-        <CodeCard code={computeStage[0]} lang="sokol-shdc" title="src/shaders/Particles.glsl" />
+        <CodeCard code={computeStage} lang="sokol-shdc" title="src/shaders/Particles.glsl" />
       </div>
       <p class="note"><a href={guide + '#compute-a-particle-fountain'}>Walk through it</a> · <a href={repositorySource(particles + 'src/shaders/Particles.glsl')}>Read the shaders</a> · <a href={repositorySource(particles + 'src')}>Read the app</a></p>
     </div>
