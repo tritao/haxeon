@@ -77,12 +77,6 @@ const getStarted = docsUrl('guides/00-get-started.md');
     height: 100%;
     line-height: 1.6;
   }
-  .wordmark {
-    color: var(--sl-color-white);
-    font: 800 1.35rem/1 var(--hx-font-display);
-    letter-spacing: -0.03em;
-    text-decoration: none;
-  }
   nav {
     display: flex;
     gap: var(--sl-nav-gap);
@@ -183,7 +177,7 @@ const getStarted = docsUrl('guides/00-get-started.md');
       font-size: var(--sl-text-sm);
     }
     .wordmark {
-      font-size: var(--sl-text-lg);
+      --wordmark-size: var(--sl-text-lg);
     }
   }
 </style>

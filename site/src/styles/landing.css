@@ -17,7 +17,7 @@
   padding: 10px 18px;
   border-radius: var(--hx-radius-pill);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: var(--sl-text-base);
   text-decoration: none;
   border: 1px solid transparent;
   cursor: pointer;
@@ -49,7 +49,7 @@
   letter-spacing: -0.02em;
 }
 :where(.landing-content h3) {
-  font-size: 1.15rem;
+  font-size: var(--sl-text-lg);
   font-weight: 600;
 }
 :where(.landing-content p) {
@@ -71,10 +71,10 @@
 :where(.landing-content .lede) {
   color: var(--sl-color-gray-3);
   max-width: 62ch;
-  font-size: 1.05rem;
+  font-size: var(--sl-text-base);
 }
 :where(.landing-content .eyebrow) {
-  font: 600 0.75rem/1 var(--sl-font-mono);
+  font: 600 var(--sl-text-2xs)/1 var(--sl-font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--sl-color-gray-3);
@@ -87,15 +87,15 @@
 }
 :where(.landing-content .detail) {
   color: var(--sl-color-gray-3);
-  font-size: 0.95rem;
+  font-size: var(--sl-text-base);
 }
 :where(.landing-content .note) {
-  font-size: 0.85rem;
+  font-size: var(--sl-text-sm);
   color: var(--sl-color-gray-3);
   margin-top: var(--hx-space-4);
 }
 :where(.landing-content .cmd) {
-  font: 0.82rem / normal var(--sl-font-mono);
+  font: var(--sl-text-xs) / normal var(--sl-font-mono);
   background: var(--sl-color-accent-low);
   border-radius: var(--hx-radius-s);
   padding: var(--hx-space-2) 10px;
@@ -159,7 +159,7 @@
 }
 :where(.landing-content .intro .lede) {
   max-width: 76ch;
-  font-size: 1.15rem;
+  font-size: var(--sl-text-lg);
 }
 :where(.landing-content .intro .ctas) {
   margin-top: 0;
@@ -256,7 +256,7 @@
 :where(.landing-content table) {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.92rem;
+  font-size: var(--sl-text-sm);
 }
 :where(.landing-content :is(th, td)) {
   text-align: left;
@@ -264,7 +264,7 @@
   border-bottom: 1px solid var(--sl-color-gray-5);
 }
 :where(.landing-content thead th) {
-  font: 600 0.75rem var(--sl-font-mono);
+  font: 600 var(--sl-text-2xs) var(--sl-font-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--sl-color-gray-3);

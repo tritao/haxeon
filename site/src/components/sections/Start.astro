@@ -49,10 +49,10 @@ import { docsUrl } from '../../../docs.mjs';
     list-style: none;
     padding: 0;
     margin: 0;
-    counter-reset: s;
+    counter-reset: step;
   }
   .start :global(li) {
-    counter-increment: s;
+    counter-increment: step;
   }
   .start :global(li) h3 {
     display: flex;
@@ -60,7 +60,7 @@ import { docsUrl } from '../../../docs.mjs';
     gap: var(--hx-space-3);
   }
   .start :global(li) h3::before {
-    content: counter(s);
+    content: counter(step);
     flex: none;
     width: 28px;
     height: 28px;
@@ -69,6 +69,6 @@ import { docsUrl } from '../../../docs.mjs';
     place-items: center;
     background: var(--sl-color-accent);
     color: var(--sl-color-text-invert);
-    font: 700 0.9rem/1 var(--sl-font-mono);
+    font: 700 var(--sl-text-sm)/1 var(--sl-font-mono);
   }
 </style>

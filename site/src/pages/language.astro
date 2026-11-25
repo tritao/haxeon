@@ -180,11 +180,11 @@ const comingFrom = withSummaries(listedPages(comingFromReadme, 'docs/coming-from
   .lessons a::before {
     content: counter(lesson);
     grid-row: span 2;
-    font: 600 1.1rem var(--sl-font-mono);
+    font: 600 var(--sl-text-lg) var(--sl-font-mono);
     color: var(--sl-color-accent);
   }
   .lessons .title { font-weight: 600; color: var(--sl-color-white); }
-  .lessons .text { color: var(--sl-color-gray-3); font-size: 0.92rem; }
+  .lessons .text { color: var(--sl-color-gray-3); font-size: var(--sl-text-sm); }
   @media (max-width: 62rem) {
     .lessons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }

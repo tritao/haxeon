@@ -5,27 +5,27 @@ interface Props {
   status: Status;
 }
 const { status } = Astro.props;
-const state = { Supported: 'ok', Experimental: 'exp', 'In progress': 'plan', Planned: 'plan' }[status];
 ---
 
-<span class:list={['st', state]}><slot>{status}</slot></span>
+<span class:list={['badge', status.toLowerCase().replace(' ', '-')]}><slot>{status}</slot></span>
 
 <style>
-  .st {
-    font: 600 0.78rem var(--sl-font-mono);
+  .badge {
+    font: 600 var(--sl-text-xs) var(--sl-font-mono);
     padding: 2px 8px;
     border-radius: var(--hx-radius-pill);
     white-space: nowrap;
   }
-  .ok {
+  .supported {
     background: var(--sl-color-green-low);
     color: var(--sl-color-green-high);
   }
-  .exp {
+  .experimental {
     background: var(--sl-color-accent-low);
     color: var(--sl-color-white);
   }
-  .plan {
+  .in-progress,
+  .planned {
     border: 1px dashed var(--sl-color-gray-5);
     color: var(--sl-color-gray-3);
   }

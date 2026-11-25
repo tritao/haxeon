@@ -162,11 +162,11 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
   .demo > * {
     min-width: 0;
   }
-  .demo .editor {
+  .editor {
     display: flex;
     flex-direction: column;
   }
-  .demo .editor .bar {
+  .editor .bar {
     justify-content: space-between;
     gap: var(--hx-space-2);
     flex-wrap: wrap;
@@ -174,7 +174,7 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
   .demo :global(.ec-line.del .code) {
     text-decoration: line-through;
   }
-  .demo .app {
+  .app {
     padding: var(--hx-space-5);
     display: flex;
     flex-direction: column;
@@ -184,7 +184,7 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
   .window {
     background: var(--sl-color-bg-sidebar);
     border: 1px solid var(--sl-color-gray-5);
-    border-radius: 8px;
+    border-radius: var(--hx-radius-s);
     overflow: hidden;
   }
   .window .titlebar {
@@ -193,7 +193,7 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
     gap: var(--hx-space-2);
     padding: var(--hx-space-2) var(--hx-space-3);
     border-bottom: 1px solid var(--sl-color-gray-5);
-    font-size: 0.8rem;
+    font-size: var(--sl-text-xs);
     color: var(--sl-color-gray-3);
   }
   .dot {
@@ -224,7 +224,7 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
     align-items: center;
   }
   .status {
-    font: 0.8rem var(--sl-font-mono);
+    font: var(--sl-text-xs) var(--sl-font-mono);
     color: var(--sl-color-gray-3);
   }
   .status :global(.kept) {
@@ -235,7 +235,7 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
     color: var(--sl-color-green-high);
     border-radius: var(--hx-radius-pill);
     padding: 3px 10px;
-    font: 600 0.78rem var(--sl-font-mono);
+    font: 600 var(--sl-text-xs) var(--sl-font-mono);
   }
   @media (prefers-reduced-motion: no-preference) {
     .flash {
@@ -257,11 +257,11 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
     background: none;
     cursor: pointer;
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--sl-text-sm);
   }
   .demo-note {
     color: var(--sl-color-gray-3);
-    font-size: 0.85rem;
+    font-size: var(--sl-text-sm);
   }
 
   @media (max-width: 55rem) {

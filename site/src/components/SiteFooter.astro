@@ -29,9 +29,9 @@ const comingFrom = await getCollection(
     )
   }
   <div class="site-links">
-    <div class="wrap">
+    <div class="wrap columns">
       <div>
-        <a class="mark" href="/">Haxeon</a><p>
+        <a class="wordmark" href="/">Haxeon</a><p>
           A language and runtime for cross-platform apps and tools, developed in the open.
         </p>
       </div>
@@ -82,9 +82,9 @@ const comingFrom = await getCollection(
     border-top: 1px solid var(--sl-color-gray-5);
     padding-block: var(--hx-space-7);
     color: var(--sl-color-gray-3);
-    font-size: 0.9rem;
+    font-size: var(--sl-text-sm);
   }
-  .wrap {
+  .columns {
     display: grid;
     grid-template-columns: 2fr 1fr 1fr 1fr;
     gap: var(--hx-space-6);
@@ -96,7 +96,7 @@ const comingFrom = await getCollection(
   }
   .site-links h2 {
     margin: 0 0 var(--hx-space-2);
-    font: 600 0.75rem var(--sl-font-mono);
+    font: 600 var(--sl-text-2xs) var(--sl-font-mono);
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }
@@ -108,14 +108,11 @@ const comingFrom = await getCollection(
   .site-links a:hover {
     text-decoration: underline;
   }
-  .mark {
-    font: 800 1.1rem/1 var(--hx-font-display);
-    letter-spacing: -0.03em;
-    color: var(--sl-color-white);
-    text-decoration: none;
+  .wordmark {
+    --wordmark-size: var(--sl-text-lg);
   }
   @media (max-width: 55rem) {
-    .wrap {
+    .columns {
       grid-template-columns: 1fr 1fr;
     }
   }

@@ -192,7 +192,7 @@ samp {
   gap: var(--hx-space-2);
   padding: var(--hx-space-3) var(--hx-space-4);
   border-bottom: 1px solid var(--hx-code-line);
-  font: 0.75rem var(--sl-font-mono);
+  font: var(--sl-text-2xs) var(--sl-font-mono);
   color: var(--hx-code-muted);
 }
 .code-panel .expressive-code pre {
@@ -217,4 +217,12 @@ pre.output-pane {
 .expressive-code:has(pre[data-language='text']) {
   --ec-codePadBlk: 0px;
   --ec-codePadInl: 0px;
+}
+
+/* The name as a logotype, in the site header and footer. */
+.wordmark {
+  font: 800 var(--wordmark-size, 1.35rem) / 1 var(--hx-font-display);
+  letter-spacing: -0.03em;
+  color: var(--sl-color-white);
+  text-decoration: none;
 }

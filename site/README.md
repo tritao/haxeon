@@ -61,6 +61,7 @@ component styles in their Astro components and use the shared landing styles (`s
 grid and button primitives. Those rules have no specificity, so a component's own rule always overrides them.
 Gaps, margins and section padding use the spacing scale (`--hx-space-1` to `--hx-space-8`); only the inner padding
 of small controls such as buttons, chips and table cells is set by eye.
+Text sizes below the display headings use Starlight's type scale (`--sl-text-2xs` to `--sl-text-lg`).
 
 `Command.astro`, `CodeCard.astro`, `Card.astro` and `PlatformTable.astro` live in `src/components/` for the Astro
 pages; the docs are plain Markdown. Expressive Code renders the component and Markdown code examples
