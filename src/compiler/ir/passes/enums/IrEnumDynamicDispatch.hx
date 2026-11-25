@@ -29,9 +29,10 @@ private typedef EnumDynamicRequest = {
 
 /**
  * Dispatch Dynamic enum operations by the concrete runtime enum descriptor. Per function (`IrFunctionPass`): a function's summary
- * says which Dynamic enum operations it has (`BOXES`, `CALLS_EQUAL`, `CALLS_REFLECT`, `CLOSES`), and its rewrite reads whether
- * it is reached (`UNREACHED`), whether any enum registers (`REGISTERED`) and whether a helper it calls kept its content name
- * (`RENAMED`), and asks for the unboxes and type tests it calls. The helpers are named by the enum type.
+ * says which Dynamic enum operations it has (`BOXES`, `CALLS_EQUAL`, `CALLS_REFLECT`, `CLOSES`, `CASTS`), and the rewrite of one
+ * with an operation to replace reads whether it is reached (`UNREACHED`), whether any enum registers (`REGISTERED`) and whether
+ * a helper it calls kept its content name (`RENAMED`), and asks for the unboxes and type tests it calls. The helpers are named
+ * by the enum type.
  */
 @:nullSafety(Strict)
 class IrEnumDynamicDispatch extends IrFunctionPass {
@@ -63,6 +64,12 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 
 	/** A closure or a map store, which the escape reach of the reflection decision reads (`IrEnumEscapeReach`). */
 	static inline final CLOSES = 8;
+
+	/** A cast from Dynamic to an enum, or a type test, which the rewrite may turn into a helper call. */
+	static inline final CASTS = 16;
+
+	/** What the rewrite replaces: a function with none of it is left alone, without reading a fact. */
+	static inline final REWRITES = BOXES | CALLS_EQUAL | CASTS;
 
 	// Facts.
 	static inline final UNREACHED = 0;
@@ -100,15 +107,35 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	/** The reflective equality helpers no root reaches, which the stage drops. */
 	var dropped:Map<String, Bool> = [];
 
+	/**
+	 * What the helpers of each enum type are named by (`helperName`), by the type's key; worked out from the type alone, so a
+	 * session keeps it (`ENCODINGS`).
+	 */
+	final encodings:Map<String, String>;
+
+	@:processWide("a kept result's key, only ever read")
+	static final ENCODINGS =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Map<String, String>>("enum-dispatch-encodings");
+
 	/** The box and view helpers, in the order of `requested`. */
 	final made:Array<IrFunction> = [];
 
 	/** The box helper of `type`: what an `EnumDynamicBox` of it calls, unless a function of the program has the name. */
 	public static function boxName(type:IrType):String
-		return helperName(BOX_PREFIX, type);
+		return BOX_PREFIX + encoded(type);
 
-	static function helperName(prefix:String, type:IrType):String
-		return prefix + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type));
+	static function encoded(type:IrType):String
+		return haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type));
+
+	/** The content name of a helper of `prefix` for `type`, whose key is `id`. */
+	function helperName(prefix:String, type:IrType, ?id:String):String {
+		var typeKey = id == null ? key(type) : id, known = encodings.get(typeKey);
+		if (known == null) {
+			known = encoded(type);
+			encodings.set(typeKey, known);
+		}
+		return prefix + known;
+	}
 
 	static function key(type:IrType):String
 		return IrTypeIdentity.text(type);
@@ -120,6 +147,13 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 		this.reflectableObjects = reflectableObjects;
 		this.unreached = unreached;
 		this.lineage = lineage;
+		var kept = lineage == null ? null : lineage.memos.lastResult(ENCODINGS);
+		if (kept == null) {
+			kept = [];
+			if (lineage != null)
+				lineage.memos.keepResult(ENCODINGS, kept);
+		}
+		encodings = kept;
 	}
 
 	public static function rewrite(functions:Array<IrFunction>, ?reflectionProgram:IrProgram,
@@ -146,6 +180,11 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 							flags |= CALLS_REFLECT;
 						else if (arguments.length >= 3 && IrEnumEscapeReach.mapSetter(callTarget.name))
 							flags |= CLOSES;
+						else if ((callTarget.name == "__std_is_of_type" || callTarget.name == "__std_is_exact_type")
+							&& arguments.length == 2)
+							flags |= CASTS;
+					case SafeCast(output, input) if (IrVerifier.sameType(input.type, Dyn) && isEnum(output.type)):
+						flags |= CASTS;
 					case InstanceClosure(_, _, _):
 						flags |= CLOSES;
 					default:
@@ -171,7 +210,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 			}
 			if (flags & CLOSES != 0)
 				closing.set(fn.name, true);
-			if (!reached(fn))
+			if (flags & (BOXES | CALLS_EQUAL | CALLS_REFLECT) == 0 || !reached(fn))
 				continue;
 			if (flags & CALLS_EQUAL != 0)
 				needsEqual = true;
@@ -233,9 +272,9 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 			if (helper != null) reflectiveRoots.push(helper);
 		}
 		dropped = droppedReflectiveHelpers(functions, reflectiveRoots, lineage, program);
-		for (fn in functions) if (reached(fn) && !dropped.exists(fn.name)) switch fn.kind {
-			case EnumEquality(true) if (fn.arguments.length == 2
-				&& isEnum(fn.arguments[0].type)): register(fn.arguments[0].type);
+		for (fn in functions) switch fn.kind {
+			case EnumEquality(true) if (fn.arguments.length == 2 && isEnum(fn.arguments[0].type) && reached(fn)
+				&& !dropped.exists(fn.name)): register(fn.arguments[0].type);
 			default:
 		}
 		requested = [for (id => type in requests) {
@@ -247,11 +286,11 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 		var named = [for (request in requested) {
 			var id = request.id,
 				type = request.type,
-				box = claim(helperName(BOX_PREFIX, type)),
-				view = claim(helperName(VIEW_PREFIX, type));
+				box = claim(helperName(BOX_PREFIX, type, id)),
+				view = claim(helperName(VIEW_PREFIX, type, id));
 			boxNames.set(id, box);
 			viewNames.set(id, view);
-			unboxNames.set(id, claim(helperName(UNBOX_PREFIX, type)));
+			unboxNames.set(id, claim(helperName(UNBOX_PREFIX, type, id)));
 			{
 				request:request, box:box, view:view
 			};
@@ -310,12 +349,12 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 
 	/** The unbox helper of `type`: the registered one, else its content name. */
 	function unboxNameOf(type:IrType):String {
-		var name = unboxNames.get(key(type));
-		return name != null ? name : helperName(UNBOX_PREFIX, type);
+		var id = key(type), name = unboxNames.get(id);
+		return name != null ? name : helperName(UNBOX_PREFIX, type, id);
 	}
 
 	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
-		if (reader.read(UNREACHED, fn.name) == 1)
+		if (summary & REWRITES == 0 || reader.read(UNREACHED, fn.name) == 1)
 			return fn;
 		var typeValues:Null<Map<Int, IrType>> = null;
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
@@ -369,7 +408,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 		if (kind == UNBOX) {
 			var id = key(type), helper = unboxNames.get(id);
 			if (helper == null) {
-				helper = helperName(UNBOX_PREFIX, type);
+				helper = helperName(UNBOX_PREFIX, type, id);
 				if (occupied(helper))
 					throw new InternalError('A function of the program has the name of the enum unbox helper "$helper"');
 				taken.set(helper, true);
@@ -445,9 +484,8 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 		taken.set(name, true);
 		return name;
 	}
-	static function typeTestName(type:IrType, exact:Bool):String
-		return "$enum-dynamic-test:" + (exact ? "exact:" : "instance:")
-			+ haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type));
+	function typeTestName(type:IrType, exact:Bool):String
+		return helperName("$enum-dynamic-test:" + (exact ? "exact:" : "instance:"), type);
 
 	static function unbox(name:String, type:IrType):IrFunction {
 		var builder = new IrBuilder(),

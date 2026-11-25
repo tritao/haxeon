@@ -29,7 +29,7 @@ class IrEnumTagStorage {
 			boxes:Map<String, String> = [],
 			unboxes:Map<String, String> = [];
 		for (fn in program.functions) {
-			// Every name `free` gives starts with the prefix, so only those can be taken.
+			// Every name `free` gives starts with the prefix, so only those can be taken (`adapterNamed`).
 			if (StringTools.startsWith(fn.name, ADAPTER_PREFIX))
 				occupied.set(fn.name, true);
 			switch fn.kind {
@@ -51,6 +51,13 @@ class IrEnumTagStorage {
 		}
 		return result;
 	}
+
+	/** Whether `fn` bears on `adapterNames`: it has a name an adapter could take, or is an adapter. */
+	public static function adapterNamed(fn:IrFunction):Bool
+		return StringTools.startsWith(fn.name, ADAPTER_PREFIX) || switch fn.kind {
+			case EnumTagAdapter(EnumTag(_), _): true;
+			default: false;
+		};
 
 	/**
 	 * `base`, the adapter's name by its enum, unless a function has it; then the first free `base_N`. Named by the enum, not by its

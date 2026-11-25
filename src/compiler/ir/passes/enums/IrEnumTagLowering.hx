@@ -1069,8 +1069,16 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 	/** Of a function with inline enum requests, which its providers resolve: never stated, so such a function is always redone. */
 	static inline final INLINE_REQUESTS = 10;
 
-	/** The summary of a function with inline enum box or unbox requests. */
+	// Summary bits.
+
+	/** A function with inline enum box or unbox requests. */
 	static inline final HAS_INLINE_REQUESTS = 1;
+
+	/** An equality provider of two arguments, which may compare tags (`prepare`). */
+	static inline final EQUALITY = 2;
+
+	/** A function with an adapter's name or kind, which the adapters' naming reads (`IrEnumTagStorage.adapterNames`). */
+	static inline final ADAPTER_NAMED = 4;
 
 	/** The helper kind of an enum's adapters (`request`). */
 	static inline final ADAPTERS = 0;
@@ -1166,14 +1174,23 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 	}
 
 	override public function summarize(fn:IrFunction):Int {
+		var summary = IrEnumTagStorage.adapterNamed(fn) ? ADAPTER_NAMED : 0;
+		switch fn.provides {
+			case Serves(_, operation) if (fn.arguments.length == 2):
+				var base = IrProviders.base(operation);
+				if (base == compiler.core.Provides.ProviderOperation.Equals
+					|| base == compiler.core.Provides.ProviderOperation.ReflectEquals)
+					summary |= EQUALITY;
+			default:
+		}
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
 					case Intrinsic(_, InlineEnumBox(_) | InlineEnumUnbox(_), _):
-						return HAS_INLINE_REQUESTS;
+						return summary | HAS_INLINE_REQUESTS;
 					default:
 				}
-		return 0;
+		return summary;
 	}
 
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, index:IrFunctionIndex):Void {
@@ -1189,26 +1206,24 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 			return;
 		// Payload-free enums cannot override equality. Their synthesized calls are
 		// scalar comparisons even with source inlining disabled.
-		for (fn in functions)
-			if ((switch fn.provides {
-				case Serves(_,
-					operation): (IrProviders.base(operation) == compiler.core.Provides.ProviderOperation.Equals
-					|| IrProviders.base(operation) == compiler.core.Provides.ProviderOperation.ReflectEquals);
-				case None: false;
-			}) && fn.arguments.length == 2)
+		for (position in 0...functions.length)
+			if (summaries[position] & EQUALITY != 0) {
+				var fn = functions[position];
 				switch mapped(fn.arguments[0].type) {
-				case EnumTag(name):
-					if (IrVerifier.sameType(mapped(fn.arguments[1].type), EnumTag(name)))
-						tagEqualities.set(fn.name, true);
-				default:
+					case EnumTag(name):
+						if (IrVerifier.sameType(mapped(fn.arguments[1].type), EnumTag(name)))
+							tagEqualities.set(fn.name, true);
+					default:
+				}
 			}
 		for (native in program.natives)
 			nativeWrapper(native.name, native.arguments, native.result, false);
 		for (native in program.cNatives)
 			nativeWrapper(native.name, native.arguments, native.result, true);
 		generatedByName = [for (fn in generated) fn.name => fn];
+		// A declaration with no type to change is kept as it is, so what compares the tables compares it by identity.
 		program.objects = [for (object in program.objects)
-			{
+			if (!Lambda.exists(object.fields, field -> changes(field.type))) object else {
 				name:object.name,
 					isValue:object.isValue,
 					nativeLayout:object.nativeLayout,
@@ -1224,11 +1239,13 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 							nullableScalarStorage:field.nullableScalarStorage
 					}]
 			}];
-		program.staticFields = [for (field in program.staticFields) {
-			name:field.name, type:mapped(field.type)
-		}];
+		program.staticFields = [for (field in program.staticFields)
+			if (!changes(field.type)) field else {
+				name:field.name, type:mapped(field.type)
+			}];
 		program.interfaces = [for (entry in program.interfaces)
-			{
+			if (!Lambda.exists(entry.methods,
+			method -> changes(method.result) || Lambda.exists(method.arguments, changes))) entry else {
 				name:entry.name,
 					bases:entry.bases,
 					methods:[for (method in entry.methods)
@@ -1239,7 +1256,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 					}]
 			}];
 		program.enums = [for (entry in program.enums)
-			{
+			if (!Lambda.exists(entry.cases, constructor -> Lambda.exists(constructor.params, changes))) entry else {
 				name:entry.name,
 					isRecursive:entry.isRecursive,
 					inlineStorage:entry.inlineStorage,
@@ -1257,7 +1274,9 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 			}
 		var view = new IrProgram(program.entryPoint);
 		view.enums = program.enums;
-		view.functions = functions.concat(generated);
+		// Only a function with an adapter's name or kind bears on the adapters' names; the wrappers have neither.
+		view.functions =
+			[for (position in 0...functions.length) if (summaries[position] & ADAPTER_NAMED != 0) functions[position]];
 		for (name => pair in IrEnumTagStorage.adapterNames(view)) {
 			boxNames.set(name, pair.box);
 			unboxNames.set(name, pair.unbox);
@@ -1439,7 +1458,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 		this.reader = reader;
 		var result = lower(fn);
 		if (result != fn) {
-			if (summary == HAS_INLINE_REQUESTS) {
+			if (summary & HAS_INLINE_REQUESTS != 0) {
 				reader.read(INLINE_REQUESTS, "");
 				result = IrInlineEnumRequests.resolve(program, [result])[0];
 			}
@@ -1490,10 +1509,11 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 		if (boxNames.keys().hasNext())
 			IrEnumTagLowering.rewriteEscapes(this, wrappers);
 		program.functions = result.concat(wrappers);
+		// The adapters are looked up in the stage's input: the rewrite renames nothing, the equalities it drops and the wrappers
+		// are no adapters, and what `addAdapters` adds it indexes.
 		if (boxNames.keys().hasNext())
 			IrEnumTagLowering.addAdapters(program, required,
-				new IrFunctionIndex("enum-tag-lowering", program.functions),
-				boxNames, unboxNames);
+				input ?? new IrFunctionIndex("enum-tag-lowering", program.functions), boxNames, unboxNames);
 		return program.functions;
 	}
 
