@@ -3,9 +3,9 @@
 Status: steps 1 and 2 are done and step 3 is under way. The engine core is in `compiler.query`. Each session's database holds
 the build inputs (step 2, `BuildInputs`) and, as a kind of its own, the facts typed units read: the typer records its reads in
 the engine's frames, and a unit's reads are verified by the engine (step 3, slice 3a). What each unit read is a result of that
-kind, written in a transaction the taken build commits (slice 3b). The IR stages before the encode point get per-function reuse in pipeline order through their own memos
-(`IrFunctionPass`, `IrStageMemo`; `IR_CORE_COLUMNS.md`, session caching model). ADR 0003 decisions 1, 10 and 14 are the
-requirements; this note is how. The pass framework (M2) is built on this engine.
+kind, written in a transaction the taken build commits (slice 3b). The IR stages, lowering and encoding still keep results
+through their own mechanisms; "Steps 4 onward" lists them, what each becomes, and the order they move in. ADR 0003
+decisions 1, 10 and 14 are the requirements; this note is how. The pass framework (M2) is built on this engine.
 
 ## Why now
 
@@ -203,18 +203,118 @@ Each step is byte-identical on the self-compile and the program suites, and keep
    - **3d: prints as queries over the sources** (large; with M4c). `DeclarationPrints` compares canonical forms module by
      module; as derived queries over the `sources` inputs, a print's facts would be computed on demand, and naming a type
      would read an input of its own, the type's kind, instead of the partial-read rule.
-4. **The passes (M2), in pipeline order from the front.** A pass gets reuse only if the function it is given is the
-   same object or digest as last build, and an unported whole-program stage before it makes new objects every build,
-   so every function would look changed. The chain therefore starts where objects are kept today, IR generation's
-   per-function cache (`ModuleState.irFunctions`), and each stage is ported after the ones before it: per-function
-   rewrites as computed queries, whole-program stages (pruning, dispatch walks) as summaries over per-function
-   contributions. The inventory's order by edit cost decides nothing until the chain reaches a pass. Measure the
-   compile server's one-string edit and no-op at each step.
-5. **The fixpoints, then the inliner,** where the chain reaches them.
-6. **Lowering and assembly (M4b),** then the front-end caches (M4c).
+4. **Every other reuse mechanism, in pipeline order from the front** (below). A stage gets reuse only if its input is the
+   same memo as last build, so the chain starts at IR generation's per-function cache (`ModuleState.irFunctions`) and each
+   stage moves after the ones before it, deleting its own mechanism in the same change: per-function rewrites as computed
+   queries, whole-program stages as summaries over per-function contributions, the fixpoints and the inliner where the
+   chain reaches them, then lowering (M4b). The front-end caches follow with 3c and 3d (M4c).
 
 Measures for every step: self-compile cold (no more than 2% slower while stages are being moved), the compile server's
-one-string edit (7 s at the start) and no-op (1.3 s), and the worker's resident memory after a warm build.
+body, signature and blank-line edits and no-op (perf-guard), and the worker's resident memory after a warm build.
+
+## Steps 4 onward: one reuse mechanism
+
+Measured on the compiler's own sources (2026-11-25, main-thread instructions in the compile server): a body edit costs 2.44G,
+a signature edit 18.5G (typing 4.9G, IR generation 1.9G, IR passes 2.9G, inliner 2.2G, HashLink lowering 3.7G, metadata
+0.55G, encode and write 1.1G), a blank-line edit 7.6G (inliner 2.1G, lowering 2.6G). On the signature edit about 950
+functions changed, yet whole-program walks read 9,753 (value-array rewrite), 9,151 (encode bodies) and 6,111 (inliner).
+
+### Inventory
+
+Everything below keeps results across builds outside the engine. Lines are the file's, or the part of it named.
+
+| Mechanism | Lines | Keyed on; kept until | Read by | Becomes |
+|---|---|---|---|---|
+| `IrStageMemo`, `IrStageMemos`, `IrStageEntry` | 526 (the file, with `IrLineage` and the contribution memos) | stage and function slot; input version, fact reads, output, summary, helper requests; dropped when the stage's last run did not use it | `IrFunctionStages.run`, the ~25 `IrFunctionPass` stages | a computed kind per stage, keyed by function symbol |
+| `IrLineage`, `IrFunctionVersions`, `IrFunctionSlots`, `ModuleState.irVersions` | (above), 17, 95 | slot → function object and version; a version is never given twice; slots swept when cells exceed twice the functions | every stage (`settle`, `versionOf`), `IrStage` | a memo's identity and `changedAt`; `settle`'s equality check becomes early cutoff by `IrFunctionStateEquality.same` |
+| `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests) |
+| Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemo.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrTypeAwareWalk.SUMMARIES`, `IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name |
+| `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | summary queries; tables read as table results |
+| Reuse code inside passes | ~750 lines naming the above in 49 files; est. 1,000–1,400 with the code around them | — | — | query declarations (est. a third of it); fact reads stay as engine reads |
+| `IrGeneratedFunctions` (structure printers, initializers) | 95 | key and identity of the input objects; swept when untouched | `FrontendCompilation`, `IrProgramAssembler` | derived query per generated function |
+| `objectCache`, `canonicalObjectCache` (`SessionState`) | ~40 in `FrontendCompilation` | class name; while the declaration is unchanged | frontend, walks' table copies | table results: an equal table is last build's object |
+| `IrFunctionMemo` and its users: `irTypeMentions`, `irCalls`, `staticReferences`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo` | 46; 41 (`HlFunctionSummaries`), ~12, ~25 | `IrFunction` identity; one build past last use | frontend, `StaticInitializationOrder`, `RuntimeAbi`, `IrReachability`, `HlLower`, `IrNonNullFields` | contribution queries |
+| `IrSourceRehash`, `irSources` | 130 | function → file hashes its locations name | frontend | gone with relative positions (the hash is added at encode), else a derived query |
+| `IrVerifyMemo` | 190 | function name → function and answer facts | `IrVerifier` | computed query per function |
+| `IrInlineCache` and the inliner's memo plumbing | ~170, ~100 | name → original body, instrumented form, published form, object facts, positional prints; maps replaced per run | `IrInliner`, `Compiler` (published) | inlined form per function; a call cycle is one component query; `published` moves to the live state |
+| `PipelineSnapshot` | 157 | tables' encoding, functions' identity, environment text; last plain build | `CompilationPipeline`, backends | the root query (final IR, module) verifies; deleted with its check |
+| `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts | 83, 45, 162 | name and lowering environment; the build's entries; facts never swept | `HlLower` | computed query per function: relocatable code, reading object facts as engine reads |
+| Link and replay: `HlRequestKeys`, `HlRequestAnswers`, `HlSymbolRequest`, `HlLink`, `HlLinkRecord`/`HlKeptTables`, parts of `HlSymbolTable` and `HlLower` | 196, 66, 102, 120, 251, ~150, ~290 | request numbers (grow only); last build's tables with each position's first requests | `HlLower` | stable output indices (below) |
+| `HlDebugMetadataCache` | 66 | stable id; one generation | `HlLower`, assembler | per-function query |
+| `HlWriterCache` | 216 | `HlFunction` identity (encodings, validation marks, span groups), all dropped when the debug-file list changes; compressed sections by kind | `HlWriter`, `HlValidator`, `CompilerSession` | per-function encode query (~120 lines go); the compressed-section memo stays |
+| Wasm module reuse (`WasmBackendSession.encoded`) | ~30 of 181 | identity of the final IR and options | Wasm backend | the root query |
+| **Stays:** `HlModuleAssembler`, `HlFunctionCache`, `HlSymbolTable`'s published prefix, `hl/persistence`, Wasm `patchState` | 1,041, 286, —, 933 | published slots and stable ids | live patching | not caches: the running module's state, an input to the next patch |
+| **Stays here:** frontend prints and canonical forms, `semanticProgram`, `programFacts`, `lastTypedProgram`, `ReachabilityCache`; interning tables | — | — | — | step 3c/3d and M4c; COMPILER_FOUNDATIONS item 4 |
+
+`HlcBackendSession` keeps nothing. The compiler's no-op result is already the engine's (step 2).
+
+### Stable output indices
+
+On the signature edit no table was kept (`HlLinkRecord` fits only when nothing moves): 7,922 functions with unchanged IR were
+linked again, 5,501 of them with moved indices, and 938 lowered fresh. The body edit kept the tables and its 8,857 functions
+in place, at no cost. What exists only to reproduce a cold build's first-use numbering, about 1,000 lines:
+
+- `HlRequestAnswers` (66), `HlLinkRecord` and `HlKeptTables` (251): replaying requests in program order rebuilds first-use
+  tables; kept tables with leaf replacement.
+- `HlSymbolTable.shareFrom`, `replaceLeaf`, `truncate`, `lengths`/`sameLengths`, `typesName`, `stringConstantAt` (~150).
+- In `HlLower`: the recording in every `intern*` and `record` (~70), the kept-tables and link branches of
+  `lowerProgramWithNatives`, the kept String constants, `settleKept`, `settleTables`, `slotNames`, `verifyLinking`,
+  `sameReplayTable` (~220).
+- The answers half of `HlRequestKeys` and `HlLoweredFunction`, and `HlSymbolRequest`'s answer payloads (~150);
+  `HlLink.link`'s request checks (~40).
+
+**A stable order alone does not delete the relink.** In a dense table any deterministic order moves every entry after an
+inserted one; ordering by module and declaration changes which entries move, not how many. It does make the tables a function
+of the set of entries rather than of lowering order, so the replay above goes. To delete the relink and the re-encode
+too, the order needs slack:
+
+- **Ranges.** Functions by module in program order, then declaration order, generated ones after their owner. Every other
+  entry (type, global, int, float, String) belongs to the first module in program order that uses it, and is sorted within
+  that module's range by its key (a type by its canonical key, never a process-local type id). Each range has a capacity
+  that is a function of its count alone (for example rounded up with headroom), so a cold build makes the same holes.
+  An edit moves only the entries of the ranges it overflows, and the entries that change owner.
+- **Linking.** Lowering emits entry keys (what `HlRequestKeys` numbers today), and a per-function link resolves them; a
+  function that reads no moved range keeps its code and encoding. Which ranges a function reads is a contribution.
+- **Cold build.** One link over every function, since a range's layout is known only once all functions are lowered (est.
+  under 1% of a cold self-compile); filler entries in the holes (est. a few percent of the tables). Measure cold runtime
+  for locality.
+- **HashLink fork loader.** It already reserves patch slots past `nfunctions` (`functions_capacity`, `functions_indexes`
+  filled with -1); holes inside the range need it to accept absent findexes, and typed tables need fillers (`void` types
+  and globals) or a marker the loader skips.
+- **Live patching.** Live builds keep their append-only published prefix (`HlFunctionCache`, `HlSymbolTable`); a module's
+  first publication takes the cold layout, and a patch may later fill holes instead of appending.
+- **Debug info.** Function identities use stable ids, not findexes. The debug-file table is still first-use dense: a new
+  file drops every encoding in `HlWriterCache`; sort files by path, with the same slack rule if new modules are frequent.
+- **Operand widths.** Unmoved indices keep their widths; a range that overflows across a width boundary re-encodes its users.
+
+Expected on the signature edit: the 0.75G link and most of the re-encoding of the 5,501 moved functions (write is 1.14G
+there against 0.11G on the body edit), about 1.5G (estimate). Nothing on the body edit, which keeps its tables already.
+
+### Order
+
+Each slice is checked by `--check-reuse` on the self-compile (engine check mode, which replaces the slice's own check), the
+edit replay, the warm-equals-fresh mains, the byte-identical self-compile, perf-guard, and the Wasm warm tests where IR stages
+change (they run for Wasm too). Savings are estimates from the profile above (body / signature / blank-line edit, G).
+
+| # | Slice | Size (est. lines) | Deletes | Expected | Depends on |
+|---|---|---|---|---|---|
+| A | Relative positions (in progress elsewhere) | — | `IrSourceRehash` (likely) | blank-line edit: most of the inliner and lowering 4.7G | — |
+| B | Stable output indices | −1,000 / +400 | link and replay (above) | 0 / 1.5 / 0 | A; checks also ci-tier debug-metadata and hot-reload, self-compile oracle takes a new base |
+| 1 | Engine for per-function stages: a computed kind keyed by function symbol with equality cutoff, contributions and summaries with per-key reads, sweep of computed memos | +400 | — | none; verifying the memos must keep the body edit at today's cost (`IrLineage.start` alone is 2.4% of it) | — |
+| 2 | IR generation, generated functions, object tables as results | −450 / +250 | `IrFunctionVersions`, `IrGeneratedFunctions`, `objectCache` maps, `IrLineage.start`, frontend `IrFunctionMemo` users | 0.1 / 0.1 / 0.1 | 1 |
+| 3 | Assembly stages before the encode point | −2,000 / +500 | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05 | 2 |
+| 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4) | −400 / +250 | their whole-program rereads | 0.2 / 1.2 / 0.2 | 3 |
+| 5 | Inliner | −300 / +150 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A | 4 |
+| 6 | Verification and final-IR summaries | −450 / +100 | `IrVerifyMemo`, `IrFunctionMemo`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, plain-build reach record | 0.1 / 0.3 / 0.05 | 5 |
+| 7 | Lowering, debug metadata and encoding as queries; root query | −850 / +300 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts, `HlDebugMetadataCache`, `HlWriterCache` encodings, `PipelineSnapshot`, Wasm module reuse | small; no-op must stay at 0.29 s | B, 6 |
+
+B touches only `hl/` and can land beside 1–3. The largest part of the signature edit, typing and IR generation (6.8G), is
+step 3c's and the frontend's, not this plan's. Estimated together: the body edit from 2.44G to about 1.9G, the signature
+edit from 18.5G to about 13.8G.
+
+**Net lines (estimate):** about 5,450 deleted and 2,350 added in `src/`, about 3,100 fewer, plus the test mains of
+deleted mechanisms (`IrVerifyMemoMain`, `WarmStageFactsMain`, `StaticNullCheckReuseMain`, `InlinerSession`,
+`HlWriterCacheMain`, about 450 lines) rewritten as engine checks of about half that.
 
 ## Prior art
 

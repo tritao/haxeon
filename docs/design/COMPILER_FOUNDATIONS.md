@@ -89,6 +89,11 @@ The clean fix changes the cold build, not the warm one: give indices by a stable
 generated functions after their owner). Warm and cold then agree without renumbering, and the relink cost disappears
 instead of being optimized.
 
+**Measured** on 2026-11-25 ([QUERY_ENGINE.md](QUERY_ENGINE.md), "Stable output indices"): in a dense table any stable order
+still moves every entry after an inserted one. A stable order deletes the request replay that rebuilds first-use tables
+(about 1,000 lines in `hl/incremental` and `HlLower`); per-module ranges with slack, filled with filler entries, are what
+delete the relink and the re-encode (about 1.5G of the 18.5G signature edit).
+
 **Costs and questions:**
 - **Output layout:** it changes once, so the self-compile oracle takes a new base.
 - **Live patching:** it already keeps slots for dropped functions; the two numbering rules must agree.
@@ -163,4 +168,5 @@ whoever pushes, and a cost taken on purpose is written as `--raise=METRIC=REASON
 - Should the edit replay in CI also run with the AOT server, which is the server users run on Linux?
 - For item 3, does any tool read HashLink indices expecting first-use order? Candidates: the debugger, the profiler, live
   patch history.
-- For item 2, which per-stage mechanism goes first? `IrFacts` and the stage memos are the closest to the engine's model.
+- For item 2, which per-stage mechanism goes first? Answered in QUERY_ENGINE.md, "Order": IR generation's, then the stage
+  memos in pipeline order.
