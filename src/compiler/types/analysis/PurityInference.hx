@@ -57,20 +57,14 @@ class PurityInference {
 	 */
 	final overrideFamilies:Map<String, Array<String>>;
 
-	/** The facts the walk being recorded read (`memoized`), each once; null while nothing is recorded. */
-	var recorded:Null<Array<Int>> = null;
-
+	/** The facts of the walk being recorded (`memoized`), which records its reads in a frame of their database; null otherwise. */
 	var recordedFacts:Null<DeclarationFacts> = null;
-	var recordSink = 0;
 
 	/** Records that the walk read fact `aspect` of `name`, when one is being recorded. */
 	function note(aspect:FactAspect, name:String):Void {
-		var list = recorded, table = recordedFacts;
-		if (list != null && table != null) {
-			var id = table.id(aspect, name);
-			if (table.firstRecord(id, recordSink))
-				list.push(id);
-		}
+		var table = recordedFacts;
+		if (table != null)
+			table.database.record(table, table.id(aspect, name));
 	}
 
 	/** Records the facts `isAnnotatedPure` reads of `key`: its signature (its metadata), and its class's shape (the class's). */
@@ -97,18 +91,23 @@ class PurityInference {
 			next.entries.set(key, prior);
 			return prior.dependencies;
 		}
-		var list:Array<Int> = [];
-		recorded = list;
+		var outer = recordedFacts;
 		recordedFacts = table;
-		recordSink = table.newSink();
-		var index = 0;
-		while (index < own.length) {
-			note(cast own[index], own[index + 1]);
-			index += 2;
+		table.database.beginRecording();
+		var found = try {
+			var index = 0;
+			while (index < own.length) {
+				note(cast own[index], own[index + 1]);
+				index += 2;
+			}
+			compute();
+		} catch (error:haxe.Exception) {
+			table.database.endRecording();
+			recordedFacts = outer;
+			throw error;
 		}
-		var found = compute();
-		recorded = null;
-		recordedFacts = null;
+		var list = table.database.endRecording();
+		recordedFacts = outer;
 		next.entries.set(key, new PurityDependencyEntry(new UnitReads(table.revision, list), found));
 		return found;
 	}

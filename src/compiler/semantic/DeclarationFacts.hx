@@ -67,15 +67,16 @@ class UnitReads {
 }
 
 /**
- * The facts typed units read, for a session (`WARM_REBUILD_REUSE.md`, "Typing: recorded reads"). A fact is an aspect of a
- * declaration or of the program, by name, interned to a dense id. It keeps the revision its print last changed at and the
- * facts its meaning goes through; a unit keeps the facts it read and the revision it was typed at (`UnitReads`), and is current
- * while none of them, or of what they go through, changed after that.
+ * The facts typed units read, for a session (`WARM_REBUILD_REUSE.md`, "Typing: recorded reads"), as a kind of the session's query
+ * database (`RecordedQueryKind`). A fact is an aspect of a declaration or of the program, by name, interned to a dense id, which is
+ * its key and, the kind being the database's first, its read. It keeps the revision its print last changed at and the facts its
+ * meaning goes through; a unit is a `Unit` fact whose reads are the facts it read, kept with the revision it was typed at
+ * (`UnitReads`), and is current while none of them, or of what they go through, changed after that.
  *
  * Prints only move forward: a build that fails after moving one leaves it moved, so the units typed before are typed again.
  * The copies of the session state share the table, as they share the IR facts.
  */
-class DeclarationFacts {
+class DeclarationFacts extends compiler.query.RecordedQueryKind {
 	public static inline final KIND_CLASSES = "classes";
 	public static inline final KIND_ENUMS = "enums";
 	public static inline final KIND_ABSTRACTS = "abstracts";
@@ -92,13 +93,16 @@ class DeclarationFacts {
 	/** Which classes override which methods: the override methods of every class (their bases are `KIND_CLASSES`). */
 	public static inline final KIND_OVERRIDES = "overrides";
 
-	/** The revision of the build in progress: 1 for the first. */
-	public var revision(default, null) = 0;
+	/** The revision of the build in progress: the database's. */
+	public var revision(get, never):Int;
+
+	inline function get_revision():Int
+		return database.revision;
 
 	var ids:Array<Map<String, Int>> = [for (_ in 0...(FactAspect.WireAliases + 1))[]];
 	var aspects:Array<Int> = [];
 	var names:Array<String> = [];
-	var changedAt:Array<Int> = [];
+	var printChangedAt:Array<Int> = [];
 
 	/**
 	 * By a type's `Shape` fact, the revision at which the name last became or stopped being a declaration of some kind. A
@@ -112,17 +116,16 @@ class DeclarationFacts {
 	/** The module whose state holds a `Unit` fact's reads, by fact. */
 	var unitModules:Map<Int, String> = [];
 
-	/** The latest change of each fact and of what it goes through, for the revision in `effectiveIn`. */
-	var effective:Array<Int> = [];
+	/** Where a walk finds the reads of a `Unit` fact (`current`, `latestChange`), while one runs. */
+	var units:Null<(unit:Int) -> Null<UnitReads>> = null;
 
-	var effectiveIn:Array<Int> = [];
-
-	/** The reader that last recorded each fact (`ReadSink`), so that a sink records a fact once. */
-	var recordedBy:Array<Int> = [];
-
-	var lastSink = 0;
-
-	public function new() {}
+	/** Registers the table as `database`'s first kind, so that a fact's id is its read. */
+	public function new(database:compiler.query.QueryDatabase) {
+		super("fact", database);
+		database.register(this);
+		if (index != 0)
+			throw new compiler.core.InternalError("the declaration facts must be their database's first kind");
+	}
 
 	/**
 	 * Forgets every fact, for a compile that keeps no session once its typing is done: only a next build's invalidation reads
@@ -132,30 +135,17 @@ class DeclarationFacts {
 		ids = [for (_ in 0...(FactAspect.WireAliases + 1))[]];
 		aspects = [];
 		names = [];
-		changedAt = [];
+		printChangedAt = [];
 		kindChangedAt = [];
 		dependencies = [];
 		unitModules = [];
-		effective = [];
-		effectiveIn = [];
-		recordedBy = [];
 		expanded = [];
-		members = [];
-		path = [];
-		next = [];
-		successors = [];
-		named = [];
-		visitedIn = [];
-		order = [];
-		lowest = [];
-		latest = [];
-		onPath = [];
-		walkReads = null;
+		clearWalk();
 	}
 
 	/** Starts a build: facts changed from here on change at the new revision. */
 	public function beginBuild():Int
-		return ++revision;
+		return database.newRevision();
 
 	/** The fact `aspect` of `name`, made the first time it is named. */
 	public function id(aspect:FactAspect, name:String):Int {
@@ -166,12 +156,9 @@ class DeclarationFacts {
 		table.set(name, made);
 		aspects.push(aspect);
 		names.push(name);
-		changedAt.push(0);
+		printChangedAt.push(0);
 		kindChangedAt.push(0);
 		dependencies.push(null);
-		effective.push(0);
-		effectiveIn.push(0);
-		recordedBy.push(0);
 		return made;
 	}
 
@@ -188,11 +175,11 @@ class DeclarationFacts {
 		return names[id];
 
 	public inline function changedRevision(id:Int):Int
-		return changedAt[id];
+		return printChangedAt[id];
 
 	/** Records that fact `id`'s print changed in this build. */
 	public function changed(id:Int):Void {
-		changedAt[id] = revision;
+		printChangedAt[id] = revision;
 		lastChange = revision;
 	}
 
@@ -239,145 +226,45 @@ class DeclarationFacts {
 	public function unitModule(id:Int):Null<String>
 		return unitModules.get(id);
 
-	/** A new reader for `record`: a sink records each fact once. */
-	public function newSink():Int
-		return ++lastSink;
+	override function ownChange(key:Int):Int
+		return printChangedAt[key];
 
-	/** Whether sink `sink` has not recorded fact `id` yet, marking it recorded. */
-	public inline function firstRecord(id:Int, sink:Int):Bool {
-		if (recordedBy[id] == sink)
-			return false;
-		recordedBy[id] = sink;
-		return true;
+	/**
+	 * A unit's reads are what it read, found through `units`; one no module holds reads (a generic body typed for its errors alone)
+	 * gives its readers nothing: a reader of a unit always reads the declaration it is typed from too, whose own facts change when
+	 * it is edited or removed.
+	 */
+	override function readsOf(key:Int):Null<Array<Int>> {
+		if (aspects[key] != (FactAspect.Unit:Int))
+			return dependencies[key];
+		var find = units, record = find == null ? null : find(key);
+		return record == null ? null : record.facts;
 	}
+
+	/** What a declaration names goes through only the types it expands, and the kinds of the others; what a unit read counts whatever it is. */
+	override function partialChange(source:Int, target:Int):Int
+		return aspects[source] != (FactAspect.Unit:Int) && aspects[target] == (FactAspect.Shape:Int)
+			&& !isExpanded(target) ? kindChangedAt[target] : -1;
 
 	/**
 	 * The latest revision at which fact `id`, or a fact it goes through, changed. A unit fact goes through the reads `reads` finds
-	 * for it. One no module holds reads (a generic body typed for its errors alone) gives its readers nothing: a reader of a unit
-	 * always reads the declaration it is typed from too, whose own facts change when it is edited or removed. Memoized for the
-	 * build. The facts that go through each other (an
-	 * inferred declaration that reads another that reads it) get the latest change of all of them: the walk finds them as a
-	 * strongly connected component (Tarjan's algorithm), without recursion, since chains of units can be long.
+	 * for it. Memoized for the build; the facts that go through each other (an inferred declaration that reads another that reads
+	 * it) get the latest change of all of them.
 	 */
-	public function latestChange(id:Int, reads:(unit:Int) -> Null<UnitReads>):Int {
-		if (effectiveIn[id] == revision)
-			return effective[id];
-		// A fact that goes through nothing changed when it did.
-		if (dependencies[id] == null && aspects[id] != (FactAspect.Unit:Int)) {
-			effective[id] = changedAt[id];
-			effectiveIn[id] = revision;
-			return changedAt[id];
-		}
-		walkEpoch++;
-		counter = 0;
-		walkReads = reads;
-		enter(id);
-		while (path.length > 0) {
-			var top = path.length - 1, fact = path[top], through = successors[top], position = next[top];
-			if (through != null && position < through.length && latest[fact] < revision) {
-				next[top] = position + 1;
-				var successor = through[position];
-				// What a declaration names goes through only the types it expands, and the kinds of the others; what a unit read
-				// counts whatever it is.
-				if (named[top] && aspects[successor] == (FactAspect.Shape:Int) && !isExpanded(successor)) {
-					if (kindChangedAt[successor] > latest[fact])
-						latest[fact] = kindChangedAt[successor];
-					continue;
-				}
-				if (effectiveIn[successor] == revision) {
-					if (effective[successor] > latest[fact])
-						latest[fact] = effective[successor];
-				} else if (successor >= visitedIn.length || visitedIn[successor] != walkEpoch)
-					enter(successor);
-				else if (onPath[successor] && order[successor] < lowest[fact])
-					lowest[fact] = order[successor];
-				continue;
-			}
-			path.pop();
-			next.pop();
-			successors.pop();
-			named.pop();
-			if (lowest[fact] == order[fact]) {
-				// `fact` heads a component: every member gets the latest change of all of them.
-				var start = members.lastIndexOf(fact), change = 0;
-				for (index in start...members.length)
-					if (latest[members[index]] > change)
-						change = latest[members[index]];
-				for (index in start...members.length) {
-					var member = members[index];
-					onPath[member] = false;
-					effective[member] = change;
-					effectiveIn[member] = revision;
-				}
-				members.resize(start);
-			}
-			if (path.length > 0) {
-				var parent = path[path.length - 1];
-				if (lowest[fact] < lowest[parent])
-					lowest[parent] = lowest[fact];
-				var change = effectiveIn[fact] == revision ? effective[fact] : latest[fact];
-				if (change > latest[parent])
-					latest[parent] = change;
-			}
-		}
-		walkReads = null;
-		return effective[id];
+	public function latestChangeOf(id:Int, reads:(unit:Int) -> Null<UnitReads>):Int {
+		// Each entry sets where units are found, so one an exception left behind is never read; a try costs on this path.
+		units = reads;
+		var change = latestChange(id);
+		units = null;
+		return change;
 	}
-
-	/** Puts `fact` on the walk's path, with what it goes through. */
-	function enter(fact:Int):Void {
-		growWalk(fact);
-		visitedIn[fact] = walkEpoch;
-		order[fact] = counter;
-		lowest[fact] = counter;
-		counter++;
-		members.push(fact);
-		onPath[fact] = true;
-		var through = dependencies[fact], declared = true;
-		if (aspects[fact] == (FactAspect.Unit:Int)) {
-			var record = walkReads == null ? null : walkReads(fact);
-			through = record == null ? null : record.facts;
-			declared = false;
-		}
-		latest[fact] = changedAt[fact];
-		path.push(fact);
-		next.push(0);
-		successors.push(through);
-		named.push(declared);
-	}
-
-	// The walk's stacks, kept between walks so that a walk allocates nothing once they have grown.
-	var members:Array<Int> = [];
-	var path:Array<Int> = [];
-	var next:Array<Int> = [];
-	var successors:Array<Null<Array<Int>>> = [];
-	var named:Array<Bool> = [];
-	var counter = 0;
-	var walkReads:Null<(unit:Int) -> Null<UnitReads>> = null;
-
-	// The walk's state per fact, valid where `visitedIn` holds the walk's number.
-	var visitedIn:Array<Int> = [];
-	var order:Array<Int> = [];
-	var lowest:Array<Int> = [];
-	var latest:Array<Int> = [];
-	var onPath:Array<Bool> = [];
-	var walkEpoch = 0;
-
-	function growWalk(fact:Int):Void
-		while (visitedIn.length <= fact) {
-			visitedIn.push(0);
-			order.push(0);
-			lowest.push(0);
-			latest.push(0);
-			onPath.push(false);
-		}
 
 	/** Whether a unit typed at `typedAt` that read `facts` is current: nothing it read changed after it was typed. */
 	public function current(record:UnitReads, reads:(unit:Int) -> Null<UnitReads>):Bool {
-		for (fact in record.facts)
-			if (latestChange(fact, reads) > record.typedAt)
-				return false;
-		return true;
+		units = reads;
+		var result = currentSince(record.facts, record.typedAt);
+		units = null;
+		return result;
 	}
 
 	/**
@@ -386,11 +273,14 @@ class DeclarationFacts {
 	 */
 	public function firstChanged(record:UnitReads, reads:(unit:Int) -> Null<UnitReads>):Int {
 		var through = -1;
+		units = reads;
 		for (fact in record.facts)
-			if (changedAt[fact] > record.typedAt)
-				return fact;
-			else if (through < 0 && latestChange(fact, reads) > record.typedAt)
+			if (printChangedAt[fact] > record.typedAt) {
 				through = fact;
+				break;
+			} else if (through < 0 && latestChange(fact) > record.typedAt)
+				through = fact;
+		units = null;
 		return through;
 	}
 

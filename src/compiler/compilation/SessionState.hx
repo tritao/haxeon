@@ -63,12 +63,12 @@ class SessionState {
 	public var programFacts:Null<compiler.semantic.ProgramFacts.InferredProgramFacts> = null;
 
 	/**
-	 * The session's query database (`docs/design/QUERY_ENGINE.md`): the build inputs. Every copy shares it, as an input is set
-	 * outside builds.
+	 * The session's query database (`docs/design/QUERY_ENGINE.md`): the build inputs and the facts typed units read. Every copy
+	 * shares it, as an input is set outside builds and a print only moves forward.
 	 */
 	public var queries(default, null):compiler.query.QueryDatabase;
 
-	/** The facts typed units read (`DeclarationFacts`); every copy shares it, as a print only moves forward. */
+	/** The facts typed units read (`DeclarationFacts`), the database's first kind. */
 	public var declarationFacts(default, null):compiler.semantic.DeclarationFacts;
 
 	/** What the builds are made from, as the database's inputs (`BuildInputs`). */
@@ -230,7 +230,7 @@ class SessionState {
 		semanticWorkspace = new SemanticWorkspace(modules);
 		if (sharing == null) {
 			queries = new compiler.query.QueryDatabase();
-			declarationFacts = new compiler.semantic.DeclarationFacts();
+			declarationFacts = new compiler.semantic.DeclarationFacts(queries);
 			inputs = new BuildInputs(queries);
 		} else {
 			queries = sharing.queries;
