@@ -555,7 +555,9 @@ function scratchDirectory():String {
 		'haxeon-release-smoke.${Std.random(0x7fffffff)}'
 	]);
 	FileSystem.createDirectory(directory);
-	return directory;
+	// Resolved, so the paths the test runs from are the ones it finds in process command lines: macOS's TMPDIR is under
+	// /var, a link to /private/var.
+	return FileSystem.fullPath(directory);
 }
 
 /** Ends the compiler workers this test started (they idle out, but there is no reason to wait) and removes its directory. */

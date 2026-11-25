@@ -16,6 +16,12 @@ if(NOT C_SOURCES OR NOT OUTPUT)
 endif()
 find_package(Haxeon REQUIRED CONFIG)
 
+# haxeon_add_c_executable chooses the optimization, so a configuration adds no C flags of its own: with MSVC, CMake's
+# default configuration is Debug, whose /Od and /RTC1 the release build's /O2 cannot be combined with.
+foreach(_config IN ITEMS DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+  set(CMAKE_C_FLAGS_${_config} "")
+endforeach()
+
 if(DEVELOPMENT)
   haxeon_add_c_executable(program SOURCES_DIR "${C_SOURCES}" DEVELOPMENT)
 else()
