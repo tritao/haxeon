@@ -1,13 +1,13 @@
-# Haxeon ⚡
+# Haxeon
 
-> **Haxe, always on.**
+**A language and runtime for cross-platform apps and tools.**
 
-Haxeon is a cross-platform application toolkit built on a Haxe-compatible
-language. Write your app once in typed, familiar Haxe, call C and C++ libraries
-through generated bindings, and run it on desktop, Android, and the web, with
-live code updates while it runs.
+Develop on a live VM that patches your running program as you edit, ship one codebase as native executables or
+WebAssembly, and call C and C++ directly. Haxeon is built on Haxe and compiles a growing subset of it.
 
-Haxeon currently implements a growing subset of Haxe.
+Haxeon is pre-1.0: the language, the CLI and the packages may change between releases. No binary release has been
+published yet, so build it from source as the [Quick start](#-quick-start) below shows, then follow
+[Get started](docs/guides/00-get-started.md).
 
 ## 🧱 What you get
 
