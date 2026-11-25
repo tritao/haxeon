@@ -13,7 +13,6 @@ import haxeon.io.SegmentedBytes;
 class HlWriterCache {
 	var debugFiles:Array<String> = [];
 	var functions:ObjectMap<HlFunction, EncodedFunction> = new ObjectMap();
-	var functionPaths:ObjectMap<HlFunction, Array<String>> = new ObjectMap();
 	var validatedFunctions:ObjectMap<HlFunction, Bool> = new ObjectMap();
 	var validatedSnapshots:ObjectMap<Bytes, Int> = new ObjectMap();
 	var spanGroups:ObjectMap<Array<HlDebugLocation>, SpanGroupBytes> = new ObjectMap();
@@ -109,12 +108,6 @@ class HlWriterCache {
 		functions.set(fn,
 			new EncodedFunction(bytes, sources == null ? null : AnchorPlaces.of(fn.debugLocations, sources,
 			false)));
-
-	public function paths(fn:HlFunction):Null<Array<String>>
-		return functionPaths.get(fn);
-
-	public function retainPaths(active:ObjectMap<HlFunction, Array<String>>):Void
-		functionPaths = active;
 
 	public function isValidated(fn:HlFunction):Bool
 		return validatedFunctions.exists(fn);

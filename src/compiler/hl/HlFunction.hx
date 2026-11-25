@@ -67,6 +67,27 @@ class HlFunction {
 		this.debugLocations = debugLocations == null ? [] : debugLocations;
 		this.debugAssignments = debugAssignments == null ? [] : debugAssignments;
 	}
+
+	var distinctAnchors:Null<Array<Int>> = null;
+
+	/**
+	 * The anchors the debug locations count from, each once, in the order they first appear: what the files a function names
+	 * and the places its encoding depends on follow from. Kept with the function, which never changes.
+	 */
+	public function anchors():Array<Int> {
+		var known = distinctAnchors;
+		if (known != null)
+			return known;
+		var result:Array<Int> = [], previous = -1;
+		for (location in debugLocations)
+			if (location.anchor != previous) {
+				previous = location.anchor;
+				if (result.indexOf(previous) < 0)
+					result.push(previous);
+			}
+		distinctAnchors = result;
+		return result;
+	}
 }
 
 /** Symbolic HashLink instruction used before labels become relative offsets. */

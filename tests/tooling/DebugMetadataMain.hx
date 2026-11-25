@@ -107,15 +107,19 @@ class DebugMetadataMain {
 		}
 		if (fn.debugLocations.length < 3)
 			throw "Debug-file cache fixture needs three opcode locations";
-		var originalLocations = fn.debugLocations.copy();
+		// A function never changes (the writer and HlFunction.anchors rely on it): the fixture's mixed paths are another function.
+		var mixedLocations = fn.debugLocations.copy();
 		for (index in 0...3) {
-			var location = originalLocations[index];
-			fn.debugLocations[index] =
+			var location = mixedLocations[index];
+			mixedLocations[index] =
 				new compiler.hl.HlFunction.HlDebugLocation(compiler.core.SourceAnchor.file(index == 1
 				? "second-source.hx" : "first-source.hx"), location.line,
 				location.column, location.endLine, location.endColumn, location.start, location.end, location.flags,
 				location.generatedText);
 		}
+		var fnIndex = code.functions.indexOf(fn);
+		code.functions[fnIndex] = new compiler.hl.HlFunction(fn.type, fn.functionIndex, fn.registers, fn.opcodes,
+			mixedLocations, fn.debugAssignments);
 		var mixedPaths = HlWriter.encode(code).flatten(),
 			mixedCache = new HlWriterCache();
 		for (_ in 0...2) {
@@ -124,8 +128,7 @@ class DebugMetadataMain {
 			if (mixedPaths.compare(streamed.getBytes()) != 0)
 				throw "Cached debug files changed non-contiguous source-file ordering";
 		}
-		for (index in 0...3)
-			fn.debugLocations[index] = originalLocations[index];
+		code.functions[fnIndex] = fn;
 		if (!contains(bytes, suffix))
 			throw "HLB output did not serialize canonical debug assignment triples";
 		Sys.println("PASS: HLB serializes deterministic local and function debug metadata");

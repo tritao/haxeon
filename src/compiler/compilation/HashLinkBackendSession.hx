@@ -37,13 +37,8 @@ class HashLinkBackendSession implements BackendSession {
 	/** The lowered functions of the last plain build (see `HlLoweredCache`). */
 	public var loweredCache:HlLoweredCache;
 
-	/**
-	 * The files the last module's debug locations are placed in (`HlCode.sources`): the module stays right while their texts do.
-	 * Each function's, while it is the same object, in `placedBy`.
-	 */
+	/** The files the last module's debug locations are placed in (`HlCode.sources`): the module stays right while their texts do. */
 	var placedFiles:Map<String, Bool> = [];
-
-	var placedBy = new haxe.ds.ObjectMap<compiler.hl.HlFunction, Array<String>>();
 
 	/** Where this session's builds last placed each anchor, for the code a live module keeps of what an edit removed. */
 	var placedAnchors = new compiler.core.SourceAnchor.SourceAnchorHistory();
@@ -66,7 +61,6 @@ class HashLinkBackendSession implements BackendSession {
 	public function forCandidate():BackendSession {
 		var candidate = new HashLinkBackendSession(assembler, loweredCache.copy());
 		candidate.placedFiles = placedFiles;
-		candidate.placedBy = placedBy;
 		candidate.placedAnchors = placedAnchors;
 		return candidate;
 	}
@@ -391,28 +385,11 @@ class HashLinkBackendSession implements BackendSession {
 
 	/** Records the files `code`'s debug locations are placed in (`placedFiles`). */
 	function notePlacedFiles(code:HlCode):Void {
-		var files:Map<String, Bool> = [],
-			memo = new haxe.ds.ObjectMap<compiler.hl.HlFunction, Array<String>>(),
-			sources = code.sources;
-		for (fn in code.functions) {
-			var paths = placedBy.get(fn);
-			if (paths == null) {
-				paths = [];
-				var previous = -1;
-				for (location in fn.debugLocations)
-					if (location.anchor != previous) {
-						previous = location.anchor;
-						var path = sources.path(previous);
-						if (paths.indexOf(path) < 0)
-							paths.push(path);
-					}
-			}
-			memo.set(fn, paths);
-			for (path in paths)
-				files.set(path, true);
-		}
+		var files:Map<String, Bool> = [], sources = code.sources;
+		for (fn in code.functions)
+			for (anchor in fn.anchors())
+				files.set(sources.path(anchor), true);
 		placedFiles = files;
-		placedBy = memo;
 	}
 
 	static function attachSourceSnapshots(context:CompilationContext, code:HlCode):Void {

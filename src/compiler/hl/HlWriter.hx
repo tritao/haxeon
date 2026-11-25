@@ -800,12 +800,8 @@ class HlWriter {
 		for (fn in code.functions)
 			if (fn.debugLocations.length > 0)
 				hasDebug = true;
-		if (!hasDebug) {
-			if (cache != null)
-				cache.retainPaths(new ObjectMap());
+		if (!hasDebug)
 			return;
-		}
-		var activePaths:ObjectMap<HlFunction, Array<String>> = cache == null ? null : new ObjectMap();
 		for (fn in code.functions) {
 			if (fn.debugLocations.length == 0) {
 				internDebugFile("<generated>");
@@ -816,25 +812,10 @@ class HlWriter {
 					internDebugFile(sources.path(location.anchor));
 				continue;
 			}
-			// An anchor is always in the same file, so the paths a function names last while it is the same object.
-			var paths = cache.paths(fn);
-			if (paths == null) {
-				paths = [];
-				var previousAnchor = -1;
-				for (location in fn.debugLocations)
-					if (location.anchor != previousAnchor) {
-						previousAnchor = location.anchor;
-						var path = sources.path(previousAnchor);
-						if (paths.indexOf(path) < 0)
-							paths.push(path);
-					}
-			}
-			activePaths.set(fn, paths);
-			for (path in paths)
-				internDebugFile(path);
+			// An anchor is always in the same file: a function a session writes again names the files its anchors are in.
+			for (anchor in fn.anchors())
+				internDebugFile(sources.path(anchor));
 		}
-		if (cache != null)
-			cache.retainPaths(activePaths);
 	}
 
 	function internDebugFile(path:String):Int {
