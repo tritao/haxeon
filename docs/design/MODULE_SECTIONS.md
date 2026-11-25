@@ -1,7 +1,8 @@
 # Module sections and load-time linking (design note)
 
-Status: designed 2026-11-25; the open questions are decided (section 9); slice 1, the loader, has landed. The user's
-decision: per-module sections and load-time linking replace "stable output indices"
+Status: designed 2026-11-25; the open questions are decided (section 9). Slice 1, the loader, has landed, and slice 2a: the
+compiler writes sections behind `--module-sections`, links them ahead of time, and every reader of modules reads them
+(section 8). The user's decision: per-module sections and load-time linking replace "stable output indices"
 ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3, [QUERY_ENGINE.md](QUERY_ENGINE.md) row B).
 
 **Problem.** HashLink's function, type, global, string and constant tables are dense and numbered in first-use order, so a
@@ -131,9 +132,45 @@ NUL-terminated strings, then each length).
   bytes and debug files in order of first appearance.
 - **Names and identities.** A function's key member is its name in the linked code (`function_names`): members are
   qualified declaration paths, readable alone. Its stable id is its findex until the loader mints ids (slice 4).
-- **Debug.** Each function carries its lines and assignments as in HLB 8, with section-local files. The debug sections
-  (function identities, opcode source spans, source snapshots) are not part of HLB 9 yet: they come with slice 2, keyed
-  by local function index, together with the readers that need them.
+- **Debug.** Each function carries its lines and assignments as in HLB 8, with section-local files. After its functions a
+  section has its debug sub-sections: a count, then each as HLB 8's debug sections are (kind, version, flags, size,
+  payload), never compressed on their own since the section's LZ4 covers them. Slice 2 writes two, in development builds:
+  the opcode source spans of its functions (kind 2 version 2, the function numbered by its index among the section's
+  functions) and source snapshots (kind 3 version 1). A file's snapshot is in its module's section, else in the first
+  section whose code shows it. There is no function-identity sub-section: a function's identity is its key. The loader
+  checks the sub-sections and steps over them; tools read them through the static link (section 5).
+
+**What slice 2 writes** (`HlSectionWriter`):
+
+- **Sections.** One per module of the build that owns anything, named by the module's path (`ModuleState.name`, never the
+  file's path, which can be absolute), in `compareModules` order, then the shared section `$shared`, which no module path
+  can be. Sections are LZ4-compressed (fast level) where the natives are; the Haxe interpreter stores them as they are.
+- **Homes** are taken from the dense module the lowering makes, so slice 2 needs nothing new from the IR:
+  - a function's is the module of the file most of its positions count from (the anchor of most of its opcodes), so a
+    lambda, a specialization or a dispatcher goes with the declaration whose code it is; a function with no position in a
+    module file (printers, runtime helpers, `__init`, `__entry`) goes to `$shared`;
+  - an object type with methods goes with its first method, an enum tag with its enum, any other class, enum or
+    interface with the first function, in module order, whose registers hold it, else to `$shared`. String, the runtime
+    headers and the anonymous structures (`HlSymbolTable.isSharedDefinition`) are shared definitions;
+  - a class value or enum constant global goes with its type, another global with the first function that reads or
+    writes it, else to `$shared`; literal constants are no one's.
+  Homes by declaration, from the IR (section 3, "Ownership"), replace the first-user rules in slice 3, where they decide
+  what an edit re-encodes.
+- **Keys.** Functions by their names (`HlCode.functionNames`); objects, structs and enums by their names, interfaces by
+  their nominal identity, an enum tag as `enum-tag:` and its enum's name; globals by their symbol names
+  (`HlCode.globalNames`), a class value as `$class:` and its type's name.
+- **Numbering.** The build numbers its functions as the loader will (`HlSectionOutput.linkedIndices`): `.functions`, the
+  build's stable ids (a function's linked index) and its `.hli` use it. A native no section declares is left out.
+
+**Measured with slice 2** on the compiler's release self-compile (11,651 functions; one performance core):
+
+- 567 sections; `$shared` is the largest, 0.41 MB of 9.17 MB stored, 0.22 MB compressed.
+- Size: 5.30 MB with LZ4 sections, 9.17 MB stored, against 6.13 MB for HLB 8 (whose identities, about 0.37 MB, are
+  compressed). Uncompressed, the section names (import keys and owned members, text) take 2.73 MB; instructions shrink from
+  3.67 MB to 3.36 MB with local indices.
+- Load: starting the compiler (load, link, JIT) takes 4.517 G instructions against 4.367 G (+3.4%); stored sections take
+  4.496 G, so LZ4 costs about 21 M. Wall 0.94 s against 0.90 s.
+- The static link of the file takes 1.1 s on node (the debugger) and well under a second on HashLink.
 
 ## 2. Loader
 
@@ -246,13 +283,13 @@ None of these can come from a correct compiler. The compiler-side linker (see 5)
 |---|---|
 | VM loader (`code.c`, `main.c`, `hlruntime.c`) | `hl_code_link` for HLB 9. The dense reader stays |
 | JIT, `module.c`, `debugger.c`, `prof.c`, hlprof, `jit_gdb.c` | None: they read the linked `hl_code`. Function names come from keys |
-| hashlink-debugger (`hld/Module.hx`) | Reads the `.hl` file itself (`format.hl.Reader`), and a runtime module's bytes through `debug_hlb`. It needs an HLB 9 reader that links as the loader does before plain builds write HLB 9 (slice 2) |
+| hashlink-debugger (`hld/Module.hx`) | Reads the `.hl` file itself (`format.hl.Reader`), and a runtime module's bytes through `debug_hlb`. Done in slice 2: `Module.load` links an HLB 9 file with `HlStaticLink` (it imports only `haxe`, so it runs on JavaScript) and reads the dense module, with identities, spans and snapshots |
 | HLD3 protocol, DAP | Unchanged fields. The findex is the runtime's, and the stable id is minted by the loader |
 | Patch loader (`hlpatch.c`) | HLP 12 (see 4) |
-| AOT (`HlcImage`, `HlcModule`, `native/aot/hlc_main.c`) | Gets its indices from a compiler-side link (`HlStaticLink`: the loader's algorithm in Haxe, one pass in a cold build) and keeps writing a dense image |
+| AOT (`HlcImage`, `HlcModule`, `native/aot/hlc_main.c`) | Gets its indices from a compiler-side link (`HlStaticLink`: the loader's algorithm in Haxe, one pass in a cold build) and keeps writing a dense image. Slice 2 leaves it on the dense module the lowering still makes; it moves to the static link when that module goes (slice 3) |
 | Stock HL/C (`hl2c`) | Not in use. It could read a statically linked HLB 8 if ever needed |
-| `HlModuleReader`, `haxeon dev hl-stat`, `scripts/report-binary-size.py`, `vendor/hashlink/tools/hldump.c` | Read sections. Table statistics come from `HlStaticLink` |
-| Sidecars | `.functions`, compared by the self-compile oracle and the edit replay, is written from `HlStaticLink`'s numbering or dropped for keys. `.hli` shrinks to module id and revision. Android HXR (`haxeon_jni.c`, `AndroidWatch`) addresses the entry by key |
+| `HlModuleReader`, `haxeon dev hl-stat`, `scripts/report-binary-size.py`, `vendor/hashlink/tools/hldump.c` | Read sections. Table statistics come from `HlStaticLink`. Done in slice 2: `HlModuleReader` reads an HLB 9 file through `HlStaticLink.linkWithParts`, with the bytes of each part of the sections; `hl-stat --link OUT` writes the linked HLB 8 module; a sectioned build's size census (`HAXEON_IR_CENSUS=1`) gives those parts, which the report accounts for; hldump reads HLB 9 through the loader |
+| Sidecars | `.functions`, compared by the self-compile oracle and the edit replay, is written from `HlStaticLink`'s numbering or dropped for keys. `.hli` shrinks to module id and revision. Android HXR (`haxeon_jni.c`, `AndroidWatch`) addresses the entry by key. In slice 2 a sectioned build writes `.functions` and `.hli` in the loader's numbering (`HlSectionOutput.linkedIndices`); HXR watches live builds, which stay dense until slice 4 |
 | Persistence (`hl/persistence`) | `HlSymbolStateCodec`, `HlTypeDefStateCodec` and `HlFunctionCacheStateCodec` go. `HlAssemblerStateCodec` keeps the semantic baseline and the section digests |
 | Tests | The self-compile oracle takes a new base once, and stays byte-identical cold vs warm. These are rewritten: `HlModuleRoundTripMain`, `HlWriterCacheMain`, `DebugMetadataMain`, `test-hlb-debug-sections.sh`, the HLB cases in `TestMain`, and the patch mains that build HLP by hand (`PatchOpcodeTests`, `AddedFunctionLayoutMain` and the rest of the 20 files under `tests/` that import these classes). The ci-tier debug-metadata and hot-reload suites run unchanged |
 | Wasm | None |
@@ -299,7 +336,7 @@ and perf-guard, including startup.
 |---|---|---|---|---|
 | A | Positions relative to their declaration (in progress elsewhere) | — | — | — |
 | 1 | Fork: `link.c` and the HLB 9 reader beside the dense one. C tests on hand-built two-section modules cover every failure mode, plus `hldump`. Landed: `tests/native/code_link.c` (the `code-link` suite) | +1,500 C (+1,400 C tests) | fork tests; existing suites untouched (the compiler still writes HLB 8) | — |
-| 2 | Compiler: home modules, `HlSectionWriter`, `HlStaticLink`. Plain builds write HLB 9; live builds stay on HLB 8. AOT, `hl-stat` and the binary-size report link statically | +1,100 / −150 | the self-compile takes its new base. New validation: the loader's linked-table digest (behind a flag) equals `HlStaticLink`'s. The ci debug-metadata suite | 1, A |
+| 2 | Compiler: home modules, `HlSectionWriter`, `HlStaticLink`. Plain builds write HLB 9; live builds stay on HLB 8. AOT, `hl-stat` and the binary-size report link statically. **Split.** 2a landed: the writer, the static link, the readers (`HlModuleReader`, hl-stat, the size report, the debugger) and the check that the VM's link equals the static link (`code_link --compare`, the `module-sections` suite, the `driver-sections` suite), with sections behind the typed option `--module-sections`. 2b: plain builds write sections by default, the self-compile oracle and the checked-in bootstrap take their new base | +1,100 / −150 | the self-compile takes its new base. New validation: the VM's link equals `HlStaticLink`'s. The ci debug-metadata suite | 1, A |
 | 3 | Plain warm builds without link and replay. One memo per module section, then folded into engine slice 7 | −1,000 / +150 | `--check-reuse` | 2 |
 | 4 | Live patching on sections: HLP 12, the patch linker, loader stable ids, slots and codecs removed, HXR | −2,100 / +500 compiler, −450 / +450 fork | the ci hot-reload suite, the patch mains, `NominalInterfacePatchMain`, an Android watch run | 3 |
 | 5 | Per-class initializer parts in their owning modules. The compiler no longer writes HLB 8 for live builds | −50 / +100 | edit replay on a static-initializer edit | 4 |
