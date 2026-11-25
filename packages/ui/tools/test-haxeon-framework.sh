@@ -2,6 +2,7 @@
 set -euo pipefail
 
 module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+source "$module_dir/tools/ui-sources.sh" "$module_dir"
 haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
 materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
 repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
@@ -40,9 +41,8 @@ compiler_command=("$hashlink_runtime" "$compiler")
 	--root="$module_dir/tests/haxeon" \
 	--root="$haxeon_dir/packages/platform/tests" \
 	--root="$haxeon_dir/stdlib" \
-	--root="$module_dir/haxe" \
+	"${ui_root_flags[@]}" \
 	--root="$editor_dir/src" \
-	--root="$module_dir/bindings/haxe" \
 	--root="$haxeon_dir/packages/platform/src" \
 	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
 	--ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap" \
@@ -53,25 +53,7 @@ compiler_command=("$hashlink_runtime" "$compiler")
 	"$module_dir/tests/haxeon/FrameworkSmoke.hx" \
 	"$haxeon_dir/packages/platform/tests/NativeKitEventDecoderTests.hx" \
 	"$editor_dir/src/haxeon/editor/"*.hx \
-	"$module_dir/haxe/haxeon/ui/core/"*.hx \
-	"$module_dir/haxe/haxeon/ui/style/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/"*.hx \
-	"$module_dir/haxe/haxeon/ui/docking/"*.hx \
-	"$module_dir/haxe/haxeon/ui/editing/"*.hx \
-	"$module_dir/haxe/haxeon/ui/plotting/"*.hx \
-	"$module_dir/haxe/haxeon/ui/properties/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/collections/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/commands/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/controls/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/docking/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/layout/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/overlays/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/plotting/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/properties/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/scroll/"*.hx \
-	"$module_dir/haxe/haxeon/ui/widgets/text/"*.hx \
-	"$module_dir/haxe/haxeon/ui/host/"*.hx \
-	"$module_dir/bindings/haxe/haxeon/ui/"*.hx)
+	"${ui_modules[@]}")
 
 runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 if command -v xvfb-run >/dev/null; then

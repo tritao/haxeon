@@ -2,6 +2,7 @@
 set -euo pipefail
 
 module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+source "$module_dir/tools/ui-sources.sh" "$module_dir"
 haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
 materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
 repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
@@ -106,9 +107,8 @@ compiler_args=(
 	--wasm-import-memory
 	--wasm-memory-contract="$memory_contract"
 	--root="$module_dir/examples/ui_showcase"
-	--root="$module_dir/haxe"
+	"${ui_root_flags[@]}"
 	--root="$editor_dir/src"
-	--root="$module_dir/bindings/haxe"
 	--root="$haxeon_dir/packages/platform/src"
 	--root="$haxeon_dir/packages/gpu/src"
 	--ffi-interface="$haxeon_dir/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
@@ -126,32 +126,9 @@ compiler_args=(
 	"$module_dir/examples/ui_showcase/ShowcaseWeb.hx"
 	"$module_dir/examples/ui_showcase/UiExplorer.hx"
 	"$module_dir/examples/ui_showcase/ShowcaseCube.hx"
-	"$module_dir/haxe/haxeon/ui/core/"*.hx
+	"${ui_modules[@]}"
 	"$editor_dir/src/haxeon/editor/"*.hx
-	"$module_dir/haxe/haxeon/ui/style/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/"*.hx
-	"$module_dir/haxe/haxeon/ui/docking/"*.hx
-	"$module_dir/haxe/haxeon/ui/editing/"*.hx
-	"$module_dir/haxe/haxeon/ui/plotting/"*.hx
-	"$module_dir/haxe/haxeon/ui/properties/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/collections/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/commands/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/controls/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/docking/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/layout/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/overlays/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/plotting/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/properties/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/scroll/"*.hx
-	"$module_dir/haxe/haxeon/ui/widgets/text/"*.hx
-	"$module_dir/haxe/haxeon/ui/theme/"*.hx
-	"$module_dir/haxe/haxeon/ui/semantics/"*.hx
-	"$module_dir/haxe/haxeon/ui/debug/"*.hx
-	"$module_dir/haxe/haxeon/ui/gestures/"*.hx
-	"$module_dir/haxe/haxeon/ui/animation/"*.hx
-	"$module_dir/haxe/haxeon/ui/host/"*.hx
 	"$haxeon_dir/packages/platform/src/haxeon/platform/GraphicsImageRef.hx"
-	"$module_dir/bindings/haxe/haxeon/ui/"*.hx
 	"$haxeon_dir/packages/platform/src/haxeon/platform/event/NativeEvent.hx"
 	"$haxeon_dir/packages/platform/src/haxeon/platform/event/EventPump.hx"
 	"$haxeon_dir/packages/platform/src/haxeon/platform/event/PlatformEvent.hx"
