@@ -3214,7 +3214,7 @@ class FrameworkSmoke {
 		var cacheEnvironment = new StyleEnvironment(500.0, 800.0);
 		var environmentSheet = new StyleSheet("CacheEnvironment");
 		environmentSheet.rule(StyleSelector.widget("button"), [StyleValue.paddingSymmetric(12.0, 8.0)]);
-		environmentSheet.when(Environment.widthLessThan(600.0),
+		environmentSheet.when(Environment.width.lessThan(600.0),
 			StyleSelector.widget("button"),
 			[StyleValue.paddingSymmetric(6.0, 4.0)]);
 		var environmentResolver = new StyleResolver();
@@ -3280,7 +3280,7 @@ class FrameworkSmoke {
 		if (animatedComputed.getColor(StyleProperty.Background).red != 1.0
 			|| transitionScheduler.activeCount != 0 || normalComputed.getColor(StyleProperty.Background).red != 0.0
 			|| transitionResolver.cacheHits != 0 || transitionResolver.cacheMisses != 0) return 218;
-		var effectChain = EffectChain.of([BlurEffect.withSigma(12.0), ColorFactorEffect.saturate(1.15)]);
+		var effectChain = EffectChain.of([new BlurEffect(12.0), ColorFactorEffect.saturate(1.15)]);
 		var effectOverflow = effectChain.inkOverflow();
 		if (effectChain.effects.length != 2
 			|| effectOverflow.left != 36.0 || effectOverflow.top != 36.0 || effectOverflow.right != 36.0
@@ -3288,15 +3288,15 @@ class FrameworkSmoke {
 		var normalizedEffects = EffectChain.of([
 			ColorFactorEffect.brightness(1.2),
 			ColorFactorEffect.contrast(0.8),
-			BlurEffect.withSigma(3.0),
+			new BlurEffect(3.0),
 			ColorFactorEffect.saturate(1.1)
 		]).normalized();
 		if (normalizedEffects.effects.length != 3 || normalizedEffects.effects[0].kind != EffectKind.ColorMatrix
 			|| normalizedEffects.effects[1].kind != EffectKind.Blur
 			|| normalizedEffects.effects[2].kind != EffectKind.ColorMatrix) return 242;
-		var blurThenMatrix = EffectChain.of([BlurEffect.withSigma(2.0),
+		var blurThenMatrix = EffectChain.of([new BlurEffect(2.0),
 			ColorFactorEffect.brightness(1.2)]).normalized();
-		var multipleBlurs = EffectChain.of([BlurEffect.withSigma(2.0), BlurEffect.withSigma(4.0)]).normalized();
+		var multipleBlurs = EffectChain.of([new BlurEffect(2.0), new BlurEffect(4.0)]).normalized();
 		if (blurThenMatrix.effects.length != 2 || blurThenMatrix.effects[0].kind != EffectKind.Blur
 			|| blurThenMatrix.effects[1].kind != EffectKind.ColorMatrix
 			|| multipleBlurs.effects.length != 2) return 246;
@@ -3327,16 +3327,16 @@ class FrameworkSmoke {
 			new InkOverflow(1.0, 1.0, 1.0, 1.0)),
 			[EffectParameter.scalar(0.75)]);
 		var mixedCustom = EffectChain.of([ColorFactorEffect.brightness(1.2),
-			customRuntime, BlurEffect.withSigma(3.0)]).normalized();
+			customRuntime, new BlurEffect(3.0)]).normalized();
 		if (mixedCustom.effects.length != 3 || mixedCustom.effects[0].kind != EffectKind.ColorMatrix
 			|| mixedCustom.effects[1].kind != EffectKind.Custom
 			|| mixedCustom.effects[2].kind != EffectKind.Blur) return 246;
 		var interpolatedEffects = EffectChain.interpolate(EffectChain.of([
-			BlurEffect.withSigma(4.0),
+			new BlurEffect(4.0),
 			ColorFactorEffect.brightness(1.0)
 		]),
 			EffectChain.of([
-				BlurEffect.withSigma(12.0),
+				new BlurEffect(12.0),
 				ColorFactorEffect.brightness(2.0)
 			]),
 			0.5);
@@ -3346,9 +3346,9 @@ class FrameworkSmoke {
 			|| interpolatedBrightness == null || interpolatedBrightness.factor != 1.5) return 241;
 		var effectTransitionSheet = new StyleSheet("EffectTransitionSheet");
 		effectTransitionSheet.rule(StyleSelector.widget("panel"),
-			[StyleValue.effects(EffectChain.of([BlurEffect.withSigma(4.0)]))]);
+			[StyleValue.effects(EffectChain.of([new BlurEffect(4.0)]))]);
 		effectTransitionSheet.rule(StyleSelector.widget("panel").state(StyleState.Hovered),
-			[StyleValue.effects(EffectChain.of([BlurEffect.withSigma(12.0)]))]);
+			[StyleValue.effects(EffectChain.of([new BlurEffect(12.0)]))]);
 		effectTransitionSheet.transition(StyleProperty.Effects, 0.1, Easing.Linear);
 		var effectTransitionScheduler = new AnimationScheduler();
 		var effectTransitionResolver = new StyleResolver(effectTransitionScheduler);
@@ -3390,9 +3390,9 @@ class FrameworkSmoke {
 			[
 				StyleValue.effects(effectChain),
 				StyleValue.backdropEffects(EffectChain.of([
-					BlurEffect.withSigma(8.0),
+					new BlurEffect(8.0),
 					ColorFactorEffect.contrast(1.1),
-					HueRotateEffect.withDegrees(12.0),
+					new HueRotateEffect(12.0),
 					ColorMatrixEffect.identity(),
 					dropShadow
 				]))
@@ -3447,7 +3447,7 @@ class FrameworkSmoke {
 		var blurList = DisplayList.create();
 		effectCanvas.withLayer(1.0, function(canvas) {
 			canvas.fillRect(new Rect(4.0, 6.0, 24.0, 18.0), Color.rgba(0.2, 0.4, 0.8, 1.0));
-		}, CompositeMode.SourceOver, new Rect(4.0, 6.0, 24.0, 18.0), EffectChain.of([BlurEffect.withSigma(4.0)]));
+		}, CompositeMode.SourceOver, new Rect(4.0, 6.0, 24.0, 18.0), EffectChain.of([new BlurEffect(4.0)]));
 		effectCanvas.update(blurList);
 		if (blurList.info().commandCount != 4) return 249;
 		blurList.dispose();
@@ -3501,14 +3501,14 @@ class FrameworkSmoke {
 		backdropList.dispose();
 		effectCanvas.reset();
 		var eightOperations = EffectChain.of([
-			BlurEffect.withSigma(1.0),
-			BlurEffect.withSigma(2.0),
-			BlurEffect.withSigma(3.0),
-			BlurEffect.withSigma(4.0),
-			BlurEffect.withSigma(5.0),
-			BlurEffect.withSigma(6.0),
-			BlurEffect.withSigma(7.0),
-			BlurEffect.withSigma(8.0)
+			new BlurEffect(1.0),
+			new BlurEffect(2.0),
+			new BlurEffect(3.0),
+			new BlurEffect(4.0),
+			new BlurEffect(5.0),
+			new BlurEffect(6.0),
+			new BlurEffect(7.0),
+			new BlurEffect(8.0)
 		]);
 		var eightOperationCanvas = new Canvas();
 		var eightOperationList = DisplayList.create();
@@ -3522,15 +3522,15 @@ class FrameworkSmoke {
 				CompositeMode.SourceOver,
 				null,
 				EffectChain.of([
-					BlurEffect.withSigma(1.0),
-					BlurEffect.withSigma(2.0),
-					BlurEffect.withSigma(3.0),
-					BlurEffect.withSigma(4.0),
-					BlurEffect.withSigma(5.0),
-					BlurEffect.withSigma(6.0),
-					BlurEffect.withSigma(7.0),
-					BlurEffect.withSigma(8.0),
-					BlurEffect.withSigma(9.0)
+					new BlurEffect(1.0),
+					new BlurEffect(2.0),
+					new BlurEffect(3.0),
+					new BlurEffect(4.0),
+					new BlurEffect(5.0),
+					new BlurEffect(6.0),
+					new BlurEffect(7.0),
+					new BlurEffect(8.0),
+					new BlurEffect(9.0)
 				]));
 		} catch (_:Dynamic) {
 			rejectedNineOperations = true;
@@ -3538,7 +3538,7 @@ class FrameworkSmoke {
 		if (!rejectedNineOperations) return 257;
 		var responsiveSheet = new StyleSheet("ResponsiveSheet");
 		responsiveSheet.rule(StyleSelector.widget("button"), [StyleValue.paddingSymmetric(12.0, 8.0)]);
-		responsiveSheet.when(Environment.widthLessThan(600.0),
+		responsiveSheet.when(Environment.width.lessThan(600.0),
 			StyleSelector.widget("button"),
 			[StyleValue.paddingSymmetric(6.0, 4.0)]);
 		responsiveSheet.when(Environment.colorScheme(EnvironmentColorScheme.Dark),
@@ -3962,7 +3962,7 @@ class FrameworkSmoke {
 		var inspectorEffects = new StyleSheet("InspectorEffects");
 		inspectorEffects.rule(StyleSelector.widget("button"),
 			[
-				StyleValue.effects(EffectChain.of([BlurEffect.withSigma(4.0)])),
+				StyleValue.effects(EffectChain.of([new BlurEffect(4.0)])),
 				StyleValue.backdropEffects(EffectChain.of([ColorFactorEffect.brightness(1.1)])),
 				StyleValue.mask(Mask.roundedRect(6.0))
 			]);
@@ -4790,7 +4790,7 @@ class FrameworkSmoke {
 		if (normal == hovered) return false;
 		var before = new ComputedStyle();
 		var decorated = new ComputedStyle();
-		decorated.setDecorations(new DecorationChain([new BorderDecoration(Color.fromBytes(255, 0, 0), 2)]), null);
+		decorated.setDecorations(DecorationChain.of([new BorderDecoration(Color.fromBytes(255, 0, 0), 2)]), null);
 		node.computedStyle = decorated;
 		node.syncRevisions(node, haxeon.ui.style.ComputedStyle.StyleDiff.compare(before, decorated));
 		var styled = node.retainedPaintKey();
@@ -7113,7 +7113,7 @@ private class DecoratedButtonSmoke implements View {
 		var node = new Button("Decorated", null, function() {}, "decoration-normalization").build(context);
 		if (decorated) {
 			var computed = context.resolveStyle(new StyleTarget("box", "caller-decoration"), node.layout.style);
-			computed.setDecorations(new DecorationChain([new BorderDecoration(Color.fromBytes(255, 0, 0), 2)]), null);
+			computed.setDecorations(DecorationChain.of([new BorderDecoration(Color.fromBytes(255, 0, 0), 2)]), null);
 			node.computedStyle = computed;
 		}
 		return node;

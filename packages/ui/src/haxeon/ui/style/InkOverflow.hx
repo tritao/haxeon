@@ -10,11 +10,19 @@ import Hashable;
  * the Haxe style system.
  */
 struct InkOverflow implements Hashable {
+	/** How far drawing may reach past the left edge. */
 	public final left:Float;
+
+	/** How far past the top edge. */
 	public final top:Float;
+
+	/** How far past the right edge. */
 	public final right:Float;
+
+	/** How far past the bottom edge. */
 	public final bottom:Float;
 
+	/** Overflow of the given distances. Throws when one is negative or not finite. */
 	public function new(left:Float = 0.0, top:Float = 0.0, right:Float = 0.0,
 			bottom:Float = 0.0) {
 		if (!Math.isFinite(left) || left < 0.0 || !Math.isFinite(top) || top < 0.0 || !Math.isFinite(right)
@@ -26,6 +34,7 @@ struct InkOverflow implements Hashable {
 		this.bottom = bottom;
 	}
 
+	/** No overflow. */
 	public static function zero():InkOverflow
 		return new InkOverflow();
 
@@ -38,6 +47,7 @@ struct InkOverflow implements Hashable {
 	}
 
 
+	/** A description for inspection. */
 	public function toString():String
 		return '($left, $top, $right, $bottom)';
 }

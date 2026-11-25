@@ -6,29 +6,56 @@ class StyleEnvironment {
 
 	/** Stable identity prevents separate environments at revision zero colliding. */
 	public final identity:Int;
+
+	/** The viewport's width, in logical pixels. */
 	public var width:Float;
+
+	/** The viewport's height, in logical pixels. */
 	public var height:Float;
 	var pixelDensityValue:Float;
+
+	/** Device pixels per logical pixel. */
 	public var pixelDensity(get, set):Float;
+
+	/** An `EnvironmentOrientation` value. */
 	public var orientation:Int;
 	var platformValue:String;
+
+	/** The platform's name, such as "macos" or "web". */
 	public var platform(get, set):String;
 	var colorSchemeValue:Int;
+
+	/** An `EnvironmentColorScheme` value: what the user asked the system for. */
 	public var colorScheme(get, set):Int;
 	var pointerValue:Int;
+
+	/** An `EnvironmentPointer` value: how precise the main pointer is. */
 	public var pointer(get, set):Int;
 	var hoverSupportedValue:Bool;
+
+	/** Whether the pointer can hover. */
 	public var hoverSupported(get, set):Bool;
 	var textScaleValue:Float;
+
+	/** The user's text size multiplier. */
 	public var textScale(get, set):Float;
 	var reducedMotionValue:Bool;
+
+	/** Whether the user asked for less motion. */
 	public var reducedMotion(get, set):Bool;
 	var scrollbarVisibilityValue:Int = haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Auto;
+
+	/** A `ScrollbarVisibility` value: the system's scrollbar preference. */
 	public var scrollbarVisibility(get, set):Int;
 	var highContrastValue:Bool;
+
+	/** Whether the user asked for high contrast. */
 	public var highContrast(get, set):Bool;
+
+	/** Counts the changes, so styles depending on the environment are resolved again. */
 	public var revision(default, null):Int;
 
+	/** An environment with a viewport of `width` by `height`. */
 	public function new(width:Float = 0.0, height:Float = 0.0) {
 		identity = nextIdentity++;
 		this.width = width;
@@ -46,6 +73,7 @@ class StyleEnvironment {
 		refreshOrientation();
 	}
 
+	/** Sets the viewport's size, counting a change only when it differs. Throws when a side is not positive. */
 	public function setViewport(width:Float, height:Float):Void {
 		if (width <= 0.0 || height <= 0.0)
 			throw "Style environment viewport must be positive";
@@ -156,66 +184,70 @@ class StyleEnvironment {
 
 /** Typed environment query factories; no selector syntax or parser is involved. */
 class Environment {
+	/** Conditions on the viewport's width. */
 	public static final width:EnvironmentDimension = new EnvironmentDimension(0);
+	/** Conditions on the viewport's height. */
 	public static final height:EnvironmentDimension = new EnvironmentDimension(1);
+	/** Conditions on device pixels per logical pixel. */
 	public static final pixelDensity:EnvironmentDimension = new EnvironmentDimension(2);
+	/** Conditions on the user's text size multiplier. */
 	public static final textScale:EnvironmentDimension = new EnvironmentDimension(3);
 
-	public static function widthLessThan(value:Float):EnvironmentCondition
-		return EnvironmentCondition.numeric(0, 0, value);
-
-	public static function widthAtLeast(value:Float):EnvironmentCondition
-		return EnvironmentCondition.numeric(0, 3, value);
-
-	public static function heightLessThan(value:Float):EnvironmentCondition
-		return EnvironmentCondition.numeric(1, 0, value);
-
+	/** While the viewport has the `EnvironmentOrientation` `value`. */
 	public static function orientation(value:Int):EnvironmentCondition
 		return EnvironmentCondition.orientation(value);
 
+	/** While running on the platform `value`. */
 	public static function platform(value:String):EnvironmentCondition
 		return EnvironmentCondition.platform(value);
 
+	/** While the system asks for the `EnvironmentColorScheme` `value`. */
 	public static function colorScheme(value:Int):EnvironmentCondition
 		return EnvironmentCondition.colorScheme(value);
 
+	/** While the main pointer has the `EnvironmentPointer` precision `value`. */
 	public static function pointer(value:Int):EnvironmentCondition
 		return EnvironmentCondition.pointer(value);
 
+	/** While the pointer can hover, or cannot when `value` is false. */
 	public static function hoverSupported(value:Bool = true):EnvironmentCondition
 		return EnvironmentCondition.hoverSupported(value);
 
+	/** While the user asks for less motion, or does not. */
 	public static function reducedMotion(value:Bool = true):EnvironmentCondition
 		return EnvironmentCondition.reducedMotion(value);
 
+	/** While the user asks for high contrast, or does not. */
 	public static function highContrast(value:Bool = true):EnvironmentCondition
 		return EnvironmentCondition.highContrast(value);
 }
 
 /** Stable color-scheme values for style environments. */
 class EnvironmentColorScheme {
+	/** A light appearance. */
 	public static inline var Light:Int = 0;
+	/** A dark appearance. */
 	public static inline var Dark:Int = 1;
 }
 
 /** Typed environment predicate used by conditional style rules. */
 class EnvironmentCondition {
-	public static inline var Width:Int = 0;
-	public static inline var Height:Int = 1;
-	public static inline var Density:Int = 2;
-	public static inline var TextScale:Int = 3;
-	public static inline var Orientation:Int = 4;
-	public static inline var Platform:Int = 5;
-	public static inline var ColorScheme:Int = 6;
-	public static inline var Pointer:Int = 7;
-	public static inline var HoverSupport:Int = 8;
-	public static inline var ReducedMotion:Int = 9;
-	public static inline var HighContrast:Int = 10;
-	public static inline var Less:Int = 0;
-	public static inline var LessOrEqual:Int = 1;
-	public static inline var Equal:Int = 2;
-	public static inline var GreaterOrEqual:Int = 3;
-	public static inline var Greater:Int = 4;
+	internal static inline var Width:Int = 0;
+	internal static inline var Height:Int = 1;
+	internal static inline var Density:Int = 2;
+	internal static inline var TextScale:Int = 3;
+	internal static inline var Orientation:Int = 4;
+	internal static inline var Platform:Int = 5;
+	internal static inline var ColorScheme:Int = 6;
+	internal static inline var Pointer:Int = 7;
+	internal static inline var HoverSupport:Int = 8;
+	internal static inline var ReducedMotion:Int = 9;
+	internal static inline var HighContrast:Int = 10;
+	internal static inline var Less:Int = 0;
+	internal static inline var LessOrEqual:Int = 1;
+	internal static inline var Equal:Int = 2;
+	internal static inline var GreaterOrEqual:Int = 3;
+	internal static inline var Greater:Int = 4;
 
 	final property:Int;
 	final comparison:Int;
@@ -231,7 +263,7 @@ class EnvironmentCondition {
 		this.flag = flag;
 	}
 
-	public function matches(environment:StyleEnvironment):Bool {
+	internal function matches(environment:StyleEnvironment):Bool {
 		if (environment == null)
 			return false;
 		if (property == 0) return compare(environment.width);
@@ -257,34 +289,34 @@ class EnvironmentCondition {
 		return false;
 	}
 
-	public static function numeric(property:Int, comparison:Int, value:Float):EnvironmentCondition
+	internal static function numeric(property:Int, comparison:Int, value:Float):EnvironmentCondition
 		return new EnvironmentCondition(property, comparison, value, "", false);
 
-	public static function enumValue(property:Int, value:Int):EnvironmentCondition
+	internal static function enumValue(property:Int, value:Int):EnvironmentCondition
 		return new EnvironmentCondition(property, 2, value, "", false);
 
-	public static function boolean(property:Int, value:Bool):EnvironmentCondition
+	internal static function boolean(property:Int, value:Bool):EnvironmentCondition
 		return new EnvironmentCondition(property, 2, 0.0, "", value);
 
-	public static function orientation(value:Int):EnvironmentCondition
+	internal static function orientation(value:Int):EnvironmentCondition
 		return enumValue(4, value);
 
-	public static function platform(value:String):EnvironmentCondition
+	internal static function platform(value:String):EnvironmentCondition
 		return new EnvironmentCondition(5, 2, 0.0, value, false);
 
-	public static function colorScheme(value:Int):EnvironmentCondition
+	internal static function colorScheme(value:Int):EnvironmentCondition
 		return enumValue(6, value);
 
-	public static function pointer(value:Int):EnvironmentCondition
+	internal static function pointer(value:Int):EnvironmentCondition
 		return enumValue(7, value);
 
-	public static function hoverSupported(value:Bool = true):EnvironmentCondition
+	internal static function hoverSupported(value:Bool = true):EnvironmentCondition
 		return boolean(8, value);
 
-	public static function reducedMotion(value:Bool = true):EnvironmentCondition
+	internal static function reducedMotion(value:Bool = true):EnvironmentCondition
 		return boolean(9, value);
 
-	public static function highContrast(value:Bool = true):EnvironmentCondition
+	internal static function highContrast(value:Bool = true):EnvironmentCondition
 		return boolean(10, value);
 }
 
@@ -292,31 +324,40 @@ class EnvironmentCondition {
 class EnvironmentDimension {
 	final property:Int;
 
-	public function new(property:Int)
+	internal function new(property:Int)
 		this.property = property;
 
+	/** While the dimension is below `value`. */
 	public function lessThan(value:Float):EnvironmentCondition
 		return EnvironmentCondition.numeric(property, 0, value);
 
+	/** While it is at most `value`. */
 	public function lessOrEqual(value:Float):EnvironmentCondition
 		return EnvironmentCondition.numeric(property, 1, value);
 
+	/** While it is at least `value`. */
 	public function atLeast(value:Float):EnvironmentCondition
 		return EnvironmentCondition.numeric(property, 3, value);
 
+	/** While it is above `value`. */
 	public function greaterThan(value:Float):EnvironmentCondition
 		return EnvironmentCondition.numeric(property, 4, value);
 }
 
 /** Stable orientation values for style environments. */
 class EnvironmentOrientation {
+	/** Not known, as before the first layout. */
 	public static inline var Unknown:Int = 0;
+	/** Taller than wide. */
 	public static inline var Portrait:Int = 1;
+	/** Wider than tall. */
 	public static inline var Landscape:Int = 2;
 }
 
 /** Stable pointer capability values for style environments. */
 class EnvironmentPointer {
+	/** A precise pointer, such as a mouse. */
 	public static inline var Fine:Int = 0;
+	/** An imprecise one, such as a finger. */
 	public static inline var Coarse:Int = 1;
 }

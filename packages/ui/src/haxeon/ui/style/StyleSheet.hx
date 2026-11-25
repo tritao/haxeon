@@ -11,11 +11,20 @@ class StyleSheet {
 
 	/** Stable resolver-local identity, distinct from the human-readable name. */
 	public final identity:Int;
+
+	/** The sheet's name, for inspection. */
 	public final name:String;
+
+	/** The rules, in order. */
 	public final rules(default, null):Array<StyleRule>;
+
+	/** The transitions, one per property at most. */
 	public final transitions(default, null):Array<StyleTransition>;
+
+	/** Counts the changes, so styles are resolved again. */
 	public var revision(default, null):Int;
 
+	/** An empty sheet named `name`. */
 	public function new(?name:String) {
 		identity = nextIdentity++;
 		this.name = name == null || name.length == 0 ? "StyleSheet" : name;
@@ -24,6 +33,7 @@ class StyleSheet {
 		revision = 0;
 	}
 
+	/** Adds a rule setting `declarations` on boxes `selector` matches, and returns it. */
 	public function rule(selector:StyleSelector, declarations:Array<StyleValue>):StyleRule {
 		var result = new StyleRule(name, selector, declarations, rules.length);
 		rules.push(result);
@@ -31,6 +41,7 @@ class StyleSheet {
 		return result;
 	}
 
+	/** Adds a rule that applies only while the environment meets `condition`. Throws without a condition. */
 	public function when(condition:EnvironmentCondition, selector:StyleSelector,
 			declarations:Array<StyleValue>):StyleRule {
 		if (condition == null)
@@ -41,15 +52,18 @@ class StyleSheet {
 		return result;
 	}
 
+	/** Removes every rule and transition. */
 	public function clear():Void {
 		rules.resize(0);
 		transitions.resize(0);
 		revision++;
 	}
 
+	/** Whether it has no rules and no transitions. */
 	public function isEmpty():Bool
 		return rules.length == 0;
 
+	/** Animates changes of `property` over `duration` seconds with `easing`, replacing any earlier transition of it. */
 	public function transition(property:StylePropertyBase, duration:Float,
 			easing:Int = Easing.EaseOut):StyleTransition {
 		var result = new StyleTransition(property, duration, easing);
@@ -58,6 +72,7 @@ class StyleSheet {
 		return result;
 	}
 
+	/** The transition of `property`, or null. */
 	public function transitionFor(property:StylePropertyBase):Null<StyleTransition> {
 		for (transition in transitions)
 			if (transition.property.name == property.name)
@@ -68,12 +83,18 @@ class StyleSheet {
 
 /** One ordered typed selector/declaration rule. */
 class StyleRule {
+	/** Which boxes the rule applies to. */
 	public final selector:StyleSelector;
+	/** The values it sets. */
 	public final declarations:Array<StyleValue>;
+	/** Its place in its sheet: later rules win over earlier ones. */
 	public final order:Int;
+	/** The name of its sheet. */
 	public final stylesheet:String;
+	/** The environment it applies in; always when null. */
 	public final condition:Null<EnvironmentCondition>;
 
+	/** A rule; sheets make them with `StyleSheet.rule` and `when`. Throws without a selector or declarations. */
 	public function new(stylesheet:String, selector:StyleSelector,
 			declarations:Array<StyleValue>, order:Int, ?condition:EnvironmentCondition) {
 		if (selector == null || declarations == null || declarations.length == 0)
@@ -85,17 +106,24 @@ class StyleRule {
 		this.condition = condition;
 	}
 
+	/** Whether the rule applies to `target` in `environment`. */
 	public function matches(target:StyleTarget, ?environment:StyleEnvironment):Bool
 		return selector.matches(target) && (condition == null || condition.matches(environment));
 }
 
 /** Typed selector; deliberately does not parse or emit CSS syntax. */
 class StyleSelector {
+	/** The widget type it requires, or null for any. */
 	public final widgetType:Null<String>;
+	/** The key it requires, or null for any. */
 	public final keyValue:Null<String>;
+	/** The ID it requires, or null for any. */
 	public final idValue:Null<String>;
+	/** The classes it requires, all of them. */
 	public final classNames:Array<String>;
+	/** The tags it requires, all of them. */
 	public final tagNames:Array<String>;
+	/** The states it requires, all of them. */
 	public final stateMask:StyleState;
 
 	function new(?widgetType:String,
@@ -112,18 +140,22 @@ class StyleSelector {
 		this.stateMask = stateMask;
 	}
 
+	/** Matches every box. */
 	public static function any():StyleSelector return new StyleSelector();
 
+	/** Matches widgets of `type`, such as "button". */
 	public static function widget(type:String):StyleSelector {
 		if (type == null || type.length == 0) throw "Widget selectors require a type";
 		return new StyleSelector(type);
 	}
 
+	/** Matches the box keyed `value`. */
 	public static function key(value:String):StyleSelector {
 		if (value == null || value.length == 0) throw "Key selectors require a value";
 		return new StyleSelector(null, value);
 	}
 
+	/** Matches the box with the ID `value`. */
 	public static function id(value:String):StyleSelector {
 		if (value == null || value.length == 0) throw "ID selectors require a value";
 		return new StyleSelector(null, null, value);
@@ -149,8 +181,10 @@ class StyleSelector {
 		return this;
 	}
 
+	/** Whether it requires any state. */
 	public function hasState():Bool return !stateMask.isEmpty();
 
+	/** Whether `target` meets every requirement. */
 	public inline function matches(target:StyleTarget):Bool return matchesWithoutStates(target)
 		&& target.states.contains(stateMask);
 
@@ -177,6 +211,7 @@ class StyleSelector {
 	public function specificity():Int return (idValue == null
 		? 0 : 100) + (classNames.length + tagNames.length + countStates(stateMask)) * 10 + (widgetType == null ? 0 : 1);
 
+	/** The selector as text, for inspection. */
 	public function describe():String {
 		var result = widgetType == null ? "*" : widgetType;
 		if (idValue != null) result += "#" + idValue;

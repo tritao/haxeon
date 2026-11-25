@@ -713,7 +713,7 @@ private class UpdatingResources implements View {
 			"value") && Reflect.fields(entries[0]).indexOf("value") >= 0 && reflected != null && reflected.value == 7,
 			"Reflection lost the inspected axis value");
 		var node = new RenderNode(new WidgetId(723), LayoutVisualKind.Box);
-		constructed.setDecorations(new haxeon.ui.style.Decoration.DecorationChain([new InspectionDecoration()]), null);
+		constructed.setDecorations(haxeon.ui.style.Decoration.DecorationChain.of([new InspectionDecoration()]), null);
 		node.computedStyle = constructed;
 		InspectionDecoration.copies = 0;
 		var snapshots = haxeon.ui.debug.UiInspector.snapshot(node, null);

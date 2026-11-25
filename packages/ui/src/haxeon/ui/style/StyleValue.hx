@@ -19,6 +19,7 @@ import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.Decoration;
 /** One typed declaration passed to a StyleRule. */
 class StyleValue {
+	/** The property the declaration sets. */
 	public final property:StylePropertyBase;
 
 	function new(property:StylePropertyBase) {
@@ -81,32 +82,33 @@ class StyleValue {
 		return inspect();
 	}
 
-	public static inline function colorOf(value:StyleValue):Color return (cast value:StyleColorValue).value;
-	public static inline function insetsOf(value:StyleValue):Insets return (cast value:StyleInsetsValue).value;
-	public static inline function axisOf(value:StyleValue):LayoutAxis return (cast value:StyleAxisValue).value;
-	public static inline function matrixOf(value:StyleValue):Transform2D return (cast value:StyleTransformValue).value;
-	public static inline function numberOf(value:StyleValue):Float return (cast value:StyleFloatValue).value;
-	public static inline function integerOf(value:StyleValue):Int return (cast value:StyleIntegerValue).value;
-	public static inline function directionOf(value:StyleValue):LayoutDirection return (cast value:StyleDirectionValue)
+	internal static inline function colorOf(value:StyleValue):Color return (cast value:StyleColorValue).value;
+	internal static inline function insetsOf(value:StyleValue):Insets return (cast value:StyleInsetsValue).value;
+	internal static inline function axisOf(value:StyleValue):LayoutAxis return (cast value:StyleAxisValue).value;
+	internal static inline function matrixOf(value:StyleValue):Transform2D return (cast value:StyleTransformValue)
 		.value;
-	public static inline function alignmentXOf(value:StyleValue):LayoutAlignmentX return (cast value:StyleChildAlignXValue)
+	internal static inline function numberOf(value:StyleValue):Float return (cast value:StyleFloatValue).value;
+	internal static inline function integerOf(value:StyleValue):Int return (cast value:StyleIntegerValue).value;
+	internal static inline function directionOf(value:StyleValue):LayoutDirection return (cast value:StyleDirectionValue)
 		.value;
-	public static inline function alignmentYOf(value:StyleValue):LayoutAlignmentY return (cast value:StyleChildAlignYValue)
+	internal static inline function alignmentXOf(value:StyleValue):LayoutAlignmentX return (cast value:StyleChildAlignXValue)
 		.value;
-	public static inline function distributionOf(value:StyleValue):LayoutDistribution return (cast value:StyleChildDistributionValue)
+	internal static inline function alignmentYOf(value:StyleValue):LayoutAlignmentY return (cast value:StyleChildAlignYValue)
 		.value;
-	public static inline function positioningOf(value:StyleValue):LayoutPositioning return (cast value:StylePositioningValue)
+	internal static inline function distributionOf(value:StyleValue):LayoutDistribution return (cast value:StyleChildDistributionValue)
 		.value;
-	public static inline function wrapModeOf(value:StyleValue):LayoutWrapMode return (cast value:StyleWrapModeValue)
+	internal static inline function positioningOf(value:StyleValue):LayoutPositioning return (cast value:StylePositioningValue)
 		.value;
-	public static inline function selfAlignmentOf(value:StyleValue):LayoutSelfAlignment return (cast value:StyleAlignSelfValue)
+	internal static inline function wrapModeOf(value:StyleValue):LayoutWrapMode return (cast value:StyleWrapModeValue)
 		.value;
-	public static inline function booleanOf(value:StyleValue):Bool return (cast value:StyleBoolValue).value;
-	public static inline function decorationsOf(value:StyleValue):DecorationChain
+	internal static inline function selfAlignmentOf(value:StyleValue):LayoutSelfAlignment return (cast value:StyleAlignSelfValue)
+		.value;
+	internal static inline function booleanOf(value:StyleValue):Bool return (cast value:StyleBoolValue).value;
+	internal static inline function decorationsOf(value:StyleValue):DecorationChain
 		return (cast value:StyleReferenceValue<DecorationChain>).value;
-	public static inline function effectsOf(value:StyleValue):EffectChain
+	internal static inline function effectsOf(value:StyleValue):EffectChain
 		return (cast value:StyleReferenceValue<EffectChain>).value;
-	public static inline function maskOf(value:StyleValue):Mask return (cast value:StyleReferenceValue<Mask>).value;
+	internal static inline function maskOf(value:StyleValue):Mask return (cast value:StyleReferenceValue<Mask>).value;
 
 	static var defaultValues:Null<Array<StyleValue>>;
 
@@ -204,70 +206,100 @@ class StyleValue {
 	/** Creates a typed declaration for an arbitrary property of the corresponding kind. */
 	public static function number(property:StyleProperty<Float>, value:Float):StyleValue
 		return new StyleFloatValue(property, value);
+
+	/** Sets the color property `property`. */
 	public static function color(property:StyleColorProperty, value:Color):StyleValue
 		return new StyleColorValue(property, value);
+
+	/** Sets the true-or-false property `property`. */
 	public static function boolean(property:StyleProperty<Bool>, value:Bool):StyleValue
 		return new StyleBoolValue(property, value);
+
+	/** Sets the integer property `property`. */
 	public static function integer(property:StyleProperty<Int>, value:Int):StyleValue
 		return new StyleIntegerValue(property, value);
+
+	/** Sets the sizing property `property`. */
 	public static function axis(property:StyleAxisProperty, value:LayoutAxis):StyleValue
 		return new StyleAxisValue(property, value);
+
+	/** Sets the insets property `property`. */
 	public static function insets(property:StyleInsetsProperty, value:Insets):StyleValue
 		return new StyleInsetsValue(property, value);
+
+	/** Sets the transform property `property`. */
 	public static function matrix(property:StyleTransformProperty, value:Transform2D):StyleValue
 		return new StyleTransformValue(property, value);
 
+	/** Sets `StyleProperty.Width`. */
 	public static function width(value:LayoutAxis):StyleValue
 		return new StyleAxisValue(StyleProperty.Width, value);
 
+	/** Sets `StyleProperty.Height`. */
 	public static function height(value:LayoutAxis):StyleValue
 		return new StyleAxisValue(StyleProperty.Height, value);
 
+	/** Sets `StyleProperty.Direction`. */
 	public static function direction(value:LayoutDirection):StyleValue
 		return new StyleDirectionValue(StyleProperty.Direction, value);
 
+	/** Sets `StyleProperty.ChildAlignX`. */
 	public static function alignX(value:LayoutAlignmentX):StyleValue
 		return new StyleChildAlignXValue(StyleProperty.ChildAlignX, value);
 
+	/** Sets `StyleProperty.ChildAlignY`. */
 	public static function alignY(value:LayoutAlignmentY):StyleValue
 		return new StyleChildAlignYValue(StyleProperty.ChildAlignY, value);
 
+	/** Sets `StyleProperty.ChildDistribution`. */
 	public static function distribution(value:LayoutDistribution):StyleValue
 		return new StyleChildDistributionValue(StyleProperty.ChildDistribution, value);
 
+	/** Sets `StyleProperty.Positioning`. */
 	public static function positioning(value:LayoutPositioning):StyleValue
 		return new StylePositioningValue(StyleProperty.Positioning, value);
 
+	/** Sets `StyleProperty.AspectRatio`. */
 	public static function aspectRatio(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.AspectRatio, value);
 
+	/** Sets `StyleProperty.WrapMode`. */
 	public static function wrapMode(value:LayoutWrapMode):StyleValue
 		return new StyleWrapModeValue(StyleProperty.WrapMode, value);
 
+	/** Sets `StyleProperty.RowGap`. */
 	public static function rowGap(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.RowGap, value);
 
+	/** Sets `StyleProperty.ColumnGap`. */
 	public static function columnGap(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.ColumnGap, value);
 
+	/** Sets `StyleProperty.AlignSelf`. */
 	public static function alignSelf(value:LayoutSelfAlignment):StyleValue
 		return new StyleAlignSelfValue(StyleProperty.AlignSelf, value);
 
+	/** Sets `StyleProperty.Background`. */
 	public static function background(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.Background, value);
 
+	/** Sets `StyleProperty.Padding`. */
 	public static function padding(value:Insets):StyleValue
 		return new StyleInsetsValue(StyleProperty.Padding, value);
 
+	/** Sets `StyleProperty.Transform`. */
 	public static function transform(value:Transform2D):StyleValue
 		return new StyleTransformValue(StyleProperty.Transform, value);
 
+	/** Sets `StyleProperty.Padding`: `horizontal` on the left and right, `vertical` on the top and bottom. */
 	public static function paddingSymmetric(horizontal:Float, vertical:Float):StyleValue
 		return padding(new Insets(horizontal, vertical, horizontal, vertical));
 
+	/** Sets one corner's radius, `property` being one of the `Radius` properties. */
 	public static function radius(property:StyleProperty<Float>, value:Float):StyleValue
 		return new StyleFloatValue(property, value);
 
+	/** Sets all four corner radii to `value`. */
 	public static function radiusAll(value:Float):Array<StyleValue>
 		return [
 			radius(StyleProperty.RadiusTopLeft, value),
@@ -276,65 +308,86 @@ class StyleValue {
 			radius(StyleProperty.RadiusBottomLeft, value)
 		];
 
+	/** Sets `StyleProperty.TextColor`. */
 	public static function textColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.TextColor, value);
 
+	/** Sets `StyleProperty.FontSize`. */
 	public static function fontSize(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.FontSize, value);
 
+	/** Sets `StyleProperty.LetterSpacing`. */
 	public static function letterSpacing(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.LetterSpacing, value);
 
+	/** Sets `StyleProperty.BorderColor`. */
 	public static function borderColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.BorderColor, value);
 
+	/** Sets `StyleProperty.BorderWidth`. */
 	public static function borderWidth(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.BorderWidth, value);
 
+	/** Sets `StyleProperty.ShadowColor`. */
 	public static function shadowColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.ShadowColor, value);
 
+	/** Sets both shadow offsets. */
 	public static function shadowOffset(x:Float, y:Float):Array<StyleValue>
 		return [
 			new StyleFloatValue(StyleProperty.ShadowOffsetX, x),
 			new StyleFloatValue(StyleProperty.ShadowOffsetY, y)
 		];
 
+	/** Sets `StyleProperty.ShadowBlur`. */
 	public static function shadowBlur(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.ShadowBlur, value);
 
+	/** Sets `StyleProperty.ShadowSpread`. */
 	public static function shadowSpread(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.ShadowSpread, value);
 
+	/** Sets `StyleProperty.Decorations`. */
 	public static function decorations(value:DecorationChain):StyleValue
 		return new StyleReferenceValue(StyleProperty.Decorations, value);
 
+	/** Sets `StyleProperty.Opacity`. */
 	public static function opacity(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.Opacity, value);
 
+	/** Sets `StyleProperty.Effects`. */
 	public static function effects(value:EffectChain):StyleValue
 		return new StyleReferenceValue(StyleProperty.Effects, value);
+
+	/** Sets the effect chain property `property`. */
 	public static function effectProperty(property:StyleProperty<EffectChain>, value:EffectChain):StyleValue
 		return new StyleReferenceValue(property, value);
 
+	/** Sets `StyleProperty.BackdropEffects`. */
 	public static function backdropEffects(value:EffectChain):StyleValue
 		return new StyleReferenceValue(StyleProperty.BackdropEffects, value);
 
+	/** Sets `StyleProperty.Mask`. */
 	public static function mask(value:Mask):StyleValue
 		return new StyleReferenceValue(StyleProperty.Mask, value);
 
+	/** Sets `StyleProperty.ProgressTrackColor`. */
 	public static function progressTrackColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.ProgressTrackColor, value);
 
+	/** Sets `StyleProperty.ProgressFillColor`. */
 	public static function progressFillColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.ProgressFillColor, value);
 
+	/** Sets `StyleProperty.SliderTrackColor`. */
 	public static function sliderTrackColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.SliderTrackColor, value);
 
+	/** Sets `StyleProperty.SliderFillColor`. */
 	public static function sliderFillColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.SliderFillColor, value);
 
+	/** Sets `StyleProperty.SliderThumbColor`. */
 	public static function sliderThumbColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.SliderThumbColor, value);
 

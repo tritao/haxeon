@@ -14,7 +14,7 @@ import haxeon.ui.widgets.layout.Padding;
 
 import haxeon.ui.style.ComputedStyle;
 /** Deterministic framework/inheritance/theme/application/state/local cascade. */
-class StyleResolver {
+internal class StyleResolver {
 	static inline var MaxCacheEntries:Int = 8192;
 	static final LocalTextSource = new StyleSource("local", "text", -1, "local");
 
@@ -497,7 +497,7 @@ class StyleResolver {
 
 }
 
-class StyleResolverLocalFingerprint {
+internal class StyleResolverLocalFingerprint {
 	public final snapshot:LayoutStyle;
 	public final key:String;
 
@@ -508,7 +508,7 @@ class StyleResolverLocalFingerprint {
 }
 
 /** Collision-checked structural key for a cached computed style. */
-class StyleResolverCacheEntry {
+internal class StyleResolverCacheEntry {
 	final target:StyleTarget;
 	final states:StyleState;
 	final parentKey:String;
@@ -553,10 +553,17 @@ class StyleResolverCacheEntry {
 
 /** One property transition requested by a stylesheet. */
 class StyleTransition {
+	/** The property animated. */
 	public final property:StylePropertyBase;
+	/** How long a change takes, in seconds. */
 	public final duration:Float;
+	/** An `Easing` value: how the change speeds up and slows down. */
 	public final easing:Int;
 
+	/**
+	 * A transition; sheets make them with `StyleSheet.transition`. Throws when `duration` is negative or `easing` is
+	 * unknown.
+	 */
 	public function new(property:StylePropertyBase, duration:Float, easing:Int = Easing.EaseOut) {
 		if (property == null || duration < 0.0 || easing < Easing.Linear || easing > Easing.EaseInOut)
 			throw "Style transitions require a property, duration, and valid easing";
@@ -567,7 +574,7 @@ class StyleTransition {
 }
 
 /** Scheduler adapter for typed style interpolation. */
-class StyleTransitionAnimation implements Animation {
+internal class StyleTransitionAnimation implements Animation {
 	final from:StyleValue;
 	final to:StyleValue;
 	final duration:Float;

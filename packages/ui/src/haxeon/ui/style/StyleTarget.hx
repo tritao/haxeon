@@ -2,11 +2,22 @@ package haxeon.ui.style;
 
 /** Style-facing identity and interaction data for one render node. */
 class StyleTarget {
+	/** The widget type, such as "button". */
 	public final widgetType:String;
+
+	/** The box's key. */
 	public final key:Null<String>;
+
+	/** The box's ID. */
 	public final id:Null<String>;
+
+	/** Its classes. */
 	public final classes:Array<String>;
+
+	/** Its tags. */
 	public final tags:Array<String>;
+
+	/** Its current states. */
 	public final states:StyleState;
 	/** Hash of the selector inputs other than pseudo-state, computed without allocating. */
 	public final selectorHash:Int;
@@ -40,6 +51,7 @@ class StyleTarget {
 		return values.copy();
 	}
 
+	/** What a box is, for matching against selectors. Throws when `widgetType` is empty. */
 	public function new(widgetType:String, ?key:String, ?id:String,
 			?classes:Array<String>, ?tags:Array<String>, states:StyleState = StyleState.empty()) {
 		if (widgetType == null || widgetType.length == 0)
@@ -106,12 +118,15 @@ class StyleTarget {
 	static function stringKey(value:Null<String>):String
 		return value == null ? "-1:" : value.length + ":" + value;
 
+	/** Whether it is in `state`. */
 	public function hasState(state:StyleState):Bool
 		return (states & state) != StyleState.empty();
 
+	/** Whether it has the class `name`. */
 	public function hasClass(name:String):Bool
 		return contains(classes, name);
 
+	/** Whether it has the tag `name`. */
 	public function hasTag(name:String):Bool
 		return contains(tags, name);
 

@@ -6,11 +6,15 @@ import haxeon.ui.style.VisualEffect;
 
 /** Typed value for a native renderer-owned custom shader effect. */
 class CustomEffect extends VisualEffect {
+	/** The effect the renderer implements. */
 	public final definition:CustomEffectDefinition;
+
+	/** The values given for the definition's parameters, in order. */
 	public final parameters:Array<EffectParameter>;
 	/** Flattened values written into the backend-neutral layer descriptor. */
 	public final components:Array<Float>;
 
+	/** An instance of `definition` with `parameters`. Throws when they do not match the definition's types. */
 	public function new(definition:CustomEffectDefinition, parameters:Array<EffectParameter>) {
 		super(EffectKind.Custom);
 		if (definition == null)
@@ -76,12 +80,19 @@ class CustomEffect extends VisualEffect {
  * backend-specific mapping remain native concerns.
  */
 struct CustomEffectDefinition implements Equatable {
+	/** The ID the native renderer registered the effect under: positive. */
 	public final id:Int;
+	/** The effect's name, for inspection. */
 	public final name:String;
 	final parameterTypes:Array<EffectParameterType>;
+	/** How far the effect may draw outside the box, so the renderer leaves room. */
 	public final overflow:InkOverflow;
+	/** How many numbers all its parameters take together. */
 	public final componentCount:Int;
 
+	/**
+	 * The contract of the native effect `id`, taking parameters of `parameterTypes`. Throws when `id` is not positive.
+	 */
 	public function new(id:Int, name:String, parameterTypes:Array<EffectParameterType>,
 			overflow:Null<InkOverflow> = null) {
 		if (id <= 0)
@@ -108,15 +119,18 @@ struct CustomEffectDefinition implements Equatable {
 		this.componentCount = components;
 	}
 
+	/** How many parameters it takes. */
 	public function parameterCount():Int
 		return parameterTypes.length;
 
+	/** The type of the parameter at `index`. */
 	public function parameterTypeAt(index:Int):EffectParameterType {
 		if (index < 0 || index >= parameterTypes.length)
 			throw "Custom effect parameter index is out of range";
 		return parameterTypes[index];
 	}
 
+	/** Whether `other` describes the same effect. */
 	public function equals(other:CustomEffectDefinition):Bool {
 		if (id != other.id || name != other.name || componentCount != other.componentCount
 			|| overflow != other.overflow || parameterTypes.length != other.parameterTypes.length)
@@ -127,17 +141,24 @@ struct CustomEffectDefinition implements Equatable {
 		return true;
 	}
 
+	/** A description for inspection. */
 	public function describe():String
 		return name + "#" + id;
 }
 
 /** One typed value supplied to a custom effect registration. */
 struct EffectParameter implements Equatable {
+	/** The parameter's type. */
 	public final type:EffectParameterType;
+	/** How many of `x`, `y`, `z` and `w` it uses. */
 	public final componentCount:Int;
+	/** The first component. */
 	public final x:Float;
+	/** The second component. */
 	public final y:Float;
+	/** The third component. */
 	public final z:Float;
+	/** The fourth component. */
 	public final w:Float;
 
 	private function new(type:EffectParameterType, x:Float, y:Float, z:Float, w:Float) {
@@ -152,15 +173,19 @@ struct EffectParameter implements Equatable {
 		this.w = count > 3 ? VisualEffect.requireFinite(w, "Custom effect parameters must be finite") : 0.0;
 	}
 
+	/** A single number. */
 	public static function scalar(value:Float):EffectParameter
 		return new EffectParameter(EffectParameterType.Float, value, 0.0, 0.0, 0.0);
 
+	/** Two numbers. */
 	public static function vec2(x:Float, y:Float):EffectParameter
 		return new EffectParameter(EffectParameterType.Vec2, x, y, 0.0, 0.0);
 
+	/** Four numbers. */
 	public static function vec4(x:Float, y:Float, z:Float, w:Float):EffectParameter
 		return new EffectParameter(EffectParameterType.Vec4, x, y, z, w);
 
+	/** A color, as red, green, blue and alpha. */
 	public static function color(value:Color):EffectParameter {
 		if (value == null)
 			throw "Custom color parameters require a color";
@@ -168,6 +193,7 @@ struct EffectParameter implements Equatable {
 			value.red, value.green, value.blue, value.alpha);
 	}
 
+	/** The component at `index`, from 0 to 3. */
 	public function valueAt(index:Int):Float
 		return switch index {
 			case 0: x;
@@ -177,10 +203,12 @@ struct EffectParameter implements Equatable {
 			default: throw "Custom effect parameter component is out of range";
 		};
 
+	/** Whether `other` has the same type and components. */
 	public function equals(other:EffectParameter):Bool
 		return type == other.type && componentCount == other.componentCount && x == other.x && y == other.y
 			&& z == other.z && w == other.w;
 
+	/** The value `amount` of the way to `other`, for transitions; jumps halfway when the types differ. */
 	public function interpolate(other:Null<EffectParameter>, amount:Float):EffectParameter {
 		if (other == null)
 			return this;
@@ -193,6 +221,7 @@ struct EffectParameter implements Equatable {
 			VisualEffect.interpolateFloat(w, other.w, amount));
 	}
 
+	/** A description for inspection. */
 	public function describe():String {
 		var text:Array<String> = [];
 		for (index in 0...componentCount)
@@ -203,14 +232,19 @@ struct EffectParameter implements Equatable {
 
 /** Component shape used by a renderer-owned custom effect parameter. */
 enum EffectParameterType implements Equatable {
+	/** One number. */
 	Float;
+	/** Two numbers. */
 	Vec2;
+	/** Four numbers. */
 	Vec4;
+	/** A color. */
 	Color;
 }
 
 /** Explicit parameter metadata and display labels, independent of enum representation. */
 class EffectParameterTypeUtil {
+	/** How many numbers a parameter of `type` takes; 0 for null. */
 	public static function componentCount(type:EffectParameterType):Int {
 		if (type == null) return 0;
 		return switch type {
@@ -219,6 +253,7 @@ class EffectParameterTypeUtil {
 			case EffectParameterType.Vec4 | EffectParameterType.Color: 4;
 		};
 	}
+	/** The type's name, as shaders spell it. */
 	public static function label(type:EffectParameterType):String {
 		return switch type {
 			case EffectParameterType.Float: "float";

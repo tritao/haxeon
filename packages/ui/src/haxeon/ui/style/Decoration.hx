@@ -61,11 +61,17 @@ class Decoration {
 
 /** Typed decoration families understood by the style and paint systems. */
 enum DecorationKind implements Equatable {
+	/** `BackgroundDecoration`. */
 	Background;
+	/** `GradientDecoration`. */
 	Gradient;
+	/** `ImageDecoration`. */
 	Image;
+	/** `NineSliceDecoration`. */
 	NineSlice;
+	/** `BorderDecoration`. */
 	Border;
+	/** `ShadowDecoration`. */
 	Shadow;
 	/** A user-defined renderer-owned decoration. */
 	Custom;
@@ -73,9 +79,10 @@ enum DecorationKind implements Equatable {
 
 /** Ordered, value-aware collection of post-layout style decorations. */
 class DecorationChain {
+	/** The decorations, drawn in order: later ones on top. */
 	public final decorations:Array<Decoration>;
 
-	public function new(decorations:Array<Decoration> = null) {
+	function new(decorations:Array<Decoration> = null) {
 		this.decorations = [];
 		if (decorations != null)
 			for (decoration in decorations) {
@@ -85,15 +92,19 @@ class DecorationChain {
 			}
 	}
 
+	/** A chain of no decorations. */
 	public static function empty():DecorationChain
 		return new DecorationChain();
 
+	/** A chain of `decorations`. Throws when one is null. */
 	public static function of(decorations:Array<Decoration>):DecorationChain
 		return new DecorationChain(decorations);
 
+	/** A chain of the same decorations. */
 	public function copy():DecorationChain
 		return new DecorationChain(decorations);
 
+	/** Whether `other` has equal decorations in the same order. */
 	public function isEqual(other:DecorationChain):Bool {
 		if (other == null || decorations.length != other.decorations.length)
 			return false;
@@ -126,6 +137,7 @@ class DecorationChain {
 		return values.join("|");
 	}
 
+	/** A description for inspection. */
 	public function toString():String
 		return "[" + key() + "]";
 
@@ -138,8 +150,10 @@ class DecorationChain {
 
 /** Paints the computed background as a custom decoration when native fill is unsuitable. */
 class BackgroundDecoration extends Decoration {
+	/** The fill; the box's `Background` when null. */
 	public final color:Null<Color>;
 
+	/** A fill of `color`, or of the box's background. */
 	public function new(?color:Color) {
 		super(DecorationKind.Background);
 		this.color = color == null ? null : VisualEffect.copyColor(color);
@@ -177,11 +191,14 @@ class BackgroundDecoration extends Decoration {
 
 /** Inset solid border aligned by the renderer at the final device transform. */
 class BorderDecoration extends Decoration {
+	/** The border's color; the box's `BorderColor` when null. */
 	public final color:Null<Color>;
+	/** Its width; the box's `BorderWidth` when null. */
 	public final width:Null<Float>;
 	/** Fixed one-device-pixel outline instead of a scaled logical width. */
 	public final hairline:Bool;
 
+	/** A border inside the box's edge; `hairline` draws it one device pixel wide whatever the scale. */
 	public function new(?color:Color, ?width:Float, hairline:Bool = false) {
 		super(DecorationKind.Border);
 		this.color = color;
@@ -231,9 +248,12 @@ class BorderDecoration extends Decoration {
 
 /** Horizontal linear gradient backed by the renderer's native gradient paint. */
 class GradientDecoration extends Decoration {
+	/** The color at the left edge. */
 	public final start:Color;
+	/** The color at the right edge. */
 	public final end:Color;
 
+	/** A horizontal gradient from `start` at the left to `end` at the right. */
 	public function new(start:Color, end:Color) {
 		super(DecorationKind.Gradient);
 		this.start = VisualEffect.copyColor(start);
@@ -274,8 +294,10 @@ class GradientDecoration extends Decoration {
 
 /** Fills the resolved node bounds with an image. */
 class ImageDecoration extends Decoration {
+	/** The image, stretched to the box. */
 	public final image:Image;
 
+	/** Draws `image` over the box. */
 	public function new(image:Image) {
 		super(DecorationKind.Image);
 		if (image == null || image.isDisposed())
@@ -304,12 +326,18 @@ class ImageDecoration extends Decoration {
 
 /** Draws an image as nine independently clipped, stretched slices. */
 class NineSliceDecoration extends Decoration {
+	/** The image sliced. */
 	public final image:Image;
+	/** The width of the left edge kept unstretched, in image pixels. */
 	public final left:Float;
+	/** The height of the top edge kept unstretched. */
 	public final top:Float;
+	/** The width of the right edge kept unstretched. */
 	public final right:Float;
+	/** The height of the bottom edge kept unstretched. */
 	public final bottom:Float;
 
+	/** Draws `image` stretched to the box, its corners kept and its edges stretched along their length only. */
 	public function new(image:Image, left:Float, top:Float, right:Float, bottom:Float) {
 		super(DecorationKind.NineSlice);
 		if (image == null || image.isDisposed() || left < 0.0 || top < 0.0 || right < 0.0 || bottom < 0.0)
@@ -402,13 +430,18 @@ class NineSliceDecoration extends Decoration {
 
 /** Geometry-based rounded-rectangle shadow; distinct from subtree DropShadowEffect. */
 class ShadowDecoration extends Decoration {
+	/** The shadow's color; the box's `ShadowColor` when null. */
 	public final color:Null<Color>;
+	/** How far it is moved right; the box's `ShadowOffsetX` when null. */
 	public final offsetX:Null<Float>;
+	/** How far it is moved down; the box's `ShadowOffsetY` when null. */
 	public final offsetY:Null<Float>;
 	/** Optional UI-facing blur radius override. */
 	public final blurRadius:Null<Float>;
+	/** How far it grows beyond the box; the box's `ShadowSpread` when null. */
 	public final spread:Null<Float>;
 
+	/** A shadow of the box's rounded shape; values left out come from the box's style. */
 	public function new(?color:Color, ?offsetX:Float, ?offsetY:Float, ?blurRadius:Float, ?spread:Float) {
 		super(DecorationKind.Shadow);
 		this.color = color;

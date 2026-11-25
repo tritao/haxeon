@@ -57,7 +57,7 @@ class BuildContext implements Disposable {
 	 * Resolves a widget's computed style from the theme, the style sheet and its own style; a widget calls it while it
 	 * builds.
 	 */
-	public final styleResolver:StyleResolver;
+	internal final styleResolver:StyleResolver;
 
 	/** What styles can depend on: the viewport's size, the pointer in use, reduced motion and the like. */
 	public final environment:StyleEnvironment;

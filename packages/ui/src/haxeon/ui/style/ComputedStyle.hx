@@ -21,7 +21,7 @@ private class InheritedKeyCache {
 class ComputedStyle {
 	var values:Array<StyleValue>;
 	var sources:Array<Null<StyleSource>>;
-	public var matchingRules(default, null):Array<StyleSource>;
+	internal var matchingRules(default, null):Array<StyleSource>;
 	var shared:Bool;
 	var rulesShared:Bool;
 	var inheritedKeyCache:Null<InheritedKeyCache>;
@@ -45,7 +45,7 @@ class ComputedStyle {
 	}
 
 	/** Stores an immutable typed declaration. */
-	public function setDeclaration(value:StyleValue, source:Null<StyleSource>):Void {
+	internal function setDeclaration(value:StyleValue, source:Null<StyleSource>):Void {
 		if (value == null) throw "Computed styles require a declaration";
 		ensureWritable();
 		var property = value.property;
@@ -59,102 +59,130 @@ class ComputedStyle {
 		sources[slot] = source;
 	}
 
-	public function setColor(property:StyleColorProperty, value:Color, source:Null<StyleSource>):Void
+	internal function setColor(property:StyleColorProperty, value:Color, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.color(property, value), source);
-	public function setInsets(property:StyleInsetsProperty, value:Insets, source:Null<StyleSource>):Void
+	internal function setInsets(property:StyleInsetsProperty, value:Insets, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.insets(property, value), source);
-	public function setAxis(property:StyleAxisProperty, value:LayoutAxis, source:Null<StyleSource>):Void
+	internal function setAxis(property:StyleAxisProperty, value:LayoutAxis, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.axis(property, value), source);
-	public function setMatrix(property:StyleTransformProperty, value:Transform2D, source:Null<StyleSource>):Void
+	internal function setMatrix(property:StyleTransformProperty, value:Transform2D, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.matrix(property, value), source);
-	public function setNumber(property:StyleProperty<Float>, value:Float, source:Null<StyleSource>):Void
+	internal function setNumber(property:StyleProperty<Float>, value:Float, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.number(property, value), source);
-	public function setInteger(property:StyleProperty<Int>, value:Int, source:Null<StyleSource>):Void
+	internal function setInteger(property:StyleProperty<Int>, value:Int, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.integer(property, value), source);
-	public function setBoolean(property:StyleProperty<Bool>, value:Bool, source:Null<StyleSource>):Void
+	internal function setBoolean(property:StyleProperty<Bool>, value:Bool, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.boolean(property, value), source);
-	public function setDecorations(value:DecorationChain, source:Null<StyleSource>):Void
+	internal function setDecorations(value:DecorationChain, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.decorations(value), source);
-	public function setEffects(property:StyleProperty<EffectChain>, value:EffectChain, source:Null<StyleSource>):Void
+	internal function setEffects(property:StyleProperty<EffectChain>, value:EffectChain, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.effectProperty(property, value), source);
-	public function setMask(value:Mask, source:Null<StyleSource>):Void
+	internal function setMask(value:Mask, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.mask(value), source);
 
 	inline function isSet(slot:Int):Bool return slot < values.length && values[slot] != null;
 	inline function valueAt(slot:Int):Null<StyleValue> return slot < values.length ? values[slot] : null;
 	inline function sourceAt(slot:Int):Null<StyleSource> return slot < sources.length ? sources[slot] : null;
 
+	/** Whether a rule or the widget set `property`; otherwise its default applies. */
 	public function has(property:StylePropertyBase):Bool return property != null && isSet(property.slot);
+
+	/** Where the value of `property` came from, or null for the default. */
 	public function source(property:StylePropertyBase):Null<StyleSource> return sourceAt(property.slot);
 	/** Internal typed value access, including null-valued reference declarations. */
 	@:allow(haxeon.ui.style.StyleResolver)
 	function declaration(property:StylePropertyBase):Null<StyleValue> return valueAt(property.slot);
 
+	/** The value of `property`. */
 	public function getColor(property:StyleColorProperty):Color {
 		var value = valueAt(property.slot);
 		return value == null ? property.defaultValue : StyleValue.colorOf(value);
 	}
+
+	/** The value of `property`. */
 	public function getInsets(property:StyleInsetsProperty):Insets {
 		var value = valueAt(property.slot);
 		return value == null ? property.defaultValue : StyleValue.insetsOf(value);
 	}
+
+	/** The value of `property`. */
 	public function getAxis(property:StyleAxisProperty):LayoutAxis {
 		var value = valueAt(property.slot);
 		return value == null ? property.defaultValue : StyleValue.axisOf(value);
 	}
+
+	/** The value of `property`. */
 	public function getMatrix(property:StyleTransformProperty):Transform2D {
 		var value = valueAt(property.slot);
 		return value == null ? property.defaultValue : StyleValue.matrixOf(value);
 	}
+
+	/** The value of `property`. */
 	public function getNumber(property:StyleProperty<Float>):Float {
 		var value = valueAt(property.slot);
 		return value == null ? property.defaultValue : StyleValue.numberOf(value);
 	}
+
+	/** The value of `property`. */
 	public function getInteger(property:StyleProperty<Int>):Int {
 		var value = valueAt(property.slot);
 		return value == null ? property.defaultValue : StyleValue.integerOf(value);
 	}
+
+	/** The value of `property`. */
 	public function getBoolean(property:StyleProperty<Bool>):Bool {
 		var value = valueAt(property.slot);
 		return value == null ? property.defaultValue : StyleValue.booleanOf(value);
 	}
+
+	/** The decorations. A copy, which the caller may change. */
 	public function getDecorations():DecorationChain {
 		var value = valueAt(StyleProperty.Decorations.slot);
 		if (value == null) return StyleProperty.Decorations.defaultValue;
 		var result = StyleValue.decorationsOf(value);
 		return result == null ? null : result.copy();
 	}
+
+	/** The decorations. The stored value itself, without a copy: do not change it. */
 	public function getDecorationsReadOnly():DecorationChain {
 		var value = valueAt(StyleProperty.Decorations.slot);
 		return value == null ? StyleProperty.Decorations.defaultValue : StyleValue.decorationsOf(value);
 	}
+
+	/** The effects of `property`. A copy, which the caller may change. */
 	public function getEffects(property:StyleProperty<EffectChain>):EffectChain {
 		var value = valueAt(property.slot);
 		if (value == null) return property.defaultValue;
 		var result = StyleValue.effectsOf(value);
 		return result == null ? null : result.copy();
 	}
+
+	/** The effects of `property`. The stored value itself, without a copy: do not change it. */
 	public function getEffectsReadOnly(property:StyleProperty<EffectChain>):EffectChain {
 		var value = valueAt(property.slot);
 		return value == null ? property.defaultValue : StyleValue.effectsOf(value);
 	}
+
+	/** The mask. A copy, which the caller may change. */
 	public function getMask():Mask {
 		var value = valueAt(StyleProperty.Mask.slot);
 		if (value == null) return StyleProperty.Mask.defaultValue;
 		var result = StyleValue.maskOf(value);
 		return result == null ? null : result.copy();
 	}
+
+	/** The mask. The stored value itself, without a copy: do not change it. */
 	public function getMaskReadOnly():Mask {
 		var value = valueAt(StyleProperty.Mask.slot);
 		return value == null ? StyleProperty.Mask.defaultValue : StyleValue.maskOf(value);
 	}
 
-	public function sharesValuesWith(other:Null<ComputedStyle>):Bool return other != null && values == other.values;
+	internal function sharesValuesWith(other:Null<ComputedStyle>):Bool return other != null && values == other.values;
 	@:allow(haxeon.ui.style.StyleDiff)
 	function sameValue(property:StylePropertyBase, other:ComputedStyle):Bool
 		return values[property.slot].sameAs(other.values[property.slot]);
 
-	public function recordMatch(source:StyleSource):Void {
+	internal function recordMatch(source:StyleSource):Void {
 		if (source != null) {
 			if (rulesShared) {
 				matchingRules = matchingRules.copy();
@@ -163,7 +191,11 @@ class ComputedStyle {
 			matchingRules.push(source);
 		}
 	}
+
+	/** The rules that matched, in the order they applied. */
 	public function matchingStyleRules():Array<StyleSource> return matchingRules.copy();
+
+	/** Every set value with its source, for inspection. */
 	public function entries():Array<StyleInspectionEntry> {
 		var result:Array<StyleInspectionEntry> = [];
 		for (property in StyleProperty.all())
@@ -224,6 +256,7 @@ class ComputedStyle {
 		return result;
 	}
 
+	/** An equal style, sharing storage until either changes. */
 	public function copy():ComputedStyle {
 		var result = new ComputedStyle();
 		for (property in StyleProperty.all())
@@ -232,7 +265,7 @@ class ComputedStyle {
 		for (source in matchingRules) result.recordMatch(source);
 		return result;
 	}
-	public function fork():ComputedStyle {
+	internal function fork():ComputedStyle {
 		if (inheritedKeyCache == null) inheritedKeyCache = new InheritedKeyCache();
 		var result = new ComputedStyle(this);
 		result.inheritedKeyCache = inheritedKeyCache;
@@ -240,8 +273,8 @@ class ComputedStyle {
 		rulesShared = true;
 		return result;
 	}
-	public function cachedInheritedKey():Null<String> return inheritedKeyCache == null ? null : inheritedKeyCache.key;
-	public function rememberInheritedKey(key:String):Void {
+	internal function cachedInheritedKey():Null<String> return inheritedKeyCache == null ? null : inheritedKeyCache.key;
+	internal function rememberInheritedKey(key:String):Void {
 		if (inheritedKeyCache == null) inheritedKeyCache = new InheritedKeyCache();
 		inheritedKeyCache.key = key;
 	}
@@ -255,9 +288,12 @@ class ComputedStyle {
 
 /** Value-level difference between two computed styles, classified by impact. */
 class StyleDiff {
+	/** Whether any value differs. */
 	public final changed:Bool;
+	/** What the differences must redo. */
 	public final impact:StyleImpact;
 
+	/** A comparison's result. */
 	public function new(changed:Bool, impact:StyleImpact) {
 		this.changed = changed;
 		this.impact = impact;
@@ -300,11 +336,17 @@ class StyleDiff {
 
 /** Work categories affected by a resolved style property. */
 enum abstract StyleImpact(Int) implements Flags {
+	/** Nothing to redo. */
 	var None = 0;
+	/** Layout must run again. */
 	var Layout = 1 << 0;
+	/** Text must be shaped and wrapped again. */
 	var TextLayout = 1 << 1;
+	/** The box must be painted again. */
 	var Paint = 1 << 2;
+	/** Only compositing changes: opacity, transforms or effects. */
 	var Composite = 1 << 3;
+	/** The accessibility tree must be updated. */
 	var Semantics = 1 << 4;
 	/** Changes resolved visual geometry used by native picking without relayout. */
 	var HitGeometry = 1 << 5;
@@ -312,11 +354,16 @@ enum abstract StyleImpact(Int) implements Flags {
 
 /** Optional provenance attached to one computed property. */
 class StyleSource {
+	/** The name of the sheet the value came from. */
 	public final stylesheet:String;
+	/** The rule's selector, as text. */
 	public final selector:String;
+	/** The rule's place in its sheet, or -1 for values not from a sheet. */
 	public final rule:Int;
+	/** Which layer set it: "framework", "theme", "application", their "-state" rules, or "local". */
 	public final layer:String;
 
+	/** A value's origin. */
 	public function new(stylesheet:String, selector:String, rule:Int, layer:String) {
 		this.stylesheet = stylesheet == null ? "" : stylesheet;
 		this.selector = selector == null ? "" : selector;
@@ -324,16 +371,21 @@ class StyleSource {
 		this.layer = layer == null ? "" : layer;
 	}
 
+	/** A description for inspection. */
 	public function toString():String
 		return stylesheet + " " + selector + " (rule " + rule + ", " + layer + ")";
 }
 
 /** Inspectable computed property entry kept as a standalone Haxe module. */
 class StyleInspectionEntry {
+	/** The property's name. */
 	public final name:String;
+	/** Its value. */
 	public final value:Dynamic;
+	/** The rule that set it, or null for the default. */
 	public final source:Null<StyleSource>;
 
+	/** One inspected value. */
 	public function new(name:String, value:Dynamic, source:Null<StyleSource>) {
 		this.name = name;
 		this.value = value;

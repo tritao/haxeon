@@ -23,12 +23,12 @@ class EffectsPage {
 	/** Installs the examples as ordinary application stylesheet declarations. */
 	public static function installStyles(explorer:UiExplorer):Void {
 		explorer.context.buildContext.styleSheet.rule(StyleSelector.key("effects-blur"), [
-			StyleValue.effects(EffectChain.of([BlurEffect.withSigma(5.0)]))
+			StyleValue.effects(EffectChain.of([new BlurEffect(5.0)]))
 		]);
 		explorer.context.buildContext.styleSheet.rule(StyleSelector.key("effects-color"), [
 			StyleValue.effects(EffectChain.of([
 				ColorFactorEffect.brightness(1.12), ColorFactorEffect.contrast(1.18),
-				ColorFactorEffect.saturate(1.35), HueRotateEffect.withDegrees(10.0)
+				ColorFactorEffect.saturate(1.35), new HueRotateEffect(10.0)
 			]))
 		]);
 		explorer.context.buildContext.styleSheet.rule(StyleSelector.key("effects-shadow"), [
@@ -42,7 +42,7 @@ class EffectsPage {
 			StyleValue.mask(Mask.linearGradient(0.0, 0.0, 1.0, 1.0, 0.28, 1.0))
 		]);
 		explorer.context.buildContext.styleSheet.rule(StyleSelector.key("effects-backdrop"), [
-			StyleValue.backdropEffects(EffectChain.of([BlurEffect.withSigma(7.0)]))
+			StyleValue.backdropEffects(EffectChain.of([new BlurEffect(7.0)]))
 		]);
 	}
 

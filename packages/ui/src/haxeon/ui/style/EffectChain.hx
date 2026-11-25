@@ -4,9 +4,10 @@ import haxeon.ui.style.VisualEffect;
 
 /** Ordered, value-semantic collection of post-layout visual effects. */
 class EffectChain {
+	/** The effects, applied in order. */
 	public final effects:Array<VisualEffect>;
 
-	public function new(effects:Array<VisualEffect> = null) {
+	function new(effects:Array<VisualEffect> = null) {
 		this.effects = [];
 		if (effects != null)
 			for (effect in effects) {
@@ -16,15 +17,19 @@ class EffectChain {
 			}
 	}
 
+	/** A chain of no effects. */
 	public static function empty():EffectChain
 		return new EffectChain();
 
+	/** A chain of `effects`. Throws when one is null. */
 	public static function of(effects:Array<VisualEffect>):EffectChain
 		return new EffectChain(effects);
 
+	/** A chain of the same effects. */
 	public function copy():EffectChain
 		return new EffectChain(effects);
 
+	/** Whether `other` has equal effects in the same order. */
 	public function isEqual(other:EffectChain):Bool {
 		if (other == null || effects.length != other.effects.length)
 			return false;
@@ -290,6 +295,7 @@ class EffectChain {
 		return values.join("|");
 	}
 
+	/** A description for inspection. */
 	public function toString():String
 		return "[" + key() + "]";
 }

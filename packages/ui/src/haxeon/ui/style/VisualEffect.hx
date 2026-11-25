@@ -92,12 +92,19 @@ class VisualEffect {
 
 /** Typed effect families understood by the native compositor. */
 enum EffectKind implements Equatable {
+	/** `BlurEffect`. */
 	Blur;
+	/** `BrightnessEffect`. */
 	Brightness;
+	/** `ContrastEffect`. */
 	Contrast;
+	/** `SaturateEffect`. */
 	Saturate;
+	/** `HueRotateEffect`. */
 	HueRotate;
+	/** `ColorMatrixEffect`. */
 	ColorMatrix;
+	/** `DropShadowEffect`. */
 	DropShadow;
 	/** A renderer-owned shader/effect registration. */
 	Custom;
@@ -105,16 +112,15 @@ enum EffectKind implements Equatable {
 
 /** Gaussian blur described by its standard deviation in logical pixels. */
 class BlurEffect extends VisualEffect {
+	/** The blur's standard deviation, in logical pixels. */
 	public final sigma:Float;
 
+	/** A blur of `sigma`. Throws when it is negative or not finite. */
 	public function new(sigma:Float) {
 		super(EffectKind.Blur);
 		this.sigma = VisualEffect.requireNonNegative(sigma,
 			"Blur sigma must be finite and non-negative");
 	}
-
-	public static function withSigma(value:Float):BlurEffect
-		return new BlurEffect(value);
 
 	override public function isEqual(other:VisualEffect):Bool {
 		if (other == null || other.kind != EffectKind.Blur)
@@ -142,6 +148,7 @@ class BlurEffect extends VisualEffect {
 
 /** Multiplicative color adjustment by one factor: brightness, contrast or saturation. */
 class ColorFactorEffect extends VisualEffect {
+	/** The multiplier: 1 leaves the content as it is, 0 makes it black, grey or flat. */
 	public final factor:Float;
 
 	function new(kind:EffectKind, factor:Float) {
@@ -154,15 +161,15 @@ class ColorFactorEffect extends VisualEffect {
 		});
 	}
 
-	/** Multiplicative RGB brightness. */
+	/** Scales brightness by `factor`. Throws when it is negative or not finite. */
 	public static function brightness(factor:Float):ColorFactorEffect
 		return new ColorFactorEffect(EffectKind.Brightness, factor);
 
-	/** Multiplicative RGB contrast. */
+	/** Scales contrast by `factor`. Throws when it is negative or not finite. */
 	public static function contrast(factor:Float):ColorFactorEffect
 		return new ColorFactorEffect(EffectKind.Contrast, factor);
 
-	/** Multiplicative color saturation. */
+	/** Scales saturation by `factor`: 0 is grey. Throws when it is negative or not finite. */
 	public static function saturate(factor:Float):ColorFactorEffect
 		return new ColorFactorEffect(EffectKind.Saturate, factor);
 
@@ -193,16 +200,15 @@ class ColorFactorEffect extends VisualEffect {
 
 /** Hue rotation in degrees. */
 class HueRotateEffect extends VisualEffect {
+	/** How far hues are turned around the color wheel. */
 	public final degrees:Float;
 
+	/** Turns hues by `degrees`. Throws when it is not finite. */
 	public function new(degrees:Float) {
 		super(EffectKind.HueRotate);
 		this.degrees = VisualEffect.requireFinite(degrees,
 			"Hue rotation must be finite");
 	}
-
-	public static function withDegrees(value:Float):HueRotateEffect
-		return new HueRotateEffect(value);
 
 	override public function isEqual(other:VisualEffect):Bool {
 		if (other == null || other.kind != EffectKind.HueRotate)
@@ -227,9 +233,12 @@ class HueRotateEffect extends VisualEffect {
 
 /** Four-channel color matrix in row-major 4x5 form. */
 class ColorMatrixEffect extends VisualEffect {
+	/** How many numbers a matrix has: four rows of five, the fifth an offset. */
 	public static inline var ComponentCount:Int = 20;
+	/** The 4×5 matrix, row by row, mapping RGBA to RGBA. */
 	public final matrix:Array<Float>;
 
+	/** Transforms colors by `matrix`. Throws unless it has `ComponentCount` finite numbers. */
 	public function new(matrix:Array<Float>) {
 		super(EffectKind.ColorMatrix);
 		if (matrix == null || matrix.length != ComponentCount)
@@ -240,6 +249,7 @@ class ColorMatrixEffect extends VisualEffect {
 				"Color matrix components must be finite"));
 	}
 
+	/** The matrix that leaves colors as they are. */
 	public static function identity():ColorMatrixEffect {
 		var matrix:Array<Float> = [];
 		for (row in 0...4)
@@ -283,11 +293,16 @@ class ColorMatrixEffect extends VisualEffect {
 
 /** Subtree alpha shadow; distinct from the lightweight ShadowDecoration. */
 class DropShadowEffect extends VisualEffect {
+	/** How far the shadow is moved right. */
 	public final offsetX:Float;
+	/** How far it is moved down. */
 	public final offsetY:Float;
+	/** Its blur's standard deviation. */
 	public final sigma:Float;
+	/** Its color. */
 	public final color:Color;
 
+	/** A shadow of the content's own shape, unlike the box-shaped `ShadowDecoration`. */
 	public function new(offsetX:Float, offsetY:Float, sigma:Float, color:Color) {
 		super(EffectKind.DropShadow);
 		this.offsetX = VisualEffect.requireFinite(offsetX, "Drop-shadow X offset must be finite");

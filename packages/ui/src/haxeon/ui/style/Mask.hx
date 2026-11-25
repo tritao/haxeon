@@ -7,14 +7,31 @@ import haxeon.ui.Image;
  * composition inputs; their shape and resource identity do not interpolate.
  */
 class Mask {
+	/** The mask's shape. */
 	public final kind:MaskKind;
+
+	/** The corner radius of a rounded rectangle, or a circle's radius. */
 	public final radius:Float;
+
+	/** A gradient's start, horizontally, as a fraction of the width. */
 	public final x0:Float;
+
+	/** A gradient's start, vertically. */
 	public final y0:Float;
+
+	/** A gradient's end, horizontally. */
 	public final x1:Float;
+
+	/** A gradient's end, vertically. */
 	public final y1:Float;
+
+	/** The opacity at a gradient's start. */
 	public final alpha0:Float;
+
+	/** The opacity at its end. */
 	public final alpha1:Float;
+
+	/** An image mask's image, whose alpha is used. */
 	public final image:Null<Image>;
 
 	function new(kind:MaskKind, radius:Float, x0:Float, y0:Float, x1:Float, y1:Float,
@@ -43,12 +60,15 @@ class Mask {
 		this.image = image;
 	}
 
+	/** Masks to the box. */
 	public static function rectangle():Mask
 		return new Mask(MaskKind.Rectangle, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, null);
 
+	/** Masks to the box with corners of `radius`. Throws when it is negative. */
 	public static function roundedRect(radius:Float):Mask
 		return new Mask(MaskKind.RoundedRect, radius, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, null);
 
+	/** Masks to a circle of `radius`. Throws when it is negative. */
 	public static function circle(radius:Float):Mask
 		return new Mask(MaskKind.Circle, radius, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, null);
 
@@ -57,9 +77,11 @@ class Mask {
 			alpha0:Float = 0.0, alpha1:Float = 1.0):Mask
 		return new Mask(MaskKind.LinearGradient, 0.0, x0, y0, x1, y1, alpha0, alpha1, null);
 
+	/** Masks by `image`'s alpha. Throws when the image is disposed. */
 	public static function fromImage(image:Image):Mask
 		return new Mask(MaskKind.Image, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, image);
 
+	/** An equal mask. */
 	public function copy():Mask
 		return new Mask(kind, radius, x0, y0, x1, y1, alpha0, alpha1, image);
 
@@ -68,6 +90,7 @@ class Mask {
 		return other != null && kind == other.kind && radius == other.radius && x0 == other.x0 && y0 == other.y0 && x1
 			== other.x1 && y1 == other.y1 && alpha0 == other.alpha0 && alpha1 == other.alpha1 && image == other.image;
 
+	/** A description for inspection. */
 	public function describe():String {
 		return switch kind {
 			case MaskKind.Rectangle: "rectangle";
@@ -81,6 +104,7 @@ class Mask {
 		};
 	}
 
+	/** A description for inspection. */
 	public function toString():String
 		return describe();
 }
