@@ -9,7 +9,7 @@ import compiler.hl.HlWriter;
 import sys.io.File;
 
 /**
- * `haxeon dev hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections]`: what a
+ * `haxeon dev hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections] [--link OUT]`: what a
  * HashLink module is made of, read with HlModuleReader. Two modules side by side (one stock Haxe wrote, one this compiler
  * wrote) answer most "why is ours bigger or slower to load" questions; HashLink compiles every instruction when it loads a
  * module, so instruction counts are start-up time.
@@ -20,19 +20,31 @@ import sys.io.File;
  *   --dump NAME          one function's instructions, NAME as --top prints it; --index I picks one of several
  *   --around OPCODE      the opcodes before and after OPCODE (OSwitch or Switch), by count
  *   --sections           the debug sections and their sizes
+ *   --link OUT           write the HLB 8 module the loader links a module of sections (HLB 9) into (HlStaticLink), which
+ *                        `code_link --compare` checks against the VM's own link
  */
 class HlStatCommand {
 	public static function run(arguments:Array<String>):Int {
 		if (arguments.length == 0 || StringTools.startsWith(arguments[0], "-")) {
 			Sys.stderr()
-				.writeString("usage: haxeon dev hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections]\n");
+				.writeString("usage: haxeon dev hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections] [--link OUT]\n");
 			return 2;
 		}
-		var path = arguments[0], module = HlModuleReader.read(File.getBytes(path)), names = functionNames(module);
+		var path = arguments[0], bytes = File.getBytes(path);
 		function option(name:String):Null<String> {
 			var at = arguments.indexOf(name);
 			return at < 0 ? null : (at + 1 < arguments.length ? arguments[at + 1] : "");
 		}
+		var link = option("--link");
+		if (link != null) {
+			if (!compiler.hl.HlStaticLink.isSectioned(bytes)) {
+				Sys.stderr().writeString('hl-stat: $path is not a module of sections (HLB 9)\n');
+				return 1;
+			}
+			File.saveBytes(link, compiler.hl.HlStaticLink.link(bytes));
+			return 0;
+		}
+		var module = HlModuleReader.read(bytes), names = functionNames(module);
 		var instructions = 0, registers = 0;
 		for (fn in module.functions) {
 			instructions += fn.instructions.length;

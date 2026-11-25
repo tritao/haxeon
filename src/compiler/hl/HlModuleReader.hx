@@ -14,7 +14,35 @@ import haxe.io.BytesInput;
  * decoder (HlModuleRoundTripMain).
  */
 class HlModuleReader {
+	/**
+	 * A module of sections (HLB 9) reads as the dense module the loader links it into (`HlStaticLink`), with its version and the
+	 * sizes of its sections' parts.
+	 */
 	public static function read(bytes:Bytes):HlModule {
+		if (!HlStaticLink.isSectioned(bytes))
+			return readDense(bytes);
+		var linked = HlStaticLink.linkWithParts(bytes), module = readDense(linked.module);
+		return {
+			version: HlStaticLink.VERSION,
+			debug: module.debug,
+			ints: module.ints,
+			floats: module.floats,
+			strings: module.strings,
+			byteData: module.byteData,
+			bytePositions: module.bytePositions,
+			debugFiles: module.debugFiles,
+			types: module.types,
+			globals: module.globals,
+			natives: module.natives,
+			functions: module.functions,
+			constants: module.constants,
+			entryPoint: module.entryPoint,
+			sections: module.sections,
+			sizes: linked.parts
+		};
+	}
+
+	static function readDense(bytes:Bytes):HlModule {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		if (bytes.length < 4 || input.readString(3) != "HLB")

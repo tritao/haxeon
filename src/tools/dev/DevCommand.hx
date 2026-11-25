@@ -11,9 +11,9 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *       Print the path of a HashLink build of the entry point MAIN, built with the pinned Haxe and cached by content (ToolArtifacts).
  *       Build diagnostics go to stderr; stdout is only the path.
  *
- *   haxeon dev hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections]
+ *   haxeon dev hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections] [--link OUT]
  *       What a HashLink module is made of: part sizes, opcode counts, the largest functions, one function's instructions
- *       (HlStatCommand, reading with compiler.hl.HlModuleReader).
+ *       (HlStatCommand, reading with compiler.hl.HlModuleReader); a module of sections reads as the loader links it.
  *
  *   haxeon dev tool-build-mode
  *       Print the build mode tool artifacts are built in (build.HaxeonBuild.TOOL_BUILD_MODE), for scripts that build them.
@@ -190,7 +190,7 @@ class DevCommand {
 			summary: "Print the path of a cached HashLink build of the entry point MAIN (built with the pinned Haxe)"
 		},
 		{
-			usage: "hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections]",
+			usage: "hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections] [--link OUT]",
 			summary: "What a HashLink module is made of: part sizes, opcodes, largest functions, one function's code"
 		},
 		{
