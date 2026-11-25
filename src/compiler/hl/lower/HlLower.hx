@@ -770,9 +770,11 @@ class HlLower {
 				});
 			}
 			allocationAfterSpanGroups = AllocationMeter.sample();
-			// The groups only point at the functions' locations; the section is encoded when the module is written.
+			// The groups only point at the functions' locations; the section is encoded when the module is written. It captures
+			// the sources, not `code`, a field: that would keep this lowerer alive with every module.
+			var sources = code.sources;
 			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0,
-				cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, code.sources, cache), HlLz4.FAST));
+				cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, sources, cache), HlLz4.FAST));
 		}
 		if (debugCache != null)
 			debugCache.endGeneration();
