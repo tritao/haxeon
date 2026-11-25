@@ -6,9 +6,16 @@ import NativeKitUI;
 import haxeon.ui.TextStyle;
 /** A shaped text layout resource with a stable handle and mutable UTF-8 content. */
 class TextLayout extends NativeKitUIResource {
+	/** The text laid out. */
 	public var text(default, null):String;
+
+	/** The width it wraps at. */
 	public var width(default, null):Float;
+
+	/** Its font, size and letter spacing. */
 	public var textStyle:TextStyle;
+
+	/** Its wrapping, alignment and line spacing. */
 	public var paragraphStyle:ParagraphStyle;
 	// Canonical grapheme geometry is stable until shaping changes. Bound the cache
 	// for standalone long-line layouts as well as editor paragraph chunks.
@@ -36,6 +43,7 @@ class TextLayout extends NativeKitUIResource {
 		this.paragraphStyle = paragraphStyle;
 	}
 
+	/** `text` shaped and wrapped at `width`. Throws when `width` is not positive. */
 	public static function create(fonts:FontCollection, text:String, width:Float,
 			?textStyle:TextStyle, ?paragraphStyle:ParagraphStyle):TextLayout {
 		if (width <= 0.0)
@@ -48,11 +56,6 @@ class TextLayout extends NativeKitUIResource {
 		UiResult.check(made.status, "textLayout.create");
 		return new TextLayout(made.out_layout, actualText, width, actualTextStyle, actualParagraphStyle);
 	}
-
-	/** Creates a layout using the same semantic styles as LayoutNode. */
-	public static function createStyled(fonts:FontCollection, text:String, width:Float,
-			style:TextStyle, paragraph:ParagraphStyle):TextLayout
-		return create(fonts, text, width, style, paragraph);
 
 	/** Re-shapes this layout without replacing its native resource handle. */
 	public function setText(value:String):Void {
@@ -145,6 +148,7 @@ class TextLayout extends NativeKitUIResource {
 		return result;
 	}
 
+	/** The area the laid-out text covers. */
 	public function measure():TextMetrics {
 		var measured = NativeKitUI.nkui_text_layout_measure(nativeHandle());
 		UiResult.check(measured.status, "textLayout.measure");
@@ -153,6 +157,7 @@ class TextLayout extends NativeKitUIResource {
 			measured.out_metrics.get_height());
 	}
 
+	/** The position nearest (`x`, `y`), for placing a caret. */
 	public function hitTest(x:Float, y:Float):TextPosition {
 		var hit = NativeKitUI.nkui_text_layout_hit_test(nativeHandle(), x, y);
 		UiResult.check(hit.status, "textLayout.hitTest");
@@ -195,6 +200,7 @@ class TextLayout extends NativeKitUIResource {
 		return result;
 	}
 
+	/** Where the caret at `position` is drawn. */
 	public function caret(position:TextPosition):TextCaret
 		return caretAt(position.offset, position.affinity);
 
@@ -420,11 +426,19 @@ class TextLayout extends NativeKitUIResource {
 
 /** Bounds returned by TextLayout.measure. */
 struct TextMetrics implements Equatable {
+	/** The covered area's left edge. */
 	public final x:Float;
+
+	/** Its top edge. */
 	public final y:Float;
+
+	/** Its width. */
 	public final width:Float;
+
+	/** Its height. */
 	public final height:Float;
 
+	/** A measured area. */
 	public function new(x:Float, y:Float, width:Float, height:Float) {
 		this.x = x;
 		this.y = y;
@@ -435,9 +449,13 @@ struct TextMetrics implements Equatable {
 
 /** A Unicode code-point caret position. */
 class TextPosition {
+	/** The character offset. */
 	public final offset:Int;
+
+	/** Which side of a line break the caret sits on at `offset`; pass it back as given. */
 	public final affinity:Int;
 
+	/** A position. */
 	public function new(offset:Int, affinity:Int) {
 		this.offset = offset;
 		this.affinity = affinity;
@@ -446,9 +464,13 @@ class TextPosition {
 
 /** An ordered code-point range returned by a text layout query. */
 class TextRange {
+	/** Its first character. */
 	public final start:Int;
+
+	/** The character after its last. */
 	public final end:Int;
 
+	/** The characters from `start` to `end`. */
 	public function new(start:Int, end:Int) {
 		this.start = start;
 		this.end = end;
@@ -457,15 +479,27 @@ class TextRange {
 
 /** Visual rectangle associated with an absolute code-point range. */
 struct TextRangeRect {
+	/** The first character the rectangle covers. */
 	public final start:Int;
+
+	/** The character after the last. */
 	public final end:Int;
+
+	/** Its left edge. */
 	public final x:Float;
+
+	/** Its top edge. */
 	public final y:Float;
+
+	/** Its width. */
 	public final width:Float;
+
+	/** Its height. */
 	public final height:Float;
 	/** Whether the visual left edge corresponds to the range start. */
 	public final visualLeftIsStart:Bool;
 
+	/** A rectangle covering part of a range on one line. */
 	public function new(start:Int, end:Int, x:Float, y:Float, width:Float, height:Float,
 			visualLeftIsStart:Bool = true) {
 		this.start = start;
@@ -480,13 +514,25 @@ struct TextRangeRect {
 
 /** Visual geometry for a text caret. */
 struct TextCaret implements Equatable {
+	/** The caret's horizontal position. */
 	public final x:Float;
+
+	/** Its baseline's vertical position. */
 	public final y:Float;
+
+	/** How far it reaches above the baseline. */
 	public final ascender:Float;
+
+	/** How far it reaches below. */
 	public final descender:Float;
+
+	/** Its slant, for italic text. */
 	public final slope:Float;
+
+	/** The direction of the text at it. */
 	public final direction:TextDirection;
 
+	/** A caret's geometry. */
 	public function new(x:Float, y:Float, ascender:Float, descender:Float, slope:Float, direction:TextDirection) {
 		this.x = x;
 		this.y = y;

@@ -322,7 +322,7 @@ class Showcase implements Disposable {
 	}
 
 	function styled(value:String, width:Float, fontSize:Float):TextLayout
-		return keep(TextLayout.createStyled(fonts, value, width, new TextStyle(fontSize),
+		return keep(TextLayout.create(fonts, value, width, new TextStyle(fontSize),
 			new ParagraphStyle()));
 
 	public function updatePointer(x:Float, y:Float):Void {

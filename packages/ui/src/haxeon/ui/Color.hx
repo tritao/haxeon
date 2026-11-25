@@ -9,12 +9,19 @@ import NativeKitUI;
 
 /** Immutable normalized RGBA color value. */
 struct Color implements Hashable implements Diffable {
+	/** The red component, from 0 to 1. */
 	public final red:Float;
+
+	/** The green component, from 0 to 1. */
 	public final green:Float;
+
+	/** The blue component, from 0 to 1. */
 	public final blue:Float;
+
+	/** The opacity, from 0 (transparent) to 1 (opaque). */
 	public final alpha:Float;
 
-	public function new(red:Float, green:Float, blue:Float, alpha:Float = 1.0) {
+	function new(red:Float, green:Float, blue:Float, alpha:Float = 1.0) {
 		if (red < 0.0 || red > 1.0 || green < 0.0 || green > 1.0 || blue < 0.0 || blue > 1.0 || alpha < 0.0
 			|| alpha > 1.0)
 			throw "Color components must be in the range 0..1";
@@ -34,9 +41,11 @@ struct Color implements Hashable implements Diffable {
 			(blue * alpha + background.blue * behind) / opacity, opacity);
 	}
 
+	/** A color of components from 0 to 1. Throws when one is outside that range. */
 	public static function rgba(red:Float, green:Float, blue:Float, alpha:Float = 1.0):Color
 		return new Color(red, green, blue, alpha);
 
+	/** A color of components from 0 to 255. */
 	public static function fromBytes(red:Int, green:Int, blue:Int, alpha:Int = 255):Color
 		return new Color(red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0);
 

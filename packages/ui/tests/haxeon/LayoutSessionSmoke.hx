@@ -284,7 +284,7 @@ class LayoutSessionSmoke {
 			|| !rejectsTransaction(infiniteLetterSpacing) || !rejectsTransaction(infiniteLineHeight)) return 5;
 		var session = LayoutSession.create();
 		session.setFonts(fonts);
-		var textLayout = TextLayout.createStyled(fonts,
+		var textLayout = TextLayout.create(fonts,
 			"NativeKit selection",
 			220.0,
 			new TextStyle(18.0),

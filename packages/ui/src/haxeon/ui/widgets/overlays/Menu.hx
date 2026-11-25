@@ -111,14 +111,14 @@ class Menu implements View {
 				TextStyleOverride.foreground(item.enabled
 				? context.theme.tokens.textPrimary : context.theme.tokens.textDisabled));
 			if (context.fonts != null) {
-				var measurement = TextLayout.createStyled(context.fonts,
+				var measurement = TextLayout.create(context.fonts,
 					item.label,
 					100000.0,
 					typography.textStyle,
 					typography.paragraphStyle);
 				var shortcutWidth = 0.0;
 				if (item.shortcut != null && item.shortcut.length > 0) {
-					var shortcutLayout = TextLayout.createStyled(context.fonts,
+					var shortcutLayout = TextLayout.create(context.fonts,
 						item.shortcut,
 						100000.0,
 						typography.textStyle,

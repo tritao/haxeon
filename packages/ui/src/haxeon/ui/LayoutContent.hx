@@ -9,6 +9,7 @@ interface LayoutContent {
 	/** Application-defined cache token; change it whenever intrinsic metrics change. */
 	function getVersion():Int;
 
+	/** The content's size within `constraints`. */
 	function measure(constraints:LayoutMeasureConstraints):LayoutMeasureResult;
 
 	/** Returns a paint provider when this content owns a retained display list. */
@@ -17,8 +18,10 @@ interface LayoutContent {
 
 /** Immutable intrinsic provider for an uploaded Image resource. */
 class LayoutImageContent implements LayoutContent {
+	/** The image measured. */
 	public final image:Image;
 
+	/** Content measured as `image`'s size. */
 	public function new(image:Image) {
 		if (image == null || image.isDisposed())
 			throw "Image content requires a live image";
@@ -28,6 +31,7 @@ class LayoutImageContent implements LayoutContent {
 	public function getVersion():Int
 		return 0;
 
+	/** The image's own size, in pixels; `constraints` do not change it. */
 	public function measure(constraints:LayoutMeasureConstraints):LayoutMeasureResult
 		return new LayoutMeasureResult(image.width, image.height);
 
@@ -55,6 +59,7 @@ class LayoutRenderableContent implements LayoutContent implements Disposable {
 	var paintedVersion:Int;
 	var paintedGeometry:Null<ResolvedLayoutItem>;
 
+	/** Content measured by `measurement` and drawn by `painter`. */
 	public function new(measurement:LayoutContent, painter:LayoutContentPaint,
 			canvasCapacity:Int = 4096) {
 		if (measurement == null || painter == null)
@@ -131,6 +136,10 @@ class LayoutMeasuredContent implements LayoutContent {
 	final callback:LayoutContentMeasure;
 	var versionValue:Int;
 
+	/**
+	 * Content measured by `callback`; raise `version` when its size may have changed, so layout measures it again.
+	 * Throws without a callback or with a negative version.
+	 */
 	public function new(callback:LayoutContentMeasure, version:Int = 0) {
 		if (callback == null || version < 0)
 			throw "Measured content requires a callback and non-negative version";
@@ -155,6 +164,7 @@ class LayoutMeasuredContent implements LayoutContent {
 		versionValue = version;
 	}
 
+	/** What `callback` measures within `constraints`. */
 	public function measure(constraints:LayoutMeasureConstraints):LayoutMeasureResult
 		return callback(constraints);
 
@@ -162,6 +172,7 @@ class LayoutMeasuredContent implements LayoutContent {
 		return null;
 }
 
+/** Measures content within the constraints it is given. */
 typedef LayoutContentMeasure = (constraints:LayoutMeasureConstraints) -> LayoutMeasureResult;
 
 /** High-level synchronous intrinsic measurement callback for custom nodes. */
@@ -169,9 +180,13 @@ typedef LayoutMeasureCallback = (nodeId:Int, constraints:LayoutMeasureConstraint
 
 /** Constraint range supplied while NativeKit measures a custom layout node. */
 class LayoutMeasureConstraints {
+	/** The narrowest the content may be. */
 	public final minWidth:Float;
+	/** The widest it may be. */
 	public final maxWidth:Float;
+	/** The shortest it may be. */
 	public final minHeight:Float;
+	/** The tallest it may be. */
 	public final maxHeight:Float;
 
 	private function new(minWidth:Float, maxWidth:Float, minHeight:Float, maxHeight:Float) {
@@ -190,11 +205,16 @@ class LayoutMeasureConstraints {
 
 /** Intrinsic size and optional baseline returned for a custom layout node. */
 class LayoutMeasureResult {
+	/** The measured width. */
 	public final width:Float;
+	/** The measured height. */
 	public final height:Float;
+	/** The first text baseline, from the top, when `hasBaseline`. */
 	public final baseline:Float;
+	/** Whether the content has a baseline to align by. */
 	public final hasBaseline:Bool;
 
+	/** A measured size, with a baseline when `hasBaseline`. */
 	public function new(width:Float, height:Float, ?baseline:Float = 0.0,
 			hasBaseline:Bool = false) {
 		if (width < 0.0 || height < 0.0 || width != width || height != height)
@@ -220,13 +240,20 @@ class LayoutMeasureResult {
 
 /** Snapshot of intrinsic measurement and persistent-cache activity. */
 class LayoutMeasureStats {
+	/** How many measurements layout asked for. */
 	public final requests:haxe.Int64;
+	/** How many the cache answered. */
 	public final cacheHits:haxe.Int64;
+	/** How many it did not. */
 	public final cacheMisses:haxe.Int64;
+	/** How many called a content's measure. */
 	public final callbackCalls:haxe.Int64;
+	/** How many results the cache holds. */
 	public final cacheEntries:haxe.Int64;
+	/** How many it can hold. */
 	public final cacheCapacity:haxe.Int64;
 
+	/** A snapshot of the counts. */
 	public function new(requests:haxe.Int64, cacheHits:haxe.Int64, cacheMisses:haxe.Int64,
 			callbackCalls:haxe.Int64, cacheEntries:haxe.Int64, cacheCapacity:haxe.Int64) {
 		this.requests = requests;

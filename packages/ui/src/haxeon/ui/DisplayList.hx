@@ -13,6 +13,7 @@ class DisplayList implements Disposable {
 		disposed = false;
 	}
 
+	/** An empty display list. */
 	public static function create():DisplayList {
 		var made = NativeKitUI.nkui_display_list_create();
 		UiResult.check(made.status, "displayList.create");
@@ -33,6 +34,7 @@ class DisplayList implements Disposable {
 		UiResult.check(NativeKitUI.nkui_display_list_reset(value), "displayList.clear");
 	}
 
+	/** Its size and command count. */
 	public function info():DisplayListInfo {
 		ensureLive();
 		var result = NativeKitUI.nkui_display_list_get_info(value);
@@ -50,6 +52,7 @@ class DisplayList implements Disposable {
 		UiResult.check(status, "displayList.dispose");
 	}
 
+	/** Whether it was disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
@@ -69,10 +72,16 @@ class DisplayList implements Disposable {
 
 /** Stable summary of a retained display list. */
 class DisplayListInfo {
+	/** How many bytes its commands take. */
 	public final commandBytes:Int;
+
+	/** How many commands it holds. */
 	public final commandCount:Int;
+
+	/** The command encoding's version, as the native renderer reads it. */
 	public final apiVersion:Int;
 
+	/** A display list's size and command count. */
 	public function new(commandBytes:Int, commandCount:Int, apiVersion:Int) {
 		this.commandBytes = commandBytes;
 		this.commandCount = commandCount;

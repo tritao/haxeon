@@ -21,6 +21,7 @@ class NativeKitUIResource implements Disposable {
 		UiResult.check(status, "resource.dispose");
 	}
 
+	/** Whether it was disposed, after which it may not be used. */
 	public function isDisposed():Bool
 		return disposed;
 

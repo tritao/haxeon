@@ -42,7 +42,7 @@ class UiStyleInvalidationMetrics {
 	}
 
 	/** Classifies current nodes against their prior submitted inputs. */
-	public static function compare(previous:Null<RenderNode>, current:Null<RenderNode>,
+	internal static function compare(previous:Null<RenderNode>, current:Null<RenderNode>,
 			?previousById:Map<Int, RenderNode>, ?currentById:Map<Int, RenderNode>,
 			?priorOverrides:Map<Int, RenderNode>, ?frame:UiStyleInvalidationFrame):UiStyleInvalidationMetrics {
 		var previousIndex = previousById == null ? new Map<Int, RenderNode>():previousById;
@@ -117,7 +117,7 @@ class UiStyleInvalidationMetrics {
 	}
 
 	/** Classify announced edits made by geometry callbacks against their existing comparison priors. */
-	public static function collectLayoutEdits(current:Map<Int, RenderNode>, priors:Map<Int, RenderNode>,
+	internal static function collectLayoutEdits(current:Map<Int, RenderNode>, priors:Map<Int, RenderNode>,
 			changes:LayoutChanges):Void {
 		for (id => prior in priors) {
 			var node = current.get(id);
@@ -141,8 +141,7 @@ class UiStyleInvalidationMetrics {
 }
 
 /** Reused comparison inputs keep the frame visitor's capture fixed as the native boundary gains data. */
-@:noCompletion
-class UiStyleInvalidationFrame {
+internal class UiStyleInvalidationFrame {
 	public final context:BuildContext;
 	public final changes:LayoutChanges;
 	internal var topology:RenderTreeTopology;

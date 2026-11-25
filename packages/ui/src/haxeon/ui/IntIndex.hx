@@ -4,7 +4,7 @@ package haxeon.ui;
  * Maps integer keys to non-negative integers without allocating per `set` or `get`: `Map<Int, Int>` boxes both the value it
  * stores and the one it returns. Open addressing over three arrays; `clear` bumps a generation instead of touching the slots.
  */
-class IntIndex {
+internal class IntIndex {
 	var keys:Array<Int>;
 	var values:Array<Int>;
 	var stamps:Array<Int>;

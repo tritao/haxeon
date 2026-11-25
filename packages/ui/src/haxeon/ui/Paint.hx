@@ -14,6 +14,7 @@ class SolidPaint extends Paint {
 	private function new(value:nkui_resource)
 		super(value);
 
+	/** A paint of one color. */
 	public static function create(color:Color):SolidPaint {
 		var made = NativeKitUI.nkui_paint_create_solid(color.nativeValue());
 		UiResult.check(made.status, "paint.createSolid");
@@ -27,6 +28,7 @@ class LinearGradientPaint extends Paint {
 	private function new(value:nkui_resource)
 		super(value);
 
+	/** A gradient from (`startX`, `startY`) to (`endX`, `endY`) through `stops`. Throws without two to eight stops. */
 	public static function create(startX:Float, startY:Float, endX:Float, endY:Float,
 			stops:Array<GradientStop>):LinearGradientPaint {
 		if (stops == null || stops.length < 2 || stops.length > NativeKitUIConstants.NKUI_GRADIENT_MAX_STOPS)
@@ -46,9 +48,12 @@ class LinearGradientPaint extends Paint {
 
 /** Immutable position and color pair used by a gradient paint. */
 class GradientStop {
+	/** Where along the gradient it is, from 0 to 1. */
 	public final offset:Float;
+	/** The color there. */
 	public final color:Color;
 
+	/** A stop of `color` at `offset`. */
 	public function new(offset:Float, color:Color) {
 		if (offset < 0.0 || offset > 1.0)
 			throw "Gradient stop offset must be in the range 0..1";

@@ -17,6 +17,7 @@ class Renderer implements Disposable {
 		disposed = false;
 	}
 
+	/** A new renderer, with its own GPU resources. */
 	public static function create():Renderer {
 		var made = NativeKitUI.nkui_renderer_create();
 		UiResult.check(made.status, "renderer.create");
@@ -33,12 +34,14 @@ class Renderer implements Disposable {
 		return borrowed.out_gpu_renderer_id;
 	}
 
+	/** Draws `list` into `surface`, at the surface's own size. */
 	public function render(list:DisplayList, surface:Surface):Void {
 		ensureLive();
 		UiResult.check(NativeKitUI.nkui_renderer_render(value, list.nativeHandle(), surface.nativeHandle()),
 			"renderer.render");
 	}
 
+	/** Draws `list` into `surface` with the sizes `frame` gives. */
 	public function renderFrame(list:DisplayList, surface:Surface, frame:FrameInfo):Void {
 		ensureLive();
 		UiResult.check(NativeKitUI.nkui_renderer_render_frame(value, list.nativeHandle(), surface.nativeHandle(),
@@ -64,6 +67,7 @@ class Renderer implements Disposable {
 			registration.nativeValue()), "renderer.registerCustomEffect");
 	}
 
+	/** Counts of its caches' work, for profiling. */
 	public function stats():RendererStats {
 		ensureLive();
 		var result = NativeKitUI.nkui_renderer_get_stats(value);
@@ -79,7 +83,7 @@ class Renderer implements Disposable {
 
 	/** How often layout-session frames compiled a render plan or reused the last one, and why each compile was needed.
 		Cumulative; the reasons add up to `compiles`. */
-	public function planReuse():RenderPlanReuse {
+	internal function planReuse():RenderPlanReuse {
 		ensureLive();
 		var result = NativeKitUI.nkui_renderer_get_stats(value);
 		UiResult.check(result.status, "renderer.planReuse");
@@ -133,6 +137,7 @@ class Renderer implements Disposable {
 		UiResult.check(status, "renderer.dispose");
 	}
 
+	/** Whether it was disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
@@ -149,7 +154,7 @@ class Renderer implements Disposable {
 }
 
 /** Cumulative render plan compile and reuse counts, with the reason for each compile. */
-class RenderPlanReuse {
+internal class RenderPlanReuse {
 	public final compiles:Float;
 	public final reuses:Float;
 	/** The session's layout changed. */
@@ -181,18 +186,40 @@ class RenderPlanReuse {
 
 /** Immutable renderer preparation counters. */
 class RendererStats {
+	/** How many paths were prepared for drawing. */
 	public final pathPreparations:haxe.Int64;
+
+	/** How many the path cache answered. */
 	public final pathCacheHits:haxe.Int64;
+
+	/** How many it did not. */
 	public final pathCacheMisses:haxe.Int64;
+
+	/** How many vertices tessellation produced. */
 	public final pathVerticesGenerated:haxe.Int64;
+
+	/** How many bytes tessellated geometry allocated. */
 	public final pathGeometryBytesAllocated:haxe.Int64;
+
+	/** The time tessellation took. */
 	public final pathTessellationNanoseconds:haxe.Int64;
+
+	/** How many bytes of geometry the cache keeps. */
 	public final pathGeometryBytesRetained:haxe.Int64;
+
+	/** How many drawings the raster cache answered. */
 	public final rasterCacheHits:haxe.Int64;
+
+	/** How many it did not. */
 	public final rasterCacheMisses:haxe.Int64;
+
+	/** How many rasters it keeps. */
 	public final rasterCacheEntries:haxe.Int64;
+
+	/** How many bytes they take. */
 	public final rasterCacheBytes:haxe.Int64;
 
+	/** A snapshot of the counts. */
 	public function new(pathPreparations:haxe.Int64, pathCacheHits:haxe.Int64, pathCacheMisses:haxe.Int64,
 			pathVerticesGenerated:haxe.Int64,
 			pathGeometryBytesAllocated:haxe.Int64, pathTessellationNanoseconds:haxe.Int64,

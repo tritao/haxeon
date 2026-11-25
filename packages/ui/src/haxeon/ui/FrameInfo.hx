@@ -5,12 +5,23 @@ import NativeKitUI;
 /** Per-frame logical and physical surface dimensions. */
 class FrameInfo {
 	var nativeFrame:nkui_frame_info;
+
+	/** The surface's width, in logical pixels. */
 	public var logicalWidth:Float;
+
+	/** The surface's height, in logical pixels. */
 	public var logicalHeight:Float;
+
+	/** Its width, in device pixels. */
 	public var framebufferWidth:Int;
+
+	/** Its height, in device pixels. */
 	public var framebufferHeight:Int;
+
+	/** Device pixels per logical pixel. */
 	public var pixelScale:Float;
 
+	/** A frame of the given sizes. */
 	public function new(logicalWidth:Float, logicalHeight:Float, framebufferWidth:Int, framebufferHeight:Int,
 			pixelScale:Float) {
 		if (logicalWidth <= 0.0 || logicalHeight <= 0.0 || framebufferWidth <= 0 || framebufferHeight <= 0

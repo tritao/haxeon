@@ -8,9 +8,17 @@ class Image extends NativeKitUIResource {
 
 	/** Stable process-local identity used by value caches and diagnostics. */
 	public final identity:Int;
+
+	/** Its width, in pixels. */
 	public final width:Int;
+
+	/** Its height, in pixels. */
 	public final height:Int;
+
+	/** How its pixels are stored. */
 	public final format:ImageFormat;
+
+	/** How it is sampled when drawn larger or smaller. */
 	public final filter:ImageFilter;
 
 	private function new(value:nkui_resource, width:Int, height:Int, format:ImageFormat,
@@ -23,6 +31,7 @@ class Image extends NativeKitUIResource {
 		this.filter = filter;
 	}
 
+	/** An image of `pixels`, uploaded to the renderer. Throws when the pixels do not match the size and format. */
 	public static function create(width:Int, height:Int, format:ImageFormat, pixels:Bytes,
 			filter:ImageFilter = ImageFilter.Linear):Image {
 		if (width <= 0 || height <= 0)

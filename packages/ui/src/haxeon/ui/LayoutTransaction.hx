@@ -6,8 +6,7 @@ import haxe.io.Bytes;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 /** Encodes a retained Haxe node tree into the single native frame payload. */
-@:noCompletion
-class LayoutTransaction {
+internal class LayoutTransaction {
 	var nodes:Array<LayoutNode> = [];
 	var parents:Array<Int> = [];
 	var stringBytes:Array<Bytes> = [];

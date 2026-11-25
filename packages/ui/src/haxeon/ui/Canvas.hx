@@ -26,6 +26,7 @@ class Canvas {
 	var paintedRects:Null<Map<String, {path:Path, paint:Paint}>>;
 	var retainedRects:Null<Map<String, {path:Path, paint:Paint}>>;
 
+	/** An empty canvas whose command buffer starts at `capacity` bytes. */
 	public function new(capacity:Int = 4096) {
 		commands = new CanvasCommandBuffer(capacity);
 		state = new CanvasState();
@@ -35,6 +36,7 @@ class Canvas {
 		transientResources = [];
 	}
 
+	/** Clears the recorded commands and the state, for the next paint. */
 	public function reset():Void {
 		releaseTransientResources();
 		sweepRetained();
@@ -62,29 +64,35 @@ class Canvas {
 		state.copyFrom(saved[savedDepth]);
 	}
 
+	/** Runs `action`, then restores the transform, clip, alpha and composite mode it began with. */
 	public function withState(action:Canvas->Void):Void {
 		save();
 		defer restore();
 		action(this);
 	}
 
+	/** Replaces the transform. */
 	public function setTransform(transform:Transform2D):Void {
 		setTransformValues(transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty);
 	}
 
+	/** Sets the identity transform. */
 	public function resetTransform():Void
 		setTransformValues(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
 
+	/** Moves later drawing by (`x`, `y`), in the current transform's space. */
 	public function translate(x:Float, y:Float):Void {
 		setTransformValues(state.a, state.b, state.c, state.d,
 			state.a * x + state.c * y + state.tx,
 			state.b * x + state.d * y + state.ty);
 	}
 
+	/** Scales later drawing by `x` and `y`. */
 	public function scale(x:Float, y:Float):Void
 		setTransformValues(state.a * x, state.b * x, state.c * y, state.d * y,
 			state.tx, state.ty);
 
+	/** Rotates later drawing by `radians`, clockwise. */
 	public function rotate(radians:Float):Void {
 		var cosine = Math.cos(radians);
 		var sine = Math.sin(radians);
@@ -95,6 +103,7 @@ class Canvas {
 			state.tx, state.ty);
 	}
 
+	/** Skews later drawing by `xRadians` and `yRadians`. */
 	public function skew(xRadians:Float, yRadians:Float):Void {
 		var x = Math.tan(xRadians);
 		var y = Math.tan(yRadians);
@@ -113,6 +122,7 @@ class Canvas {
 		commands.transform(a, b, c, d, tx, ty);
 	}
 
+	/** Multiplies later drawing's opacity by `alpha`. Throws outside 0..1. */
 	public function setAlpha(alpha:Float):Void {
 		if (alpha < 0.0 || alpha > 1.0)
 			throw "Canvas alpha must be in the range 0..1";
@@ -120,27 +130,31 @@ class Canvas {
 		commands.globalAlpha(alpha);
 	}
 
-	public function setPaint(paint:Paint):Void {
+	internal function setPaint(paint:Paint):Void {
 		state.paint = paint;
 		commands.paint(paint);
 	}
 
+	/** How later drawing combines with what is under it. */
 	public function setComposite(mode:CompositeMode):Void {
 		state.composite = mode;
 		commands.composite(mode);
 	}
 
+	/** Clips later drawing to `rect`, until the state is restored. */
 	public function clip(rect:Rect):Void {
 		state.clip = rect;
 		commands.clipRect(rect.x, rect.y, rect.width, rect.height);
 	}
 
+	/** Runs `action` clipped to `rect`, then restores the state. */
 	public function withClip(rect:Rect, action:Canvas->Void):Void
 		withState(function(canvas) {
 			canvas.clip(rect);
 			action(canvas);
 		});
 
+	/** Fills `path` with `paint`. */
 	public function fill(path:Path, paint:Paint):Void {
 		setPaint(paint);
 		commands.drawPath(path);
@@ -166,6 +180,7 @@ class Canvas {
 		}
 	}
 
+	/** Strokes `path` with `paint`, `width` wide. */
 	public function stroke(path:Path, paint:Paint, width:Float, cap:LineCap = LineCap.Butt,
 			join:LineJoin = LineJoin.Miter,
 			miterLimit:Float = 4.0):Void {
@@ -344,6 +359,7 @@ class Canvas {
 		}
 	}
 
+	/** Draws `image` stretched to `rect`. */
 	public function drawImage(image:Image, rect:Rect):Void
 		commands.drawImage(image, rect.x, rect.y, rect.width, rect.height);
 
@@ -369,9 +385,14 @@ class Canvas {
 			blurRadius / 2.0, spread, radii, color);
 	}
 
+	/** Draws a laid-out text at (`x`, `y`), its top left corner. */
 	public function drawText(layout:TextLayout, x:Float, y:Float):Void
 		commands.drawText(layout, x, y);
 
+	/**
+	 * Runs `action` into a layer that is composited at `opacity`, with `mode`, `effects`, `mask` and
+	 * `backdropEffects`, when it ends.
+	 */
 	public function withLayer(opacity:Float, action:Canvas->Void, mode:CompositeMode = CompositeMode.SourceOver,
 			?bounds:Rect, ?effects:EffectChain, ?mask:Mask, ?backdropEffects:EffectChain):Void {
 		beginLayer(opacity, mode, bounds, effects, mask, backdropEffects);
@@ -379,6 +400,10 @@ class Canvas {
 		action(this);
 	}
 
+	/**
+	 * Opens a layer, as `withLayer` does; `endLayer` composites it. Throws when `opacity` is outside 0..1 or `bounds`
+	 * is not finite.
+	 */
 	public function beginLayer(opacity:Float, mode:CompositeMode = CompositeMode.SourceOver,
 			?bounds:Rect, ?effects:EffectChain, ?mask:Mask, ?backdropEffects:EffectChain):Void {
 		if (opacity < 0.0 || opacity > 1.0)
@@ -390,6 +415,7 @@ class Canvas {
 		openLayers++;
 	}
 
+	/** Composites the innermost open layer. Throws when none is open. */
 	public function endLayer():Void {
 		if (openLayers == 0)
 			throw "Canvas endLayer without a matching beginLayer";

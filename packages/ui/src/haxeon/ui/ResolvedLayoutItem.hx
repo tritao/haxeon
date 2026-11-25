@@ -4,18 +4,35 @@ import haxe.io.Bytes;
 
 /** Frame-scoped layout, clipping, content, visibility, and transform geometry. */
 class ResolvedLayoutItem {
+	/** The node it is the layout of. */
 	public final id:Int;
-	public final flags:Int;
+	internal final flags:Int;
+
+	/** Its left edge, in its parent's coordinates. */
 	public final x:Float;
+
+	/** Its top edge, in its parent's coordinates. */
 	public final y:Float;
+
+	/** Its width. */
 	public final width:Float;
+
+	/** Its height. */
 	public final height:Float;
+
+	/** The area its drawing is clipped to, in viewport coordinates. */
 	public final clipBounds:Rect;
+
+	/** The area its children cover. */
 	public final contentBounds:Rect;
+
+	/** Its transform to viewport coordinates. */
 	public final transform:Transform2D;
+
+	/** Its first text baseline, from its top, when `hasBaseline`. */
 	public final baseline:Float;
 
-	public function new(id:Int, flags:Int, x:Float, y:Float, width:Float, height:Float,
+	internal function new(id:Int, flags:Int, x:Float, y:Float, width:Float, height:Float,
 			clipBounds:Rect, contentBounds:Rect, transform:Transform2D, baseline:Float) {
 		this.id = id;
 		this.flags = flags;
@@ -29,14 +46,17 @@ class ResolvedLayoutItem {
 		this.baseline = baseline;
 	}
 
+	/** Whether it is drawn. */
 	public var visible(get, never):Bool;
 	inline function get_visible():Bool
 		return (flags & 1) != 0;
 
+	/** Whether it has a baseline to align by. */
 	public var hasBaseline(get, never):Bool;
 	inline function get_hasBaseline():Bool
 		return (flags & 2) != 0;
 
+	/** Its box, in its parent's coordinates. */
 	public inline function bounds():Rect
 		return new Rect(x, y, width, height);
 
@@ -60,7 +80,7 @@ class ResolvedLayoutItem {
 	public inline function viewportToLocalX(viewportX:Float, viewportY:Float):Float
 		return transform.inverseTransformedX(viewportX, viewportY) - x;
 
-	public inline function viewportToLocalY(viewportX:Float, viewportY:Float):Float
+	internal inline function viewportToLocalY(viewportX:Float, viewportY:Float):Float
 		return transform.inverseTransformedY(viewportX, viewportY) - y;
 
 	/** Attempts to convert a viewport point into this node's local space. */
@@ -152,7 +172,7 @@ class ResolvedLayoutItem {
 		return localX >= 0.0 && localY >= 0.0 && localX <= width && localY <= height;
 	}
 
-	public static function decode(bytes:Bytes, offset:Int, ?previous:ResolvedLayoutItem):ResolvedLayoutItem {
+	internal static function decode(bytes:Bytes, offset:Int, ?previous:ResolvedLayoutItem):ResolvedLayoutItem {
 		var recordBytes = NativeKitUIConstants.NKUI_LAYOUT_RESOLVED_ITEM_BYTES;
 		if (offset < 0 || offset > bytes.length || recordBytes > bytes.length - offset)
 			throw "Resolved layout item is outside the geometry snapshot";

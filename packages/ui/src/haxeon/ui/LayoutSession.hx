@@ -49,6 +49,7 @@ class LayoutSession implements Disposable {
 		hasMeasureContents = false;
 	}
 
+	/** A new session, with its own native layout state. */
 	public static function create():LayoutSession {
 		var made = NativeKitUI.nkui_layout_session_create();
 		UiResult.check(made.status, "layoutSession.create");
@@ -76,7 +77,7 @@ class LayoutSession implements Disposable {
 	}
 
 	/** Submits one render tree and returns geometry for the complete resolved frame. */
-	public function submit(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges,
+	internal function submit(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges,
 			forceFull:Bool = false):Array<ResolvedLayoutItem> {
 		ensureLive();
 		if (frame == null)
@@ -324,6 +325,7 @@ class LayoutSession implements Disposable {
 		UiResult.check(status, "layoutSession.dispose");
 	}
 
+	/** Whether it was disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
@@ -419,13 +421,20 @@ class LayoutSession implements Disposable {
 
 /** Snapshot of native geometric hit-test traversal activity. */
 class LayoutHitTestStats {
+	/** How many hit tests ran. */
 	public final hitTestCount:haxe.Int64;
+	/** How many nodes they visited. */
 	public final nodesVisited:haxe.Int64;
+	/** How many subtrees their bounds ruled out. */
 	public final subtreesRejected:haxe.Int64;
+	/** How many tested a node's exact shape. */
 	public final preciseHitTests:haxe.Int64;
+	/** The most nodes one hit test visited. */
 	public final maxNodesVisited:haxe.Int64;
+	/** The time they took. */
 	public final hitTestTimeNanoseconds:haxe.Int64;
 
+	/** A snapshot of the counts. */
 	public function new(hitTestCount:haxe.Int64, nodesVisited:haxe.Int64,
 			subtreesRejected:haxe.Int64, preciseHitTests:haxe.Int64,
 			maxNodesVisited:haxe.Int64, hitTestTimeNanoseconds:haxe.Int64) {

@@ -63,7 +63,7 @@ class MiddleEllipsisText implements View {
 					var paragraph = new ParagraphStyle(TextWrap.None, resolved.paragraphStyle.alignment,
 						resolved.paragraphStyle.lineHeight, resolved.paragraphStyle.direction,
 						resolved.paragraphStyle.tabWidth);
-					var layout = TextLayout.createStyled(context.fonts, value, 100000.0,
+					var layout = TextLayout.create(context.fonts, value, 100000.0,
 						resolved.textStyle, paragraph);
 					next = value;
 					if (layout.measure().width > available) {

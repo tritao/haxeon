@@ -9,8 +9,7 @@ import haxeon.ui.style.EffectChain;
 import haxeon.ui.style.Mask;
 import haxeon.ui.style.VisualEffect;
 
-@:noCompletion
-class CanvasCommandBuffer {
+internal class CanvasCommandBuffer {
 	var bytes:Bytes;
 	var length:Int;
 
@@ -21,9 +20,7 @@ class CanvasCommandBuffer {
 		length = 0;
 	}
 
-	@:noCompletion
-	@:allow(haxeon.ui.Canvas)
-	private function reset():Void
+	internal function reset():Void
 		length = 0;
 
 	public function save():Void
@@ -266,17 +263,11 @@ class CanvasCommandBuffer {
 	}
 
 	/** Internal submission bridge; public callers should use Canvas and DisplayList. */
-	@:noCompletion
-	@:allow(haxeon.ui.DisplayList)
-	@:allow(haxeon.ui.Canvas)
-	private function submit(list:nkui_display_list):NativeKitUI.UiStatus
+	internal function submit(list:nkui_display_list):NativeKitUI.UiStatus
 		return submitRange(list, 0, length);
 
 	/** Internal range submission bridge. */
-	@:noCompletion
-	@:allow(haxeon.ui.DisplayList)
-	@:allow(haxeon.ui.Canvas)
-	private function submitRange(list:nkui_display_list, offset:Int, count:Int):NativeKitUI.UiStatus {
+	internal function submitRange(list:nkui_display_list, offset:Int, count:Int):NativeKitUI.UiStatus {
 		if (offset < 0 || offset > length || count < 0 || count > length - offset)
 			throw "Command range is out of bounds";
 		return NativeKitUI.nkui_display_list_submit_slice(list, bytes, offset, count);

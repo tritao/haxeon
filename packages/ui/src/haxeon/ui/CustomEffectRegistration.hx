@@ -10,12 +10,24 @@ import haxeon.ui.style.CustomEffect;
  * the Haxe style object only carries the definition and values.
  */
 class CustomEffectRegistration {
+	/** The effect's contract: its ID, parameters and overflow. */
 	public final definition:CustomEffectDefinition;
+
+	/** Its fragment shader for desktop OpenGL (GLSL 4.10). */
 	public final glsl410Fragment:Null<String>;
+
+	/** Its fragment shader for WebGL and OpenGL ES (GLSL 3.00 ES). */
 	public final glsl300esFragment:Null<String>;
+
+	/** Its fragment shader for Direct3D (HLSL 5). */
 	public final hlsl5Fragment:Null<String>;
+
+	/** Its fragment shader for Metal on macOS. */
 	public final metalMacosFragment:Null<String>;
 
+	/**
+	 * A registration of `definition` with its shader for each backend; a backend without one cannot draw the effect.
+	 */
 	public function new(definition:CustomEffectDefinition, glsl410Fragment:Null<String> = null,
 			glsl300esFragment:Null<String> = null, hlsl5Fragment:Null<String> = null,
 			metalMacosFragment:Null<String> = null) {

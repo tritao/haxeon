@@ -74,7 +74,7 @@ class Transaction {
 		var textStyle = new TextStyle(18.0);
 		textStyle = textStyle.withLetterSpacing(-0.25);
 		var paragraphStyle = new ParagraphStyle().withWrap(TextWrap.Word);
-		var text = TextLayout.createStyled(fonts, "NativeKit — こんにちは — مرحبا", 220.0,
+		var text = TextLayout.create(fonts, "NativeKit — こんにちは — مرحبا", 220.0,
 			textStyle, paragraphStyle);
 		textStyle = textStyle.withFontSize(30.0);
 		paragraphStyle = paragraphStyle.withWrap(TextWrap.None);
@@ -93,13 +93,13 @@ class Transaction {
 			!= TextDirection.Rtl || textStyle.fontSize != 30.0 || paragraphStyle.wrap != TextWrap.None)
 			return 19;
 		var beforeColors = text.measure();
-		text.setColorRanges([new TextColorRange(0, 3, new Color(1.0, 0.0, 0.0))]);
-		text.setColor(new Color(0.0, 0.0, 1.0));
+		text.setColorRanges([new TextColorRange(0, 3, Color.rgba(1.0, 0.0, 0.0))]);
+		text.setColor(Color.rgba(0.0, 0.0, 1.0));
 		var overlapRejected = false;
 		try {
 			text.setColorRanges([
-				new TextColorRange(0, 3, new Color(1.0, 0.0, 0.0)),
-				new TextColorRange(2, 4, new Color(0.0, 1.0, 0.0))
+				new TextColorRange(0, 3, Color.rgba(1.0, 0.0, 0.0)),
+				new TextColorRange(2, 4, Color.rgba(0.0, 1.0, 0.0))
 			]);
 		} catch (_:String) {
 			overlapRejected = true;
@@ -107,7 +107,7 @@ class Transaction {
 		if (!overlapRejected)
 			return 20;
 		text.setColorRanges([]);
-		text.setColorRanges([new TextColorRange(0, 7, new Color(0.0, 0.85, 0.0))]);
+		text.setColorRanges([new TextColorRange(0, 7, Color.rgba(0.0, 0.85, 0.0))]);
 		var metrics = text.measure();
 		if (metrics.width != beforeColors.width || metrics.height != beforeColors.height)
 			return 21;

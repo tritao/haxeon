@@ -6,15 +6,26 @@ package haxeon.ui;
  * declaration; the scalar cache fingerprint is explicit and is not a map-key hash.
  */
 class LayoutStyle implements Diffable {
+	/** The box's width. */
 	public var width:LayoutAxis;
+
+	/** The box's height. */
 	public var height:LayoutAxis;
 	/** Width divided by height; zero disables aspect-ratio sizing. */
 	public var aspectRatio:Float;
+
+	/** Whether children are laid out top to bottom or left to right. */
 	public var direction:LayoutDirection;
+
+	/** Where children sit horizontally. */
 	public var childAlignX:LayoutAlignmentX;
+
+	/** Where children sit vertically. */
 	public var childAlignY:LayoutAlignmentY;
 	/** Main-axis free-space distribution policy. */
 	public var childDistribution:LayoutDistribution;
+
+	/** Whether the box flows with its siblings or is placed at its position. */
 	public var positioning:LayoutPositioning;
 	/** Controls whether children flow onto additional rows or columns. */
 	public var wrapMode:LayoutWrapMode;
@@ -24,22 +35,52 @@ class LayoutStyle implements Diffable {
 	public var columnGap:Float;
 	/** Cross-axis alignment override when this node is a child. */
 	public var alignSelf:LayoutSelfAlignment;
+
+	/** Its left edge within its parent, when placed. */
 	public var positionX:Float;
+
+	/** Its top edge within its parent, when placed. */
 	public var positionY:Float;
+
+	/** Its stacking order among siblings. */
 	public var zIndex:Int;
+
+	/** Whether its parent's clip applies to it. */
 	public var clipToParent:Bool;
 	/** Paint above ordinary content, scoped to the nearest enclosing overlay. Requires Absolute positioning. */
 	public var overlay:Bool;
+
+	/** Space between its edges and its children. */
 	public var padding:Insets;
+
+	/** Space between consecutive children. */
 	public var childGap:Float;
+
+	/** Its fill. */
 	public var background:Color;
+
+	/** Its top-left corner radius. */
 	public var radiusTopLeft:Float;
+
+	/** Its top-right corner radius. */
 	public var radiusTopRight:Float;
+
+	/** Its bottom-left corner radius. */
 	public var radiusBottomLeft:Float;
+
+	/** Its bottom-right corner radius. */
 	public var radiusBottomRight:Float;
+
+	/** Whether children are clipped at its left and right edges. */
 	public var clipHorizontal:Bool;
+
+	/** Whether children are clipped at its top and bottom edges. */
 	public var clipVertical:Bool;
+
+	/** Whether it is drawn and hit tested; hidden, it keeps its place in layout. */
 	public var visible:Bool;
+
+	/** A transform applied when compositing; layout is unaffected. */
 	public var transform:Transform2D;
 	/** Normalized horizontal pivot used after layout resolves the node width. */
 	public var transformOriginX:Float;
@@ -53,6 +94,7 @@ class LayoutStyle implements Diffable {
 
 	static final DefaultTransform:Transform2D = Transform2D.identity();
 
+	/** The default style: fit to content, top to bottom, transparent. */
 	public function new() {
 		width = LayoutAxis.fit();
 		height = LayoutAxis.fit();
@@ -112,6 +154,8 @@ typedef LayoutWrapMode = NativeKitUI.UiLayoutWrapMode;
 
 /** Whether a node participates in parent flow or floats over sibling layout. */
 enum LayoutPositioning implements Hashable {
+	/** Laid out with its siblings. */
 	Flow;
+	/** Placed at its position within its parent, outside the siblings' flow. */
 	Absolute;
 }

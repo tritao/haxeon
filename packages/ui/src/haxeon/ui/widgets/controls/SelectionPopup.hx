@@ -324,7 +324,7 @@ internal class SelectionPopup {
 	function contentWidth(context:BuildContext):Float {
 		if (context.fonts == null || visibleIndices.length == 0) return 0.0;
 		var resolved = context.resolveTextRole(TextRole.Button, TextStyleOverride.paragraph(TextWrap.None));
-		var layout = TextLayout.createStyled(context.fonts, "", 100000.0, resolved.textStyle, resolved.paragraphStyle);
+		var layout = TextLayout.create(context.fonts, "", 100000.0, resolved.textStyle, resolved.paragraphStyle);
 		var widest = 0.0;
 		for (index in visibleIndices) {
 			layout.setText(options[index].label);

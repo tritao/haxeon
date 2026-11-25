@@ -15,20 +15,24 @@ class PathBuilder {
 	var elements:Array<nkui_path_element>;
 	final elementScratch:Array<nkui_path_element> = [];
 
+	/** An empty builder. */
 	public function new() {
 		elements = [];
 	}
 
+	/** Removes everything built, and returns the builder. */
 	public function clear():PathBuilder {
 		elements.resize(0);
 		return this;
 	}
 
+	/** Starts a subpath at (`x`, `y`). */
 	public function moveTo(x:Float, y:Float):PathBuilder {
 		append(UiPathVerb.MoveTo, 2, x, y);
 		return this;
 	}
 
+	/** Adds a line to (`x`, `y`). */
 	public function lineTo(x:Float, y:Float):PathBuilder {
 		append(UiPathVerb.LineTo, 2, x, y);
 		return this;
@@ -60,28 +64,33 @@ class PathBuilder {
 		return this;
 	}
 
+	/** Adds a quadratic curve to (`x`, `y`) through its control point. */
 	public function quadraticTo(controlX:Float, controlY:Float, x:Float, y:Float):PathBuilder {
 		append(UiPathVerb.QuadraticTo, 4, controlX, controlY, x, y);
 		return this;
 	}
 
+	/** Adds a cubic curve to (`x`, `y`) through its two control points. */
 	public function cubicTo(control1X:Float, control1Y:Float, control2X:Float, control2Y:Float, x:Float,
 			y:Float):PathBuilder {
 		append(UiPathVerb.BezierTo, 6, control1X, control1Y, control2X, control2Y, x, y);
 		return this;
 	}
 
+	/** Adds an arc of `radius` tangent to the two lines through the tangent points. */
 	public function arcTo(tangent1X:Float, tangent1Y:Float, tangent2X:Float, tangent2Y:Float,
 			radius:Float):PathBuilder {
 		append(UiPathVerb.ArcTo, 5, tangent1X, tangent1Y, tangent2X, tangent2Y, radius);
 		return this;
 	}
 
+	/** Closes the subpath with a line to its start. */
 	public function close():PathBuilder {
 		append(UiPathVerb.Close);
 		return this;
 	}
 
+	/** The path built so far, as a native resource. */
 	public function build():Path {
 		if (elements.length == 0)
 			throw "Cannot build an empty path";

@@ -305,7 +305,6 @@ internal class SpinnerPainter implements Disposable {
  * instead of drawing every display refresh, and a step only repaints the spinner's own custom paint (it has no paint cache
  * key), so its frames rebuild nothing. An editor waiting on a long background job therefore idles near zero CPU.
  */
-@:noCompletion
 internal class SpinnerClock implements DelayedAnimation implements RetainedAnimation {
 	/** Visible steps per second; smooth enough for an indeterminate indicator. */
 	public static inline var StepsPerSecond:Float = 15.0;

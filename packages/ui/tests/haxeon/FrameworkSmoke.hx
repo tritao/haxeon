@@ -434,7 +434,7 @@ class FrameworkSmoke {
 			return [];
 		};
 		var canvas = new Canvas();
-		editor.layout.paint(canvas, new Color(1.0, 1.0, 1.0), 0.0, editor.layout.measure().height);
+		editor.layout.paint(canvas, Color.rgba(1.0, 1.0, 1.0), 0.0, editor.layout.measure().height);
 		var originalRanges = paintedRanges;
 		canvas.reset();
 		for (step in 0...7) {
@@ -468,7 +468,7 @@ class FrameworkSmoke {
 				> 0.001) throw "newline chunk metrics differ from fresh layout";
 			var current = new haxeon.editor.TextDocument(editor.text);
 			paintedRanges = [];
-			editor.layout.paint(canvas, new Color(1.0, 1.0, 1.0), 0.0, actualSize.height);
+			editor.layout.paint(canvas, Color.rgba(1.0, 1.0, 1.0), 0.0, actualSize.height);
 			canvas.reset();
 			if (step == 0) {
 				if (paintedRanges.length != originalRanges.length) throw "one newline repartitioned unrelated chunks";
@@ -521,17 +521,17 @@ class FrameworkSmoke {
 		var measured = editor.layout.measure();
 		var calls = 0;
 		var requestedEnd = 0;
-		var tint = new Color(1.0, 0.0, 0.0);
+		var tint = Color.rgba(1.0, 0.0, 0.0);
 		editor.layout.colorRangeProvider = function(start, end) {
 			calls++;
 			requestedEnd = end;
 			return [new TextColorRange(0, 600, tint)];
 		};
 		var canvas = new Canvas();
-		editor.layout.paint(canvas, new Color(1.0, 1.0, 1.0), 0.0, 20.0);
+		editor.layout.paint(canvas, Color.rgba(1.0, 1.0, 1.0), 0.0, 20.0);
 		if (calls != 1 || requestedEnd <= 0 || requestedEnd >= 600) return false;
-		tint = new Color(0.0, 1.0, 0.0);
-		editor.layout.paint(canvas, new Color(1.0, 1.0, 1.0), 0.0, 20.0);
+		tint = Color.rgba(0.0, 1.0, 0.0);
+		editor.layout.paint(canvas, Color.rgba(1.0, 1.0, 1.0), 0.0, 20.0);
 		var afterColors = editor.layout.measure();
 		if (calls != 2 || measured.width != afterColors.width || measured.height != afterColors.height) return false;
 		editor.layout.colorRangeProvider = function(start, end) {
@@ -539,12 +539,12 @@ class FrameworkSmoke {
 		};
 		var rejected = false;
 		try {
-			editor.layout.paint(canvas, new Color(1.0, 1.0, 1.0), 0.0, 20.0);
+			editor.layout.paint(canvas, Color.rgba(1.0, 1.0, 1.0), 0.0, 20.0);
 		} catch (_:String) {
 			rejected = true;
 		}
 		editor.layout.colorRangeProvider = null;
-		editor.layout.paint(canvas, new Color(1.0, 1.0, 1.0), 0.0, 20.0);
+		editor.layout.paint(canvas, Color.rgba(1.0, 1.0, 1.0), 0.0, 20.0);
 		editor.dispose();
 		return rejected;
 	}
@@ -559,7 +559,7 @@ class FrameworkSmoke {
 		var editor = new TextEditorState(decorationFonts, "abc🙂def\nxyz");
 		editor.updateLayout(200.0);
 		var before = editor.layout.measure();
-		var color = new Color(0.85, 0.2, 0.2);
+		var color = Color.rgba(0.85, 0.2, 0.2);
 		var background = new TextDecoration(1, 5, color, Background);
 		var rects = background.rectangles(editor.layout, 0.0, 100.0);
 		if (rects.length == 0 || rects[0].x <= 0.0 || rects[0].width <= 0.0) throw "decoration range geometry: count="

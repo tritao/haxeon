@@ -975,7 +975,7 @@ private class DockTextWidthCache {
 		var hash = haxeon.Hashing.hash(key);
 		var bucket = buckets.get(hash);
 		if (bucket != null) for (index in 0...bucket.length) if (bucket[index].key == key) return bucket[index].width;
-		var layout = TextLayout.createStyled(fonts, label, 100000.0, textStyle, paragraphStyle);
+		var layout = TextLayout.create(fonts, label, 100000.0, textStyle, paragraphStyle);
 		var width = layout.measure().width;
 		layout.dispose();
 		if (entryCount >= MAX_ENTRIES) {

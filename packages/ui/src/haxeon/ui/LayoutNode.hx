@@ -4,16 +4,27 @@ package haxeon.ui;
 import haxeon.ui.TextStyle;
 /** Render/layout node submitted to NativeUI. Haxe semantics live above it. */
 class LayoutNode {
+	/** The node's ID, unique within its tree: positive. */
 	public final id:Int;
+
+	/** What the node draws: a box, text, an image or custom content. */
 	public var visualKind:LayoutVisualKind;
+
+	/** Its layout and box style. */
 	public final style:LayoutStyle;
+
+	/** The text a text node shows. */
 	public var text:String;
+
+	/** The color of that text. */
 	public var textColor:Color;
 	/**
 	 * Most nodes never show text, so absent values use shared immutable defaults. Reading these properties allocates
 	 * nothing; assigning a complete style stores its value inline in the optional slot.
 	 */
 	public var textStyle(get, set):TextStyle;
+
+	/** How that text wraps, aligns and spaces its lines. */
 	public var paragraphStyle(get, set):ParagraphStyle;
 	var ownTextStyles:Null<LayoutTextStyles> = null;
 	/** Color is immutable, and the styles below are only ever read: every node without its own starts from these. */
@@ -41,6 +52,7 @@ class LayoutNode {
 	@:allow(haxeon.ui.LayoutTransaction)
 	var encodeStamp:Int;
 
+	/** A node of `visualKind`. Throws when `id` is not positive. */
 	public function new(id:Int, visualKind:LayoutVisualKind = LayoutVisualKind.Box,
 			?style:LayoutStyle) {
 		if (id <= 0)
@@ -113,6 +125,7 @@ class LayoutNode {
 		}
 	}
 
+	/** Appends `child`, and returns it. */
 	public function add(child:LayoutNode):LayoutNode {
 		if (child == null || child == this)
 			throw "A layout node cannot contain itself";
@@ -122,13 +135,16 @@ class LayoutNode {
 		return child;
 	}
 
+	/** Removes `child`. Returns whether it was a child. */
 	public function remove(child:LayoutNode):Bool {
 		return child != null && children.remove(child);
 	}
 
+	/** A box node. */
 	public static function box(id:Int, ?style:LayoutStyle):LayoutNode
 		return new LayoutNode(id, LayoutVisualKind.Box, style);
 
+	/** A text node showing `value`. */
 	public static function textNode(id:Int, value:String, ?style:LayoutStyle):LayoutNode {
 		var node = new LayoutNode(id, LayoutVisualKind.Text, style);
 		node.text = value == null ? "" : value;
