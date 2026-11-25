@@ -17,13 +17,25 @@ import haxeon.ui.widgets.Icon;
 
 /** Accessible icon-only button with a required non-visual label. */
 class IconButton implements ScopeView {
+	/** Identifies the button among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The icon shown. */
 	public final icon:IconName;
+
+	/** The button's accessible name, which assistive technology reads and a tooltip may show: required. */
 	public final label:String;
+
+	/** The button's box. */
 	public final style:LayoutStyle;
+
+	/** Whether the button reacts to input. */
 	public final enabled:Bool;
+
+	/** Called when the button is activated by a click, a tap, or the keyboard. */
 	public final onClick:Void->Void;
 
+	/** A button showing `icon` and named `label`. Throws when `key` or `label` is empty. */
 	public function new(key:String,
 			icon:IconName,
 			label:String,

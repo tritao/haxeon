@@ -17,16 +17,35 @@ import haxeon.ui.widgets.controls.ProgressPainter;
 
 /** Read-only progress indicator painted from a normalized numeric range. */
 class ProgressBar implements View {
+	/**
+	 * Identifies the bar among its siblings, so its animation carries on across rebuilds: required, and never empty.
+	 */
 	public final key:String;
+
+	/** What is in progress, which assistive technology announces. */
 	public final label:Null<String>;
+
+	/** How far the work has got, between `minimum` and `maximum`; ignored while `mode` is `Indeterminate`. */
 	public var value:Float;
+
+	/** The value of no progress. */
 	public final minimum:Float;
+
+	/** The value of complete progress: greater than `minimum`. */
 	public final maximum:Float;
+
+	/** The bar's box. */
 	public final style:LayoutStyle;
+
+	/** Whether the bar shows how far the work has got, or only that it is under way; `Determinate` by default. */
 	public var mode:ProgressMode;
 	/** Seconds used when a determinate value changes; zero disables interpolation. */
 	public var animationDuration:Float;
 
+	/**
+	 * A bar showing `value` between `minimum` and `maximum`, clamped into that range. Throws when `key` is empty, a
+	 * number is not finite, or the range is empty.
+	 */
 	public function new(key:String,
 			value:Float,
 			minimum:Float = 0.0,

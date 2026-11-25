@@ -14,12 +14,22 @@ import haxeon.ui.core.View;
 
 /** Shared horizontal command surface for editor and simulation controls. */
 class Toolbar implements View {
+	/** Identifies the toolbar among its siblings: required, and never empty. */
 	public final key:String;
+
+	/** The commands shown, as buttons in this order; an id the registry does not know is left out. */
 	public final commandIds:Array<String>;
+
+	/** Where the commands are looked up; the build context's registry when null. */
 	public final registry:Null<CommandRegistry>;
+
+	/** What the commands act on when invoked, passed to each command. */
 	public final invocationContext:Null<CommandContext>;
+
+	/** The toolbar's row: always left to right, 4 pixels between buttons by default. */
 	public final style:LayoutStyle;
 
+	/** A toolbar of the commands named by `commandIds`. Throws when `key` is empty. */
 	public function new(key:String, commandIds:Array<String>, ?registry:CommandRegistry,
 			?invocationContext:CommandContext, ?style:LayoutStyle) {
 		if (key == null || key.length == 0)

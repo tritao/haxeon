@@ -20,15 +20,31 @@ import haxeon.ui.widgets.Icon;
 
 /** Reusable single-line search input with leading affordance and clear action. */
 class SearchField implements View {
+	/** Identifies the field among its siblings, so its text and focus survive rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The query. */
 	public var value:String;
+
+	/** The hint shown while the query is empty; "Search" by default. */
 	public var placeholder:String;
+
+	/** The field's accessible name; the placeholder unless set. */
 	public var label:String;
+
+	/** Whether the field accepts input. */
 	public var enabled:Bool;
+
+	/** The field's box, with the search icon before the text. */
 	public final style:LayoutStyle;
+
+	/** Called with the query after each edit. */
 	public var onChange:Null<String->Void>;
+
+	/** Called with the query when the user presses Enter. */
 	public var onSubmit:Null<String->Void>;
 
+	/** A search field showing `value`. Throws when `key` is empty. */
 	public function new(key:String,
 			value:String = "",
 			?onChange:String->Void,

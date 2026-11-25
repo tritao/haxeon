@@ -18,6 +18,7 @@ import haxeon.ui.widgets.text.Text;
 /** Compact, decorative count inside the containing control's accessible label. */
 class CountBadge implements View {
 	final count:Int;
+	/** A badge showing `count`, for a control whose own accessible label already says it. */
 	public function new(count:Int) this.count = count;
 	public function build(context:BuildContext):RenderNode {
 		var style = new LayoutStyle();

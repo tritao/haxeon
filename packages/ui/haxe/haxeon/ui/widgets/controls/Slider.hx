@@ -26,17 +26,36 @@ import haxeon.ui.style.StyleTarget;
  * show a visible label, usually with the value, beside it.
  */
 class Slider implements View {
+	/** Identifies the slider among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
 	/** The name assistive technology announces; not drawn. */
 	public final accessibleName:String;
+	/** The current value, between `minimum` and `maximum`. */
 	public var value:Float;
+
+	/** The value at the start of the track. */
 	public final minimum:Float;
+
+	/** The value at the end of the track: greater than `minimum`. */
 	public final maximum:Float;
+
+	/** The increment the arrow keys move by and a drag snaps to. */
 	public final step:Float;
+
+	/** Whether the slider reacts to input. */
 	public var enabled:Bool;
+
+	/** Called with each new value as the user moves the thumb. */
 	public var onChange:Null<Float->Void>;
+
+	/** The slider's box. */
 	public final style:LayoutStyle;
 
+	/**
+	 * A slider from `minimum` to `maximum` showing `value`, clamped into that range. Throws when a number is not finite,
+	 * the range is empty, or `step` is not positive.
+	 */
 	public function new(key:String,
 			accessibleName:String,
 			value:Float,

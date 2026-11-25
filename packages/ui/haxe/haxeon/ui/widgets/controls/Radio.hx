@@ -25,14 +25,28 @@ import haxeon.ui.theme.TextRole;
 /** Selectable radio option; use RadioGroup for exclusive selection and arrow keys. */
 class Radio implements View {
 	final key:Key;
+	/** The text beside the button, and its accessible name. */
 	public final label:String;
-	public final value:String;
-	public var selected:Bool;
-	public var enabled:Bool;
-	public final style:LayoutStyle;
-	public var onSelect:String->Void;
-	public var hasSelectHandler(default, null):Bool;
 
+	/** What choosing this button selects: never empty. */
+	public final value:String;
+
+	/** Whether this is the chosen button of its group. */
+	public var selected:Bool;
+
+	/** Whether the button reacts to input. */
+	public var enabled:Bool;
+
+	/** The button's row. */
+	public final style:LayoutStyle;
+
+	/** Called with `value` when the user chooses this button. */
+	public var onSelect:String->Void;
+	var hasSelectHandler:Bool;
+
+	/**
+	 * A single radio button; `RadioGroup` lays out a set of them and keeps one chosen. Throws when `value` is empty.
+	 */
 	public function new(key:String,
 			label:String,
 			value:String,

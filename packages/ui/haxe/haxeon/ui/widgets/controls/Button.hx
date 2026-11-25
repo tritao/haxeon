@@ -26,30 +26,46 @@ import haxeon.ui.theme.TextRole;
 
 /** Compositional Haxe button; the native engine sees only box and text nodes. */
 class Button implements ScopeView {
+	/** Identifies the button among its siblings, so its state survives rebuilds; defaults to the label. */
 	public final key:String;
+
+	/** The visible text, and the accessible name unless `accessibilityLabel` gives one. */
 	public final label:String;
+
 	/** Optional full name when compact visible text abbreviates an action. */
 	public final accessibilityLabel:Null<String>;
 	/** Optional label presentation; the button retains its full semantic label. */
 	public final labelView:Null<View>;
 	/** Fit a single-line label within the button content area. */
 	public final ellipsizeLabel:Bool;
+	/** The button's box: always laid out left to right with its content centred vertically, 8 pixels apart by default. */
 	public final style:LayoutStyle;
+
 	/** Typed selector classes used by composite controls and application styles. */
 	public final classes:Array<String>;
 	/** Theme-backed visual treatment; defaults to Secondary. Request Primary for the main action. */
 	public final variant:ButtonVariant;
+	/** Whether the button reacts to input; a disabled button is shown dimmed and never activates. */
 	public final enabled:Bool;
+
+	/** Shown as the current choice, as in a toggle group or a tab bar, and reported as selected to accessibility. */
 	public final selected:Bool;
+
 	/** Optional decorative icons rendered inside the button's single hit target. */
 	public final leadingIcon:Null<IconName>;
 	/** Custom decorative view inside the same button hit target. */
 	public final leadingView:Null<View>;
+	/** Custom decorative view after the label, inside the same hit target. */
 	public final trailingView:Null<View>;
+
+	/** Optional decorative icon after the label, such as a chevron for a menu. */
 	public final trailingIcon:Null<IconName>;
+
+	/** The size of the leading and trailing icons, in logical pixels; 16 by default. */
 	public final iconSize:Float;
 	final semanticDescription:Semantics;
 	final activation:Null<UiEvent->Void>;
+	/** Called when the button is activated by a click, a tap, or the keyboard. */
 	public final onClick:Void->Void;
 	/** Optional event-aware activation, useful for positioning a menu by its trigger. */
 	public final onClickEvent:Null<UiEvent->Void>;
@@ -57,6 +73,10 @@ class Button implements ScopeView {
 	var firstTarget:Null<StyleTarget> = null;
 	var otherTargets:Null<Array<StyleTarget>> = null;
 
+	/**
+	 * A button showing `label`. Every other argument is optional: `variant` picks the theme's treatment (Secondary by
+	 * default), and `semantics` replaces the accessible description the button derives from its label and state.
+	 */
 	public function new(label:String,
 			?style:LayoutStyle,
 			?onClick:Void->Void,

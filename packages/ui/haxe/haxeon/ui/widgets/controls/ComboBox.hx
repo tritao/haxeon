@@ -23,17 +23,38 @@ import haxeon.ui.semantics.Semantics;
 /** Typed editable selection control with filtered, keyboard-navigable options. */
 class ComboBox<T> implements View {
 	final key:Key;
+	/** The choices, each with a unique key, in the order the list shows them. */
 	public final options:Array<SelectOption<T>>;
+
+	/** The selected option's value. */
 	public var value:T;
+
+	/** Whether the field reacts to input; true unless set otherwise. */
 	public var enabled:Bool;
+
+	/** The field's box; 40 pixels high unless it sets a height. */
 	public var style:LayoutStyle;
+
+	/** The hint shown while the query is empty; "Search" by default. */
 	public var placeholder:String;
+
+	/** Called with the value of the option the user picks. */
 	public var onChange:T->Void;
+
+	/** Called with the query each time the user edits it, for a caller that loads its options as the user types. */
 	public var onQueryChange:String->Void;
-	public var hasChangeHandler(default, null):Bool;
-	public var hasQueryChangeHandler(default, null):Bool;
+
+	/** Whether the caller passed `onChange`, which otherwise does nothing. */
+	var hasChangeHandler:Bool;
+
+	/** Whether the caller passed `onQueryChange`, which otherwise does nothing. */
+	var hasQueryChangeHandler:Bool;
 	final usesDefaultStyle:Bool;
 
+	/**
+	 * A field that filters `options` by what the user types and selects one, showing `value` to start with. Throws when
+	 * `key` is empty or two options share a key.
+	 */
 	public function new(key:String,
 			options:Array<SelectOption<T>>,
 			value:T,

@@ -18,12 +18,20 @@ import haxeon.ui.widgets.controls.RadioOption;
 /** Exclusive radio options with stable selected state and arrow-key traversal. */
 class RadioGroup implements View {
 	final key:Key;
+	/** The choices, in the order shown; keys and values are unique. */
 	public final options:Array<RadioOption>;
-	public var value:String;
-	public final style:LayoutStyle;
-	public var onChange:String->Void;
-	public var hasChangeHandler(default, null):Bool;
 
+	/** The chosen option's value. A disabled or unknown value gives way to the first enabled option. */
+	public var value:String;
+
+	/** The group's box, which stacks its buttons. */
+	public final style:LayoutStyle;
+
+	/** Called with the newly chosen value when the user picks another option. */
+	public var onChange:String->Void;
+	var hasChangeHandler:Bool;
+
+	/** A group of radio buttons for `options`, with `value` chosen. Throws when two options share a key or a value. */
 	public function new(key:String,
 			options:Array<RadioOption>,
 			value:String,

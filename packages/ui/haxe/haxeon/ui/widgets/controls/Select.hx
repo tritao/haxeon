@@ -23,16 +23,29 @@ import haxeon.ui.widgets.controls.SelectionPopup;
 /** Typed single-selection control with a positioned, keyboard-navigable option list. */
 class Select<T> implements View {
 	final key:Key;
+	/** The choices, each with a unique key, in the order the list shows them. */
 	public final options:Array<SelectOption<T>>;
+
+	/** The selected option's value. */
 	public var value:T;
+
+	/** Whether the control reacts to input. */
 	public var enabled:Bool;
+
+	/** The control's box; 36 pixels high unless it sets a height. */
 	public final style:LayoutStyle;
+
+	/** Called with the value of the option the user picks. */
 	public var onChange:T->Void;
-	public var hasChangeHandler(default, null):Bool;
+	var hasChangeHandler:Bool;
 
 	/** The control's accessible name; without one it is named by the selected option. */
 	public var accessibilityLabel:Null<String> = null;
 
+	/**
+	 * A drop-down list of `options` showing the one whose value is `value`. Throws when `key` is empty or two options
+	 * share a key.
+	 */
 	public function new(key:String, options:Array<SelectOption<T>>, value:T, ?onChange:T->Void, ?style:LayoutStyle) {
 		if (key == null || key.length == 0) throw "Select requires a stable non-empty key";
 		this.key = new Key(key);

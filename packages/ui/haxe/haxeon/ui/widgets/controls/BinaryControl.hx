@@ -30,19 +30,31 @@ import haxeon.ui.theme.TextRole;
 
 /** Shared Haxe implementation for checkbox and switch-style boolean controls. */
 class BinaryControl implements View implements Observable {
+	/** Identifies the control among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The text beside the box or switch, and its accessible name unless `accessibilityLabel` gives one. */
 	public final label:String;
 
 	/** Names the control for assistive technology when its visible label is elsewhere, as in a property row. */
 	public var accessibilityLabel:Null<String> = null;
+	/** Whether the control is on. Activation flips it and then calls `onChange` with the new value. */
 	public var checked:Bool;
+
 	/** Checkbox aggregate state; activation clears it and toggles checked. */
 	public var indeterminate:Bool = false;
+	/** Whether the control reacts to input; true unless set otherwise. */
 	public var enabled:Bool;
+
+	/** Called with the new value after the user turns the control on or off. */
 	public var onChange:Null<Bool->Void>;
 	final toggle:Bool;
 	final style:LayoutStyle;
 
+	/**
+	 * A control labelled `label`, shown as a switch when `toggle` and as a checkbox otherwise; `Checkbox` and `Toggle` pick
+	 * one. Its row is 32 pixels high unless `style` sets a height. Throws when `key` is empty.
+	 */
 	public function new(key:String, label:String, checked:Bool, toggle:Bool, ?onChange:Bool->Void, ?style:LayoutStyle) {
 		if (key == null || key.length == 0) throw "Boolean controls require a stable key";
 		this.key = key;

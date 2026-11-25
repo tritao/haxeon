@@ -15,15 +15,27 @@ import haxeon.ui.semantics.Semantics;
 
 /** Indeterminate progress indicator rendered from reusable procedural paths. */
 class Spinner implements View {
+	/** Identifies the spinner among its siblings, so its animation carries on across rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** What is loading, which assistive technology announces; "Loading" by default. */
 	public final label:String;
+
+	/** The animation drawn. */
 	public final kind:SpinnerKind;
+
+	/** The color drawn in; the theme's accent when null. */
 	public final color:Null<Color>;
+
+	/** How fast the animation runs, relative to its normal pace: finite and positive. */
 	public final speed:Float;
+
+	/** The spinner's box. */
 	public final style:LayoutStyle;
 	/** When false, the spinner holds its current frame and is not scheduled. */
 	public var running:Bool;
 
+	/** A running spinner. Throws when `key` is empty or `speed` is not finite and positive. */
 	public function new(key:String,
 			?label:String,
 			?style:LayoutStyle,

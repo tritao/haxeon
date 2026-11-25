@@ -33,18 +33,30 @@ import haxeon.ui.widgets.scroll.ScrollView;
 /** Scrollable tab strip and selected page composed from Haxe buttons and views. */
 class Tabs implements View {
 	final key:Key;
+	/** The tabs, in header order. */
 	public final items:Array<TabItem>;
+
+	/** The key of the selected tab; an empty or unknown key selects the first enabled tab. */
 	public var selectedKey:String;
 	/** Whether selection is retained locally or supplied by the caller. */
 	public var selectionMode(default, null):TabsSelectionMode;
+	/** The box holding the header strip and the selected page. */
 	public final style:LayoutStyle;
+
+	/** Called with the key of the tab the user selects. */
 	public var onChange:String->Void;
-	public var hasChangeHandler(default, null):Bool;
+	var hasChangeHandler:Bool;
 	/** Optional pointer-drag lifecycle used by generic dock workspaces. */
 	public var onTabDragStart:Null<String->UiEvent->Void>;
+	/** Called with the dragged tab's key as the pointer moves during a tab drag. */
 	public var onTabDragMove:Null<String->UiEvent->Void>;
+
+	/** Called with the dragged tab's key when the pointer is released. */
 	public var onTabDragEnd:Null<String->UiEvent->Void>;
+
+	/** Called with the dragged tab's key when a tab drag is abandoned, as by Escape or a lost pointer capture. */
 	public var onTabDragCancel:Null<String->UiEvent->Void>;
+
 	/** Requests a menu for an enabled tab without changing the selected page. */
 	public var onTabContextMenu:Null<String->UiEvent->Void>;
 	/** Called after each header is built so dock hosts can register geometry. */
@@ -57,6 +69,10 @@ class Tabs implements View {
 	/** Overrides the default scrolling viewport; the caller owns overflow and selected-tab reveal. */
 	public var transformHeaderStrip:Null<(RenderNode, BuildContext) -> RenderNode>;
 
+	/**
+	 * A tab strip over `items` with `selectedKey` selected. The drag callbacks and `selectionMode` are for dock hosts;
+	 * `withOptions` sets these and the rest by name.
+	 */
 	public function new(key:String,
 			items:Array<TabItem>,
 			selectedKey:String = "",
