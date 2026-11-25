@@ -830,13 +830,12 @@ class FrontendCompilation {
 
 	/**
 	 * The key of `fn` in the generation kind (`SessionState.irGeneration`), which holds `fn` or an equal function once this returns:
-	 * a module's function is put unless the kind holds that very object, as it does unless an edit or a rollback replaced it. The
-	 * check is typed here, as the kind's own would be a dynamic one.
+	 * a module's function is put, which costs a comparison of identity when the kind holds that very object, as it does unless an
+	 * edit or a rollback replaced it.
 	 */
 	static inline function generated(state:SessionState, fn:IrFunction):Int {
 		var key = fn.symbol.id;
-		if (state.irGeneration.kept(key) != fn)
-			state.irGeneration.put(state.queries, key, fn);
+		state.irGeneration.put(state.queries, key, fn);
 		return key;
 	}
 

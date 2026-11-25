@@ -18,7 +18,11 @@ import compiler.query.QueryKind.QueryRead;
  * for a read of a key verified in the revision (`QueryKindBase.changeIfVerified`). A computation that throws ends the build: the
  * next build drops the frames it left (`QueryDatabase.newRevision`), and the marks of the keys it was busy with are of the
  * revision it ended in.
+ *
+ * `@:generic`, so each value type has a kind of its own: an erased one reads its values through the any-array accessor and casts
+ * them at the caller, calls `same` through an adapter that casts both arguments, and compares two values dynamically.
  */
+@:generic
 class ComputedQueryKind<V> extends QueryKindBase {
 	final same:(V, V) -> Bool;
 	final compute:Null<(QueryDatabase, Int) -> V>;
@@ -146,7 +150,7 @@ class ComputedQueryKind<V> extends QueryKindBase {
 		keepReads(key, verified != 0, recorded);
 		verifiedAt[key] = revision;
 		computedAt[key] = revision;
-		if (verified != 0 && same(values[key], value))
+		if (verified != 0 && (values[key] == value || same(values[key], value)))
 			return values[key];
 		if (verified == 0)
 			grown = true;
@@ -160,13 +164,12 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	 * made of a typed function, an object of the typed program), and returns the value kept: the memo's when it is `same` (early
 	 * cutoff), else `value`, changed now. Such a key holds until its stage puts it again, which it does in every build before
 	 * anything reads it. A key read in this revision changes in a revision of its own, so what read the old value does not hold over
-	 * the new one. A stage puts the same object again often, so `same` should answer that first, typed: an `==` here, on the type
-	 * parameter, is a dynamic comparison and costs many times more.
+	 * the new one. A stage puts the same object again most of the time, which is found without calling `same`.
 	 */
 	public function put(database:QueryDatabase, key:Int, value:V):V {
 		var revision = database.revision, verified = key < verifiedAt.length ? verifiedAt[key] : 0;
 		usedAt = revision;
-		if (verified != 0 && same(values[key], value)) {
+		if (verified != 0 && (values[key] == value || same(values[key], value))) {
 			verifiedAt[key] = revision;
 			return values[key];
 		}

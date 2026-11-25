@@ -292,9 +292,11 @@ class IrLineage {
 			lineage.sweep();
 		for (index in 0...functions.length) {
 			var fn = functions[index];
-			// Most of the input is the function the kind holds: that is checked typed, as the kind's own check is dynamic.
-			if (database != null && inputs != null && inputs.kept(fn.symbol.id) != fn)
-				functions[index] = fn = inputs.put(database, fn.symbol.id, fn);
+			if (database != null && inputs != null) {
+				var kept = inputs.put(database, fn.symbol.id, fn);
+				if (kept != fn)
+					functions[index] = fn = kept;
+			}
 			var slot = lineage.slots.of(fn);
 			lineage.setAt(slot, fn, lineage.inputVersion(slot, fn));
 		}
