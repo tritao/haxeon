@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # `internal` (docs/reference/LANGUAGE_SUPPORT.md): a package's internal types and members serve all of its own modules, and
-# another package that names, constructs or reaches them gets E1031; its API description leaves them out.
+# another package that names, constructs or reaches them gets E1031, as does a public declaration that exposes one; its API
+# description marks them.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -131,8 +132,28 @@ expect_internal "" "new Label(\"x\").invalidate();" "an internal method" "invali
 expect_internal "" "var measured = new Label(\"x\").measured;" "an internal field" "measured"
 expect_internal "" "widgets.layout.Measure.padding();" "an internal module-level function" "padding"
 
-# The description of `widgets` leaves its internals out.
+# A declaration other packages see cannot expose an internal type: its users could not name what they hold.
+cat > "$work/widgets/src/widgets/Leak.hx" <<'HAXE'
+package widgets;
+
+class Leak {
+	public static function measure():widgets.layout.Measure {
+		return null;
+	}
+}
+HAXE
 cd "$work/widgets"
+# A library has no entry: `doc` analyzes it whole.
+if "$haxeon" doc --output "$work/api.json" > "$work/out.txt" 2>&1 || ! grep -q "E1031" "$work/out.txt" \
+	|| ! grep -q "widgets.Leak.measure is public but exposes widgets.layout.Measure" "$work/out.txt"; then
+	echo "FAIL: a public method exposing an internal type was not E1031:" >&2
+	cat "$work/out.txt" >&2
+	exit 1
+fi
+# An internal or private member may name it.
+sed -i 's/public static function measure/internal static function measure/' "$work/widgets/src/widgets/Leak.hx"
+
+# The description of `widgets` leaves its internals out.
 "$haxeon" doc --output "$work/api.json"
 python3 - "$work/api.json" <<'PY'
 import json

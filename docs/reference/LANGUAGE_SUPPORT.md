@@ -145,7 +145,10 @@ The current subset includes:
   `internal` type, or an `internal` field, property, method or module-level function or variable, can be used by any code
   of the package that declares it, and nowhere else: naming it, constructing it or reaching one of its members from
   another package is `E1031`. A package is a [manifest](MANIFEST.md) package, its source roots together; a project's own
-  sources are its package. Every member of an internal type is internal. `@:allow`, `@:access` and `@:privateAccess`
+  sources are its package. Every member of an internal type is internal. What other packages see may not name an internal
+  type either: a public declaration's supertypes and constraints, a typedef's type, an abstract's underlying and
+  conversion types, an enum constructor's arguments, and its public members' types (`E1031`), since its users could not
+  name what they hold. `@:allow`, `@:access` and `@:privateAccess`
   open `private`, not `internal`. Internal declarations are left out of a package's API reference (`haxeon doc`). It is
   a modifier only where one is written, so `internal` stays usable as a name, a package included.
 

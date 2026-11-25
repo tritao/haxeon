@@ -250,10 +250,12 @@ More than one import supplies the name used at this location. Qualify the refere
 
 The code cannot access the constructor or member under its visibility rules. Use an accessible API or change visibility if the member is intended to be public.
 
-## E1031: Internal declaration used outside its package
+## E1031: Internal declaration used or exposed outside its package
 
 An `internal` type or member belongs to the package that declares it: only that package's code can name it, construct it or
-reach its members. Use the package's public API instead, or make the declaration public if it is meant for other packages.
+reach its members, and a public declaration may not expose an internal type in what other packages see of it (a public
+method's argument or result, a supertype, a typedef's type). Use the package's public API instead, make the exposing
+declaration internal too, or make the internal declaration public if it is meant for other packages.
 Here the `widgets` package declares `internal class LayoutCache`, and an application that depends on it uses it:
 
 ```haxe

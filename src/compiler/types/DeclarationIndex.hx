@@ -334,6 +334,7 @@ class DeclarationIndex {
 
 	public function validateProgramSignatures(program:AstProgram):Void {
 		validateSignatures(program);
+		InternalExposure.check(program, internalTypes);
 		validateInheritedMethods(program);
 		conversions.validate();
 	}
