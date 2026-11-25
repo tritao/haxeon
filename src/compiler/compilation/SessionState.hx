@@ -62,8 +62,17 @@ class SessionState {
 	/** The purity and no-return facts of the last canonical program (`SemanticAssembly`), while it is made of the same modules. */
 	public var programFacts:Null<compiler.semantic.ProgramFacts.InferredProgramFacts> = null;
 
+	/**
+	 * The session's query database (`docs/design/QUERY_ENGINE.md`): the build inputs. Every copy shares it, as an input is set
+	 * outside builds.
+	 */
+	public var queries(default, null):compiler.query.QueryDatabase;
+
 	/** The facts typed units read (`DeclarationFacts`); every copy shares it, as a print only moves forward. */
-	public var declarationFacts(default, null) = new compiler.semantic.DeclarationFacts();
+	public var declarationFacts(default, null):compiler.semantic.DeclarationFacts;
+
+	/** What the builds are made from, as the database's inputs (`BuildInputs`). */
+	public var inputs(default, null):BuildInputs;
 	public var publishedAbi:Null<RuntimeAbiDescriptor> = null;
 	public var compiledOnce = false;
 
@@ -215,9 +224,19 @@ class SessionState {
 		}
 	}
 
+	/** A state of its own, or, given `sharing`, one sharing its query database, as a copy of it does. */
 	public function new(types:TypeRegistry, genericSpecializations:GenericSpecializationRegistry,
-			backend:BackendSession) {
+			backend:BackendSession, ?sharing:SessionState) {
 		semanticWorkspace = new SemanticWorkspace(modules);
+		if (sharing == null) {
+			queries = new compiler.query.QueryDatabase();
+			declarationFacts = new compiler.semantic.DeclarationFacts();
+			inputs = new BuildInputs(queries);
+		} else {
+			queries = sharing.queries;
+			declarationFacts = sharing.declarationFacts;
+			inputs = sharing.inputs;
+		}
 		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(irVersions);
 		this.types = types;
 		this.genericSpecializations = genericSpecializations;
@@ -231,7 +250,7 @@ class SessionState {
 	 */
 	public function copyForCandidate(?startingBackend:BackendSession):SessionState {
 		var result = new SessionState(types.copy(), genericSpecializations.copy(),
-			(startingBackend == null ? backend : startingBackend).forCandidate());
+			(startingBackend == null ? backend : startingBackend).forCandidate(), this);
 		for (name => state in modules)
 			result.modules.set(name, state);
 		result.objectCache = objectCache.copy();
@@ -241,7 +260,6 @@ class SessionState {
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
 		result.programFacts = programFacts;
-		result.declarationFacts = declarationFacts;
 		result.publishedAbi = publishedAbi;
 		result.compiledOnce = compiledOnce;
 		result.rehydrationBaseline = rehydrationBaseline;

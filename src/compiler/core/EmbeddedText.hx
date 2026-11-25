@@ -49,9 +49,12 @@ class EmbeddedText {
 	public function inputs():Array<EmbeddedInput>
 		return values == null ? [] : [for (value in values) value.input];
 
-	public static function changed(input:EmbeddedInput):Bool {
-		return try Sha256.make(File.getBytes(input.path)).toHex() != input.digest catch (_:Dynamic) true;
-	}
+	public static function changed(input:EmbeddedInput):Bool
+		return currentDigest(input.path) != input.digest;
+
+	/** The digest of the file at `path` as it is now, or an empty string when it cannot be read. */
+	public static function currentDigest(path:String):String
+		return try Sha256.make(File.getBytes(path)).toHex() catch (_:Dynamic) "";
 
 	static function error(message:String, span:SourceSpan):CompileError
 		return new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, span));

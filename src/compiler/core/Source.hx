@@ -184,6 +184,10 @@ class SourceFile {
 	/** Stable FNV-1a identity of the UTF-8 source snapshot used for compilation. */
 	public function contentHash():Int
 		return hash;
+
+	/** The second, independent hash of the snapshot: with `contentHash`, its 64-bit identity. */
+	public function secondContentHash():Int
+		return secondHash;
 }
 
 /**

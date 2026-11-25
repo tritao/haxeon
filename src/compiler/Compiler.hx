@@ -250,8 +250,7 @@ class Compiler {
 	public var options(default, set):CompileOptions = new CompileOptions();
 
 	function set_options(value:CompileOptions):CompileOptions {
-		if (value.key() != options.key())
-			sourceGeneration++;
+		state.inputs.setOptions(value.key());
 		if (value.scriptModule != options.scriptModule) {
 			// Both modules need to be parsed again when their grammar changes.
 			for (name in [options.scriptModule, value.scriptModule]) {
@@ -273,8 +272,8 @@ class Compiler {
 	public final ffi:FfiRegistry;
 
 	final publication = new CompilerPublication();
-	var sourceGeneration = 0;
-	var cachedCompileGeneration = -1;
+	/** The input revision (`BuildInputs`) the cached result was built at. */
+	var cachedCompileRevision = -1;
 	var cachedCompileEntry:Null<String>;
 	var cachedCompileResult:Null<CompileResult>;
 
@@ -308,6 +307,7 @@ class Compiler {
 				beginRehydration(assembler);
 			}
 		}
+		state.inputs.setOptions(options.key());
 		ffi = new FfiRegistry(projectedFfiModule);
 		if (ffiConfiguration != null) {
 			for (source in ffiConfiguration.interfaceSources())
@@ -396,6 +396,7 @@ class Compiler {
 	public function addFfiInterface(path:String, source:String):Void {
 		if (state.compiledOnce)
 			throw new InternalError("FFI interfaces are frozen after the first compilation");
+		state.inputs.addFfiSource("interface", path, source);
 		ffi.registerInterface(path, source);
 	}
 
@@ -403,15 +404,17 @@ class Compiler {
 	public function addFfiProjection(path:String, source:String):Void {
 		if (state.compiledOnce)
 			throw new InternalError("FFI projections are frozen after the first compilation");
+		state.inputs.addFfiSource("projection", path, source);
 		ffi.registerProjection(path, source);
 	}
 
-	/** A module the FFI registry projected from an interface: a source update, or with no text a change of the build inputs. */
+	/**
+	 * A module the FFI registry projected from an interface: a source update. One with no text changes nothing beyond the
+	 * interface's registration, which is an input of its own.
+	 */
 	function projectedFfiModule(path:String, source:String):Void
 		if (source.length > 0)
 			update(path, source);
-		else
-			sourceGeneration++;
 
 	/** Modules compiled with every entry, whatever it imports: what a host calls into (haxeon.wasm.HostError). */
 	public final rootModules:Array<String> = [];
@@ -434,7 +437,7 @@ class Compiler {
 		if (sameExportedFunctions(unique, exportedFunctions))
 			return;
 		exportedFunctions = unique;
-		sourceGeneration++;
+		state.inputs.setExports(unique);
 	}
 
 	static function sameExportedFunctions(first:Array<String>, second:Array<String>):Bool {
@@ -449,20 +452,20 @@ class Compiler {
 	/** Add a filesystem root whose modules are loaded on demand during resolution. */
 	public function addSourceRoot(path:String):Void {
 		sourceLoader.addRoot(path);
-		sourceGeneration++;
+		state.inputs.addSourceRoot("source:" + path);
 	}
 
 	/** Register the compiler-owned standard library root separately from project source roots. */
 	public function addStandardLibrarySourceRoot(path:String):Void {
 		sourceLoader.addStandardLibraryRoot(path);
 		sourceLoader.addPortableLibraryRoot(path);
-		sourceGeneration++;
+		state.inputs.addSourceRoot("standard:" + path);
 	}
 
 	/** Add a package-scoped source root for a resolved local dependency. */
 	public function addPackageSourceRoot(packageName:String, path:String):Void {
 		sourceLoader.addPackageRoot(packageName, path);
-		sourceGeneration++;
+		state.inputs.addSourceRoot("package:" + packageName + "=" + path);
 	}
 
 	public function compact(entryModule:String):CompileResult {
@@ -496,7 +499,7 @@ class Compiler {
 			state = new ModuleState(name, file);
 			modules.set(name, state);
 		}
-		sourceGeneration++;
+		this.state.inputs.setSource(name, file);
 		return state;
 	}
 
@@ -508,7 +511,7 @@ class Compiler {
 		if (state.loadedText != source) {
 			state.update(new SourceFile(state.source.path, source, state.source.isStandardLibrarySource,
 				state.source.physicalPath));
-			sourceGeneration++;
+			this.state.inputs.setSource(name, state.source);
 		}
 	}
 
@@ -520,7 +523,7 @@ class Compiler {
 		modules.remove(name);
 		state.declarationOwners.release(name);
 		graph.rebuild(modules);
-		sourceGeneration++;
+		state.inputs.removeSource(name);
 		return true;
 	}
 
@@ -572,7 +575,9 @@ class Compiler {
 				module.render(new SourceFile(module.source.path, module.source.text,
 					module.source.isStandardLibrarySource, module.source.physicalPath));
 		}
-		sourceGeneration++;
+		state.inputs.setConfiguration(identity, scopeIdentity);
+		state.inputs.setTarget(isWasmTarget()
+			? compiler.ir.pipeline.TargetProfile.wasm : compiler.ir.pipeline.TargetProfile.hashLink);
 	}
 
 	/**
@@ -658,9 +663,13 @@ class Compiler {
 				continue;
 			for (input in module.embeddedInputs)
 				if (compiler.core.EmbeddedText.changed(input)) {
+					// What the parse read is the input: its files as they are now, which the next parse reads.
+					state.inputs.setEmbedded(module.name, [
+						for (read in module.embeddedInputs)
+							read.path + "=" + compiler.core.EmbeddedText.currentDigest(read.path)
+					].join("\n"));
 					module.render(new SourceFile(module.source.path, module.source.text,
 						module.source.isStandardLibrarySource, module.source.physicalPath));
-					sourceGeneration++;
 					break;
 				}
 		}
@@ -671,7 +680,7 @@ class Compiler {
 		var cached = cachedCompileResult, cachedEntry = cachedCompileEntry;
 		if (!publication.status().tracking
 			&& cached != null
-			&& cachedCompileGeneration == sourceGeneration
+			&& cachedCompileRevision == state.queries.inputRevision
 			&& cachedEntry != null
 			&& cachedEntry == entryModule) {
 			if (token != null)
@@ -770,7 +779,7 @@ class Compiler {
 	}
 
 	function rememberCompile(entryModule:String, result:CompileResult):Void {
-		cachedCompileGeneration = sourceGeneration;
+		cachedCompileRevision = state.queries.inputRevision;
 		cachedCompileEntry = entryModule;
 		cachedCompileResult = result;
 	}
