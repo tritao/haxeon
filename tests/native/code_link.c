@@ -128,6 +128,9 @@ typedef struct {
 	buf dense_globals, dense_natives;
 	unit_fn fns[64];
 	int nfns;
+	/* Debug sub-sections after the functions: kind, version, flags, size and payload each. */
+	buf debug_sections;
+	int ndebug_sections;
 } unit;
 
 static unit *unit_new( const char *path, bool debug ) {
@@ -340,6 +343,17 @@ static void section_payload( unit *u, buf *b ) {
 	b_buf(b, &u->types);
 	b_buf(b, &u->constants);
 	for(int i=0;i<u->nfns;i++) fn_body(u, b, u->fns + i);
+	b_index(b, u->ndebug_sections);
+	b_buf(b, &u->debug_sections);
+}
+
+static void debug_section( unit *u, int kind, int flags, const char *payload ) {
+	b_index(&u->debug_sections, kind);
+	b_index(&u->debug_sections, 1);
+	b_index(&u->debug_sections, flags);
+	b_index(&u->debug_sections, (int)strlen(payload));
+	b_raw(&u->debug_sections, payload, (int)strlen(payload));
+	u->ndebug_sections++;
 }
 
 static void section_bytes( unit *u, buf *b, bool lz4 ) {
@@ -583,6 +597,38 @@ static void same_code( const char *what, hl_code *l, hl_code *d ) {
 	if( failures == before ) printf("ok: %s\n", what);
 }
 
+static bool read_file( const char *path, buf *b ) {
+	FILE *f = fopen(path, "rb");
+	char chunk[65536];
+	size_t n;
+	if( f == NULL ) return false;
+	while( (n = fread(chunk, 1, sizeof(chunk), f)) > 0 ) b_raw(b, chunk, (int)n);
+	fclose(f);
+	return true;
+}
+
+/*
+	`--compare SECTIONED DENSE`: the loader's link of an HLB 9 file holds the same tables, functions and function names as the
+	HLB 8 file the compiler's static link (`haxeon dev hl-link`) makes of it.
+*/
+static int compare_files( const char *sectioned, const char *dense ) {
+	buf a = { 0 }, b = { 0 };
+	char *error = NULL;
+	hl_code *l, *d;
+	if( !read_file(sectioned, &a) || !read_file(dense, &b) ) { fprintf(stderr, "compare: cannot read the files\n"); return 1; }
+	l = hl_code_read(a.d, a.len, &error);
+	if( l == NULL ) { fprintf(stderr, "compare: %s does not link: %s\n", sectioned, error ? error : ""); return 1; }
+	d = hl_code_read(b.d, b.len, &error);
+	if( d == NULL ) { fprintf(stderr, "compare: %s does not read: %s\n", dense, error ? error : ""); return 1; }
+	check(l->version == 9 && d->version == 8, "compare: an HLB 9 file and an HLB 8 file");
+	same_code("the loader's link equals the static link", l, d);
+	for(int i=0;i<l->nfunctions && i<d->nfunctions;i++)
+		check(l->function_names[i] && d->function_names[i] && strcmp(l->function_names[i], d->function_names[i]) == 0
+			&& l->function_stable_ids[i] == d->function_stable_ids[i], "function %d's name and stable id", i);
+	printf("%s: %d functions, %d types, %d globals, %d strings\n", failures ? "FAIL" : "PASS", l->nfunctions, l->ntypes, l->nglobals, l->nstrings);
+	return failures ? 1 : 0;
+}
+
 // ---- the program: app.Main calls lib.Point and a shared helper; both define String and use the same literals
 
 /* The program's native, which the module finds in this executable ("builtin"). */
@@ -700,6 +746,9 @@ static unit *shared_section( void ) {
 	unit_fn *f = fn_begin(u, "twice", ttwice, 1, regs);
 	op(u, f, file, 30, OAdd, 3, 0, 0, 0);
 	op(u, f, file, 31, ORet, 1, 0);
+	// Tools read a section's debug sub-sections; the loader steps over them, known kind or not.
+	debug_section(u, 3, 0, "snapshot");
+	debug_section(u, 99, 0, "unknown");
 	return u;
 }
 
@@ -1192,6 +1241,19 @@ static void test_errors( void ) {
 		if( c == NULL && error ) printf("ok: trailing data in a section: %s\n", error);
 		free(b.d);
 	}
+	{
+		unit *a = simple("a.A");
+		char *error;
+		buf b;
+		hl_code *c;
+		simple_fn(a, "f", t_prim(a, HDYN));
+		debug_section(a, 2, 1, "packed");
+		b = image(&a, 1, false, "a.A", "f", false);
+		c = link_image(b, &error);
+		check(c == NULL && error && strstr(error, "a compressed debug section"), "a compressed debug sub-section: %s", error ? error : "");
+		if( c == NULL && error ) printf("ok: a compressed debug sub-section: %s\n", error);
+		free(b.d);
+	}
 }
 
 /* Every cut of the program and every byte changed in it either links or fails with a message; none reads outside the file. */
@@ -1393,6 +1455,7 @@ int main( int argc, char **argv ) {
 	hl_sys_init();
 	hl_register_thread(&marker);
 	if( argc > 1 && strcmp(argv[1], "--bench") == 0 ) return bench(argc, argv);
+	if( argc > 3 && strcmp(argv[1], "--compare") == 0 ) return compare_files(argv[2], argv[3]);
 	if( argc > 2 && strcmp(argv[1], "--write") == 0 ) {
 		// The test program as an HLB 9 file, for the tools that read bytecode (hldump).
 		buf b = program_image(false);
