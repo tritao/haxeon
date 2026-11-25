@@ -89,14 +89,17 @@ class ApiModelBuilder {
 				types.push(described);
 		}
 		for (decl in program.interfaces)
-			types.push(interfaceDeclaration(decl));
+			if (decl.visibility != AstVisibility.Private)
+				types.push(interfaceDeclaration(decl));
 		for (decl in program.aliases)
 			if (decl.visibility != AstVisibility.Private)
 				types.push(aliasDeclaration(decl));
 		for (decl in program.enums)
-			types.push(enumDeclaration(decl));
+			if (decl.visibility != AstVisibility.Private)
+				types.push(enumDeclaration(decl));
 		for (decl in program.abstracts)
-			types.push(abstractDeclaration(decl));
+			if (decl.visibility != AstVisibility.Private)
+				types.push(abstractDeclaration(decl));
 		// A module's functions are named after it (`pack.Mod.f`), except the entry module's `main`; none can be private.
 		for (fn in program.functions) {
 			var module = moduleName(fn.span),
