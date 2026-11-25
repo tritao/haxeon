@@ -264,7 +264,8 @@ class CompilerDriver {
 				sourceRoots.push(root.path);
 			sys.FileSystem.createDirectory(Path.directory(absolutePath(apiJsonOutput)));
 			File.saveContent(apiJsonOutput,
-				ApiJsonWriter.emit(ApiModelBuilder.build(semantic, compiler.modules, sourceRoots, roots)));
+				ApiJsonWriter.emit(ApiModelBuilder.build(semantic, compiler.modules, sourceRoots, roots,
+				request.apiPackages)));
 		}
 		return result;
 	}

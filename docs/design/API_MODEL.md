@@ -62,9 +62,14 @@ kind has them (`ApiJsonWriter` writes them field by field, so the output is this
 | Record | Fields |
 | --- | --- |
 | Root | `version` (integer, `1`), `described` (the module paths described), `modules`, `types` |
-| Module | `path`, `file` (its source, relative to its source root), `members` (its public top-level variables and functions) |
-| Declaration | `path`, `module`, `kind` (`class`, `interface`, `enum`, `abstract`, `typedef`, `extern`), `isExtern`, `source`, `typeParameters`, `supertypes`, `interfaces`, `underlying` (type or null), `from`, `to`, `members` |
+| Module | `path`, `package`, `file` (its source), `members` (its public top-level variables and functions) |
+| Declaration | `path`, `module`, `package`, `kind` (`class`, `interface`, `enum`, `abstract`, `typedef`, `extern`), `isExtern`, `source`, `typeParameters`, `supertypes`, `interfaces`, `underlying` (type or null), `from`, `to`, `members` |
 | Source | `visibility` (`public`), `position` (`file`, with `/` separators, and one-based `line`), `metadata` (`{name, arguments}`, arguments as source text), `documentation` (null or `{markdown, tags}`) |
+
+`package` is the name of the package whose sources hold the declaration (`--api-package=NAME=DIRECTORY`; `haxeon doc`
+passes every package of the project), and a `file` is relative to that package's root, so a reader finds the source as
+the package's location joined with it. Without a package (the standard library, FFI modules generated into a build),
+`package` is null and the file is relative to its source root. No path in the model is this machine's.
 | Tag | `name` (`param`, `return`, `throws`, `see`, `deprecated`, `since`), `parameter` (the name for `param`, otherwise null), `text` |
 | Type parameter | `name`, `constraints` (types) |
 | Member | `name`, `kind`, `isStatic`, `source`, then by kind: `field` and `enumValue` have `type`; `property` has `type`, `get` and `set` (`default`, `null`, `never`, `get`, `set`, `dynamic`); `constructor`, `method`, `function` (a module's), `enumConstructor`, `conversion` and `operator` have `typeParameters`, `arguments` and `result`, with `operatorText` for an operator and `conversion` (`from` or `to`) for a conversion |

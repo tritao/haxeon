@@ -80,5 +80,9 @@ panel = types["library.Panel"]
 constructor = next(member for member in panel["members"] if member["kind"] == "constructor")
 assert constructor["arguments"][0]["type"] == {"kind": "named", "path": "shapes.Size", "arguments": []}, constructor
 assert panel["source"]["documentation"]["markdown"] == "A panel of a fixed size."
+# Each source belongs to its package, at a path relative to the package's root: nothing names this machine's directories.
+assert (panel["package"], panel["source"]["position"]["file"]) == ("library", "src/library/Panel.hx"), panel["source"]
+assert (types["shapes.Size"]["package"], types["shapes.Size"]["source"]["position"]["file"]) == ("shapes", "src/shapes/Size.hx")
+assert '"/' not in open(sys.argv[1]).read().replace('"/"', ""), "an absolute path is in the description"
 PY
 echo "PASS: haxeon doc describes a library's own public modules, without an entry"

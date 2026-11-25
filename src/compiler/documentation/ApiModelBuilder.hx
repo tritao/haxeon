@@ -37,17 +37,29 @@ class ApiModelBuilder {
 	final comments = new ObjectMap<SourceFile, Array<DocumentationComment>>();
 	final roots:Array<String>;
 
-	/** The model of `semantic`, whose `described` modules are the API; `roots` are the source roots paths are relative to. */
-	public static function build(semantic:SemanticProgram, modules:Map<String, ModuleState>, roots:Array<String>,
-			described:Array<String>):ApiModel
-		return new ApiModelBuilder(semantic, modules, roots).model(described);
+	/** The packages sources belong to, with their roots as absolute directories, the innermost first. */
+	final packages:Array<{name:String, root:String}>;
 
-	function new(semantic:SemanticProgram, states:Map<String, ModuleState>, roots:Array<String>) {
+	/**
+	 * The model of `semantic`, whose `described` modules are the API. A source in one of `packages` is given relative to that
+	 * package's root; any other (the standard library's) relative to the source root of `roots` that holds it.
+	 */
+	public static function build(semantic:SemanticProgram, modules:Map<String, ModuleState>, roots:Array<String>,
+			described:Array<String>, ?packages:Array<{name:String, root:String}>):ApiModel
+		return new ApiModelBuilder(semantic, modules, roots, packages ?? []).model(described);
+
+	function new(semantic:SemanticProgram, states:Map<String, ModuleState>, roots:Array<String>,
+			packages:Array<{name:String, root:String}>) {
 		this.semantic = semantic;
 		for (state in states)
 			modules.set(state.source.path, state.name);
 		this.roots = [for (root in roots) Path.addTrailingSlash(absolute(root))];
 		this.roots.sort((left, right) -> right.length - left.length);
+		// A package inside another's directory (a checkout's packages/ under its root) owns what it holds.
+		this.packages = [for (entry in packages) {
+			name:entry.name, root:Path.addTrailingSlash(absolute(entry.root))
+		}];
+		this.packages.sort((left, right) -> right.root.length - left.root.length);
 	}
 
 	function model(described:Array<String>):ApiModel {
@@ -57,7 +69,8 @@ class ApiModelBuilder {
 		function moduleOf(span:SourceSpan):Array<ApiMember> {
 			var path = moduleName(span), module = modules.get(path);
 			if (module == null) {
-				module = {path: path, file: relativeFile(span.file, path), members: []};
+				var location = locate(span.file, path);
+				module = {path: path, packageName: location.name, file: location.file, members: []};
 				modules.set(path, module);
 			}
 			return module.members;
@@ -178,6 +191,7 @@ class ApiModelBuilder {
 			source: source(owner.span, metadata),
 			path: owner.name,
 			module: moduleName(owner.span),
+			packageName: locate(owner.span.file, moduleName(owner.span)).name,
 			kind: kind,
 			isExtern: isExtern,
 			typeParameters: parameters(owner.typeParameters, owner.typeConstraints, scope),
@@ -413,14 +427,22 @@ class ApiModelBuilder {
 		}
 		return {
 			visibility: "public",
-			position: {file: relativeFile(file, moduleName(span)), line: file.lineAt(span.start)},
+			position: {file: locate(file, moduleName(span)).file, line: file.lineAt(span.start)},
 			documentation: doc.lines.length == 0 ? null : DocumentationTools.forApi(doc),
 			metadata: annotations
 		};
 	}
 
-	function relativeFile(file:SourceFile, module:String):String {
+	/** The package `file` belongs to, if any, and its path relative to that package's root, or else to its source root. */
+	function locate(file:SourceFile, module:String):{name:Null<String>, file:String} {
 		var path = absolute(file.physicalPath);
+		for (entry in packages)
+			if (StringTools.startsWith(path, entry.root))
+				return {name: entry.name, file: path.substr(entry.root.length)};
+		return {name: null, file: relativeFile(path, module)};
+	}
+
+	function relativeFile(path:String, module:String):String {
 		for (root in roots)
 			if (StringTools.startsWith(path, root))
 				return path.substr(root.length);

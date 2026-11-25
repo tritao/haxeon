@@ -12,7 +12,7 @@ import sys.io.File;
 class CompilerArguments {
 	/** The options that take a value, as `--name=value` or `--name value`. */
 	static final VALUED = [
-		"--output", "--api-json", "--api-source", "--target", "--build-mode", "--entry", "--ir-output",
+		"--output", "--api-json", "--api-source", "--api-package", "--target", "--build-mode", "--entry", "--ir-output",
 		"--inputs-output", "--baseline",
 		"--baseline-output",
 		"--entry-id-output", "--root", "--sources-file", "--package-root", "--ffi-header", "--ffi-library",
@@ -29,6 +29,7 @@ class CompilerArguments {
 			output = "out/main.hl",
 			apiJsonOutput:Null<String> = null,
 			apiSources:Array<String> = [],
+			apiPackages:Array<{name:String, root:String}> = [],
 			irOutput:Null<String> = null,
 			inputsOutput:Null<String> = null,
 			baseline:Null<String> = null,
@@ -79,7 +80,13 @@ class CompilerArguments {
 				apiJsonOutput = value(argument, "--api-json=");
 			else if (StringTools.startsWith(argument, "--api-source="))
 				apiSources.push(value(argument, "--api-source="));
-			else if (StringTools.startsWith(argument, "--entry=")) {
+			else if (StringTools.startsWith(argument, "--api-package=")) {
+				var spec = value(argument, "--api-package="), separator = spec.indexOf("=");
+				if (separator <= 0 || separator == spec.length - 1)
+					throw new UsageError('Compiler option "--api-package" takes NAME=DIRECTORY, not "$spec"');
+				apiPackages.push({name: spec.substr(0, separator), root: spec.substr(separator + 1)});
+			}
+				else if (StringTools.startsWith(argument, "--entry=")) {
 				entry = value(argument, "--entry=");
 				entryGiven = true;
 			}
@@ -196,8 +203,8 @@ class CompilerArguments {
 		// A description of the sources is an analysis: it types them and builds nothing, and needs no entry.
 		if (apiJsonOutput != null && !noOutput)
 			throw new UsageError("--api-json describes the sources without building them: use it with --no-output");
-		if (apiSources.length > 0 && apiJsonOutput == null)
-			throw new UsageError("--api-source chooses what --api-json describes: use it with --api-json");
+		if ((apiSources.length > 0 || apiPackages.length > 0) && apiJsonOutput == null)
+			throw new UsageError("--api-source and --api-package shape what --api-json describes: use them with --api-json");
 		if (apiJsonOutput != null && !entryGiven)
 			entry = compiler.modules.ModuleReachability.NO_ENTRY;
 		if (baseline != null && !live)
@@ -235,6 +242,7 @@ class CompilerArguments {
 			output: output,
 			apiJsonOutput: apiJsonOutput,
 			apiSources: apiSources,
+			apiPackages: apiPackages,
 			irOutput: irOutput,
 			inputsOutput: inputsOutput,
 			baseline: baseline,

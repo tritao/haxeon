@@ -30,6 +30,7 @@ class ApiJsonWriter {
 	static function module(output:JsonOutput, value:ApiModule):Void {
 		output.open();
 		output.string("path", value.path);
+		output.field("package", () -> value.packageName == null ? output.nothing() : output.scalar(value.packageName));
 		output.string("file", value.file);
 		output.list("members", value.members, member);
 		output.close();
@@ -39,6 +40,7 @@ class ApiJsonWriter {
 		output.open();
 		output.string("path", value.path);
 		output.string("module", value.module);
+		output.field("package", () -> value.packageName == null ? output.nothing() : output.scalar(value.packageName));
 		output.string("kind", value.kind);
 		output.boolean("isExtern", value.isExtern);
 		output.field("source", () -> source(output, value.source));

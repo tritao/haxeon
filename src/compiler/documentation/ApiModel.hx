@@ -14,6 +14,10 @@ typedef ApiModel = {
 /** A module's own public functions and variables: those declared at its top level, outside any type. */
 typedef ApiModule = {
 	final path:String;
+
+	/** The package its source belongs to (`package` in JSON); null for the standard library's. */
+	final packageName:Null<String>;
+
 	final file:String;
 	final members:Array<ApiMember>;
 }
@@ -22,6 +26,9 @@ typedef ApiDeclaration = {
 	final source:ApiSource;
 	final path:String;
 	final module:String;
+
+	/** The package its source belongs to (`package` in JSON); null for the standard library's. */
+	final packageName:Null<String>;
 	final kind:String;
 	final isExtern:Bool;
 	final typeParameters:Array<ApiTypeParameter>;

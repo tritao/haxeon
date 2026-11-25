@@ -77,6 +77,9 @@ class CompilerProvider {
 			arguments.push("--api-json=" + context.apiJson);
 			for (root in project.rootPackage.sourceRoots)
 				arguments.push("--api-source=" + root);
+			// Each source is given relative to its package's root, never as this machine's path.
+			for (resolvedPackage in project.packages.packages)
+				arguments.push('--api-package=${resolvedPackage.name}=${resolvedPackage.root}');
 		}
 		for (sourceRoot in compilerInputs.roots)
 			arguments.push("--root=" + sourceRoot);
