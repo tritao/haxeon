@@ -148,6 +148,14 @@ class ConversionResolver {
 
 	function convert(value:TypedExpression, expected:CompilerType, context:String, position:Int,
 			code:DiagnosticCode):TypedExpression {
+		// A class named as a value (`trace(Button)`, `var type:Dynamic = Button`) is Haxe's `Class<T>`, which Haxeon has no
+		// runtime value for yet; a class reference reaches a conversion only there, never as a static member's receiver.
+		switch value.expression {
+			case TClassRef(name):
+				fail(DiagnosticCode.RUNTIME_SUPPORT, 'A class used as a value (Class<$name>) is not supported yet',
+					value.span);
+			case _:
+		}
 		// Where a value meets the type it must have, an empty type variable on either side takes the other's type.
 		if (session.monomorphs.active()) {
 			Monomorphs.unify(value.type, expected);

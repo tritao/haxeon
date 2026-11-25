@@ -248,7 +248,8 @@ The current subset includes:
   enum value, `haxe.EnumTools.EnumValueTools` (below), which apply without a `using`. Not yet: a class named as a value
   (`Main.twice()` with a `Dynamic` first argument, which Haxe passes `Class<Main>`) and Haxe's `haxe.EnumTools` on an enum
   itself (`Color.getName()`, `Color.createAll()`): both need class and enum values (`Class<T>`,
-  `Enum<T>`), which Haxeon does not have yet.
+  `Enum<T>`), which Haxeon does not have yet. A class used as a value anywhere (`trace(Button)`, `var type:Dynamic =
+  Button`) is `E1016`.
 - The enum part of Haxe's `Type` API, on a value of a known enum type: `Type.enumIndex`, `Type.enumEq`,
   `Type.enumConstructor` (the constructor's name) and `Type.enumParameters` (a new `Array<Dynamic>` of its arguments in
   declaration order, `null` for an optional one left out; writing to it does not change the value, as on HashLink). Haxe's

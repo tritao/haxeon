@@ -1966,6 +1966,12 @@ class TestMain {
 			+ 'var value:Dynamic = 1; return Std.isOfType(value, RoleAlias) ? 1 : 0; }',
 			"Cannot use abstract as value");
 		Sys.println("PASS: Std.isOfType rejects an abstract, and one a typedef names, as Haxe does");
+		// A class named as a value is Haxe's Class<T>, which Haxeon has no runtime value for yet: reported, not a crash in IR
+		// generation, wherever the value goes.
+		for (use in ['trace(Button);', 'var type:Dynamic = Button;', 'var all:Array<Dynamic> = [Button];'])
+			expectCompileError('class Button { public function new() {} } function main():Int { $use return 0; }',
+				"A class used as a value (Class<Button>) is not supported yet", true);
+		Sys.println("PASS: a class used as a value is reported as unsupported, not a crash");
 		Frontend.compile('function read(value:Dynamic):Int { if (Std.isOfType(value, String)) return value.length; return 0; } function convert(value:Dynamic):Int return Std.int(value); function main():Int return read("haxeon") + convert(42.5);');
 		Sys.println("PASS: Dynamic type tests refine locals and Std.int accepts numeric Dynamic values");
 		var nullObjectCompiler = new Compiler();

@@ -29,6 +29,7 @@ The rules for every entry:
 | `Observable` | Classes whose fields are tracked individually by the compiler; replaces per-field signals and revision counters. | [ADR 0002](../adr/0002-reactive-ui-model.md) |
 | Result builders | Conditional proposal: a library-declared builder lowers `if`, `switch` and `for`; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 | Lazy parameters | Conditional proposal: `Lazy<T>` parameters receive the caller's expression unevaluated; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
+| `internal` | An access level for what a package's modules share but its users may not use, enforced per manifest package, with named friends (`package.friends`) for its own test projects and no public declaration exposing an internal type. Implemented. | [LANGUAGE_SUPPORT.md](../reference/LANGUAGE_SUPPORT.md) |
 
 ### RawRepresentable (implemented)
 
@@ -236,6 +237,32 @@ so `==` and writes through the view must reach the original. HashLink has virtua
 the IR); Wasm32 and Wasm GC would need field-index tables like the typed interface tables. A value whose shape matches
 exactly keeps the fixed-layout path, so only the widening conversion pays. Needs a design document before it is
 implemented.
+
+### Class and enum values: `Class<T>` and `Enum<T>` (Haxe compatibility)
+
+Haxe lets a class or enum be a value: `trace(Button)` prints it, `var type:Class<Dynamic> = Button` holds it, and the
+reflective `Type` API takes one held that way (`Type.getClass`, `getSuperClass`, `resolveClass`, `typeof`), as does
+`haxe.EnumTools` on an enum itself (`Color.getName()`, `Color.createAll()`) and a static extension whose first argument
+is `Class<T>`. Haxeon supports these only on a class or enum named where they are called (`Type.getClassName(Button)`,
+`Type.createInstance(Button, [])`), resolved while typing. A class used as a value anywhere else is `E1016` ("A class
+used as a value (Class<Button>) is not supported yet"), reported by the typer where the value is converted
+(`ConversionResolver.convert`). Until then the typer gives a class reference the instance's type, which is what lets it
+reach a conversion at all.
+
+Supporting it needs a runtime value per class and enum, and a type for it in the typer:
+
+- **Typing:** a class reference gets its own type, `Class<T>` (and `Enum<T>`), instead of the instance's, so a value
+  use is typed rather than detected; the static-member receivers keep using the reference itself.
+- **HashLink:** classes already have runtime type objects (`$Button` is what Haxe's HashLink target prints), so a class
+  value can be the type's global, and the reflective calls read it.
+- **Wasm32 and Wasm GC:** no class objects exist; each class and enum named as a value needs a descriptor (its name,
+  its base, its constructor and its fields, as the reflection tables already hold for `Type.getInstanceFields`), emitted
+  only for the classes a program uses as values.
+- **Reachability:** a class used as a value keeps its constructor and the members reflection can reach, as
+  `Type.createInstance` already does for a named class.
+
+Needs a design document before it is implemented. Until it lands, code that holds classes as values uses an explicit
+factory (`() -> new Button()`) or a name (`Type.getClassName`).
 
 ### Other Haxe compatibility gaps
 
