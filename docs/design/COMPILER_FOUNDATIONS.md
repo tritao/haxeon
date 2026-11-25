@@ -80,6 +80,9 @@ being possible.
 
 ## 3. Stable output indices
 
+**Decided 2026-11-25:** per-module sections linked by the HashLink loader replace stable indices; see
+[MODULE_SECTIONS.md](MODULE_SECTIONS.md). What follows is the analysis that led there.
+
 HashLink's function, global, string and type indices are dense and given in first-use order. A cold build's index
 therefore depends on everything before it. A warm build that adds one function must renumber, relink and re-encode
 everything after it, to match the cold build byte for byte (WARM_REBUILD_REUSE.md, "A new constant, global or function

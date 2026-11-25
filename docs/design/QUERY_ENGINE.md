@@ -239,16 +239,19 @@ Everything below keeps results across builds outside the engine. Lines are the f
 | `IrInlineCache` and the inliner's memo plumbing | ~170, ~100 | name → original body, instrumented form, published form, object facts, positional prints; maps replaced per run | `IrInliner`, `Compiler` (published) | inlined form per function; a call cycle is one component query; `published` moves to the live state |
 | `PipelineSnapshot` | 157 | tables' encoding, functions' identity, environment text; last plain build | `CompilationPipeline`, backends | the root query (final IR, module) verifies; deleted with its check |
 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts | 83, 45, 162 | name and lowering environment; the build's entries; facts never swept | `HlLower` | computed query per function: relocatable code, reading object facts as engine reads |
-| Link and replay: `HlRequestKeys`, `HlRequestAnswers`, `HlSymbolRequest`, `HlLink`, `HlLinkRecord`/`HlKeptTables`, parts of `HlSymbolTable` and `HlLower` | 196, 66, 102, 120, 251, ~150, ~290 | request numbers (grow only); last build's tables with each position's first requests | `HlLower` | stable output indices (below) |
+| Link and replay: `HlRequestKeys`, `HlRequestAnswers`, `HlSymbolRequest`, `HlLink`, `HlLinkRecord`/`HlKeptTables`, parts of `HlSymbolTable` and `HlLower` | 196, 66, 102, 120, 251, ~150, ~290 | request numbers (grow only); last build's tables with each position's first requests | `HlLower` | module sections ([MODULE_SECTIONS.md](MODULE_SECTIONS.md)) |
 | `HlDebugMetadataCache` | 66 | stable id; one generation | `HlLower`, assembler | per-function query |
 | `HlWriterCache` | 216 | `HlFunction` identity (encodings, validation marks, span groups), all dropped when the debug-file list changes; compressed sections by kind | `HlWriter`, `HlValidator`, `CompilerSession` | per-function encode query (~120 lines go); the compressed-section memo stays |
 | Wasm module reuse (`WasmBackendSession.encoded`) | ~30 of 181 | identity of the final IR and options | Wasm backend | the root query |
-| **Stays:** `HlModuleAssembler`, `HlFunctionCache`, `HlSymbolTable`'s published prefix, `hl/persistence`, Wasm `patchState` | 1,041, 286, —, 933 | published slots and stable ids | live patching | not caches: the running module's state, an input to the next patch |
+| **Stays:** `HlModuleAssembler`, `HlFunctionCache`, `HlSymbolTable`'s published prefix, `hl/persistence`, Wasm `patchState` | 1,041, 286, —, 933 | published slots and stable ids | live patching | not caches: the running module's state, an input to the next patch; with module sections the slots move to the loader and these shrink to the semantic baseline (MODULE_SECTIONS.md, 4) |
 | **Stays here:** frontend prints and canonical forms, `semanticProgram`, `programFacts`, `lastTypedProgram`, `ReachabilityCache`; interning tables | — | — | — | step 3c/3d and M4c; COMPILER_FOUNDATIONS item 4 |
 
 `HlcBackendSession` keeps nothing. The compiler's no-op result is already the engine's (step 2).
 
 ### Stable output indices
+
+Superseded by per-module sections with load-time linking ([MODULE_SECTIONS.md](MODULE_SECTIONS.md)): no global indices
+in the output, so nothing shifts. The measurement below still holds; the ranges design is not pursued.
 
 On the signature edit no table was kept (`HlLinkRecord` fits only when nothing moves): 7,922 functions with unchanged IR were
 linked again, 5,501 of them with moved indices, and 938 lowered fresh. The body edit kept the tables and its 8,857 functions
@@ -299,7 +302,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 | # | Slice | Size (est. lines) | Deletes | Expected | Depends on |
 |---|---|---|---|---|---|
 | A | Relative positions (in progress elsewhere) | — | `IrSourceRehash` (likely) | blank-line edit: most of the inliner and lowering 4.7G | — |
-| B | Stable output indices | −1,000 / +400 | link and replay (above) | 0 / 1.5 / 0 | A; checks also ci-tier debug-metadata and hot-reload, self-compile oracle takes a new base |
+| B | Module sections and load-time linking ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), its slices 1–5) | −3,300 / +1,200, fork +650 net | link and replay, published slots and stable ids, symbol persistence | 0.1 / 1.4 / 0 | A; checks also ci-tier debug-metadata and hot-reload, self-compile oracle takes a new base |
 | 1 | Engine for per-function stages: a computed kind keyed by function symbol with equality cutoff, contributions and summaries with per-key reads, sweep of computed memos | +400 | — | none; verifying the memos must keep the body edit at today's cost (`IrLineage.start` alone is 2.4% of it) | — |
 | 2 | IR generation, generated functions, object tables as results | −450 / +250 | `IrFunctionVersions`, `IrGeneratedFunctions`, `objectCache` maps, `IrLineage.start`, frontend `IrFunctionMemo` users | 0.1 / 0.1 / 0.1 | 1 |
 | 3 | Assembly stages before the encode point | −2,000 / +500 | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05 | 2 |
