@@ -6,6 +6,7 @@ import compiler.query.QueryErrors.QueryCycle;
 import compiler.query.QueryErrors.QueryReuseMismatch;
 import compiler.query.QueryKind;
 import compiler.query.QueryKind.QueryRead;
+import compiler.query.QuerySummary;
 import compiler.query.RecordedQueryKind;
 import compiler.query.RecordedQueryKind.RecordedResult;
 
@@ -183,12 +184,14 @@ class QueryEngineMain {
 		transactions();
 		computedKinds();
 		stageKinds();
+		summaries();
 		computedSweep();
 		computedTransactions();
 
 		Sys.println("PASS: query engine reuses, cuts off early, verifies reads in order, reports cycles, sweeps, checks reuse, "
 			+ "verifies recorded results through components, records a stage's reads in frames, tells input revisions from build revisions, "
-			+ "commits and rolls back written results, cuts computed values off by equality on demand and in a stage's run, sweeps the computed memos a build did not use, and drops those "
+			+ "commits and rolls back written results, cuts computed values off by equality on demand and in a stage's run, updates "
+			+ "summaries per changed contribution with per-key reads, sweeps the computed memos a build did not use, and drops those "
 			+ "computed over results a rollback undid");
 	}
 
@@ -497,6 +500,85 @@ class QueryEngineMain {
 		hidden = 0;
 		expect(mismatch != null && mismatch.query == "first(0)",
 			"check mode computes a held rewrite again and compares");
+	}
+
+	/**
+	 * A summary over per-function contributions: only a contribution that is not the one kept is applied, and a key that appears
+	 * or goes changes only its readers and the readers of the whole set.
+	 */
+	static function summaries():Void {
+		var database = new QueryDatabase();
+		var functions = database.register(QueryKind.input("function", digestInt, sameInt));
+		var uses = database.register(new ComputedQueryKind<Array<Int>>("uses",
+			(left, right) -> left.join(",") == right.join(","), function(db, key) {
+				var bits = db.get(functions, key);
+				return [for (bit in 0...8) if (bits & (1 << bit) != 0) bit];
+			}));
+		var summary = database.register(new QuerySummary("used"));
+		var keyRuns = [0, 0, 0, 0], wholeRuns = 0;
+		var reader = database.register(new ComputedQueryKind<Box>("has", Box.same, function(db, key) {
+			keyRuns[key]++;
+			return new Box(summary.has(db, key) ? 1 : 0);
+		}));
+		var whole = database.register(new ComputedQueryKind<Box>("all", Box.same, function(db, _) {
+			wholeRuns++;
+			return new Box(summary.keys(db).length);
+		}));
+		function build(bits:Array<Int>):Void {
+			database.newRevision();
+			for (key in 0...bits.length)
+				database.set(functions, key, bits[key]);
+			summary.open(database);
+			for (key in 0...bits.length)
+				summary.contribute(database, key, uses.get(database, key));
+			summary.close(database);
+			for (key in 0...4)
+				reader.get(database, key);
+			whole.get(database, 0);
+		}
+		function present():String
+			return [for (key in 0...4) reader.value(key).value].join("");
+		build([1, 2, 1]);
+		expect(summary.replaced == 3 && present() == "1100" && keyRuns.join("") == "1111" && wholeRuns == 1,
+			"a first run");
+		build([1, 2, 1]);
+		expect(summary.replaced == 3 && keyRuns.join("") == "1111" && wholeRuns == 1,
+			"contributions that held cost nothing, and nothing is read again");
+		build([1, 6, 1]);
+		expect(summary.replaced == 4 && present() == "1110" && keyRuns.join("") == "1121" && wholeRuns == 2,
+			"a new key changes only its readers and the whole set");
+		build([3, 6, 1]);
+		expect(summary.replaced == 5 && keyRuns.join("") == "1121" && wholeRuns == 2,
+			"a contribution naming a key another names changes no reader");
+		build([3, 6]);
+		expect(summary.replaced == 6 && keyRuns.join("") == "1121" && wholeRuns == 2,
+			"a contributor not given is retracted");
+		build([0, 6]);
+		expect(summary.replaced == 7 && present() == "0110" && keyRuns.join("") == "2121" && wholeRuns == 3,
+			"a key no contributor names any more goes");
+
+		summary.open(database);
+		expect(throwsInternal(() -> summary.has(database, 0)), "reading a summary while it is open is an error");
+		summary.contribute(database, 0, uses.get(database, 0));
+		expect(throwsInternal(() -> summary.contribute(database, 0, [])),
+			"a contributor given twice in a run is an error");
+		summary.open(database);
+		summary.contribute(database, 0, uses.get(database, 0));
+		summary.contribute(database, 1, uses.get(database, 1));
+		summary.close(database);
+		expect(summary.has(database, 1) && !summary.has(database, 0), "a run left open is started again");
+
+		var checked = new QueryDatabase(true);
+		var counted = checked.register(new QuerySummary("counted"));
+		var given = [1, 2];
+		counted.open(checked);
+		counted.contribute(checked, 0, given);
+		counted.close(checked);
+		given.push(3);
+		counted.open(checked);
+		counted.contribute(checked, 0, given);
+		expect(throwsInternal(() -> counted.close(checked)),
+			"check mode counts again and finds a contribution changed after it was given");
 	}
 
 	/** Sweep drops the computed memos a build did not use, of the kinds it used; a dropped memo is computed again when read. */
