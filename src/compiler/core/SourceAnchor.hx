@@ -105,12 +105,14 @@ class SourceAnchor {
 /**
  * Where a build's sources put each anchor: its file, the offset and line it starts at, and the content hash of the file's text,
  * which names the snapshot a module carries of it. The files are the build's modules; without one at an anchor's path, the text
- * that last declared its anchors (`SourceAnchor.declaredFile`), for a lowering made without a build. An anchor of the whole file
- * of anything else (generated code) starts at offset 0 on line 1 and has no snapshot.
+ * that last declared its anchors (`SourceAnchor.declaredFile`), for a lowering made without a build. An anchor no text places
+ * any more is where the session last placed it (`SourceAnchorHistory`): a live module keeps the code of functions an edit removed.
+ * An anchor of the whole file of anything else (generated code) starts at offset 0 on line 1 and has no snapshot.
  */
 @:nullSafety(Strict)
 class SourceAnchors {
 	final files:Map<String, SourceFile>;
+	final history:Null<SourceAnchorHistory>;
 
 	/** By anchor id, what is known of it: its offset, its line and its file's hash; -1 offsets for an anchor not looked up yet. */
 	final offsets:Array<Int> = [];
@@ -118,13 +120,16 @@ class SourceAnchors {
 	final lines:Array<Int> = [];
 	final hashes:Array<Int> = [];
 
-	public function new(files:Map<String, SourceFile>)
+	public function new(files:Map<String, SourceFile>, ?history:SourceAnchorHistory) {
 		this.files = files;
+		this.history = history;
+	}
 
-	/** Whether the build's sources place `anchor`, which a declaration that is gone does not. */
+	/** Whether `anchor` has a place: in the build's sources, or where the session last placed it. */
 	public function places(anchor:Int):Bool {
-		var entry = SourceAnchor.at(anchor), file = fileAt(entry.path);
-		return file == null ? entry.key == "" : file.anchorIndex(anchor) != SourceFile.NO_ANCHOR;
+		var entry = SourceAnchor.at(anchor), file = fileAt(entry.path), known = history;
+		return (file == null ? entry.key == "" : file.anchorIndex(anchor) != SourceFile.NO_ANCHOR)
+			|| known != null && known.knows(anchor);
 	}
 
 	/** An anchor's file. */
@@ -154,15 +159,19 @@ class SourceAnchors {
 
 	function find(anchor:Int):Int {
 		var entry = SourceAnchor.at(anchor), file = fileAt(entry.path), offset = 0, line = 1, hash = 0;
-		if (file != null) {
-			hash = file.contentHash();
-			var index = file.anchorIndex(anchor);
-			if (index == SourceFile.NO_ANCHOR)
-				throw new InternalError('Source anchor "${entry.key}" is not a declaration of ${entry.path}');
+		var index = file == null ? SourceFile.NO_ANCHOR : file.anchorIndex(anchor), known = history;
+		if (file != null && index != SourceFile.NO_ANCHOR) {
 			offset = file.anchorOffset(index);
 			line = file.anchorLine(index);
-		} else if (entry.key != "")
-			throw new InternalError('Source anchor "${entry.key}" names ${entry.path}, which nothing parsed');
+			hash = file.contentHash();
+			if (known != null)
+				known.record(anchor, offset, line, hash);
+		} else if (known != null && known.knows(anchor)) {
+			offset = known.offset(anchor);
+			line = known.line(anchor);
+			hash = known.hash(anchor);
+		} else if (file != null || entry.key != "")
+			throw new InternalError('Source anchor "${entry.key}" is not a declaration of ${entry.path}');
 		while (offsets.length <= anchor) {
 			offsets.push(-1);
 			lines.push(0);
@@ -173,4 +182,40 @@ class SourceAnchors {
 		hashes[anchor] = hash;
 		return offset;
 	}
+}
+
+/**
+ * Where a session's builds last placed each anchor (`SourceAnchors`), by anchor id: the place of the code a live module keeps
+ * after an edit removed its declaration, as the last text that had it put it.
+ */
+@:nullSafety(Strict)
+class SourceAnchorHistory {
+	final offsets:Array<Int> = [];
+	final lines:Array<Int> = [];
+	final hashes:Array<Int> = [];
+
+	public function new() {}
+
+	public function record(anchor:Int, offset:Int, line:Int, hash:Int):Void {
+		while (offsets.length <= anchor) {
+			offsets.push(-1);
+			lines.push(0);
+			hashes.push(0);
+		}
+		offsets[anchor] = offset;
+		lines[anchor] = line;
+		hashes[anchor] = hash;
+	}
+
+	public inline function knows(anchor:Int):Bool
+		return anchor < offsets.length && offsets[anchor] >= 0;
+
+	public inline function offset(anchor:Int):Int
+		return offsets[anchor];
+
+	public inline function line(anchor:Int):Int
+		return lines[anchor];
+
+	public inline function hash(anchor:Int):Int
+		return hashes[anchor];
 }

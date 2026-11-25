@@ -726,13 +726,14 @@ class HotReloadMain {
 		}
 		resumed.update("Main.hx",
 			"function helper():Int { return 1; } function main():Int { return 42 + helper() - 1; }");
+		// `helper` is the code it was at the place it was (its positions count from its declaration), so only `main` is patched.
 		var changed = resumed.compile("Main");
 		if (changed.revision != initial.revision + 1
-			|| changed.changedFunctions.length != 2
+			|| changed.changedFunctions.length != 1
 			|| changed.changedFunctions.indexOf(mainId) < 0
-			|| changed.changedFunctions.indexOf(helperId) < 0
+			|| changed.changedFunctions.indexOf(helperId) >= 0
 			|| changed.artifact.hashLink().patchBytes == null)
-			throw "Restarted compiler did not emit the revision-2 code and source-metadata patch";
+			throw 'Restarted compiler did not emit the revision-2 patch of main alone: ${changed.changedFunctions}';
 		Runtime.patchSet(loaded,
 			new PatchSet(initial.revision, changed.revision, changed.artifact.hashLink().patchBytes,
 			changed.changedFunctions));

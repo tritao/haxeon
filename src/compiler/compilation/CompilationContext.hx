@@ -113,10 +113,12 @@ class CompilationContext {
 	public function isWasmTarget():Bool
 		return owner.isWasmTarget();
 
-	/** The build's sources, which place the anchors IR locations count from (`SourceAnchors`). */
-	public function sourceAnchors():compiler.core.SourceAnchor.SourceAnchors
+	/** The build's sources, which place the anchors IR locations count from (`SourceAnchors`), with what `history` remembers. */
+	public function sourceAnchors(?history:compiler.core.SourceAnchor.SourceAnchorHistory):compiler.core.SourceAnchor
+		.SourceAnchors
 		return new compiler.core.SourceAnchor
-			.SourceAnchors([for (module in state.modules) module.source.path => module.source]);
+			.SourceAnchors([for (module in state.modules) module.source.path => module.source],
+			history);
 
 	/**
 	 * What `sourceAnchors` places anchors from, as a short text: the same for the same texts at the same paths, of every module or of

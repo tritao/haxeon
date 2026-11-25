@@ -66,7 +66,9 @@ class SourceFile {
 		if (anchorIndices != null)
 			return;
 		var order = [for (index in 0...starts.length) index];
-		order.sort((a, b) -> starts[a] != starts[b] ? starts[a] - starts[b] : ends[b] - ends[a]);
+		// A total order: of two declarations with one range, the one kept must not depend on the sort.
+		order.sort((a, b) -> starts[a] != starts[b] ? starts[a] - starts[b] : ends[a] != ends[b] ? ends[b]
+			- ends[a] : Reflect.compare(keys[a], keys[b]));
 		var indices:Map<Int, Int> = [],
 			kept:Array<Int> = [],
 			keptEnds:Array<Int> = [],

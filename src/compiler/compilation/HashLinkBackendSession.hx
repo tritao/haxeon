@@ -45,6 +45,9 @@ class HashLinkBackendSession implements BackendSession {
 
 	var placedBy = new haxe.ds.ObjectMap<compiler.hl.HlFunction, Array<String>>();
 
+	/** Where this session's builds last placed each anchor, for the code a live module keeps of what an edit removed. */
+	var placedAnchors = new compiler.core.SourceAnchor.SourceAnchorHistory();
+
 	public function new(assembler:HlModuleAssembler, ?loweredCache:HlLoweredCache) {
 		this.assembler = assembler;
 		this.loweredCache = loweredCache == null ? new HlLoweredCache() : loweredCache;
@@ -64,6 +67,7 @@ class HashLinkBackendSession implements BackendSession {
 		var candidate = new HashLinkBackendSession(assembler, loweredCache.copy());
 		candidate.placedFiles = placedFiles;
 		candidate.placedBy = placedBy;
+		candidate.placedAnchors = placedAnchors;
 		return candidate;
 	}
 
@@ -233,7 +237,7 @@ class HashLinkBackendSession implements BackendSession {
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching ? context.liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
-		candidateAssembler.sources = context.sourceAnchors();
+		candidateAssembler.sources = context.sourceAnchors(placedAnchors);
 		candidateAssembler.checkReuse = context.options.checkReuse;
 		candidateAssembler.irVerified = !context.livePatching;
 		candidateAssembler.livePatching = context.livePatching;
