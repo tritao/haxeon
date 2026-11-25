@@ -137,7 +137,13 @@ class ApiModelBuilder {
 
 	/** The module-level function or variable `name` of the module `module`, as its module record holds it. */
 	public function moduleMember(module:String, name:String):Null<ApiMember> {
+		// The entry module's main is named main alone (`ModuleCanonicalizer.canonicalFunction`).
 		var fn = semantic.signatures.get(module + "." + name);
+		if (fn == null && name == "main") {
+			var main = semantic.signatures.get("main");
+			if (main != null && moduleName(main.span) == module)
+				fn = main;
+		}
 		if (fn != null)
 			return moduleFunction(fn, name);
 		var storage = semantic.declarations.classes.exists(ModuleFields.storageName(module))

@@ -11,10 +11,10 @@ class ImplicitConstructorServiceMain {
 		service.compile("Main");
 		var argument = main.indexOf("Derived(") + "Derived(".length,
 			help = service.signatureHelp("Main.hx", argument);
-		expect(help != null && help.label == "Derived(n:Int)",
+		expect(help != null && help.label == "new(n:Int)",
 			"signature help shows the inherited arguments, got " + (help == null ? "nothing" : help.label));
-		expect(service.hover("Main.hx", main.indexOf("Derived") + 2) == "Derived(n:Int)",
-			"hover on the class shows its constructor");
+		expect(service.hover("Main.hx", main.indexOf("Derived") + 2) == "class Derived extends Base",
+			"hover on the class shows its declaration; signature help shows the constructor it inherits");
 		var definition = service.definition("Main.hx", main.indexOf("Derived") + 2);
 		expect(definition != null && definition.path == "Derived.hx",
 			"the class is the definition of its inherited constructor");
@@ -31,7 +31,7 @@ class ImplicitConstructorServiceMain {
 			"class Base { public var n:Int; public function new(n:Int, k:Int = 0) { this.n = n + k; } }");
 		service.compile("Main");
 		var edited = service.signatureHelp("Main.hx", argument);
-		expect(edited != null && edited.label == "Derived(n:Int, k:Int)",
+		expect(edited != null && edited.label == "new(n:Int, k:Int = 0)",
 			"editing the base constructor updates the derived signature");
 
 		Sys.println("PASS: implicit constructors in the language service");

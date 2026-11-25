@@ -1,5 +1,5 @@
-Status: Implemented: the model, its JSON, `haxeon doc`, and the deletion of `--xml`. Editor hover reading it and the
-website's pages are planned below.
+Status: Implemented: the model, its JSON, `haxeon doc`, the website's package reference, editor hover and signature
+help, and the deletion of `--xml`.
 
 # Haxeon API model
 
@@ -106,10 +106,20 @@ declares them (a module's variables and functions by line), which is how their a
 constraints and annotations keep their declaration order; and the JSON is written field by field. A description is the
 same with or without an entry.
 
-## Next
+## Rendering
 
-- Editor hover and signature help read it. `LanguageService.hover` renders the member's type or signature from the model,
-  `hoverDocumentation` its comment and tags, and `signatureHelp` the callable, with each `@param` for the active argument;
-  the position, symbol and active-argument lookups stay. Locals, incomplete edits and declarations not in the model keep the
-  editor's semantic or recovery path.
-- The website's `build:api` step renders one page per exposed Haxe package from the model, and reports doc-comment coverage.
+The website's reference (site/api.mjs, as HTML with links) and the editor's hover and signature help (`ApiText`) show the
+model as Haxe declarations, by the same rules: a type by its short name, a typedef by its own name, type arguments in
+`<>`, a function type as `(A, ?B) -> R`; an argument `?name:T` when it may be left out and `name:T = value` when it has a
+default; a field as `final` or `var`, a property with its accessors, a method as `function name<T>(...):R`, a
+constructor as `new(...)`, an enum constructor by its name and payload; a type's declaration line with its kind, type
+parameters and what it extends, implements or stands for. A member is shown without its owner, as Haxe's own display
+does. A change to these rules changes both renderers.
+
+## Editor
+
+Hover and signature help describe a declaration from the model, built one declaration at a time
+(`ApiModelBuilder.typeNamed`, `moduleMember`) from the semantic program the last analysis kept, so the editor and the
+reference show the same signature. Hovering a type shows its declaration line; signature help for `new T(` shows the
+constructor, inherited ones included. A local, a type parameter, a built-in type's member, or a declaration an edit
+added since the last analysis are described as the semantic index has them.

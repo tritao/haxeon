@@ -25,6 +25,10 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.ConditionalCompilation;
 import compiler.core.Diagnostic.CompileError;
+import compiler.documentation.ApiModel.ApiDeclaration;
+import compiler.documentation.ApiModel.ApiMember;
+import compiler.documentation.ApiModelBuilder;
+import compiler.documentation.ApiText;
 import compiler.documentation.Documentation;
 import compiler.documentation.Documentation.DocumentationTools;
 import compiler.documentation.Documentation.DocumentationComment;
@@ -191,6 +195,12 @@ typedef SignatureHelp = {
 	final ?parameterDocumentation:Array<Null<String>>;
 }
 
+/** What the API model says about a declaration symbol: a type, or a member of a type or of a module. */
+private enum ApiEntry {
+	TypeEntry(declaration:ApiDeclaration);
+	MemberEntry(member:ApiMember);
+}
+
 private typedef SemanticQueryContext = {
 	final state:ModuleState;
 	final model:SemanticModel;
@@ -218,6 +228,11 @@ class LanguageService {
 	var workspaceIndexScanActive = false;
 	var workspaceIndexComplete = false;
 	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
+
+	/** Describes declarations as the API reference does, for the semantic program it was made from (`apiEntry`). */
+	var apiBuilder:Null<ApiModelBuilder> = null;
+
+	var apiBuilderProgram:Null<compiler.semantic.SemanticProgram> = null;
 	final structuralIndex:Map<String, StructuralIndexEntry> = [];
 	var editorDefines:Map<String, String> = [];
 
@@ -1137,7 +1152,16 @@ class LanguageService {
 			return null;
 		var model = effectiveSemanticModel(state),
 			indexedId = model == null ? null : model.index.symbolIdAt(position),
-			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.indexedSignature(indexedId);
+			described = indexedId == null ? null : apiEntry(indexedId);
+		// A declaration is shown as the API reference shows it; a local, or an edit not yet analyzed, as the index has it.
+		switch described {
+			case TypeEntry(declaration):
+				return ApiText.declaration(declaration);
+			case MemberEntry(member):
+				return ApiText.member(member);
+			case null:
+		}
+		var indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.indexedSignature(indexedId);
 		if (indexedSignature != null)
 			return indexedSignature.label;
 		if (indexedId != null && model != null) {
@@ -1199,7 +1223,14 @@ class LanguageService {
 		if (callee < 0)
 			return null;
 		var id = model.index.symbolIdAt(tokens.start(TokenId.ofRow(callee)) + 1),
-			signature = id == null ? null : compiler.semanticWorkspace.indexedSignature(id);
+			callable = id == null ? null : apiCallable(id),
+			described:Null<compiler.semantic.SemanticIndex.SemanticSignatureInfo> = callable == null ? null : {
+				label: ApiText.member(callable),
+				parameters: [for (argument in callable.arguments ?? []) ApiText.argument(argument)],
+				result: callable.result == null ? "" : ApiText.type(callable.result)
+			},
+			signature = described != null ? described : id == null
+				? null : compiler.semanticWorkspace.indexedSignature(id);
 		if (signature == null)
 			return null;
 		var active = activeCallParameter(tokens, open, position);
@@ -1217,11 +1248,73 @@ class LanguageService {
 			Reflect.setField(result, "parameterDocumentation", [for (parameter in signature.parameters) {
 				var separator = parameter.indexOf(":"),
 					name = separator < 0 ? parameter : parameter.substring(0, separator);
-				documentation.parameters.get(name);
+				documentation.parameters.get(StringTools.startsWith(name, "?") ? name.substr(1) : name);
 			}]);
 		}
 		tagResults([result], state);
 		return result;
+	}
+
+	/**
+	 * The API model's description of the declaration symbol `id` (`ApiModelBuilder`), from the semantic program the last
+	 * analysis kept: a type, or a member of a type or of a module. Null for a local or a type parameter, or for a declaration
+	 * that program does not have (one an edit added since), which the index then describes.
+	 */
+	function apiEntry(id:SemanticSymbolId):Null<ApiEntry> {
+		var semantic = compiler.state.semanticProgram, resolved = compiler.semanticWorkspace.indexedSymbol(id);
+		if (semantic == null || resolved == null)
+			return null;
+		if (apiBuilderProgram != semantic) {
+			apiBuilder = ApiModelBuilder.of(semantic, compiler.modules);
+			apiBuilderProgram = semantic;
+		}
+		var builder = apiBuilder;
+		if (builder == null)
+			return null;
+		var module = resolved.state.name,
+			separator = module.lastIndexOf("."),
+			packageName = separator < 0 ? null : module.substr(0, separator),
+			symbol = resolved.symbol;
+		inline function typePath(local:String):String
+			return ModuleCanonicalizer.qualifiedTypeName(packageName, local);
+		return switch symbol.kind {
+			case DeclarationKind.Class | DeclarationKind.Interface | DeclarationKind.Enum | DeclarationKind.Abstract
+				| DeclarationKind.Alias:
+				var declaration = builder.typeNamed(typePath(symbol.name));
+				declaration == null ? null : TypeEntry(declaration);
+			case DeclarationKind.Member | DeclarationKind.EnumCase:
+				var dot = symbol.name.lastIndexOf("."),
+					owner = dot < 0 ? null : builder.typeNamed(typePath(symbol.name.substr(0, dot))),
+					name = symbol.name.substr(dot + 1),
+					found:Null<ApiMember> = null;
+				if (owner != null)
+					for (member in owner.members)
+						if (member.name == name && found == null && member.kind != "operator"
+							&& member.kind != "conversion")
+							found = member;
+				found == null ? null : MemberEntry(found);
+			case DeclarationKind.Function:
+				var member = builder.moduleMember(module, symbol.name);
+				member == null ? null : MemberEntry(member);
+			case _:
+				null;
+		};
+	}
+
+	/** What a call of the symbol `id` takes: its function, or a type's constructor. */
+	function apiCallable(id:SemanticSymbolId):Null<ApiMember> {
+		return switch apiEntry(id) {
+			case MemberEntry(member):
+				member.arguments == null ? null : member;
+			case TypeEntry(declaration):
+				var constructor:Null<ApiMember> = null;
+				for (member in declaration.members)
+					if (member.kind == "constructor" && constructor == null)
+						constructor = member;
+				constructor;
+			case null:
+				null;
+		};
 	}
 
 	static function callOpenToken(tokens:TokenTable, position:Int):Int {

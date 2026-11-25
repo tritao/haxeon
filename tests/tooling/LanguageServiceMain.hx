@@ -120,7 +120,7 @@ class LanguageServiceMain {
 		for (item in completion)
 			if (item.label == "main")
 				hasMain = true;
-		if (!hasMain || service.hover("Main.hx", hoverPosition) != "main():Int")
+		if (!hasMain || service.hover("Main.hx", hoverPosition) != "function main():Int")
 			throw "language service completion or hover failed";
 		var linkService = new LanguageService(),
 			aliasSource = "import tools.Helper as H; function main():Int return 0;";
@@ -140,7 +140,7 @@ class LanguageServiceMain {
 		for (item in kindCompletion)
 			if (item.label == "Two" && item.detail == "Kind.Two(Int)")
 				hasTwo = true;
-		if (!hasTwo || service.hover("Main.hx", kindPosition) != "Kind.One()")
+		if (!hasTwo || service.hover("Main.hx", kindPosition) != "One")
 			throw "language service member completion or enum hover failed";
 		var classPosition = source.indexOf("Editor.make") + "Editor.".length,
 			classCompletion = service.complete("Main.hx", classPosition),
@@ -157,7 +157,7 @@ class LanguageServiceMain {
 			if (item.label == "active" && item.detail == "active:Int")
 				hasActive = true;
 		var instanceHoverPosition = source.indexOf("editor.active") + "editor.active".length;
-		if (!hasActive || service.hover("Main.hx", instanceHoverPosition) != "Editor.active:Int")
+		if (!hasActive || service.hover("Main.hx", instanceHoverPosition) != "var active:Int")
 			throw "language service typed instance completion failed";
 		var stringPosition = source.indexOf("text.length") + "text.".length,
 			stringCompletion = service.complete("Main.hx", stringPosition),
@@ -321,7 +321,7 @@ class LanguageServiceMain {
 			|| enumRename.length != 3)
 			throw "language service enum-case semantic indexing failed";
 		var enumSignature = enumService.signatureHelp("app/Main.hx", enumSource.lastIndexOf("41") + 1);
-		if (enumSignature == null || enumSignature.label != "Kind.Two(value:Int)" || enumSignature.activeParameter != 0)
+		if (enumSignature == null || enumSignature.label != "Two(value:Int)" || enumSignature.activeParameter != 0)
 			throw "language service enum-constructor signature help failed";
 		var signatureService = new LanguageService(),
 			signatureSource =
@@ -332,10 +332,10 @@ class LanguageServiceMain {
 			constructorSignature = signatureService.signatureHelp("Signatures.hx",
 				signatureSource.indexOf("Box(1)") + "Box(".length);
 		if (nestedSignature == null
-			|| nestedSignature.label != "add(left:Int, right:Int):Int"
+			|| nestedSignature.label != "function add(left:Int, right:Int):Int"
 			|| nestedSignature.activeParameter != 1
 			|| constructorSignature == null
-			|| constructorSignature.label != "Box(value:Int)")
+			|| constructorSignature.label != "new(value:Int)")
 			throw "language service nested-call or constructor signature help failed";
 		var hierarchyService = new LanguageService(),
 			hierarchySource =

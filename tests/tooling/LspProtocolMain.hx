@@ -602,7 +602,7 @@ class LspProtocolMain {
 			method: "textDocument/hover",
 			params: {textDocument: {uri: uri}, position: {line: 0, character: source.indexOf("main") + 4}}
 		}));
-		if (hover.result == null || hover.result.contents.value != "main():Int")
+		if (hover.result == null || hover.result.contents.value != "function main():Int")
 			throw "LSP hover did not use the compiler language service";
 		var highlights = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -720,7 +720,7 @@ class LspProtocolMain {
 		}));
 		if (
 			signature.result == null
-				|| signature.result.signatures[0].label != "add(left:Int, right:Int):Int" // Typed: HashLink rejects dynamic calls that omit String.indexOf's optional argument.
+				|| signature.result.signatures[0].label != "function add(left:Int, right:Int):Int" // Typed: HashLink rejects dynamic calls that omit String.indexOf's optional argument.
 				|| (signature.result.signatures[0].documentation.value:String).indexOf("Adds values") < 0
 				|| signature.result.signatures[0].parameters[0].documentation.value != "First value."
 				|| signature.result.activeParameter != 1
