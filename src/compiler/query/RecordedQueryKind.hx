@@ -157,10 +157,10 @@ class RecordedQueryKind extends QueryKindBase {
 		counter = 0;
 		enter(key, reads);
 		while (path.length > 0) {
-			var top = path.length - 1, node = path[top], through = successors[top], position = next[top];
-			if (through != null && position < through.length && latest[node] < revision) {
-				next[top] = position + 1;
-				var read = through[position];
+			var top = path.length - 1, node = path[top], position = positions[top];
+			if (position < ends[top] && latest[node] < revision) {
+				positions[top] = position + 1;
+				var read = walkReads[position];
 				if (QueryRead.kind(read) != index) {
 					var change = database.kindAt(QueryRead.kind(read)).changedAt(database, QueryRead.key(read));
 					if (change > latest[node])
@@ -183,8 +183,10 @@ class RecordedQueryKind extends QueryKindBase {
 				continue;
 			}
 			path.pop();
-			next.pop();
-			successors.pop();
+			positions.pop();
+			ends.pop();
+			// What a node reads follows what its parent reads: popped, it leaves the parent's at the end.
+			walkReads.resize(top > 0 ? ends[top - 1] : 0);
 			if (lowest[node] == order[node]) {
 				// `node` heads a component: every member gets the latest change of all of them.
 				var start = members.lastIndexOf(node), change = 0;
@@ -231,8 +233,11 @@ class RecordedQueryKind extends QueryKindBase {
 		onPath[node] = true;
 		latest[node] = ownChange(node);
 		path.push(node);
-		next.push(0);
-		successors.push(reads);
+		positions.push(walkReads.length);
+		if (reads != null)
+			for (read in reads)
+				walkReads.push(read);
+		ends.push(walkReads.length);
 	}
 
 	/** Forgets every key's result and walk state, for a subclass that forgets its keys. */
@@ -246,8 +251,9 @@ class RecordedQueryKind extends QueryKindBase {
 		effectiveIn = [];
 		members = [];
 		path = [];
-		next = [];
-		successors = [];
+		positions = [];
+		ends = [];
+		walkReads = [];
 		visitedIn = [];
 		order = [];
 		lowest = [];
@@ -255,11 +261,14 @@ class RecordedQueryKind extends QueryKindBase {
 		onPath = [];
 	}
 
-	// The walk's stacks, kept between walks so that a walk allocates nothing once they have grown.
+	// The walk's stacks, kept between walks so that a walk allocates nothing once they have grown. What each node on the path reads
+	// is copied into `walkReads`, after its parent's, and walked from `positions` to `ends`: an element of an array of arrays is
+	// checked on each read, and the walk reads one per step.
 	var members:Array<Int> = [];
 	var path:Array<Int> = [];
-	var next:Array<Int> = [];
-	var successors:Array<Null<Array<Int>>> = [];
+	var positions:Array<Int> = [];
+	var ends:Array<Int> = [];
+	var walkReads:Array<Int> = [];
 	var counter = 0;
 
 	// The walk's state per key, valid where `visitedIn` holds the walk's number.
