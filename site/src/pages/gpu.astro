@@ -7,6 +7,7 @@ import LiveEmbed from '../components/LiveEmbed.astro';
 import StatusBadge, { type Status } from '../components/StatusBadge.astro';
 import triangleScene from '../../../docs/guides/examples/06-gpu-basics/triangle/src/Scene.hx?raw';
 import triangleShader from '../../../docs/guides/examples/06-gpu-basics/triangle/src/shaders/Triangle.glsl?raw';
+import particlesScene from '../../../docs/guides/examples/06-gpu-basics/particles/src/Scene.hx?raw';
 import particlesShader from '../../../docs/guides/examples/06-gpu-basics/particles/src/shaders/Particles.glsl?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
 import { memberSource, methodSource } from '../excerpts';
@@ -18,11 +19,13 @@ const circuit = 'packages/gpu/examples/circuit-run/';
 const triangle = 'docs/guides/examples/06-gpu-basics/triangle/';
 const particles = 'docs/guides/examples/06-gpu-basics/particles/';
 
-const backends: { platform: string; api: string; status: Status; compute: string; timestamps: string }[] = [
-  { platform: 'Linux', api: 'OpenGL 4.1 core', status: 'Supported', compute: 'GL 4.3+ drivers', timestamps: 'Yes' },
-  { platform: 'Web', api: 'WebGL2', status: 'Supported', compute: 'No', timestamps: 'No' },
-  { platform: 'macOS', api: 'Metal', status: 'Supported', compute: 'Yes', timestamps: 'Depends on GPU' },
-  { platform: 'Windows', api: 'Direct3D 11', status: 'Supported', compute: 'Yes', timestamps: 'Yes' },
+// For the available backends, `short` names the API in the stack diagram and `shaders` the language the build compiles
+// shaders to for it.
+const backends: { platform: string; api: string; short?: string; shaders?: string; status: Status; compute: string; timestamps: string }[] = [
+  { platform: 'Linux', api: 'OpenGL 4.1 core', short: 'OpenGL', shaders: 'GLSL 4.1', status: 'Supported', compute: 'GL 4.3+ drivers', timestamps: 'Yes' },
+  { platform: 'Web', api: 'WebGL2', short: 'WebGL2', shaders: 'GLSL ES 3.0', status: 'Supported', compute: 'No', timestamps: 'No' },
+  { platform: 'macOS', api: 'Metal', short: 'Metal', shaders: 'Metal', status: 'Supported', compute: 'Yes', timestamps: 'Depends on GPU' },
+  { platform: 'Windows', api: 'Direct3D 11', short: 'D3D11', shaders: 'HLSL 5', status: 'Supported', compute: 'Yes', timestamps: 'Yes' },
   { platform: 'Web', api: 'WebGPU', status: 'Planned', compute: '–', timestamps: '–' },
   { platform: 'Linux, Windows', api: 'Vulkan', status: 'Planned', compute: '–', timestamps: '–' },
 ];
@@ -32,6 +35,8 @@ const ready = methodSource(triangleScene, 'new', triangle + 'src/Scene.hx');
 const frame = methodSource(triangleScene, 'draw', triangle + 'src/Scene.hx');
 const computeStage = particlesShader.match(/^@cs step_cs\n[\s\S]*?^@end$/m);
 if (!computeStage) throw new Error('Missing the compute stage in the Particles shader');
+const particleCount = particlesScene.match(/^\tstatic inline var count = (\d+);$/m);
+if (!particleCount) throw new Error(`Missing the particle count in ${particles}src/Scene.hx`);
 
 // The build generates shaders.Triangle; scripts/build-gpu-modules.sh copies it here before the site builds.
 const generatedModules = import.meta.glob<string>('../../generated/gpu/Triangle.hx', { query: '?raw', import: 'default', eager: true });
@@ -149,7 +154,7 @@ const generatedExcerpt = [
       <ol class="shader-flow" aria-label="Shader build">
         <li><span>Triangle.glsl</span></li>
         <li><span>sokol-shdc</span></li>
-        <li><span>GLSL 4.1 · GLSL ES 3.0 · HLSL 5 · Metal</span></li>
+        <li><span>{available.map(({ shaders }) => shaders).join(' · ')}</span></li>
         <li><span>shaders.Triangle</span></li>
       </ol>
       <div class="grid two top">
@@ -173,7 +178,7 @@ const generatedExcerpt = [
     <div class="wrap">
       <div class="head">
         <h2>Compute</h2>
-        <p class="lede">A compute shader moves 8,192 particles in a storage buffer. The draw reads the same buffer, so nothing goes back to the CPU.</p>
+        <p class="lede">A compute shader moves {Number(particleCount[1]).toLocaleString('en-US')} particles in a storage buffer. The draw reads the same buffer, so nothing goes back to the CPU.</p>
       </div>
       <div class="grid two top">
         <figure>
@@ -210,7 +215,7 @@ const generatedExcerpt = [
             { title: 'Your draw code' },
             { title: 'GPU layer', detail: 'Buffers · Pipelines · Passes' },
             { title: 'sokol_gfx' },
-            { title: 'OpenGL · WebGL2 · Metal · D3D11' },
+            { title: available.map(({ short }) => short).join(' · ') },
           ]}
         />
       </div>
@@ -253,9 +258,9 @@ const generatedExcerpt = [
   .api-name { display: block; font-weight: 400; font-size: 0.85rem; color: var(--sl-color-gray-3); }
   .backend-table { display: grid; gap: var(--hx-space-3); align-content: start; }
   .hero { --hero-columns: minmax(0, 1fr) minmax(0, 34rem); }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--hx-space-2); list-style: none; padding: 0; }
   @media (max-width: 30rem) {
-    th, td { padding-inline: 4px; }
+    th, td { padding-inline: var(--hx-space-1); }
     tbody :is(th, td) { font-size: 0.8rem; }
   }
 </style>

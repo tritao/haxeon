@@ -64,8 +64,8 @@ const comingFrom = await getCollection(
 <style>
   .page-footer {
     display: grid;
-    gap: 1.5rem;
-    margin-block: 3rem 1.5rem;
+    gap: var(--hx-space-6);
+    margin-block: var(--hx-space-7) var(--hx-space-6);
   }
   .meta {
     display: flex;
@@ -80,14 +80,14 @@ const comingFrom = await getCollection(
   }
   .site-links {
     border-top: 1px solid var(--sl-color-gray-5);
-    padding-block: 40px;
+    padding-block: var(--hx-space-7);
     color: var(--sl-color-gray-3);
     font-size: 0.9rem;
   }
   .wrap {
     display: grid;
     grid-template-columns: 2fr 1fr 1fr 1fr;
-    gap: 24px;
+    gap: var(--hx-space-6);
   }
   .site-links a {
     color: var(--sl-color-white);
@@ -95,7 +95,7 @@ const comingFrom = await getCollection(
     display: block;
   }
   .site-links h2 {
-    margin: 0 0 8px;
+    margin: 0 0 var(--hx-space-2);
     font: 600 0.75rem var(--sl-font-mono);
     text-transform: uppercase;
     letter-spacing: 0.06em;

@@ -29,17 +29,25 @@ function lineDiff(a: string[], b: string[]): ['' | 'del' | 'add', string][] {
 const diff = lineDiff(before, after);
 if (!diff.some(([change]) => change)) throw new Error(`steps/1-logic-patch no longer changes view() in ${example}`);
 
-// The mock window below shows these; a guide edit that changes them must update the demo too.
+// What the mock window shows of each version, as its source writes it; a guide edit that changes these must update
+// the demo too. The script below renders the counter and button from the same table.
+const field = 'Main.count.value';
+const count = '${' + field + '}';
+const versions = [
+  { source: initial, counter: `You clicked ${count} times`, button: 'Click me', step: 1 },
+  { source: edited, counter: `Count: ${count}`, button: 'Add 2', step: 2 },
+];
 const shown: [string, string[]][] = [
-  [initial, ['options.title = "My App"', 'new Text("My first app")', 'You clicked ${Main.count.value} times', '"Click me"', 'Main.count.value + 1', '"Reset"']],
-  [edited, ['Count: ${Main.count.value}', '"Add 2"', 'Main.count.value + 2']],
+  [initial, ['options.title = "My App"', 'new Text("My first app")', '"Reset"']],
+  ...versions.map(({ source, counter, button, step }): [string, string[]] => [source, [counter, `"${button}"`, `${field} + ${step}`]]),
 ];
 for (const [source, texts] of shown)
   for (const text of texts)
     if (!source.includes(text)) throw new Error(`The live demo shows ${text}, which ${example} no longer has`);
+const views = versions.map(({ counter, button, step }) => ({ counter: counter.split(count), button, step }));
 ---
 
-<live-edit-demo class="demo">
+<live-edit-demo class="demo" data-versions={JSON.stringify(views)}>
   <div class="editor code-panel">
     <div class="bar"><span>src/Main.hx</span><span data-version>version 1</span></div>
     {
@@ -68,8 +76,8 @@ for (const [source, texts] of shown)
       </div>
       <div class="body">
         <p>My first app</p>
-        <p data-count>You clicked 0 times</p>
-        <button type="button" data-add>Click me</button>
+        <p data-count>{views[0].counter.join('0')}</p>
+        <button type="button" data-add>{views[0].button}</button>
         <button type="button" data-reset>Reset</button>
       </div>
     </div>
@@ -92,17 +100,19 @@ for (const [source, texts] of shown)
       const status = this.querySelector('[role="status"]')!;
       const apply = this.querySelector<HTMLButtonElement>('[data-apply]')!;
       const code = [...this.querySelectorAll<HTMLElement>('[data-code]')];
+      const views: { counter: string[]; button: string; step: number }[] = JSON.parse(this.dataset.versions!);
       // The running app's state, which an edit keeps.
       let count = 0;
       let version = 1;
 
       const render = () => {
-        label.textContent = version === 1 ? `You clicked ${count} times` : `Count: ${count}`;
-        add.textContent = version === 1 ? 'Click me' : 'Add 2';
+        const view = views[version - 1];
+        label.textContent = view.counter.join(String(count));
+        add.textContent = view.button;
       };
 
       add.addEventListener('click', () => {
-        count += version === 1 ? 1 : 2;
+        count += views[version - 1].step;
         render();
       });
       this.querySelector('[data-reset]')!.addEventListener('click', () => {
@@ -165,10 +175,10 @@ for (const [source, texts] of shown)
     text-decoration: line-through;
   }
   .demo .app {
-    padding: 22px;
+    padding: var(--hx-space-5);
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: var(--hx-space-4);
     background: var(--sl-color-accent-low);
   }
   .window {
@@ -180,8 +190,8 @@ for (const [source, texts] of shown)
   .window .titlebar {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: var(--hx-space-2) 12px;
+    gap: var(--hx-space-2);
+    padding: var(--hx-space-2) var(--hx-space-3);
     border-bottom: 1px solid var(--sl-color-gray-5);
     font-size: 0.8rem;
     color: var(--sl-color-gray-3);
@@ -195,11 +205,11 @@ for (const [source, texts] of shown)
   .window .body {
     padding: var(--hx-space-4);
     display: grid;
-    gap: 10px;
+    gap: var(--hx-space-3);
     justify-items: start;
   }
   .window .body button {
-    padding: var(--hx-space-2) 12px;
+    padding: var(--hx-space-2) var(--hx-space-3);
     border-radius: var(--hx-radius-s);
     border: 1px solid var(--sl-color-gray-5);
     background: var(--sl-color-bg-sidebar);
@@ -209,7 +219,7 @@ for (const [source, texts] of shown)
   }
   .controls {
     display: flex;
-    gap: 10px;
+    gap: var(--hx-space-3);
     flex-wrap: wrap;
     align-items: center;
   }
@@ -220,7 +230,7 @@ for (const [source, texts] of shown)
   .status :global(.kept) {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--hx-space-2);
     background: var(--sl-color-green-low);
     color: var(--sl-color-green-high);
     border-radius: var(--hx-radius-pill);

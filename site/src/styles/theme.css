@@ -189,8 +189,8 @@ samp {
 }
 :where(.code-panel > .bar) {
   display: flex;
-  gap: 6px;
-  padding: 10px 14px;
+  gap: var(--hx-space-2);
+  padding: var(--hx-space-3) var(--hx-space-4);
   border-bottom: 1px solid var(--hx-code-line);
   font: 0.75rem var(--sl-font-mono);
   color: var(--hx-code-muted);
@@ -207,7 +207,7 @@ samp {
 /* Plain-text fences and the home page's program output use the same surface. */
 .expressive-code .frame > pre[data-language='text'],
 pre.output-pane {
-  padding: var(--hx-space-4) 18px;
+  padding: var(--hx-space-4) var(--hx-space-5);
   background: var(--sl-color-bg-inline-code);
   color: var(--hx-code-fg);
   border: 0;

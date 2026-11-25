@@ -92,7 +92,7 @@
 :where(.landing-content .note) {
   font-size: 0.85rem;
   color: var(--sl-color-gray-3);
-  margin-top: 14px;
+  margin-top: var(--hx-space-4);
 }
 :where(.landing-content .cmd) {
   font: 0.82rem / normal var(--sl-font-mono);
@@ -120,14 +120,14 @@
 :where(.landing-content .titled) {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--hx-space-3);
 }
 
 /* A section's heading block; on wide screens the heading sits left and its intro right. */
 :where(.landing-content .head) {
   display: grid;
-  gap: 14px;
-  margin-bottom: 36px;
+  gap: var(--hx-space-4);
+  margin-bottom: var(--hx-space-6);
 }
 :where(.landing-content .head .lede) {
   max-width: 76ch;
@@ -135,7 +135,7 @@
 @media (min-width: 62.5rem) {
   :where(.landing-content .head) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    column-gap: 56px;
+    column-gap: var(--hx-space-7);
   }
   :where(.landing-content .head > *) {
     grid-column: 1;
@@ -155,7 +155,7 @@
 :where(.landing-content .intro) {
   display: grid;
   row-gap: var(--hx-space-4);
-  margin-bottom: 36px;
+  margin-bottom: var(--hx-space-6);
 }
 :where(.landing-content .intro .lede) {
   max-width: 76ch;

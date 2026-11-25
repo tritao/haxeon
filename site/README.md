@@ -55,10 +55,12 @@ overrides provide the shared site header and footer, including page navigation a
 available. Splash pages provide their own visible heading and full-width section layout; the sections more than one
 page uses live in `src/components/sections/`.
 
-`src/styles/tokens.json` defines the palette and typography. `src/styles/theme.css` maps them to Starlight's
+`src/styles/tokens.json` defines the palette, typography and spacing scale. `src/styles/theme.css` maps them to Starlight's
 custom properties and defines the site's own properties for details such as the display font and card radii. Keep
 component styles in their Astro components and use the shared landing styles (`src/styles/landing.css`) for section,
 grid and button primitives. Those rules have no specificity, so a component's own rule always overrides them.
+Gaps, margins and section padding use the spacing scale (`--hx-space-1` to `--hx-space-8`); only the inner padding
+of small controls such as buttons, chips and table cells is set by eye.
 
 `Command.astro`, `CodeCard.astro`, `Card.astro` and `PlatformTable.astro` live in `src/components/` for the Astro
 pages; the docs are plain Markdown. Expressive Code renders the component and Markdown code examples
