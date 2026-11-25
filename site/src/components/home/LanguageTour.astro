@@ -1,6 +1,18 @@
 ---
 import CodeCard from '../CodeCard.astro';
 
+interface Props {
+  /** Shown above the title; the homepage names the section, a page about the language does not need to. */
+  eyebrow?: string;
+  title?: string;
+  lede?: string;
+}
+const {
+  eyebrow,
+  title = 'Typed, expressive, and quick to write.',
+  lede = 'Static types with inference, value types, pattern matching, null safety and deterministic cleanup, compiled fast enough to edit while it runs.',
+} = Astro.props;
+
 const examples = [
   {
     id: 'values',
@@ -160,12 +172,9 @@ Sys.println(height.toFeet());`,
 <section>
   <div class="wrap">
     <div class="head">
-      <span class="eyebrow">The language</span>
-      <h2>Typed, expressive, and quick to write.</h2>
-      <p class="lede">
-        Static types with inference, value types, pattern matching, null safety and deterministic
-        cleanup, compiled fast enough to edit while it runs.
-      </p>
+      {eyebrow && <span class="eyebrow">{eyebrow}</span>}
+      <h2>{title}</h2>
+      <p class="lede">{lede}</p>
     </div>
     <language-tour class="tour">
       <div class="tabs" role="tablist" aria-label="Language features">

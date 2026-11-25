@@ -9,8 +9,20 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const haxeon = join(root, 'scripts/haxeon');
 const haxe = join(root, '.tools/haxe/haxe');
 const $ = load(await readFile(new URL('../dist/index.html', import.meta.url), 'utf8'));
-const examples = $('[data-example]').toArray();
-if (!examples.length) throw new Error('The homepage has no runnable examples.');
+if (!$('[data-example]').length) throw new Error('The homepage has no runnable examples.');
+// The homepage's examples, then the Language page's; the tour appears on both, so each name runs once.
+const examples = [];
+const seen = new Set();
+for (const page of ['index.html', 'language/index.html']) {
+  const document = load(await readFile(new URL('../dist/' + page, import.meta.url), 'utf8'));
+  for (const element of document('[data-example]').toArray()) {
+    const name = document(element).attr('data-example');
+    if (!seen.has(name)) {
+      seen.add(name);
+      examples.push(element);
+    }
+  }
+}
 
 function sourceFor(block, language) {
   const lines = block.find(`pre[data-language="${language}"] .ec-line > .code`).toArray();

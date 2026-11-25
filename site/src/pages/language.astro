@@ -1,19 +1,66 @@
 ---
-import { getCollection } from 'astro:content';
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import Card from '../components/Card.astro';
+import CodeCard from '../components/CodeCard.astro';
 import LanguageTour from '../components/home/LanguageTour.astro';
 import { docsUrl } from '../../docs.mjs';
 
-const lessons = (
-  await getCollection(
-    'docs',
-    ({ id, data }) => (id === 'learn' || id.startsWith('learn/')) && !data.draft,
-  )
-).sort(
-  (a, b) =>
-    (a.data.sidebar?.order ?? Infinity) - (b.data.sidebar?.order ?? Infinity) ||
-    a.id.localeCompare(b.id),
-);
+const learn = (page: string) => docsUrl('learn/' + page);
+const reference = (page: string) => docsUrl('reference/' + page);
+
+// Compiled and run by scripts/check-examples.mjs, which compares the output.
+const overview = `struct Size implements Equatable {
+	public final w:Float;
+	public final h:Float;
+	public function new(w:Float, h:Float) {
+		this.w = w;
+		this.h = h;
+	}
+}
+
+enum Shape {
+	Circle(radius:Float);
+	Rect(size:Size);
+}
+
+function area(shape:Null<Shape>):Float
+	return switch shape {
+		case null: 0;
+		case Circle(r): Math.PI * r * r;
+		case Rect(s): s.w * s.h;
+	}
+
+Sys.println(area(Rect(new Size(2, 3))));
+Sys.println(area(null));
+Sys.println(new Size(2, 3) == new Size(2, 3));`;
+
+const beyond = [
+  ['Iteration', 'Loop over ranges, arrays, maps and any type with hasNext() and next().', reference('ITERATION.md')],
+  ['Key paths', 'Compiler-checked references to stored fields, for bindings and inspectors.', reference('KEY_PATHS.md')],
+  ['Futures', 'A Future holds one eventual outcome, for work that finishes later.', reference('ASYNC.md')],
+  ['Wire formats and RPC', 'JSON and MessagePack codecs from your types, and typed RPC services from interfaces.', learn('wire-and-rpc.md')],
+  ['C and C++', 'Import a header and call the library; structs keep their C layout.', docsUrl('guides/04-calling-c-and-cpp.md')],
+  ['Live edits', 'What an edit can change while the program runs, and what needs a restart.', reference('LIVE_PATCHING.md')],
+];
+
+const lessons = [
+  ['Values and functions', 'Bindings with final and var, inferred types, and functions.', 'basics.md'],
+  ['Classes, interfaces and structures', 'Objects with methods, interfaces, and anonymous structures.', 'types.md'],
+  ['Enums and pattern matching', 'Enums that carry data, and switch to take them apart.', 'enums-and-patterns.md'],
+  ['Null safety', 'Null<T> for values that can be absent, checked by the compiler.', 'null-safety.md'],
+  ['Structs and value equality', 'Values that copy on assignment and compare by content.', 'value-types.md'],
+  ['Cleanup at the end of a block', 'Cleanup with defer that runs on every way out of a block.', 'cleanup.md'],
+  ['Iteration', 'Loops over ranges, collections and your own iterators.', 'iteration.md'],
+  ['Wire formats and typed RPC', 'Serialize your types and call services across a connection.', 'wire-and-rpc.md'],
+  ['Abstracts', 'Distinct types over an existing value, at no runtime cost.', 'abstracts.md'],
+];
+
+const comingFrom = [
+  ['Flutter', 'UI described in code and edited while the app runs.', 'flutter.md'],
+  ['.NET', 'Classes, generics and inferred locals, with a JIT while you develop.', 'dotnet.md'],
+  ['Go', 'Small functions, loops over keys and values, cleanup next to acquisition.', 'go.md'],
+  ['Haxe, HashLink and Lime', 'What carries over, what differs, and how to move a project.', 'haxe.md'],
+];
 ---
 
 <StarlightPage
@@ -22,37 +69,154 @@ const lessons = (
     template: 'splash',
     prev: false,
     next: false,
-    description: 'Explore Haxeon’s types, pattern matching, null safety and deterministic cleanup.',
+    description: 'Explore Haxeon’s types, values, pattern matching, null safety and deterministic cleanup.',
   }}
 >
   <div class="landing-content">
     <section class="page-intro paper">
-      <div class="wrap head">
-        <h1 id="_top" tabindex="-1">Language</h1>
-        <p class="lede">
-          Static types with inference, value types, pattern matching, null safety and deterministic
-          cleanup.
-        </p>
-        {
-          lessons.length ? (
-            <div class="prose">
-              <h2>Learn the language</h2>
-              <ul>
-                {lessons.map(({ id, data }) => (
-                  <li>
-                    <a href={`/${id}/`}>{data.title}</a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p>
-              <a href={docsUrl('reference/LANGUAGE_SUPPORT.md')}>Read the language reference</a>
-            </p>
-          )
-        }
+      <div class="wrap hero">
+        <div class="head">
+          <h1 id="_top" tabindex="-1">A typed language, built for apps and tools.</h1>
+          <p class="lede">Static types with inference, values that compare by content, pattern matching, null safety and deterministic cleanup, compiled fast enough to change a program while it runs.</p>
+          <div class="ctas">
+            <a class="btn primary" href={learn('README.md')}>Learn the language</a>
+            <a class="btn ghost" href={docsUrl('coming-from/README.md')}>Coming from another platform</a>
+          </div>
+        </div>
+        <CodeCard code={overview} lang="haxe" title="shapes.hx" output={'6\n0\ntrue'} example="overview" />
       </div>
     </section>
-    <LanguageTour />
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>How it’s designed</h2>
+          <p class="lede">Familiar where it can be, strict where it pays off, and quick enough to keep up with you.</p>
+        </div>
+        <div class="grid three">
+          <Card compact>
+            <h3>Types without ceremony</h3>
+            <p>Every value has a static type, and the compiler infers most of them. Where you want flexibility, opt into <code>Dynamic</code> for just that value. <a href={learn('basics.md')}>Values and functions</a></p>
+          </Card>
+          <Card compact>
+            <h3>Values, not only objects</h3>
+            <p>A <code>struct</code> copies on assignment and, when you ask, compares and hashes by its fields. Abstracts give a value a type of its own at no runtime cost. <a href={learn('value-types.md')}>Structs and value equality</a></p>
+          </Card>
+          <Card compact>
+            <h3>Safe and predictable</h3>
+            <p><code>Null&lt;T&gt;</code> marks what can be absent, <code>switch</code> must cover every case, and <code>defer</code> runs cleanup on every way out of a block. <a href={learn('null-safety.md')}>Null safety</a></p>
+          </Card>
+        </div>
+      </div>
+    </section>
+
+    <LanguageTour title="See it in code" lede="Short programs and their output. The site compiles and runs each one when it builds." />
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>Beyond the basics</h2>
+          <p class="lede">The parts you reach for once a program grows.</p>
+        </div>
+        <ul class="features">
+          {beyond.map(([title, text, href]) => (
+            <li><h3><a href={href}>{title}</a></h3><p>{text}</p></li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>Learn it in order</h2>
+          <p class="lede">Nine short lessons, each with a complete program and its output. Read them in order or start with the topic you need.</p>
+        </div>
+        <ol class="lessons">
+          {lessons.map(([title, text, page]) => (
+            <li><a href={learn(page)}><span class="title">{title}</span><span class="text">{text}</span></a></li>
+          ))}
+        </ol>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>Coming from another platform</h2>
+          <p class="lede">The equivalents for the language, build and deployment tools you already use.</p>
+        </div>
+        <div class="grid four">
+          {comingFrom.map(([title, text, page]) => (
+            <Card compact>
+              <h3><a href={docsUrl('coming-from/' + page)}>{title}</a></h3>
+              <p>{text}</p>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
   </div>
 </StarlightPage>
+
+<style>
+  .page-intro .head .ctas { margin-top: 0; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: var(--hx-space-6); align-items: start; }
+  .grid { display: grid; gap: var(--hx-space-5); }
+  .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .grid p { margin: 0; }
+  .features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--hx-space-6) var(--hx-space-5);
+  }
+  .features li { margin: 0; border-left: 2px solid var(--sl-color-accent); padding-left: var(--hx-space-4); }
+  .features h3 { margin: 0 0 var(--hx-space-1); font-size: 1.05rem; }
+  .features p { margin: 0; color: var(--sl-color-gray-2); }
+  .lessons {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: lesson;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--hx-space-4) var(--hx-space-5);
+  }
+  .lessons li { margin: 0; counter-increment: lesson; }
+  .lessons a {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    column-gap: var(--hx-space-3);
+    padding: var(--hx-space-3) var(--hx-space-4);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--hx-radius-m);
+    background: var(--sl-color-bg-sidebar);
+    text-decoration: none;
+    color: inherit;
+    height: 100%;
+    align-content: start;
+  }
+  .lessons a:hover { border-color: var(--sl-color-accent); }
+  .lessons a::before {
+    content: counter(lesson);
+    grid-row: span 2;
+    font: 600 1.1rem var(--sl-font-mono);
+    color: var(--sl-color-accent);
+  }
+  .lessons .title { font-weight: 600; color: var(--sl-color-white); }
+  .lessons .text { color: var(--sl-color-gray-3); font-size: 0.92rem; }
+  @media (max-width: 62rem) {
+    .four, .lessons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 55rem) {
+    .hero, .three { grid-template-columns: minmax(0, 1fr); }
+    .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 34rem) {
+    .features, .four, .lessons { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
