@@ -51,6 +51,7 @@
   --hx-code-divider: token(dark.code-divider);
   --hx-code-output-bg: token(dark.code-output-bg);
   --hx-code-run: token(dark.code-run);
+  --hx-code-border: token(dark.code-border);
   --hx-grid: token(dark.grid);
 }
 
@@ -72,6 +73,7 @@
   --hx-code-divider: token(light.code-divider);
   --hx-code-output-bg: token(light.code-output-bg);
   --hx-code-run: token(light.code-run);
+  --hx-code-border: token(light.code-border);
   --hx-grid: token(light.grid);
 }
 
@@ -119,6 +121,7 @@ samp {
   align-items: center;
   gap: var(--hx-space-2);
   background: var(--sl-color-bg-inline-code);
+  border: 1px solid var(--hx-code-border);
   border-radius: var(--hx-radius-s);
   padding: var(--hx-space-2) 10px;
 }
@@ -190,6 +193,7 @@ samp {
 .code-panel {
   background: var(--sl-color-bg-inline-code);
   color: var(--hx-code-fg);
+  border: 1px solid var(--hx-code-border);
 }
 :where(.code-panel > .bar) {
   display: flex;

@@ -133,5 +133,7 @@ export default defineEcConfig({
       delDiffIndicatorColor: ({ theme }) => tokens[theme.name]['code-comment'],
     },
     borderRadius: 'var(--hx-radius-m)',
+    borderColor: ({ theme }) => tokens[theme.name]['code-border'],
+    borderWidth: '1px',
   },
 });
