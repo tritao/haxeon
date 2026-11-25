@@ -17,6 +17,8 @@ class GenericSpecializationPolicy {
 	/** Select an owner parameter's representation for a value-specialized class. */
 	public static function decideOwner(owner:AstClass, parameter:String, semantic:CompilerType,
 			requiresLayoutSpecialization:CompilerType->Bool):SpecializationDecision {
+		if (isGeneric(owner))
+			return {representation: semantic, policy: "layout"};
 		if (owner.typeConstraints != null)
 			for (constraint in owner.typeConstraints)
 				if (constraint.parameter == parameter)
@@ -41,6 +43,14 @@ class GenericSpecializationPolicy {
 				return {representation: semantic, policy: "layout"};
 		}
 		return shared(semantic);
+	}
+
+	/** Whether `owner` is declared `@:generic`: each of its instances is specialized for its exact type arguments, as Haxe does. */
+	public static function isGeneric(owner:AstClass):Bool {
+		for (entry in owner.metadata)
+			if (entry.name == "generic")
+				return true;
+		return false;
 	}
 
 	/**

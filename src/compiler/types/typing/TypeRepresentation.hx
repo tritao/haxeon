@@ -258,7 +258,8 @@ class TypeRepresentation {
 		if (declaration == null || declaration.typeParameters.length == 0
 			|| arguments.length != declaration.typeParameters.length)
 			return null;
-		var needsSpecialization = declaration.typeConstraints != null && declaration.typeConstraints.length > 0;
+		var needsSpecialization = declaration.typeConstraints != null && declaration.typeConstraints.length > 0
+			|| GenericSpecializationPolicy.isGeneric(declaration);
 		if (declaration.typeConstraints != null)
 			for (constraint in declaration.typeConstraints) {
 				var index = declaration.typeParameters.indexOf(constraint.parameter);

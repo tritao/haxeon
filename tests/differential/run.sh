@@ -304,6 +304,7 @@ in_background run_case instance-properties 0
 # An assignment used as a value is the setter's result where a setter stores it, else the value stored.
 in_background run_case assignment-values 0
 in_background run_case abstract-generic-structure 0
+in_background run_case generic-class 0
 in_background run_case constrained-type-parameter-members 0
 in_background run_case constrained-type-parameter-assignment 0
 in_background run_compile_failure uncalled-generic-error

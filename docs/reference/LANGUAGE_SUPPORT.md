@@ -119,8 +119,10 @@ The current subset includes:
   (`typedef Tree = {children:Array<Tree>}`), directly, through `Null<>`, in pairs, or per generic instantiation.
 - A generic class or interface with a concrete type argument is accepted where the same type with `Dynamic` is expected
   (`Box<Int>` as `Box<Dynamic>`), as in Haxe, including through a base class or an implemented interface. Every instantiation
-  of a generic class shares one erased layout. Only a whole `Dynamic` argument on the expected side widens: the other direction,
-  differing concrete arguments, and `Dynamic` nested inside an argument (`Box<Array<Dynamic>>`) are still type errors.
+  of a generic class shares one erased layout, except a `@:generic` class's, which is made for its exact type arguments as
+  in Haxe (on a function `@:generic` changes nothing: generic functions are specialized by their arguments' runtime shapes
+  already). Only a whole `Dynamic` argument on the expected side widens: the other direction, differing concrete arguments,
+  and `Dynamic` nested inside an argument (`Box<Array<Dynamic>>`) are still type errors.
 - `==` on enums follows Haxe. A constructor without fields denotes one value, so `Dot == Dot` is true however the two values
   came about; values of constructors with fields compare by identity, so `Circle(1) == Circle(1)` is false for two separately
   built values and `Circle(1) == Circle(2)` is false. `Array<Enum>.indexOf` and `remove` use the same rule. For declared value equality, a type must conform to `Equatable`; `==` and `haxeon.Equality.equals` then use the same
