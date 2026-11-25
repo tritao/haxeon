@@ -489,18 +489,19 @@ class WarmRebuildReuseMain {
 	 * only what a fresh one has.
 	 */
 	static function specializationOfAnEditedStructure(failures:Array<String>):Void {
-		var files = [
-			"Key.hx" => "typedef Key = { final name:String; final a:Int; }",
-			"Info.hx" => "class Info { public final n:Int; public function new(n:Int) this.n = n; }",
-			"Table.hx"
-				=> "class Table { public final types = new haxe.ds.ObjectMap<Key, Info>(); public function new() {} }",
-			"Main.hx"
-				=> "class Main { static function main():Int { var table = new Table(), key:Key = {name: \"x\", a: 1}; "
-				+ "table.types.set(key, new Info(41)); var total = 0; for (k => v in table.types) total += k.a + v.n; "
-				+ "trace([for (k in table.types.keys()) k.name]); return total; } }"
-		];
 		for (check in [false, true])
 			try {
+				// Each run starts from the sources before the edit, which `rebuild` writes into `files`.
+				var files = [
+					"Key.hx" => "typedef Key = { final name:String; final a:Int; }",
+					"Info.hx" => "class Info { public final n:Int; public function new(n:Int) this.n = n; }",
+					"Table.hx"
+						=> "class Table { public final types = new haxe.ds.ObjectMap<Key, Info>(); public function new() {} }",
+					"Main.hx"
+						=> "class Main { static function main():Int { var table = new Table(), key:Key = {name: \"x\", a: 1}; "
+						+ "table.types.set(key, new Info(41)); var total = 0; for (k => v in table.types) total += k.a + v.n; "
+						+ "trace([for (k in table.types.keys()) k.name]); return total; } }"
+				];
 				var compiler = newCompiler(files);
 				compiler.options = new CompileOptions({checkReuse: check});
 				compiler.compile("Main");
