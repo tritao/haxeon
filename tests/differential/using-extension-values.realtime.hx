@@ -17,7 +17,7 @@ class Tools {
 		return n;
 	}
 
-	public static function describe < T:Shape > (shape:T):String return "shape " + shape.area();
+	public static function describe<T:Shape>(shape:T):String return "shape " + shape.area();
 
 	public static function doubled(shape:Shape):Int
 		return shape.area() * 2;
@@ -50,7 +50,7 @@ class Main {
 		return "  hi  ";
 	}
 
-	static function measure < T:Shape > (value:T):String return value.describe() + " " + value.doubled();
+	static function measure<T:Shape>(value:T):String return value.describe() + " " + value.doubled();
 
 	static function main():Void {
 		var trimmed = text().trim;

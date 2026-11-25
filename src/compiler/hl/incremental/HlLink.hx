@@ -65,8 +65,8 @@ class HlLink {
 			[for (instruction in before.opcodes) rewrite(instruction, remap)], before.debugLocations,
 			[for (assignment in before.debugAssignments)
 			{
-				name:index(remap.strings, assignment.name, "debug name"), position:assignment.position,
-					scopeEnd:assignment.scopeEnd
+				name: index(remap.strings, assignment.name, "debug name"), position: assignment.position,
+				scopeEnd: assignment.scopeEnd
 			}]);
 		return {
 			fn: fn,

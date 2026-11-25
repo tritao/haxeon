@@ -404,7 +404,7 @@ class ExtractorPatterns {
 			case ObjectLiteral(fields, objectSpan):
 				var replaced:Array<AstObjectField> = [for (field in fields)
 					{
-						name:field.name, value:replaceHole(field.value, hole, replacement), span:field.span
+						name: field.name, value: replaceHole(field.value, hole, replacement), span: field.span
 					}];
 				ObjectLiteral(replaced, objectSpan);
 			case Capture(name, inner, captureSpan):

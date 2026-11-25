@@ -222,7 +222,7 @@ class TupleSwitch {
 				return null;
 			return [for (index in 0...declaration.cases.length)
 				{
-					name:declaration.cases[index].name, constructorIndex:index, key:null
+					name: declaration.cases[index].name, constructorIndex: index, key: null
 				}];
 		}
 		switch type {
@@ -234,7 +234,7 @@ class TupleSwitch {
 		return closed == null ? null : [for (value in closed)
 			if (value.key != "null")
 			{
-				name:value.name, constructorIndex:-1, key:value.key
+				name: value.name, constructorIndex: -1, key: value.key
 			}];
 	}
 

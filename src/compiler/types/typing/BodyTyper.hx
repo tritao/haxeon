@@ -317,7 +317,7 @@ class BodyTyper implements BodyTyping {
 			if (map != null) {
 				typedStatements = map.statements(typedStatements);
 				arguments = [for (argument in arguments) {
-					name:argument.name, type:map.type(argument.type)
+					name: argument.name, type: map.type(argument.type)
 				}];
 			}
 			result = session.monomorphs.settled(result);
@@ -356,7 +356,7 @@ class BodyTyper implements BodyTyping {
 		if (elaboration != null) {
 			statements = elaboration.statements(statements);
 			arguments = [for (argument in arguments) {
-				name:argument.name, type:elaboration.type(argument.type)
+				name: argument.name, type: elaboration.type(argument.type)
 			}];
 			result = elaboration.type(result);
 			if (elaborationMark != null)
@@ -2180,8 +2180,8 @@ class BodyTyper implements BodyTyping {
 				case Try(tryBranch, catches, span):
 					result.push(Try(discardResult(tryBranch, name), [for (caught in catches)
 						{
-							name:caught.name, type:caught.type, statements:discardResult(caught.statements, name),
-								span:caught.span
+							name: caught.name, type: caught.type, statements: discardResult(caught.statements, name),
+							span: caught.span
 						}], span));
 				case If(test, yes, no, span):
 					result.push(If(test, discardResult(yes, name), discardResult(no, name), span));
@@ -3263,11 +3263,11 @@ class BodyTyper implements BodyTyping {
 		var enumDecl = session.enumDecls.required(enumName),
 			coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in cases) for (arm in switchCase.arms)
 				{
-					constructorIndex:arm.constructorIndex,
-						subjectBinding:arm.subjectBinding,
-						isCatchAll:arm.isCatchAll,
-						guard:arm.guard,
-						predicates:arm.predicates
+					constructorIndex: arm.constructorIndex,
+					subjectBinding: arm.subjectBinding,
+					isCatchAll: arm.isCatchAll,
+					guard: arm.guard,
+					predicates: arm.predicates
 				}];
 		for (index in 0...enumDecl.cases.length)
 			if (!enumCaseCovered(type, index, coverageCases))

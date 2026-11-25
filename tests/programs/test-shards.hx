@@ -21,7 +21,7 @@ function main():Int {
 	var weights = [9.0, 1.0, 4.0, 1.0, 1.0, 7.0, 2.0, 2.0, 3.0, 1.0, 5.0, 1.0, 1.0, 1.0, 6.0];
 	var groups:Array<TestGroup> = [for (index in 0...weights.length)
 		{
-			name:"group" + index, run:() -> {}, weight:weights[index]
+			name: "group" + index, run: () -> {}, weight: weights[index]
 		}];
 
 	// Every group belongs to exactly one shard, for any number of shards, and the split is the same every time.
@@ -60,8 +60,7 @@ function main():Int {
 	}
 
 	// Groups without a weight count one each.
-	var plain:Array<TestGroup> = [for (index in 0...6) {
-		name:"plain" + index, run:() -> {}
+	var plain:Array<TestGroup> = [for (index in 0...6) {name: "plain" + index, run: () -> {}
 	}];
 	expect(Shards.assignment(plain, 1, 2).length == 3 && Shards.assignment(plain, 2, 2).length == 3,
 		"unweighted groups split evenly");
@@ -70,7 +69,7 @@ function main():Int {
 	var ran:Array<String> = [];
 	var tracked:Array<TestGroup> = [for (index in 0...5)
 		{
-			name:"t" + index, run:() -> ran.push("t" + index), weight:1.0
+			name: "t" + index, run: () -> ran.push("t" + index), weight: 1.0
 		}];
 	expect(Shards.run(tracked, []) && ran.join(",") == "t0,t1,t2,t3,t4", "without a shard every group runs");
 	ran = [];

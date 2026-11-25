@@ -57,7 +57,7 @@ class WasmTypeIdPlanMain {
 		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary)];
 		program.objects = [for (name in ["CbXKjoemVa", "ChobQKjKLS"])
 			{
-				name:name, isValue:false, base:null, interfaces:[], fields:[], methods:[]
+				name: name, isValue: false, base: null, interfaces: [], fields: [], methods: []
 			}];
 		return program;
 	}

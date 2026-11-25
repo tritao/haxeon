@@ -84,8 +84,8 @@ class TypedLint {
 			} {
 		var lint = new TypedLint(rule, stdlib), failed = false, lines:Array<String> = [];
 		var files = [for (path in paths) {
-			display:path,
-				absolute:Path.normalize(Path.isAbsolute(path) ? path : Path.join([base, path]))
+			display: path,
+			absolute: Path.normalize(Path.isAbsolute(path) ? path : Path.join([base, path]))
 		}];
 		for (file in files)
 			if (!lint.analyze(file.absolute))
@@ -146,20 +146,21 @@ class TypedLint {
 	static function unbound(locals:Array<UnboundLocal>):Array<TypedFinding>
 		return [for (local in locals)
 			{
-				span:local.span, message:'local "${local.name}" is Dynamic: nothing fixes ${local.what}'
+				span: local.span, message: 'local "${local.name}" is Dynamic: nothing fixes ${local.what}'
 			}];
 
 	static function nonExceptions(throws:Array<NonExceptionThrow>):Array<TypedFinding>
 		return [for (thrown in throws)
 			{
-				span:thrown.span, message:'throw of ${thrown.thrown}, not a haxe.Exception: throw an Exception subclass'
+				span: thrown.span,
+				message: 'throw of ${thrown.thrown}, not a haxe.Exception: throw an Exception subclass'
 			}];
 
 	static function namespaceUses(uses:Array<ModuleNamespaceUse>):Array<TypedFinding>
 		return [for (use in uses)
 			{
-				span:use.span,
-					message:'"${use.written}" names ${use.member} through its module\'s name, which Haxe rejects: '
+				span: use.span,
+				message: '"${use.written}" names ${use.member} through its module\'s name, which Haxe rejects: '
 					+ 'import ${use.member} or write it in full'
 			}];
 

@@ -63,7 +63,7 @@ class AnimationSmoke {
 			"RightFoot"
 		];
 		var nodes = [for (i in 0...names.length) {
-			name:"mixamorig:" + names[i], translation:[0.0, i * 0.1, 0.0]
+			name: "mixamorig:" + names[i], translation: [0.0, i * 0.1, 0.0]
 		}];
 		var document = haxe.Json.stringify({
 			asset: {version: "2.0"},

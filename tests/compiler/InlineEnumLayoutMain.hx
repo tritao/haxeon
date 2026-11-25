@@ -16,22 +16,22 @@ class InlineEnumLayoutMain {
 	static function pointerObjects(bits:Int):Array<IrObject> {
 		var size = Std.int(bits / 8);
 		return [for (count in [8, 9]) {
-			name:count == 8 ? "EightPointers" : "NinePointers", isValue:true, base:null, interfaces:[], methods:[],
-				nativeLayout:{
-					target:bits == 64 ? IrInlineEnumLayout.CANONICAL_ABI : "wasm32-wasi",
-					size:count * size,
-					alignment:size
-				},
-				fields:[for (index in 0...count) {
-					name:'pointer$index', type:RawPtr,
-						nativeLayout:{
-							offset:index * size,
-							size:size,
-							alignment:size,
-							signed:false,
-							inlineRecord:false
-						}
-				}]
+			name: count == 8 ? "EightPointers" : "NinePointers", isValue: true, base: null, interfaces: [], methods: [],
+			nativeLayout: {
+				target: bits == 64 ? IrInlineEnumLayout.CANONICAL_ABI : "wasm32-wasi",
+				size: count * size,
+				alignment: size
+			},
+			fields: [for (index in 0...count) {
+				name: 'pointer$index', type: RawPtr,
+				nativeLayout: {
+					offset: index * size,
+					size: size,
+					alignment: size,
+					signed: false,
+					inlineRecord: false
+				}
+			}]
 		}];
 	}
 

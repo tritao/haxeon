@@ -1429,22 +1429,23 @@ class HxiHaxeEmitter {
 		}
 
 		var outputFields:Array<{name:String, type:String}> = [for (output in planned.outputs) {
-			name:output.parameter, type:output.type
+			name: output.parameter, type: output.type
 		}],
 			statusField = "__result",
 			hasOutputs = outputFields.length > 0,
 			returnType = planned.returnType,
 			returnExpression = if (outputFields.length == 1) '__result.${outputFields[0].name}'
-			else if (outputFields.length > 1) "{"
-			+ [for (field in outputFields) field.name + ": __result." + field.name].join(", ") + "}" else "",
+				else if (outputFields.length > 1) "{"
+				+ [for (field in outputFields) field.name + ": __result." + field.name].join(", ") + "}" else "",
 			resultName = switch nativeFunctionResult(model.declarations, nativeName) {
-			case Named(name): name;
-			case _: throw new InternalError('Result policy applied to non-enum result for "$nativeName"');
-		},
-			success = resultSuccessMember(model.declarations, resultName, policy.successValue, profile),
-			diagnostic = policy.diagnosticFunction == null ? "null" : projectedFunctionName(policy.diagnosticFunction,
-			profile),
-			checkedName = planned.name;
+				case Named(name): name;
+				case _: throw new InternalError('Result policy applied to non-enum result for "$nativeName"');
+			},
+				success = resultSuccessMember(model.declarations, resultName, policy.successValue, profile),
+				diagnostic = policy.diagnosticFunction == null
+				? "null" : projectedFunctionName(policy.diagnosticFunction,
+				profile),
+				checkedName = planned.name;
 
 		output.add('/** Calls $publicName and throws the configured error type when its result is not successful. */\n');
 		output.add('function $checkedName(${arguments.join(", ")}):$returnType {\n');

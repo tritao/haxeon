@@ -9,8 +9,8 @@ abstract IntList(Array<Int>) {
 	public inline function new(value:Array<Int>) this = value;
 }
 
-function keepEquatable < T:Equatable > (value:T):T return value;
-function keepHashable < T:Hashable > (value:T):T return value;
+function keepEquatable<T:Equatable>(value:T):T return value;
+function keepHashable<T:Hashable>(value:T):T return value;
 
 function main():Int {
 	var a = new IntId(7), b = new IntId(7), c = new IntId(8);

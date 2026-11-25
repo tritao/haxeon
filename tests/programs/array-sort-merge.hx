@@ -115,7 +115,7 @@ function valuesStable(random:Random):Bool {
 
 function recordsStable():Bool {
 	var records = [for (index in 0...50) {
-		key:(index * 7) % 4, index:index
+		key: (index * 7) % 4, index: index
 	}];
 	records.sort((a, b) -> a.key - b.key);
 	for (index in 1...records.length) {

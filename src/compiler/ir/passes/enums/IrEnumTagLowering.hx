@@ -1224,45 +1224,45 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 		// A declaration with no type to change is kept as it is, so what compares the tables compares it by identity.
 		program.objects = [for (object in program.objects)
 			if (!Lambda.exists(object.fields, field -> changes(field.type))) object else {
-				name:object.name,
-					isValue:object.isValue,
-					nativeLayout:object.nativeLayout,
-					base:object.base,
-					interfaces:object.interfaces,
-					methods:object.methods,
-					fields:[for (field in object.fields)
+				name: object.name,
+				isValue: object.isValue,
+				nativeLayout: object.nativeLayout,
+				base: object.base,
+				interfaces: object.interfaces,
+				methods: object.methods,
+				fields: [for (field in object.fields)
 					{
-						name:field.name,
-							type:mapped(field.type),
-							nativeLayout:field.nativeLayout,
-							scalarStorage:field.scalarStorage,
-							nullableScalarStorage:field.nullableScalarStorage
+						name: field.name,
+						type: mapped(field.type),
+						nativeLayout: field.nativeLayout,
+						scalarStorage: field.scalarStorage,
+						nullableScalarStorage: field.nullableScalarStorage
 					}]
 			}];
 		program.staticFields = [for (field in program.staticFields)
 			if (!changes(field.type)) field else {
-				name:field.name, type:mapped(field.type)
+				name: field.name, type: mapped(field.type)
 			}];
 		program.interfaces = [for (entry in program.interfaces)
 			if (!Lambda.exists(entry.methods,
 			method -> changes(method.result) || Lambda.exists(method.arguments, changes))) entry else {
-				name:entry.name,
-					bases:entry.bases,
-					methods:[for (method in entry.methods)
+				name: entry.name,
+				bases: entry.bases,
+				methods: [for (method in entry.methods)
 					{
-						name:method.name,
-							arguments:[for (argument in method.arguments) mapped(argument)],
-							result:mapped(method.result)
+						name: method.name,
+						arguments: [for (argument in method.arguments) mapped(argument)],
+						result: mapped(method.result)
 					}]
 			}];
 		program.enums = [for (entry in program.enums)
 			if (!Lambda.exists(entry.cases, constructor -> Lambda.exists(constructor.params, changes))) entry else {
-				name:entry.name,
-					isRecursive:entry.isRecursive,
-					inlineStorage:entry.inlineStorage,
-					cases:[for (constructor in entry.cases)
+				name: entry.name,
+				isRecursive: entry.isRecursive,
+				inlineStorage: entry.inlineStorage,
+				cases: [for (constructor in entry.cases)
 					{
-						name:constructor.name, params:[for (parameter in constructor.params) mapped(parameter)]
+						name: constructor.name, params: [for (parameter in constructor.params) mapped(parameter)]
 					}]
 			}];
 		// What the escapes read: the program's tables as lowered, and the functions' signatures as their rewrite makes them.
@@ -1691,12 +1691,12 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 		var rewrittenFunction = new IrFunction(fn.name, [for (argument in fn.arguments) use(argument)],
 			mapped(fn.result), blocks, fn.kind, [for (binding in fn.debugBindings)
 			{
-				identity:binding.identity,
-					name:binding.name,
-					value:use(binding.value),
-					path:binding.path,
-					scopeStart:binding.scopeStart,
-					scopeEnd:binding.scopeEnd
+				identity: binding.identity,
+				name: binding.name,
+				value: use(binding.value),
+				path: binding.path,
+				scopeStart: binding.scopeStart,
+				scopeEnd: binding.scopeEnd
 			}], fn.inlineHint, fn.retention);
 		return rewrittenFunction;
 	}

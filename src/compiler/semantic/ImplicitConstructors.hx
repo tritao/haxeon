@@ -167,12 +167,12 @@ class ImplicitConstructors {
 			case AnonymousType(fields):
 				AnonymousType([for (field in fields)
 					{
-						name:field.name,
-							type:substitute(field.type, substitutions),
-							optional:field.optional,
-							isFinal:field.isFinal,
-							metadata:field.metadata,
-							span:field.span
+						name: field.name,
+						type: substitute(field.type, substitutions),
+						optional: field.optional,
+						isFinal: field.isFinal,
+						metadata: field.metadata,
+						span: field.span
 					}]);
 			default: type;
 		};

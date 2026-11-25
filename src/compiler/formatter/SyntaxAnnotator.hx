@@ -257,21 +257,22 @@ class SyntaxAnnotator {
 		if (isDeclarationList(tokens, syntaxIndexes, position))
 			return true;
 		var previous = previousKind(tokens, syntaxIndexes, position);
-		if (previous == null || previous == TokenKind.RightParen || previous == TokenKind.Else
-			|| previous == TokenKind.Try || previous == TokenKind.Catch
+		if (previous == null || previous == TokenKind.Try || previous == TokenKind.Catch
 			|| previous == TokenKind.Final)
 			return true;
-		// `case A: {` opens the arm's block and `x -> {` a lambda's body, unless the brace starts an object literal (`case A: {x: 1}`,
-		// `x -> {y: x}`), as Haxe decides it.
+		// `case A: {` opens the arm's block, `x -> {` a lambda's body and `if (c) {` or `else {` a branch, unless the brace starts
+		// an object literal (`case A: {x: 1}`, `x -> {y: x}`, `else {x: 1}`), as Haxe decides it: no block starts with `name:`.
 		// After a conditional's `?` the brace is likewise an object literal (`c ? {a: 1} : b`) or a block expression.
 		if ((previous == TokenKind.Colon && endsCaseHeader(tokens, syntaxIndexes, position - 1)
 			|| previous == TokenKind.Arrow
-			|| previous == TokenKind.Question)
+			|| previous == TokenKind.Question
+			|| previous == TokenKind.RightParen
+			|| previous == TokenKind.Else)
 			&& !startsObjectLiteral(tokens, syntaxIndexes, position))
 			return true;
 		return switch previous {
 			case TokenKind.Assign, TokenKind.Colon, TokenKind.Comma, TokenKind.LeftParen, TokenKind.LeftBracket,
-				TokenKind.Arrow, TokenKind.Return, TokenKind.Question,
+				TokenKind.Arrow, TokenKind.Return, TokenKind.Question, TokenKind.RightParen, TokenKind.Else,
 				TokenKind.Less: false;
 			default: true;
 		};

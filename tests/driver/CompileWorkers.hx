@@ -177,7 +177,7 @@ class CompileWorkers {
 		var worker = new CompileWorker(command, Path.join([directory, 'compile-worker-${started++}.json']));
 		return {finish: () -> {
 			var outcome = try worker.compile(arguments) catch (error:Dynamic) {
-				status:1, output:'the isolated compile server failed: $error\n'
+				status: 1, output: 'the isolated compile server failed: $error\n'
 			};
 			worker.shutdown();
 			return outcome;

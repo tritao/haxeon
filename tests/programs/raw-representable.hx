@@ -59,7 +59,7 @@ class Holder {
 	public var code:Code;
 	public function new(code:Code) this.code = code;
 }
-function read < T:RawRepresentable > (value:T):Int return value.rawValue();
+function read<T:RawRepresentable>(value:T):Int return value.rawValue();
 class Probe {
 	@:expose public static function fromRaw32(count:Int):Int {
 		var total = 0;

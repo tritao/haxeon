@@ -71,7 +71,7 @@ class EnumTagRewriteMain {
 		tagProgram.functions = [plain("main", 0)];
 		tagProgram.enums = [for (index in 0...4096)
 			{
-				name:"Tag" + index, cases:[{name: "Only", params: []}]
+				name: "Tag" + index, cases: [{name: "Only", params: []}]
 			}];
 		tagProgram.enums.push({name: "Payload", cases: [{name: "Some", params: [I32]}]});
 		var planner = new compiler.ir.passes.enums.IrInlineEnumLayout(tagProgram.enums, [], 64,

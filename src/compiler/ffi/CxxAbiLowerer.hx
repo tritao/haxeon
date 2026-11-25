@@ -168,7 +168,7 @@ class CxxAbiLowerer {
 			callbackNames:Map<String, String>):HxiDeclaration {
 		var values = [for (value in enumModel.values)
 			{
-				name:value.name, value:Int64.parseString(value.value), span:value.span
+				name: value.name, value: Int64.parseString(value.value), span: value.span
 			}];
 		return Enumeration(hxiName(enumModel.qualifiedName),
 			lowerType(enumModel.underlying, records, enums, aliases, true, callbackNames), false, values,

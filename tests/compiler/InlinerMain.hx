@@ -398,18 +398,18 @@ function main():Int return stay(1);
 		narrowProgram.functions = narrowFunctions.copy();
 		narrowProgram.objects = [for (object in narrowObjects)
 			if (object.name != "NarrowValue") object else {
-				name:object.name,
-					isValue:object.isValue,
-					nativeLayout:object.nativeLayout,
-					base:object.base,
-					interfaces:object.interfaces,
-					methods:object.methods,
-					fields:[for (field in object.fields)
+				name: object.name,
+				isValue: object.isValue,
+				nativeLayout: object.nativeLayout,
+				base: object.base,
+				interfaces: object.interfaces,
+				methods: object.methods,
+				fields: [for (field in object.fields)
 					if (field.name != "value") field else {
-						name:field.name,
-							type:field.type,
-							nativeLayout:field.nativeLayout,
-							scalarStorage:{size:1, signed:true}
+						name: field.name,
+						type: field.type,
+						nativeLayout: field.nativeLayout,
+						scalarStorage: {size: 1, signed: true}
 					}]
 			}];
 		narrowCache.run(narrowProgram);

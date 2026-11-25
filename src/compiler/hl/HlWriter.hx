@@ -172,7 +172,7 @@ class HlWriter {
 					default:
 				}
 		var stringUses = [for (index => count in uses) {
-			index:index, count:count
+			index: index, count: count
 		}];
 		stringUses.sort((a, b) -> a.count != b.count ? b.count - a.count : a.index - b.index);
 		var topStringUses = [

@@ -169,34 +169,36 @@ class SwitchCaseTyper {
 		function bindings(list:Array<TypedSwitchBinding>):Array<TypedSwitchBinding>
 			return [for (binding in list)
 				{
-					name:local(binding.name),
-						type:binding.type,
-						storageType:binding.storageType,
-						fieldStorageType:binding.fieldStorageType,
-						index:binding.index,
-						arrayIndex:binding.arrayIndex,
-						nestedPath:binding.nestedPath
+					name: local(binding.name),
+					type: binding.type,
+					storageType: binding.storageType,
+					fieldStorageType: binding.fieldStorageType,
+					index: binding.index,
+					arrayIndex: binding.arrayIndex,
+					nestedPath: binding.nestedPath
 				}];
 		var arrayPattern = match.arrayPattern;
-		return {value: match.value,
+		return {
+			value: match.value,
 			subjectBinding: local(match.subjectBinding),
 			arrayPattern: arrayPattern == null ? null : {elements: [for (element in arrayPattern.elements)
-			{
-				type:element.type,
-					value:element.value,
-					equalityFunction:element.equalityFunction,
-					subjectBinding:local(element.subjectBinding),
-					isCatchAll:element.isCatchAll,
-					constructorIndex:element.constructorIndex,
-					bindings:bindings(element.bindings),
-					predicates:element.predicates
-			}]},
-				isCatchAll: match.isCatchAll,
-				enumName: match.enumName,
-				constructorIndex: match.constructorIndex,
-				bindings: bindings(match.bindings),
-				predicates: match.predicates,
-				span: match.span};
+				{
+					type: element.type,
+					value: element.value,
+					equalityFunction: element.equalityFunction,
+					subjectBinding: local(element.subjectBinding),
+					isCatchAll: element.isCatchAll,
+					constructorIndex: element.constructorIndex,
+					bindings: bindings(element.bindings),
+					predicates: element.predicates
+				}]},
+			isCatchAll: match.isCatchAll,
+			enumName: match.enumName,
+			constructorIndex: match.constructorIndex,
+			bindings: bindings(match.bindings),
+			predicates: match.predicates,
+			span: match.span
+		};
 	}
 
 	static function named(names:Array<PatternName>, name:String):Null<PatternName> {

@@ -278,8 +278,8 @@ class HashLinkBackendSession implements BackendSession {
 			assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions,
 			assembly.baseGlobals, assembly.objectLayout, [for (guard in assembly.guards)
 			if (candidateAssembler.cache.stableIds.exists(guard.name)) {
-				stableId:candidateAssembler.cache.stableIds.get(guard.name) ?? 0,
-					description:guard.description
+				stableId: candidateAssembler.cache.stableIds.get(guard.name) ?? 0,
+				description: guard.description
 			}], candidateAssembler.symbols.namedGlobals());
 		var allocationAfterPatch = AllocationMeter.sample();
 		assembler = candidateAssembler;
@@ -370,7 +370,7 @@ class HashLinkBackendSession implements BackendSession {
 			byHash.set(hash, content);
 		}
 		code.sourceSnapshots = [for (hash => content in byHash) {
-			sourceHash:hash, content:content
+			sourceHash: hash, content: content
 		}];
 		code.sourceSnapshots.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash
 			> right.sourceHash ? 1 : 0);

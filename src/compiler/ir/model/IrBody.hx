@@ -943,12 +943,12 @@ class IrBody {
 	function decodeBindings(values:Array<Null<IrValue>>):Array<IrDebugBinding>
 		return [for (index in 0...bindingIdentities.length)
 			{
-				identity:bindingIdentities[index],
-					name:bindingNames[index],
-					value:valueOf(bindingValues[index], values),
-					path:bindingPaths[index],
-					scopeStart:bindingStarts[index],
-					scopeEnd:bindingEnds[index]
+				identity: bindingIdentities[index],
+				name: bindingNames[index],
+				value: valueOf(bindingValues[index], values),
+				path: bindingPaths[index],
+				scopeStart: bindingStarts[index],
+				scopeEnd: bindingEnds[index]
 			}];
 
 	/**
@@ -987,8 +987,8 @@ class IrBody {
 		return switch opcode(row) {
 			case IrOpcode.Phi: Phi(out(), [for (index in 0...operandCount(row))
 				{
-						block:ints[aux + index], value:at(index)
-					}]);
+					block: ints[aux + index], value: at(index)
+				}]);
 			case IrOpcode.ConstVoid: ConstVoid(out());
 			case IrOpcode.ConstInt: ConstInt(out(), aux);
 			case IrOpcode.ConstFloat: ConstFloat(out(), floats[aux]);

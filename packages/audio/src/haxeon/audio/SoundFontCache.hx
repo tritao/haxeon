@@ -247,7 +247,7 @@ class SoundFontLease implements Disposable {
 	public function presets():Array<SoundFontPresetInfo> {
 		ensureLive();
 		return [for (info in entry.inventory) {
-			index:info.index, bank:info.bank, program:info.program, name:info.name
+			index: info.index, bank: info.bank, program: info.program, name: info.name
 		}];
 	}
 	public function preset(index:Int, gain:Float = 1):InstrumentDefinition {

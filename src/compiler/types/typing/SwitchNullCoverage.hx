@@ -95,10 +95,10 @@ class SwitchNullCoverage {
 			arms:Array<TypedSwitchArm>):Null<String> {
 		var rows:Array<NullRow> = [for (arm in arms)
 			{
-				patterns:[
+				patterns: [
 					arm.isCatchAll ? Any : position(session, bodyTyper, type, arm.constructorIndex, arm.value,
 						arm.predicates)
-				], guarded:arm.guard != null
+				], guarded: arm.guard != null
 			}];
 		var witness = missing(session, bodyTyper, rows, 1, true);
 		return witness == null ? null : witness[0];
@@ -110,8 +110,8 @@ class SwitchNullCoverage {
 		if (constructorIndex >= 0)
 			return constructor(session, bodyTyper, type, constructorIndex, [for (predicate in predicates)
 				{
-					path:[predicate.index].concat([for (access in predicate.nestedPath ?? []) access.fieldIndex]),
-						predicate:predicate
+					path: [predicate.index].concat([for (access in predicate.nestedPath ?? []) access.fieldIndex]),
+					predicate: predicate
 				}]);
 		return value == null ? Any : constant(bodyTyper, type, value);
 	}
@@ -207,7 +207,7 @@ class SwitchNullCoverage {
 			return first.guarded ? missing(session, bodyTyper, rows.slice(1), width, root) : null;
 		// Rows are never changed in place, so with the first column chosen they serve as they are.
 		var swapped = column == 0 ? rows : [for (row in rows) {
-			patterns:swap(row.patterns, column), guarded:row.guarded
+			patterns: swap(row.patterns, column), guarded: row.guarded
 		}];
 		var type:Null<CompilerType> = null,
 			values:Array<{key:String, name:String, arity:Int}> = [],

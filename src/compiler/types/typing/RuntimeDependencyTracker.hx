@@ -30,8 +30,8 @@ class RuntimeDependencyTracker {
 		}> = [for (functionName => targets in dependencies)
 			for (target in targets.names.keys())
 			{
-			functionName:functionName, target:target
-		}];
+				functionName: functionName, target: target
+			}];
 		result.sort(function(left, right) {
 			var functionOrder = Reflect.compare(left.functionName, right.functionName);
 			return functionOrder == 0 ? Reflect.compare(left.target, right.target) : functionOrder;

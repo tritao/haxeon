@@ -1034,7 +1034,7 @@ class SemanticAssembly {
 		var names = [for (name in reasons.keys()) name];
 		names.sort(Reflect.compare);
 		return [for (name in names) {
-			artifact:name, reasons:reasons.get(name)
+			artifact: name, reasons: reasons.get(name)
 		}];
 	}
 

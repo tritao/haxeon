@@ -264,7 +264,8 @@ class ProfilerService {
 		];
 		if (newAllocations.length > 0)
 			emittedAllocationSequence = newAllocations[newAllocations.length - 1].sequence;
-		var result:Dynamic = {sequence: ++notificationSequence,
+		var result:Dynamic = {
+			sequence: ++notificationSequence,
 			state: Std.string(value.state),
 			samples: value.samples,
 			instrumentedCalls: value.instrumentedCalls,
@@ -281,49 +282,51 @@ class ProfilerService {
 			malformedSegments: value.malformedSegments,
 			gcSamples: value.gcSamples,
 			threads: [for (threadId => name in value.threads)
-			{
-				id:threadId,
-					name:name
-			}],
-				nativeSymbolCount: value.nativeSymbolCount,
-				gcStats: value.gcStats.length == 0 ? [] : [gcStatsValue(value.gcStats[value.gcStats.length - 1])],
-				timeline: {epoch: timelineEpoch,
+				{
+					id: threadId,
+					name: name
+				}],
+			nativeSymbolCount: value.nativeSymbolCount,
+			gcStats: value.gcStats.length == 0 ? [] : [gcStatsValue(value.gcStats[value.gcStats.length - 1])],
+			timeline: {
+				epoch: timelineEpoch,
 				reset: timelineReset || timelineGap,
 				gap: timelineGap,
 				fromSequence: newSamples.length == 0 ? emittedTimelineSequence : newSamples[0].sequence,
 				toSequence: emittedTimelineSequence,
 				samples: [for (sample in newSamples)
-				{
-			sequence:sample.sequence,
-				timestamp:sample.timestamp,
-				threadId:sample.threadId,
-				stackKey:sample.stackKey
-		}],
-			stacks: newStacks,
-			counters: downsampleGc(newGcStats, 128),
-			allocations: [for (sample in newAllocations)
-			{
-			sequence:sample.sequence,
-				timestamp:sample.timestamp,
-				threadId:sample.threadId,
-				requested:sample.requested,
-				allocated:sample.allocated,
-				interval:sample.interval,
-				typeKind:sample.typeKind,
-				frameDetails:[for (frame in sample.frameDetails) frameValue(frame)]
-		}]},
+					{
+						sequence: sample.sequence,
+						timestamp: sample.timestamp,
+						threadId: sample.threadId,
+						stackKey: sample.stackKey
+					}],
+				stacks: newStacks,
+				counters: downsampleGc(newGcStats, 128),
+				allocations: [for (sample in newAllocations)
+					{
+						sequence: sample.sequence,
+						timestamp: sample.timestamp,
+						threadId: sample.threadId,
+						requested: sample.requested,
+						allocated: sample.allocated,
+						interval: sample.interval,
+						typeKind: sample.typeKind,
+						frameDetails: [for (frame in sample.frameDetails) frameValue(frame)]
+					}]
+			},
 			metadataSchema: value.metadataSchema,
 			metadataRevisions: [for (moduleId => revision in value.metadataRevisions)
-			{
-			moduleId:moduleId, revision:revision
-		}],
+				{
+					moduleId: moduleId, revision: revision
+				}],
 			metadataChanges: [for (change in value.metadataChanges)
-			{
-			timestamp:change.timestamp,
-				moduleId:change.moduleId,
-				oldRevision:change.oldRevision,
-				newRevision:change.newRevision
-		}],
+				{
+					timestamp: change.timestamp,
+					moduleId: change.moduleId,
+					oldRevision: change.oldRevision,
+					newRevision: change.newRevision
+				}],
 			functions: [
 				for (aggregate in value.functions.slice(0, maxEntries))
 					aggregateValue(aggregate)
@@ -332,13 +335,14 @@ class ProfilerService {
 			stacks: [for (stack in value.stacks.slice(0, maxEntries)) stackValue(stack)],
 			leaves: [for (leaf in value.leaves) leafValue(leaf)],
 			events: [for (event in value.events)
-			{
-			timestamp:event.timestamp,
-				threadId:event.threadId,
-				eventId:event.eventId,
-				payloadHex:event.payload.toHex()
-		}],
-			lastError: value.lastError};
+				{
+					timestamp: event.timestamp,
+					threadId: event.threadId,
+					eventId: event.eventId,
+					payloadHex: event.payload.toHex()
+				}],
+			lastError: value.lastError
+		};
 		Reflect.setField(result, "captureActive", session != null && session.captureActive());
 		var view = viewModel.update(result);
 		Reflect.setField(result, "view", view.state);
@@ -392,15 +396,17 @@ class ProfilerService {
 		};
 
 	static function stackValue(value:ProfileStack):Dynamic
-		return {key: value.key,
+		return {
+			key: value.key,
 			frames: value.frames,
 			frameDetails: [for (frame in value.frameDetails) frameValue(frame)],
 			threadSamples: [for (threadId => samples in value.threadSamples)
-			{
-				threadId:threadId,
-					samples:samples
-			}],
-				samples: value.samples};
+				{
+					threadId: threadId,
+					samples: samples
+				}],
+			samples: value.samples
+		};
 
 	static function frameValue(frame:profiler.ProfilerSession.ProfileStackFrame):Dynamic
 		return {

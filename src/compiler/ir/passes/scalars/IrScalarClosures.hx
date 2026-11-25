@@ -349,48 +349,48 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 			generated.push(erasedCall(erasedCalls[generatedIndex++]));
 		var mappedObjects:Array<IrObject> = [for (object in program.objects)
 			{
-				name:object.name,
-					isValue:object.isValue,
-					nativeLayout:object.nativeLayout,
-					base:object.base,
-					interfaces:object.interfaces,
-					fields:[for (field in object.fields)
+				name: object.name,
+				isValue: object.isValue,
+				nativeLayout: object.nativeLayout,
+				base: object.base,
+				interfaces: object.interfaces,
+				fields: [for (field in object.fields)
 					{
-						name:field.name,
-							type:mapType(field.type),
-							nativeLayout:field.nativeLayout,
-							scalarStorage:field.scalarStorage,
-							nullableScalarStorage:field.nullableScalarStorage
+						name: field.name,
+						type: mapType(field.type),
+						nativeLayout: field.nativeLayout,
+						scalarStorage: field.scalarStorage,
+						nullableScalarStorage: field.nullableScalarStorage
 					}],
-						methods:object.methods
+				methods: object.methods
 			}];
 		for (object in generatedObjects)
 			mappedObjects.push(object);
 		program.objects = mappedObjects;
 		program.interfaces = [for (interfaceDecl in program.interfaces)
 			{
-				name:interfaceDecl.name,
-					bases:interfaceDecl.bases,
-					methods:[for (method in interfaceDecl.methods)
+				name: interfaceDecl.name,
+				bases: interfaceDecl.bases,
+				methods: [for (method in interfaceDecl.methods)
 					{
-						name:method.name,
-							arguments:[for (argument in method.arguments) mapType(argument)],
-							result:mapType(method.result)
+						name: method.name,
+						arguments: [for (argument in method.arguments) mapType(argument)],
+						result: mapType(method.result)
 					}]
 			}];
 		program.enums = [for (entry in program.enums)
 			{
-				name:entry.name,
-					isRecursive:entry.isRecursive,
-					inlineStorage:entry.inlineStorage,
-					cases:[for (item in entry.cases)
+				name: entry.name,
+				isRecursive: entry.isRecursive,
+				inlineStorage: entry.inlineStorage,
+				cases: [for (item in entry.cases)
 					{
-						name:item.name, params:[for (type in item.params) mapType(type)]
+						name: item.name, params: [for (type in item.params) mapType(type)]
 					}]
 			}];
 		program.staticFields = [for (field in program.staticFields)
 			{
-				name:field.name, type:mapType(field.type)
+				name: field.name, type: mapType(field.type)
 			}];
 		// The adapters' interface boxes and checked casts are derived from each adapter's version, so a kept adapter keeps them.
 		var checks = lineage != null && lineage.checks;

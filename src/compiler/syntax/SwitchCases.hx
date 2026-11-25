@@ -22,20 +22,20 @@ class SwitchCases {
 		return [for (switchCase in cases)
 			for (pattern in switchCase.patterns)
 			{
-				patterns:[pattern],
-					guard:switchCase.guard,
-					statements:switchCase.statements,
-					span:switchCase.span
+				patterns: [pattern],
+				guard: switchCase.guard,
+				statements: switchCase.statements,
+				span: switchCase.span
 			}];
 
 	public static function expressionPerPattern(cases:Array<AstSwitchExpressionCase>):Array<AstSwitchExpressionCase>
 		return [for (switchCase in cases)
 			for (pattern in switchCase.patterns)
 			{
-				patterns:[pattern],
-					guard:switchCase.guard,
-					result:switchCase.result,
-					span:switchCase.span
+				patterns: [pattern],
+				guard: switchCase.guard,
+				result: switchCase.result,
+				span: switchCase.span
 			}];
 
 	/** The one pattern of a case `perPattern` made. */

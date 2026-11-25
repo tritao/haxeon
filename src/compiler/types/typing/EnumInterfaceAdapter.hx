@@ -105,8 +105,8 @@ class EnumInterfaceAdapter {
 						index < actualArguments.length ? actualArguments[index]
 						: TTypeParameter(enumName, enumDeclaration.typeParameters[index]));
 				var args = [for (argument in implementation.arguments) {
-					name:argument.name,
-						type:session.declarations.resolve(argument.type, argument.span, enumSubstitutions)
+					name: argument.name,
+					type: session.declarations.resolve(argument.type, argument.span, enumSubstitutions)
 				}];
 				var result = session.declarations.types.resultType(implementation, enumSubstitutions);
 				EnumConformanceMethods.request(session, request.type, contract.name, request.origin, span);

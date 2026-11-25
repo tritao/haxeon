@@ -30,22 +30,22 @@ class Ruler implements Measured implements Readable implements Writable {
 }
 
 class Main {
-	static function measure < T:Measured > (value:T):Int return value.measure();
+	static function measure<T:Measured>(value:T):Int return value.measure();
 
-	static function copy < T:Readable & Writable > (from:T, to:T):Int {
+	static function copy<T:Readable & Writable>(from:T, to:T):Int {
 		to.write(from.read() + 1);
 		return to.read();
 	}
 
-	static function lengthOf < T:Ruler > (ruler:T):Int {
+	static function lengthOf<T:Ruler>(ruler:T):Int {
 		ruler.length += 1;
 		return ruler.length + ruler.measure();
 	}
 
-	static function x < T:{var x:Int;
-	} > (point:T):Int return point.x * 2;
+	static function x<T:{var x:Int;
+	}>(point:T):Int return point.x * 2;
 
-	static function unused < T:Measured > (value:T):Int return value.measure() + 1;
+	static function unused<T:Measured>(value:T):Int return value.measure() + 1;
 
 	static function main() {
 		var ruler = new Ruler(3);

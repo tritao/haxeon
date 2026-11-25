@@ -10,18 +10,26 @@ import sys.io.File;
 class WasmHandleGcLeafMain {
 	static function main():Void {
 		var provenance = SourceProvenance.generated("handle-gc-leaf"), program = new IrProgram("main");
-		program.objects = [{
-			name: "Victim",
-			isValue: false,
-			base: null,
-			interfaces: [],
-			fields: [{name: "number", type: I32}],
-			methods: []
-		},
-			{name: "Garbage", isValue: false, base: null, interfaces: [],
-			fields: [for (index in 0...8) {
-				name:'field$index', type:I32
-			}], methods: []}];
+		program.objects = [
+			{
+				name: "Victim",
+				isValue: false,
+				base: null,
+				interfaces: [],
+				fields: [{name: "number", type: I32}],
+				methods: []
+			},
+			{
+				name: "Garbage",
+				isValue: false,
+				base: null,
+				interfaces: [],
+				fields: [for (index in 0...8) {
+					name: 'field$index', type: I32
+				}],
+				methods: []
+			}
+		];
 		program.staticFields = [
 			{name: "victim", type: Obj("Victim")},
 			{name: "handle", type: Dyn},

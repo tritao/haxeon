@@ -155,7 +155,7 @@ class HaxeArguments {
 	static function segments(arguments:Array<String>, directory:String,
 			unsupported:Array<String>):Array<Array<Located>> {
 		var pending:Array<Located> = [for (argument in arguments) {
-			value:argument, directory:directory
+			value: argument, directory: directory
 		}],
 			current = directory,
 			each:Array<Located> = [],
@@ -189,7 +189,7 @@ class HaxeArguments {
 				if (++files > 256)
 					throw new UsageError('.hxml files include each other in a cycle (at ${argument.value})');
 				var included:Array<Located> = [for (value in hxmlArguments(File.getContent(path))) {
-					value:value, directory:current
+					value: value, directory: current
 				}];
 				pending = included.concat(pending);
 			} else
@@ -203,7 +203,7 @@ class HaxeArguments {
 	/** `arguments`, each relative to `directory`. */
 	static function located(arguments:Array<Located>, directory:String):Array<Located>
 		return [for (argument in arguments) {
-			value:argument.value, directory:directory
+			value: argument.value, directory: directory
 		}];
 
 	static function isCommandValue(accumulated:Array<Located>):Bool

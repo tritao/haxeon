@@ -60,14 +60,16 @@ class ApiTypeEncoder {
 		var ordered = fields.copy(), id = active.length;
 		ordered.sort((left, right) -> Reflect.compare(left.name, right.name));
 		active.push(fields);
-		var result:ApiType = {kind: "anonymous",
+		var result:ApiType = {
+			kind: "anonymous",
 			id: id,
 			fields: [for (field in ordered) {
-				name:field.name,
-					type:encodeWithin(field.type, active),
-					optional:field.optional,
-					isFinal:field.isFinal
-			}]};
+				name: field.name,
+				type: encodeWithin(field.type, active),
+				optional: field.optional,
+				isFinal: field.isFinal
+			}]
+		};
 		active.pop();
 		return result;
 	}

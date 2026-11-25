@@ -24,7 +24,7 @@ abstract EqualityArrayList(Array<Int>) {
 abstract EqualityArrayWrappedChoice(EqualityArrayChoice) {
 	public inline function new(choice:EqualityArrayChoice) this = choice;
 }
-function genericEquality < T:Equatable > (left:T, right:T):Bool return Equality.equals(left, right);
+function genericEquality<T:Equatable>(left:T, right:T):Bool return Equality.equals(left, right);
 
 function main():Int {
 	var emptyA:Array<Int> = [], emptyB:Array<Int> = [];

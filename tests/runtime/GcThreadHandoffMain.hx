@@ -12,7 +12,7 @@ class GcThreadHandoffMain {
 		var keep = 0;
 		for (i in 0...n) {
 			var a = [for (j in 0...16) {
-				v:j + i
+				v: j + i
 			}];
 			keep += a[i % 16].v;
 		}

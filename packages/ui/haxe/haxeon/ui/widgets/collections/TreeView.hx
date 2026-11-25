@@ -207,7 +207,7 @@ class TreeView implements View {
 		var keys = [for (key in extraSelected.keys()) if (branchByKey.exists(key)) key];
 		if (selectedKey != null && branchByKey.exists(selectedKey)) keys.push(selectedKey);
 		var rows:Array<{key:String, index:Int}> = [for (key in keys) {
-			key:key, index:cast indexOfKey(key)
+			key: key, index: cast indexOfKey(key)
 		}];
 		rows.sort(function(a, b) return a.index - b.index);
 		return [for (row in rows) row.key];

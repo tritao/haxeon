@@ -25,22 +25,22 @@ class FfiConfiguration {
 		this.interfaces = interfaces == null
 			? [] : HxiInterfaceOrder.dependenciesFirst([for (source in interfaces)
 			{
-				path:source.path,
-					text:source.text
+				path: source.path,
+				text: source.text
 			}]);
 		this.projections = projections == null ? [] : [for (source in projections) {
-			path:source.path, text:source.text
+			path: source.path, text: source.text
 		}];
 	}
 
 	public function interfaceSources():Array<FfiInterfaceSource>
 		return [for (source in interfaces) {
-			path:source.path, text:source.text
+			path: source.path, text: source.text
 		}];
 
 	public function projectionSources():Array<FfiProjectionSource>
 		return [for (source in projections) {
-			path:source.path, text:source.text
+			path: source.path, text: source.text
 		}];
 }
 

@@ -361,45 +361,45 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 		// Only the selected tag carriers change; native placement and optional payload widths stay intact.
 		result.objects = [for (object in program.objects)
 			{
-				name:object.name,
-					isValue:object.isValue,
-					nativeLayout:object.nativeLayout,
-					base:object.base,
-					interfaces:object.interfaces,
-					fields:[for (field in object.fields)
+				name: object.name,
+				isValue: object.isValue,
+				nativeLayout: object.nativeLayout,
+				base: object.base,
+				interfaces: object.interfaces,
+				fields: [for (field in object.fields)
 					{
-						name:field.name,
-							type:physical(field.type),
-							nativeLayout:field.nativeLayout,
-							scalarStorage:field.scalarStorage,
-							nullableScalarStorage:field.nullableScalarStorage
+						name: field.name,
+						type: physical(field.type),
+						nativeLayout: field.nativeLayout,
+						scalarStorage: field.scalarStorage,
+						nullableScalarStorage: field.nullableScalarStorage
 					}],
-						methods:object.methods
+				methods: object.methods
 			}];
 		result.interfaces = [for (entry in program.interfaces)
 			{
-				name:entry.name,
-					bases:entry.bases,
-					methods:[for (method in entry.methods)
+				name: entry.name,
+				bases: entry.bases,
+				methods: [for (method in entry.methods)
 					{
-						name:method.name,
-							arguments:[for (argument in method.arguments) physical(argument)],
-							result:physical(method.result)
+						name: method.name,
+						arguments: [for (argument in method.arguments) physical(argument)],
+						result: physical(method.result)
 					}]
 			}];
 		result.enums = [for (entry in program.enums)
 			{
-				name:entry.name,
-					isRecursive:entry.isRecursive,
-					inlineStorage:entry.inlineStorage,
-					cases:[for (enumCase in entry.cases)
+				name: entry.name,
+				isRecursive: entry.isRecursive,
+				inlineStorage: entry.inlineStorage,
+				cases: [for (enumCase in entry.cases)
 					{
-						name:enumCase.name, params:[for (type in enumCase.params) physical(type)]
+						name: enumCase.name, params: [for (type in enumCase.params) physical(type)]
 					}]
 			}];
 		result.staticFields = [for (field in program.staticFields)
 			{
-				name:field.name, type:physical(field.type)
+				name: field.name, type: physical(field.type)
 			}];
 		result.positionalFingerprints = program.positionalFingerprints;
 		result.parameterDefaults = program.parameterDefaults;

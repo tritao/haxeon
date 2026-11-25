@@ -252,7 +252,7 @@ class HlPatchReader {
 		}
 		var relocations = [for (_ in 0...readUnsigned(input))
 			{
-				instruction:readUnsigned(input), stableId:readUnsigned(input)
+				instruction: readUnsigned(input), stableId: readUnsigned(input)
 			}];
 		return {
 			type: type,

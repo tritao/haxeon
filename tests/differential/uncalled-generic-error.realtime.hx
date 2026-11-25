@@ -4,7 +4,7 @@ interface Measured {
 }
 
 class Main {
-	static function twice < T:Measured > (value:T):Int return value.measure() + value.missing();
+	static function twice<T:Measured>(value:T):Int return value.measure() + value.missing();
 
 	static function main() {}
 }

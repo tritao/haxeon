@@ -37,15 +37,15 @@ class TypedTypeMap {
 				isKept: fn.isKept,
 				isExposed: fn.isExposed,
 				arguments: [for (argument in fn.arguments) {
-			name:argument.name, type:map(argument.type)
-		}],
-			result: map(fn.result),
-			dispatchEntry: fn.dispatchEntry,
-			statements: statements(fn.statements),
-			cells: fn.cells,
-			cellCaptures: fn.cellCaptures,
-			span: fn.span,
-			warnings: fn.warnings};
+					name: argument.name, type: map(argument.type)
+				}],
+				result: map(fn.result),
+				dispatchEntry: fn.dispatchEntry,
+				statements: statements(fn.statements),
+				cells: fn.cells,
+				cellCaptures: fn.cellCaptures,
+				span: fn.span,
+				warnings: fn.warnings};
 
 	public function capture(item:TypedCapture):TypedCapture
 		return {field: item.field,
@@ -78,12 +78,12 @@ class TypedTypeMap {
 			case TDefer(body, span, scopedDisposal): TDefer(statements(body), span, scopedDisposal);
 			case TTry(tryBranch, catches, span): TTry(statements(tryBranch), [for (caught in catches)
 				{
-						name:caught.name,
-							type:map(caught.type),
-							subject:caught.subject,
-							statements:statements(caught.statements),
-							span:caught.span
-					}], span);
+					name: caught.name,
+					type: map(caught.type),
+					subject: caught.subject,
+					statements: statements(caught.statements),
+					span: caught.span
+				}], span);
 			case TIf(condition, thenBranch, elseBranch, span): TIf(expression(condition), statements(thenBranch),
 				statements(elseBranch), span);
 			case TWhile(condition, body, span): TWhile(expression(condition), statements(body), span);
@@ -93,8 +93,8 @@ class TypedTypeMap {
 			case TSwitch(subject, cases, defaultBranch, hasDefault, span): TSwitch(expression(subject),
 				[for (switchCase in cases)
 				{
-						arms:[for (arm in switchCase.arms) switchArm(arm)], statements:statements(switchCase.statements)
-					}], statements(defaultBranch), hasDefault, span);
+					arms: [for (arm in switchCase.arms) switchArm(arm)], statements: statements(switchCase.statements)
+				}], statements(defaultBranch), hasDefault, span);
 			case TIncrement(name, valueType, delta, span): TIncrement(name, map(valueType), delta, span);
 			case TCapturedIncrement(name, valueType, delta, span): TCapturedIncrement(name, map(valueType), delta,
 				span);
@@ -142,7 +142,7 @@ class TypedTypeMap {
 
 	function objectFields(fields:Array<TypedObjectField>):Array<TypedObjectField>
 		return [for (field in fields) {
-			name:field.name, value:expression(field.value)
+			name: field.name, value: expression(field.value)
 		}];
 
 	function switchArm(arm:TypedSwitchArm):TypedSwitchArm
@@ -216,14 +216,14 @@ class TypedTypeMap {
 			case TSwitchExpression(subject, cases, defaultExpression): TSwitchExpression(expression(subject),
 				[for (switchCase in cases)
 				{
-						arms:[for (arm in switchCase.arms) switchArm(arm)], result:expression(switchCase.result)
-					}], optional(defaultExpression));
+					arms: [for (arm in switchCase.arms) switchArm(arm)], result: expression(switchCase.result)
+				}], optional(defaultExpression));
 			case TObjectLiteral(name, fields, isDynamic): TObjectLiteral(name, objectFields(fields), isDynamic);
 			case TArrayLiteral(values): TArrayLiteral(expressions(values));
 			case TTuple(values): TTuple(expressions(values));
 			case TMapLiteral(entries): TMapLiteral([for (entry in entries) {
-					key:expression(entry.key), value:expression(entry.value)
-				}]);
+				key: expression(entry.key), value: expression(entry.value)
+			}]);
 			case TArrayComprehension(keyName, valueName, iterable, condition, value,
 				flattened): TArrayComprehension(keyName,
 				valueName, expression(iterable), optional(condition), expression(value), flattened);
@@ -265,59 +265,63 @@ class TypedTypeMap {
 		};
 
 	function copyLayout(layout:ValueCopyLayout):ValueCopyLayout
-		return {name: layout.name,
+		return {
+			name: layout.name,
 			fields: [for (field in layout.fields)
-			{
-				name:field.name, type:map(field.type), nested:field.nested == null ? null : copyLayout(field.nested)
-			}]};
+				{
+					name: field.name, type: map(field.type),
+					nested: field.nested == null ? null : copyLayout(field.nested)
+				}]
+		};
 
 	function arrayPattern(pattern:Null<TypedSwitchArrayPattern>):Null<TypedSwitchArrayPattern>
 		return pattern == null ? null : {elements: [for (element in pattern.elements)
 			{
-				type:map(element.type),
-					value:optional(element.value),
-					equalityFunction:element.equalityFunction,
-					subjectBinding:element.subjectBinding,
-					isCatchAll:element.isCatchAll,
-					constructorIndex:element.constructorIndex,
-					bindings:bindings(element.bindings),
-					predicates:predicates(element.predicates)
+				type: map(element.type),
+				value: optional(element.value),
+				equalityFunction: element.equalityFunction,
+				subjectBinding: element.subjectBinding,
+				isCatchAll: element.isCatchAll,
+				constructorIndex: element.constructorIndex,
+				bindings: bindings(element.bindings),
+				predicates: predicates(element.predicates)
 			}]};
 
 	function bindings(list:Array<TypedSwitchBinding>):Array<TypedSwitchBinding>
 		return [for (binding in list)
 			{
-				name:binding.name,
-					type:map(binding.type),
-					storageType:map(binding.storageType),
-					fieldStorageType:map(binding.fieldStorageType),
-					index:binding.index,
-					arrayIndex:binding.arrayIndex,
-					nestedPath:fieldPath(binding.nestedPath)
+				name: binding.name,
+				type: map(binding.type),
+				storageType: map(binding.storageType),
+				fieldStorageType: map(binding.fieldStorageType),
+				index: binding.index,
+				arrayIndex: binding.arrayIndex,
+				nestedPath: fieldPath(binding.nestedPath)
 			}];
 
 	function predicates(list:Array<TypedSwitchPredicate>):Array<TypedSwitchPredicate>
 		return [for (predicate in list)
 			{
-				value:optional(predicate.value),
-					arrayLength:predicate.arrayLength,
-					type:map(predicate.type),
-					storageType:map(predicate.storageType),
-					fieldStorageType:map(predicate.fieldStorageType),
-					index:predicate.index,
-					arrayIndex:predicate.arrayIndex,
-					nestedPath:fieldPath(predicate.nestedPath),
-					objectPath:predicate.objectPath == null ? null : [for (access in predicate.objectPath)
+				value: optional(predicate.value),
+				arrayLength: predicate.arrayLength,
+				type: map(predicate.type),
+				storageType: map(predicate.storageType),
+				fieldStorageType: map(predicate.fieldStorageType),
+				index: predicate.index,
+				arrayIndex: predicate.arrayIndex,
+				nestedPath: fieldPath(predicate.nestedPath),
+				objectPath: predicate.objectPath == null ? null : [for (access in predicate.objectPath)
 					{
-						name:access.name, storageType:map(access.storageType)
+						name: access.name, storageType: map(access.storageType)
 					}],
-						nestedConstructorIndex:predicate.nestedConstructorIndex
+				nestedConstructorIndex: predicate.nestedConstructorIndex
 			}];
 
 	function fieldPath(path:Null<Array<TypedSwitchFieldAccess>>):Null<Array<TypedSwitchFieldAccess>>
 		return path == null ? null : [for (access in path)
 			{
-				enumType:map(access.enumType), constructorIndex:access.constructorIndex, fieldIndex:access.fieldIndex,
-					storageType:map(access.storageType)
+				enumType: map(access.enumType), constructorIndex: access.constructorIndex,
+				fieldIndex: access.fieldIndex,
+				storageType: map(access.storageType)
 			}];
 }

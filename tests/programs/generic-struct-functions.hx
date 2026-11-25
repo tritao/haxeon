@@ -27,7 +27,7 @@ class ReferenceValue {
 }
 
 function identity<T>(value:T):T return value;
-function measure < T:Measured > (value:T):Int return value.measure();
+function measure<T:Measured>(value:T):Int return value.measure();
 function apply<T>(value:T, operation:T->Int):Int return operation(value);
 function pointNumber(value:ManagedPoint):Int return value.number;
 

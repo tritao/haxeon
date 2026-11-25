@@ -92,22 +92,26 @@ class InlineEnumPointerWordMain {
 		b.select(bad);
 		b.returnValue(b.constInt(1));
 		var p = new IrProgram("main");
-		p.objects = [{
-			name: "Owner",
-			isValue: false,
-			base: null,
-			interfaces: [],
-			methods: [],
-			fields: []
-		},
-			{name: "Words",
-			isValue: true,
-			base: null,
-			interfaces: [],
-			methods: [],
-			fields: [for (i in 0...4) {
-				name:"scalar" + i, type:word
-			}]}];
+		p.objects = [
+			{
+				name: "Owner",
+				isValue: false,
+				base: null,
+				interfaces: [],
+				methods: [],
+				fields: []
+			},
+			{
+				name: "Words",
+				isValue: true,
+				base: null,
+				interfaces: [],
+				methods: [],
+				fields: [for (i in 0...4) {
+					name: "scalar" + i, type: word
+				}]
+			}
+		];
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		p.natives = IrInlineEnumWordAccess.natives();
 		var table = compiler.ir.model.IrObjectTable.of([for (o in p.objects) o.name => o]);

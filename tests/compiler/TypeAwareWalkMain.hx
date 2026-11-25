@@ -25,14 +25,16 @@ class TypeAwareWalkMain {
 	}
 
 	static function object(name:String, interfaces:Array<String>, methods:Array<String>):IrObject
-		return {name: name,
+		return {
+			name: name,
 			isValue: false,
 			base: null,
 			interfaces: interfaces,
 			fields: [],
 			methods: [for (method in methods) {
-				name:method, functionName:compiler.ir.model.IrSymbol.of(name + "." + method)
-			}]};
+				name: method, functionName: compiler.ir.model.IrSymbol.of(name + "." + method)
+			}]
+		};
 
 	static function empty(name:String, kind:IrFunctionKind, ?arguments:Array<IrType>, result:IrType = Void):IrFunction {
 		var builder = new IrBuilder();
@@ -144,21 +146,21 @@ class TypeAwareWalkMain {
 				kind + ": the class of an argument is not created by the native");
 			// A native declared to return the subclass creates it.
 			program.natives = [for (native in program.natives) {
-				name:native.name, library:native.library, symbol:native.symbol, arguments:native.arguments,
-					result:Obj("Derived")
+				name: native.name, library: native.library, symbol: native.symbol, arguments: native.arguments,
+				result: Obj("Derived")
 			}];
 			program.cNatives = [for (native in program.cNatives) {
-				name:native.name,
-					library:native.library,
-					symbol:native.symbol,
-					signature:"",
-					pointerOwnership:"none",
-					pointerRelease:null,
-					pointerLength:null,
-					pointerNullable:false,
-					arguments:native.arguments,
-					argumentModes:native.argumentModes,
-					result:Obj("Derived")
+				name: native.name,
+				library: native.library,
+				symbol: native.symbol,
+				signature: "",
+				pointerOwnership: "none",
+				pointerRelease: null,
+				pointerLength: null,
+				pointerNullable: false,
+				arguments: native.arguments,
+				argumentModes: native.argumentModes,
+				result: Obj("Derived")
 			}];
 			var subclass = IrTypeAwareWalk.run(program, {functions: ["main"], types: []});
 			expect(subclass.createdClasses.exists("Derived"), kind + ": a native's subclass result is created");

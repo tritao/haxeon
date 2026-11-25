@@ -290,14 +290,14 @@ class IrOptionalScalarFlow extends IrFunctionPass {
 			if (candidates.exists(fn.name))
 				made.push(derive(PREFIX + fn.name, versions.get(fn.name) ?? 0, () -> scalarForm(fn, true)));
 		var checked = [for (name => typeName in receiverChecks) {
-			name:name, typeName:typeName
+			name: name, typeName: typeName
 		}];
 		checked.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in checked)
 			made.push(derive(entry.name, IrFunctionStages.FROM_NAME,
 				() -> receiverCheckFunction(entry.name, entry.typeName)));
 		var wrapped = [for (name => declared in wrappers) {
-			name:name, declared:declared
+			name: name, declared: declared
 		}];
 		wrapped.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in wrapped)
@@ -1231,7 +1231,7 @@ class IrOptionalScalarFlow extends IrFunctionPass {
 						}
 						for (i in 0...parts.length)
 							add(target, Phi(parts[i], [for (j in 0...incoming.length) {
-								block:incoming[j].block, value:sources[j][i]
+								block: incoming[j].block, value: sources[j][i]
 							}]), located);
 						if (holders.exists(out.id))
 							phiInstall.push({id: out.id, from: located});

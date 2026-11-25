@@ -685,11 +685,11 @@ class DeclarationIndex {
 			substitutions:Map<String, CompilerType>, target:Array<AnonymousField>):Void {
 		var fields:Array<AnonymousField> = [for (field in parsedFields)
 			{
-				name:field.name,
-					type:field.optional ? nullable(resolveInner(field.type, field.span, resolving,
+				name: field.name,
+				type: field.optional ? nullable(resolveInner(field.type, field.span, resolving,
 					substitutions)) : resolveInner(field.type, field.span, resolving, substitutions),
-					optional:field.optional,
-					isFinal:field.isFinal
+				optional: field.optional,
+				isFinal: field.isFinal
 			}];
 		fields.sort(function(left, right) return Reflect.compare(left.name, right.name));
 		for (i in 1...fields.length)

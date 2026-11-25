@@ -30,7 +30,7 @@ class KeyPathType {
 				type: TBool
 			}
 		]) {
-			name:entry.name, type:entry.type, optional:false, isFinal:true
+			name: entry.name, type: entry.type, optional: false, isFinal: true
 		}];
 
 	public static function descriptorName(root:CompilerType, value:CompilerType):String

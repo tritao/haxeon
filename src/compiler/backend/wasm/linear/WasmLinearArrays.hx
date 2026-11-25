@@ -325,7 +325,7 @@ class WasmLinearArrays {
 	public static function addArrayConcat(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]},
 			[for (_ in 0...4) {
-				type:I32
+				type: I32
 			}], [
 				LocalGet(0),
 				I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),

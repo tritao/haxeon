@@ -274,7 +274,7 @@ class IrTypedInterfaceDispatch {
 		function carriersCompatible(a:IrType, b:IrType):Bool
 			return IrVerifier.sameType(a, b) || (isManagedReference(a) && isManagedReference(b));
 		var sorted = [for (name => signature in requests) {
-			name:name, signature:signature
+			name: name, signature: signature
 		}];
 		sorted.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in sorted) {

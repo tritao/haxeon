@@ -29,7 +29,7 @@ class EnumHolder<T> {
 	public function new(item:T) this.item = item;
 }
 
-function makeGeneric < T:Equatable > (value:T):GenericValue<T> return GenericValue.Item(value);
+function makeGeneric<T:Equatable>(value:T):GenericValue<T> return GenericValue.Item(value);
 
 @:hlNative("haxeon_runtime", "__reflect_is_enum")
 extern function enumKindProbe(value:Dynamic):Bool;

@@ -118,8 +118,8 @@ class GenericFingerprint<T> implements Diffable {
 	public function new(value:T) this.value = value;
 }
 
-function keepEquatable < T:Equatable > (value:T):T return value;
-function keepHashable < T:Hashable > (value:T):T return value;
+function keepEquatable<T:Equatable>(value:T):T return value;
+function keepHashable<T:Hashable>(value:T):T return value;
 
 function main():Int {
 	var a = new Record(7);

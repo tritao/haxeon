@@ -244,7 +244,7 @@ class IrValueArrayProgramRewrite {
 					visit(IrTypeIds.type(id));
 				}
 		var keyed = [for (key => element in elements) {
-			key:key, element:element
+			key: key, element: element
 		}];
 		keyed.sort((a, b) -> Reflect.compare(a.key, b.key));
 		var index = new ValueArrayFunctionIndex([for (entry in keyed) entry.element], builder),

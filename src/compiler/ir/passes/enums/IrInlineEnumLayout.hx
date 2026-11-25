@@ -146,7 +146,7 @@ class IrInlineEnumLayout {
 	public function generatedObjects():Array<IrObject> {
 		var generated = [for (name => object in objects)
 			if (StringTools.startsWith(name, VALUE_PREFIX)) {
-				name:name, object:object
+				name: name, object: object
 			}];
 		generated.sort((a, b) -> Reflect.compare(a.name, b.name));
 		return [for (entry in generated) entry.object];
@@ -187,8 +187,8 @@ class IrInlineEnumLayout {
 		var name = object.name;
 		valueCopies.set(object.name, name);
 		var fields:Array<IrObjectField> = [for (field in object.fields) {
-			name:field.name, type:payloadType(field.type), nativeLayout:field.nativeLayout,
-				scalarStorage:field.scalarStorage, nullableScalarStorage:field.nullableScalarStorage
+			name: field.name, type: payloadType(field.type), nativeLayout: field.nativeLayout,
+			scalarStorage: field.scalarStorage, nullableScalarStorage: field.nullableScalarStorage
 		}];
 		objects.set(name, {
 			name: name,

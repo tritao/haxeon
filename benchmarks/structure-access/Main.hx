@@ -40,12 +40,12 @@ class Main {
 	static function main() {
 		var classes = [for (i in 0...COUNT) new Point(i, i + 1)],
 			structures:Array<Pair> = [for (i in 0...COUNT) {
-				x:i, y:i + 1
+				x: i, y: i + 1
 			}],
-				boxes:Array<Box<Dynamic>> = [for (i in 0...COUNT) new Box<Int>(i)],
-				dynamics:Array<Dynamic> = [for (i in 0...COUNT) {
-			x:i, y:i + 1
-		}];
+			boxes:Array<Box<Dynamic>> = [for (i in 0...COUNT) new Box<Int>(i)],
+			dynamics:Array<Dynamic> = [for (i in 0...COUNT) {
+				x: i, y: i + 1
+			}];
 		report("class", () -> {
 			var sum = 0;
 			for (i in 0...READS)

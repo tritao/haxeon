@@ -413,14 +413,12 @@ class TestRunner {
 		return runPipelines([for (test in tests) {
 			var name = test.name,
 				failure = (status:Int) -> status == 0 ? null : 'FAIL: $name exited with $status';
-			if (program != null && shared.contains(name)) {
-				steps:[{start: () -> {
-					Sys.putEnv(NAMED_MAIN, name);
-					startProgram(program);
-				},
-					failure: failure}],
-					success:""
-			} else {
+			if (program != null && shared.contains(name)) {steps: [{start: () -> {
+				Sys.putEnv(NAMED_MAIN, name);
+				startProgram(program);
+			},
+				failure: failure}],
+				success: ""} else {
 				var compiled = testMainOutput(name);
 				{
 					steps:[

@@ -49,7 +49,7 @@ function mutate(value:Vec2):Vec2 {
 	return value;
 }
 
-function readX < T:HasX > (value:T):Int return value.xValue();
+function readX<T:HasX>(value:T):Int return value.xValue();
 
 function main():Int {
 	var original = new Vec2(1, 2);

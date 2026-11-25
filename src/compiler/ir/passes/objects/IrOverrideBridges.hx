@@ -151,7 +151,7 @@ class IrOverrideBridges extends IrFunctionPass {
 		if (bridges.length == 0)
 			return functions;
 		var made = [for (name => adapter in adapters) {
-			name:name, adapter:adapter
+			name: name, adapter: adapter
 		}];
 		made.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in made)

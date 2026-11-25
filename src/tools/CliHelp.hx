@@ -349,7 +349,7 @@ class CliHelp {
 	public static function commandGroups():Array<{title:String, commands:Array<String>}>
 		return [for (group in GROUPS)
 			{
-				title:group.title, commands:[for (command in group.commands) command.name]
+				title: group.title, commands: [for (command in group.commands) command.name]
 			}];
 
 	/** The overview: each group's commands with a line each. */

@@ -51,7 +51,7 @@ class HlStatCommand {
 				for (instruction in fn.instructions)
 					counts.set(instruction.opcode, (counts.get(instruction.opcode) ?? 0) + 1);
 			var ranked = [for (opcode => n in counts) {
-				opcode:opcode, n:n
+				opcode: opcode, n: n
 			}];
 			ranked.sort((a, b) -> b.n - a.n);
 			for (entry in ranked.slice(0, count))
@@ -163,7 +163,7 @@ class HlStatCommand {
 
 	static function ranking(counts:Map<Int, Int>):String {
 		var ranked = [for (opcode => n in counts) {
-			opcode:opcode, n:n
+			opcode: opcode, n: n
 		}];
 		ranked.sort((a, b) -> b.n - a.n);
 		return [for (entry in ranked.slice(0, 12)) opcodeName(entry.opcode).substr(1) + " " + entry.n].join(", ");

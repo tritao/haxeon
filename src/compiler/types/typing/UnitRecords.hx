@@ -81,7 +81,7 @@ class UnitRecords {
 			var names = [for (name in types.keys()) name];
 			names.sort(Reflect.compare);
 			result.set(unit, [for (name in names) {
-				name:name, fields:types.get(name)
+				name: name, fields: types.get(name)
 			}]);
 		}
 		return result;

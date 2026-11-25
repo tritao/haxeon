@@ -500,7 +500,7 @@ class HlSymbolTable {
 
 	static function orderedMap(values:Map<String, Int>):Array<HlNamedIndex> {
 		var result:Array<HlNamedIndex> = [for (name => index in values) {
-			name:name, index:index
+			name: name, index: index
 		}];
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		return result;
@@ -508,7 +508,7 @@ class HlSymbolTable {
 
 	static function orderedNestedMap(values:Map<String, Map<String, Int>>):Array<HlNamedSlots> {
 		var result:Array<HlNamedSlots> = [for (name => slots in values) {
-			name:name, slots:orderedMap(slots)
+			name: name, slots: orderedMap(slots)
 		}];
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		return result;
@@ -778,7 +778,7 @@ class HlSymbolTable {
 		ensureWritable();
 		var constructors:Array<HlEnumConstructor> = [for (constructor in enumDecl.cases)
 			{
-				name:internString(constructor.name), params:[for (param in constructor.params) internType(param)]
+				name: internString(constructor.name), params: [for (param in constructor.params) internType(param)]
 			}];
 		var index = typeIndices.exists(key) ? typeIndices.get(key) : types.length;
 		if (pendingTypes.exists(key)) {
@@ -870,8 +870,8 @@ class HlSymbolTable {
 		ensureWritable();
 		var fields:Array<HlObjectField> = [for (field in object.fields)
 			{
-				name:internString(field.name),
-					type:internObjectFieldType(field.type, valueObjects, compiler.ir.model.IrFieldStorage.scalar(field))
+				name: internString(field.name),
+				type: internObjectFieldType(field.type, valueObjects, compiler.ir.model.IrFieldStorage.scalar(field))
 			}];
 		if (interfaceSlots != null)
 			for (slot in interfaceSlots) {

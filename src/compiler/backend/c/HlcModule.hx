@@ -602,7 +602,7 @@ class HlcModule {
 	/** The indices of `set` sorted by their C names, so declarations are in the same order in every build. */
 	static function sorted(set:Map<Int, Bool>, name:Int->String):Array<Int> {
 		var keyed = [for (index in set.keys()) {
-			index:index, name:name(index)
+			index: index, name: name(index)
 		}];
 		keyed.sort((a, b) -> Reflect.compare(a.name, b.name));
 		return [for (entry in keyed) entry.index];

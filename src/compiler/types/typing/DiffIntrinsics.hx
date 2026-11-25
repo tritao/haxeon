@@ -222,7 +222,7 @@ class DiffIntrinsics {
 					break;
 				}
 				if (found != null) {
-					declaration:declaration, method:found, type:type
+					declaration: declaration, method: found, type: type
 				};
 				else if (declaration.base == null) null;
 				else {

@@ -119,10 +119,10 @@ class KeyPathRuntime {
 				created =
 					new TypedExpression(TObjectLiteral(KeyPathType.descriptorName(definition.root, definition.value),
 					[for (entry in values) {
-						name:entry.name, value:entry.value
+						name: entry.name, value: entry.value
 					}], false), pathType, span),
-						cached = new TypedExpression(TStaticField(cacheName, fieldName), pathType, span),
-						missing = new TypedExpression(TEqual(cached, nil(pathType, span)), TBool, span);
+				cached = new TypedExpression(TStaticField(cacheName, fieldName), pathType, span),
+				missing = new TypedExpression(TEqual(cached, nil(pathType, span)), TBool, span);
 			result.push(fn(name, definition, [], pathType, [
 				TIf(missing, [TStaticFieldAssign(cacheName, fieldName, created, span)], [], span),
 				TReturn(cached, span)

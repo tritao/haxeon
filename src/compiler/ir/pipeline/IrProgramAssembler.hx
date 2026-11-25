@@ -79,12 +79,12 @@ class IrProgramAssembler {
 				case HashLinkNative: true;
 				default: false;
 			})) {
-			name:native.name,
-				library:native.library,
-				symbol:native.symbol,
-				arguments:[for (argument in native.arguments) generator.lowerType(argument)],
-				result:generator.lowerType(native.result)
-		}];
+				name: native.name,
+				library: native.library,
+				symbol: native.symbol,
+				arguments: [for (argument in native.arguments) generator.lowerType(argument)],
+				result: generator.lowerType(native.result)
+			}];
 
 	public static function cNativesFrom(generator:IrGenerator, typed:TypedProgram):Array<IrCNative> {
 		var result:Array<IrCNative> = [];
@@ -333,11 +333,11 @@ class IrProgramAssembler {
 	public static function enumsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrEnum> {
 		var result:Array<IrEnum> = [for (enumDecl in typed.enums)
 			{
-				name:enumDecl.name,
-					isRecursive:enumDecl.isRecursive,
-					cases:[for (caseDecl in enumDecl.cases)
+				name: enumDecl.name,
+				isRecursive: enumDecl.isRecursive,
+				cases: [for (caseDecl in enumDecl.cases)
 					{
-						name:caseDecl.name, params:[for (param in caseDecl.params) generator.lowerType(param)]
+						name: caseDecl.name, params: [for (param in caseDecl.params) generator.lowerType(param)]
 					}]
 			}];
 		result.sort((left, right) -> Reflect.compare(left.name, right.name));
@@ -347,13 +347,13 @@ class IrProgramAssembler {
 	public static function interfacesFrom(generator:IrGenerator, typed:TypedProgram):Array<IrInterface> {
 		return [for (interfaceDecl in typed.interfaces)
 			{
-				name:interfaceDecl.name,
-					bases:interfaceDecl.bases,
-					methods:[for (method in interfaceDecl.methods)
+				name: interfaceDecl.name,
+				bases: interfaceDecl.bases,
+				methods: [for (method in interfaceDecl.methods)
 					{
-						name:method.name,
-							arguments:[for (argument in method.arguments) generator.lowerType(argument)],
-							result:generator.lowerType(method.result)
+						name: method.name,
+						arguments: [for (argument in method.arguments) generator.lowerType(argument)],
+						result: generator.lowerType(method.result)
 					}]
 			}];
 	}
@@ -469,29 +469,29 @@ class IrProgramAssembler {
 				base: null,
 				interfaces: [],
 				fields: [for (capture in environment.captures)
-				{
-					name:capture.field,
-						type:generator.lowerType(switch capture.source {
-							case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass):
-								TInstance(NominalKind.Class, cellClass, []);
-							default: capture.storageType;
-						})
-				}],
+				{name: capture.field,
+				type: generator.lowerType(switch capture.source {
+					case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass):
+						TInstance(NominalKind.Class, cellClass, []);
+					default: capture.storageType;
+				})}],
 					methods: []});
 		for (anonymous in typed.anonymousTypes)
-			objects.push({name: anonymous.name,
+			objects.push({
+				name: anonymous.name,
 				isValue: false,
 				base: null,
 				interfaces: [],
 				fields: [for (field in anonymous.fields)
-				{
-					name:field.name, type:generator.lowerType(field.type)
-				}],
-					methods: printsStructures
+					{
+						name: field.name, type: generator.lowerType(field.type)
+					}],
+				methods: printsStructures
 					? [{
 						name: "__string",
 						functionName: compiler.ir.model.IrSymbol.of(anonymousStringName(anonymous.name))
-					}] : []});
+					}] : []
+			});
 		return objects;
 	}
 

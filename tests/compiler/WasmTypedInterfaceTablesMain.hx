@@ -56,7 +56,8 @@ class WasmTypedInterfaceTablesMain {
 			var path = 'out/typed-method-table-${gc?"gc":"linear"}.wasm';
 			sys.io.File.saveBytes(path, WasmEncoder.encode(standalone));
 			var expected = [for (name in classes) {
-				id:module.runtimeTypeId(Obj(name)), slot:slots.get(IrTypedInterfaceDispatch.adapterName(dispatch, name))
+				id: module.runtimeTypeId(Obj(name)),
+				slot: slots.get(IrTypedInterfaceDispatch.adapterName(dispatch, name))
 			}];
 			var cases = haxe.Json.stringify(expected), missing = module.runtimeTypeId(Obj("InvalidSignature"));
 			var js =

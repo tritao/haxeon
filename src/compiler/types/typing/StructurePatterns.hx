@@ -63,12 +63,12 @@ class StructurePatterns {
 				[for (switchCase in fieldCases) compiler.syntax.SwitchCases.only(switchCase.patterns)], span);
 		var fieldSwitch = Switch(tuple.subject, [for (index in 0...fieldCases.length)
 			{
-				patterns:[tuple.values[index]],
-					guard:fieldCases[index].guard,
-					statements:fieldCases[index].statements,
-					span:fieldCases[index].span
+				patterns: [tuple.values[index]],
+				guard: fieldCases[index].guard,
+				statements: fieldCases[index].statements,
+				span: fieldCases[index].span
 			}], defaultBranch, hasDefault, span),
-				statements:Array<AstStatement> = held.temporary == null ? [] : [held.temporary];
+			statements:Array<AstStatement> = held.temporary == null ? [] : [held.temporary];
 		if (fieldCases.length == cases.length)
 			statements.push(fieldSwitch);
 		else {
@@ -104,12 +104,12 @@ class StructurePatterns {
 				[for (switchCase in fieldCases) compiler.syntax.SwitchCases.only(switchCase.patterns)], span);
 		var fieldSwitch = SwitchExpression(tuple.subject, [for (index in 0...fieldCases.length)
 			{
-				patterns:[tuple.values[index]],
-					guard:fieldCases[index].guard,
-					result:fieldCases[index].result,
-					span:fieldCases[index].span
+				patterns: [tuple.values[index]],
+				guard: fieldCases[index].guard,
+				result: fieldCases[index].result,
+				span: fieldCases[index].span
 			}], fallback, span),
-				result = fieldSwitch;
+			result = fieldSwitch;
 		if (fieldCases.length != cases.length) {
 			var nullCases:Array<AstSwitchExpressionCase> = [], covered = false;
 			for (switchCase in cases)

@@ -255,52 +255,54 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		}
 		var typedEnums:Array<TypedEnum> = cachedMetadata == null ? [for (enumDecl in program.enums)
 			{
-				name:enumDecl.name,
-					isRecursive:session.enumRepresentations.isRecursive(enumDecl.name),
-					equatable:DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []),
+				name: enumDecl.name,
+				isRecursive: session.enumRepresentations.isRecursive(enumDecl.name),
+				equatable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []),
 					"Equatable"),
-					hashable:DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []),
+				hashable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []),
 					"Hashable"),
-					metadata:enumDecl.metadata,
-					cases:[for (caseDecl in enumDecl.cases)
+				metadata: enumDecl.metadata,
+				cases: [for (caseDecl in enumDecl.cases)
 					{
-						name:caseDecl.name,
-							metadata:caseDecl.metadata,
-							params:[
-								for (param in caseDecl.params)
-									session.representation.enumStorageType(enumDecl.typeParameters, param,
-									TInstance(NominalKind.Enum, enumDecl.name, []))
-							],
-							span:caseDecl.span
+						name: caseDecl.name,
+						metadata: caseDecl.metadata,
+						params: [
+							for (param in caseDecl.params)
+								session.representation.enumStorageType(enumDecl.typeParameters, param,
+								TInstance(NominalKind.Enum, enumDecl.name, []))
+						],
+						span: caseDecl.span
 					}],
-						span:enumDecl.span
+				span: enumDecl.span
 			}] : [
 				for (declaration in cachedMetadata.enums)
 					if (declaration.specializationOrigin == null) declaration
-			], typedInterfaces:Array<TypedInterface> = cachedMetadata == null
+			],
+			typedInterfaces:Array<TypedInterface> = cachedMetadata == null
 				? [for (interfaceDecl in program.interfaces)
 				{
-			name:interfaceDecl.name,
-				bases:[
-					for (base in interfaceDecl.bases)
-						if (!StructProperties.isConstraintSyntax(base)) BodyTyper.inheritanceName(base)
-				],
-				methods:[for (method in interfaceDecl.methods) if (method.isDynamic != true)
-				{
-					name:method.name,
-						arguments:[
-							for (argument in method.arguments)
-								session.representation.resolveMethodArgument(TInstance(NominalKind.Interface,
-								interfaceDecl.name,
-								[for (_ in interfaceDecl.typeParameters) TDynamic]),
-								interfaceDecl.name, argument)
-								.physical
-						],
-						result:erasureType(interfaceDecl, method.result, method.span)
-				}]
-		}] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null
-			? typeDeclaredClasses(program.classes, selected) : refreshCachedClasses(program.classes,
-			cachedMetadata.classes, selected, refreshing),
+					name: interfaceDecl.name,
+					bases: [
+						for (base in interfaceDecl.bases)
+							if (!StructProperties.isConstraintSyntax(base)) BodyTyper.inheritanceName(base)
+					],
+					methods: [for (method in interfaceDecl.methods) if (method.isDynamic != true)
+						{
+							name: method.name,
+							arguments: [
+								for (argument in method.arguments)
+									session.representation.resolveMethodArgument(TInstance(NominalKind.Interface,
+									interfaceDecl.name,
+									[for (_ in interfaceDecl.typeParameters) TDynamic]),
+									interfaceDecl.name, argument)
+									.physical
+							],
+							result: erasureType(interfaceDecl, method.result, method.span)
+						}]
+				}] : cachedMetadata.interfaces,
+			typedClasses:Array<TypedClass> = cachedMetadata == null
+				? typeDeclaredClasses(program.classes, selected) : refreshCachedClasses(program.classes,
+				cachedMetadata.classes, selected, refreshing),
 			typedFunctions:Array<TypedFunction> = [];
 		// Unchanged code keeps the generic owners and generated classes it uses, whether or not the declaration metadata of the
 		// previous program is reused. Owners are asked for again and typed from the current declarations, so a program that
@@ -1920,7 +1922,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					TInstance(NominalKind.Class, classDecl.name, [])).flat;
 			if (!entry.isNativeValue && !isFlat)
 				continue;
-			records.push({name: classDecl.name,
+			records.push({
+				name: classDecl.name,
 				isValue: !entry.isNativeValue,
 				isFlat: isFlat,
 				isPortable: false,
@@ -1929,20 +1932,21 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				base: null,
 				interfaces: [],
 				fields: [for (field in classDecl.fields) if (!field.isStatic) {
-					name:field.name,
-						metadata:field.metadata,
-						type:session.declarations.types.fieldType(classDecl.name, field),
-						initializer:null,
-						inlineValue:null,
-						readAccess:field.readAccess,
-						writeAccess:field.writeAccess,
-						isStatic:false,
-						isInline:field.isInline,
-						isFinal:field.isFinal,
-						span:field.span
+					name: field.name,
+					metadata: field.metadata,
+					type: session.declarations.types.fieldType(classDecl.name, field),
+					initializer: null,
+					inlineValue: null,
+					readAccess: field.readAccess,
+					writeAccess: field.writeAccess,
+					isStatic: false,
+					isInline: field.isInline,
+					isFinal: field.isFinal,
+					span: field.span
 				}],
-					methods: [],
-					span: classDecl.span});
+				methods: [],
+				span: classDecl.span
+			});
 		}
 		layoutNativeClasses(records);
 		for (entry in valueClasses) {
@@ -2027,14 +2031,15 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					field.span);
 		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [for (field in declaration.fields)
 			if (!field.isStatic) {
-				name:field.name, type:compiler.types.StructProperties.isTagEnum(session.declarations,
-					field.type) ? TInt : field.type, span:field.span
+				name: field.name, type: compiler.types.StructProperties.isTagEnum(session.declarations,
+					field.type) ? TInt : field.type, span: field.span
 			}], nativeDeclarations, declaration.span) catch (error:haxe.Exception) {
-			visiting.remove(key);
-			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'Invalid flat value record "$name": ${Std.string(error)}',
-				declaration.span);
-			cast null;
-		};
+				visiting.remove(key);
+				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+					'Invalid flat value record "$name": ${Std.string(error)}',
+					declaration.span);
+				cast null;
+			};
 		visiting.remove(key);
 		layouts.set(name, layout);
 		return layout;
@@ -2129,9 +2134,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var argumentTypes = bodyTyper.argumentTypesOf(method, substitutions),
 			arguments = [for (index in 0...method.arguments.length)
 				{
-					name:method.arguments[index].name, type:argumentTypes[index]
-				}], result = substitutions == null ? bodyTyper.functionResultType(method,
-					method.span) : session.declarations.types.resultType(method, substitutions);
+					name: method.arguments[index].name, type: argumentTypes[index]
+				}],
+			result = substitutions == null ? bodyTyper.functionResultType(method,
+				method.span) : session.declarations.types.resultType(method, substitutions);
 		for (argument in arguments)
 			if (NativeLayout.containsUnsupportedRuntimeValueType(argument.type))
 				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,

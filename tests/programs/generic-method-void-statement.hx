@@ -16,7 +16,7 @@ class Doc {
 		return item;
 	}
 
-	public function addNode < T:Node > (node:T):T {
+	public function addNode<T:Node>(node:T):T {
 		total += node.id;
 		return node;
 	}

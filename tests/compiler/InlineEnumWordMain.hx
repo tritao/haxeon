@@ -148,14 +148,16 @@ class InlineEnumWordMain {
 		builder.select(no);
 		builder.returnValue(builder.constInt(1));
 		var program = new IrProgram("main");
-		program.objects = [{name: "PayloadWords",
+		program.objects = [{
+			name: "PayloadWords",
 			isValue: true,
 			base: null,
 			interfaces: [],
 			methods: [],
 			fields: [for (index in 0...6) {
-				name:'scalar$index', type:wordType
-			}]}];
+				name: 'scalar$index', type: wordType
+			}]
+		}];
 		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary)];
 		var entry = new IrBuilder(),
 			warm = entry.call("main", [], I32),

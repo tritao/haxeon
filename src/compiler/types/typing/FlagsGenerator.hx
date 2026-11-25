@@ -119,8 +119,9 @@ class FlagsGenerator {
 				method = request.method,
 				info = signature(request.owner, method),
 				arguments = [for (i in 0...info.arguments.length) {
-					name:i == 0 ? "value" : "flag", type:info.arguments[i]
-				}], statements:Array<TypedStatement> = [];
+					name: i == 0 ? "value" : "flag", type: info.arguments[i]
+				}],
+				statements:Array<TypedStatement> = [];
 			function expression(kind:TypedExpressionKind, type:CompilerType):TypedExpression
 				return new TypedExpression(kind, type, span);
 			function integer(value:Int):TypedExpression

@@ -459,8 +459,8 @@ class TextEditorLayout implements Disposable {
 		if (mode == "off") return;
 		var ranges = [for (selection in selections) if (selection.anchor != selection.focus)
 			{
-				start:Std.int(Math.min(selection.anchor, selection.focus)),
-					end:Std.int(Math.max(selection.anchor, selection.focus))
+				start: Std.int(Math.min(selection.anchor, selection.focus)),
+				end: Std.int(Math.max(selection.anchor, selection.focus))
 			}];
 		ranges.sort((a, b) -> a.start - b.start);
 		var merged:Array<{start:Int, end:Int}> = [];

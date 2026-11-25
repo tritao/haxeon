@@ -39,27 +39,31 @@ class HxiProjectionPlanner {
 			switch declaration {
 				case Enumeration(name, _, flags, values, _):
 					var prefix = HxiHaxeEmitter.enumValuePrefix(values, profile, name);
-					enums.push({nativeName: name,
+					enums.push({
+						nativeName: name,
 						name: HxiHaxeEmitter.enumTypeName(name, profile),
 						flags: flags,
 						values: [for (value in values)
-						{
-							nativeName:value.name,
-								name:HxiHaxeEmitter.enumValueName(value.name, prefix, name, profile),
-								value:haxe.Int64.toStr(value.value)
-						}]});
+							{
+								nativeName: value.name,
+								name: HxiHaxeEmitter.enumValueName(value.name, prefix, name, profile),
+								value: haxe.Int64.toStr(value.value)
+							}]
+					});
 				case Structure(name, size, alignment, fields, _):
-					structures.push({nativeName: name,
+					structures.push({
+						nativeName: name,
 						name: HxiHaxeEmitter.projectedTypeName(name, profile),
 						size: size,
 						alignment: alignment,
 						fields: [for (field in fields)
-						{
-							nativeName:field.name,
-								name:HxiHaxeEmitter.projectedFieldName(name, field.name, profile),
-								type:field.type,
-								offset:field.offset
-						}]});
+							{
+								nativeName: field.name,
+								name: HxiHaxeEmitter.projectedFieldName(name, field.name, profile),
+								type: field.type,
+								offset: field.offset
+							}]
+					});
 				case Handle(name, _, destroy, _):
 					var owner = destroy == null ? null : ownedHandle(name, destroy, profile);
 					handles.push({

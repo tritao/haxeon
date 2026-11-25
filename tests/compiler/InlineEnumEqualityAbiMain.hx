@@ -59,7 +59,7 @@ class InlineEnumEqualityAbiMain {
 			inlineStorage: shape.valueObject.name
 		}];
 		program.staticFields = [for (name in ["first", "same", "different", "empty", "nil"]) {
-			name:name, type:storage
+			name: name, type: storage
 		}];
 		program.natives = compiler.ir.passes.enums.IrInlineEnumWordAccess.natives();
 		for (field in ["tag", "number", "owner"]) {

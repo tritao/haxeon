@@ -308,7 +308,7 @@ class LambdaAlignment {
 			unmatchedOld:Array<Int>,
 			unmatchedNew:Array<Int>):Bool {
 		var pairs = [for (from => to in mapping) {
-			from:from, to:to
+			from: from, to: to
 		}];
 		pairs.sort((a, b) -> a.from - b.from);
 		for (index in 1...pairs.length)

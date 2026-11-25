@@ -58,7 +58,7 @@ class ApiModelBuilder {
 		this.roots.sort((left, right) -> right.length - left.length);
 		// A package inside another's directory (a checkout's packages/ under its root) owns what it holds.
 		this.packages = [for (entry in packages) {
-			name:entry.name, root:Path.addTrailingSlash(absolute(entry.root))
+			name: entry.name, root: Path.addTrailingSlash(absolute(entry.root))
 		}];
 		this.packages.sort((left, right) -> right.root.length - left.root.length);
 	}
@@ -199,21 +199,21 @@ class ApiModelBuilder {
 			result = ApiTypeEncoder.encode(TInstance(compiler.types.Type.NominalKind.Enum, decl.name,
 				[for (parameter in decl.typeParameters) scope.get(parameter)])),
 			members:Array<ApiMember> = [for (entry in decl.cases) {
-				source:source(entry.span, entry.metadata),
-					kind:"enumConstructor",
-					name:entry.name,
-					isStatic:true,
-					arguments:[for (parameter in entry.params) {
-						name:parameter.name,
-							type:typeOf(parameter.type,
-							() -> semantic.declarations.declaredTypes.enumParameterType(parameter, scope),
-							parameter.span,
-							scope),
-							optional:parameter.optional,
-							defaultValue:null
-					}],
-						result:result,
-						typeParameters:[]
+				source: source(entry.span, entry.metadata),
+				kind: "enumConstructor",
+				name: entry.name,
+				isStatic: true,
+				arguments: [for (parameter in entry.params) {
+					name: parameter.name,
+					type: typeOf(parameter.type,
+						() -> semantic.declarations.declaredTypes.enumParameterType(parameter, scope),
+						parameter.span,
+						scope),
+					optional: parameter.optional,
+					defaultValue: null
+				}],
+				result: result,
+				typeParameters: []
 			}];
 		addMethods(members, owner, decl.methods ?? [], true);
 		return declaration(owner, "enum", decl.metadata, false, members, null, decl.conformances);
@@ -478,8 +478,8 @@ class ApiModelBuilder {
 	function parameters(names:Array<String>, constraints:Null<Array<AstTypeConstraint>>,
 			scope:Map<String, CompilerType>):Array<ApiTypeParameter>
 		return [for (name in names) {
-			name:name,
-				constraints:[for (constraint in constraints ?? [])
+			name: name,
+			constraints: [for (constraint in constraints ?? [])
 				if (constraint.parameter == name) resolve(constraint.type, constraint.span, scope)]
 		}];
 
@@ -545,10 +545,10 @@ class ApiModelBuilder {
 					kind:"anonymous",
 						id:depth,
 						fields:[for (field in ordered) {
-							name:field.name,
-								type:inner(field.type),
-								optional:field.optional,
-								isFinal:field.isFinal
+							name: field.name,
+							type: inner(field.type),
+							optional: field.optional,
+							isFinal: field.isFinal
 						}]
 				};
 			case _:

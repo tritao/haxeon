@@ -278,7 +278,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 			default:
 		}
 		requested = [for (id => type in requests) {
-			id:id, type:type
+			id: id, type: type
 		}];
 		requested.sort((a, b) -> Reflect.compare(a.id, b.id));
 		// Named by the enum type, not by its place among the requests: an enum that starts or stops being requested renames no
@@ -426,7 +426,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 		for (helper in made)
 			rewritten.push(helper);
 		var usedUnboxes = [for (name => type in unboxes) {
-			name:name, type:type
+			name: name, type: type
 		}];
 		usedUnboxes.sort((a, b) -> Reflect.compare(a.name, b.name));
 		var session = lineage, kept = made.copy();
@@ -438,7 +438,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 			kept.push(known);
 		}
 		var tests = [for (name => test in typeTests) {
-			name:name, test:test
+			name: name, test: test
 		}];
 		tests.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in tests)

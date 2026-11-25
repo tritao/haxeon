@@ -193,7 +193,7 @@ function disposalFailure():Void {
 	scoped var second = new ThrowingResource();
 	throw "original";
 }
-function genericCleanup < T:Disposable > (value:T):Void {
+function genericCleanup<T:Disposable>(value:T):Void {
 	scoped var resource = value;
 }
 function interfaceHelper(value:Disposable):Void {

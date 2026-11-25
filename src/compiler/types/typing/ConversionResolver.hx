@@ -683,23 +683,26 @@ class ConversionResolver {
 			captureName = '__adapted_callable',
 			arguments = [for (index in 0...targetArguments.length)
 				{
-					name:'$' + 'adapter_arg_$index',
-						type:targetArguments[index]
-				}], captures:Array<TypedCapture> = [
-					{
-						field: captureName,
-						bindingId: captureName,
-						type: value.type,
-						storageType: value.type,
-						source: CaptureExpression(value)
-					}
-				], callable = new TypedExpression(TCaptured(captureName), value.type, span, false, null, value.type),
-					callArguments = [
-						for (index in 0...arguments.length)
-							adaptFunctionValue(new TypedExpression(TLocal(arguments[index].name), arguments[index].type,
-							span), sourceArguments[index], span)
-					], call = new TypedExpression(TClosureCall(callable, callArguments), sourceResult, span),
-					statements:Array<TypedStatement> = [];
+					name: '$' + 'adapter_arg_$index',
+					type: targetArguments[index]
+				}],
+			captures:Array<TypedCapture> = [
+				{
+					field: captureName,
+					bindingId: captureName,
+					type: value.type,
+					storageType: value.type,
+					source: CaptureExpression(value)
+				}
+			],
+			callable = new TypedExpression(TCaptured(captureName), value.type, span, false, null, value.type),
+			callArguments = [
+				for (index in 0...arguments.length)
+					adaptFunctionValue(new TypedExpression(TLocal(arguments[index].name), arguments[index].type,
+					span), sourceArguments[index], span)
+			],
+			call = new TypedExpression(TClosureCall(callable, callArguments), sourceResult, span),
+			statements:Array<TypedStatement> = [];
 		if ((switch (targetResult) {
 			case TVoid: true;
 			default: false;

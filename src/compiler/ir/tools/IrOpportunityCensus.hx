@@ -38,7 +38,7 @@ class IrOpportunityCensus {
 		var names = [for (name in histogram.keys()) name];
 		names.sort(Reflect.compare);
 		return [for (name in names) {
-			opcode:name, count:histogram.get(name)
+			opcode: name, count: histogram.get(name)
 		}];
 	}
 

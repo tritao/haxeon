@@ -145,10 +145,13 @@ class IrValueArrayBridge {
 					done = b.createBlock();
 				b.branch(b.equal(value, b.constNull(type)), absent, present);
 				b.select(absent);
-				var presence = helpers.slot(path, true), empty = [for (leaf in helpers.subtree(path))
-					{
-						slot:leaf.index, value:zero(b, leaf.slot.type), active:b.constBool(leaf.index == presence)
-					}], absentEnd = b.currentBlock().id;
+				var presence = helpers.slot(path, true),
+					empty = [for (leaf in helpers.subtree(path))
+						{
+							slot: leaf.index, value: zero(b, leaf.slot.type),
+							active: b.constBool(leaf.index == presence)
+						}],
+					absentEnd = b.currentBlock().id;
 				b.jump(done);
 				b.select(present);
 				var unwrapped = b.safeCast(value, inner),
@@ -159,8 +162,9 @@ class IrValueArrayBridge {
 					live = live.concat(snapshot(b, unwrapped, inner, path));
 				var active = [for (leaf in live)
 					{
-						slot:leaf.slot, value:leaf.active ?? b.constBool(true)
-					}], presentEnd = b.currentBlock().id;
+						slot: leaf.slot, value: leaf.active ?? b.constBool(true)
+					}],
+					presentEnd = b.currentBlock().id;
 				b.jump(done);
 				b.select(done);
 				[for (leaf in empty) {

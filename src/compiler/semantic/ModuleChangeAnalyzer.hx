@@ -263,14 +263,14 @@ class ModuleChangeAnalyzer {
 				baseName = SemanticSignature.parsed(base, ast.aliases);
 			var classFields:Array<compiler.types.TypeRegistry.DeclaredField> = [for (field in classDecl.fields)
 				{
-					name:field.name,
-						type:SemanticSignature.parsed(field.type ?? compiler.syntax.Ast.AstType.InferredType,
+					name: field.name,
+					type: SemanticSignature.parsed(field.type ?? compiler.syntax.Ast.AstType.InferredType,
 						ast.aliases)
 				}],
-					classMethods:Array<compiler.types.TypeRegistry.DeclaredMethod> = [for (method in classDecl.methods)
+				classMethods:Array<compiler.types.TypeRegistry.DeclaredMethod> = [for (method in classDecl.methods)
 					{
-				name:method.name, signature:SemanticSignature.parsedFunction(method, ast.aliases)
-			}];
+						name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)
+					}];
 			var isValue = classDecl.isStruct == true, isNativeValue = false;
 			for (metadata in classDecl.metadata)
 				if (metadata.name == "value")

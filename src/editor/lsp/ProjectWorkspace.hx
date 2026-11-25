@@ -523,11 +523,11 @@ class ProjectWorkspace {
 			var ffi = new compiler.ffi.FfiRegistry
 				.FfiConfiguration(compiler.ffi.HxiInterfaceOrder.dependenciesFirst([for (path in interfacePaths)
 				{
-					path:path,
-						text:interfaces.get(path)
+					path: path,
+					text: interfaces.get(path)
 				}]), [for (path in projectionPaths) {
-				path:path, text:projections.get(path)
-			}]);
+					path: path, text: projections.get(path)
+				}]);
 			var defines = inputs.defines.concat(compiler.tools.CompilerDriver.targetDefines(inputs.target));
 			return new HaxeProjectConfiguration(file, roots, inputs.entry == null ? [] : [inputs.entry], defines, [],
 				ffi, inputs.nullSafety);

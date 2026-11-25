@@ -690,7 +690,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 			for (classDecl in program.classes) {
 				var members:Array<{key:String, start:Int}> = [for (field in classDecl.fields)
 					{
-						key:fieldKey(classDecl.name, field), start:field.span.start
+						key: fieldKey(classDecl.name, field), start: field.span.start
 					}];
 				for (method in classDecl.methods)
 					members.push({key: classDecl.name + "." + method.name, start: method.span.start});

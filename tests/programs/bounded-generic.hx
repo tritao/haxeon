@@ -17,7 +17,7 @@ class Holder < T:(Readable, Writable) > {
 	public function new() {}
 }
 
-function consume < T:(Readable, Writable) > (value:T):Int return value.read() + value.write();
+function consume<T:(Readable, Writable)>(value:T):Int return value.read() + value.write();
 
 function main():Int {
 	var holder:Holder<Value> = new Holder<Value>();

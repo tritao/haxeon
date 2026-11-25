@@ -399,17 +399,19 @@ class LanguageService {
 			if (diagnostic.span.end < start || diagnostic.span.start > end)
 				continue;
 			for (fix in diagnostic.fixes)
-				result.push({id: diagnostic.code + ":" + fix.id,
+				result.push({
+					id: diagnostic.code + ":" + fix.id,
 					title: fix.title,
 					diagnostic: diagnostic,
 					edits: [for (edit in fix.edits)
-					{
-						path:edit.span.file.path,
-							span:edit.span,
-							replacement:edit.replacement,
-							revision:state.revision,
-							stale:false
-					}]});
+						{
+							path: edit.span.file.path,
+							span: edit.span,
+							replacement: edit.replacement,
+							revision: state.revision,
+							stale: false
+						}]
+				});
 		}
 		return result;
 	}
@@ -1441,10 +1443,10 @@ class LanguageService {
 			return [];
 		return [for (implementation in compiler.semanticWorkspace.implementations(context.symbol, token))
 			{
-				path:implementation.span.file.path,
-					span:implementation.span,
-					revision:snapshotRevision(implementation.state),
-					stale:snapshotRevision(implementation.state) != implementation.state.revision
+				path: implementation.span.file.path,
+				span: implementation.span,
+				revision: snapshotRevision(implementation.state),
+				stale: snapshotRevision(implementation.state) != implementation.state.revision
 			}];
 	}
 
@@ -1498,10 +1500,10 @@ class LanguageService {
 			return null;
 		var result:Array<SymbolLocation> = [for (location in compiler.semanticWorkspace.indexedLocations(id, token))
 			{
-				path:location.span.file.path,
-					span:location.span,
-					revision:snapshotRevision(location.state),
-					stale:snapshotRevision(location.state) != location.state.revision
+				path: location.span.file.path,
+				span: location.span,
+				revision: snapshotRevision(location.state),
+				stale: snapshotRevision(location.state) != location.state.revision
 			}];
 		result.sort(function(left, right) {
 			var path = Reflect.compare(left.path, right.path);

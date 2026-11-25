@@ -24,21 +24,21 @@ class Pool {
 
 	public function new() {}
 
-	public function keep < T:Resource > (resource:T):T {
+	public function keep<T:Resource>(resource:T):T {
 		resources.push(resource);
 		return resource;
 	}
 }
 
 class Main {
-	static function asResource < T:Resource > (value:T):Resource return value;
+	static function asResource<T:Resource>(value:T):Resource return value;
 
-	static function asBase < T:Base > (value:T):Int {
+	static function asBase<T:Base>(value:T):Int {
 		var base:Base = value;
 		return base.id();
 	}
 
-	static function closeAll < T:Resource > (values:Array<T>):Int {
+	static function closeAll<T:Resource>(values:Array<T>):Int {
 		var total = 0;
 		for (value in values) {
 			var resource:Resource = value;
@@ -47,7 +47,7 @@ class Main {
 		return total;
 	}
 
-	static function unused < T:Resource > (value:T):Array<Resource> return [value];
+	static function unused<T:Resource>(value:T):Array<Resource> return [value];
 
 	static function main() {
 		var pool = new Pool();

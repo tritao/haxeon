@@ -1990,12 +1990,14 @@ class LspProtocolMain {
 			sys.io.File.saveContent(path, text);
 		}
 		var protocol = new LspProtocol();
-		request(protocol, Json.stringify({jsonrpc: "2.0",
+		request(protocol, Json.stringify({
+			jsonrpc: "2.0",
 			id: 811,
 			method: "initialize",
 			params: {workspaceFolders: [for (root in ["nested", "flat"]) {
-				uri:FileUri.fromPath(base + "/" + root), name:root
-			}]}}));
+				uri: FileUri.fromPath(base + "/" + root), name: root
+			}]}
+		}));
 		var loaded = [
 			"nested/src/app/Main.hx",
 			"nested/src/build/Tool.hx",
@@ -2127,12 +2129,14 @@ class LspProtocolMain {
 			[base]
 		]) {
 			var nested = new LspProtocol();
-			request(nested, Json.stringify({jsonrpc: "2.0",
+			request(nested, Json.stringify({
+				jsonrpc: "2.0",
 				id: 803,
 				method: "initialize",
 				params: {workspaceFolders: [for (root in roots) {
-					uri:FileUri.fromPath(root), name:root
-				}]}}));
+					uri: FileUri.fromPath(root), name: root
+				}]}
+			}));
 			var published = nested.handle(Json.stringify({
 				jsonrpc: "2.0",
 				method: "textDocument/didOpen",

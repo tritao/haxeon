@@ -686,11 +686,11 @@ class LspProtocol {
 		requireCurrent(document);
 		return [for (symbol in service.documentSymbols(compilerPath(document)))
 			{
-				name:symbol.name,
-					kind:symbolKind(symbol.kind),
-					detail:symbol.detail,
-					range:document.range(symbol.span.start, symbol.span.end),
-					selectionRange:document.range(symbol.span.start, symbol.span.end)
+				name: symbol.name,
+				kind: symbolKind(symbol.kind),
+				detail: symbol.detail,
+				range: document.range(symbol.span.start, symbol.span.end),
+				selectionRange: document.range(symbol.span.start, symbol.span.end)
 			}];
 	}
 
@@ -698,12 +698,12 @@ class LspProtocol {
 		var query = requiredString(required(request, "params"), "query");
 		return [for (symbol in service.workspaceSymbols(query, token))
 			{
-				name:symbol.name,
-					kind:symbolKind(symbol.kind),
-					containerName:symbol.container,
-					tags:symbol.deprecated ? [1] : null,
-					location:{uri:documents.uri(project.diskPath(symbol.path))},
-					data:{identity:symbol.identity, revision:symbol.revision}
+				name: symbol.name,
+				kind: symbolKind(symbol.kind),
+				containerName: symbol.container,
+				tags: symbol.deprecated ? [1] : null,
+				location: {uri: documents.uri(project.diskPath(symbol.path))},
+				data: {identity: symbol.identity, revision: symbol.revision}
 			}];
 	}
 
@@ -777,7 +777,7 @@ class LspProtocol {
 		Reflect.setField(item, "documentation", {kind: "markdown", value: resolved.documentation});
 		Reflect.setField(item, "additionalTextEdits", [for (edit in resolved.edits)
 			{
-				range:document.range(edit.span.start, edit.span.end), newText:edit.replacement
+				range: document.range(edit.span.start, edit.span.end), newText: edit.replacement
 			}]);
 		return item;
 	}
@@ -789,7 +789,7 @@ class LspProtocol {
 		return [for (highlight in service.documentHighlights(compilerPath(document),
 			positionOffset(document, position(request)), token))
 			{
-				range:document.range(highlight.span.start, highlight.span.end), kind:highlight.write ? 3 : 2
+				range: document.range(highlight.span.start, highlight.span.end), kind: highlight.write ? 3 : 2
 			}];
 	}
 
@@ -876,11 +876,11 @@ class LspProtocol {
 					isPreferred:true,
 					edit:{documentChanges:[for (uri => edits in changes)
 					{
-						textDocument:{
-							uri:uri,
-							version:versionOf(targets.get(uri))
+						textDocument: {
+							uri: uri,
+							version: versionOf(targets.get(uri))
 						},
-							edits:edits
+						edits: edits
 					}]}
 			}
 		}];
@@ -895,11 +895,11 @@ class LspProtocol {
 			positionOffset(document, required(range, "start")),
 			positionOffset(document, required(range, "end")), token))
 			{
-				position:document.position(hint.position),
-					label:hint.label,
-					kind:hint.kind == "type" ? 1 : 2,
-					paddingLeft:hint.paddingLeft,
-					paddingRight:hint.paddingRight
+				position: document.position(hint.position),
+				label: hint.label,
+				kind: hint.kind == "type" ? 1 : 2,
+				paddingLeft: hint.paddingLeft,
+				paddingRight: hint.paddingRight
 			}];
 	}
 
@@ -1026,7 +1026,7 @@ class LspProtocol {
 			edits = service.format(path, start, end, new compiler.formatter.ProjectFormat().forFile(path));
 		return [for (edit in edits)
 			{
-				range:document.range(edit.span.start, edit.span.end), newText:edit.replacement
+				range: document.range(edit.span.start, edit.span.end), newText: edit.replacement
 			}];
 	}
 
@@ -1064,9 +1064,9 @@ class LspProtocol {
 		requireCurrent(document);
 		return [for (link in service.documentLinks(compilerPath(document), token))
 			{
-				range:document.range(link.span.start, link.span.end),
-					target:documents.uri(project.diskPath(link.targetPath)),
-					tooltip:link.tooltip
+				range: document.range(link.span.start, link.span.end),
+				target: documents.uri(project.diskPath(link.targetPath)),
+				tooltip: link.tooltip
 			}];
 	}
 
@@ -1088,22 +1088,26 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		var value = service.signatureHelp(compilerPath(document), positionOffset(document, position(request)));
-		return value == null ? null : {signatures: [{label: value.label,
-			documentation: value.documentation == null ? null : {
-				kind: "markdown",
-				value: value.documentation
-			},
-			parameters: [for (index in 0...value.parameters.length)
-			{
-				label:value.parameters[index],
-					documentation:value.parameterDocumentation == null
-					|| value.parameterDocumentation[index] == null ? null : {
-						kind: "markdown",
-						value: value.parameterDocumentation[index]
-					}
-			}]}],
-				activeSignature: 0,
-				activeParameter: value.activeParameter};
+		return value == null ? null : {
+			signatures: [{
+				label: value.label,
+				documentation: value.documentation == null ? null : {
+					kind: "markdown",
+					value: value.documentation
+				},
+				parameters: [for (index in 0...value.parameters.length)
+					{
+						label: value.parameters[index],
+						documentation: value.parameterDocumentation == null
+							|| value.parameterDocumentation[index] == null ? null : {
+								kind: "markdown",
+								value: value.parameterDocumentation[index]
+							}
+					}]
+			}],
+			activeSignature: 0,
+			activeParameter: value.activeParameter
+		};
 	}
 
 	function definition(request:Dynamic, token:CancellationToken):Dynamic {
@@ -1280,11 +1284,11 @@ class LspProtocol {
 		}
 		return {documentChanges: [for (uri => textEdits in grouped)
 			{
-				textDocument:{
-					uri:uri,
-					version:versionOf(targets.get(uri))
+				textDocument: {
+					uri: uri,
+					version: versionOf(targets.get(uri))
 				},
-					edits:textEdits
+				edits: textEdits
 			}]};
 	}
 

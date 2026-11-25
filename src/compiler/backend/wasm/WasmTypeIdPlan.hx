@@ -59,7 +59,7 @@ class WasmTypeIdPlan {
 	/** Identifiers that need translation back to their stable dispatch hash. */
 	public function remapped():Array<{id:Int, hash:Int}> {
 		var result = [for (id in hashes.keys()) if (id != hashes.get(id)) {
-			id:id, hash:hashes.get(id)
+			id: id, hash: hashes.get(id)
 		}];
 		result.sort((a, b) -> a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 		return result;

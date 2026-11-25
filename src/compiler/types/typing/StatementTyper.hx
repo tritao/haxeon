@@ -1222,10 +1222,10 @@ class StatementTyper {
 			tupleTypes = TupleSwitch.elementTypes(typedExpression);
 			cases = [for (switchCase in cases)
 				{
-					patterns:[for (pattern in switchCase.patterns) TupleSwitch.wholeValuePattern(pattern)],
-						guard:switchCase.guard,
-						statements:switchCase.statements,
-						span:switchCase.span
+					patterns: [for (pattern in switchCase.patterns) TupleSwitch.wholeValuePattern(pattern)],
+					guard: switchCase.guard,
+					statements: switchCase.statements,
+					span: switchCase.span
 				}];
 		}
 		var typedCases:Array<TypedSwitchCase> = [],
@@ -1268,11 +1268,11 @@ class StatementTyper {
 				coverageCases:Array<TypedSwitchCoverageCase> =
 					[for (switchCase in typedCases) for (arm in switchCase.arms)
 					{
-						constructorIndex:arm.constructorIndex,
-							subjectBinding:arm.subjectBinding,
-							isCatchAll:arm.isCatchAll,
-							guard:arm.guard,
-							predicates:arm.predicates
+						constructorIndex: arm.constructorIndex,
+						subjectBinding: arm.subjectBinding,
+						isCatchAll: arm.isCatchAll,
+						guard: arm.guard,
+						predicates: arm.predicates
 					}];
 			if (session.enumDecls.exists(enumName)) {
 				var enumDecl = session.enumDecls.get(enumName);

@@ -110,28 +110,29 @@ class ShaderSchema {
 			string(sampler, "name");
 			string(sampler, "type");
 		}
-		return {name: name,
+		return {
+			name: name,
 			variant: variant,
 			attributes: array(data, "attributes").map(attribute),
 			blocks: array(data, "uniform_blocks").map(block),
 			images: [for (image in array(data, "images")) {
-				slot:integer(image, "slot"),
-					stage:string(image, "stage"),
-					type:string(image, "type"),
-					sampleType:string(image, "sample_type"),
-					multisampled:boolean(image, "multisampled")
+				slot: integer(image, "slot"),
+				stage: string(image, "stage"),
+				type: string(image, "type"),
+				sampleType: string(image, "sample_type"),
+				multisampled: boolean(image, "multisampled")
 			}],
-				pairs: [for (pair in array(data, "image_sampler_pairs")) {
-			image:integer(pair, "image_slot"),
-				sampler:integer(pair, "sampler_slot"),
-				name:string(pair, "name")
-		}],
+			pairs: [for (pair in array(data, "image_sampler_pairs")) {
+				image: integer(pair, "image_slot"),
+				sampler: integer(pair, "sampler_slot"),
+				name: string(pair, "name")
+			}],
 			storage: [for (buffer in array(data, "storage_buffers")) {
-			slot:integer(buffer, "slot"),
-				stage:string(buffer, "stage"),
-				name:string(buffer, "name"),
-				readonly:boolean(buffer, "readonly")
-		}],
+				slot: integer(buffer, "slot"),
+				stage: string(buffer, "stage"),
+				name: string(buffer, "name"),
+				readonly: boolean(buffer, "readonly")
+			}],
 			vertex: vertex,
 			fragment: fragment,
 			compute: compute,
@@ -139,7 +140,8 @@ class ShaderSchema {
 				x: integer(threads, "x"),
 				y: integer(threads, "y"),
 				z: integer(threads, "z")
-			} : null};
+			} : null
+		};
 	}
 
 	static function attribute(data:Dynamic):Attribute {

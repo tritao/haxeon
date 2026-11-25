@@ -84,12 +84,12 @@ class HlBytecodeInput {
 					methodCount = unsigned(input, format),
 					bindingCount = unsigned(input, format);
 				var fields = [for (_ in 0...fieldCount) {
-					name:index(input), type:index(input)
+					name: index(input), type: index(input)
 				}],
 					methods = [for (_ in 0...methodCount)
-					{
-					name:index(input), functionIndex:index(input), prototype:index(input)
-				}],
+						{
+							name: index(input), functionIndex: index(input), prototype: index(input)
+						}],
 					bindings = [for (_ in 0...bindingCount * 2) index(input)];
 				tag == HlType.Obj ? Object(name, base, global, fields, methods, bindings) : Structure(name, global,
 					fields,
@@ -97,7 +97,7 @@ class HlBytecodeInput {
 			case HlType.Virtual:
 				var name = namedVirtuals ? index(input) : -1;
 				Virtual(name, [for (_ in 0...unsigned(input, format)) {
-					name:index(input), type:index(input)
+					name: index(input), type: index(input)
 				}]);
 			case HlType.Abstract:
 				Abstract(index(input));
@@ -105,7 +105,7 @@ class HlBytecodeInput {
 				var name = index(input), global = unsigned(input, format);
 				Enum(name, global, [for (_ in 0...unsigned(input, format))
 					{
-						name:index(input), params:[for (_ in 0...unsigned(input, format)) index(input)]
+						name: index(input), params: [for (_ in 0...unsigned(input, format)) index(input)]
 					}]);
 			case HlType.EnumTag:
 				var boxed = index(input);

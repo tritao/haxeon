@@ -11,7 +11,7 @@ interface Shape {
 }
 
 class Main {
-	static function measure < T:Shape > (value:T):String return value.label();
+	static function measure<T:Shape>(value:T):String return value.label();
 
 	static function main():Void {}
 }

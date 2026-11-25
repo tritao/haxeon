@@ -179,7 +179,7 @@ class IrGenericOwnerErasure {
 				}
 		var byFunction = new IrFunctionIndex(STAGE, functions);
 		var sorted = [for (name => signature in requests) {
-			name:name, signature:signature
+			name: name, signature: signature
 		}];
 		sorted.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in sorted) {

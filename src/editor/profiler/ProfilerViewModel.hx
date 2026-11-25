@@ -144,7 +144,8 @@ class ProfilerViewModel {
 	static function nodeValue(node:ProfilerViewNode):Dynamic {
 		var revisions = [for (revision in node.revisions.keys()) revision];
 		revisions.sort((a, b) -> a - b);
-		return {id: node.id,
+		return {
+			id: node.id,
 			parentId: node.parentId,
 			stableKey: node.stableKey,
 			name: node.name,
@@ -155,10 +156,11 @@ class ProfilerViewModel {
 			totalSamples: node.totalSamples,
 			revisions: revisions,
 			threadSamples: [for (threadId => samples in node.threadSamples)
-			{
-				threadId:threadId,
-					samples:samples
-			}]};
+				{
+					threadId: threadId,
+					samples: samples
+				}]
+		};
 	}
 
 	static function compareNodes(left:Dynamic, right:Dynamic):Int {

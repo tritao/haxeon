@@ -245,7 +245,7 @@ class IrOptionalFieldStorage extends IrFunctionPass {
 		var ordered = [for (fields in plans)
 			for (plan in fields)
 			{
-				name:key(plan.owner, plan.field), plan:plan
+				name: key(plan.owner, plan.field), plan: plan
 			}];
 		ordered.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in ordered) {

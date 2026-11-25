@@ -112,7 +112,7 @@ class IrValueDynamicDispatch extends IrFunctionPass {
 			&& (createdClasses == null || createdClasses.exists(object.name)))
 			register("$reflected:" + object.name, Obj(object.name));
 		requested = [for (suffix => type in requests) {
-			suffix:suffix, type:type
+			suffix: suffix, type: type
 		}];
 		requested.sort((a, b) -> Reflect.compare(a.suffix, b.suffix));
 	}

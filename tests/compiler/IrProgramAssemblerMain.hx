@@ -115,14 +115,14 @@ class IrProgramAssemblerMain {
 			"changing scalar signedness must change the runtime ABI signature");
 		managedRoundTrip.objects =
 			[for (object in managedRoundTrip.objects) if (object.name != "ManagedWidth") object else {
-				name:object.name, isValue:object.isValue, nativeLayout:object.nativeLayout, base:object.base,
-					interfaces:object.interfaces, methods:object.methods,
-					fields:[for (field in object.fields) if (field.name != "byte") field else {
-						name:field.name, type:field.type, nativeLayout:field.nativeLayout, scalarStorage:{
-							size:3,
-							signed:false
-						}
-					}]
+				name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base,
+				interfaces: object.interfaces, methods: object.methods,
+				fields: [for (field in object.fields) if (field.name != "byte") field else {
+					name: field.name, type: field.type, nativeLayout: field.nativeLayout, scalarStorage: {
+						size: 3,
+						signed: false
+					}
+				}]
 			}];
 		var rejectedStorage = false;
 		try compiler.ir.verify.IrVerifier.verify(managedRoundTrip) catch (_:Dynamic) rejectedStorage = true;

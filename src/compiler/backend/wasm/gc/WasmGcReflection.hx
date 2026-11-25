@@ -111,7 +111,7 @@ class WasmGcReflection {
 			middle = 4,
 			key = 5;
 		var locals:Array<WasmLocal> = [for (_ in 0...5) {
-			type:I32
+			type: I32
 		}];
 		return module.addFunction(new WasmFunction(ENTRY_FUNCTION, plan.wasmFunctionType([Dyn], I32), locals, [
 			LocalGet(0),

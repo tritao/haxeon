@@ -19,7 +19,7 @@ enum EnumIdentity implements EnumGeneric<Int> {
 	Identity;
 	public function convert(value:Int):Int return value;
 }
-function applyGeneric < T:EnumTransform > (operation:T):Int return operation.apply(41);
+function applyGeneric<T:EnumTransform>(operation:T):Int return operation.apply(41);
 function applyInterface(operation:EnumTransform):Int return operation.apply(41);
 function applyGenericInterface(operation:EnumGeneric<Int>):Int return operation.convert(42);
 function nullableFactory():Null<EnumOperation> {

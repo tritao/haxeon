@@ -12,7 +12,7 @@ function get(point:ReadPoint):Int return point.x;
 
 function main():Int {
 	var values = [for (i in 40...41) {
-		x:i
+		x: i
 	}];
 	var initial = get(values[0]);
 	var result = sum(values);

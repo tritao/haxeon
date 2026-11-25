@@ -109,7 +109,7 @@ class TypedProgramAssembler {
 		var names = [for (name in session.anonymousTypes.keys()) name];
 		names.sort(Reflect.compare);
 		return [for (name in names) {
-			name:name, fields:session.anonymousTypes.get(name)
+			name: name, fields: session.anonymousTypes.get(name)
 		}];
 	}
 }

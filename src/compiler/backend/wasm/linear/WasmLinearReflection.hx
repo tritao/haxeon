@@ -63,7 +63,7 @@ class WasmLinearReflection {
 		var id = 1, low = 2, high = 3, middle = 4, row = 5, key = 6;
 		return module.addFunction(WasmFunctionBuilder.fromRaw(ENTRY_FUNCTION, {parameters: [I32], results: [I32]},
 			[for (_ in 0...6) {
-				type:I32
+				type: I32
 			}], [
 				LocalGet(0),
 				I32Eqz,

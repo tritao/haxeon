@@ -153,11 +153,11 @@ class CompilerSession {
 			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
 			projectionPaths = request.ffiProjections.concat(host.projections);
 		var interfaces:Array<FfiInterfaceSource> = [for (path in interfacePaths) {
-			path:path, text:read(path)
+			path: path, text: read(path)
 		}],
 			projections:Array<FfiProjectionSource> = [for (path in projectionPaths) {
-			path:path, text:read(path)
-		}],
+				path: path, text: read(path)
+			}],
 			identity = Json.stringify({
 				target: request.target,
 				buildMode: request.buildMode,
@@ -180,10 +180,10 @@ class CompilerSession {
 			reset();
 		if (compiler == null) {
 			interfaces = [for (path in interfacePaths) {
-				path:path, text:read(path)
+				path: path, text: read(path)
 			}];
 			projections = [for (path in projectionPaths) {
-				path:path, text:read(path)
+				path: path, text: read(path)
 			}];
 		}
 		// A module resolved lazily (notably stdlib) has an absolute source path; one whose file is gone takes a new session, which

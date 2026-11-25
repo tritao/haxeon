@@ -367,7 +367,7 @@ class IrObjectReflection {
 		for (layout in layouts) {
 			var parameters = [for (index in 1...native.arguments.length)
 				{
-					name:'argument$index', type:native.arguments[index]
+					name: 'argument$index', type: native.arguments[index]
 				}];
 			var body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void = switch native.symbol {
 				case "__reflect_field": fieldBody;

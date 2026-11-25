@@ -13,7 +13,7 @@ class SemanticSignature {
 	/** Final controls field writes; it does not change the anonymous object layout. */
 	public static function anonymousTypeName(fields:Array<compiler.types.Type.AnonymousField>):String
 		return compiler.core.GlobalNames.of('$' + 'anon:' + anonymousFields([for (field in fields) {
-			name:field.name, type:field.type, optional:field.optional, isFinal:false
+			name: field.name, type: field.type, optional: field.optional, isFinal: false
 		}]));
 
 	/**
@@ -96,7 +96,7 @@ class SemanticSignature {
 				if (!provisional)
 					throw new InternalError('An open literal structure ($name) was spelled before its unit closed it');
 				'$' + 'anon:' + anonymousFields([for (field in fields) {
-					name:field.name, type:field.type, optional:field.optional, isFinal:false
+					name: field.name, type: field.type, optional: field.optional, isFinal: false
 				}], true);
 			case TAnonymous(name, _): name;
 			// A filled type variable is spelled as its type, so keys made while it is in a type match the ones made after.

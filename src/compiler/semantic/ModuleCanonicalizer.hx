@@ -26,22 +26,23 @@ class ModuleCanonicalizer {
 		var typeConstraints:Null<Array<AstTypeConstraint>> = fn.typeConstraints == null
 			? null : [for (constraint in fn.typeConstraints)
 			{
-				parameter:constraint.parameter,
-					type:canonicalType(constraint.type, functionAliases, fn.typeParameters),
-					span:constraint.span
+				parameter: constraint.parameter,
+				type: canonicalType(constraint.type, functionAliases, fn.typeParameters),
+				span: constraint.span
 			}],
-				arguments:Array<AstArgument> = [for (argument in fn.arguments)
+			arguments:Array<AstArgument> = [for (argument in fn.arguments)
 				{
-			name:argument.name,
-				type:canonicalType(argument.type, functionAliases, fn.typeParameters),
-				span:argument.span,
-				optional:argument.optional,
-				defaultValueSpan:argument.defaultValueSpan,
-				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, functionAliases)
-		}],
+					name: argument.name,
+					type: canonicalType(argument.type, functionAliases, fn.typeParameters),
+					span: argument.span,
+					optional: argument.optional,
+					defaultValueSpan: argument.defaultValueSpan,
+					defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals,
+						functionAliases)
+				}],
 			result = canonicalType(fn.result, functionAliases, fn.typeParameters),
 			statements = canonicalBlock(fn.statements, module, entry, locals, functionAliases,
-			[for (argument in fn.arguments) argument.name]);
+				[for (argument in fn.arguments) argument.name]);
 		return AstFunctions.withSignature(fn, name, typeConstraints, arguments, result, statements);
 	}
 
@@ -161,28 +162,30 @@ class ModuleCanonicalizer {
 			entry:String, locals:LocalScope):compiler.syntax.Ast.AstEnum {
 		var enumAliases = aliases.child();
 		for (parameter in enumDecl.typeParameters) enumAliases.set(parameter, parameter);
-		return {name: qualifiedTypeName(packageName, enumDecl.name),
+		return {
+			name: qualifiedTypeName(packageName, enumDecl.name),
 			typeParameters: enumDecl.typeParameters,
 			typeConstraints: canonicalConstraints(enumDecl.typeConstraints, aliases, enumDecl.typeParameters),
 			conformances: enumDecl.conformances == null
-			? [] : [for (type in enumDecl.conformances) canonicalType(type, aliases, enumDecl.typeParameters)],
+				? [] : [for (type in enumDecl.conformances) canonicalType(type, aliases, enumDecl.typeParameters)],
 			methods: enumDecl.methods == null ? [] : [for (method in enumDecl.methods) canonicalFunction(method, module,
-			entry, locals, method.name, enumAliases)],
+				entry, locals, method.name, enumAliases)],
 			metadata: enumDecl.metadata,
 			cases: [for (caseDecl in enumDecl.cases)
-			{
-				name:caseDecl.name,
-					metadata:caseDecl.metadata,
-					params:[for (param in caseDecl.params)
-					{
-						name:param.name,
-							type:canonicalType(param.type, aliases, enumDecl.typeParameters),
-							optional:param.optional,
-							span:param.span
-					}],
-						span:caseDecl.span
-			}],
-				span: enumDecl.span};
+				{
+					name: caseDecl.name,
+					metadata: caseDecl.metadata,
+					params: [for (param in caseDecl.params)
+						{
+							name: param.name,
+							type: canonicalType(param.type, aliases, enumDecl.typeParameters),
+							optional: param.optional,
+							span: param.span
+						}],
+					span: caseDecl.span
+				}],
+			span: enumDecl.span
+		};
 	}
 
 	public static function canonicalMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, module:String,
@@ -190,26 +193,27 @@ class ModuleCanonicalizer {
 			aliases:AliasTable):Array<compiler.syntax.Ast.AstMetadata>
 		return [for (annotation in metadata)
 			{
-				name:resolveTypeName(annotation.name, aliases),
-					// Access grants name a source path and `@:forward` names fields, not imported expression aliases.
-					arguments:annotation.name == "access" || annotation.name == "allow"
+				name: resolveTypeName(annotation.name, aliases),
+				// Access grants name a source path and `@:forward` names fields, not imported expression aliases.
+				arguments: annotation.name == "access" || annotation.name == "allow"
 					|| annotation.name == "forward" ? annotation.arguments : [
 						for (argument in annotation.arguments)
 							canonicalExpression(argument, module, entry, locals, aliases)
 					],
-					span:annotation.span
+				span: annotation.span
 			}];
 
 	public static function canonicalAbstract(decl:compiler.syntax.Ast.AstAbstract, aliases:AliasTable,
 			packageName:Null<String>, module:String, entry:String,
 			locals:LocalScope):compiler.syntax.Ast.AstAbstract
-		return {name: qualifiedTypeName(packageName, decl.name),
+		return {
+			name: qualifiedTypeName(packageName, decl.name),
 			isExtern: decl.isExtern,
 			metadata: decl.metadata == null ? null : canonicalMetadata(decl.metadata, module, entry, locals, aliases),
 			typeParameters: decl.typeParameters,
 			typeConstraints: canonicalConstraints(decl.typeConstraints, aliases, decl.typeParameters),
 			conformances: decl.conformances == null
-			? null : [for (type in decl.conformances) canonicalType(type, aliases, decl.typeParameters)],
+				? null : [for (type in decl.conformances) canonicalType(type, aliases, decl.typeParameters)],
 			underlying: canonicalType(decl.underlying, aliases, decl.typeParameters),
 			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases, decl.typeParameters)],
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases, decl.typeParameters)],
@@ -222,14 +226,15 @@ class ModuleCanonicalizer {
 					canonicalAbstractMethod(method, decl.typeParameters, module, entry, locals, method.name, aliases)
 			],
 			values: decl.values == null ? null : [for (value in decl.values)
-			{
-				name:value.name,
-					isPublic:value.isPublic,
-					metadata:canonicalMetadata(value.metadata, module, entry, locals, aliases),
-					value:canonicalExpression(value.value, module, entry, locals, aliases),
-					span:value.span
-			}],
-				span: decl.span};
+				{
+					name: value.name,
+					isPublic: value.isPublic,
+					metadata: canonicalMetadata(value.metadata, module, entry, locals, aliases),
+					value: canonicalExpression(value.value, module, entry, locals, aliases),
+					span: value.span
+				}],
+			span: decl.span
+		};
 
 	/**
 	 * An abstract's or an interface's variable or property with its type and metadata resolved in the module
@@ -264,22 +269,23 @@ class ModuleCanonicalizer {
 		var typeConstraints:Null<Array<AstTypeConstraint>> = method.typeConstraints == null
 			? null : [for (constraint in method.typeConstraints)
 			{
-				parameter:constraint.parameter,
-					type:canonicalType(constraint.type, methodAliases, parameters),
-					span:constraint.span
+				parameter: constraint.parameter,
+				type: canonicalType(constraint.type, methodAliases, parameters),
+				span: constraint.span
 			}],
-				arguments:Array<AstArgument> = [for (argument in method.arguments)
+			arguments:Array<AstArgument> = [for (argument in method.arguments)
 				{
-			name:argument.name,
-				type:canonicalType(argument.type, methodAliases, parameters),
-				span:argument.span,
-				optional:argument.optional,
-				defaultValueSpan:argument.defaultValueSpan,
-				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, methodAliases)
-		}],
+					name: argument.name,
+					type: canonicalType(argument.type, methodAliases, parameters),
+					span: argument.span,
+					optional: argument.optional,
+					defaultValueSpan: argument.defaultValueSpan,
+					defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals,
+						methodAliases)
+				}],
 			result = canonicalType(method.result, methodAliases, parameters),
 			statements = canonicalBlock(method.statements, module, entry, locals, methodAliases,
-			[for (argument in method.arguments) argument.name]);
+				[for (argument in method.arguments) argument.name]);
 		return AstFunctions.withSignature(method, name, typeConstraints, arguments, result, statements);
 	}
 
@@ -325,19 +331,19 @@ class ModuleCanonicalizer {
 		var typeConstraints:Null<Array<AstTypeConstraint>> = method.typeConstraints == null
 			? null : [for (constraint in method.typeConstraints)
 			{
-				parameter:constraint.parameter,
-					type:canonicalType(constraint.type, aliases, parameters),
-					span:constraint.span
+				parameter: constraint.parameter,
+				type: canonicalType(constraint.type, aliases, parameters),
+				span: constraint.span
 			}],
-				arguments:Array<AstArgument> = [for (argument in method.arguments)
+			arguments:Array<AstArgument> = [for (argument in method.arguments)
 				{
-			name:argument.name,
-				type:canonicalType(argument.type, aliases, parameters),
-				span:argument.span,
-				optional:argument.optional,
-				defaultValueSpan:argument.defaultValueSpan,
-				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
-		}];
+					name: argument.name,
+					type: canonicalType(argument.type, aliases, parameters),
+					span: argument.span,
+					optional: argument.optional,
+					defaultValueSpan: argument.defaultValueSpan,
+					defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
+				}];
 		return AstFunctions.copy(method, method.name, false, method.metadata, method.typeParameters, typeConstraints,
 			arguments,
 			canonicalType(method.result, aliases, parameters), [], method.span);
@@ -348,9 +354,9 @@ class ModuleCanonicalizer {
 			typeParameters:Array<String>):Null<Array<AstTypeConstraint>>
 		return constraints == null ? null : [for (constraint in constraints)
 			{
-				parameter:constraint.parameter,
-					type:canonicalType(constraint.type, aliases, typeParameters),
-					span:constraint.span
+				parameter: constraint.parameter,
+				type: canonicalType(constraint.type, aliases, typeParameters),
+				span: constraint.span
 			}];
 
 	public static function astTypeName(type:compiler.syntax.Ast.AstType):String
@@ -498,12 +504,12 @@ class ModuleCanonicalizer {
 			case Try(tryBranch, catches, span): Try(canonicalBlock(tryBranch, module, entry, locals, aliases),
 				[for (catchClause in catches)
 				{
-						name:catchClause.name,
-							type:canonicalType(catchClause.type, aliases),
-							statements:canonicalBlock(catchClause.statements, module, entry, locals, aliases,
-							[catchClause.name]),
-							span:catchClause.span
-					}], span);
+					name: catchClause.name,
+					type: canonicalType(catchClause.type, aliases),
+					statements: canonicalBlock(catchClause.statements, module, entry, locals, aliases,
+						[catchClause.name]),
+					span: catchClause.span
+				}], span);
 			case ReturnVoid(span): ReturnVoid(span);
 			case Break(span): Break(span);
 			case Continue(span): Continue(span);
@@ -673,17 +679,17 @@ class ModuleCanonicalizer {
 					}], canonicalOptionalExpression(fallback, module, entry, locals, aliases), s);
 			case ObjectLiteral(fields, s): ObjectLiteral([for (field in fields)
 				{
-						name:field.name, value:canonicalExpression(field.value, module, entry, locals, aliases),
-							span:field.span
-					}], s);
+					name: field.name, value: canonicalExpression(field.value, module, entry, locals, aliases),
+					span: field.span
+				}], s);
 			case ArrayLiteral(values,
 				s): ArrayLiteral([for (value in values) canonicalExpression(value, module, entry, locals, aliases)], s);
 			case MapLiteral(entries, s): MapLiteral([for (mapEntry in entries)
 				{
-						key:canonicalExpression(mapEntry.key, module, entry, locals, aliases),
-							value:canonicalExpression(mapEntry.value, module, entry, locals, aliases),
-							span:mapEntry.span
-					}], s);
+					key: canonicalExpression(mapEntry.key, module, entry, locals, aliases),
+					value: canonicalExpression(mapEntry.value, module, entry, locals, aliases),
+					span: mapEntry.span
+				}], s);
 			case ArrayComprehension(keyName, valueName, iterable, predicate, value, flattened, s):
 				var inner = bindNames(locals, [keyName, valueName]);
 				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
@@ -759,20 +765,20 @@ class ModuleCanonicalizer {
 				}
 				Lambda([for (argument in arguments)
 					{
-						name:argument.name,
-							type:canonicalType(argument.type, aliases),
-							span:argument.span,
-							// A local function's optional parameters and defaults let calls omit them.
-							optional:argument.optional,
-							defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals,
+						name: argument.name,
+						type: canonicalType(argument.type, aliases),
+						span: argument.span,
+						// A local function's optional parameters and defaults let calls omit them.
+						optional: argument.optional,
+						defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals,
 							aliases)
 					}],
-						canonicalBlock(body, module, entry, locals, aliases,
-						[for (argument in arguments) argument.name]), identity, s, isInline, isNamed,
-						generic == null ? null : {
-							parameters: generic.parameters,
-							constraints: canonicalConstraints(generic.constraints, aliases, generic.parameters)
-						});
+					canonicalBlock(body, module, entry, locals, aliases,
+					[for (argument in arguments) argument.name]), identity, s, isInline, isNamed,
+					generic == null ? null : {
+						parameters: generic.parameters,
+						constraints: canonicalConstraints(generic.constraints, aliases, generic.parameters)
+					});
 		}
 
 	public static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String,
@@ -895,13 +901,13 @@ class ModuleCanonicalizer {
 				canonicalType(result, aliases, typeParameters), optional);
 			case AnonymousType(fields): AnonymousType([for (field in fields)
 				{
-						name:field.name,
-							type:canonicalType(field.type, aliases, typeParameters),
-							optional:field.optional,
-							isFinal:field.isFinal,
-							metadata:field.metadata,
-							span:field.span
-					}]);
+					name: field.name,
+					type: canonicalType(field.type, aliases, typeParameters),
+					optional: field.optional,
+					isFinal: field.isFinal,
+					metadata: field.metadata,
+					span: field.span
+				}]);
 			default: type;
 		};
 }

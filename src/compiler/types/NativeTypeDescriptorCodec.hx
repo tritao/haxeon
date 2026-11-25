@@ -365,12 +365,12 @@ class NativeTypeDescriptorCodec {
 	}>):Array<Dynamic>
 		return [for (annotation in values)
 			{
-				name:annotation.name,
-					arguments:[for (argument in annotation.arguments)
+				name: annotation.name,
+				arguments: [for (argument in annotation.arguments)
 					{
-						name:argument.name,
-							type:argument.type,
-							value:annotationConstantJson(argument.value, replacements)
+						name: argument.name,
+						type: argument.type,
+						value: annotationConstantJson(argument.value, replacements)
 					}]
 			}];
 

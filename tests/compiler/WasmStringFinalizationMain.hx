@@ -95,7 +95,7 @@ class WasmStringFinalizationMain {
 			for (i in 0...cases)
 				constructors.push({name: "Case" + i, params: [I32]});
 			program.enums = [for (i in 0...enums) {
-				name:"Sample" + i, cases:constructors
+				name: "Sample" + i, cases: constructors
 			}];
 			var selected:Map<String, Bool> = [];
 			for (entry in program.enums)

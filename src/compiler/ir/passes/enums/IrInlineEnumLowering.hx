@@ -104,10 +104,10 @@ class IrInlineEnumLowering {
 		var result = new IrProgram(program.entryPoint);
 		result.enums = [for (entry in program.enums)
 			{
-				name:entry.name,
-					cases:entry.cases,
-					isRecursive:entry.isRecursive,
-					inlineStorage:selectedStorage.get(entry.name)
+				name: entry.name,
+				cases: entry.cases,
+				isRecursive: entry.isRecursive,
+				inlineStorage: selectedStorage.get(entry.name)
 			}];
 		result.natives = program.natives.copy();
 		result.cNatives = program.cNatives;
@@ -117,13 +117,13 @@ class IrInlineEnumLowering {
 		result.parameterDefaults = program.parameterDefaults;
 		result.interfaces = [for (entry in program.interfaces)
 			{
-				name:entry.name,
-					bases:entry.bases,
-					methods:[for (method in entry.methods)
+				name: entry.name,
+				bases: entry.bases,
+				methods: [for (method in entry.methods)
 					{
-						name:method.name,
-							arguments:[for (argument in method.arguments) mapped(argument)],
-							result:mapped(method.result)
+						name: method.name,
+						arguments: [for (argument in method.arguments) mapped(argument)],
+						result: mapped(method.result)
 					}]
 			}];
 		result.staticFields = [];
@@ -140,19 +140,19 @@ class IrInlineEnumLowering {
 			}
 		var rewrittenObjects:Array<IrObject> = [for (object in program.objects)
 			{
-				name:object.name,
-					isValue:object.isValue,
-					nativeLayout:object.nativeLayout,
-					base:object.base,
-					interfaces:object.interfaces,
-					methods:object.methods,
-					fields:[for (field in object.fields)
+				name: object.name,
+				isValue: object.isValue,
+				nativeLayout: object.nativeLayout,
+				base: object.base,
+				interfaces: object.interfaces,
+				methods: object.methods,
+				fields: [for (field in object.fields)
 					{
-						name:field.name,
-							type:mapped(field.type),
-							nativeLayout:field.nativeLayout,
-							scalarStorage:field.scalarStorage,
-							nullableScalarStorage:field.nullableScalarStorage
+						name: field.name,
+						type: mapped(field.type),
+						nativeLayout: field.nativeLayout,
+						scalarStorage: field.scalarStorage,
+						nullableScalarStorage: field.nullableScalarStorage
 					}]
 			}];
 		result.objects = rewrittenObjects.concat(planner.generatedObjects());

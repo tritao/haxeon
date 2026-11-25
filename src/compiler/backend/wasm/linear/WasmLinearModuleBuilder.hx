@@ -165,13 +165,13 @@ class WasmLinearModuleBuilder {
 			verified = new WasmFlattenValueFields(logical).rewrite();
 		verified.objects = [for (object in logical.objects)
 			{
-				name:object.name,
-					isValue:object.isValue,
-					nativeLayout:object.nativeLayout,
-					base:object.base,
-					interfaces:object.interfaces,
-					fields:values.fields(object.fields),
-					methods:object.methods
+				name: object.name,
+				isValue: object.isValue,
+				nativeLayout: object.nativeLayout,
+				base: object.base,
+				interfaces: object.interfaces,
+				fields: values.fields(object.fields),
+				methods: object.methods
 			}];
 		IrVerifier.verify(verified);
 		var exports = [
@@ -187,13 +187,13 @@ class WasmLinearModuleBuilder {
 			}), flattened = fields.rewrite();
 		flattened.objects = [for (object in logical.objects)
 			{
-				name:object.name,
-					isValue:object.isValue,
-					nativeLayout:object.nativeLayout,
-					base:object.base,
-					interfaces:object.interfaces,
-					fields:values.fields(object.fields),
-					methods:object.methods
+				name: object.name,
+				isValue: object.isValue,
+				nativeLayout: object.nativeLayout,
+				base: object.base,
+				interfaces: object.interfaces,
+				fields: values.fields(object.fields),
+				methods: object.methods
 			}];
 		var physicalObjects =
 			compiler.ir.model.IrObjectTable.of([for (object in flattened.objects) object.name => object]);

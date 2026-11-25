@@ -1089,20 +1089,23 @@ class ExpressionTyper {
 			case TFunction(parameters, result, _):
 				[for (index in 0...parameters.length)
 					{
-						name:'parameter$index', type:parameters[index]
-					}].concat([{name: "result", type: result}]);
+						name: 'parameter$index', type: parameters[index]
+					}].concat([{
+						name: "result",
+						type: result
+					}]);
 			case TAbstract(_, parameters, representation):
 				var values = [for (index in 0...parameters.length)
 					{
-						name:'argument$index', type:parameters[index]
+						name: 'argument$index', type: parameters[index]
 					}];
 				if (parameters.length == 0 && SemanticSignature.type(representation) != SemanticSignature.type(type))
 					values.push({name: "representation", type: representation});
 				values;
 			case TInstance(_, _, parameters): [for (index in 0...parameters.length)
 				{
-						name:'argument$index', type:parameters[index]
-					}];
+					name: 'argument$index', type: parameters[index]
+				}];
 			case _: [];
 		};
 		return [
@@ -1253,10 +1256,10 @@ class ExpressionTyper {
 		if (objectExpected == null) {
 			var inferred:Array<AnonymousField> = [for (field in typedFields)
 				{
-					name:field.name,
-						type:field.value.type,
-						optional:false,
-						isFinal:false
+					name: field.name,
+					type: field.value.type,
+					optional: false,
+					isFinal: false
 				}];
 			inferred.sort(function(left, right) return Reflect.compare(left.name, right.name));
 			// Without an expected structure, the literal's structure stays open while its unit is typed, gaining the optional fields of
@@ -1858,10 +1861,10 @@ class ExpressionTyper {
 			tupleTypes = TupleSwitch.elementTypes(typedSubject);
 			cases = [for (switchCase in cases)
 				{
-					patterns:[for (pattern in switchCase.patterns) TupleSwitch.wholeValuePattern(pattern)],
-						guard:switchCase.guard,
-						result:switchCase.result,
-						span:switchCase.span
+					patterns: [for (pattern in switchCase.patterns) TupleSwitch.wholeValuePattern(pattern)],
+					guard: switchCase.guard,
+					result: switchCase.result,
+					span: switchCase.span
 				}];
 		}
 		var typedCases:Array<TypedSwitchExpressionCase> = [],
@@ -1986,11 +1989,11 @@ class ExpressionTyper {
 				coverageCases:Array<TypedSwitchCoverageCase> =
 					[for (switchCase in typedCases) for (arm in switchCase.arms)
 					{
-						constructorIndex:arm.constructorIndex,
-							subjectBinding:arm.subjectBinding,
-							isCatchAll:arm.isCatchAll,
-							guard:arm.guard,
-							predicates:arm.predicates
+						constructorIndex: arm.constructorIndex,
+						subjectBinding: arm.subjectBinding,
+						isCatchAll: arm.isCatchAll,
+						guard: arm.guard,
+						predicates: arm.predicates
 					}];
 			if (session.enumDecls.exists(resolvedEnumName)) {
 				var enumDecl = session.enumDecls.get(resolvedEnumName);
@@ -2176,7 +2179,7 @@ class ExpressionTyper {
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var converted:Array<TypedSwitchExpressionCase> = [for (item in cases)
 					{
-						arms:item.arms, result:coerceCastNull(item.result, expected)
+						arms: item.arms, result: coerceCastNull(item.result, expected)
 					}];
 				new TypedExpression(TSwitchExpression(subject, converted,
 					defaultExpression == null ? null : coerceCastNull(defaultExpression, expected)),

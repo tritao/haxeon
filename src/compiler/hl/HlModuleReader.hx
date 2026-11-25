@@ -57,10 +57,10 @@ class HlModuleReader {
 		var globals = [for (_ in 0...globalCount) HlBytecodeInput.index(input)];
 		var natives = [for (_ in 0...nativeCount)
 			{
-				library:HlBytecodeInput.index(input),
-					name:HlBytecodeInput.index(input),
-					type:HlBytecodeInput.index(input),
-					functionIndex:unsigned(input)
+				library: HlBytecodeInput.index(input),
+				name: HlBytecodeInput.index(input),
+				type: HlBytecodeInput.index(input),
+				functionIndex: unsigned(input)
 			}];
 		part("globals and natives");
 		var functions:Array<HlModuleFunction> = [], instructionBytes = 0, debugBytes = 0;
@@ -106,7 +106,7 @@ class HlModuleReader {
 		mark = input.position;
 		var constants = [for (_ in 0...constantCount)
 			{
-				global:unsigned(input), fields:[for (_ in 0...unsigned(input)) unsigned(input)]
+				global: unsigned(input), fields: [for (_ in 0...unsigned(input)) unsigned(input)]
 			}];
 		part("constant objects");
 		var sections:Array<HlModuleSection> = [];
@@ -161,15 +161,15 @@ class HlModuleReader {
 			return input.readString(unsigned(input));
 		return [for (_ in 0...unsigned(input))
 			{
-				stableId:unsigned(input),
-					functionIndex:unsigned(input),
-					qualifiedName:text(),
-					displayName:text(),
-					sourcePath:text(),
-					start:HlBytecodeInput.index(input) - 1,
-					end:HlBytecodeInput.index(input) - 1,
-					line:unsigned(input),
-					flags:unsigned(input)
+				stableId: unsigned(input),
+				functionIndex: unsigned(input),
+				qualifiedName: text(),
+				displayName: text(),
+				sourcePath: text(),
+				start: HlBytecodeInput.index(input) - 1,
+				end: HlBytecodeInput.index(input) - 1,
+				line: unsigned(input),
+				flags: unsigned(input)
 			}];
 	}
 

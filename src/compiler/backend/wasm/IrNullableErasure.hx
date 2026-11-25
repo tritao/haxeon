@@ -24,43 +24,43 @@ class IrNullableErasure {
 		// Payload-width semantics have already been lowered before a nullable field becomes an opaque Dynamic slot.
 		result.objects = [for (object in program.objects)
 			{
-				name:object.name,
-					isValue:object.isValue,
-					nativeLayout:object.nativeLayout,
-					base:object.base,
-					interfaces:object.interfaces,
-					fields:[for (field in object.fields)
+				name: object.name,
+				isValue: object.isValue,
+				nativeLayout: object.nativeLayout,
+				base: object.base,
+				interfaces: object.interfaces,
+				fields: [for (field in object.fields)
 					{
-						name:field.name, type:IrTypeTools.erase(field.type), nativeLayout:field.nativeLayout,
-							scalarStorage:field.scalarStorage,
-							nullableScalarStorage:null
+						name: field.name, type: IrTypeTools.erase(field.type), nativeLayout: field.nativeLayout,
+						scalarStorage: field.scalarStorage,
+						nullableScalarStorage: null
 					}],
-						methods:object.methods
+				methods: object.methods
 			}];
 		result.interfaces = [for (entry in program.interfaces)
 			{
-				name:entry.name,
-					bases:entry.bases,
-					methods:[for (method in entry.methods)
+				name: entry.name,
+				bases: entry.bases,
+				methods: [for (method in entry.methods)
 					{
-						name:method.name,
-							arguments:[for (argument in method.arguments) IrTypeTools.erase(argument)],
-							result:IrTypeTools.erase(method.result)
+						name: method.name,
+						arguments: [for (argument in method.arguments) IrTypeTools.erase(argument)],
+						result: IrTypeTools.erase(method.result)
 					}]
 			}];
 		result.enums = [for (entry in program.enums)
 			{
-				name:entry.name,
-					isRecursive:entry.isRecursive,
-					inlineStorage:entry.inlineStorage,
-					cases:[for (enumCase in entry.cases)
+				name: entry.name,
+				isRecursive: entry.isRecursive,
+				inlineStorage: entry.inlineStorage,
+				cases: [for (enumCase in entry.cases)
 					{
-						name:enumCase.name, params:[for (type in enumCase.params) IrTypeTools.erase(type)]
+						name: enumCase.name, params: [for (type in enumCase.params) IrTypeTools.erase(type)]
 					}]
 			}];
 		result.staticFields = [for (field in program.staticFields)
 			{
-				name:field.name, type:IrTypeTools.erase(field.type)
+				name: field.name, type: IrTypeTools.erase(field.type)
 			}];
 		return result;
 	}
@@ -177,12 +177,12 @@ class IrNullableErasure {
 		}
 		var bindings:Array<IrDebugBinding> = [for (binding in fn.debugBindings)
 			{
-				identity:binding.identity,
-					name:binding.name,
-					value:use(binding.value),
-					path:binding.path,
-					scopeStart:binding.scopeStart,
-					scopeEnd:binding.scopeEnd
+				identity: binding.identity,
+				name: binding.name,
+				value: use(binding.value),
+				path: binding.path,
+				scopeStart: binding.scopeStart,
+				scopeEnd: binding.scopeEnd
 			}];
 		return fn.withBlocks(blocks, bindings, arguments, IrTypeTools.erase(fn.result));
 	}

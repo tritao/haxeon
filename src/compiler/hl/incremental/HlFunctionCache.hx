@@ -76,14 +76,14 @@ class HlFunctionCache {
 
 	public function exportState():HlFunctionCacheState {
 		var ids:Array<HlStableFunctionState> = [for (name => id in stableIds) {
-			name:name, id:id
+			name: name, id: id
 		}];
 		var signatureState:Array<HlFunctionSignatureState> = [for (name => fn in functions) {
-			name:name, signature:signature(fn)
+			name: name, signature: signature(fn)
 		}];
 		var functionState:Array<HlCachedFunctionState> = [for (name => fn in functions)
 			{
-				name:name, bytes:IrFunctionStateCodec.encode(fn)
+				name: name, bytes: IrFunctionStateCodec.encode(fn)
 			}];
 		ids.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		signatureState.sort(function(a, b) return Reflect.compare(a.name, b.name));

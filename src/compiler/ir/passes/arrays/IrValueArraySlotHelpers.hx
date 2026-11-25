@@ -161,7 +161,7 @@ class IrValueArraySlotHelpers {
 	public function subtree(path:Array<String>):Array<IrValueArraySubslot> {
 		return [for (index in 0...shape.slots.length) if (isPrefix(path, shape.slots[index].path, true))
 			{
-				index:index, slot:shape.slots[index]
+				index: index, slot: shape.slots[index]
 			}];
 	}
 

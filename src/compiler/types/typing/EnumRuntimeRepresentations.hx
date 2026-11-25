@@ -77,14 +77,20 @@ class EnumRuntimeRepresentations {
 			case TInstance(_, _, arguments): arguments;
 			default: [];
 		};
-		return {name: EnumRuntimeType.name(type), specializationOrigin: origin, specializationArguments: arguments,
+		return {
+			name: EnumRuntimeType.name(type),
+			specializationOrigin: origin,
+			specializationArguments: arguments,
 			isRecursive: isRecursive(origin),
 			equatable: DeclaredConformance.has(session, type, "Equatable"),
-			hashable: DeclaredConformance.has(session, type, "Hashable"), metadata: source.metadata,
+			hashable: DeclaredConformance.has(session, type, "Hashable"),
+			metadata: source.metadata,
 			cases: [for (constructor in source.cases) {
-				name:constructor.name, metadata:constructor.metadata, span:constructor.span,
-					params:[for (parameter in constructor.params) storage(source.typeParameters, parameter, type)]
-			}], span: source.span};
+				name: constructor.name, metadata: constructor.metadata, span: constructor.span,
+				params: [for (parameter in constructor.params) storage(source.typeParameters, parameter, type)]
+			}],
+			span: source.span
+		};
 	}
 
 	public function storage(parameters:Array<String>, parameter:AstEnumParameter, instance:CompilerType):CompilerType {

@@ -33,9 +33,9 @@ typedef ReversePair = {y:Int, x:Int};
 typedef Empty = {};
 typedef TwoPairs = {first:Pair, second:Pair};
 
-function equalGeneric < T:Equatable > (a:T, b:T):Bool return Equality.equals(a, b);
+function equalGeneric<T:Equatable>(a:T, b:T):Bool return Equality.equals(a, b);
 
-function hashGeneric < T:Hashable > (a:T):Int return Hashing.hash(a);
+function hashGeneric<T:Hashable>(a:T):Int return Hashing.hash(a);
 
 function main():Int {
 	var a:Pair = {x: 0, y: 1}, b:Pair = {x: 0, y: 1}, different:Pair = {x: 1, y: 0};
