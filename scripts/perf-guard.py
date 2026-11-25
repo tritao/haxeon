@@ -77,6 +77,7 @@ store. It runs in two modes, each with metrics of its own, so the result never d
 Measures on Linux x86-64 only, where the baseline was taken; elsewhere it says so and passes. A metric beyond its tolerance
 below the baseline passes and asks for the baseline to be updated (--update), so gains are locked in.
 """
+import functools
 import json
 import os
 import platform
@@ -140,14 +141,18 @@ def frozen_input(out):
     if not os.path.exists(os.path.join(tree, "sources.txt")):
         shutil.rmtree(tree, ignore_errors=True)
         os.makedirs(tree)
+        # A shallow clone (CI's) lacks the revision: fetch it alone, without the submodules, whose pins it may not reach.
+        if subprocess.run(["git", "cat-file", "-e", revision + "^{tree}"], cwd=ROOT, stderr=subprocess.DEVNULL).returncode != 0:
+            run(["git", "fetch", "--quiet", "--no-recurse-submodules", "--depth=1", "origin", revision])
         archive = subprocess.run(["git", "archive", revision] + SOURCE_ROOTS, cwd=ROOT, check=True, stdout=subprocess.PIPE).stdout
         subprocess.run(["tar", "-x", "-C", tree], input=archive, check=True)
         list_sources(tree, os.path.join(tree, "sources.txt"))
     return tree, os.path.join(tree, "sources.txt")
 
 
+@functools.cache
 def perf_unavailable():
-    if run(["sh", "-c", "command -v perf || true"]).strip() == "":
+    if shutil.which("perf") is None:
         return "perf is not installed"
     try:
         with open("/proc/sys/kernel/perf_event_paranoid") as source:
@@ -156,6 +161,12 @@ def perf_unavailable():
         return "no perf_event_paranoid"
     if level > 2:
         return f"perf_event_paranoid is {level}"
+    # A virtual machine may expose no hardware counters, which perf reports only when it is asked to count.
+    pin, prefix = performance_cores()
+    probe = subprocess.run(pin + ["perf", "stat", "-x,", "-e", prefix + "instructions/u", "--", "true"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if not any(row.split(",")[0].isdigit() for row in probe.stderr.splitlines()):
+        return "perf counts no instructions here: " + probe.stderr.strip().replace("\n", " ")[:200]
     return None
 
 
@@ -163,12 +174,13 @@ def performance_cores():
     """The command prefix and perf event prefix that keep a measured process on one core type and count its counter.
 
     On a hybrid CPU each core type has its own counter, multiplexed and extrapolated when the thread moves between them: keep the
-    process on the performance cores and count theirs."""
+    process on the performance cores and count theirs. Elsewhere the one core type's counter is `cpu`'s: an event written
+    `instructions/u` without it names no counter."""
     hybrid = "/sys/bus/event_source/devices/cpu_core/cpus"
     if os.path.exists(hybrid):
         with open(hybrid) as source:
             return ["taskset", "-c", source.read().strip()], "cpu_core/"
-    return [], ""
+    return [], "cpu/"
 
 
 def measure(hl, compiler, sources, output, log_path, cwd):

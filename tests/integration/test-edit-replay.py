@@ -39,7 +39,8 @@ def commits(count):
                                                   stdout=subprocess.DEVNULL).returncode == 0:
             return list(reversed(found)), git("rev-parse", found[-1] + "^", text=True).strip()
         if attempt == 0 and git("rev-parse", "--is-shallow-repository", text=True).strip() == "true":
-            git("fetch", "--quiet", "--deepen=500", "origin")
+            # Not the submodules: the older commits name pins their shallow clones cannot fetch.
+            git("fetch", "--quiet", "--no-recurse-submodules", "--deepen=500", "origin")
     raise SystemExit(f"edit-replay: the history has fewer than {count} commits that change {EDITED}")
 
 
