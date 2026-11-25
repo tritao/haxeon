@@ -10,7 +10,9 @@ import compiler.query.QueryKind.QueryRead;
  * readers are reused too.
  *
  * A stage that computes outside the database (the typer, which types units in its own order) records what it reads the same
- * way, in a frame of its own (`beginRecording`), and keeps the reads with its result (`RecordedQueryKind`).
+ * way, in a frame of its own (`beginRecording`), and keeps the reads with its result (`RecordedQueryKind`). Those results are
+ * written in a transaction: a build that is taken commits them (`commit`), and a state the session returns to rolls back what
+ * was written after it (`rollBack`).
  */
 class QueryDatabase {
 	/** Starts at 1 and advances when an input changes and when a build begins (`newRevision`). */
@@ -24,6 +26,12 @@ class QueryDatabase {
 
 	/** How many derived results were computed since the database was made; reuses and check mode do not count. */
 	public var computations(default, null) = 0;
+
+	/** The last commit (`commit`), which a state taken from a build keeps to return to (`rollBack`). */
+	public var lastCommit(default, null) = 0;
+
+	/** The oldest commit `rollBack` can return to (`keepRollbackTo`). */
+	var rollbackFloor = 0;
 
 	final kinds:Array<QueryKindBase> = [];
 
@@ -75,6 +83,38 @@ class QueryDatabase {
 		stamps.resize(0);
 		marksAtEnter.resize(0);
 		return ++revision;
+	}
+
+	/** Takes the results the build in progress wrote: they stay unless a rollback returns before the commit this returns. */
+	public function commit():Int {
+		lastCommit++;
+		for (kind in kinds)
+			kind.commitWrites(lastCommit);
+		return lastCommit;
+	}
+
+	/**
+	 * Returns the written results to what commit `commit` left: the commits after it, and the writes of a build no commit took,
+	 * are undone. Anything found for the revision was found over the results undone, so a rollback that undid something starts a
+	 * revision.
+	 */
+	public function rollBack(commit:Int):Void {
+		if (commit < rollbackFloor)
+			throw new compiler.core.InternalError("query results cannot return to commit " + commit + ", before "
+				+ rollbackFloor);
+		var undone = false;
+		for (kind in kinds)
+			if (kind.undoAfter(commit))
+				undone = true;
+		if (undone)
+			revision++;
+	}
+
+	/** Keeps what returns to commit `commit` or a later one (`rollBack`), and forgets what returns before it. */
+	public function keepRollbackTo(commit:Int):Void {
+		rollbackFloor = commit;
+		for (kind in kinds)
+			kind.forgetUndo(commit);
 	}
 
 	/** Drops the derived results not used since the last revision began; returns how many. */

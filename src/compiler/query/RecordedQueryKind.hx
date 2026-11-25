@@ -3,6 +3,20 @@ package compiler.query;
 import compiler.query.QueryKind.QueryKindBase;
 import compiler.query.QueryKind.QueryRead;
 
+/** A result a stage computed outside the database (`RecordedQueryKind`): the revision it was computed at and what it read. */
+class RecordedResult {
+	/** It is current while nothing it read changed after this revision. */
+	public final revision:Int;
+
+	/** What it read (`QueryRead`), in order, each once. */
+	public final reads:Array<Int>;
+
+	public function new(revision:Int, reads:Array<Int>) {
+		this.revision = revision;
+		this.reads = reads;
+	}
+}
+
 /**
  * A kind whose results a stage computes outside the database, in its own order, and keeps with the reads it recorded
  * (`QueryDatabase.beginRecording`), or that are set from outside with the keys they go through. A result has no digest of its
@@ -11,8 +25,13 @@ import compiler.query.QueryKind.QueryRead;
  * and every member changed when the latest of them did: such results come from one computation, whose order of reads is the
  * stage's.
  *
- * A subclass gives each key's own change, its reads and, for a read that goes through only a part of what it reads (a
- * declaration naming a type reads only the type's kind), that part's change.
+ * A build writes its results in a transaction (`write`): the database commits them when the build is taken (`QueryDatabase.commit`),
+ * and a build that is not taken leaves them to be undone, as is every commit after a state the session returns to
+ * (`QueryDatabase.rollBack`). The results describe what the taken state holds (the typed bodies a unit's reads are of), so they
+ * must be that state's, not a rejected build's.
+ *
+ * A subclass gives each key's own change, its reads (by default its result's) and, for a read that goes through only a part of
+ * what it reads (a declaration naming a type reads only the type's kind), that part's change.
  */
 class RecordedQueryKind extends QueryKindBase {
 	/** The database the kind is registered in, whose revision its walks are memoized for. */
@@ -23,18 +42,83 @@ class RecordedQueryKind extends QueryKindBase {
 
 	var effectiveIn:Array<Int> = [];
 
+	/** Each key's result as written so far (`write`), committed or not; null for none. */
+	var results:Array<Null<RecordedResult>> = [];
+
+	// What undoes each write, oldest first: the commit that took it (`OPEN` while none has), its key and the result it replaced.
+	var undoCommits:Array<Int> = [];
+	var undoKeys:Array<Int> = [];
+	var undoResults:Array<Null<RecordedResult>> = [];
+
+	static inline final OPEN = 0x7FFFFFFF;
+
 	function new(name:String, database:QueryDatabase) {
 		super(name);
 		this.database = database;
+	}
+
+	/** `key`'s result, or null for none. */
+	public inline function result(key:Int):Null<RecordedResult>
+		return key < results.length ? results[key] : null;
+
+	/** Every key that has a result is below this. */
+	public var resultLimit(get, never):Int;
+
+	inline function get_resultLimit():Int
+		return results.length;
+
+	/** Sets `key`'s result, or removes it (null), in the transaction of the build in progress. */
+	public function write(key:Int, result:Null<RecordedResult>):Void {
+		while (results.length <= key)
+			results.push(null);
+		undoCommits.push(OPEN);
+		undoKeys.push(key);
+		undoResults.push(results[key]);
+		results[key] = result;
+	}
+
+	override function commitWrites(commit:Int):Void {
+		var index = undoCommits.length - 1;
+		while (index >= 0 && undoCommits[index] == OPEN) {
+			undoCommits[index] = commit;
+			index--;
+		}
+	}
+
+	override function undoAfter(commit:Int):Bool {
+		var index = undoCommits.length;
+		while (index > 0 && undoCommits[index - 1] > commit) {
+			index--;
+			results[undoKeys[index]] = undoResults[index];
+		}
+		if (index == undoCommits.length)
+			return false;
+		undoCommits.resize(index);
+		undoKeys.resize(index);
+		undoResults.resize(index);
+		return true;
+	}
+
+	override function forgetUndo(through:Int):Void {
+		var count = 0;
+		while (count < undoCommits.length && undoCommits[count] <= through)
+			count++;
+		if (count == 0)
+			return;
+		undoCommits.splice(0, count);
+		undoKeys.splice(0, count);
+		undoResults.splice(0, count);
 	}
 
 	/** The revision at which `key` last changed itself. */
 	function ownChange(key:Int):Int
 		throw new compiler.core.InternalError("query kind " + kindName + " has no ownChange");
 
-	/** What `key` read (`QueryRead`), or null for nothing. */
-	function readsOf(key:Int):Null<Array<Int>>
-		return null;
+	/** What `key` read (`QueryRead`), or null for nothing: its result's reads. */
+	function readsOf(key:Int):Null<Array<Int>> {
+		var held = result(key);
+		return held == null ? null : held.reads;
+	}
 
 	/** The change a read of this kind's `target` by `source` sees when it is less than all of `target`; -1 for all of it. */
 	function partialChange(source:Int, target:Int):Int
@@ -151,9 +235,13 @@ class RecordedQueryKind extends QueryKindBase {
 		successors.push(reads);
 	}
 
-	/** Forgets every key's walk state, for a subclass that forgets its keys. */
-	function clearWalk():Void {
+	/** Forgets every key's result and walk state, for a subclass that forgets its keys. */
+	function clearKeys():Void {
 		clearRecorded();
+		results = [];
+		undoCommits = [];
+		undoKeys = [];
+		undoResults = [];
 		effective = [];
 		effectiveIn = [];
 		members = [];

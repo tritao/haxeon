@@ -5,6 +5,7 @@ import compiler.query.QueryErrors.QueryReuseMismatch;
 import compiler.query.QueryKind;
 import compiler.query.QueryKind.QueryRead;
 import compiler.query.RecordedQueryKind;
+import compiler.query.RecordedQueryKind.RecordedResult;
 
 /** Results a test stage computes itself: each node's own change, its reads, and which reads see only a part (`partOf`). */
 class TestRecorded extends RecordedQueryKind {
@@ -34,6 +35,19 @@ class TestRecorded extends RecordedQueryKind {
 
 	override function partialChange(source:Int, target:Int):Int
 		return partOf[target];
+}
+
+/** Results a test stage writes in the database's transactions (`RecordedQueryKind.write`), read through their reads. */
+class TestWritten extends RecordedQueryKind {
+	public final own:Array<Int> = [];
+
+	public function new(database:QueryDatabase) {
+		super("written", database);
+		database.register(this);
+	}
+
+	override function ownChange(key:Int):Int
+		return key < own.length ? own[key] : 0;
 }
 
 /** The query engine on synthetic queries: reuse without computing, early cutoff, read order, cycles, sweep, check mode. */
@@ -171,9 +185,11 @@ class QueryEngineMain {
 		recordedResults();
 		stageFrames();
 		inputRevisions();
+		transactions();
 
 		Sys.println("PASS: query engine reuses, cuts off early, digests by computation, verifies reads in order, reports cycles, sweeps, checks reuse, "
-			+ "verifies recorded results through components, records a stage's reads in frames, and tells input revisions from build revisions");
+			+ "verifies recorded results through components, records a stage's reads in frames, tells input revisions from build revisions, "
+			+ "and commits and rolls back written results");
 	}
 
 	/** Results a stage computes itself change when they or anything they read did, transitively; a component changes as one. */
@@ -265,5 +281,58 @@ class QueryEngineMain {
 		expect(database.inputRevision == inputs, "removing an input that is not set changes nothing");
 		database.remove(source, 0);
 		expect(database.inputRevision > inputs && source.peek(0) == null, "removing one is a change");
+	}
+
+	/**
+	 * Written results are seen at once, kept by a commit, undone when a state before it is returned to, and forgotten once no
+	 * state can return before them.
+	 */
+	static function transactions():Void {
+		var database = new QueryDatabase();
+		var written = new TestWritten(database);
+		for (_ in 0...3)
+			written.own.push(0);
+		var start = database.newRevision();
+		written.write(0, new RecordedResult(start, [QueryRead.of(written.index, 1)]));
+		expect(written.result(0) != null && written.result(1) == null, "a write is read back before it is committed");
+		var first = database.commit();
+		expect(first == database.lastCommit && written.result(0) != null, "a commit keeps the writes");
+
+		var later = database.newRevision();
+		written.own[1] = later;
+		expect(written.latestChange(0) == later, "a result changes with what its reads name");
+		written.write(0, null);
+		written.write(1, new RecordedResult(later, [QueryRead.of(written.index, 2)]));
+		database.rollBack(first);
+		expect(written.result(0) != null && written.result(1) == null, "a build not taken is undone");
+		expect(database.revision > later, "undoing starts a revision, as what was found for the old one is stale");
+		database.rollBack(first);
+
+		database.newRevision();
+		written.write(1, new RecordedResult(database.revision, []));
+		var second = database.commit();
+		written.write(1, null);
+		written.write(2, new RecordedResult(database.revision, []));
+		written.write(2, new RecordedResult(database.revision, [QueryRead.of(written.index, 0)]));
+		var third = database.commit();
+		expect(written.result(1) == null && written.result(2).reads.length == 1,
+			"the last write of a key is the one kept");
+		database.rollBack(second);
+		expect(written.result(1) != null && written.result(2) == null,
+			"returning to a commit undoes the ones after it");
+		expect(third > second, "commits are numbered on");
+
+		database.newRevision();
+		written.write(0, null);
+		var fourth = database.commit();
+		database.keepRollbackTo(fourth);
+		var refused = false;
+		try
+			database.rollBack(second)
+		catch (_:compiler.core.InternalError)
+			refused = true;
+		expect(refused && written.result(0) == null, "a rollback before what is kept is refused");
+		database.rollBack(fourth);
+		expect(written.result(0) == null && written.result(1) != null, "returning to the kept commit changes nothing");
 	}
 }

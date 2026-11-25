@@ -140,7 +140,7 @@ class DeclarationFacts extends compiler.query.RecordedQueryKind {
 		dependencies = [];
 		unitModules = [];
 		expanded = [];
-		clearWalk();
+		clearKeys();
 	}
 
 	/** Starts a build: facts changed from here on change at the new revision. */

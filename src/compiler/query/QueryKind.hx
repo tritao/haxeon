@@ -54,6 +54,22 @@ class QueryKindBase {
 	public function sweep(revision:Int):Int
 		return 0;
 
+	/**
+	 * Marks the results the build in progress wrote as taken by commit `commit` (`QueryDatabase.commit`). A computed memo is a
+	 * function of its reads whichever build made it, so only results a stage wrote (`RecordedQueryKind`) take part.
+	 */
+	@:allow(compiler.query.QueryDatabase)
+	function commitWrites(commit:Int):Void {}
+
+	/** Undoes the writes of the commits after `commit` and those no commit took; whether there were any. */
+	@:allow(compiler.query.QueryDatabase)
+	function undoAfter(commit:Int):Bool
+		return false;
+
+	/** Forgets what undoes the commits up to `through`: no rollback returns before it. */
+	@:allow(compiler.query.QueryDatabase)
+	function forgetUndo(through:Int):Void {}
+
 	public function describe(key:Int):String
 		return kindName + "(" + key + ")";
 
