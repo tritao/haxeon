@@ -933,7 +933,7 @@ class IrGenerator {
 						builder.select(joinBlock);
 				case TWhile(condition, body, span):
 					var infinite = ControlFlow.isInfiniteLoop(condition, body);
-					var breakFlag = '$' + 'while-break:${span.start}';
+					var breakFlag = builder.internalName('while-break');
 					localTypes.set(breakFlag, Bool);
 					builder.store(breakFlag, builder.constBool(false));
 					var conditionBlock = builder.createBlock(),
@@ -963,7 +963,7 @@ class IrGenerator {
 				case TDoWhile(body, condition, span):
 					// One copy of the body, entered first: body, then the condition block, which loops back or leaves. `break` and
 					// `continue` jump to the condition block, as in the other loops, where the break flag is read first.
-					var breakFlag = '$' + 'do-while-break:${span.start}';
+					var breakFlag = builder.internalName('do-while-break');
 					localTypes.set(breakFlag, Bool);
 					builder.store(breakFlag, builder.constBool(false));
 					var bodyBlock = builder.createOpenBlock(),
@@ -990,10 +990,10 @@ class IrGenerator {
 					builder.select(afterBlock);
 				case TForIn(name, valueName, sourceIterable, body, span):
 					var iterable = arrayIteratorSource(sourceIterable);
-					var arrayName = '$' + 'for-array:${span.start}',
-						mapName = '$' + 'for-map:${span.start}',
-						indexName = '$' + 'for-index:${span.start}',
-						breakFlag = '$' + 'for-break:${span.start}',
+					var arrayName = builder.internalName('for-array'),
+						mapName = builder.internalName('for-map'),
+						indexName = builder.internalName('for-index'),
+						breakFlag = builder.internalName('for-break'),
 						iterator = switch iterable.type {
 							case TIterator(_): true;
 							default: false;
@@ -1019,7 +1019,7 @@ class IrGenerator {
 					};
 					// `a...b` counts directly instead of materializing an Array<Int>.
 					var rangeEnd:Null<TypedExpression> = null,
-						rangeEndName = '$' + 'for-end:${span.start}';
+						rangeEndName = builder.internalName('for-end');
 					var rangeStart:Null<TypedExpression> = null;
 					if (valueName == null)
 						switch iterable.expression {
@@ -1108,7 +1108,7 @@ class IrGenerator {
 					lowerLoopHeader(builder, conditionBlock, checkBlock, afterBlock, loop);
 					builder.select(afterBlock);
 				case TSwitch(expression, cases, defaultBranch, hasDefault, span):
-					var switchName = '$' + 'switch:${span.start}',
+					var switchName = builder.internalName('switch'),
 						switchType = lowerType(expression.type),
 						tuple = storeSwitchSubject(switchName, expression, builder, localTypes),
 						exits:Array<IrBlock> = [];
@@ -2752,7 +2752,7 @@ class IrGenerator {
 				var yesBlock = builder.createBlock(),
 					noBlock = builder.createBlock(),
 					afterBlock = builder.createBlock(),
-					localName = '$' + 'conditional:${expression.span.start}:${afterBlock.id}',
+					localName = builder.internalName('conditional'),
 					resultType = lowerType(expression.type);
 				localTypes.set(localName, resultType);
 				lowerBranch(condition, yesBlock, noBlock, builder, localTypes);
@@ -2881,8 +2881,8 @@ class IrGenerator {
 						span);
 				}
 			case TSwitchExpression(subject, cases, defaultExpression):
-				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
-					resultName = '$' + 'switch-expression-result:${expression.span.start}',
+				var subjectName = builder.internalName('switch-expression-subject'),
+					resultName = builder.internalName('switch-expression-result'),
 					subjectType = lowerType(subject.type),
 					resultType = lowerType(expression.type);
 				localTypes.set(resultName, resultType);
@@ -3102,7 +3102,7 @@ class IrGenerator {
 				} else {
 					var object = builder.newObject(physicalName),
 						objectType:IrType = Obj(physicalName),
-						objectName = '$' + 'new-object:${expression.span.start}:${object.id}';
+						objectName = builder.internalName('new-object');
 					localTypes.set(objectName, objectType);
 					builder.store(objectName, object);
 					if (facts.observableStateOwner(physicalName) != null)
@@ -3124,7 +3124,7 @@ class IrGenerator {
 			case TObjectLiteral(typeName, fields, isDynamic):
 				if (isDynamic && profile.dynamicObjectLiterals) {
 					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn),
-						objectName = '$' + 'dynamic-object-literal:${expression.span.start}:${object.id}';
+						objectName = builder.internalName('dynamic-object-literal');
 					localTypes.set(objectName, IrType.Dyn);
 					builder.store(objectName, object);
 					for (field in fields) {
@@ -3140,7 +3140,7 @@ class IrGenerator {
 					// Targets without native dynamic objects (Wasm) use the stdlib's runtime.DynamicObject.
 					var objectType:IrType = Obj(PlatformAbi.DYNAMIC_OBJECT_CLASS),
 						object = builder.call('${PlatformAbi.DYNAMIC_OBJECT_CLASS}.create', [], objectType),
-						objectName = '$' + 'dynamic-object-literal:${expression.span.start}:${object.id}';
+						objectName = builder.internalName('dynamic-object-literal');
 					localTypes.set(objectName, objectType);
 					builder.store(objectName, object);
 					for (field in fields) {
@@ -3157,8 +3157,8 @@ class IrGenerator {
 						case TAnonymous(name, _): name;
 						default: typeName;
 					}, object = facts.valueClasses.exists(physicalName) ? builder.valueInit(physicalName)
-						: builder.newObject(physicalName), objectType:IrType = Obj(physicalName), objectName = '$'
-						+ 'object-literal:${expression.span.start}:${object.id}';
+						: builder.newObject(physicalName), objectType:IrType = Obj(physicalName),
+						objectName = builder.internalName('object-literal');
 					localTypes.set(objectName, objectType);
 					builder.store(objectName, object);
 					for (field in fields) {
@@ -3178,7 +3178,7 @@ class IrGenerator {
 					default: throw new InternalError("Array literal requires an array type");
 				}, arrayType:IrType = Array(lowerType(element)), array = lowerArrayAllocation(builder, element,
 					builder.constInt(values.length)),
-					arrayName = '$' + 'array-literal:${expression.span.start}:${array.id}';
+					arrayName = builder.internalName('array-literal');
 				localTypes.set(arrayName, arrayType);
 				builder.store(arrayName, array);
 				for (index in 0...values.length) {
@@ -3191,7 +3191,7 @@ class IrGenerator {
 					case TMap(key, value): {key: key, value: value};
 					default: throw new InternalError("Map literal requires a map type");
 				}, resultType = lowerType(expression.type), map = lowerMapAllocation(builder, types.key, types.value,
-					resultType), mapName = '$' + 'map-literal:${expression.span.start}:${map.id}';
+					resultType), mapName = builder.internalName('map-literal');
 				localTypes.set(mapName, resultType);
 				builder.store(mapName, map);
 				for (entry in entries) {
@@ -3205,10 +3205,10 @@ class IrGenerator {
 				builder.load(mapName, resultType);
 			case TArrayComprehension(keyName, valueName, sourceIterable, condition, value, _):
 				var iterable = arrayIteratorSource(sourceIterable);
-				var inputName = '$' + 'comprehension-input:${expression.span.start}',
-					mapName = '$' + 'comprehension-map:${expression.span.start}',
-					resultName = '$' + 'comprehension-result:${expression.span.start}',
-					indexName = '$' + 'comprehension-index:${expression.span.start}',
+				var inputName = builder.internalName('comprehension-input'),
+					mapName = builder.internalName('comprehension-map'),
+					resultName = builder.internalName('comprehension-result'),
+					indexName = builder.internalName('comprehension-index'),
 					mapTypes = mapTypesOrVoid(iterable.type),
 					iterator = switch iterable.type {
 						case TIterator(_): true;
@@ -3237,10 +3237,10 @@ class IrGenerator {
 						case TRange(start, end): rangeBounds = {start: start, end: end};
 						default:
 					}
-				var rangeStartName = '$' + 'comprehension-range-start:${expression.span.start}',
-					rangeLengthName = '$' + 'comprehension-range-length:${expression.span.start}';
+				var rangeStartName = builder.internalName('comprehension-range-start'),
+					rangeLengthName = builder.internalName('comprehension-range-length');
 				if (rangeBounds != null) {
-					var endName = '$' + 'comprehension-range-end:${expression.span.start}';
+					var endName = builder.internalName('comprehension-range-end');
 					for (name in [rangeStartName, rangeLengthName, endName])
 						localTypes.set(name, I32);
 					builder.store(rangeStartName, lowerExpression(rangeBounds.start, builder, localTypes));
@@ -3356,10 +3356,10 @@ class IrGenerator {
 				builder.select(afterBlock);
 				builder.load(resultName, resultType);
 			case TMapComprehension(keyName, valueName, iterable, condition, key, value):
-				var inputName = '$' + 'map-comprehension-input:${expression.span.start}',
-					sourceMapName = '$' + 'map-comprehension-source:${expression.span.start}',
-					resultName = '$' + 'map-comprehension-result:${expression.span.start}',
-					indexName = '$' + 'map-comprehension-index:${expression.span.start}',
+				var inputName = builder.internalName('map-comprehension-input'),
+					sourceMapName = builder.internalName('map-comprehension-source'),
+					resultName = builder.internalName('map-comprehension-result'),
+					indexName = builder.internalName('map-comprehension-index'),
 					sourceMapTypes = mapTypesOrVoid(iterable.type),
 					iterator = switch iterable.type {
 						case TIterator(_): true;
@@ -3444,12 +3444,12 @@ class IrGenerator {
 				builder.select(afterBlock);
 				builder.load(resultName, resultType);
 			case TRange(start, end):
-				var startName = '$' + 'range-start:${expression.span.start}',
-					endName = '$' + 'range-end:${expression.span.start}',
-					differenceName = '$' + 'range-difference:${expression.span.start}',
-					lengthName = '$' + 'range-length:${expression.span.start}',
-					resultName = '$' + 'range-result:${expression.span.start}',
-					indexName = '$' + 'range-index:${expression.span.start}',
+				var startName = builder.internalName('range-start'),
+					endName = builder.internalName('range-end'),
+					differenceName = builder.internalName('range-difference'),
+					lengthName = builder.internalName('range-length'),
+					resultName = builder.internalName('range-result'),
+					indexName = builder.internalName('range-index'),
 					resultType:IrType = Array(I32);
 				for (name in [startName, endName, differenceName, lengthName, indexName])
 					localTypes.set(name, I32);
@@ -3968,7 +3968,7 @@ class IrGenerator {
 			resultElement:CompilerType, builder:IrLocalsBuilder,
 			localTypes:Map<String, IrType>):Void {
 		var sourceType = lowerType(value.type),
-			sourceName = '$' + 'flattened-comprehension:${value.span.start}',
+			sourceName = builder.internalName('flattened-comprehension'),
 			indexName = sourceName + ":index";
 		localTypes.set(sourceName, sourceType);
 		localTypes.set(indexName, I32);
@@ -4922,7 +4922,7 @@ class IrGenerator {
 
 	function lowerLogical(left:TypedExpression, right:TypedExpression, and:Bool, builder:IrLocalsBuilder,
 			localTypes:Map<String, IrType>):IrValue {
-		var resultName = '$' + 'logical:${left.span.start}:${right.span.end}';
+		var resultName = builder.internalName('logical');
 		localTypes.set(resultName, Bool);
 		var operands:Array<TypedExpression> = [],
 			pending:Array<TypedExpression> = [right, left];

@@ -51,6 +51,15 @@ class IrLocalsBuilder {
 	var activeTraps:Array<{id:Int, preserveExceptionStack:Bool}> = [];
 	var provenance:SourceProvenance = SourceProvenance.generated("cfg-builder");
 
+	var internalNames = 0;
+
+	/**
+	 * A fresh name for a local the generator adds, `$kind:n`, numbered within the function: a name made from a source offset
+	 * would change the function's IR whenever text above it moved.
+	 */
+	public function internalName(kind:String):String
+		return '$' + kind + ':' + internalNames++;
+
 	public function new(scratch:IrSsaScratch, ?localTypes:Map<String, IrType>) {
 		this.scratch = scratch;
 		variables = new IrSsaVariables(scratch, localTypes);
