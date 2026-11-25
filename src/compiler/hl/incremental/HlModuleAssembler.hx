@@ -170,8 +170,11 @@ class HlModuleAssembler {
 
 	public var developmentMetadata:Bool = true;
 
-	/** The build's sources, which place the module's debug locations (`HlCode.sources`): none for a module made without them. */
-	public var sources = new SourceAnchors([]);
+	/**
+	 * The build's sources, which place the module's debug locations (`HlCode.sources`); a build sets them for each assembly, as they
+	 * remember what they placed. Without them an assembly places anchors where they were last declared.
+	 */
+	public var sources:Null<SourceAnchors> = null;
 
 	/** Lower what the lowering cache would reuse again and compare (`CompileOptions.checkReuse`). */
 	public var checkReuse:Bool = false;
@@ -230,7 +233,6 @@ class HlModuleAssembler {
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
 		result.developmentMetadata = developmentMetadata;
-		result.sources = sources;
 		result.loweredCache = loweredCache;
 		result.irVerified = irVerified;
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
@@ -472,7 +474,11 @@ class HlModuleAssembler {
 	 * program had and `program` lacks, lambdas retired by a rename among them. Retired functions an adapter now serves, and
 	 * functions moved for a changed signature (`moveChangedSignatures` guards those), are left out.
 	 */
-	function dropGuards(program:IrProgram, skip:Map<String, Bool>):Array<{name:String, description:String}> {
+	function dropGuards(program:IrProgram, skip:Map<String, Bool>,
+			sources:SourceAnchors):Array<{
+				name:String,
+				description:String
+			}> {
 		var present:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
 			guards:Array<{name:String, description:String}> = [];
 		for (name in cache.slots) {
@@ -811,7 +817,7 @@ class HlModuleAssembler {
 	 */
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision,
 			?dispatched:Map<String, Bool>, ?resumed:Map<String, haxe.io.Bytes>):HlAssemblyResult {
-		var startedAt = Sys.time() * 1000.0;
+		var startedAt = Sys.time() * 1000.0, sources = this.sources ?? new SourceAnchors([]);
 		// Runtime calls the lowering writes a fast path for go through one helper each (`IrSharedRuntimeCalls`); a helper this module
 		// has not published yet is new code, which a patch must carry.
 		var shared = compiler.hl.IrSharedRuntimeCalls.apply(program,
@@ -848,7 +854,7 @@ class HlModuleAssembler {
 			if (moves.moved.length > 0)
 				for (name in callersOfMoved(moves.moved, tag, [for (fn in program.functions) fn.name => true]))
 					regenerate(name);
-			guards = moves.guards.concat(dropGuards(program, [for (name in moves.adapted) name => true]));
+			guards = moves.guards.concat(dropGuards(program, [for (name in moves.adapted) name => true], sources));
 		}
 		// Once this patch applies, no closure the running module holds reaches a guard: the runtime refuses the patch while one
 		// does, and the new code calls none. So a guard keeps its slot, stable ID, signature and the code the module has in the
