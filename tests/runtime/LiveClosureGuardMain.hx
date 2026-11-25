@@ -288,7 +288,13 @@ class LiveClosureGuardMain {
 				source += "function unused(x:Int):Int return x;
 ";
 			source += "function main():Int {
-  if (Ui.handlers.length == 0) {
+";
+			// Code that only moves is not patched, so the edit that deletes `unused` also changes `main`: its patch carries the
+			// guard of the deleted function.
+			if (!unused)
+				source += "  if (Ui.extra.length < 0) return -1;
+";
+			source += "  if (Ui.handlers.length == 0) {
 ";
 			for (i in 0...70)
 				if (i != deleted)

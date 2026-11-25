@@ -236,6 +236,7 @@ class HlModuleAssembler {
 		result.loweredCache = loweredCache;
 		result.irVerified = irVerified;
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
+		result.renamed = renamed.copy();
 		result.programNames = programNames == null ? null : [for (name in programNames.keys()) name => true];
 		return result;
 	}
@@ -332,6 +333,9 @@ class HlModuleAssembler {
 			var names:Map<String, String> = [];
 			for (name in cache.slots)
 				names.set(name, step.apply(name));
+			for (from => to in names)
+				if (from != to)
+					renamed.set(to, true);
 			for (name in cache.stableIds.keys())
 				names.set(name, step.apply(name));
 			cache.rename(names);
@@ -340,6 +344,32 @@ class HlModuleAssembler {
 			if (programNames != null)
 				programNames = step.keys(programNames);
 		}
+
+	/**
+	 * The functions a rename (`renameLambdas`) gave other names since the last assembly. Their code, and the code that calls
+	 * or makes closures of their slots, was lowered against the old names: the next assembly lowers it again, from the IR the
+	 * names have now, without patching it into the running module, which keeps its functions in their slots.
+	 */
+	var renamed:Map<String, Bool> = [];
+
+	/** The functions to lower again after a rename (`renamed`): the renamed ones and those whose code reaches their slots. */
+	function afterRenames(present:Map<String, Bool>):Array<String> {
+		if (!renamed.keys().hasNext())
+			return [];
+		var slots:Map<Int, Bool> = [], result:Array<String> = [];
+		for (name in renamed.keys()) {
+			var lowered = published.entries.get(name);
+			if (lowered != null)
+				slots.set(lowered.fn.functionIndex, true);
+		}
+		for (name => entry in published.entries)
+			if (present.exists(name) && !RetiredName.is(name)
+				&& (renamed.exists(name) || referencesAny(entry.fn, slots)))
+				result.push(name);
+		result.sort(Reflect.compare);
+		renamed = [];
+		return result;
+	}
 
 	function renameLowered(names:Map<String, String>):Void {
 		var renamed:Map<String, HlLoweredFunction> = [];
@@ -980,7 +1010,11 @@ class HlModuleAssembler {
 				published = new HlLoweredCache();
 			liveCache = published;
 		}
-		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, regenerated,
+		var relowered = regenerated.copy(), listedForLowering = [for (name in regenerated) name => true];
+		for (name in afterRenames(present))
+			if (!listedForLowering.exists(name))
+				relowered.push(name);
+		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, relowered,
 			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false,
 			livePatching || keepsLowered ? liveCache : null, irVerified,
 			livePatching,

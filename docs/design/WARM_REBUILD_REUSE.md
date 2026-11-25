@@ -46,7 +46,10 @@ makes from the same sources, and its work is proportional to the edit.
   snapshots they name. The writer keeps each function's encoding while its anchors are where they were (`HlWriterCache`), and
   a build reuses the last module only while its sources are the same (`CompilationContext.sourcesKey`). A function whose code
   holds a line as a value, the `haxe.PosInfos` a call passes, does change. Names the generator gives its own locals are
-  numbered within the function (`IrLocalsBuilder.internalName`), not taken from offsets.
+  numbered within the function (`IrLocalsBuilder.internalName`), not taken from offsets. A live module keeps the code of
+  functions an edit removed; their anchors are placed where the session last placed them (`SourceAnchorHistory`). A live
+  build that renames lambdas to follow an edit (`LambdaAlignment`) lowers the renamed functions and the code reaching their
+  slots again, without patching them (`HlModuleAssembler.renamed`).
 
 A failed or rejected build leaves every cache as the last successful build left it: a build works on a copy of the
 `SessionState` it started from, and what its units read is written in a transaction of the session's query database that only
