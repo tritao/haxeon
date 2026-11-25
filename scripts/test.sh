@@ -16,6 +16,13 @@
 # fails; the exit code is 0 only if every suite that ran passed. Temporary files go to a directory of the run's own, removed after it.
 set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
+# The suites run on a session bus of their own with no services to start on demand (tests/dbus-session.conf), wherever they run.
+# On a bus where the desktop services are installed but not running, as GLib starts for each Xvfb display on CI, GTK starts the
+# desktop portal for each window, which waits out D-Bus's 25-second timeout for a keyring before the window appears.
+if [[ $(uname -s) == Linux && -z ${HAXEON_TEST_BUS:-} ]] && command -v dbus-run-session >/dev/null; then
+	export HAXEON_TEST_BUS=1
+	exec dbus-run-session --config-file="$root_dir/tests/dbus-session.conf" -- "$0" "$@"
+fi
 mode=ci
 case ${1:-} in quick | wave | ci | full) mode=$1 && shift ;; esac
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-test.XXXXXX")
