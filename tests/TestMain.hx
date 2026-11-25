@@ -1972,6 +1972,23 @@ class TestMain {
 			expectCompileError('class Button { public function new() {} } function main():Int { $use return 0; }',
 				"A class used as a value (Class<Button>) is not supported yet", true);
 		Sys.println("PASS: a class used as a value is reported as unsupported, not a crash");
+		// A type's visibility is part of its declaration: making it internal is checked again in a session that analyzed it
+		// public, not taken for an edit of bodies alone.
+		var exposureCompiler = new Compiler(null, CompilerIntrinsics.configuration());
+		exposureCompiler.addStandardLibrarySourceRoot("stdlib");
+		exposureCompiler.update("Helper.hx", "class Helper { public function new() {} }");
+		exposureCompiler.update("Main.hx",
+			"class Api { public static function make():Helper return new Helper(); } function main():Int return Api.make() == null ? 1 : 0;");
+		exposureCompiler.compile("Main");
+		exposureCompiler.update("Helper.hx", "internal class Helper { public function new() {} }");
+		var exposureReported = false;
+		try
+			exposureCompiler.compile("Main")
+		catch (error:CompileError)
+			exposureReported = error.diagnostic.code == "E1031";
+		if (!exposureReported)
+			throw "a session that analyzed a type public did not check it again once internal";
+		Sys.println("PASS: making a type internal is a declaration change a session checks again");
 		Frontend.compile('function read(value:Dynamic):Int { if (Std.isOfType(value, String)) return value.length; return 0; } function convert(value:Dynamic):Int return Std.int(value); function main():Int return read("haxeon") + convert(42.5);');
 		Sys.println("PASS: Dynamic type tests refine locals and Std.int accepts numeric Dynamic values");
 		var nullObjectCompiler = new Compiler();

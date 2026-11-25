@@ -37,7 +37,7 @@ class ModuleChangeAnalyzer {
 		var wireFields:Map<String, String> = [];
 		var interfaces:Map<String, String> = [];
 		for (interfaceDecl in ast.interfaces) {
-			var signature = interfaceDecl.name
+			var signature = interfaceDecl.visibility.modifier() + ":" + interfaceDecl.name
 				+ '<${SemanticSignature.parsedParameters(interfaceDecl.typeParameters, interfaceDecl.typeConstraints, ast.aliases)}>'
 				+ " extends "
 				+ [for (base in interfaceDecl.bases) ModuleCanonicalizer.astTypeName(base)].join(",") + " {" + [
@@ -61,7 +61,7 @@ class ModuleChangeAnalyzer {
 		var aliases:Map<String, String> = [];
 		for (alias in ast.aliases) {
 			var aliasName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, alias.name),
-				signature = aliasName
+				signature = alias.visibility.modifier() + ":" + aliasName
 					+ (alias.typeParameters.length == 0 ? ""
 					: '<${SemanticSignature.parsedParameters(alias.typeParameters, alias.typeConstraints, ast.aliases)}>')
 					+ "="
@@ -76,7 +76,7 @@ class ModuleChangeAnalyzer {
 		var enums:Map<String, String> = [];
 		for (enumDecl in ast.enums) {
 			var enumName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, enumDecl.name),
-				signature = enumName + "[" + fieldMetadataFingerprint(state,
+				signature = enumDecl.visibility.modifier() + ":" + enumName + "[" + fieldMetadataFingerprint(state,
 					enumDecl.metadata) + "]:" + (enumDecl.conformances == null
 					? "" : [for (type in enumDecl.conformances) SemanticSignature.parsed(type, ast.aliases)].join(","))
 					+ "{" + [
@@ -103,7 +103,7 @@ class ModuleChangeAnalyzer {
 		var abstracts:Map<String, String> = [];
 		for (abstractDecl in ast.abstracts) {
 			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name),
-				signature = abstractName
+				signature = abstractDecl.visibility.modifier() + ":" + abstractName
 					+ (abstractDecl.typeParameters.length == 0 ? ""
 					: '<${SemanticSignature.parsedParameters(abstractDecl.typeParameters, abstractDecl.typeConstraints, ast.aliases)}>')
 					+ "("
@@ -166,6 +166,8 @@ class ModuleChangeAnalyzer {
 			signature += classDecl.isStruct == true ? ":struct" : isNativeValue ? ":native-value" : isValue
 				? ":value" : ":object";
 			signature += ":metadata:" + fieldMetadataFingerprint(state, classDecl.metadata);
+			// Where the class may be named (`internal`) is part of its declaration, as its kind is.
+			signature += ":visibility:" + classDecl.visibility.modifier();
 			ownerConstraints.set(name, signature);
 			if (state.ownerConstraintFingerprints.get(name) != signature)
 				structuralChanged.set('constraint:$name', true);
