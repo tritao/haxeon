@@ -31,9 +31,6 @@ class IrPipelineContext {
 	/** The session's per-function memos of the stages before the encode point; null in a compile that keeps none. */
 	public var stageMemos:Null<IrStageMemos> = null;
 
-	/** The generator's version of each function it holds (`ModuleState.irVersions`), 0 for another; with `stageMemos`. */
-	public var generatedVersion:Null<String->Int> = null;
-
 	/** The versions of the functions as the stages before the encode point stand, in a session (`IrLineage`); null elsewhere. */
 	public var lineage:Null<IrLineage> = null;
 

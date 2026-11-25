@@ -89,13 +89,18 @@ class SessionState {
 
 	public var inlineCache(default, null):IrInlineCache = new IrInlineCache();
 
-	/** The numbers the modules' IR versions are taken from (`ModuleState.irVersions`); every copy shares it. */
-	public var irVersions(default,
-		null):compiler.ir.reuse.IrFunctionVersions = new compiler.ir.reuse.IrFunctionVersions();
+	/**
+	 * The IR of each function the assembly starts from, by its name's symbol (`IrSymbol`), in the session's database: what the
+	 * generator made of each typed function (`FrontendCompilation.publishFunctions`) and the functions the frontend and the
+	 * assembler make (`IrLineage.start`). An IR made again the same keeps last build's object and the revision it changed at, so
+	 * whatever reads it holds. Every copy shares it: a function's IR is put again every build it is read in, from the modules of
+	 * the state the build started from.
+	 */
+	public var irGeneration(default, null):compiler.query.ComputedQueryKind<compiler.ir.model.IrFunction>;
 
 	/**
-	 * What the assembly stages before the encode point made of each function (`IrStageMemos`), keyed on the versions `irVersions`
-	 * gives; every copy shares it, as an entry holds only for the versions and fact prints it recorded.
+	 * What the assembly stages before the encode point made of each function (`IrStageMemos`), keyed on the versions of their
+	 * input; every copy shares it, as an entry holds only for the versions and fact prints it recorded.
 	 */
 	public var stageMemos(default, null):compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
@@ -151,7 +156,7 @@ class SessionState {
 		semanticProgram = null;
 		programFacts = null;
 		inlineCache = new IrInlineCache();
-		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(irVersions);
+		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(queries, irGeneration);
 		pipelineSnapshot = null;
 		verifyMemo = new IrVerifyMemo();
 		reachabilityCache = [];
@@ -166,6 +171,7 @@ class SessionState {
 	public function releaseGeneratedIr():Void {
 		for (state in modules)
 			state.irFunctions = [];
+		irGeneration.clear();
 		irTypeMentions.clear();
 		irCalls.clear();
 		staticReferences.clear();
@@ -234,12 +240,16 @@ class SessionState {
 			queries = new compiler.query.QueryDatabase();
 			declarationFacts = new compiler.semantic.DeclarationFacts(queries);
 			inputs = new BuildInputs(queries);
+			irGeneration =
+				queries.register(new compiler.query.ComputedQueryKind<compiler.ir.model.IrFunction>("ir-generation",
+				compiler.ir.codec.IrFunctionStateEquality.same, null, id -> compiler.ir.model.IrSymbol.at(id).name));
 		} else {
 			queries = sharing.queries;
 			declarationFacts = sharing.declarationFacts;
 			inputs = sharing.inputs;
+			irGeneration = sharing.irGeneration;
 		}
-		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(irVersions);
+		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(queries, irGeneration);
 		this.types = types;
 		this.genericSpecializations = genericSpecializations;
 		this.backend = backend;
@@ -269,7 +279,6 @@ class SessionState {
 		result.committed = committed;
 		result.rehydrationBaseline = rehydrationBaseline;
 		result.inlineCache = inlineCache.copy();
-		result.irVersions = irVersions;
 		result.stageMemos = stageMemos;
 		result.irTypeMentions = irTypeMentions;
 		result.irCalls = irCalls;

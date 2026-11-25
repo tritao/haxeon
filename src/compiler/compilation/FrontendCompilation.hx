@@ -770,7 +770,8 @@ class FrontendCompilation {
 			retyped = build.retyped,
 			regenerated = build.regenerated,
 			indexSemantics = build.indexSemantics,
-			lowerToIr = build.lowerToIr;
+			lowerToIr = build.lowerToIr,
+			generation = context.state.irGeneration;
 		var touchedModules:Map<String, Bool> = [],
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [],
 			generatedFunctions:Map<String, Bool> = [];
@@ -780,20 +781,6 @@ class FrontendCompilation {
 			typedByName.set(fn.name, fn);
 			if (!owners.exists(fn.name))
 				generatedFunctions.set(fn.name, true);
-		}
-		// The module each generated function was held by before this build, found when one first needs it.
-		var heldBy:Null<Map<String, String>> = null;
-		function previouslyHeld(name:String):Null<String> {
-			var held = heldBy;
-			if (held == null) {
-				held = [];
-				for (module => state in context.state.modules)
-					for (functionName in state.irFunctions.keys())
-						if (generatedFunctions.exists(functionName))
-							held.set(functionName, module);
-				heldBy = held;
-			}
-			return held.get(name);
 		}
 		for (fn in typedNew.functions) {
 			checkCancelled(token);
@@ -829,35 +816,24 @@ class FrontendCompilation {
 				retyped.push(fn.name);
 			touchedModules.set(module, true);
 			if (lowerToIr) {
-				var ir = generator.generateFunction(fn),
-					previous = state.pendingIrFunctions.exists(fn.name) ? null : state.irFunctions.get(fn.name),
-					previousVersion = state.irVersions.exists(fn.name) ? state.irVersions.get(fn.name) : 0;
+				var ir = generator.generateFunction(fn), key = ir.symbol.id, kept = generation.kept(key),
+					previous = state.pendingIrFunctions.exists(fn.name) ? null : state.irFunctions.get(fn.name);
 				// A helper is owned by the module of the code that asked for it first, which another build can ask from elsewhere:
-				// what it had is in the module that owned it before, until pruning drops that copy.
-				if (previous == null && generated && !state.irFunctions.exists(fn.name)) {
-					var held = previouslyHeld(fn.name);
-					var holder = held == null ? null : context.state.modules.get(held);
-					if (holder != null && !holder.pendingIrFunctions.exists(fn.name)) {
-						previous = holder.irFunctions.get(fn.name);
-						previousVersion = holder.irVersions.exists(fn.name) ? holder.irVersions.get(fn.name) : 0;
-					}
-				}
+				// the IR it had is the database's, under its name.
+				if (previous == null && generated)
+					previous = kept;
 				state.irSourceRevisions.set(fn.name, state.revision);
 				state.pendingIrFunctions.remove(fn.name);
 				// What the session keeps of the IR it had is its body alone: the new IR is compared as rows, encoded, and keeps that
 				// encoding as its body, which the encode point then takes as it is.
-				if (previous != null && previous.body != null)
+				if (kept != null && kept.body != null)
 					ir.encodedBody();
 				// Typed again to the IR it already had (a helper every build types from the program's requests, an edit that changes
-				// nothing the function compiles to): the function keeps that IR and its version, so nothing after it sees a change.
-				if (previous != null && compiler.ir.codec.IrFunctionStateEquality.same(previous, ir)) {
-					state.irFunctions.set(fn.name, previous);
-					state.irVersions.set(fn.name, previousVersion);
-					continue;
-				}
-				state.irFunctions.set(fn.name, ir);
-				regenerated.push(fn.name);
-				state.irVersions.set(fn.name, context.state.irVersions.next());
+				// nothing the function compiles to): the function keeps that IR, so nothing after it sees a change.
+				var made = generation.put(context.state.queries, key, ir);
+				state.irFunctions.set(fn.name, made);
+				if (made != previous)
+					regenerated.push(fn.name);
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
@@ -1310,29 +1286,18 @@ class FrontendCompilation {
 					var fn = state.typedFunctions.get(functionName);
 					if (fn == null)
 						throw new InternalError('Pending IR function "$functionName" has no typed function');
-					state.irFunctions.set(functionName, generator.generateFunction(fn));
+					var ir = generator.generateFunction(fn);
+					state.irFunctions.set(functionName,
+						context.state.irGeneration.put(context.state.queries, ir.symbol.id, ir));
 					if (!state.typedSourceRevisions.exists(functionName))
 						throw new InternalError('Pending IR function "$functionName" has no typed source revision');
 					state.irSourceRevisions.set(functionName, state.typedSourceRevisions.get(functionName));
-					state.irVersions.set(functionName, context.state.irVersions.next());
 					state.pendingIrFunctions.remove(functionName);
 					regenerated.push(functionName);
 				}
 			}
 		build.regenerated = uniqueSorted(regenerated);
 		build.irGenerationDoneAt = now();
-	}
-
-	/** The generator's version of each function of the program (`ModuleState.irVersions`), 0 for one it does not hold. */
-	static function generatedVersions(build:FrontendBuild):String->Int {
-		var modules = build.context.state.modules, owners = build.semanticAssembly.owners;
-		return function(name:String):Int {
-			var owner = owners.get(name), state = owner == null ? null : modules.get(owner);
-			if (state == null || !state.irFunctions.exists(name))
-				return 0;
-			var version = state.irVersions.get(name);
-			return version == null ? 0 : version;
-		};
 	}
 
 	/** Where the frontend's stages spent their time and allocation: `CompilationContext.frontendStages`. */
@@ -1546,7 +1511,7 @@ class FrontendCompilation {
 							throw new InternalError('Missing canonical layout for "${object.name}"');
 						canonical;
 					} else object;
-				}], context.options, meter, context.state.stageMemos, generatedVersions(build));
+				}], context.options, meter, context.state.stageMemos);
 			// The fingerprints go into the runtime ABI only.
 			if (context.describesRuntimeAbi()) {
 				var cNativeNames = [for (native in irCNatives) native.name].join(","),
@@ -1780,7 +1745,6 @@ class FrontendCompilation {
 			state.pendingIrFunctions.remove(cached);
 			state.irFunctions.remove(cached);
 			state.irSourceRevisions.remove(cached);
-			state.irVersions.remove(cached);
 		}
 
 	/**

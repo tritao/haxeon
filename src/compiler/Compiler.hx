@@ -796,6 +796,8 @@ class Compiler {
 	 */
 	function adoptCandidate(candidate:SessionState):Void {
 		var oldest = publication.oldestSnapshot();
+		// A computed memo the taken build did not use, of a kind it used, is of a function its program no longer has.
+		candidate.queries.sweep();
 		candidate.committed = candidate.queries.commit();
 		candidate.queries.keepRollbackTo(oldest == null ? state.committed : oldest.committed);
 		state = candidate;

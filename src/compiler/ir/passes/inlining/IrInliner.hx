@@ -373,7 +373,7 @@ class IrInliner extends IrFactSource {
 	final forms:Null<IrContributionMemo<IrInlinedForm>>;
 	final calls:Null<IrContributionMemo<IrCallEdges>>;
 	final parameters:Null<IrContributionMemo<Int>>;
-	final versions:Null<compiler.ir.reuse.IrFunctionVersions>;
+	final memos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
 
 	/** The function being inlined, innermost last, with the reader that records what its inlining reads (with a memo). */
 	final frameIds:Array<Int> = [];
@@ -428,7 +428,7 @@ class IrInliner extends IrFactSource {
 		forms = memos == null ? null : memos.contribution(FORMS);
 		calls = memos == null ? null : memos.contribution(CALLS);
 		parameters = memos == null ? null : memos.contribution(PARAMETERS);
-		versions = memos == null ? null : memos.versions;
+		this.memos = memos;
 		if (memos != null)
 			memos.facts.begin();
 		this.profile = profile;
@@ -978,8 +978,8 @@ class IrInliner extends IrFactSource {
 	 * frozen from may differ in what the cleanup numbers. A form that depends on where the walk made it (`impure`) has a new one.
 	 */
 	function outputVersion(id:Int, form:Null<IrBody>, unchanged:Bool, impure:Bool):Int {
-		var memo = this.memo, forms = this.forms, versions = this.versions, input = inputVersions[id];
-		if (memo == null || forms == null || versions == null)
+		var memo = this.memo, forms = this.forms, memos = this.memos, input = inputVersions[id];
+		if (memo == null || forms == null || memos == null)
 			return 0;
 		var last = input != 0 && form != null && !impure ? memo.last(slots[id]) : null;
 		var kept = last == null ? null : forms.get(last.outputVersion);
@@ -992,7 +992,7 @@ class IrInliner extends IrFactSource {
 			if (IrFunctionStateEquality.sameBodies(keptBody, form))
 				return last.outputVersion;
 		}
-		return versions.next();
+		return memos.nextVersion();
 	}
 
 	/**

@@ -221,12 +221,12 @@ class IrAssemblyStageList {
 	}
 
 	public function run(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var watches = false, memos = context.stageMemos, generated = context.generatedVersion;
+		var watches = false, memos = context.stageMemos;
 		// A session reuses what the stages before the encode point made of each function (`IrStageMemos`).
 		context.lineage = null;
-		if (memos != null && generated != null && context.options.keepSession) {
+		if (memos != null && context.options.keepSession) {
 			var meter = context.meter, before = meter == null ? null : meter.start();
-			context.lineage = IrLineage.start(memos, assembly.functions, generated, context.options.checkReuse);
+			context.lineage = IrLineage.start(memos, assembly.functions, context.options.checkReuse);
 			if (meter != null && before != null)
 				meter.stop(IrLineage.INPUT, before);
 		}

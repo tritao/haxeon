@@ -109,14 +109,14 @@ class IrFunctionStages {
 					var body = made.body;
 					if (body != null)
 						made.freezeBody(builder);
-					version = memos.versions.next();
+					version = memos.nextVersion();
 				} else if (made != fn) {
 					if (last != null && input != 0 && last.input == input
 						&& compiler.ir.codec.IrFunctionStateEquality.same(last.output, made)) {
 						made = last.output;
 						version = last.outputVersion;
 					} else
-						version = memos.versions.next();
+						version = memos.nextVersion();
 				}
 				entry = new IrStageEntry(input, reader.recorded(), made, version, summaries[index], reader.requests());
 				entries[index] = entry;
@@ -191,7 +191,7 @@ class IrFunctionStages {
 				made.encodedBody(builder);
 				made.freezeBody(builder);
 			}
-			entry = new IrStageEntry(input, reader.recorded(), made, kept ? input : memos.versions.next(), 0,
+			entry = new IrStageEntry(input, reader.recorded(), made, kept ? input : memos.nextVersion(), 0,
 				reader.requests());
 		}
 		memo.keep(slot, entry);

@@ -72,7 +72,8 @@ Four stages, each with a measurable checkpoint. Each stage must keep the full dr
 ## Where the pass goes
 
 The IR is SSA per function (`IrFunction`: blocks of `Located<IrInstruction>`, `IrValue` ids are function-local).
-Functions are generated independently and cached per module (`ModuleState.irFunctions`, versioned by `irVersions`).
+Functions are generated independently and cached per module (`ModuleState.irFunctions`, and by name in the session's query
+database, `SessionState.irGeneration`).
 The only point where every function and the object tables coexist, before both backends, is between
 `IrGenerator.assemble` (`compilation/FrontendCompilation.hx`, the call at about line 473) and
 `HashLinkBackendSession.assemble`. HashLink and both Wasm backends consume the same `IrProgram`, so one pass covers all
@@ -109,8 +110,8 @@ Confirmed by the code:
 
 So a caller that inlined a callee would keep the old body after the callee is edited. Required rules:
 
-1. Record, per caller, the callees it inlined (transitively) and each callee's `irVersions` value. Validate on every
-   compile, as recorded reads do for typing (`WARM_REBUILD_REUSE.md`, "Typing: recorded reads").
+1. Record, per caller, the callees it inlined (transitively) and the revision each callee's IR last changed at. Validate
+   on every compile, as recorded reads do for typing (`WARM_REBUILD_REUSE.md`, "Typing: recorded reads").
 2. Compute the patch set by post-inline IR: `changed` is every function whose `IrFunctionStateCodec.encode` bytes differ
    from the last published entry (the same comparison `Compiler.rehydratedChanges` uses). Callers of an edited callee
    are then re-lowered, re-verified and patched.

@@ -107,14 +107,27 @@ class IrStageMemo {
 
 /**
  * The per-function memos of the assembly stages in a session (docs/design/QUERY_ENGINE.md, the passes in pipeline order): one
- * `IrStageMemo` per stage, the facts they read (`IrFacts`) and the versions they key on (`IrFunctionVersions`). The copies of the
+ * `IrStageMemo` per stage, the facts they read (`IrFacts`) and the versions they key on (`nextVersion`). The copies of the
  * session state share them: an entry holds only while its input version and the prints of its facts are the ones it recorded,
  * and neither is ever given twice, so what a rolled-back build left is never wrongly reused.
  */
 @:nullSafety(Strict)
 class IrStageMemos {
 	public final facts = new IrFacts();
-	public final versions:IrFunctionVersions;
+
+	/**
+	 * The session's database and its kind of the functions the assembly starts from (`SessionState.irGeneration`), which the
+	 * input of each run is put into (`IrLineage.start`); null for memos outside a session's database.
+	 */
+	public final database:Null<compiler.query.QueryDatabase>;
+
+	public final inputs:Null<compiler.query.ComputedQueryKind<IrFunction>>;
+
+	var lastVersion = 0;
+
+	/** A version no function of the session had before: a version names one function object. */
+	public function nextVersion():Int
+		return ++lastVersion;
 
 	/** The lineage the assembly runs keep, one at a time (`IrLineage.start`). */
 	public final lineage:IrLineage;
@@ -170,8 +183,9 @@ class IrStageMemos {
 	public function keepHelper(fn:IrFunction):Void
 		keptHelpers.set(fn.name, new IrContribution(fn, build));
 
-	public function new(versions:IrFunctionVersions) {
-		this.versions = versions;
+	public function new(?database:compiler.query.QueryDatabase, ?inputs:compiler.query.ComputedQueryKind<IrFunction>) {
+		this.database = database;
+		this.inputs = inputs;
 		lineage = new IrLineage(this);
 	}
 
@@ -204,9 +218,9 @@ class IrStageMemos {
 }
 
 /**
- * The version of each function of the program under assembly, from the generator's (`ModuleState.irVersions`) through each stage
- * before the encode point: a function a stage leaves alone keeps its version, one it changes takes the version its memo has for
- * what it made, or a new one. The session keeps one (`IrStageMemos.lineage`), whose cells, one per function slot (`slots`), each
+ * The version of each function of the program under assembly, from its input (`start`) through each stage before the encode
+ * point: a function a stage leaves alone keeps its version, one it changes takes the version its memo has for what it made, or a
+ * new one. The session keeps one (`IrStageMemos.lineage`), whose cells, one per function slot (`slots`), each
  * build updates in place; a version names one function object, so a cell left from another build is never wrong.
  */
 @:nullSafety(Strict)
@@ -217,7 +231,7 @@ class IrLineage {
 	/** What a stage's memo of the functions it derives (`IrFunctionStages.derived`) is named after the stage. */
 	public static inline final DERIVED = ":derived";
 
-	/** The name the input's settling is metered and memoized under. */
+	/** The name the input's settling is metered under. */
 	public static inline final INPUT = "assembly-input";
 
 	public final memos:IrStageMemos;
@@ -247,7 +261,7 @@ class IrLineage {
 	final cellSeen:Array<Int> = [];
 	var cellCount = 0;
 
-	/** By slot, the function the last build's input had and the generator's version of it (`generatedVersion`). */
+	/** By slot, the function the last build's input had and its version (`inputVersion`). */
 	final inputFunctions:Array<Null<IrFunction>> = [];
 
 	final inputVersions:Array<Int> = [];
@@ -264,49 +278,36 @@ class IrLineage {
 		this.memos = memos;
 
 	/**
-	 * Starts a build's lineage from the assembly's input: a generator function has its version (`generated`, 0 for a function the
-	 * generator does not hold); any other one, which the frontend or the assembler makes (the initializers and structure printers,
-	 * kept while their inputs are the same objects, `IrGeneratedFunctions`; the observable field counts, made each build), is settled
-	 * as a stage's output (`settle`), so it keeps its identity while it is made the same. The cells of names the build does not
-	 * have are dropped.
+	 * Starts a build's lineage from the assembly's input. Each function is put into the session's kind of the input functions
+	 * (`IrStageMemos.inputs`), which keeps last build's object for one made again the same, so a function keeps its version
+	 * while it is the same object (`inputVersion`). The cells of names the build does not have are dropped.
 	 */
-	public static function start(memos:IrStageMemos, functions:Array<IrFunction>, generated:String->Int,
-			checks:Bool):IrLineage {
+	public static function start(memos:IrStageMemos, functions:Array<IrFunction>, checks:Bool):IrLineage {
 		memos.startBuild();
-		var lineage = memos.lineage, memo = memos.stage(INPUT);
+		var lineage = memos.lineage, database = memos.database, inputs = memos.inputs;
 		lineage.checks = checks;
 		lineage.bodies = false;
 		lineage.live = 0;
 		if (lineage.cellCount > functions.length * 2)
 			lineage.sweep();
 		for (index in 0...functions.length) {
-			var fn = functions[index], version = lineage.generatedVersion(fn, generated);
-			if (version > 0)
-				lineage.set(fn, version);
-			else
-				functions[index] = lineage.settleOne(memo, fn, 0);
+			var fn = functions[index];
+			// Most of the input is the function the kind holds: that is checked typed, as the kind's own check is dynamic.
+			if (database != null && inputs != null && inputs.kept(fn.symbol.id) != fn)
+				functions[index] = fn = inputs.put(database, fn.symbol.id, fn);
+			var slot = lineage.slots.of(fn);
+			lineage.setAt(slot, fn, lineage.inputVersion(slot, fn));
 		}
 		return lineage;
 	}
 
-	/**
-	 * The generator's version of `fn` (`generated`): the one an earlier build's input had when `fn` is that same function, since a
-	 * version names one function object; else asked, and kept for the next build when the generator holds it. `--check-reuse` asks every time and compares.
-	 */
-	function generatedVersion(fn:IrFunction, generated:String->Int):Int {
-		var slot = slots.of(fn);
-		if (slot < inputFunctions.length && inputFunctions[slot] == fn) {
-			var known = inputVersions[slot];
-			if (checks && generated(fn.name) != known)
-				throw new compiler.core
-					.InternalError('--check-reuse: the generator gives ${fn.name} another version than it gave the same function before');
-			return known;
-		}
-		var version = generated(fn.name);
-		if (version > 0) {
-			inputFunctions[slot] = fn;
-			inputVersions[slot] = version;
-		}
+	/** The version of input `fn`, whose slot is `slot`: last build's input's when `fn` is that function, else a new one. */
+	function inputVersion(slot:Int, fn:IrFunction):Int {
+		if (slot < inputFunctions.length && inputFunctions[slot] == fn)
+			return inputVersions[slot];
+		var version = memos.nextVersion();
+		inputFunctions[slot] = fn;
+		inputVersions[slot] = version;
 		return version;
 	}
 
@@ -414,7 +415,7 @@ class IrLineage {
 	function settleChanged(stage:String, slot:Int, fn:IrFunction):IrFunction {
 		if (!bodies)
 			return settleAt(memos.stage(stage), slot, fn, versionAt(slot));
-		setAt(slot, fn, memos.versions.next());
+		setAt(slot, fn, memos.nextVersion());
 		return fn;
 	}
 
@@ -436,15 +437,11 @@ class IrLineage {
 		live = functions.length;
 	}
 
-	/** `fn`, made from the function of version `input` (0 for none), settled with `memo` and recorded. */
-	public function settleOne(memo:IrStageMemo, fn:IrFunction, input:Int):IrFunction
-		return settleAt(memo, slots.of(fn), fn, input);
-
 	function settleAt(memo:IrStageMemo, slot:Int, fn:IrFunction, input:Int):IrFunction {
 		var entry = memo.last(slot);
 		if (entry == null || entry.input != input
 			|| !compiler.ir.codec.IrFunctionStateEquality.same(entry.output, fn))
-			entry = new IrStageEntry(input, NO_FACTS, fn, memos.versions.next(), 0, null);
+			entry = new IrStageEntry(input, NO_FACTS, fn, memos.nextVersion(), 0, null);
 		memo.keep(slot, entry);
 		setAt(slot, entry.output, entry.outputVersion);
 		return entry.output;

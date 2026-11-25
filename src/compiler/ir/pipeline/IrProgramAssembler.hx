@@ -644,8 +644,7 @@ class IrProgramAssembler {
 			?exportedFunctions:Array<String>,
 			walkFromEntry = false, pruneFromEntry = false,
 			?canonicalObjects:Array<IrObject>, ?options:compiler.CompileOptions,
-			?meter:compiler.core.IrPassMeter, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos,
-			?generatedVersion:String->Int):IrProgram {
+			?meter:compiler.core.IrPassMeter, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):IrProgram {
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
 			for (initializer in staticInitializers)
@@ -668,7 +667,6 @@ class IrProgramAssembler {
 			context.options = options;
 		context.meter = meter;
 		context.stageMemos = stageMemos;
-		context.generatedVersion = generatedVersion;
 		context.entryPoint = entryPoint;
 		context.staticInitializers = staticInitializers;
 		context.inlineCache = inlineCache;

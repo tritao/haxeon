@@ -6,7 +6,6 @@ import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.passes.nullability.IrStaticNullChecks;
 import compiler.ir.pipeline.IrFunctionStages;
-import compiler.ir.reuse.IrFunctionVersions;
 import compiler.ir.reuse.IrStageMemo.IrLineage;
 import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
@@ -15,26 +14,16 @@ import compiler.ir.reuse.IrStageMemo.IrStageMemos;
  * with no memo, while what the rewrite reads (whether initialization reaches the function, whether a receiver is a value) holds.
  */
 class StaticNullCheckReuseMain {
-	static final memos = new IrStageMemos(new IrFunctionVersions());
+	static final memos = new IrStageMemos();
 
-	/** By name, the generator's function and its version: a new object takes a new version. */
-	static final generated:Map<String, {fn:IrFunction, version:Int}> = [];
-
-	/** One build of the stage in the session, past the encode point, with `--check-reuse`. */
+	/** One build of the stage in the session, past the encode point, with `--check-reuse`: a new object takes a new version. */
 	static function build(functions:Array<IrFunction>, ?objects:Array<IrObject>):Array<IrFunction> {
 		for (fn in functions) {
-			var known = generated.get(fn.name);
-			if (known == null || known.fn != fn) {
-				fn.encodedBody();
-				fn.freezeBody();
-				generated.set(fn.name, {fn: fn, version: memos.versions.next()});
-			}
+			fn.encodedBody();
+			fn.freezeBody();
 		}
 		var input = functions.copy();
-		var lineage = IrLineage.start(memos, input, name -> {
-			var known = generated.get(name);
-			known == null ? 0 : known.version;
-		}, true);
+		var lineage = IrLineage.start(memos, input, true);
 		lineage.enterBodies();
 		return IrFunctionStages.run(IrStaticNullChecks.STAGE,
 			new IrStaticNullChecks(objects, null, lineage, true),
