@@ -76,97 +76,33 @@ class ApiModelBuilder {
 			return module.members;
 		}
 		for (decl in program.classes) {
-			var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints);
 			// A module's own variables are stored as the statics of a hidden class (`ModuleFields`): they are the module's.
 			if (decl.name == ModuleFields.storageName(moduleName(decl.span))) {
 				var members = moduleOf(decl.span);
-				for (member in fields(owner, decl.fields, true))
+				for (member in moduleVariables(decl))
 					members.push(member);
 				continue;
 			}
-			if (decl.isPrivate || AbstractStatics.abstractOf(decl.name) != null)
-				continue;
-			var isExtern = decl.isExtern == true, publicByDefault = isExtern || has(decl.metadata, "publicFields");
-			var members = fields(owner, decl.fields, publicByDefault);
-			addMethods(members, owner, decl.methods, publicByDefault);
-			types.push(declaration(owner, isExtern ? "extern" : "class", decl.metadata, isExtern, members,
-				decl.base == null ? [] : [decl.base], decl.interfaces));
+			var described = classDeclaration(decl);
+			if (described != null)
+				types.push(described);
 		}
-		for (decl in program.interfaces) {
-			var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints);
-			var members = fields(owner, decl.fields, true);
-			addMethods(members, owner, decl.methods, true);
-			types.push(declaration(owner, "interface", decl.documentationMetadata, false, members, decl.bases));
-		}
-		for (decl in program.aliases) {
-			if (decl.isPrivate)
-				continue;
-			var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints);
-			types.push(declaration(owner, "typedef", decl.metadata, false, [], null, null, decl.type));
-		}
-		for (decl in program.enums) {
-			var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints);
-			var scope = parametersIn(decl.name, decl.typeParameters),
-				result = ApiTypeEncoder.encode(TInstance(compiler.types.Type.NominalKind.Enum, decl.name,
-					[for (parameter in decl.typeParameters) scope.get(parameter)])),
-				members:Array<ApiMember> = [for (entry in decl.cases) {
-					source:source(entry.span, entry.metadata),
-						kind:"enumConstructor",
-						name:entry.name,
-						isStatic:true,
-						arguments:[for (parameter in entry.params) {
-							name:parameter.name,
-								type:typeOf(parameter.type,
-								() -> semantic.declarations.declaredTypes.enumParameterType(parameter, scope),
-								parameter.span,
-								scope),
-								optional:parameter.optional,
-								defaultValue:null
-						}],
-							result:result,
-							typeParameters:[]
-				}];
-			addMethods(members, owner, decl.methods ?? [], true);
-			types.push(declaration(owner, "enum", decl.metadata, false, members, null, decl.conformances));
-		}
-		for (decl in program.abstracts) {
-			var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints);
-			var isExtern = decl.isExtern == true,
-				publicByDefault = isExtern || has(decl.metadata, "publicFields"),
-				members = fields(owner, decl.fields, publicByDefault),
-				storage = semantic.declarations.classes.get(AbstractStatics.storageName(decl.name));
-			if (storage != null)
-				members = members.concat(fields(ownerInfo(storage.name, storage.span, storage.typeParameters,
-					storage.typeConstraints),
-					storage.fields, publicByDefault));
-			addMethods(members, owner, decl.methods, publicByDefault, true);
-			if (decl.values != null) {
-				var result:ApiType = {
-					kind: "named",
-					path: decl.name,
-					arguments: [for (name in decl.typeParameters)
-						ApiTypeEncoder.encode(TTypeParameter(decl.name, name))]
-				};
-				for (value in decl.values)
-					if (value.isPublic != false)
-						members.push({
-							source: source(value.span, value.metadata),
-							kind: "enumValue",
-							name: value.name,
-							isStatic: true,
-							type: result
-						});
-			}
-			types.push(declaration(owner, "abstract", decl.metadata, isExtern, members, null, decl.conformances,
-				decl.underlying, decl.fromTypes, decl.toTypes));
-		}
+		for (decl in program.interfaces)
+			types.push(interfaceDeclaration(decl));
+		for (decl in program.aliases)
+			if (!decl.isPrivate)
+				types.push(aliasDeclaration(decl));
+		for (decl in program.enums)
+			types.push(enumDeclaration(decl));
+		for (decl in program.abstracts)
+			types.push(abstractDeclaration(decl));
 		// A module's functions are named after it (`pack.Mod.f`), except the entry module's `main`; none can be private.
 		for (fn in program.functions) {
 			var module = moduleName(fn.span),
 				prefix = module + ".",
 				name = StringTools.startsWith(fn.name, prefix) ? fn.name.substr(prefix.length) : fn.name,
 				signature = semantic.signatures.get(fn.name) ?? fn;
-			moduleOf(fn.span).push(callable(fn, signature, name, "function", true, fn.name, new Map()));
+			moduleOf(fn.span).push(moduleFunction(fn, name));
 		}
 		types.sort((left, right) -> Reflect.compare(left.path, right.path));
 		// A module's variables and functions come from two lists; together they keep the order the source declares them in.
@@ -176,6 +112,137 @@ class ApiModelBuilder {
 				(left, right) -> left.source.position.line - right.source.position.line);
 		records.sort((left, right) -> Reflect.compare(left.path, right.path));
 		return {version: 1, described: described.copy(), modules: records, types: types};
+	}
+
+	/**
+	 * The description of the type named `path` (canonical), as `model` gives it, built alone: what the editor shows for one
+	 * declaration (`LanguageService`). Null for a private type or none of that name.
+	 */
+	public function typeNamed(path:String):Null<ApiDeclaration> {
+		var tables = semantic.declarations;
+		if (tables.classes.exists(path))
+			return classDeclaration(tables.classes.get(path));
+		if (tables.interfaces.exists(path))
+			return interfaceDeclaration(tables.interfaces.get(path));
+		if (tables.aliases.exists(path)) {
+			var alias = tables.aliases.get(path);
+			return alias.isPrivate ? null : aliasDeclaration(alias);
+		}
+		if (tables.enums.exists(path))
+			return enumDeclaration(tables.enums.get(path));
+		if (tables.abstracts.exists(path))
+			return abstractDeclaration(tables.abstracts.get(path));
+		return null;
+	}
+
+	/** The module-level function or variable `name` of the module `module`, as its module record holds it. */
+	public function moduleMember(module:String, name:String):Null<ApiMember> {
+		var fn = semantic.signatures.get(module + "." + name);
+		if (fn != null)
+			return moduleFunction(fn, name);
+		var storage = semantic.declarations.classes.exists(ModuleFields.storageName(module))
+			? semantic.declarations.classes.get(ModuleFields.storageName(module)) : null;
+		if (storage == null)
+			return null;
+		for (member in moduleVariables(storage))
+			if (member.name == name)
+				return member;
+		return null;
+	}
+
+	/** A builder for describing declarations one at a time, from the semantic program an analysis keeps. */
+	public static function of(semantic:SemanticProgram, modules:Map<String, ModuleState>):ApiModelBuilder
+		return new ApiModelBuilder(semantic, modules, [], []);
+
+	function moduleVariables(storage:AstClass):Array<ApiMember>
+		return fields(ownerInfo(storage.name, storage.span, storage.typeParameters, storage.typeConstraints),
+			storage.fields,
+			true);
+
+	function moduleFunction(fn:AstFunction, name:String):ApiMember
+		return callable(fn, semantic.signatures.get(fn.name) ?? fn, name, "function", true, fn.name, new Map());
+
+	function classDeclaration(decl:AstClass):Null<ApiDeclaration> {
+		if (decl.isPrivate || AbstractStatics.abstractOf(decl.name) != null)
+			return null;
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints),
+			isExtern = decl.isExtern == true,
+			publicByDefault = isExtern || has(decl.metadata, "publicFields"),
+			members = fields(owner, decl.fields, publicByDefault);
+		addMethods(members, owner, decl.methods, publicByDefault);
+		return declaration(owner, isExtern ? "extern" : "class", decl.metadata, isExtern, members,
+			decl.base == null ? [] : [decl.base], decl.interfaces);
+	}
+
+	function interfaceDeclaration(decl:AstInterface):ApiDeclaration {
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints),
+			members = fields(owner, decl.fields, true);
+		addMethods(members, owner, decl.methods, true);
+		return declaration(owner, "interface", decl.documentationMetadata, false, members, decl.bases);
+	}
+
+	function aliasDeclaration(decl:AstTypeAlias):ApiDeclaration
+		return declaration(ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints), "typedef",
+			decl.metadata,
+			false, [], null, null, decl.type);
+
+	function enumDeclaration(decl:AstEnum):ApiDeclaration {
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints),
+			scope = parametersIn(decl.name, decl.typeParameters),
+			result = ApiTypeEncoder.encode(TInstance(compiler.types.Type.NominalKind.Enum, decl.name,
+				[for (parameter in decl.typeParameters) scope.get(parameter)])),
+			members:Array<ApiMember> = [for (entry in decl.cases) {
+				source:source(entry.span, entry.metadata),
+					kind:"enumConstructor",
+					name:entry.name,
+					isStatic:true,
+					arguments:[for (parameter in entry.params) {
+						name:parameter.name,
+							type:typeOf(parameter.type,
+							() -> semantic.declarations.declaredTypes.enumParameterType(parameter, scope),
+							parameter.span,
+							scope),
+							optional:parameter.optional,
+							defaultValue:null
+					}],
+						result:result,
+						typeParameters:[]
+			}];
+		addMethods(members, owner, decl.methods ?? [], true);
+		return declaration(owner, "enum", decl.metadata, false, members, null, decl.conformances);
+	}
+
+	function abstractDeclaration(decl:AstAbstract):ApiDeclaration {
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints),
+			isExtern = decl.isExtern == true,
+			publicByDefault = isExtern || has(decl.metadata, "publicFields"),
+			members = fields(owner, decl.fields, publicByDefault),
+			storage = semantic.declarations.classes.exists(AbstractStatics.storageName(decl.name))
+				? semantic.declarations.classes.get(AbstractStatics.storageName(decl.name)) : null;
+		if (storage != null)
+			members = members.concat(fields(ownerInfo(storage.name, storage.span, storage.typeParameters,
+				storage.typeConstraints),
+				storage.fields, publicByDefault));
+		addMethods(members, owner, decl.methods, publicByDefault, true);
+		if (decl.values != null) {
+			var result:ApiType = {
+				kind: "named",
+				path: decl.name,
+				arguments: [for (name in decl.typeParameters) ApiTypeEncoder.encode(TTypeParameter(decl.name, name))]
+			};
+			for (value in decl.values)
+				if (value.isPublic != false)
+					members.push({
+						source: source(value.span, value.metadata),
+						kind: "enumValue",
+						name: value.name,
+						isStatic: true,
+						type: result
+					});
+		}
+		return declaration(owner, "abstract", decl.metadata, isExtern, members, null, decl.conformances,
+			decl.underlying,
+			decl.fromTypes, decl.toTypes);
 	}
 
 	static function ownerInfo(name:String, span:SourceSpan, typeParameters:Array<String>,
