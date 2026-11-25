@@ -24,9 +24,10 @@
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"live_bytes_backend": {
-			"value": 263507149,
+			"value": 270532608,
 			"tolerance": 0.03,
-			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
+			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth.",
+			"raise_reason": "Gradual growth since the 90a1f578d baseline, spread over many commits with no single step (bisected at eight commits); the one step found, 240ee8a5c's kept generated functions (about 1.5 MB), was released again in 44cce1283. About +6.7 MB, +2.7%"
 		},
 		"peak_rss_bytes": {
 			"value": 1347186688,
