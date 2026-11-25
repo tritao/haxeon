@@ -253,9 +253,10 @@ class HlSymbolTable {
 			&& left.types == right.types && left.globals == right.globals;
 
 	/**
-	 * Whether this table starts with the entries of `prefix`. Each key a table maps is answered by its entry, so a table that starts
-	 * with the same entries answers every request of `prefix` the same; the keys that only name another entry (a nullable class as
-	 * `Dynamic`) add nothing either way.
+	 * Whether this table starts with the entries of `prefix`, and names its globals as `prefix` does. Each other key a table maps
+	 * is answered by its entry, so a table that starts with the same entries answers every request of `prefix` the same; the keys
+	 * that only name another entry (a nullable class as `Dynamic`) add nothing either way. A global's entry is only its type, so
+	 * its name is compared too: a renamed static field leaves every entry as it was.
 	 */
 	public function startsWith(prefix:HlSymbolTable):Bool {
 		if (ints.length < prefix.ints.length || floats.length < prefix.floats.length
@@ -273,6 +274,9 @@ class HlSymbolTable {
 				return false;
 		for (index in 0...prefix.globals.length)
 			if (globals[index] != prefix.globals[index])
+				return false;
+		for (name => index in prefix.globalIndices)
+			if (globalIndices.get(name) != index)
 				return false;
 		for (index in 0...prefix.types.length)
 			if (!sameType(types[index], prefix.types[index]))

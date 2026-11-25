@@ -159,6 +159,11 @@ class WarmRebuildReuseMain {
 				files.set("Main.hx", StringTools.replace(mainSource, "Area.of(Circle(2))",
 					"Area.of(Circle(2)) + Area.again(Circle(1), 0) - 7"));
 			}, true);
+		// The static fields keep their count and types, so the tables as the metadata leaves them differ only in a global's name.
+		edit(failures, "after a static field with an initializer is renamed", files -> {
+			files.set("Config.hx", StringTools.replace(configSource, "ratio", "share"));
+			files.set("Main.hx", StringTools.replace(mainSource, "Config.ratio", "Config.share"));
+		});
 		edit(failures, "after a new string constant",
 			files -> files.set("Lib.hx",
 			StringTools.replace(libSource, "return \"lib\";",
