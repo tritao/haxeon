@@ -10,6 +10,7 @@ class ClipboardService implements Disposable {
 	final pending:Map<String, String -> Void>;
 	var disposed:Bool;
 
+	/** The clipboard bridge; `UiContext` makes the one its widgets share. */
 	public function new() {
 		pending = new Map();
 		disposed = false;

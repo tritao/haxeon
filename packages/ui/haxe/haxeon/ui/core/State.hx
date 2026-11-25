@@ -5,6 +5,8 @@ import haxeon.reactive.Signal;
 /** Stable signal handle for one value in a UiContext's persistent state store. */
 class State<T> extends Signal<T> {
 	final store:StateStore;
+
+	/** The widget whose state this is. */
 	public final id:WidgetId;
 
 	@:allow(haxeon.ui.core.StateStore)

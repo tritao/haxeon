@@ -9,10 +9,16 @@ import haxeon.ui.theme.Theme;
 
 /** Concrete typography snapshot emitted onto a text-capable render node. */
 class ResolvedTextStyle {
+	/** The font, size and spacing. */
 	public final textStyle:TextStyle;
+
+	/** Wrapping, alignment, line height, direction and tab width. */
 	public final paragraphStyle:ParagraphStyle;
+
+	/** The color text is drawn in. */
 	public final textColor:Color;
 
+	/** A complete text style. */
 	public function new(textStyle:TextStyle, paragraphStyle:ParagraphStyle, textColor:Color,
 			?override:TextStyleOverride) {
 		if (textStyle == null || paragraphStyle == null)
@@ -30,12 +36,14 @@ class ResolvedTextStyle {
 		this.textColor = override == null || override.color == null ? textColor : override.color;
 	}
 
+	/** The theme's body text style. */
 	public static function fromTheme(theme:Theme):ResolvedTextStyle {
 		if (theme == null)
 			throw "Resolved text styles require a theme";
 		return fromRoleStyle(theme.body);
 	}
 
+	/** The style of a theme text role, such as a heading or a caption. */
 	public static function fromRoleStyle(role:TextRoleStyle):ResolvedTextStyle {
 		if (role == null)
 			throw "Resolved text styles require a role";

@@ -20,8 +20,14 @@ class TextInputBridge implements Disposable {
 	var requestedActive:Bool;
 	var activeOwner:Null<WidgetId>;
 	var nextCaretFrameAt:Float = -1.0;
+
+	/** Whether the platform text editor (the on-screen keyboard, the input method) is active for a text control now. */
 	public var platformActive(default, null):Bool;
+
+	/** Whether the surface supports platform text input, once `platformChecked`. */
 	public var platformSupported(default, null):Bool;
+
+	/** Whether the bridge has asked the current surface, so `platformSupported` holds an answer. */
 	public var platformChecked(default, null):Bool;
 	var disposed:Bool;
 	var publishedText:Null<String>;
@@ -30,6 +36,7 @@ class TextInputBridge implements Disposable {
 	final publishedComposition:Array<Float> = [];
 	var publishedGeometry:Bool = false;
 
+	/** A bridge attached to no surface; the host attaches it to the window's. */
 	public function new() {
 		surface = null;
 		requestedActive = false;
@@ -40,6 +47,7 @@ class TextInputBridge implements Disposable {
 		disposed = false;
 	}
 
+	/** Connects the bridge to `surface`, whose platform text input it drives. Throws when the surface is gone. */
 	public function attach(surface:Surface):Void {
 		ensureLive();
 		if (surface == null || surface.isDisposed())
@@ -54,6 +62,7 @@ class TextInputBridge implements Disposable {
 			activatePlatform();
 	}
 
+	/** Disconnects the bridge from its surface, deactivating the platform editor. */
 	public function detach():Void {
 		ensureLive();
 		deactivatePlatform();

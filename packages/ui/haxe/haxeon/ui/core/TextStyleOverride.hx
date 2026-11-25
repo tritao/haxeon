@@ -19,16 +19,37 @@ import haxeon.ui.FontFamily;
  * null lineHeight.
  */
 class TextStyleOverride {
+	/** The font family; null inherits it. */
 	public final font:Null<FontFamily>;
+
+	/** The size in logical pixels; null inherits it. */
 	public final fontSize:Null<Float>;
+
+	/** Extra space between letters, in logical pixels; null inherits it. */
 	public final letterSpacing:Null<Float>;
+
+	/** How lines wrap; null inherits it. */
 	public final wrap:Null<TextWrap>;
+
+	/** How lines align; null inherits it. */
 	public final alignment:Null<TextAlignment>;
+
+	/** The line height as a multiple of the font size, 0 for the font's own; null inherits it. */
 	public final lineHeight:Null<Float>;
+
+	/** Left to right or right to left; null inherits it. */
 	public final direction:Null<TextDirection>;
+
+	/** The text color; null inherits it. */
 	public final color:Null<Color>;
+
+	/** How many spaces a tab spans; null inherits it. */
 	public final tabWidth:Null<Int>;
 
+	/**
+	 * Changes to the inherited text style; each argument left out is inherited. `text`, `paragraph` and `foreground`
+	 * make the common ones.
+	 */
 	public function new(?font:FontFamily, ?fontSize:Float, ?letterSpacing:Float,
 			?wrap:TextWrap, ?alignment:TextAlignment, ?lineHeight:Float,
 			?direction:TextDirection, ?color:Color, ?tabWidth:Int) {

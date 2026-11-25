@@ -38,19 +38,36 @@ class RenderNode {
 	/** A retained body root can acquire a new logical owner without allocating a replacement node. */
 	internal function setScopeOwner(owner:RenderScope):Void throw "Only a reserved component root can own a render scope";
 
+	/** The widget this node renders, which events and focus name it by. */
 	public final id:WidgetId;
+
+	/** The node in the layout tree: its size, position and children as layout sees them. */
 	public final layout:LayoutNode;
 	/** Shared and empty until the first `add`, so leaves allocate no array; change it only through `add`, `remove` and `replaceWith`. */
 	public var children(default, null):Array<RenderNode>;
 	static final NoChildren:Array<RenderNode> = [];
+
+	/** The node this one is a child of; null for a root. */
 	public var parent(default, null):Null<RenderNode>;
+
+	/** Where layout placed the node in the last frame, or null before it has been laid out. */
 	public var resolved:Null<ResolvedLayoutItem>;
+
+	/** Whether the node can take keyboard focus. */
 	public var focusable:Bool;
+
+	/** Whether focus stays within the node's subtree, as in a modal dialog: Tab cycles inside it. */
 	public var focusTrap:Bool;
+
+	/** Whether the node's own bounds take pointer input, when `hitTestBehavior` is `Auto`; true by default. */
 	public var hitTestSelf:Bool;
+
+	/** Whether the node, its children, both or neither take pointer input. */
 	public var hitTestBehavior:HitTestBehavior;
 	/** Controls GPU raster reuse for this node's custom paint. */
 	public var cachePolicy:CachePolicy;
+
+	/** Whether the node takes input; a disabled node is skipped by focus and its styles select `Disabled`. */
 	public var enabled:Bool;
 	/** Generic pseudo-state flags maintained by the routed interaction system. */
 	/** Interaction state (hover, press, focus) the widget saw when it built this node. */
@@ -80,10 +97,20 @@ class RenderNode {
 		states = value;
 		recordsInteraction = recorded;
 	}
+
+	/** The widget type its style rules select on, such as "button"; set with `setStyleIdentity`. */
 	public var styleType:Null<String>;
+
+	/** The widget's key, which a style rule can select on. */
 	public var styleKey:Null<String>;
+
+	/** The widget's style id, which a style rule can select on with `#id`. */
 	public var styleId:Null<String>;
+
+	/** The style classes it carries, which rules select on with `.class`. */
 	public var styleClasses:Array<String>;
+
+	/** Further tags a style rule can select on. */
 	public var styleTags:Array<String>;
 	/** Optional command scope contributed by this node and its focused subtree. */
 	public var commandScope:Null<String>;
@@ -92,7 +119,14 @@ class RenderNode {
 	 * Other keys still reach the widget; modal focus traps suppress this routing.
 	 */
 	public var commandShortcutFilter:Null<String->Bool> = null;
+
+	/** The style resolved for the node in this build, or null for an unstyled node. */
 	public var computedStyle:Null<ComputedStyle>;
+
+	/**
+	 * Its place in the Tab order: 0 follows the tree order, a positive value comes first, in increasing order, and a
+	 * negative one is left out.
+	 */
 	public var tabIndex:Int;
 	/** Cursor intent used while this node is hovered or holds pointer capture. */
 	public var cursor:Null<CursorShape>;
@@ -100,6 +134,8 @@ class RenderNode {
 	public var windowDecoration:Null<WindowDecorationRegionKind>;
 	/** Optional native cursor override for this node's window-chrome region. */
 	public var windowDecorationCursor:Null<CursorShape>;
+
+	/** What assistive technology is told about the node; null for a node with nothing to say. */
 	public var semantics:Null<Semantics>;
 	/** Revision of paint/text content consumed by retained scene caches. */
 	public var contentRevision(default, null):Int;
@@ -197,6 +233,10 @@ class RenderNode {
 		styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
 	}
 
+	/**
+	 * Adds `child` as the node's last child, and returns it. Throws when `child` already has a parent or contains this
+	 * node.
+	 */
 	public function add(child:RenderNode):RenderNode {
 		if (child == null
 			|| child == this
@@ -554,10 +594,16 @@ class RenderNode {
 		return other.globalToLocal(localToGlobal(point));
 	}
 
+	/** The node's bounds in its own coordinates. Throws before layout. */
 	public function localBounds():Rect return requireResolved().localBounds();
 
+	/** The node's bounds in viewport coordinates. Throws before layout. */
 	public function globalBounds():Rect return requireResolved().viewportBounds();
 
+	/**
+	 * Whether `point`, in viewport coordinates, falls on the node, its clipping and shape included. Throws before
+	 * layout.
+	 */
 	public function containsGlobalPoint(point:Point):Bool {
 		if (point == null) throw "Global points cannot be null";
 		return requireResolved().hitTest(point.x, point.y);
@@ -626,6 +672,10 @@ class RenderNode {
 		return this;
 	}
 
+	/**
+	 * Calls `handler` each time layout places the node, with where it went; for a widget that positions something by
+	 * its geometry. Returns the node.
+	 */
 	public function onResolved(handler:ResolvedLayoutItem->Void):RenderNode {
 		if (handler == null) throw "Resolved geometry handlers cannot be null";
 		if (resolvedHandlers == null) resolvedHandlers = [];
@@ -1043,6 +1093,7 @@ class RenderNode {
 		}
 	}
 
+	/** The node of the widget `id` in this subtree, or null. */
 	public function find(id:WidgetId):Null<RenderNode> {
 		if (id == null) return null;
 		return findFrom(this, id, ++findCounter);
@@ -1067,6 +1118,7 @@ class RenderNode {
 		return null;
 	}
 
+	/** Calls `visit` on this node and every descendant, parents before children. */
 	public function walk(visit:RenderNode->Void):Void {
 		visit(this);
 		for (child in children) child.walk(visit);

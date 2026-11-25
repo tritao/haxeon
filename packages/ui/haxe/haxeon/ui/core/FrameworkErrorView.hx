@@ -14,6 +14,7 @@ class FrameworkErrorView implements View {
 	final message:String;
 	final stage:Int;
 
+	/** A view showing `message` for a failure at the frame stage `stage`, in place of the UI. */
 	public function new(message:String, stage:Int) {
 		this.message = message == null ? "Unknown UI failure" : message;
 		this.stage = stage;

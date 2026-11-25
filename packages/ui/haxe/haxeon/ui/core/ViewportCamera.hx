@@ -6,13 +6,28 @@ import haxeon.ui.Point;
 
 /** Camera state shared by GPU viewport widgets and application overlays. */
 class ViewportCamera implements Observable {
+	/** The smallest zoom allowed. */
 	public final minZoom:Float;
+
+	/** The largest zoom allowed. */
 	public final maxZoom:Float;
+
+	/** How many viewport pixels one world unit spans. */
 	public var zoom(default, null):Float;
+
+	/** The world x at the viewport's left edge. */
 	public var panX(default, null):Float;
+
+	/** The world y at the viewport's top edge. */
 	public var panY(default, null):Float;
+
+	/** Counts the camera's changes, so a viewport redraws only when it moved. */
 	public var revision(default, null):Int;
 
+	/**
+	 * A camera at `zoom`, clamped into `minZoom`...`maxZoom`, panned to (`panX`, `panY`). Throws when a value is not
+	 * finite or the zoom range is empty.
+	 */
 	public function new(zoom:Float = 1.0, panX:Float = 0.0, panY:Float = 0.0,
 			minZoom:Float = 0.01, maxZoom:Float = 100.0) {
 		if (!finite(zoom) || !finite(panX) || !finite(panY) || !finite(minZoom) || !finite(maxZoom) || minZoom <= 0.0
@@ -26,6 +41,7 @@ class ViewportCamera implements Observable {
 		revision = 1;
 	}
 
+	/** Sets the zoom, clamped into range. Returns whether it changed. Throws when `value` is not finite. */
 	public function setZoom(value:Float):Bool {
 		if (!finite(value))
 			throw "Viewport zoom must be finite";
@@ -37,6 +53,7 @@ class ViewportCamera implements Observable {
 		return true;
 	}
 
+	/** Sets the pan. Returns whether it changed. */
 	public function setPan(x:Float, y:Float):Bool {
 		if (!finite(x) || !finite(y))
 			throw "Viewport pan must be finite";
@@ -92,9 +109,11 @@ class ViewportCamera implements Observable {
 		return true;
 	}
 
+	/** Where the world point (`x`, `y`) appears in the viewport. */
 	public function worldToViewport(x:Float, y:Float):Point
 		return new Point((x - panX) * zoom, (y - panY) * zoom);
 
+	/** The world point under the viewport point (`x`, `y`). */
 	public function viewportToWorld(x:Float, y:Float):Point
 		return new Point(panX + x / zoom, panY + y / zoom);
 

@@ -14,12 +14,14 @@ class KeyScope {
 	var childKey:String = "";
 	var entries:Int;
 
+	/** The scope at `path`; a build starts from the root scope, and `child` makes the deeper ones. */
 	public function new(path:String = "", ?root:KeyScope) {
 		this.path = path;
 		this.root = root == null ? this : root;
 		entries = 0;
 	}
 
+	/** The scope `key` names within this one, made once and reused. */
 	public function child(key:Key):KeyScope {
 		if (key == null) throw "A key scope requires a key";
 		if (children == null) {
@@ -36,6 +38,7 @@ class KeyScope {
 		return result;
 	}
 
+	/** The id of the widget `localKey` names in this scope: the same in every build, so its state and focus survive. */
 	public function widgetId(localKey:String):WidgetId {
 		return widgetIdForPath(widgetPath(localKey));
 	}
@@ -95,7 +98,7 @@ class KeyScope {
 		return live;
 	}
 
-	public static function widgetIdForPath(fullPath:String):WidgetId {
+	internal static function widgetIdForPath(fullPath:String):WidgetId {
 		var bytes = Bytes.ofString(fullPath);
 		var hash = -2128831035;
 		for (index in 0...bytes.length) hash = (hash ^ bytes.get(index)) * 16777619;
@@ -103,5 +106,5 @@ class KeyScope {
 		return new WidgetId(value == 0 ? 1 : value);
 	}
 
-	public inline function pathValue():String return path;
+	internal inline function pathValue():String return path;
 }

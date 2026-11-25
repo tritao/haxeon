@@ -1448,12 +1448,12 @@ class BuildContext implements Disposable {
 	}
 
 	/** Returns state IDs touched after a retained subtree build marker. */
-	public function stateIdsUsedSince(marker:Int,
+	internal function stateIdsUsedSince(marker:Int,
 			?previous:Array<ResourceId>):Array<ResourceId> return stateStore.usedIdsSince(marker,
 		previous);
 
 	/** Keeps state-backed resources alive for a retained subtree this frame. */
-	public function retainStateIds(ids:Array<ResourceId>,
+	internal function retainStateIds(ids:Array<ResourceId>,
 			bubbleToEnclosingBuild:Bool = false):Void stateStore.retain(ids,
 		bubbleToEnclosingBuild || activeUpdatingBuild == null);
 

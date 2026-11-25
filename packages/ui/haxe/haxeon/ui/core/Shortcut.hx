@@ -4,9 +4,13 @@ import Hashable;
 
 /** A normalized key/modifier chord used by application commands. */
 struct Shortcut implements Hashable {
+	/** The key code (`UiKey`); never a modifier key alone. */
 	public final key:Int;
+
+	/** The modifier keys held with it: Shift, Control, Alt and Super, without the lock states. */
 	public final modifiers:UiModifier;
 
+	/** The chord `key` with `modifiers`, lock states dropped. Throws when `key` is not positive. */
 	public function new(key:Int, modifiers:UiModifier = UiModifier.empty()) {
 		if (key <= 0)
 			throw "Shortcuts require a positive key";
@@ -18,15 +22,19 @@ struct Shortcut implements Hashable {
 	public static function normalizeModifiers(modifiers:UiModifier):UiModifier
 		return modifiers & (UiModifier.Shift | UiModifier.Control | UiModifier.Alt | UiModifier.Super);
 
+	/** Whether pressing `key` with `modifiers` is this chord, whatever the lock keys' states. */
 	public function matches(key:Int, modifiers:UiModifier):Bool
 		return this.key == key && this.modifiers == normalizeModifiers(modifiers);
 
+	/** Whether `other` is the same chord. */
 	public function equals(other:Shortcut):Bool
 		return key == other.key && modifiers == other.modifiers;
 
+	/** A hash agreeing with `equals`. */
 	public function hash():Int
 		return key * 31 + modifiers.rawValue();
 
+	/** The chord's key code and modifier bits, for debugging; `label` is the readable form. */
 	public function toString():String
 		return 'Shortcut($key, ${modifiers.rawValue()})';
 

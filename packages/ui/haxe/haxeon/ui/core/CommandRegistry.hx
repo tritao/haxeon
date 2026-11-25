@@ -11,6 +11,10 @@ import haxeon.ui.editing.EditorDocument;
  * viewport, text-editor, and modal scopes able to override global shortcuts.
  */
 class CommandRegistry implements Observable {
+	/**
+	 * The scope that is always active: a command registered in it runs wherever no more specific scope binds its
+	 * shortcut.
+	 */
 	public static inline var GlobalScope:String = "global";
 	var commands:Map<String, Command>;
 	var commandScopes:Map<String, String>;
@@ -21,6 +25,7 @@ class CommandRegistry implements Observable {
 	/** Optional observer for semantic command recording. */
 	public var onInvoked:Null<String->CommandResult->Void> = null;
 
+	/** An empty registry, with only the global scope active. */
 	public function new() {
 		commands = new Map();
 		commandScopes = new Map();
@@ -47,6 +52,7 @@ class CommandRegistry implements Observable {
 		commandOrder = nextOrder;
 	}
 
+	/** Removes the command `id`. Returns whether there was one. */
 	public function unregister(id:String):Bool {
 		if (id == null || !commands.exists(id))
 			return false;
@@ -62,9 +68,11 @@ class CommandRegistry implements Observable {
 		return true;
 	}
 
+	/** The command `id`, or null. */
 	public function get(id:String):Null<Command>
 		return id == null ? null : commands.get(id);
 
+	/** The registered commands' ids, in registration order. */
 	public function ids():Array<String>
 		return commandOrder.copy();
 
@@ -102,6 +110,7 @@ class CommandRegistry implements Observable {
 		customShortcuts = nextShortcuts;
 	}
 
+	/** Drops the user's bindings for the command `id`: its registered shortcuts run it again. */
 	public function resetShortcuts(id:String):Void {
 		if (!customShortcuts.exists(id)) return;
 		var nextShortcuts = copyShortcuts(customShortcuts);
@@ -109,6 +118,7 @@ class CommandRegistry implements Observable {
 		customShortcuts = nextShortcuts;
 	}
 
+	/** Whether the user has rebound the command `id`. */
 	public function hasCustomShortcuts(id:String):Bool
 		return customShortcuts.exists(id);
 
@@ -145,6 +155,10 @@ class CommandRegistry implements Observable {
 		return true;
 	}
 
+	/**
+	 * The active scopes, the global one first and the most specific last: a shortcut runs the command of the last
+	 * scope that binds it.
+	 */
 	public function activeScopes():Array<String>
 		return activeScopeStack.copy();
 
@@ -158,6 +172,10 @@ class CommandRegistry implements Observable {
 		activeScopeStack = next;
 	}
 
+	/**
+	 * Deactivates the most recent activation of `scope`. Returns whether it was active; the global scope never is
+	 * popped.
+	 */
 	public function popScope(scope:String):Bool {
 		validateScope(scope);
 		if (scope == GlobalScope)
@@ -175,6 +193,7 @@ class CommandRegistry implements Observable {
 		return false;
 	}
 
+	/** Makes `scopes` the active ones, in priority order after the global scope, which stays active. */
 	public function setActiveScopes(scopes:Array<String>):Void {
 		var next = [GlobalScope];
 		if (scopes != null)

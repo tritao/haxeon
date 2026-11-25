@@ -43,6 +43,7 @@ class UiKey {
 	public static inline var V:Int = 86;
 	public static inline var X:Int = 88;
 
+	/** Whether `key` with `modifiers` asks for a context menu from the keyboard: the Menu key, or Shift+F10. */
 	public static inline function isContextMenuRequest(key:Int, modifiers:UiModifier):Bool
 		return key == Menu || (key == F10 && modifiers.contains(UiModifier.Shift));
 }

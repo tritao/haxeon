@@ -37,7 +37,7 @@ class EventDispatcher {
 	/** Optional elapsed-time probe for pointer release stages. */
 	public var pointerUpProbe:Null<String->Float->Void>;
 
-	public function new(focus:FocusManager,
+	internal function new(focus:FocusManager,
 			?interactionStates:InteractionStateStore,
 			?commandRegistry:CommandRegistry,
 			?commandContext:CommandContext) {
@@ -94,7 +94,7 @@ class EventDispatcher {
 		hitTestProvider = null;
 	}
 
-	public function setRoot(root:Null<RenderNode>, ?nodesById:Map<Int, RenderNode>):Void {
+	internal function setRoot(root:Null<RenderNode>, ?nodesById:Map<Int, RenderNode>):Void {
 		this.root = root;
 		this.nodesById = nodesById;
 		if (capturedIds.size() > 0) {
@@ -132,7 +132,7 @@ class EventDispatcher {
 		}
 	}
 
-	public function pointerMove(x:Float,
+	internal function pointerMove(x:Float,
 			y:Float,
 			modifiers:UiModifier = UiModifier.empty(),
 			pointerId:Int = 0,
@@ -165,7 +165,7 @@ class EventDispatcher {
 		}
 	}
 
-	public function pointerDown(x:Float,
+	internal function pointerDown(x:Float,
 			y:Float,
 			button:Int,
 			modifiers:UiModifier = UiModifier.empty(),
@@ -243,7 +243,7 @@ class EventDispatcher {
 		return false;
 	}
 
-	public function pointerUp(x:Float,
+	internal function pointerUp(x:Float,
 			y:Float,
 			button:Int,
 			modifiers:UiModifier = UiModifier.empty(),
@@ -295,7 +295,7 @@ class EventDispatcher {
 		if (probe != null) probe("hoverSeconds", Sys.time() - stageStarted);
 	}
 
-	public function pointerCancel(pointerId:Int,
+	internal function pointerCancel(pointerId:Int,
 			x:Float,
 			y:Float,
 			modifiers:UiModifier = UiModifier.empty(),
@@ -327,14 +327,14 @@ class EventDispatcher {
 		forgetPointer(pointerId);
 	}
 
-	public function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float,
+	internal function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float,
 			modifiers:UiModifier = UiModifier.empty()):Void {
 		var path = hitPath(x, y);
 		if (path.length > 0) dispatchPath(path,
 			new UiEvent(UiEventKind.Scroll, path[path.length - 1].id, x, y, deltaX, deltaY, 0, 0, modifiers));
 	}
 
-	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Bool {
+	internal function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Bool {
 		var node = focus.focusedNode();
 		if (node == null) {
 			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) {
@@ -424,7 +424,7 @@ class EventDispatcher {
 		return lastCommandResult.succeeded;
 	}
 
-	public function text(kind:String, text:Null<String>, data:Dynamic = null):Void {
+	internal function text(kind:String, text:Null<String>, data:Dynamic = null):Void {
 		var node = focus.focusedNode();
 		if (node == null) return;
 		var path = HitTest.pathTo(node);
@@ -447,7 +447,7 @@ class EventDispatcher {
 		return true;
 	}
 
-	public function clearPointer(pointerId:Int = 0):Void {
+	internal function clearPointer(pointerId:Int = 0):Void {
 		if (capturedIds.exists(pointerId)) {
 			// A window boundary clears hover, not the pressed button or drag owner.
 			// Logical captures still receive an outside move to clear drop previews.
@@ -483,7 +483,7 @@ class EventDispatcher {
 		forgetPointer(pointerId);
 	}
 
-	public function cancelPointers():Void {
+	internal function cancelPointers():Void {
 		var active:Array<Int> = [];
 		for (pointerId in capturedIds.keys()) active.push(pointerId);
 		for (pointerId in pressedIds.keys()) if (active.indexOf(pointerId) < 0) active.push(pointerId);
@@ -493,7 +493,7 @@ class EventDispatcher {
 		for (pointerId in hovering) clearPointer(pointerId);
 	}
 
-	public function focusEvent(id:WidgetId, kind:String):Void {
+	internal function focusEvent(id:WidgetId, kind:String):Void {
 		var node = root == null ? null : root.find(id);
 		if (node != null) updateDirectState(node, kind);
 		dispatchDirect(id, kind);
@@ -508,6 +508,10 @@ class EventDispatcher {
 	/** Returns the deepest node pressed by a pointer, if any. */
 	public function pressedId(pointerId:Int = 0):Null<WidgetId> return pressedIds.get(pointerId);
 
+	/**
+	 * Whether the widget `id` has captured the pointer `pointerId`: it gets the pointer's events wherever the pointer
+	 * goes, until it releases it.
+	 */
 	public function hasPointerCapture(id:WidgetId, pointerId:Int = 0):Bool {
 		var captured = capturedIds.get(pointerId);
 		return captured != null && id != null && captured.equals(id);
@@ -791,7 +795,7 @@ private struct PointerLocation {
 	public final pointerId:Int;
 	public final x:Float;
 	public final y:Float;
-	public function new(pointerId:Int, x:Float, y:Float) {
+	internal function new(pointerId:Int, x:Float, y:Float) {
 		this.pointerId = pointerId;
 		this.x = x;
 		this.y = y;

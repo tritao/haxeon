@@ -10,6 +10,10 @@ class RetainedView implements View {
 	/** Single-threaded scratch: filled and read within one `build`, before the view's own children build. */
 	static final scratchKey:KeyHash = new KeyHash();
 
+	/**
+	 * A view that builds `builder` once and reuses its result while what it read is unchanged and `revision`, when
+	 * given, returns the same text. Throws when `key` is empty or there is no builder.
+	 */
 	public function new(key:String, builder:BuildContext->View, ?revision:Void->String) {
 		if (key == null || key.length == 0 || builder == null) throw "Retained views require a stable key and builder";
 		this.key = key;

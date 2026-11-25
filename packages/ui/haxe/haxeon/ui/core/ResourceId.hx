@@ -1,7 +1,7 @@
 package haxeon.ui.core;
 
 /** A scalar ownership-list entry. The low bit is the domain; the sign is payload. */
-abstract ResourceId(Int) {
+internal abstract ResourceId(Int) {
 	@:allow(haxeon.ui.core.StateStore) inline function new(value:Int) this = value;
 
 	public static inline function widget(id:WidgetId):ResourceId return new ResourceId(id.value << 1);

@@ -7,9 +7,14 @@ class FocusManager {
 	var eligible:Map<Int, RenderNode>;
 	var activeTrapId:Null<WidgetId>;
 	var focusBeforeTrap:Null<WidgetId>;
+
+	/**
+	 * The widget with keyboard focus, or null for none. `UiContext.focusWidget` and its neighbours move it, sending
+	 * the focus events.
+	 */
 	public var focusedId(default, null):Null<WidgetId>;
 
-	public function new() {
+	internal function new() {
 		root = null;
 		order = [];
 		eligible = new Map();
@@ -18,7 +23,7 @@ class FocusManager {
 		focusedId = null;
 	}
 
-	public function rebuild(root:Null<RenderNode>):Void {
+	internal function rebuild(root:Null<RenderNode>):Void {
 		this.root = root;
 		order.resize(0);
 		eligible.clear();
@@ -55,13 +60,13 @@ class FocusManager {
 	}
 
 	/** Lets go of the render tree but keeps focus by ID, so the next rebuild restores it if the widget is still there. */
-	public function releaseTree():Void {
+	internal function releaseTree():Void {
 		root = null;
 		order.resize(0);
 		eligible.clear();
 	}
 
-	public function focus(id:Null<WidgetId>):Bool {
+	internal function focus(id:Null<WidgetId>):Bool {
 		if (id == null) {
 			focusedId = null;
 			return true;
@@ -73,12 +78,13 @@ class FocusManager {
 		return true;
 	}
 
-	public function focusNext():Null<WidgetId>
+	internal function focusNext():Null<WidgetId>
 		return move(1);
 
-	public function focusPrevious():Null<WidgetId>
+	internal function focusPrevious():Null<WidgetId>
 		return move(-1);
 
+	/** The focused widget's render node in the current tree, or null. */
 	public function focusedNode():Null<RenderNode>
 		return focusedId == null ? null : find(focusedId);
 
@@ -103,6 +109,7 @@ class FocusManager {
 		return found;
 	}
 
+	/** Whether the widget `id` can take focus in the current tree. */
 	public function contains(id:WidgetId):Bool
 		return find(id) != null;
 

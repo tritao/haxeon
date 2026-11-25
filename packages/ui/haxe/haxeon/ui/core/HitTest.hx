@@ -4,6 +4,10 @@ import haxeon.ui.LayoutPositioning;
 
 /** Hit testing and target paths derived from the resolved Haxe render tree. */
 class HitTest {
+	/**
+	 * The nodes under the point (`x`, `y`), in viewport coordinates, from the root down to the topmost one that takes
+	 * the pointer; empty when none does.
+	 */
 	public static function path(root:Null<RenderNode>, x:Float, y:Float):Array<RenderNode> {
 		if (root == null)
 			return [];
@@ -12,6 +16,7 @@ class HitTest {
 		return state.bestPath == null ? [] : state.bestPath;
 	}
 
+	/** The nodes from the root down to `node`: the path an event aimed at it travels. */
 	public static function pathTo(node:Null<RenderNode>):Array<RenderNode> {
 		if (node == null)
 			return [];

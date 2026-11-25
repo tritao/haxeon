@@ -10,6 +10,12 @@ class RetainedVariants implements View {
 	final resetChangedOnReturn:Bool;
 	static final scratch:KeyHash = new KeyHash();
 
+	/**
+	 * Shows the alternative `variant` built by `builder`, keeping up to `capacity` built alternatives so that switching back
+	 * reuses one, as a tab view does. `revision`, when given, rebuilds an alternative when the text it returns changes;
+	 * `resetChangedOnReturn` rebuilds, on switching back, one whose inputs changed while it was hidden. Throws without a
+	 * key, variant or builder, or with no capacity.
+	 */
 	public function new(key:String,
 			variant:String,
 			builder:BuildContext->View,

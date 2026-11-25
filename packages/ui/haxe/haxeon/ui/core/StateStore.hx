@@ -12,12 +12,12 @@ class StateStore implements Disposable {
 	/** Resource ownership follows the current body, rather than a cache's initial flattened ID list. */
 	final ownedStates:Map<ResourceId, Array<ResourceId>> = new Map();
 
-	public function setOwnedStates(owner:ResourceId, ids:Null<Array<ResourceId>>):Void {
+	internal function setOwnedStates(owner:ResourceId, ids:Null<Array<ResourceId>>):Void {
 		if (ids == null) ownedStates.remove(owner);
 		else ownedStates.set(owner, ids);
 	}
-	public function ownedStateIds(owner:ResourceId):Null<Array<ResourceId>> return ownedStates.get(owner);
-	public function ownsResource(owner:ResourceId, child:ResourceId):Bool {
+	internal function ownedStateIds(owner:ResourceId):Null<Array<ResourceId>> return ownedStates.get(owner);
+	internal function ownsResource(owner:ResourceId, child:ResourceId):Bool {
 		var ids = ownedStates.get(owner);
 		if (ids != null) for (index in 0...ids.length) if (ids[index] == child) return true;
 		return false;
@@ -39,8 +39,9 @@ class StateStore implements Disposable {
 	final seenScratch:IdSet = new IdSet(256);
 	final frameUseOrder:Array<ResourceId>;
 	var frameUseCount:Int = 0;
-	public var frameActive(default, null):Bool;
+	internal var frameActive(default, null):Bool;
 
+	/** An empty store; `UiContext` makes the one its widgets share. */
 	public function new() {
 		disposers = new Map();
 		paths = new Map();
@@ -89,6 +90,10 @@ class StateStore implements Disposable {
 		pathIds.resize(write);
 	}
 
+	/**
+	 * Gives the widget `id` its state `initial` if it has none yet, and keeps its state for this frame. Throws without
+	 * an id.
+	 */
 	public function initialize<T>(id:WidgetId, initial:T):Void {
 		if (id == null) throw "State requires a widget ID";
 		if (!handles.exists(id.value)) handles.set(id.value, new State<T>(this, id, initial));
@@ -173,7 +178,7 @@ class StateStore implements Disposable {
 	public function usageMarker():Int return frameUseCount;
 
 	/** Returns state IDs first touched after a usage marker. */
-	public function usedIdsSince(marker:Int, ?previous:Array<ResourceId>):Array<ResourceId> {
+	internal function usedIdsSince(marker:Int, ?previous:Array<ResourceId>):Array<ResourceId> {
 		var start = marker < 0 ? 0 : marker > frameUseCount ? frameUseCount : marker;
 		var count = 0, same = previous != null;
 		seenScratch.clear();
@@ -197,17 +202,17 @@ class StateStore implements Disposable {
 
 	/** Finish an independently retained build without copying its state reads into its enclosing cache. */
 	var usageCaptures:Int = 0;
-	public function beginUsage():Int {
+	internal function beginUsage():Int {
 		usageCaptures++;
 		return frameUseCount;
 	}
-	public function finishUsage(marker:Int):Void {
+	internal function finishUsage(marker:Int):Void {
 		frameUseCount = marker;
 		usageCaptures--;
 	}
 
 	/** Keeps state-backed resources for a retained, temporarily detached subtree. */
-	public function retain(ids:Array<ResourceId>, recordUsage:Bool = true):Void {
+	internal function retain(ids:Array<ResourceId>, recordUsage:Bool = true):Void {
 		if (ids == null) return;
 		for (id in ids) if (id.isScope() ? scopes.exists(id.scopeId()) : handles.exists(id.payload())) {
 			if (frameActive) frameUsed.add(id.rawValue());
@@ -278,6 +283,7 @@ class StateStore implements Disposable {
 		if (failure != null) throw failure;
 	}
 
+	/** Whether the widget `id` has state. */
 	public function contains(id:WidgetId):Bool return id != null && handles.exists(id.value);
 
 	/** Bounded-run diagnostics for detecting retained widget state growth. */
@@ -292,6 +298,7 @@ class StateStore implements Disposable {
 		return {values: valueCount, paths: pathCount, resources: resourceCount};
 	}
 
+	/** The widget `id` and the key path that names it, for diagnostics. */
 	public function describe(id:WidgetId):String {
 		if (id == null) return "null";
 		var path = paths.get(id.value);

@@ -8,6 +8,7 @@ class Dependencies extends ReactiveDependencySet implements Disposable {
 	var invalidationContext:Null<BuildContext>;
 	var invalidationBuild:Null<SelfUpdatingBuild>;
 
+	/** An empty record; `captureOnly` makes a frame's scratch capture rather than a retained record. */
 	public function new(captureOnly:Bool = false)
 		super(captureOnly);
 
@@ -32,17 +33,19 @@ class Dependencies extends ReactiveDependencySet implements Disposable {
 		finishDependencies();
 	}
 
-	public function addAll(other:Dependencies):Void {
+	internal function addAll(other:Dependencies):Void {
 		if (other != this)
 			other.appendDependenciesTo(this);
 	}
 
+	/** Whether nothing it records has changed since it was taken: what it computed is still valid. */
 	public function current():Bool
 		return !super.get_dirty();
 
-	public function trackedSourcesDirty():Bool
+	internal function trackedSourcesDirty():Bool
 		return super.get_dirty();
 
+	/** Asks for the computation that owns it to be patched when something it read may have changed. */
 	override public function onMaybeStale():Void {
 		var context = invalidationContext;
 		var build = invalidationBuild;
@@ -58,9 +61,10 @@ class Dependencies extends ReactiveDependencySet implements Disposable {
 			context.requestReactivePatch(build.root.id);
 	}
 
-	public function truncate(marker:Int):Void
+	internal function truncate(marker:Int):Void
 		if (captureOnly) truncatePending(marker);
 
+	/** Forgets what a capture recorded; a retained record keeps its reads. */
 	public function clear():Void
 		if (captureOnly) clearPending();
 

@@ -32,6 +32,11 @@ class NativeInputAdapter {
 	var pointerModifiers:UiModifier = UiModifier.empty();
 	var heldModifierKeys:Int = 0;
 
+	/**
+	 * An adapter feeding the input of the window `source` to `context`, and accessibility requests from
+	 * `accessibilitySource` (the window itself by default); `attach` connects it to the event pump. Throws without a
+	 * context or with an invalid window.
+	 */
 	public function new(context:UiContext, source:Handle, ?accessibilitySource:Handle) {
 		if (context == null || !source.isValid())
 			throw "Native input requires a UI context and window handle";

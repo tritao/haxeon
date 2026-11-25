@@ -2,10 +2,15 @@ package haxeon.ui.core;
 
 /** An application action exposed to menus, toolbars, palettes, and shortcuts. */
 class Command {
+	/** Identifies the command: what menus, toolbars and settings name it by. Never empty. */
 	public final id:String;
 	/** Opt in to OS key repeats for editing actions; destructive/menu actions default off. */
 	public var repeatable:Bool = false;
+
+	/** The command's name as people see it, in menus and the command palette. */
 	public final label:String;
+
+	/** The key chord that runs it, if any; `addShortcut` adds more. */
 	public final shortcut:Null<Shortcut>;
 	final alternateShortcuts:Array<Shortcut>;
 	final action:Void->Void;
@@ -15,6 +20,10 @@ class Command {
 	var contextualEnabledPredicate:Null<CommandContext->Bool>;
 	var contextualCheckedPredicate:Null<CommandContext->Bool>;
 
+	/**
+	 * A command that runs `action`, enabled while `enabled` says so (always, without it) and shown checked while
+	 * `checked` does. Throws without an id, a label or an action.
+	 */
 	public function new(id:String, label:String, action:Void->Void,
 			?shortcut:Shortcut, ?enabled:Void->Bool, ?checked:Void->Bool) {
 		if (id == null || id.length == 0 || label == null || label.length == 0 || action == null)
@@ -51,6 +60,7 @@ class Command {
 		return result;
 	}
 
+	/** Whether the key `key` with `modifiers` is one of the command's shortcuts. */
 	public function matchesShortcut(key:Int, modifiers:UiModifier):Bool {
 		if (shortcut != null && shortcut.matches(key, modifiers)) return true;
 		for (alternate in alternateShortcuts)
@@ -72,12 +82,14 @@ class Command {
 		return result;
 	}
 
+	/** Whether the command can run now, in `context` for a contextual command. */
 	public function isEnabled(?context:CommandContext):Bool {
 		if (contextualEnabledPredicate != null)
 			return contextualEnabledPredicate(context == null ? new CommandContext() : context);
 		return enabledPredicate == null || enabledPredicate();
 	}
 
+	/** Whether the command shows as checked now, as a toggle in a menu does, in `context` for a contextual command. */
 	public function isChecked(?context:CommandContext):Bool {
 		if (contextualCheckedPredicate != null)
 			return contextualCheckedPredicate(context == null ? new CommandContext() : context);
