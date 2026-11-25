@@ -58,6 +58,20 @@ typedef ScalarMapRecordPair = {
 	final physical:Array<compiler.types.Type.AnonymousField>;
 };
 
+/** A walk for generic enums through owners' members: the owners and aliases on its path, and the methods it read. */
+private class EnumUseWalk {
+	public final seen:Array<String> = [];
+	public final methods:Array<String> = [];
+
+	public function new() {}
+}
+
+/** Whether an owner's parameter reaches a generic enum (`ownerUsesGenericEnum`), and the methods that decided it. */
+private typedef OwnerEnumUse = {
+	final found:Bool;
+	final methods:Array<String>;
+};
+
 /**
  * Owns the boundary between source-level types and emitted representations.
  *
@@ -75,6 +89,8 @@ class TypeRepresentation {
 	final enumBodyUses:Map<String, Bool> = [];
 	/** `ownerSignaturesHold` by question, owner and parameter. */
 	final signatureUses:Map<String, Bool> = [];
+	/** `ownerUsesGenericEnum` by owner and parameter. */
+	final ownerEnumUses:Map<String, OwnerEnumUse> = [];
 	/** The body typer's conversions, which adapt a function value (`useConversions`). */
 	var conversions:Null<ConversionResolver> = null;
 	final ownerRequests:Map<String, GenericOwnerRepresentation> = [];
@@ -217,8 +233,12 @@ class TypeRepresentation {
 	function functionUsesGenericEnum(fn:AstFunction, parameter:String):Bool {
 		var key =
 			compiler.core.GlobalNames.of(fn.span.file.path + ":" + fn.span.start + ":" + fn.name + ":" + parameter);
-		if (!enumBodyUses.exists(key)) enumBodyUses.set(key, compiler.types.analysis.GenericEnumUsage.uses(fn,
-			type -> enumContainsParameter(type, parameter, [])));
+		if (!enumBodyUses.exists(key)) {
+			var walk = new EnumUseWalk();
+			enumBodyUses.set(key, compiler.types.analysis.GenericEnumUsage.uses(fn,
+				type -> enumContainsParameter(type, parameter, walk)));
+			readMethods(walk.methods);
+		}
 		return enumBodyUses.get(key);
 	}
 
@@ -731,61 +751,80 @@ class TypeRepresentation {
 		return false;
 	}
 
-	/** A boxed generic enum needs its concrete descriptor throughout an owner's ABI. */
-	function ownerUsesGenericEnum(owner:AstClass, parameter:String, ?seen:Array<String>):Bool {
-		if (seen == null) seen = [];
-		var key = owner.name + ":" + parameter;
+	/**
+	 * A boxed generic enum needs its concrete descriptor throughout an owner's ABI. Asked at every use of the owner's
+	 * specialization, it is worked out once per build, and each unit that asks reads the methods that decided it.
+	 */
+	function ownerUsesGenericEnum(owner:AstClass, parameter:String):Bool {
+		var key = compiler.core.GlobalNames.of(owner.name + ":" + parameter), known = ownerEnumUses.get(key);
+		if (known == null) {
+			var walk = new EnumUseWalk();
+			known = {found: ownerWalksToGenericEnum(owner, parameter, walk), methods: walk.methods};
+			ownerEnumUses.set(key, known);
+		}
+		readMethods(known.methods);
+		return known.found;
+	}
+
+	/** Records that the unit being typed read the signature and body of each of `methods`. */
+	function readMethods(methods:Array<String>):Void
+		for (method in methods) {
+			session.readSignature(method);
+			session.readBody(method);
+		}
+
+	function ownerWalksToGenericEnum(owner:AstClass, parameter:String, walk:EnumUseWalk):Bool {
+		var key = owner.name + ":" + parameter, seen = walk.seen;
 		if (seen.indexOf(key) >= 0) return false;
 		seen.push(key);
-		var found = owner.base != null && enumContainsParameter(owner.base, parameter, seen);
-		for (contract in owner.interfaces) if (enumContainsParameter(contract, parameter, seen)) found = true;
+		var found = owner.base != null && enumContainsParameter(owner.base, parameter, walk);
+		for (contract in owner.interfaces) if (enumContainsParameter(contract, parameter, walk)) found = true;
 		for (field in owner.fields) if (!field.isStatic && field.type != null
-			&& enumContainsParameter(field.type, parameter, seen)) found = true;
+			&& enumContainsParameter(field.type, parameter, walk)) found = true;
 		for (method in owner.methods) {
 			if (method.isStatic || method.typeParameters != null
 				&& method.typeParameters.indexOf(parameter) >= 0) continue;
 			// The method's signature and body decide it.
-			session.readSignature(owner.name + "." + method.name);
-			session.readBody(owner.name + "." + method.name);
-			for (argument in method.arguments) if (enumContainsParameter(argument.type, parameter, seen)) found = true;
-			if (enumContainsParameter(method.result, parameter, seen)) found = true;
+			walk.methods.push(owner.name + "." + method.name);
+			for (argument in method.arguments) if (enumContainsParameter(argument.type, parameter, walk)) found = true;
+			if (enumContainsParameter(method.result, parameter, walk)) found = true;
 			if (!found && compiler.types.analysis.GenericEnumUsage.uses(method,
-				type -> enumContainsParameter(type, parameter, seen))) found = true;
+				type -> enumContainsParameter(type, parameter, walk))) found = true;
 		}
 		seen.pop();
 		return found;
 	}
 
-	function enumContainsParameter(type:AstType, parameter:String, seen:Array<String>):Bool return switch type {
+	function enumContainsParameter(type:AstType, parameter:String, walk:EnumUseWalk):Bool return switch type {
 		case AppliedType(name, arguments):
 			var found = false, alias = session.declarations.aliases.get(name), owner = session.classDecls.get(name);
 			if (session.enumDecls.exists(name)) for (argument in arguments) if (containsSyntaxParameter(argument,
 				parameter)) found = true;
 			if (alias != null) {
 				var key = "alias:" + name;
-				if (seen.indexOf(key) < 0) {
-					seen.push(key);
+				if (walk.seen.indexOf(key) < 0) {
+					walk.seen.push(key);
 					for (index in 0...arguments.length)
 						if (index < alias.typeParameters.length && containsSyntaxParameter(arguments[index], parameter)
-							&& enumContainsParameter(alias.type, alias.typeParameters[index], seen)) found = true;
-					seen.pop();
+							&& enumContainsParameter(alias.type, alias.typeParameters[index], walk)) found = true;
+					walk.seen.pop();
 				}
 			}
 			if (owner != null) for (index in 0...arguments.length)
 				if (index < owner.typeParameters.length && containsSyntaxParameter(arguments[index], parameter)
-				&& ownerUsesGenericEnum(owner, owner.typeParameters[index], seen)) found = true;
-			for (argument in arguments) if (enumContainsParameter(argument, parameter, seen)) found = true;
+				&& ownerWalksToGenericEnum(owner, owner.typeParameters[index], walk)) found = true;
+			for (argument in arguments) if (enumContainsParameter(argument, parameter, walk)) found = true;
 			found;
-		case ArrayType(element), NullableType(element): enumContainsParameter(element, parameter, seen);
-		case MapType(key, value): enumContainsParameter(key, parameter, seen)
-			|| enumContainsParameter(value, parameter, seen);
+		case ArrayType(element), NullableType(element): enumContainsParameter(element, parameter, walk);
+		case MapType(key, value): enumContainsParameter(key, parameter, walk)
+			|| enumContainsParameter(value, parameter, walk);
 		case FunctionType(arguments, result, _):
-			var found = enumContainsParameter(result, parameter, seen);
-			for (argument in arguments) if (enumContainsParameter(argument, parameter, seen)) found = true;
+			var found = enumContainsParameter(result, parameter, walk);
+			for (argument in arguments) if (enumContainsParameter(argument, parameter, walk)) found = true;
 			found;
 		case AnonymousType(fields):
 			var found = false;
-			for (field in fields) if (enumContainsParameter(field.type, parameter, seen)) found = true;
+			for (field in fields) if (enumContainsParameter(field.type, parameter, walk)) found = true;
 			found;
 		default: false;
 	};
