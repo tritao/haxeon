@@ -11,8 +11,10 @@ import haxeon.ui.ResolvedLayoutItem;
  * inherit the identity/discrete defaults without any runtime type inspection.
  */
 class Decoration {
+	/** Which decoration this is: a built-in family, or `Custom` for one an application defines. */
 	public final kind:DecorationKind;
 
+	/** A decoration of `kind`; a custom decoration passes nothing. */
 	public function new(kind:DecorationKind = DecorationKind.Custom)
 		this.kind = kind;
 
@@ -31,6 +33,7 @@ class Decoration {
 	public function interpolate(other:Decoration, amount:Float):Decoration
 		return Decoration.discrete(this, other, amount);
 
+	/** The decoration as a short readable text, such as `border`, which the inspector and style dumps show. */
 	public function describe():String
 		return switch kind {
 			case DecorationKind.Background: "background";
@@ -43,9 +46,11 @@ class Decoration {
 			case DecorationKind.Custom: "custom";
 		};
 
+	/** The same text as `describe`. */
 	public function toString():String
 		return describe();
 
+	/** A copy of `left` before the midpoint of `amount`, and of `right` (or `left` without one) from it on. */
 	public static function discrete(left:Decoration, right:Decoration,
 			amount:Float):Decoration
 		return amount < 0.5 || right == null ? left.copy() : right.copy();
