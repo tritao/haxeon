@@ -18,6 +18,9 @@ private typedef DriverOptions = {
 
 	/** `--release`: plain builds are release builds. */
 	var release:Bool;
+
+	/** `--module-sections`: plain builds write module sections (`CompileOptions.moduleSections`). */
+	var moduleSections:Bool;
 }
 
 class TestDriver {
@@ -49,6 +52,7 @@ class TestDriver {
 		runner.checkReuse = options.checkReuse;
 		runner.checkIsolation = options.checkIsolation;
 		runner.release = options.release;
+		runner.moduleSections = options.moduleSections;
 		var failures = 0;
 		var selected = 0;
 		var phaseStarted = Sys.time();
@@ -164,7 +168,7 @@ class TestDriver {
 		var suites = ["all"];
 		var filter:Null<EReg> = null;
 		var listOnly = false;
-		var checkReuse = false, checkIsolation = false, release = false;
+		var checkReuse = false, checkIsolation = false, release = false, moduleSections = false;
 		var jobs = 1;
 		var index = 0;
 		while (index < args.length) {
@@ -189,6 +193,8 @@ class TestDriver {
 					checkIsolation = true;
 				case "--release":
 					release = true;
+				case "--module-sections":
+					moduleSections = true;
 				case "--jobs":
 					if (index == args.length)
 						throw "--jobs requires a positive integer";
@@ -208,7 +214,8 @@ class TestDriver {
 			jobs: jobs,
 			checkReuse: checkReuse,
 			checkIsolation: checkIsolation,
-			release: release
+			release: release,
+			moduleSections: moduleSections
 		};
 	}
 }
