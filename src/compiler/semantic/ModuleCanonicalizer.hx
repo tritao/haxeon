@@ -153,8 +153,7 @@ class ModuleCanonicalizer {
 			typeParameters: alias.typeParameters,
 			typeConstraints: canonicalConstraints(alias.typeConstraints, aliases, alias.typeParameters),
 			type: canonicalType(alias.type, aliases, alias.typeParameters),
-			isPrivate: alias.isPrivate,
-			isInternal: alias.isInternal,
+			visibility: alias.visibility,
 			span: alias.span
 		};
 
@@ -172,7 +171,7 @@ class ModuleCanonicalizer {
 			methods: enumDecl.methods == null ? [] : [for (method in enumDecl.methods) canonicalFunction(method, module,
 				entry, locals, method.name, enumAliases)],
 			metadata: enumDecl.metadata,
-			isInternal: enumDecl.isInternal,
+			visibility: enumDecl.visibility,
 			cases: [for (caseDecl in enumDecl.cases)
 				{
 					name: caseDecl.name,
@@ -211,7 +210,7 @@ class ModuleCanonicalizer {
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
 			isExtern: decl.isExtern,
-			isInternal: decl.isInternal,
+			visibility: decl.visibility,
 			metadata: decl.metadata == null ? null : canonicalMetadata(decl.metadata, module, entry, locals, aliases),
 			typeParameters: decl.typeParameters,
 			typeConstraints: canonicalConstraints(decl.typeConstraints, aliases, decl.typeParameters),
@@ -231,7 +230,7 @@ class ModuleCanonicalizer {
 			values: decl.values == null ? null : [for (value in decl.values)
 				{
 					name: value.name,
-					isPublic: value.isPublic,
+					visibility: value.visibility,
 					metadata: canonicalMetadata(value.metadata, module, entry, locals, aliases),
 					value: canonicalExpression(value.value, module, entry, locals, aliases),
 					span: value.span
@@ -247,8 +246,7 @@ class ModuleCanonicalizer {
 			module:String, entry:String, locals:LocalScope, aliases:AliasTable):compiler.syntax.Ast.AstField
 		return {
 			name: field.name,
-			isPublic: field.isPublic,
-			isInternal: field.isInternal,
+			visibility: field.visibility,
 			metadata: canonicalMetadata(field.metadata, module, entry, locals, aliases),
 			type: field.type == null ? null : canonicalType(field.type, aliases, ownerTypeParameters),
 			initializer: canonicalOptionalExpression(field.initializer, module, entry, locals, aliases),
@@ -302,7 +300,7 @@ class ModuleCanonicalizer {
 			typeParameters: interfaceDecl.typeParameters,
 			typeConstraints: canonicalConstraints(interfaceDecl.typeConstraints, aliases, interfaceDecl.typeParameters),
 			documentationMetadata: interfaceDecl.documentationMetadata,
-			isInternal: interfaceDecl.isInternal,
+			visibility: interfaceDecl.visibility,
 			bases: [
 				for (base in interfaceDecl.bases)
 					canonicalType(base, aliases, interfaceDecl.typeParameters)
@@ -324,7 +322,7 @@ class ModuleCanonicalizer {
 			typeConstraints: canonical.typeConstraints,
 			bases: canonical.bases,
 			documentationMetadata: canonical.documentationMetadata,
-			isInternal: canonical.isInternal,
+			visibility: canonical.visibility,
 			fields: canonical.fields,
 			methods: canonical.methods.concat(implied),
 			span: canonical.span

@@ -110,7 +110,7 @@ class InterfaceFieldAccessors {
 					typeConstraints: declaration.typeConstraints,
 					bases: declaration.bases,
 					documentationMetadata: declaration.documentationMetadata,
-					isInternal: declaration.isInternal,
+					visibility: declaration.visibility,
 					fields: declaration.fields,
 					methods: declaration.methods.concat(implied),
 					span: declaration.span
@@ -273,7 +273,7 @@ class InterfaceFieldAccessors {
 		return {
 			name: name,
 			isStatic: false,
-			isPublic: true,
+			visibility: AstVisibility.Public,
 			metadata: [{name: GENERATED, arguments: [], span: span}],
 			arguments: read ? [] : [{name: "value", type: type, span: span}],
 			result: type,
@@ -289,8 +289,7 @@ class InterfaceFieldAccessors {
 			isExtern: declaration.isExtern,
 			typeParameters: declaration.typeParameters,
 			typeConstraints: declaration.typeConstraints,
-			isPrivate: declaration.isPrivate,
-			isInternal: declaration.isInternal,
+			visibility: declaration.visibility,
 			metadata: declaration.metadata,
 			base: declaration.base,
 			interfaces: declaration.interfaces,

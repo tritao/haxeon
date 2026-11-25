@@ -305,8 +305,7 @@ class SemanticProgram {
 			var replacement = currentByName.get(field.name);
 			replacement == null ? field : {
 				name: field.name,
-				isPublic: field.isPublic,
-				isInternal: field.isInternal,
+				visibility: field.visibility,
 				metadata: replacement.metadata,
 				type: field.type,
 				initializer: replacement.initializer,

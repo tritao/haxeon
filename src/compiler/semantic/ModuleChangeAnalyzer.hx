@@ -3,6 +3,7 @@ package compiler.semantic;
 import compiler.modules.ModuleState;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstFieldAccess;
+import compiler.syntax.Ast.AstVisibility;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
 
@@ -41,7 +42,8 @@ class ModuleChangeAnalyzer {
 				+ " extends "
 				+ [for (base in interfaceDecl.bases) ModuleCanonicalizer.astTypeName(base)].join(",") + " {" + [
 					for (field in interfaceDecl.fields)
-						(field.isPublic == false ? "private " : "") + (field.isStatic ? "static " : "")
+						(field.visibility == AstVisibility.Unwritten ? "" : field.visibility.modifier() + " ")
+						+ (field.isStatic ? "static " : "")
 						+ (field.isFinal ? "final " : "var ") + field.name + "(" + field.readAccess + ","
 						+ field.writeAccess + "):" + (field.type == null ? "_" : SemanticSignature.parsed(field.type,
 						ast.aliases))
@@ -283,7 +285,7 @@ class ModuleChangeAnalyzer {
 					}
 			var wireFieldFingerprint = [
 				for (field in classDecl.fields)
-					field.name + "=" + (field.isPublic == true ? "public:" : "private:")
+					field.name + "=" + field.visibility.modifier() + ":"
 					+ fieldMetadataFingerprint(state, field.metadata)
 			].join(";");
 			wireFieldFingerprint += ":field-defaults:" + [

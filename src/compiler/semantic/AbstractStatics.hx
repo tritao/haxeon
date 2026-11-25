@@ -4,6 +4,7 @@ import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstVisibility;
 
 /**
  * The static variables of an abstract (`static var count = 0`, `static final step = 2`). An abstract stores nothing but its
@@ -78,7 +79,7 @@ class AbstractStatics {
 		return {
 			name: storageName(declaration.name),
 			typeParameters: [],
-			isPrivate: false,
+			visibility: AstVisibility.Unwritten,
 			// The abstract's `@:allow` and `@:publicFields` are its statics' too.
 			metadata: declaration.metadata == null ? [] : declaration.metadata,
 			base: null,
@@ -96,7 +97,7 @@ class AbstractStatics {
 			typeParameters: declaration.typeParameters,
 			typeConstraints: declaration.typeConstraints,
 			conformances: declaration.conformances,
-			isInternal: declaration.isInternal,
+			visibility: declaration.visibility,
 			underlying: declaration.underlying,
 			fromTypes: declaration.fromTypes,
 			toTypes: declaration.toTypes,

@@ -19,7 +19,7 @@ class InternalExposure {
 			return;
 		var exposure = new InternalExposure(internalTypes);
 		for (decl in program.classes ?? [])
-			if (!decl.isPrivate && decl.isInternal != true) {
+			if (visible(decl.visibility, true)) {
 				var what = 'Class ${decl.name}',
 					publicByDefault = decl.isExtern == true || has(decl.metadata, "publicFields");
 				if (decl.base != null)
@@ -27,40 +27,40 @@ class InternalExposure {
 				exposure.types(decl.interfaces, what, decl.span);
 				exposure.constraints(decl.typeConstraints, what);
 				for (field in decl.fields ?? [])
-					if (visible(field.isPublic, field.isInternal, publicByDefault))
+					if (visible(field.visibility, publicByDefault))
 						exposure.field(field, '${decl.name}.${field.name}');
 				for (method in decl.methods ?? [])
-					if (visible(method.isPublic, method.isInternal, publicByDefault) && !inheritsVisibility(method))
+					if (visible(method.visibility, publicByDefault) && !inheritsVisibility(method))
 						exposure.signature(method, '${decl.name}.${method.name}');
 			}
 		for (decl in program.interfaces ?? [])
-			if (decl.isInternal != true) {
+			if (visible(decl.visibility, true)) {
 				var what = 'Interface ${decl.name}';
 				exposure.types(decl.bases, what, decl.span);
 				exposure.constraints(decl.typeConstraints, what);
 				for (field in decl.fields ?? [])
 					exposure.field(field, '${decl.name}.${field.name}');
 				for (method in decl.methods ?? [])
-					if (method.sourcePrivate != true)
+					if (method.visibility != AstVisibility.Private)
 						exposure.signature(method, '${decl.name}.${method.name}');
 			}
 		for (decl in program.aliases ?? [])
-			if (!decl.isPrivate && decl.isInternal != true) {
+			if (visible(decl.visibility, true)) {
 				exposure.type(decl.type, 'Typedef ${decl.name}', decl.span);
 				exposure.constraints(decl.typeConstraints, 'Typedef ${decl.name}');
 			}
 		for (decl in program.enums ?? [])
-			if (decl.isInternal != true) {
+			if (visible(decl.visibility, true)) {
 				exposure.constraints(decl.typeConstraints, 'Enum ${decl.name}');
 				for (entry in decl.cases ?? [])
 					for (parameter in entry.params ?? [])
 						exposure.type(parameter.type, '${decl.name}.${entry.name}', entry.span);
 				for (method in decl.methods ?? [])
-					if (visible(method.isPublic, method.isInternal, false))
+					if (visible(method.visibility, false))
 						exposure.signature(method, '${decl.name}.${method.name}');
 			}
 		for (decl in program.abstracts ?? [])
-			if (decl.isInternal != true) {
+			if (visible(decl.visibility, true)) {
 				var what = 'Abstract ${decl.name}',
 					publicByDefault = decl.isExtern == true || has(decl.metadata, "publicFields");
 				exposure.type(decl.underlying, what, decl.span);
@@ -68,18 +68,18 @@ class InternalExposure {
 				exposure.types(decl.toTypes, what, decl.span);
 				exposure.constraints(decl.typeConstraints, what);
 				for (field in decl.fields ?? [])
-					if (visible(field.isPublic, field.isInternal, publicByDefault))
+					if (visible(field.visibility, publicByDefault))
 						exposure.field(field, '${decl.name}.${field.name}');
 				for (method in decl.methods ?? [])
-					if (visible(method.isPublic, method.isInternal, publicByDefault))
+					if (visible(method.visibility, publicByDefault))
 						exposure.signature(method, '${decl.name}.${method.name}');
 			}
 		// A module's own variables and functions are public unless written otherwise.
 		for (field in program.fields ?? [])
-			if (visible(field.isPublic, field.isInternal, true))
+			if (visible(field.visibility, true))
 				exposure.field(field, field.name);
 		for (fn in program.functions ?? [])
-			if (visible(fn.isPublic, fn.isInternal, true))
+			if (visible(fn.visibility, true))
 				exposure.signature(fn, fn.name);
 	}
 
@@ -88,13 +88,13 @@ class InternalExposure {
 	function new(internalTypes:Map<String, SourceSpan>)
 		this.internalTypes = internalTypes;
 
-	/** Whether a member written with `isPublic` and `isInternal` is seen by other packages, public when unwritten if `byDefault`. */
-	static function visible(isPublic:Null<Bool>, isInternal:Null<Bool>, byDefault:Bool):Bool
-		return isInternal != true && (isPublic ?? byDefault);
+	/** Whether other packages see a declaration written `visibility`, public when unwritten if `byDefault`. */
+	static function visible(visibility:AstVisibility, byDefault:Bool):Bool
+		return !visibility.isInternal() && visibility.reachable(byDefault);
 
 	/** An override written without a modifier has the visibility of what it overrides, whose signature is checked there. */
 	static function inheritsVisibility(method:AstFunction):Bool
-		return method.isOverride == true && method.isPublic == null;
+		return method.isOverride == true && method.visibility == AstVisibility.Unwritten;
 
 	function field(field:AstField, what:String):Void
 		if (field.type != null)

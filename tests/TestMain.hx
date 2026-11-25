@@ -445,7 +445,7 @@ class TestMain {
 		Frontend.compile('function main():Int return switch 0 { case 0: if (false) {} else return 1; 42; default: 42; };');
 		var privateAlias = new Parser(new Lexer(new SourceFile("private-alias.hx",
 			"private typedef Internal = Int;")).tokenize()).parseProgram();
-		if (!privateAlias.aliases[0].isPrivate)
+		if (privateAlias.aliases[0].visibility != compiler.syntax.Ast.AstVisibility.Private)
 			throw "Private type alias visibility was not preserved";
 		new Parser(new Lexer(new SourceFile("terminating-switch-expression.hx",
 			'function main():Int { var value = switch 0 { case 0: return 42; default: 0; }; return value; }'))
@@ -1346,7 +1346,7 @@ class TestMain {
 		var metadataProgram = new Parser(new Lexer(new SourceFile("Native.hx",
 			'@:hlNative("sample") private class Native { @:id(7) public var id:Int; @:noCompletion public static function read():Int return @:privateAccess 42; } @:wire enum MetadataStatus { @:id(5) Ready; }'))
 			.tokenize()).parseProgram();
-		if (!metadataProgram.classes[0].isPrivate
+		if (metadataProgram.classes[0].visibility != compiler.syntax.Ast.AstVisibility.Private
 			|| metadataProgram.classes[0].metadata[0].name != "hlNative"
 			|| metadataProgram.classes[0].metadata[0].arguments.length != 1
 			|| metadataProgram.classes[0].fields[0].metadata[0].name != "id"

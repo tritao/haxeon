@@ -99,7 +99,8 @@ class KeyPathTyping {
 			}
 			var entry = resolveField(session, value, name, span);
 			if (entry.field.isStatic) fail('Cannot form a key path to static field "$name"', span);
-			if (!PropertyWriteRules.canAccess(session, entry.declaration, entry.field) && entry.field.isPublic != true)
+			if (!PropertyWriteRules.canAccess(session, entry.declaration, entry.field)
+				&& !entry.field.visibility.reachable(false))
 				fail('Cannot access private field "${entry.declaration.name}.$name" in a key path', span);
 			if ((entry.field.readAccess == GetAccess || entry.field.writeAccess == SetAccess
 				|| entry.field.readAccess == DynamicAccess || entry.field.writeAccess == DynamicAccess)

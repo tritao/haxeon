@@ -91,7 +91,7 @@ class ApiModelBuilder {
 		for (decl in program.interfaces)
 			types.push(interfaceDeclaration(decl));
 		for (decl in program.aliases)
-			if (!decl.isPrivate)
+			if (decl.visibility != AstVisibility.Private)
 				types.push(aliasDeclaration(decl));
 		for (decl in program.enums)
 			types.push(enumDeclaration(decl));
@@ -127,7 +127,7 @@ class ApiModelBuilder {
 			return interfaceDeclaration(tables.interfaces.get(path));
 		if (tables.aliases.exists(path)) {
 			var alias = tables.aliases.get(path);
-			return alias.isPrivate ? null : aliasDeclaration(alias);
+			return alias.visibility == AstVisibility.Private ? null : aliasDeclaration(alias);
 		}
 		if (tables.enums.exists(path))
 			return enumDeclaration(tables.enums.get(path));
@@ -170,9 +170,10 @@ class ApiModelBuilder {
 		return callable(fn, semantic.signatures.get(fn.name) ?? fn, name, "function", true, fn.name, new Map());
 
 	function classDeclaration(decl:AstClass):Null<ApiDeclaration> {
-		if (decl.isPrivate || AbstractStatics.abstractOf(decl.name) != null)
+		if (decl.visibility == AstVisibility.Private || AbstractStatics.abstractOf(decl.name) != null)
 			return null;
-		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints,
+			decl.visibility.isInternal()),
 			isExtern = decl.isExtern == true,
 			publicByDefault = isExtern || has(decl.metadata, "publicFields"),
 			members = fields(owner, decl.fields, publicByDefault);
@@ -182,20 +183,23 @@ class ApiModelBuilder {
 	}
 
 	function interfaceDeclaration(decl:AstInterface):ApiDeclaration {
-		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints,
+			decl.visibility.isInternal()),
 			members = fields(owner, decl.fields, true);
 		addMethods(members, owner, decl.methods, true);
 		return declaration(owner, "interface", decl.documentationMetadata, false, members, decl.bases);
 	}
 
 	function aliasDeclaration(decl:AstTypeAlias):ApiDeclaration
-		return declaration(ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
+		return declaration(ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints,
+			decl.visibility.isInternal()),
 			"typedef",
 			decl.metadata,
 			false, [], null, null, decl.type);
 
 	function enumDeclaration(decl:AstEnum):ApiDeclaration {
-		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints,
+			decl.visibility.isInternal()),
 			scope = parametersIn(decl.name, decl.typeParameters),
 			result = ApiTypeEncoder.encode(TInstance(compiler.types.Type.NominalKind.Enum, decl.name,
 				[for (parameter in decl.typeParameters) scope.get(parameter)])),
@@ -221,7 +225,8 @@ class ApiModelBuilder {
 	}
 
 	function abstractDeclaration(decl:AstAbstract):ApiDeclaration {
-		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints,
+			decl.visibility.isInternal()),
 			isExtern = decl.isExtern == true,
 			publicByDefault = isExtern || has(decl.metadata, "publicFields"),
 			members = fields(owner, decl.fields, publicByDefault),
@@ -239,7 +244,7 @@ class ApiModelBuilder {
 				arguments: [for (name in decl.typeParameters) ApiTypeEncoder.encode(TTypeParameter(decl.name, name))]
 			};
 			for (value in decl.values)
-				if (value.isPublic != false)
+				if (value.visibility != AstVisibility.Private)
 					members.push({
 						source: source(value.span, value.metadata),
 						kind: "enumValue",
@@ -288,14 +293,14 @@ class ApiModelBuilder {
 	function fields(owner:ApiOwner, fields:Array<AstField>, publicByDefault:Bool):Array<ApiMember> {
 		var members:Array<ApiMember> = [], scope = parametersIn(owner.name, owner.typeParameters);
 		for (field in fields) {
-			if (!(field.isPublic ?? publicByDefault))
+			if (!field.visibility.reachable(publicByDefault))
 				continue;
 			var span = field.declarationSpan ?? field.span,
 				type = typeOf(field.type, () -> semantic.declarations.types.fieldType(owner.name, field, scope), span,
 					scope);
 			if (field.readAccess == null && field.writeAccess == null)
 				members.push({
-					source: source(span, field.metadata, field.isInternal),
+					source: source(span, field.metadata, field.visibility.isInternal()),
 					kind: "field",
 					name: field.name,
 					isStatic: field.isStatic,
@@ -305,7 +310,7 @@ class ApiModelBuilder {
 				});
 			else
 				members.push({
-					source: source(span, field.metadata, field.isInternal),
+					source: source(span, field.metadata, field.visibility.isInternal()),
 					kind: "property",
 					name: field.name,
 					isStatic: field.isStatic,
@@ -322,10 +327,11 @@ class ApiModelBuilder {
 			isAbstract:Bool = false):Void {
 		var declared = semantic.signaturesByOwner.get(owner.name);
 		for (method in methods) {
-			if (method.sourcePrivate == true || has(method.metadata, InterfaceFieldAccessors.GENERATED))
+			if (has(method.metadata, InterfaceFieldAccessors.GENERATED))
 				continue;
-			var isPublic = method.isPublic ?? (method.isOverride == true
-				? inheritedVisibility(owner.name, method.name) : publicByDefault);
+			// An interface's method written private is public to its implementers but left out of the API.
+			var isPublic = method.visibility == AstVisibility.Unwritten ? (method.isOverride == true
+				? inheritedVisibility(owner.name, method.name) : publicByDefault) : method.visibility.reachable(false);
 			var operatorText = isAbstract && method.isStatic ? annotationArguments(method.metadata, "op") : [],
 				conversion = isAbstract && method.isStatic && has(method.metadata, "from") ? "from"
 					: isAbstract && has(method.metadata, "to") ? "to" : null;
@@ -364,7 +370,7 @@ class ApiModelBuilder {
 			scope.set(parameter, TTypeParameter(qualified, parameter));
 		var types = semantic.declarations.types,
 			argumentTypes = types.argumentTypes(signature, scope);
-		return {source: source(method.span, method.metadata, method.isInternal),
+		return {source: source(method.span, method.metadata, method.visibility.isInternal()),
 			kind: kind,
 			name: name,
 			isStatic: isStatic,
@@ -476,8 +482,8 @@ class ApiModelBuilder {
 				};
 			decl = semantic.declarations.classes.get(path);
 			var methods = semantic.signaturesByOwner.get(path), method = methods == null ? null : methods.get(name);
-			if (method != null && (method.isPublic != null || method.isOverride != true))
-				return method.isPublic == true;
+			if (method != null && (method.visibility != AstVisibility.Unwritten || method.isOverride != true))
+				return method.visibility.reachable(false);
 		}
 		return true;
 	}

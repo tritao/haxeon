@@ -24,11 +24,11 @@ typedef DeclaredMember = {
 
 	final name:String;
 
-	/** Its visibility as written: true for `public`, false for `private`, null with no modifier. */
-	final isPublic:Null<Bool>;
-
-	/** Written `internal`: public to its own package's code only (`InternalAccess`). */
-	final isInternal:Bool;
+	/**
+	 * Its visibility as written; an override written without a modifier has the visibility of what it overrides, and an
+	 * interface's method is public whatever it is written.
+	 */
+	final visibility:AstVisibility;
 
 	/** Where it is declared: a module-level variable is visible to its whole module, which is its source file. */
 	final declaredIn:SourceSpan;
@@ -138,8 +138,7 @@ class MemberAccess {
 		// An abstract's static is reached as the abstract's member, where its storage class keeps it.
 		owner: AbstractStatics.abstractOf(declaration.name) ?? declaration.name,
 			name: field.name,
-			isPublic: field.isPublic,
-			isInternal: field.isInternal == true,
+			visibility: field.visibility,
 			declaredIn: field.span,
 			ownerMetadata: declaration.metadata,
 			metadata: field.metadata}, span);
@@ -150,8 +149,7 @@ class MemberAccess {
 		require(session, {
 			owner: declaration.name,
 			name: field.name,
-			isPublic: field.isPublic,
-			isInternal: field.isInternal == true,
+			visibility: field.visibility,
 			declaredIn: field.span,
 			ownerMetadata: declaration.metadata == null ? [] : declaration.metadata,
 			metadata: field.metadata
@@ -163,8 +161,7 @@ class MemberAccess {
 		require(session, {
 			owner: declaration.name,
 			name: field.name,
-			isPublic: field.isPublic,
-			isInternal: field.isInternal == true,
+			visibility: field.visibility,
 			declaredIn: field.span,
 			ownerMetadata: [],
 			metadata: field.metadata
@@ -197,7 +194,7 @@ class MemberAccess {
 	static function internalName(session:TypingSession, member:DeclaredMember):Null<String> {
 		if (session.declarations.isInternalType(member.owner))
 			return member.owner;
-		if (!member.isInternal)
+		if (!member.visibility.isInternal())
 			return null;
 		var storage = ModuleFields.storageName("");
 		return StringTools.endsWith(member.owner, storage) ? member.owner.substr(0,
@@ -214,9 +211,9 @@ class MemberAccess {
 		return declared == null ? null : {
 			owner: owner,
 			name: name,
-			isPublic: declared.isPublic == null && declared.isOverride == true ? overriddenVisibility(session, owner,
-				name) : declared.isPublic,
-			isInternal: declared.isInternal == true,
+			visibility: session.interfaceDecls.exists(owner) ? AstVisibility.Public : declared.visibility
+				== AstVisibility.Unwritten
+				&& declared.isOverride == true ? overriddenVisibility(session, owner, name) : declared.visibility,
 			declaredIn: declared.span,
 			ownerMetadata: ownerMetadata(session, owner),
 			metadata: declared.metadata
@@ -250,8 +247,8 @@ class MemberAccess {
 	 * class, or a class with `@:publicFields`; a class's or abstract's member is private otherwise.
 	 */
 	static function isPublic(session:TypingSession, member:DeclaredMember):Bool {
-		if (member.isPublic != null)
-			return member.isPublic;
+		if (member.visibility != AstVisibility.Unwritten)
+			return member.visibility.reachable(false);
 		if (session.interfaceDecls.exists(member.owner))
 			return true;
 		var classDecl = session.classDecls.get(member.owner);
@@ -270,19 +267,19 @@ class MemberAccess {
 	 * An override written without a modifier has the visibility of the method it overrides, as in Haxe. One that overrides
 	 * nothing is a broken declaration, which the inherited-method check reports (`E1020`); it is not reported again here.
 	 */
-	static function overriddenVisibility(session:TypingSession, owner:String, name:String):Bool {
+	static function overriddenVisibility(session:TypingSession, owner:String, name:String):AstVisibility {
 		var classDecl = session.classDecls.get(owner);
 		var current = classDecl == null || classDecl.base == null ? null : baseName(classDecl.base),
 			seen:Map<String, Bool> = [];
 		while (current != null && !seen.exists(current)) {
 			seen.set(current, true);
 			var declared = member(session, session.signaturesByOwner, current, name);
-			if (declared != null && (declared.isPublic != null || declared.isOverride != true))
-				return declared.isPublic == true;
+			if (declared != null && (declared.visibility != AstVisibility.Unwritten || declared.isOverride != true))
+				return declared.visibility == AstVisibility.Unwritten ? AstVisibility.Private : declared.visibility;
 			var base = session.classDecls.get(current);
 			current = base == null || base.base == null ? null : baseName(base.base);
 		}
-		return true;
+		return AstVisibility.Public;
 	}
 
 	/**

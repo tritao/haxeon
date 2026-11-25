@@ -272,13 +272,13 @@ class DeclarationIndex {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);
 			aliases.set(alias.name, alias);
 			aliasSpans.set(alias.name, alias.span);
-			if (alias.isInternal == true)
+			if (alias.visibility.isInternal())
 				internalTypes.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
 			declareType(decl.name, DeclarationKind.Enum, decl.span);
 			enums.set(decl.name, decl);
-			if (decl.isInternal == true)
+			if (decl.visibility.isInternal())
 				internalTypes.set(decl.name, decl.span);
 			for (enumCase in decl.cases)
 				declare(DeclarationKind.EnumCase, decl.name + "." + enumCase.name, enumCase.span);
@@ -286,7 +286,7 @@ class DeclarationIndex {
 		for (decl in program.abstracts) {
 			declareType(decl.name, DeclarationKind.Abstract, decl.span);
 			abstracts.set(decl.name, decl);
-			if (decl.isInternal == true)
+			if (decl.visibility.isInternal())
 				internalTypes.set(decl.name, decl.span);
 			if (decl.values != null) {
 				enumAbstracts.set(decl.name, decl);
@@ -300,7 +300,7 @@ class DeclarationIndex {
 		for (decl in program.interfaces) {
 			declareType(decl.name, DeclarationKind.Interface, decl.span);
 			interfaces.set(decl.name, decl);
-			if (decl.isInternal == true)
+			if (decl.visibility.isInternal())
 				internalTypes.set(decl.name, decl.span);
 			for (field in decl.fields)
 				declare(DeclarationKind.Member, decl.name + "." + field.name, field.span);
@@ -310,7 +310,7 @@ class DeclarationIndex {
 		for (decl in program.classes) {
 			declareType(decl.name, DeclarationKind.Class, decl.span);
 			classes.set(decl.name, decl);
-			if (decl.isInternal == true)
+			if (decl.visibility.isInternal())
 				internalTypes.set(decl.name, decl.span);
 			for (field in decl.fields)
 				declare(DeclarationKind.Member, decl.name + "." + field.name, field.span);
@@ -1248,7 +1248,7 @@ class DeclarationIndex {
 							&& !compatibleInheritedSignature(method, original, own, inherited, member))
 							fail('Method "$member" has an incompatible signature with inherited "$ancestor"',
 								method.span);
-						if (method.isPublic == false && original.isPublic == true)
+						if (method.visibility == AstVisibility.Private && original.visibility.reachable(false))
 							fail('Method "$member" cannot reduce the public visibility of inherited "$ancestor"',
 								method.span);
 					}

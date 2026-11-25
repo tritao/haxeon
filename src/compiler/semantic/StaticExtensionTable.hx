@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.syntax.Ast.AstVisibility;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.DiagnosticCode;
@@ -210,7 +211,8 @@ class StaticExtensionTable {
 	static function ownerKey(name:String, statics:Array<AstFunction>, ast:AstProgram):String
 		return name + "{" + [
 			for (fn in statics)
-				(fn.isPublic == true ? "public " : "") + SemanticSignature.parsedFunction(fn, ast.aliases)
+				(fn.visibility == AstVisibility.Unwritten ? "" : fn.visibility.modifier() + " ")
+				+ SemanticSignature.parsedFunction(fn, ast.aliases)
 				+ (fn.metadata == null ? "" : [for (entry in fn.metadata) "@" + entry.name].join(""))
 		].join(",") + "}";
 
@@ -226,7 +228,7 @@ class StaticExtensionTable {
 			if (declaration.name.indexOf("$") < 0)
 				result.push({
 					name: declaration.name,
-					isPrivate: declaration.isPrivate,
+					isPrivate: declaration.visibility == AstVisibility.Private,
 					metadata: declaration.metadata,
 					start: declaration.span.start,
 					kind: ClassStatics,
@@ -254,7 +256,7 @@ class StaticExtensionTable {
 		for (declaration in ast.aliases)
 			result.push({
 				name: declaration.name,
-				isPrivate: declaration.isPrivate,
+				isPrivate: declaration.visibility == AstVisibility.Private,
 				metadata: declaration.metadata,
 				start: declaration.span.start,
 				kind: null,

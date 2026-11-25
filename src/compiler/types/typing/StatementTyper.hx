@@ -5,6 +5,7 @@ import compiler.semantic.LambdaName;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstLocalGenerics;
+import compiler.syntax.Ast.AstVisibility;
 import compiler.types.NominalInheritance;
 import compiler.types.analysis.BindingWalker;
 
@@ -187,7 +188,9 @@ class StatementTyper {
 				default: InferredType;
 			},
 				signature:AstFunction = {
-					name: name, isStatic: false, isInline: isInline, arguments: arguments, result: resultSyntax,
+					name: name, visibility: AstVisibility.Unwritten, isStatic: false, isInline: isInline,
+					arguments: arguments,
+					result: resultSyntax,
 					statements: body,
 					typeParameters: generic.parameters, typeConstraints: generic.constraints, span: span
 				},

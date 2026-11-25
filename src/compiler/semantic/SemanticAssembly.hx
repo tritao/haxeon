@@ -436,8 +436,7 @@ class SemanticAssembly {
 							generatedByModule);
 					canonicalFields.push({
 						name: field.name,
-						isPublic: field.isPublic,
-						isInternal: field.isInternal,
+						visibility: field.visibility,
 						metadata: ModuleCanonicalizer.canonicalMetadata(field.metadata, name, entryModule, locals,
 							classAliases),
 						// An unannotated field's type is its initializer's, typed on demand (`DeclarationTypeTable`).
@@ -459,8 +458,7 @@ class SemanticAssembly {
 					isExtern: classDecl.isExtern,
 					typeParameters: classDecl.typeParameters,
 					typeConstraints: classDecl.typeConstraints,
-					isPrivate: classDecl.isPrivate,
-					isInternal: classDecl.isInternal,
+					visibility: classDecl.visibility,
 					metadata: ModuleCanonicalizer.canonicalMetadata(classDecl.metadata, name, entryModule, locals,
 						classAliases),
 					base: canonicalBase,
@@ -1110,6 +1108,7 @@ class SemanticAssembly {
 		var methods = classDecl.methods.copy();
 		methods.push({
 			name: "registerTests",
+			visibility: AstVisibility.Unwritten,
 			isStatic: false,
 			isExtern: false,
 			metadata: [],

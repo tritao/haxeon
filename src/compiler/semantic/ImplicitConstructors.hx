@@ -6,6 +6,7 @@ import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.AstVisibility;
 
 /** The constructor a class exposes: its argument list, and the type parameters those arguments are written in. */
 typedef ProvidedConstructor = {
@@ -123,7 +124,7 @@ class ImplicitConstructors {
 		return {
 			name: "new",
 			isStatic: false,
-			isPublic: true,
+			visibility: AstVisibility.Public,
 			metadata: [],
 			arguments: arguments,
 			result: VoidType,
@@ -139,8 +140,7 @@ class ImplicitConstructors {
 			isExtern: declaration.isExtern,
 			typeParameters: declaration.typeParameters,
 			typeConstraints: declaration.typeConstraints,
-			isPrivate: declaration.isPrivate,
-			isInternal: declaration.isInternal,
+			visibility: declaration.visibility,
 			metadata: declaration.metadata,
 			base: declaration.base,
 			interfaces: declaration.interfaces,

@@ -1,6 +1,7 @@
 package compiler.semantic;
 
 import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstVisibility;
 
 /**
  * Module-level `var` and `final` declarations are members of their module, as its functions are: `x` in the module's code,
@@ -36,7 +37,7 @@ class ModuleFields {
 				{
 					name: className(moduleName),
 					typeParameters: [],
-					isPrivate: false,
+					visibility: AstVisibility.Unwritten,
 					metadata: [],
 					base: null,
 					interfaces: [],

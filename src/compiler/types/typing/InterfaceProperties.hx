@@ -158,7 +158,7 @@ class InterfaceProperties {
 	 * has the rule; a class's field without one is private).
 	 */
 	static function isPublic(field:AstField):Bool
-		return field.isPublic == true;
+		return field.visibility.reachable(false);
 
 	/** Haxe's `unify_kind` of two variables: each side of the class's unifies with the interface's (`unify_access`). */
 	static function unifiesKind(actual:AstField, expected:AstField):Bool {

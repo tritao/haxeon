@@ -74,14 +74,43 @@ enum AstFieldAccess {
 	DynamicAccess;
 }
 
+/**
+ * A declaration's access level as its source writes it. `Unwritten` leaves it to Haxe's rules for its kind: a module's types
+ * and its variables and functions are public, a class's or an abstract's members private (public with `@:publicFields` or
+ * `extern`), an interface's members public, and an override has the visibility of what it overrides. An interface's member
+ * is public whatever it is written; one written `private` is left out of the API.
+ */
+enum abstract AstVisibility(Int) {
+	var Unwritten;
+	var Public;
+	var Private;
+
+	/** `internal`: public to the code of the package that declares it, and to no other package's. */
+	var Internal;
+
+	/** Whether code outside the declaration's own scope may reach it (public or internal), `byDefault` when unwritten. */
+	public inline function reachable(byDefault:Bool):Bool
+		return abstract == Unwritten ? byDefault : abstract != Private;
+
+	/** Whether it is written `internal`. */
+	public inline function isInternal():Bool
+		return abstract == Internal;
+
+	/** Its modifier as source writes it, "" when unwritten: what a declaration's printed signature shows. */
+	public function modifier():String
+		return switch abstract {
+			case Public: "public";
+			case Private: "private";
+			case Internal: "internal";
+			case _: "";
+		};
+}
+
 /** Parsed class field before annotation inference and accessor validation. */
 typedef AstField = {
 	final name:String;
-	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
-	final ?isInternal:Bool;
-
-	/** Source visibility retained for checked field references such as key paths. */
-	final ?isPublic:Bool;
+	/** Its access level as written. */
+	final visibility:AstVisibility;
 	final metadata:Array<AstMetadata>;
 	/**
 	 * The field's annotation, or null when the source gives it none: its type is then its initializer's, which the typer gives
@@ -109,9 +138,8 @@ typedef AstField = {
 /** Parsed class declaration and its unresolved inheritance relationships. */
 typedef AstClass = {
 	final name:String;
-	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
-	final ?isInternal:Bool;
-
+	/** Its access level as written. */
+	final visibility:AstVisibility;
 
 	/** Set when this declaration used the `struct` keyword. */
 	final ?isStruct:Bool;
@@ -119,7 +147,6 @@ typedef AstClass = {
 	final ?isExtern:Bool;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
-	final isPrivate:Bool;
 	final metadata:Array<AstMetadata>;
 	final base:Null<AstType>;
 	final interfaces:Array<AstType>;
@@ -139,8 +166,8 @@ typedef AstMetadata = {
 typedef AstInterface = {
 	final ?documentationMetadata:Array<AstMetadata>;
 	final name:String;
-	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
-	final ?isInternal:Bool;
+	/** Its access level as written. */
+	final visibility:AstVisibility;
 
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
@@ -160,14 +187,13 @@ typedef AstInterface = {
 /** Source typedef that the declaration index expands during type resolution. */
 typedef AstTypeAlias = {
 	final name:String;
-	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
-	final ?isInternal:Bool;
+	/** Its access level as written. */
+	final visibility:AstVisibility;
 
 	final metadata:Array<AstMetadata>;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final type:AstType;
-	final isPrivate:Bool;
 	final span:SourceSpan;
 }
 
@@ -190,8 +216,8 @@ typedef AstEnumCase = {
 /** Parsed algebraic enum declaration. */
 typedef AstEnum = {
 	final name:String;
-	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
-	final ?isInternal:Bool;
+	/** Its access level as written. */
+	final visibility:AstVisibility;
 
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
@@ -204,7 +230,7 @@ typedef AstEnum = {
 
 /** One named constant declared by an enum abstract. */
 typedef AstEnumAbstractValue = {
-	final ?isPublic:Bool;
+	final visibility:AstVisibility;
 	final name:String;
 	final metadata:Array<AstMetadata>;
 	final value:AstExpression;
@@ -217,8 +243,8 @@ typedef AstEnumAbstractValue = {
  */
 typedef AstAbstract = {
 	final name:String;
-	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
-	final ?isInternal:Bool;
+	/** Its access level as written. */
+	final visibility:AstVisibility;
 
 	final ?isExtern:Bool;
 	final ?metadata:Array<AstMetadata>;
@@ -463,20 +489,14 @@ typedef AstSwitchCase = {
 
 /** Parsed function or method declaration with an unresolved signature and body. */
 typedef AstFunction = {
-	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
-	final ?isInternal:Bool;
+	/** Its access level as written. */
+	final visibility:AstVisibility;
 
 	/** Explicit override modifier, checked against inherited instance methods. */
 	final ?isOverride:Bool;
 	final ?isDynamic:Bool;
 	final name:String;
 	final isStatic:Bool;
-
-	/** Explicit method visibility; absent visibility is inherited when overriding. */
-	final ?isPublic:Bool;
-
-	/** A written private interface method has public typing semantics but is hidden from the API. */
-	final ?sourcePrivate:Bool;
 
 	final ?isExtern:Bool;
 

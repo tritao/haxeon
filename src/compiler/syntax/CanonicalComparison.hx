@@ -852,7 +852,7 @@ class CanonicalComparison {
 	function astField(left:AstField, right:AstField):Bool {
 		if (!(left.name == right.name))
 			return false;
-		if (!(left.isPublic == right.isPublic))
+		if (!(left.visibility == right.visibility))
 			return false;
 		if (!(array(left.metadata, right.metadata, astMetadata)))
 			return false;
@@ -888,7 +888,7 @@ class CanonicalComparison {
 			return false;
 		if (!(optionalArray(left.typeConstraints, right.typeConstraints, astTypeConstraint)))
 			return false;
-		if (!(left.isPrivate == right.isPrivate))
+		if (!(left.visibility == right.visibility))
 			return false;
 		if (!(array(left.metadata, right.metadata, astMetadata)))
 			return false;
@@ -918,6 +918,8 @@ class CanonicalComparison {
 	function astInterface(left:AstInterface, right:AstInterface):Bool {
 		if (!(left.name == right.name))
 			return false;
+		if (!(left.visibility == right.visibility))
+			return false;
 		if (!(sameValues(left.typeParameters, right.typeParameters)))
 			return false;
 		if (!(optionalArray(left.typeConstraints, right.typeConstraints, astTypeConstraint)))
@@ -944,7 +946,7 @@ class CanonicalComparison {
 			return false;
 		if (!(astType(left.type, right.type)))
 			return false;
-		if (!(left.isPrivate == right.isPrivate))
+		if (!(left.visibility == right.visibility))
 			return false;
 		if (!(span(left.span, right.span)))
 			return false;
@@ -978,6 +980,8 @@ class CanonicalComparison {
 	function astEnum(left:AstEnum, right:AstEnum):Bool {
 		if (!(left.name == right.name))
 			return false;
+		if (!(left.visibility == right.visibility))
+			return false;
 		if (!(sameValues(left.typeParameters, right.typeParameters)))
 			return false;
 		if (!(optionalArray(left.typeConstraints, right.typeConstraints, astTypeConstraint)))
@@ -998,6 +1002,8 @@ class CanonicalComparison {
 	function astEnumAbstractValue(left:AstEnumAbstractValue, right:AstEnumAbstractValue):Bool {
 		if (!(left.name == right.name))
 			return false;
+		if (!(left.visibility == right.visibility))
+			return false;
 		if (!(array(left.metadata, right.metadata, astMetadata)))
 			return false;
 		if (!(astExpression(left.value, right.value)))
@@ -1009,6 +1015,8 @@ class CanonicalComparison {
 
 	function astAbstract(left:AstAbstract, right:AstAbstract):Bool {
 		if (!(left.name == right.name))
+			return false;
+		if (!(left.visibility == right.visibility))
 			return false;
 		if (!(left.isExtern == right.isExtern))
 			return false;
@@ -1102,7 +1110,7 @@ class CanonicalComparison {
 			return false;
 		if (!(left.isStatic == right.isStatic))
 			return false;
-		if (!(left.isPublic == right.isPublic))
+		if (!(left.visibility == right.visibility))
 			return false;
 		if (!(left.isExtern == right.isExtern))
 			return false;

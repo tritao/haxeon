@@ -341,7 +341,8 @@ class DeclarationPrints {
 	 * (`FactAspect.Signature`), so a reader that names one method does not depend on the others.
 	 */
 	static function sameMethodKind(left:AstFunction, right:AstFunction):Bool
-		return left.isStatic == right.isStatic && left.isPublic == right.isPublic && left.isOverride == right.isOverride
+		return left.isStatic == right.isStatic && left.visibility == right.visibility
+			&& left.isOverride == right.isOverride
 			&& left.isDynamic == right.isDynamic && left.isExtern == right.isExtern;
 
 	/** Whether `left` and `right` hold the same members by name, each the same by `same`, in whatever order. */

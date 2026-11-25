@@ -5,6 +5,7 @@ import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstTypeAlias;
+import compiler.syntax.Ast.AstVisibility;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 
@@ -164,7 +165,7 @@ class SemanticSignature {
 			+ (fn.isDynamic == true ? " dynamic" : "")
 			+ (fn.isOverride == true ? " override" : "")
 			+ (fn.isInline == true ? " inline" : "")
-			+ (fn.isPublic == null ? "" : fn.isPublic ? " public" : " private")
+			+ (fn.visibility == AstVisibility.Unwritten ? "" : " " + fn.visibility.modifier())
 			+ (typeParameters == null
 			|| typeParameters.length == 0 ? ""
 			: '<${[for (parameter in typeParameters) parameter + parsedConstraint(fn, parameter, definitions)].join(",")}>')

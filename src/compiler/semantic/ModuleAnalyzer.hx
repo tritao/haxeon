@@ -11,6 +11,7 @@ import compiler.runtime.NativeRegistry;
 import compiler.runtime.PlatformAbi;
 import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstVisibility;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
@@ -84,7 +85,8 @@ class ModuleAnalyzer {
 				if (state.source.path == item.diagnostic.span.file.path)
 					continue;
 				var name = item.name;
-				var isClass = Lambda.exists(ast.classes, decl -> decl.name == name && !decl.isPrivate);
+				var isClass = Lambda.exists(ast.classes,
+					decl -> decl.name == name && decl.visibility != AstVisibility.Private);
 				var isInterface = Lambda.exists(ast.interfaces, decl -> decl.name == name);
 				var isAbstract = Lambda.exists(ast.abstracts, decl -> decl.name == name);
 				var type = switch item.kind {
@@ -93,12 +95,14 @@ class ModuleAnalyzer {
 					case WantedInterface: isInterface;
 					case WantedBaseClass: isClass;
 					case WantedType, WantedVariable, WantedModule: isClass || isInterface || isAbstract
-						|| Lambda.exists(ast.aliases, decl -> decl.name == name && !decl.isPrivate)
+						|| Lambda.exists(ast.aliases,
+						decl -> decl.name == name && decl.visibility != AstVisibility.Private)
 						|| Lambda.exists(ast.enums, decl -> decl.name == name);
 				};
 				if (type || ((item.kind == UnresolvedNameKind.WantedVariable
 					|| item.kind == UnresolvedNameKind.WantedFunction)
-					&& Lambda.exists(ast.functions, decl -> decl.name == name && decl.isPublic != false))) {
+					&& Lambda.exists(ast.functions,
+					decl -> decl.name == name && decl.visibility != AstVisibility.Private))) {
 					var path = ModuleCanonicalizer.sourceDeclarationPath(state.name, name);
 					if (path != name && item.paths.indexOf(path) < 0)
 						item.paths.push(path);
@@ -616,7 +620,7 @@ class ModuleAnalyzer {
 					'Type name $path is redefined from module $moduleName', span));
 		}
 		for (declaration in ast.aliases)
-			check(declaration.name, declaration.isPrivate, declaration.span);
+			check(declaration.name, declaration.visibility == AstVisibility.Private, declaration.span);
 		for (declaration in ast.enums)
 			check(declaration.name, false, declaration.span);
 		for (declaration in ast.abstracts)
@@ -624,7 +628,7 @@ class ModuleAnalyzer {
 		for (declaration in ast.interfaces)
 			check(declaration.name, false, declaration.span);
 		for (declaration in ast.classes)
-			check(declaration.name, declaration.isPrivate, declaration.span);
+			check(declaration.name, declaration.visibility == AstVisibility.Private, declaration.span);
 	}
 
 	function indexDeclarations(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Void {

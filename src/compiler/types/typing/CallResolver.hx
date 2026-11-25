@@ -1730,7 +1730,7 @@ class CallResolver {
 		if (calledMethod == null && hasSignature) {
 			// A module-level function: written `internal`, it is called from its own package only.
 			var called = session.signatures.required(name);
-			if (called.isInternal == true)
+			if (called.visibility.isInternal())
 				compiler.types.InternalAccess.require(session.declarations.sourcePackages, name, called.span, span);
 		}
 		if (hasSignature && session.signatures.required(name).isDynamic == true) {
