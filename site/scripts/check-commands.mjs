@@ -106,7 +106,8 @@ try {
 
   const showcaseRequests = [];
   page.on('request', request => {
-    if (new URL(request.url()).pathname.startsWith('/ui/showcase/')) {
+    // The page may ask whether the Showcase is built (a HEAD request); only fetching it counts as loading.
+    if (request.method() !== 'HEAD' && new URL(request.url()).pathname.startsWith('/ui/showcase/')) {
       showcaseRequests.push(request.url());
     }
   });

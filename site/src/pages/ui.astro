@@ -4,6 +4,7 @@ import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
 import FeatureList, { type Feature } from '../components/FeatureList.astro';
 import LayerDiagram from '../components/LayerDiagram.astro';
+import LiveEmbed from '../components/LiveEmbed.astro';
 import PlatformTable from '../components/PlatformTable.astro';
 import counter from '../../../docs/guides/examples/01-first-app/my_app/src/Main.hx?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
@@ -126,13 +127,20 @@ const tools: Feature[] = [
           <h2>Try the Showcase</h2>
           <p class="lede">Every control and its states, text in many scripts, graphics and 3D, with an inspector for each view.</p>
         </div>
-        <div class="live-showcase">
-          <img class="showcase-light" src="/ui/showcase-light.png" width="1280" height="900" loading="lazy" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
-          <img class="showcase-dark" src="/ui/showcase-dark.png" width="1280" height="900" loading="lazy" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
-          <button class="btn primary" type="button" data-showcase-src="/ui/showcase/?embed" data-pending>Start the live Showcase</button>
+        <LiveEmbed
+          src="/ui/showcase/?embed"
+          title="UI Showcase"
+          name="the Showcase"
+          button="Start the live Showcase"
+          protocol="showcase"
+          aspect="3 / 2"
+          minHeight="600px"
+          minWidth={700}
+        >
+          <img slot="poster" class="showcase-light" src="/ui/showcase-light.png" width="1280" height="900" loading="lazy" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
+          <img slot="poster" class="showcase-dark" src="/ui/showcase-dark.png" width="1280" height="900" loading="lazy" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
           <a href="/ui/showcase/" target="_blank" rel="noopener">Open it in its own tab</a>
-          <p role="status" hidden></p>
-        </div>
+        </LiveEmbed>
       </div>
     </section>
 
@@ -152,67 +160,8 @@ const tools: Feature[] = [
 <style>
   .hero { --hero-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
   .sample { display: grid; gap: var(--hx-space-4); justify-items: start; }
-  figure { margin: 0; }
-  img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
   .window img { width: auto; max-width: 100%; }
-  figcaption { margin-top: var(--hx-space-2); color: var(--sl-color-gray-3); }
   .showcase-light, :global([data-theme='light']) .showcase-dark { display: none; }
   :global([data-theme='light']) .showcase-light { display: block; }
 </style>
 
-<script>
-  const start = document.querySelector<HTMLButtonElement>('[data-showcase-src]');
-  if (start) {
-    delete start.dataset.pending;
-    start.addEventListener('click', () => {
-      const frame = document.createElement('iframe');
-      frame.title = 'UI Showcase';
-      frame.src = start.dataset.showcaseSrc!;
-      const wrapper = start.parentElement!;
-      const status = wrapper.querySelector('[role="status"]') as HTMLElement;
-      status.hidden = false;
-      status.textContent = 'Loading the Showcase…';
-      start.disabled = true;
-
-      // Keep the catalog and workspace in view at narrow widths.
-      const resize = new ResizeObserver(([entry]) => {
-        const available = entry.contentRect.width;
-        const width = Math.max(700, available);
-        frame.style.width = `${width}px`;
-        frame.style.zoom = String(available / width);
-      });
-      resize.observe(wrapper);
-
-      function receive(event: MessageEvent) {
-        if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
-        if (event.data === 'haxeon-showcase-ready') {
-          wrapper.dataset.running = '';
-          status.hidden = true;
-          start.hidden = true;
-        } else if (event.data === 'haxeon-showcase-failed') {
-          delete wrapper.dataset.running;
-          resize.disconnect();
-          frame.remove();
-          status.hidden = false;
-          status.textContent = 'The Showcase could not load.';
-          start.hidden = false;
-          start.disabled = false;
-          window.removeEventListener('message', receive);
-        }
-      }
-
-      window.addEventListener('message', receive);
-      wrapper.prepend(frame);
-    });
-  }
-</script>
-
-<style>
-  .live-showcase { position: relative; display: grid; justify-items: start; gap: 0.75rem; margin-bottom: 2rem; }
-  .live-showcase [hidden] { display: none; }
-  .live-showcase [data-pending] { visibility: hidden; }
-  .live-showcase img, .live-showcase :global(iframe) { width: 100%; height: auto; }
-  .live-showcase :global(iframe) { aspect-ratio: 3 / 2; border: 0; min-height: 600px; }
-  .live-showcase:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
-  .live-showcase[data-running] img { display: none; }
-</style>

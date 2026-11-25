@@ -1,12 +1,18 @@
 /**
- * Cuts one method out of a class's source, from its declaration to the brace that closes it, one indent level removed.
- * A renamed or reshaped method fails the build instead of leaving stale code on a page.
+ * Cuts one class member out of its source, from the line that starts with `head` (after one indent) to the line that
+ * closes it at the same indent. A renamed or reshaped member fails the build instead of leaving stale code on a page.
  */
+export function memberSource(source: string, head: RegExp, file: string): string {
+  const found = source.match(new RegExp(`^\\t${head.source}[\\s\\S]*?^\\t\\};?$`, 'm'));
+  if (!found) throw new Error(`Missing ${head} in ${file}`);
+  return found[0];
+}
+
+/** One method, without its class's indent. */
 export function methodSource(source: string, name: string, file: string): string {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const found = source.match(new RegExp(`^\\t(?:(?:public|private|static|override|inline) )*function ${escaped}\\([\\s\\S]*?^\\t\\}`, 'm'));
-  if (!found) throw new Error(`Missing the method ${name} in ${file}`);
-  return found[0].replace(/^\t/gm, '');
+  return memberSource(source, new RegExp(`(?:(?:public|private|static|override|inline) )*function ${escaped}\\(`), file)
+    .replace(/^\t/gm, '');
 }
 
 export interface ListedPage {

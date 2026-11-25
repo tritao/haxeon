@@ -3,15 +3,21 @@ import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
 import LayerDiagram from '../components/LayerDiagram.astro';
+import LiveEmbed from '../components/LiveEmbed.astro';
 import StatusBadge, { type Status } from '../components/StatusBadge.astro';
 import triangleScene from '../../../docs/guides/examples/06-gpu-basics/triangle/src/Scene.hx?raw';
 import triangleShader from '../../../docs/guides/examples/06-gpu-basics/triangle/src/shaders/Triangle.glsl?raw';
 import particlesShader from '../../../docs/guides/examples/06-gpu-basics/particles/src/shaders/Particles.glsl?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
-import { methodSource } from '../excerpts';
+import { memberSource, methodSource } from '../excerpts';
 
+// Where the page links and quotes from.
 const gpu = (file: string) => repositorySource('packages/gpu/src/haxeon/gpu/' + file + '.hx');
+const guide = docsUrl('guides/06-gpu-basics.md');
 const circuit = 'packages/gpu/examples/circuit-run/';
+const triangle = 'docs/guides/examples/06-gpu-basics/triangle/';
+const particles = 'docs/guides/examples/06-gpu-basics/particles/';
+
 const backends: { platform: string; api: string; status: Status; compute: string; timestamps: string }[] = [
   { platform: 'Linux', api: 'OpenGL 4.1 core', status: 'Supported', compute: 'GL 4.3+ drivers', timestamps: 'Yes' },
   { platform: 'Web', api: 'WebGL2', status: 'Supported', compute: 'No', timestamps: 'No' },
@@ -21,9 +27,7 @@ const backends: { platform: string; api: string; status: Status; compute: string
   { platform: 'Linux, Windows', api: 'Vulkan', status: 'Planned', compute: '–', timestamps: '–' },
 ];
 const available = backends.filter(({ status }) => status !== 'Planned');
-const triangle = 'docs/guides/examples/06-gpu-basics/triangle/';
-const guide = docsUrl('guides/06-gpu-basics.md');
-const particles = 'docs/guides/examples/06-gpu-basics/particles/';
+
 const ready = methodSource(triangleScene, 'new', triangle + 'src/Scene.hx');
 const frame = methodSource(triangleScene, 'draw', triangle + 'src/Scene.hx');
 const computeStage = particlesShader.match(/^@cs step_cs\n[\s\S]*?^@end$/m);
@@ -31,42 +35,20 @@ if (!computeStage) throw new Error('Missing the compute stage in the Particles s
 
 // The build generates shaders.Triangle; scripts/build-gpu-modules.sh copies it here before the site builds.
 const generatedModules = import.meta.glob<string>('../../generated/gpu/Triangle.hx', { query: '?raw', import: 'default', eager: true });
-const generatedTriangle = Object.values(generatedModules)[0];
-if (!generatedTriangle) throw new Error('Missing the generated Triangle module: run npm run build:gpu-modules');
-/** Splits an object or array literal's body at its top-level commas. */
-const topLevel = (text: string) => {
-  const parts: string[] = [];
-  let depth = 0, start = 0;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if ('{[('.includes(c)) depth++;
-    else if ('}])'.includes(c)) depth--;
-    else if (c === ',' && depth === 0) { parts.push(text.slice(start, i).trim()); start = i + 1; }
-  }
-  parts.push(text.slice(start).trim());
-  return parts;
-};
-const generatedLine = (pattern: RegExp) => {
-  const line = generatedTriangle.split('\n').find((row) => pattern.test(row));
-  if (!line) throw new Error(`The generated Triangle module has no line matching ${pattern}`);
-  return line.trim();
-};
-const vertexRecord = generatedLine(/^\tpublic static final Vertex = \{/).match(/^public static final Vertex = \{(.*)\};$/)![1];
-const vertexFields = topLevel(vertexRecord).map((field) => {
-  const layout = field.match(/^layout: new VertexLayout\((\d+), \[(.*)\]\)$/);
-  if (!layout) return `\t\t${field}`;
-  const attributes = topLevel(layout[2]).map((attribute) => `\t\t\t${attribute}`).join(',\n');
-  return `\t\tlayout: new VertexLayout(${layout[1]}, [\n${attributes}\n\t\t])`;
-});
-const programName = generatedLine(/^\tpublic static final \w+ = new ShaderProgram\(/).match(/^public static final (\w+)/)![1];
+const generated = Object.values(generatedModules)[0];
+const generatedFile = 'site/generated/gpu/Triangle.hx';
+if (!generated) throw new Error('Missing the generated Triangle module: run npm run build:gpu-modules');
+const program = generated.match(/^\tpublic static final (\w+) = new ShaderProgram\(/m);
+if (!program) throw new Error(`Missing the shader program in ${generatedFile}`);
+const create = generated.match(/^\tpublic static function create\(.*$/m);
+if (!create) throw new Error(`Missing create() in ${generatedFile}`);
+// The vertex record and create() as generated; the program's compiled sources are elided.
 const generatedExcerpt = [
   'class Triangle {',
-  '\tpublic static final Vertex = {',
-  vertexFields.join(',\n'),
-  '\t};',
+  memberSource(generated, /public static final Vertex = \{/, generatedFile),
   '\t// Compiled sources per backend.',
-  `\tpublic static final ${programName} = new ShaderProgram(...);`,
-  `\t${generatedLine(/^\tpublic static function create\(/)}`,
+  `\tpublic static final ${program[1]} = new ShaderProgram(...);`,
+  create[0],
   '}',
 ].join('\n').replace(/\t/g, '  ');
 ---
@@ -92,12 +74,18 @@ const generatedExcerpt = [
             <a class="btn ghost" href={repositorySource(circuit + 'src')}>Circuit Run source</a>
           </div>
         </div>
-        <figure class="circuit-preview">
-          <img src="/gpu/circuit-run.webp" width="540" height="452" alt="Circuit Run: a teal runner and a pink drone in a maze, with a node counter, sound toggle and restart button." />
-          <button class="btn primary" type="button" data-circuit-run data-pending>Play in the browser</button>
-          <p role="status" hidden></p>
+        <LiveEmbed
+          as="figure"
+          src="/gpu/circuit-run/index.html"
+          title="Circuit Run"
+          name="Circuit Run"
+          button="Play in the browser"
+          protocol="app"
+          aspect="540 / 510"
+        >
+          <img slot="poster" src="/gpu/circuit-run.webp" width="540" height="452" alt="Circuit Run: a teal runner and a pink drone in a maze, with a node counter, sound toggle and restart button." />
           <figcaption>Circuit Run draws its maze and actors with one GPU draw per frame, with UI controls on top.</figcaption>
-        </figure>
+        </LiveEmbed>
       </div>
     </section>
 
@@ -107,7 +95,7 @@ const generatedExcerpt = [
           <h2>Draw your first frame</h2>
           <p class="lede">The triangle from the GPU basics guide sets up once when its surface is ready, then submits the same draw each frame.</p>
         </div>
-        <div class="grid two first-frame">
+        <div class="grid two top">
           <CodeCard code={ready} lang="haxe" title="Once · src/Scene.hx" />
           <div class="stack">
             <CodeCard code={frame} lang="haxe" title="Each frame · src/Scene.hx" />
@@ -169,7 +157,7 @@ const generatedExcerpt = [
           <li><span>GLSL 4.1 · GLSL ES 3.0 · HLSL 5 · Metal</span></li>
           <li><span>shaders.Triangle</span></li>
         </ol>
-        <div class="grid two first-frame">
+        <div class="grid two top">
           <CodeCard code={triangleShader} lang="sokol-shdc" title="src/shaders/Triangle.glsl" />
           <div class="stack">
             <CodeCard code={generatedExcerpt} lang="haxe" title="Generated · shaders/Triangle.hx" />
@@ -192,7 +180,7 @@ const generatedExcerpt = [
           <h2>Compute</h2>
           <p class="lede">A compute shader moves 8,192 particles in a storage buffer. The draw reads the same buffer, so nothing goes back to the CPU.</p>
         </div>
-        <div class="grid two first-frame">
+        <div class="grid two top">
           <figure>
             <img src="/gpu/particles.webp" width="640" height="640" loading="lazy" alt="A fountain of small square particles, pink and fast near the spout, green and slow near the top." />
           </figure>
@@ -209,7 +197,7 @@ const generatedExcerpt = [
           <p class="lede">Rendering goes through <a href="https://github.com/floooh/sokol">sokol_gfx</a>, a small C library that targets each platform’s native graphics API. It also has WebGPU and Vulkan backends, which are planned here.</p>
         </div>
         <div class="split">
-          <div class="tables">
+          <div class="backend-table">
             <table aria-label="GPU backends">
               <thead><tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Compute</th><th scope="col">Timestamps</th></tr></thead>
               <tbody>
@@ -267,83 +255,17 @@ const generatedExcerpt = [
   .shader-flow li + li::before { content: '→'; color: var(--sl-color-accent); }
   .shader-flow span { padding: 4px 10px; border: 1px solid var(--sl-color-gray-5); border-radius: var(--hx-radius-s); background: var(--sl-color-bg-sidebar); }
   .nowrap { white-space: nowrap; }
-  .first-frame { align-items: start; }
+  .top { align-items: start; }
   .api-name { display: block; font-weight: 400; font-size: 0.85rem; color: var(--sl-color-gray-3); }
-  .tables { display: grid; gap: var(--hx-space-3); align-content: start; }
-  figure { margin: 0; }
+  .backend-table { display: grid; gap: var(--hx-space-3); align-content: start; }
   .hero { --hero-columns: minmax(0, 1fr) minmax(0, 34rem); }
-  img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
-  figcaption { margin-top: var(--hx-space-2); color: var(--sl-color-gray-3); }
-  li + li { margin-top: var(--hx-space-2); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; }
   .chips li { margin: 0; }
   table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
   th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--sl-color-gray-5); }
   thead th { font: 600 0.75rem var(--sl-font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--sl-color-gray-3); }
-  .circuit-preview { position: relative; display: grid; justify-items: start; gap: var(--hx-space-3); }
-  .circuit-preview [hidden] { display: none; }
-  .circuit-preview [data-pending] { visibility: hidden; }
-  .circuit-preview p { margin: 0; }
-  .circuit-preview :global(iframe) { width: 100%; aspect-ratio: 540 / 510; height: auto; border: 0; border-radius: var(--hx-radius-m); }
-  .circuit-preview:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
-  .circuit-preview[data-running] img { display: none; }
   @media (max-width: 30rem) {
     th, td { padding-inline: 4px; font-size: 0.8rem; }
   }
 </style>
 
-<script>
-  const start = document.querySelector<HTMLButtonElement>('[data-circuit-run]');
-  const url = '/gpu/circuit-run/index.html';
-
-  if (start) {
-    // The button keeps its space while the check runs, so a present build does not shift the hero.
-    fetch(url, { method: 'HEAD' }).then((response) => {
-      start.hidden = !response.ok;
-    }).catch(() => {
-      start.hidden = true;
-    }).finally(() => {
-      delete start.dataset.pending;
-    });
-
-    start.addEventListener('click', () => {
-      const wrapper = start.parentElement!;
-      const status = wrapper.querySelector<HTMLElement>('[role="status"]')!;
-      const frame = document.createElement('iframe');
-      frame.title = 'Circuit Run';
-      frame.src = url;
-      start.disabled = true;
-      status.hidden = false;
-      status.textContent = 'Loading Circuit Run…';
-
-      function failed() {
-        delete wrapper.dataset.running;
-        frame.remove();
-        status.hidden = false;
-        status.textContent = 'Circuit Run could not load.';
-        start.hidden = false;
-        start.disabled = false;
-        window.removeEventListener('message', receive);
-        window.clearTimeout(timeout);
-      }
-
-      function receive(event: MessageEvent) {
-        if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
-        if (event.data?.type !== 'haxeon-app') return;
-        if (event.data.state === 'ready') {
-          window.clearTimeout(timeout);
-          wrapper.dataset.running = '';
-          status.hidden = true;
-          start.hidden = true;
-          frame.contentDocument?.querySelector('canvas')?.focus();
-        } else if (event.data.state === 'failed') {
-          failed();
-        }
-      }
-
-      const timeout = window.setTimeout(failed, 30000);
-      window.addEventListener('message', receive);
-      wrapper.prepend(frame);
-    });
-  }
-</script>

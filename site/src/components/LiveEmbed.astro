@@ -1,0 +1,133 @@
+---
+interface Props {
+  /** The page to embed; it loads only when the visitor starts it. */
+  src: string;
+  /** The iframe's accessible title. */
+  title: string;
+  /** What the status line calls it, as in "Loading the Showcase…". */
+  name: string;
+  button: string;
+  /**
+   * How the embedded page reports that it is ready or failed: `app` for the SDK's web host
+   * (`{type: 'haxeon-app', state}`), `showcase` for the UI Showcase's own messages.
+   */
+  protocol: 'app' | 'showcase';
+  aspect: string;
+  minHeight?: string;
+  /** Lay the page out at least this wide, scaled down to fit narrower columns. */
+  minWidth?: number;
+  as?: 'div' | 'figure';
+}
+const { src, title, name, button, protocol, aspect, minHeight = '0px', minWidth, as: Tag = 'div' } = Astro.props;
+const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+---
+
+<Tag
+  class="live-embed"
+  data-live-embed
+  data-src={src}
+  data-title={title}
+  data-protocol={protocol}
+  data-min-width={minWidth}
+  data-loading={`Loading ${name}…`}
+  data-failed={`${capitalized} could not load.`}
+  style={`--embed-aspect: ${aspect}; --embed-min-height: ${minHeight}`}
+>
+  <slot name="poster" />
+  <button class="btn primary" type="button" data-start data-pending>{button}</button>
+  <p role="status" hidden></p>
+  <slot />
+</Tag>
+
+<script>
+  type Message = 'ready' | 'failed' | undefined;
+  const readers: Record<string, (data: any) => Message> = {
+    app: (data) => (data?.type === 'haxeon-app' && (data.state === 'ready' || data.state === 'failed') ? data.state : undefined),
+    showcase: (data) => (data === 'haxeon-showcase-ready' ? 'ready' : data === 'haxeon-showcase-failed' ? 'failed' : undefined),
+  };
+
+  for (const wrapper of document.querySelectorAll<HTMLElement>('[data-live-embed]')) {
+    const start = wrapper.querySelector<HTMLButtonElement>('[data-start]')!;
+    const status = wrapper.querySelector<HTMLElement>('[role="status"]')!;
+    const { src, title, protocol, minWidth, loading, failed: failedText } = wrapper.dataset;
+    const read = readers[protocol!];
+
+    // The button keeps its space while the check runs, so a present build does not shift the layout; a site built
+    // without this embed hides it instead of offering a load that cannot finish.
+    fetch(src!, { method: 'HEAD' })
+      .then((response) => { start.hidden = !response.ok; })
+      .catch(() => { start.hidden = true; })
+      .finally(() => { delete start.dataset.pending; });
+
+    start.addEventListener('click', () => {
+      const frame = document.createElement('iframe');
+      frame.title = title!;
+      frame.src = src!;
+      start.disabled = true;
+      status.hidden = false;
+      status.textContent = loading!;
+
+      const resize = minWidth
+        ? new ResizeObserver(([entry]) => {
+            const available = entry.contentRect.width;
+            const width = Math.max(Number(minWidth), available);
+            frame.style.width = `${width}px`;
+            frame.style.zoom = String(available / width);
+          })
+        : undefined;
+      resize?.observe(wrapper);
+
+      function finish() {
+        window.clearTimeout(timeout);
+        window.removeEventListener('message', receive);
+      }
+
+      function failed() {
+        finish();
+        resize?.disconnect();
+        delete wrapper.dataset.running;
+        frame.remove();
+        status.hidden = false;
+        status.textContent = failedText!;
+        start.hidden = false;
+        start.disabled = false;
+      }
+
+      function receive(event: MessageEvent) {
+        if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
+        const message = read(event.data);
+        if (message === 'ready') {
+          finish();
+          wrapper.dataset.running = '';
+          status.hidden = true;
+          start.hidden = true;
+          frame.contentDocument?.querySelector('canvas')?.focus();
+        } else if (message === 'failed') {
+          failed();
+        }
+      }
+
+      // Generous enough for the larger embeds on a slow connection.
+      const timeout = window.setTimeout(failed, 60000);
+      window.addEventListener('message', receive);
+      wrapper.prepend(frame);
+    });
+  }
+</script>
+
+<style>
+  .live-embed { position: relative; display: grid; justify-items: start; gap: var(--hx-space-3); }
+  .live-embed [hidden] { display: none; }
+  .live-embed [data-pending] { visibility: hidden; }
+  .live-embed p { margin: 0; }
+  .live-embed :global(iframe) {
+    width: 100%;
+    height: auto;
+    aspect-ratio: var(--embed-aspect);
+    min-height: var(--embed-min-height);
+    border: 0;
+    border-radius: var(--hx-radius-m);
+  }
+  .live-embed:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
+  .live-embed[data-running] > :global(img) { display: none; }
+</style>

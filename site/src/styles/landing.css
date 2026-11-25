@@ -230,6 +230,22 @@
   }
 }
 
+/* Screenshots and their captions on the product pages. */
+:where(.landing-content) figure {
+  margin: 0;
+}
+:where(.landing-content) :is(figure, .live-embed) > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--hx-radius-m);
+  border: 1px solid var(--sl-color-gray-5);
+}
+:where(.landing-content) figcaption {
+  margin-top: var(--hx-space-2);
+  color: var(--sl-color-gray-3);
+}
+
 /* Splash content supplies its own title and full-bleed sections. */
 main:has(.landing-content) {
   padding: 0;
