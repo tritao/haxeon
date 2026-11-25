@@ -45,7 +45,10 @@ def main():
         work = Path(tmp)
         tree = work / "tree"
         tree.mkdir()
-        mirror(root / "packages", tree / "packages", {path.parent for path in manifests})
+        # Every package is mirrored, not linked, so a dependency's relative paths resolve inside the copy: a
+        # linked package would name its own dependencies at their original paths, beside the copies.
+        packages = {path.parent for path in (root / "packages").glob("*/haxeon.json")}
+        mirror(root / "packages", tree / "packages", packages | {path.parent for path in manifests})
         (tree / "vendor").symlink_to(root / "vendor", target_is_directory=True)
         env = os.environ.copy()
         env["HAXEON_COMPILER_SOURCE"] = str(root / "src")
