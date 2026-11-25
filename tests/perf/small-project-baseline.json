@@ -36,10 +36,10 @@
 			"raise_reason": "ac8a1069b types Map and Array as KeyValueIterables for every program (+40M, with its allocation); d76d07a0f's full collection after each compile's response, off the build's path (wall unchanged), counted because the measurement runs until the server exits (+63M: main without it measures 1.564G); 4ff774d3e's API model grows the AOT image every process start pays (+14M); 07b95ac10 took back 9M (bisected over 25 commits from ccd159f11)"
 		},
 		"aot_build_allocated_bytes": {
-			"value": 42160608,
+			"value": 43026816,
 			"tolerance": 0.02,
 			"why": "What the compile server with haxeon-aot allocated for the build (its worker allocations): deterministic for a given compiler and project.",
-			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.42 MB ahead of time; haxeon-aot does not build in 41a2453b8's window); then stdlib typed in every program: 8b5e8403e (+0.24 MB), 0bf8f03af (+0.67 MB), ac8a1069b (JsonPrinter's ObjectMap<Dynamic, Bool> now a specialized owner, +1.2 MB after 07b95ac10); the commits after 0bf8f03af took 0.7 to 0.9 MB back"
+			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.42 MB ahead of time; haxeon-aot does not build in 41a2453b8's window); then stdlib typed in every program: 8b5e8403e (+0.24 MB), 0bf8f03af (+0.67 MB), ac8a1069b (JsonPrinter's ObjectMap<Dynamic, Bool> now a specialized owner, +1.2 MB after 07b95ac10); the commits after 0bf8f03af took 0.7 to 0.9 MB back. Then engine slice 2 (IR generation, objects and generated functions as query kinds) allocates the kinds' columns, sized by symbol id, in each cold build: about +0.87 MB"
 		},
 		"aot_check_instructions": {
 			"value": 1396909540,

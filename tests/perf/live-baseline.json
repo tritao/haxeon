@@ -53,9 +53,10 @@
 			"why": "Live data growth over the growth session's edits after those that fill the session. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack absorbs the collector's page rounding."
 		},
 		"aot_ui_server_live_bytes": {
-			"value": 857919717,
+			"value": 898721907,
 			"tolerance": 0.03,
-			"why": "The server's live data after the growth session's last edit (a full collection ends each build): what a live session keeps."
+			"why": "The server's live data after the growth session's last edit (a full collection ends each build): what a live session keeps.",
+			"raise_reason": "the UI library's own restructuring (9e495b261, d280e52e7: widget and gesture satellites folded into their views) grew the measured app's live data to 894.4 MB with no compiler change in between (473249583 measured 867.6 MB); engine slice 2's query-kind columns add about 4 MB on this program"
 		},
 		"aot_ui_server_live_growth_bytes": {
 			"value": 4294967,
