@@ -99,11 +99,19 @@ samp {
     'calt' 0;
 }
 
-/* Code inside prose: a recessed tint of the page, not a block's dark surface, so it does not break the reading line. */
-.sl-markdown-content :not(pre) > code {
+/*
+ * Code inside prose, in the docs and on the product pages alike: a recessed tint of the page, not a block's dark
+ * surface, so it does not break the reading line. Starlight sizes and pads it in the docs; the product pages match.
+ */
+:is(.sl-markdown-content, .landing-content) :not(pre) > code {
   color: var(--sl-color-white);
+  background: var(--sl-color-bg-inline-code);
   border-radius: 4px;
   box-shadow: inset 0 0 0 1px var(--sl-color-gray-5);
+}
+.landing-content :not(pre) > code {
+  padding: 0.0625em 0.3em;
+  font-size: 0.9em;
 }
 
 :focus-visible {
