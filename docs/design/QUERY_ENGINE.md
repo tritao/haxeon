@@ -2,7 +2,8 @@
 
 Status: steps 1 and 2 are done and step 3 is under way. The engine core is in `compiler.query`. Each session's database holds
 the build inputs (step 2, `BuildInputs`) and, as a kind of its own, the facts typed units read: the typer records its reads in
-the engine's frames, and a unit's reads are verified by the engine (step 3, first slice). The IR stages before the encode point get per-function reuse in pipeline order through their own memos
+the engine's frames, and a unit's reads are verified by the engine (step 3, slice 3a). What each unit read is a result of that
+kind, written in a transaction the taken build commits (slice 3b). The IR stages before the encode point get per-function reuse in pipeline order through their own memos
 (`IrFunctionPass`, `IrStageMemo`; `IR_CORE_COLUMNS.md`, session caching model). ADR 0003 decisions 1, 10 and 14 are the
 requirements; this note is how. The pass framework (M2) is built on this engine.
 
@@ -100,6 +101,15 @@ driven by the engine (step 3, later slices), its units are results of a **record
   the edge rather than a read of an input of its own, because whether a type is expanded (a typedef or an abstract) is
   learned while the prints are compared, in module order, after the declarations naming it have recorded what they go
   through.
+- **Results and transactions.** A recorded kind holds each key's result (`RecordedResult`: the revision it was computed at and
+  its reads), which a build writes as it goes (`RecordedQueryKind.write`) and reads back at once. A result describes what the
+  build's state holds (a unit's record, the typed body in its module), so a build that is not taken must not leave its results
+  behind. Each write keeps what undoes it: the database commits a build's writes when its state is taken
+  (`QueryDatabase.commit`, `Compiler.adoptCandidate`), and returns to the commit a state was taken at (`rollBack`) when a build
+  starts from that state (`SessionState.copyForCandidate`) or the compiler returns to it (a rejected or retracted publication).
+  What undoes a commit is kept while a state before it can be returned to: the state the last build replaced and the
+  publications' snapshots (`keepRollbackTo`). Computed memos take no part: a memo is a function of its reads, whichever build
+  made it.
 - **Revisions.** A build starts a revision of its own (`QueryDatabase.newRevision`), since prints move while it runs and a
   unit is current when nothing it read changed after the revision it was typed at. Input changes advance the **input
   revision** besides; a result reused whole (`Compiler.compile`'s no-op result) is current while the input revision is.
@@ -166,14 +176,24 @@ Each step is byte-identical on the self-compile and the program suites, and keep
    - **3a (done): reads and their verification on the engine.** The facts are the database's first kind
      (`DeclarationFacts extends RecordedQueryKind`), so a fact's id is its read. The typer's `DeclarationReads` and the
      purity inference's dependency memo record in the engine's frames, and a unit's reads, the facts' dependencies and the
-     kind rule are verified by the engine's walk. Unit records stay in `ModuleState.unitReads`, so a rejected build's records
-     roll back with its modules.
-   - **3b: unit records in the database** (medium, about 400 lines: `FrontendCompilation`, `SemanticAssembly`,
-     `ModuleState`, `SessionState`). Units become memos of the database, keyed by their `Unit` fact, written when a build is
-     taken (a transaction the candidate state commits), so rollback no longer needs module copies of the records. The
-     specialization rule (a specialization is kept only while a unit that stays asks for it, `specializationsStillRead`)
-     becomes the sweep's reachability from the build's roots: the units typed or kept in the build. `placeUnit` and the
-     per-module record maps go.
+     kind rule are verified by the engine's walk. Unit records stayed in `ModuleState.unitReads` until 3b, so a rejected
+     build's records rolled back with its modules.
+   - **3b (done): unit records in the database.** What a unit read is its `Unit` fact's result (`UnitReads`, with the module
+     whose state holds the unit's body), written in the build's transaction and committed when the build is taken, so
+     rollback no longer needs module copies of the records; `ModuleState.unitReads` and `placeUnit` are gone. Invalidation
+     walks the results of the build's modules in fact order. The specialization rule (a specialization is kept only while a
+     unit that stays asks for it) is reachability over the results from the build's roots, the units of its modules typed or
+     kept in it (`FrontendCompilation.reachedSpecializations`); the prune sweeps an unreached specialization's body and its
+     record together. Design changes from the plan:
+     - The records are not swept by the engine's own sweep (memos neither verified nor reached are dropped). A record of a
+       module outside the build must stay while that module's state keeps the bodies it describes, or the module would come
+       back with bodies nothing checks. The engine sweeps records once the database holds a unit's typed body with its record
+       (a later slice of this step), so that the two go together.
+     - Rollback is an undo log in the recorded kind, not a write buffer committed at the end: a build reads its own writes at
+       no cost, and one mechanism serves a build that was not taken (its open writes are undone when the next build starts)
+       and a publication the host rejected or retracted after its build was taken (its commits are undone).
+     - A record keeps its unit's module: invalidation and the specialization rule look up the typed body through it, which
+       the per-module maps gave before.
    - **3c: declaration types digested by content** (large: `DeclarationTypeTable`, `ProgramTyper`, `SemanticAssembly`). An
      inferred declaration's type becomes a memo digested by its type (`SemanticSignature.type`, as
      `ModuleState.declarationTypeDigests` holds it now), read by its readers instead of the unit. An edit that leaves the
@@ -206,9 +226,6 @@ one-string edit (7 s at the start) and no-op (1.3 s), and the worker's resident 
 
 - **Granularity of typing queries.** Per function body, as today's units; whether generic specializations are separate
   queries (they are shared units today) follows generic typing stage 2 (`GENERIC_TYPING_ONCE.md`).
-- **Rollback.** A rejected build must leave memos as the last taken build left them. Inputs are set outside builds and
-  facts only move forward, so both live in a database the state copies share; results written during a build (unit
-  records, from 3b) need a transaction the taken state commits.
 - **Durability.** Standard-library inputs rarely change; salsa's durability levels let a build skip verifying them. Worth
   measuring once the engine holds the typer.
 - **Persistence.** Out of scope (ADR 0003 decision 1).

@@ -41,7 +41,8 @@ makes from the same sources, and its work is proportional to the edit.
   (`IrSourceRehash`), so its debug spans name a snapshot the module has.
 
 A failed or rejected build leaves every cache as the last successful build left it: a build works on a copy of the
-`SessionState` it started from.
+`SessionState` it started from, and what its units read is written in a transaction of the session's query database that only
+the build taken commits ([QUERY_ENGINE.md](QUERY_ENGINE.md), "Results computed outside the engine").
 
 ## Typing: recorded reads
 

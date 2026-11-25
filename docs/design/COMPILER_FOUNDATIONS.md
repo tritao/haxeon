@@ -19,8 +19,9 @@ those causes is worth more than the next local cut.
 - **Every stage grew its own reuse.** Stage memos, lineage, `IrFacts`, `IrWalkRecord`, contribution memos, the
   frontend's unit reads, the HashLink link and lowering caches. Each answers "what did this read, and does it still
   hold", each was written by hand, and their records went from 15 types to 9 in one consolidation. The query engine
-  ([QUERY_ENGINE.md](QUERY_ENGINE.md)) was designed as the single answer. It holds the build inputs and the typer's recorded
-  reads (steps 2 and 3a); no IR stage reads through it yet.
+  ([QUERY_ENGINE.md](QUERY_ENGINE.md)) was designed as the single answer. It holds the build inputs, the typer's recorded
+  reads and each unit's record, in a transaction the taken build commits (steps 2, 3a and 3b); no IR stage reads through it
+  yet.
 - **What is left of a body edit is mostly work that does not scale with the edit.**
   - About 600 functions the frontend and assembler rebuild every build, and then compare.
   - Object tables made fresh each build, so kept records compare them structurally.
@@ -50,8 +51,9 @@ that is kept or new reads it any more.
 
 Both retention rules found this week fit the engine's model. Naming a type reads its kind is a partial read of the type's
 fact now, and a read of an input of its own once prints are queries (QUERY_ENGINE.md, step 3d). A specialization kept while a
-unit that stays asks for it is the sweep's reachability from the build's roots, once unit records are memos of the database
-(step 3b).
+unit that stays asks for it is reachability over the units' records, which are results in the database since step 3b, from
+the build's roots; the engine's own sweep takes it over once the database holds the typed bodies too (a later slice of
+step 3).
 
 This is [WARM_REBUILD_REUSE.md](WARM_REBUILD_REUSE.md)'s rule ("output is the bytes a fresh compiler makes") made
 structural instead of checked case by case. Most of it falls out of item 2. Before then, each new cache is reviewed
