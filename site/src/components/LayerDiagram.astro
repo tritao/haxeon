@@ -36,6 +36,11 @@ const arrows = boxes.slice(0, -1).map(({ y, height: boxHeight }, index) => ({
   length: gap - 2,
   edge: edges[index],
 }));
+// Each layer's title, and its quieter detail line when it has one.
+const lines = boxes.flatMap(({ layer, y }) => [
+  { parts: layer.title, y: y + 23, className: 'ttl' },
+  ...(layer.detail ? [{ parts: layer.detail, y: y + 43, className: undefined }] : []),
+]);
 const path = arrows.map(({ from, length }) => `M${centre} ${from}v${length}m-4-5 4 5 4-5`).join('');
 ---
 
@@ -45,17 +50,10 @@ const path = arrows.map(({ from, length }) => `M${centre} ${from}v${length}m-4-5
     {boxes.map(({ y, height: boxHeight }) => <rect class="box" x={boxX} {y} width={boxWidth} height={boxHeight} rx="6" />)}
     <path class="acc" d={path} />
     {arrows.map(({ from, edge }) => edge && <text x={centre + 12} y={from + 21}>{edge}</text>)}
-    {boxes.map(({ layer, y }) => (
-      <>
-        <text class="ttl" x={centre} y={y + 23} text-anchor="middle">
-          {segments(layer.title).map((part) => typeof part === 'string' ? part : <a href={part.href}><tspan class="lnk">{part.text}</tspan></a>)}
-        </text>
-        {layer.detail && (
-          <text x={centre} y={y + 43} text-anchor="middle">
-            {segments(layer.detail).map((part) => typeof part === 'string' ? part : <a href={part.href}><tspan class="lnk">{part.text}</tspan></a>)}
-          </text>
-        )}
-      </>
+    {lines.map(({ parts, y, className }) => (
+      <text class={className} x={centre} {y} text-anchor="middle">
+        {segments(parts).map((part) => typeof part === 'string' ? part : <a href={part.href}><tspan class="lnk">{part.text}</tspan></a>)}
+      </text>
     ))}
   </svg>
 </Diagram>

@@ -4,7 +4,10 @@ import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
 import FeatureList, { type Feature } from '../components/FeatureList.astro';
 import LanguageTour from '../components/home/LanguageTour.astro';
+import learnReadme from '../../../docs/learn/README.md?raw';
+import comingFromReadme from '../../../docs/coming-from/README.md?raw';
 import { docsUrl } from '../../docs.mjs';
+import { listedPages, withSummaries } from '../excerpts';
 
 const learn = (page: string) => docsUrl('learn/' + page);
 const reference = (page: string) => docsUrl('reference/' + page);
@@ -44,24 +47,24 @@ const beyond: Feature[] = [
   { title: 'Live edits', text: 'What an edit can change while the program runs, and what needs a restart.', href: reference('LIVE_PATCHING.md') },
 ];
 
-const lessons = [
-  ['Values and functions', 'Bindings with final and var, inferred types, and functions.', 'basics.md'],
-  ['Classes, interfaces and structures', 'Objects with methods, interfaces, and anonymous structures.', 'types.md'],
-  ['Enums and pattern matching', 'Enums that carry data, and switch to take them apart.', 'enums-and-patterns.md'],
-  ['Null safety', 'Null<T> for values that can be absent, checked by the compiler.', 'null-safety.md'],
-  ['Structs and value equality', 'Values that copy on assignment and compare by content.', 'value-types.md'],
-  ['Cleanup at the end of a block', 'Cleanup with defer that runs on every way out of a block.', 'cleanup.md'],
-  ['Iteration', 'Loops over ranges, collections and your own iterators.', 'iteration.md'],
-  ['Wire formats and typed RPC', 'Serialize your types and call services across a connection.', 'wire-and-rpc.md'],
-  ['Abstracts', 'Distinct types over an existing value, at no runtime cost.', 'abstracts.md'],
-];
+const lessons = withSummaries(listedPages(learnReadme, 'docs/learn/README.md'), {
+  'basics.md': 'Bindings with final and var, inferred types, and functions.',
+  'types.md': 'Objects with methods, interfaces, and anonymous structures.',
+  'enums-and-patterns.md': 'Enums that carry data, and switch to take them apart.',
+  'null-safety.md': 'Null<T> for values that can be absent, checked by the compiler.',
+  'value-types.md': 'Values that copy on assignment and compare by content.',
+  'cleanup.md': 'Cleanup with defer that runs on every way out of a block.',
+  'iteration.md': 'Loops over ranges, collections and your own iterators.',
+  'wire-and-rpc.md': 'Serialize your types and call services across a connection.',
+  'abstracts.md': 'Distinct types over an existing value, at no runtime cost.',
+}, 'docs/learn/README.md');
 
-const comingFrom = [
-  ['Flutter', 'UI described in code and edited while the app runs.', 'flutter.md'],
-  ['.NET', 'Classes, generics and inferred locals, with a JIT while you develop.', 'dotnet.md'],
-  ['Go', 'Small functions, loops over keys and values, cleanup next to acquisition.', 'go.md'],
-  ['Haxe, HashLink and Lime', 'What carries over, what differs, and how to move a project.', 'haxe.md'],
-];
+const comingFrom = withSummaries(listedPages(comingFromReadme, 'docs/coming-from/README.md'), {
+  'flutter.md': 'UI described in code and edited while the app runs.',
+  'dotnet.md': 'Classes, generics and inferred locals, with a JIT while you develop.',
+  'go.md': 'Small functions, loops over keys and values, cleanup next to acquisition.',
+  'haxe.md': 'What carries over, what differs, and how to move a project.',
+}, 'docs/coming-from/README.md').map((guide) => ({ ...guide, title: guide.title.replace(/^Coming from /, '') }));
 ---
 
 <StarlightPage
@@ -127,10 +130,10 @@ const comingFrom = [
       <div class="wrap">
         <div class="head">
           <h2>Learn it in order</h2>
-          <p class="lede">Nine short lessons, each with a complete program and its output. Read them in order or start with the topic you need.</p>
+          <p class="lede">Short lessons, each with a complete program and its output. Read them in order or start with the topic you need.</p>
         </div>
         <ol class="lessons">
-          {lessons.map(([title, text, page]) => (
+          {lessons.map(({ title, text, page }) => (
             <li><a href={learn(page)}><span class="title">{title}</span><span class="text">{text}</span></a></li>
           ))}
         </ol>
@@ -144,7 +147,7 @@ const comingFrom = [
           <p class="lede">The equivalents for the language, build and deployment tools you already use.</p>
         </div>
         <div class="grid four">
-          {comingFrom.map(([title, text, page]) => (
+          {comingFrom.map(({ title, text, page }) => (
             <Card compact>
               <h3><a href={docsUrl('coming-from/' + page)}>{title}</a></h3>
               <p>{text}</p>
