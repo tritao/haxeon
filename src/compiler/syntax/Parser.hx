@@ -318,7 +318,7 @@ class Parser {
 					} else
 						enums.push(parseEnum(start, metadata));
 				} else if (check(TokenKind.Interface))
-					interfaces.push(parseInterface());
+					interfaces.push(parseInterface(metadata));
 				else if (check(TokenKind.Class) || check(TokenKind.Struct)) {
 					var isStruct = check(TokenKind.Struct);
 					if (isStruct && externDeclaration)
@@ -540,7 +540,7 @@ class Parser {
 					isPublic = kindOf(advance()) == TokenKind.Public;
 			}
 			if (values != null && !isStatic && isEnumAbstractValue(isFinal)) {
-				var value = parseEnumAbstractValue(name, underlying, nextImplicitInt, methodMetadata);
+				var value = parseEnumAbstractValue(name, underlying, nextImplicitInt, methodMetadata, isPublic);
 				nextImplicitInt = switch value.value {
 					case IntegerLiteral(literal, _): literal + 1;
 					default: null;
@@ -600,7 +600,8 @@ class Parser {
 	/** `var Name = expr;` or `var Name;`, whose value Haxe numbers or names (`implicitEnumAbstractValue`). */
 	function parseEnumAbstractValue(abstractName:String, underlying:AstType,
 			nextImplicitInt:Null<Int>,
-			metadata:Array<compiler.syntax.Ast.AstMetadata>):compiler.syntax.Ast.AstEnumAbstractValue {
+			metadata:Array<compiler.syntax.Ast.AstMetadata>,
+			isPublic:Null<Bool>):compiler.syntax.Ast.AstEnumAbstractValue {
 		match(TokenKind.Var);
 		var valueName = consumeName();
 		// A value's type is its abstract, which it may also be written as.
@@ -616,6 +617,7 @@ class Parser {
 		var end = spanOf(consume(TokenKind.Semicolon));
 		return {
 			name: textOf(valueName),
+			isPublic: isPublic,
 			metadata: metadata,
 			value: value,
 			span: spanOf(valueName).merge(end)
@@ -937,13 +939,16 @@ class Parser {
 					optional = match(TokenKind.Question),
 					argumentToken = consume(TokenKind.Identifier);
 				var argumentType = restType(rest, match(TokenKind.Colon) ? parseType() : InferredType),
-					defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
+					hasDefault = match(TokenKind.Assign),
+					defaultStart = current(),
+					defaultValue = hasDefault ? parseExpression() : null;
 				arguments.push({
 					name: textOf(argumentToken),
 					type: argumentType,
 					span: spanBetween(argumentToken, previous()),
 					optional: optional,
-					defaultValue: defaultValue
+					defaultValue: defaultValue,
+					defaultValueSpan: hasDefault ? spanBetween(defaultStart, previous()) : null
 				});
 			} while (match(TokenKind.Comma));
 			rejectEarlyRest(arguments);
@@ -1414,7 +1419,7 @@ class Parser {
 				"Invalid accessor 'dynamic' for variable " + name, span));
 	}
 
-	function parseInterface():AstInterface {
+	function parseInterface(metadata:Array<compiler.syntax.Ast.AstMetadata>):AstInterface {
 		var start = spanOf(consume(TokenKind.Interface)),
 			name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<AstTypeConstraint> = [],
@@ -1467,13 +1472,16 @@ class Parser {
 					consume(TokenKind.Colon);
 					var type = restType(rest, parseType()),
 						span = spanOf(previous()),
-						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
+						hasDefault = match(TokenKind.Assign),
+						defaultStart = current(),
+						defaultValue = hasDefault ? parseExpression() : null;
 					arguments.push({
 						name: argumentName,
 						type: type,
 						span: span,
 						optional: optional,
-						defaultValue: defaultValue
+						defaultValue: defaultValue,
+						defaultValueSpan: hasDefault ? spanBetween(defaultStart, previous()) : null
 					});
 				} while (match(TokenKind.Comma));
 			rejectEarlyRest(arguments);
@@ -1489,6 +1497,7 @@ class Parser {
 				isStatic: false,
 				isDynamic: isDynamic ? true : null,
 				isPublic: true,
+				sourcePrivate: isPublic == false,
 				isExtern: false,
 				isInline: false,
 				metadata: methodMetadata,
@@ -1506,6 +1515,7 @@ class Parser {
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
 			bases: bases,
+			documentationMetadata: metadata,
 			fields: fields,
 			methods: methods,
 			span: start.merge(end)

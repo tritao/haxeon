@@ -27,6 +27,7 @@ class AstFunctions {
 			name: name,
 			isStatic: isStatic,
 			isPublic: fn.isPublic,
+			sourcePrivate: fn.sourcePrivate,
 			isExtern: isExtern ?? fn.isExtern,
 			isInline: fn.isInline,
 			metadata: metadata,

@@ -113,6 +113,7 @@ class ImplicitConstructors {
 				type: substitute(argument.type, substitutions),
 				span: span,
 				optional: argument.optional,
+				defaultValueSpan: argument.defaultValueSpan,
 				defaultValue: argument.defaultValue
 			});
 			forwarded.push(Variable(argument.name, span));

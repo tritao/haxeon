@@ -12,15 +12,18 @@ class CompilationTransaction {
 	final token:Null<CancellationToken>;
 	final startingBackend:Null<BackendSession>;
 	final indexSemantics:Bool;
+	final observeTypedDeclarations:Null<compiler.compilation.CompilationContext.TypedDeclarationsObserver>;
 
 	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>,
 			startingBackend:Null<BackendSession>,
-			?indexSemantics = true) {
+			?indexSemantics = true,
+			?observeTypedDeclarations:compiler.compilation.CompilationContext.TypedDeclarationsObserver) {
 		this.compiler = compiler;
 		this.entryModule = entryModule;
 		this.token = token;
 		this.startingBackend = startingBackend;
 		this.indexSemantics = indexSemantics;
+		this.observeTypedDeclarations = observeTypedDeclarations;
 	}
 
 	public function run():CompileResult {
@@ -31,6 +34,7 @@ class CompilationTransaction {
 		var candidate = snapshot.copyForCandidate(startingBackend);
 		try {
 			var context = new CompilationContext(compiler, candidate, indexSemantics);
+			context.observeTypedDeclarations = observeTypedDeclarations;
 			var frontendStartedAt = Sys.time() * 1000.0;
 			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules,
 				transactionStartedAt, snapshotDoneAt, frontendStartedAt,

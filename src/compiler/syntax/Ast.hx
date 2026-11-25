@@ -57,6 +57,9 @@ typedef AstArgument = {
 	final ?optional:Bool;
 	final ?defaultValue:AstExpression;
 
+	/** Full source range of a declaration default, including grouping parentheses. */
+	final ?defaultValueSpan:SourceSpan;
+
 	/** The temporary this argument is, when the typer built the function (`TemporaryLocal`). */
 	final ?local:TemporaryLocal;
 }
@@ -128,6 +131,7 @@ typedef AstMetadata = {
 
 /** Parsed interface declaration before inherited methods are resolved. */
 typedef AstInterface = {
+	final ?documentationMetadata:Array<AstMetadata>;
 	final name:String;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
@@ -185,6 +189,7 @@ typedef AstEnum = {
 
 /** One named constant declared by an enum abstract. */
 typedef AstEnumAbstractValue = {
+	final ?isPublic:Bool;
 	final name:String;
 	final metadata:Array<AstMetadata>;
 	final value:AstExpression;
@@ -444,6 +449,9 @@ typedef AstFunction = {
 
 	/** Explicit method visibility; absent visibility is inherited when overriding. */
 	final ?isPublic:Bool;
+
+	/** A written private interface method has public typing semantics but is hidden from the API. */
+	final ?sourcePrivate:Bool;
 
 	final ?isExtern:Bool;
 

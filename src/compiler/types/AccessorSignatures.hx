@@ -85,6 +85,7 @@ class AccessorSignatures {
 					type: propertyType,
 					span: argument.span,
 					optional: argument.optional,
+					defaultValueSpan: argument.defaultValueSpan,
 					defaultValue: argument.defaultValue
 				}
 			];

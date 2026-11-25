@@ -11,6 +11,8 @@ import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.core.CancellationToken;
 import compiler.core.InternalError;
 import compiler.core.PeakProbe;
+import compiler.documentation.ApiJsonWriter;
+import compiler.documentation.ApiModelBuilder;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ffi.CHeaderEmitter;
 import compiler.hl.HlWriter;
@@ -65,11 +67,23 @@ class CompilerDriver {
 		var preparedAt = Sys.time() * 1000.0;
 		var allocationAfterPrepare = AllocationMeter.sample();
 		progressReport("compiling entry " + request.entry);
-		var result = compiler.compile(request.entry, cancellation, false);
+		var apiJson:Null<String> = null,
+			observe:Null<compiler.compilation.CompilationContext.TypedDeclarationsObserver> = null;
+		if (request.apiJsonOutput != null) {
+			var roots = request.roots.concat([request.stdlib]);
+			for (root in request.packageRoots)
+				roots.push(root.path);
+			observe = (semantic, modules) -> {
+				apiJson = ApiJsonWriter.emit(ApiModelBuilder.build(semantic, modules, roots));
+			};
+		}
+		var result = compiler.compile(request.entry, cancellation, false, observe);
 		var printer = new DiagnosticPrinter(request), warned = diagnostics == null ? report : diagnostics;
 		for (warning in compiler.warnings(result.moduleNames))
 			warned(printer.warning(warning));
 		try {
+			if (request.apiJsonOutput != null)
+				File.saveContent(request.apiJsonOutput, apiJson);
 			if (target == HashLinkC)
 				return writeC(compiler, result, request, report, preparedAt);
 			// Checked before anything is written: a module its host cannot call is not published.

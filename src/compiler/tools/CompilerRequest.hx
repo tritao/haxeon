@@ -21,6 +21,7 @@ typedef CompilerRequest = {
 	final defines:Array<String>;
 	final output:String;
 	final xmlOutput:Null<String>;
+	final ?apiJsonOutput:String;
 	final irOutput:Null<String>;
 	/** Where to write the modules this compile read: one `[name, path, sha256 of its text]` per module, sorted by name. */
 	final inputsOutput:Null<String>;

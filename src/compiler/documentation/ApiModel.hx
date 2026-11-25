@@ -1,0 +1,87 @@
+package compiler.documentation;
+
+/** Public declarations in a successfully typed source graph (docs/design/API_MODEL.md). */
+typedef ApiModel = {
+	final version:Int;
+	final modules:Array<ApiModule>;
+	final types:Array<ApiDeclaration>;
+}
+
+/** A module's own public functions and variables: those declared at its top level, outside any type. */
+typedef ApiModule = {
+	final path:String;
+	final file:String;
+	final members:Array<ApiMember>;
+}
+
+typedef ApiDeclaration = {
+	final source:ApiSource;
+	final path:String;
+	final module:String;
+	final kind:String;
+	final isExtern:Bool;
+	final typeParameters:Array<ApiTypeParameter>;
+	final supertypes:Array<ApiType>;
+	final interfaces:Array<ApiType>;
+	final underlying:Null<ApiType>;
+	final from:Array<ApiType>;
+	final to:Array<ApiType>;
+	final members:Array<ApiMember>;
+}
+
+typedef ApiSource = {
+	final visibility:String;
+	final position:{file:String, line:Int};
+	final metadata:Array<ApiAnnotation>;
+	final documentation:Null<ApiDocumentation>;
+}
+
+typedef ApiAnnotation = {
+	final name:String;
+	final arguments:Array<String>;
+}
+
+typedef ApiDocumentation = {
+	final markdown:String;
+	final tags:Array<{name:String, parameter:Null<String>, text:String}>;
+}
+
+typedef ApiMember = {
+	final source:ApiSource;
+	final kind:String;
+	final name:String;
+	final isStatic:Bool;
+	final ?type:ApiType;
+	final ?get:String;
+	final ?set:String;
+	final ?arguments:Array<ApiArgument>;
+	final ?result:ApiType;
+	final ?typeParameters:Array<ApiTypeParameter>;
+	final ?operatorText:String;
+	final ?conversion:String;
+}
+
+typedef ApiArgument = {
+	final name:Null<String>;
+	final type:ApiType;
+	final optional:Bool;
+	final defaultValue:Null<String>;
+}
+
+typedef ApiTypeParameter = {
+	final name:String;
+	final constraints:Array<ApiType>;
+}
+
+/** A tagged type tree. Only the properties belonging to its tag are present. */
+typedef ApiType = {
+	final kind:String;
+	final ?path:String;
+	final ?name:String;
+	final ?owner:String;
+	final ?arguments:Array<ApiType>;
+	final ?optional:Array<Bool>;
+	final ?result:ApiType;
+	final ?fields:Array<{name:String, type:ApiType, optional:Bool, isFinal:Bool}>;
+	final ?id:Int;
+}

@@ -12,7 +12,7 @@ import sys.io.File;
 class CompilerArguments {
 	/** The options that take a value, as `--name=value` or `--name value`. */
 	static final VALUED = [
-		"--output", "--target", "--build-mode", "--entry", "--ir-output", "--inputs-output", "--baseline",
+		"--output", "--api-json", "--target", "--build-mode", "--entry", "--ir-output", "--inputs-output", "--baseline",
 		"--baseline-output",
 		"--entry-id-output", "--root", "--sources-file", "--package-root", "--ffi-header", "--ffi-library",
 		"--ffi-interface",
@@ -27,6 +27,7 @@ class CompilerArguments {
 			buildMode = "development",
 			output = "out/main.hl",
 			xmlOutput:Null<String> = null,
+			apiJsonOutput:Null<String> = null,
 			irOutput:Null<String> = null,
 			inputsOutput:Null<String> = null,
 			baseline:Null<String> = null,
@@ -80,7 +81,9 @@ class CompilerArguments {
 				xmlOutput = arguments[index++];
 				if (xmlOutput.length == 0)
 					throw new UsageError('Compiler option "--xml" requires a value');
-			} else if (StringTools.startsWith(argument, "--entry="))
+			} else if (StringTools.startsWith(argument, "--api-json="))
+				apiJsonOutput = value(argument, "--api-json=");
+			else if (StringTools.startsWith(argument, "--entry="))
 				entry = value(argument, "--entry=");
 			else if (StringTools.startsWith(argument, "--ir-output="))
 				irOutput = value(argument, "--ir-output=");
@@ -188,7 +191,8 @@ class CompilerArguments {
 		if (live && backend != HashLink)
 			throw new UsageError("--live requires --target=hl");
 		if (noOutput
-			&& (live || baselineOutput != null || entryIdOutput != null || xmlOutput != null || irOutput != null
+			&& (live || baselineOutput != null || entryIdOutput != null || xmlOutput != null || apiJsonOutput != null
+			|| irOutput != null
 			|| inputsOutput != null || ffiHeader != null))
 			throw new UsageError("--no-output writes nothing, so it takes no option that writes a file or a live publication");
 		if (baseline != null && !live)
@@ -228,6 +232,7 @@ class CompilerArguments {
 			defines: defines,
 			output: output,
 			xmlOutput: xmlOutput,
+			apiJsonOutput: apiJsonOutput,
 			irOutput: irOutput,
 			inputsOutput: inputsOutput,
 			baseline: baseline,

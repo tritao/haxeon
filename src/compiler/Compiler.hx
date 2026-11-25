@@ -665,10 +665,11 @@ class Compiler {
 		}
 	}
 
-	public function compile(entryModule:String, ?token:CancellationToken, ?indexSemantics = true):CompileResult {
+	public function compile(entryModule:String, ?token:CancellationToken, ?indexSemantics = true,
+			?observeTypedDeclarations:compiler.compilation.CompilationContext.TypedDeclarationsObserver):CompileResult {
 		refreshEmbeddedInputs();
 		var cached = cachedCompileResult, cachedEntry = cachedCompileEntry;
-		if (!publication.status().tracking
+		if (observeTypedDeclarations == null && !publication.status().tracking
 			&& cached != null
 			&& cachedCompileGeneration == sourceGeneration
 			&& cachedEntry != null
@@ -763,7 +764,8 @@ class Compiler {
 						movedFunctions: 0
 					}};
 		}
-		var result = new CompilationTransaction(this, entryModule, token, null, indexSemantics).run();
+		var result = new CompilationTransaction(this, entryModule, token, null, indexSemantics,
+			observeTypedDeclarations).run();
 		rememberCompile(entryModule, result);
 		return result;
 	}

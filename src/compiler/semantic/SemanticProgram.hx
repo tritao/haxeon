@@ -333,6 +333,7 @@ class SemanticProgram {
 				name:argument.name,
 					type:argument.type,
 					optional:argument.optional,
+					defaultValueSpan:current.defaultValueSpan,
 					defaultValue:current.defaultValue,
 					span:current.span
 			};

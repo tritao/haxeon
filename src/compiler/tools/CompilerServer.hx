@@ -201,6 +201,7 @@ class CompilerServer {
 		for (field in [
 			"output",
 			"xmlOutput",
+			"apiJsonOutput",
 			"irOutput",
 			"inputsOutput",
 			"ffiHeader",

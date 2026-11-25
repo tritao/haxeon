@@ -36,6 +36,7 @@ class ModuleCanonicalizer {
 				type:canonicalType(argument.type, functionAliases, fn.typeParameters),
 				span:argument.span,
 				optional:argument.optional,
+				defaultValueSpan:argument.defaultValueSpan,
 				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, functionAliases)
 		}],
 			result = canonicalType(fn.result, functionAliases, fn.typeParameters),
@@ -223,6 +224,7 @@ class ModuleCanonicalizer {
 			values: decl.values == null ? null : [for (value in decl.values)
 			{
 				name:value.name,
+					isPublic:value.isPublic,
 					metadata:canonicalMetadata(value.metadata, module, entry, locals, aliases),
 					value:canonicalExpression(value.value, module, entry, locals, aliases),
 					span:value.span
@@ -272,6 +274,7 @@ class ModuleCanonicalizer {
 				type:canonicalType(argument.type, methodAliases, parameters),
 				span:argument.span,
 				optional:argument.optional,
+				defaultValueSpan:argument.defaultValueSpan,
 				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, methodAliases)
 		}],
 			result = canonicalType(method.result, methodAliases, parameters),
@@ -288,6 +291,7 @@ class ModuleCanonicalizer {
 			name: qualifiedTypeName(packageName, interfaceDecl.name),
 			typeParameters: interfaceDecl.typeParameters,
 			typeConstraints: canonicalConstraints(interfaceDecl.typeConstraints, aliases, interfaceDecl.typeParameters),
+			documentationMetadata: interfaceDecl.documentationMetadata,
 			bases: [
 				for (base in interfaceDecl.bases)
 					canonicalType(base, aliases, interfaceDecl.typeParameters)
@@ -308,6 +312,7 @@ class ModuleCanonicalizer {
 			typeParameters: canonical.typeParameters,
 			typeConstraints: canonical.typeConstraints,
 			bases: canonical.bases,
+			documentationMetadata: canonical.documentationMetadata,
 			fields: canonical.fields,
 			methods: canonical.methods.concat(implied),
 			span: canonical.span
@@ -330,6 +335,7 @@ class ModuleCanonicalizer {
 				type:canonicalType(argument.type, aliases, parameters),
 				span:argument.span,
 				optional:argument.optional,
+				defaultValueSpan:argument.defaultValueSpan,
 				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
 		}];
 		return AstFunctions.copy(method, method.name, false, method.metadata, method.typeParameters, typeConstraints,

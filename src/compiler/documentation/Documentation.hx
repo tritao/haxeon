@@ -138,6 +138,36 @@ class DocumentationTools {
 		};
 	}
 
+	/** Keeps prose and tags separate for renderers; editor Markdown retains its current presentation. */
+	public static function forApi(documentation:Documentation):ApiModel.ApiDocumentation {
+		var body:Array<String> = [],
+			tags:Array<{name:String, parameter:Null<String>, text:String}> = [],
+			pattern = ~/^@([a-z]+)(?:[ \t]+(.*))?$/,
+			parameterPattern = ~/^([^ \t]+)(?:[ \t]+(.*))?$/;
+		for (line in documentation.lines) {
+			if (pattern.match(line)) {
+				var name = pattern.matched(1), value = pattern.matched(2) ?? "", parameter = null;
+				switch name {
+					case "param":
+						if (parameterPattern.match(value)) {
+							parameter = parameterPattern.matched(1);
+							value = parameterPattern.matched(2) ?? "";
+						}
+					case "returns": name = "return";
+					case "exception": name = "throws";
+					case "return" | "throws" | "see" | "deprecated" | "since":
+					default:
+						body.push(line);
+						continue;
+				}
+				tags.push({name: name, parameter: parameter, text: value});
+			} else
+				body.push(line);
+		}
+		trimEmpty(body);
+		return {markdown: body.join("\n"), tags: tags};
+	}
+
 	static function isDocumentationGap(gap:String):Bool {
 		var trimmed = StringTools.trim(gap);
 		if (trimmed.length == 0)

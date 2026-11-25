@@ -269,6 +269,9 @@ class FrontendCompilation {
 		resolveGraph(build, pendingBody, pendingSignatures, pendingStructural);
 		assembleSemantics(build);
 		typeProgram(build);
+		var observe = context.observeTypedDeclarations;
+		if (observe != null)
+			observe(context.state.semanticProgram, context.state.modules);
 		TypingWarnings.publish(context, entryModule, build.names, build.typed(), rollbackModules);
 		rebuildSemanticIndex(build, typedFieldTypes(build));
 		publishObjects(build);

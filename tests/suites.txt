@@ -78,6 +78,7 @@ hlb-debug-sections               ci          -- bash tests/integration/test-hlb-
 hld3                             ci          -- bash tests/integration/test-hld3.sh
 differential-tests               ci          -- tests/differential/run.sh
 driver-temp                      quick       -- .tools/haxe/haxe --cwd . common.hxml -cp tests -cp tests/compiler --run DriverTemporaryDirectoryMain
+api-model                        quick,ci    -- bash tests/integration/test-api-model.sh
 
 # Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes. The lane starts before the driver
 # and runs beside it, although the driver runs several of the same test mains: every file a lane suite writes and reads back is in its

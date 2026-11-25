@@ -109,6 +109,7 @@ class InterfaceFieldAccessors {
 					typeParameters: declaration.typeParameters,
 					typeConstraints: declaration.typeConstraints,
 					bases: declaration.bases,
+					documentationMetadata: declaration.documentationMetadata,
 					fields: declaration.fields,
 					methods: declaration.methods.concat(implied),
 					span: declaration.span
