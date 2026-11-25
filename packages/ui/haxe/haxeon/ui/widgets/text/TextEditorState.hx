@@ -40,7 +40,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 	public var selectionFocusLayoutOffset(default, null):Int;
 	public var selectionAnchorAffinity(default, null):Int;
 	public var selectionFocusAffinity(default, null):Int;
-	public var lastEditTransaction(default, null):Null<EditTransaction>;
+	public var lastEditTransaction(default, null):Null<TextEditTransaction>;
 	/** Vertical scroll offset in the editor's content coordinate space. */
 	public var scrollOffsetY(default, null):Float;
 	/** Read-only logs keep the newest text in view until the user scrolls away from the end. */
@@ -118,13 +118,14 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		var selection = backwards ? edit.before : edit.after;
 		replayingHistory = true;
 		defer replayingHistory = false;
-		applyTransaction(new EditTransaction(edit.start, edit.start + TextOffsetMap.countCodepoints(removed), inserted,
+		applyTransaction(new TextEditTransaction(edit.start, edit.start + TextOffsetMap.countCodepoints(removed),
+			inserted,
 			Std.int(Math.min(selection.anchor, selection.focus)), Std.int(Math.max(selection.anchor, selection.focus)),
 			false, -1, -1, selection.focusAffinity));
 		setAnchoredSelection(selection);
 	}
 
-	function recordHistory(transaction:EditTransaction, before:TextSelection):Void {
+	function recordHistory(transaction:TextEditTransaction, before:TextSelection):Void {
 		if (!historyEnabled || replayingHistory) return;
 		var edit = new FieldHistoryEdit(transaction, before,
 			new TextSelection(selectionAnchor, selectionFocus, selectionAnchorAffinity, selectionFocusAffinity));
@@ -375,11 +376,12 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 			last = swap;
 		}
 		var caret = first + TextOffsetMap.countCodepoints(value == null ? "" : value);
-		return applyTransaction(new EditTransaction(first, last, value, caret, caret, false, -1, -1, 0, null, kind));
+		return applyTransaction(new TextEditTransaction(first, last, value, caret, caret, false, -1, -1, 0, null,
+			kind));
 	}
 
 	/** Applies one replacement and its resulting selection and composition together. */
-	public function applyTransaction(transaction:EditTransaction):Bool {
+	public function applyTransaction(transaction:TextEditTransaction):Bool {
 		ensureLive();
 		if (transaction == null) return false;
 		lastEditTransaction = null;
@@ -420,7 +422,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		else
 			clearComposition();
 		if (textChanged)
-			lastEditTransaction = new EditTransaction(first, last, replacement,
+			lastEditTransaction = new TextEditTransaction(first, last, replacement,
 				selectionStart, selectionEnd, compositionStart >= 0, compositionStart,
 				compositionEnd, selectionFocusAffinity, transaction.compositionAttributes,
 				transaction.historyKind, replacedText);
@@ -507,7 +509,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		var previousFocusAffinity = selectionFocusAffinity;
 		switch (edit.action) {
 			case TextEditAction.Compose | TextEditAction.Commit | TextEditAction.Delete:
-				return applyTransaction(new EditTransaction(edit.replaceStart, edit.replaceEnd,
+				return applyTransaction(new TextEditTransaction(edit.replaceStart, edit.replaceEnd,
 					edit.action == TextEditAction.Delete ? "" : edit.text,
 					edit.selectionStart, edit.selectionEnd, edit.action == TextEditAction.Compose,
 					edit.compositionStart, edit.compositionEnd, edit.selectionAffinity,
@@ -1138,7 +1140,7 @@ private class FieldHistoryEdit {
 	public final typing:Bool;
 	public final composition:Bool;
 	public var composing:Bool;
-	public function new(edit:EditTransaction, before:TextSelection, after:TextSelection) {
+	public function new(edit:TextEditTransaction, before:TextSelection, after:TextSelection) {
 		start = edit.replacementStart;
 		removed = edit.replacedText == null ? "" : edit.replacedText;
 		inserted = edit.replacementText == null ? "" : edit.replacementText;

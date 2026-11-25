@@ -104,7 +104,7 @@ class TextField implements View {
 	public var followTail:Bool;
 	public var onChange:Null<String->Void>;
 	/** Applied edit notifications for a caller-owned EditorKit document. */
-	public var onEdit:Null<EditTransaction->Void>;
+	public var onEdit:Null<TextEditTransaction->Void>;
 	/** Optional mutable EditorKit model shared with the persistent editor state. */
 	public var document:Null<TextDocument>;
 	public var onSubmit:Null<String->Void>;
@@ -127,7 +127,7 @@ class TextField implements View {
 			?textColor:Color,
 			multiline:Bool = false,
 			?document:TextDocument,
-			?onEdit:EditTransaction->Void) {
+			?onEdit:TextEditTransaction->Void) {
 		if (key == null || key.length == 0) throw "Text fields require a stable key";
 		if (onEdit != null && document == null) throw "Transaction callbacks require a shared EditorKit document";
 		this.key = key;
@@ -164,7 +164,7 @@ class TextField implements View {
 	/** Creates a field backed by a shared document and edit transaction stream. */
 	public static function withDocument(key:String,
 			document:TextDocument,
-			?onEdit:EditTransaction->Void,
+			?onEdit:TextEditTransaction->Void,
 			?style:LayoutStyle,
 			?label:String,
 			?textStyle:TextStyle,

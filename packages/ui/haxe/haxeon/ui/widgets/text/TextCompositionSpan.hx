@@ -1,9 +1,11 @@
 package haxeon.ui.widgets.text;
 
+import haxeon.editor.CodepointOffset;
+
 /**
  * Generic metadata for one IME composition clause.
  *
- * Ranges use absolute Unicode code-point offsets, like EditTransaction. The
+ * Ranges use absolute Unicode code-point offsets, like TextEditTransaction. The
  * flags describe semantic state only; themes choose how selected and target
  * clauses are painted.
  */

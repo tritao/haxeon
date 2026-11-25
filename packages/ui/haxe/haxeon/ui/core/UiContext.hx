@@ -1827,8 +1827,8 @@ class UiContext implements Disposable {
 			region.set_height((bottom - top) * platformCoordinateScale);
 			var kind:WindowDecorationRegionKind = cast node.windowDecoration;
 			region.set_kind(kind);
-			region.set_cursor_shape(node.windowDecorationCursor
-				== null ? NativeCursorShape.Arrow : nativeCursorShape(node.windowDecorationCursor));
+			region.set_cursor_shape(node.windowDecorationCursor == null
+				? NativeCursorShape.Arrow : node.windowDecorationCursor);
 			regions.push(region);
 		});
 		var window:WindowHandle = cast decorationWindow;
@@ -1852,31 +1852,6 @@ class UiContext implements Disposable {
 		decorationAvailable = haxe.Int64.compare(haxe.Int64.and(capabilities, Capabilities.windowCustomDecorations()),
 			haxe.Int64.ofInt(0)) != 0;
 		return decorationAvailable;
-	}
-
-	static function nativeCursorShape(shape:UiCursorShape):NativeCursorShape {
-		return switch shape {
-			case UiCursorShape.Arrow:
-				NativeCursorShape.Arrow;
-			case UiCursorShape.Text:
-				NativeCursorShape.Text;
-			case UiCursorShape.Crosshair:
-				NativeCursorShape.Crosshair;
-			case UiCursorShape.Hand:
-				NativeCursorShape.Hand;
-			case UiCursorShape.HorizontalResize:
-				NativeCursorShape.HorizontalResize;
-			case UiCursorShape.VerticalResize:
-				NativeCursorShape.VerticalResize;
-			case UiCursorShape.NwseResize:
-				NativeCursorShape.NwseResize;
-			case UiCursorShape.NeswResize:
-				NativeCursorShape.NeswResize;
-			case UiCursorShape.Move:
-				NativeCursorShape.Move;
-			case UiCursorShape.NotAllowed:
-				NativeCursorShape.NotAllowed;
-		};
 	}
 
 	function dispatchFocusChange(previous:Null<WidgetId>, next:Null<WidgetId>):Void {

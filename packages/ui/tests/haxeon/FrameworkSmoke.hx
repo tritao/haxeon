@@ -172,7 +172,7 @@ import haxeon.ui.widgets.navigation.NavigationController;
 import haxeon.ui.widgets.navigation.NavigationStack;
 import haxeon.ui.widgets.text.TextField;
 import haxeon.ui.widgets.text.TextSelection;
-import haxeon.ui.widgets.text.EditTransaction;
+import haxeon.ui.widgets.text.TextEditTransaction;
 import haxeon.editor.TextDocument;
 import haxeon.ui.widgets.layout.Spacer;
 import haxeon.ui.widgets.controls.Slider;
@@ -1246,7 +1246,7 @@ class FrameworkSmoke {
 			|| selectionHistory.selectionFocus != 1) throw "undo did not restore a reversed Unicode selection";
 		selectionHistory.dispose();
 		var compositionHistory = new TextEditorState(fonts, "");
-		compositionHistory.applyTransaction(new EditTransaction(0,
+		compositionHistory.applyTransaction(new TextEditTransaction(0,
 			0,
 			"a",
 			1,
@@ -1257,7 +1257,7 @@ class FrameworkSmoke {
 			0,
 			null,
 			TextEditorHistoryKind.Composition));
-		compositionHistory.applyTransaction(new EditTransaction(0,
+		compositionHistory.applyTransaction(new TextEditTransaction(0,
 			1,
 			"あ",
 			1,
@@ -1268,7 +1268,7 @@ class FrameworkSmoke {
 			0,
 			null,
 			TextEditorHistoryKind.Composition));
-		compositionHistory.applyTransaction(new EditTransaction(0,
+		compositionHistory.applyTransaction(new TextEditTransaction(0,
 			1,
 			"あい",
 			2,
@@ -1315,7 +1315,7 @@ class FrameworkSmoke {
 		context.key(UiEventKind.KeyDown, UiKey.Delete, wordModifier);
 		if (wordDocument.text != " last") throw "word deletion changed a read-only field";
 		var sharedDocument = new TextDocument("start");
-		var sharedEdit:Null<EditTransaction> = null;
+		var sharedEdit:Null<TextEditTransaction> = null;
 		var sharedField = TextField.withDocument("shared-document-field", sharedDocument,
 			function(edit) sharedEdit = edit);
 		var sharedRoot = context.submit(sharedField, new LayoutFrame(256.0, 192.0));

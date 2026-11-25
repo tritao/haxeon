@@ -1,5 +1,7 @@
 package haxeon.ui.widgets.text;
 
+import haxeon.editor.CodepointOffset;
+
 /**
 	A bounded UTF-8 window with absolute document code-point offsets, and the selection as reported with it: clamped
 	into the window, since platform text input requires it there, when a selection reaches past it.

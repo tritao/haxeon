@@ -1,5 +1,7 @@
 package haxeon.ui.widgets.text;
 
+import haxeon.editor.CodepointOffset;
+
 /**
  * One atomic editor mutation.
  *
@@ -7,7 +9,7 @@ package haxeon.ui.widgets.text;
  * platform adapter must convert its native offset representation before
  * creating this value. A null replacement text is treated as an empty string.
  */
-class EditTransaction {
+class TextEditTransaction {
 	public final replacementStart:CodepointOffset;
 	public final replacementEnd:CodepointOffset;
 	public final replacementText:Null<String>;
