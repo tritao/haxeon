@@ -79,7 +79,7 @@ class GesturesPage {
 					LayoutAxis.fixed(48.0))],
 					stageStyle)),
 				explorer.keyed("gesture-status",
-					explorer.text(explorer.state.gestures.message, UiExplorer.color(0.35, 0.85, 0.69))),
+					explorer.text(explorer.state.gestures.message, explorer.context.buildContext.theme.tokens.success)),
 				explorer.keyed("gesture-counts",
 					explorer.caption('Tap ${explorer.state.gestures.tapCount}  ·  Double tap ${explorer.state.gestures.doubleTapCount}  ·  Long press ${explorer.state.gestures.longPressCount}  ·  Drag ${explorer.state.gestures.dragCount}'))
 			])));

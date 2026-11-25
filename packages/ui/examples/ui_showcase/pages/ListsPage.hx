@@ -33,7 +33,7 @@ class ListsPage {
 			first = UiExplorer.LIST_COUNT;
 		items.push(explorer.keyed("list-status", explorer.panel("list-status",
 			[StatusBadge.build("status", 'Rendering rows ${first}–${last} / ${UiExplorer.LIST_COUNT}',
-			UiExplorer.color(0.35, 0.85, 0.69)),
+			explorer.context.buildContext.theme.tokens.success),
 			explorer.keyed("copy",
 			explorer.caption("Scroll inside the list. ListView materializes only the viewport window and a small overscan as Haxe widgets.")),
 			explorer.keyed("jump", explorer.button("Jump to row 415", "jump-row", function() {

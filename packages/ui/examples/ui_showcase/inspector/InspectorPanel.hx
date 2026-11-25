@@ -64,7 +64,8 @@ class InspectorPanel {
 			contentStyle,
 			ScrollAxis.Vertical);
 		children.push(explorer.keyed("content", body));
-		var auditColor = issues.length == 0 ? UiExplorer.color(0.35, 0.85, 0.69) : UiExplorer.color(0.96, 0.58, 0.31);
+		var auditColor = issues.length == 0
+			? explorer.context.buildContext.theme.tokens.success : explorer.context.buildContext.theme.tokens.warning;
 		children.push(explorer.keyed("audit-summary",
 			explorer.text(issues.length == 0
 			? "Accessibility audit · clean" : 'Accessibility audit · ${issues.length} issue(s)',
@@ -127,7 +128,8 @@ class InspectorPanel {
 				children.push(explorer.keyed("sem-audit",
 					explorer.text(nodeIssues.length == 0
 					? "No accessibility issues for this node." : nodeIssues.join("\n"),
-					nodeIssues.length == 0 ? UiExplorer.color(0.35, 0.85, 0.69) : UiExplorer.color(0.96, 0.58, 0.31))));
+					nodeIssues.length == 0 ? explorer.context.buildContext.theme.tokens.success
+					: explorer.context.buildContext.theme.tokens.warning)));
 			case "tree":
 				children.push(explorer.keyed("tree-heading", explorer.label("ANCESTRY")));
 				for (line in treeAncestry(record, records)) children.push(explorer.keyed("ancestor-" + children.length,
@@ -202,7 +204,8 @@ class InspectorPanel {
 				children.push(explorer.keyed("behavior-heading", explorer.label("BEHAVIOR")));
 				children.push(explorer.keyed("behavior-description", explorer.caption(synopsis.behavior)));
 				children.push(explorer.keyed("code-heading", explorer.label("HAXE")));
-				children.push(CodeSample.build("code-snippet", synopsis.code, UiExplorer.color(0.48, 0.82, 0.75)));
+				children.push(CodeSample.build("code-snippet", synopsis.code,
+					explorer.context.buildContext.theme.tokens.accent));
 				children.push(explorer.keyed("geometry-heading", explorer.label("RESOLVED GEOMETRY")));
 				children.push(explorer.keyed("geometry",
 					explorer.caption('bounds ${WidgetDocsRegistry.rectText(record.bounds)}\nclip ${WidgetDocsRegistry.rectText(record.clipBounds)}\nz ${record.zIndex}')));

@@ -9,8 +9,6 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.theme.TextRole;
-import haxeon.ui.theme.Theme;
-import haxeon.ui.theme.ThemeTokens;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.Slider;
@@ -196,49 +194,6 @@ import haxeon.ui.widgets.text.TextField;
 	static function paletteText(explorer:UiExplorer):Color return explorer.context.buildContext.theme.text;
 
 	static function paletteMuted(explorer:UiExplorer):Color return explorer.context.buildContext.theme.mutedText;
-
-	static function makeTheme(light:Bool):Theme {
-		var tokens = new ThemeTokens();
-		tokens.accent = light ? color(0.12, 0.37, 0.72) : color(0.25, 0.61, 0.89);
-		tokens.text = light ? color(0.10, 0.14, 0.21) : color(0.91, 0.94, 0.98);
-		tokens.mutedText = light ? color(0.32, 0.38, 0.47) : color(0.62, 0.68, 0.77);
-		tokens.buttonText = color(1.0, 1.0, 1.0);
-		tokens.disabledButtonText = light ? color(0.28, 0.31, 0.36) : color(0.62, 0.65, 0.70);
-		tokens.buttonBackground = light ? color(0.18, 0.39, 0.70) : color(0.16, 0.38, 0.70);
-		tokens.buttonHover = light ? color(0.16, 0.38, 0.69) : color(0.22, 0.48, 0.82);
-		tokens.buttonPressed = light ? color(0.11, 0.29, 0.54) : color(0.13, 0.34, 0.67);
-		tokens.buttonFocused = light ? color(0.22, 0.43, 0.73) : color(0.27, 0.52, 0.91);
-		tokens.buttonSelected = light ? color(0.16, 0.36, 0.65) : color(0.17, 0.37, 0.68);
-		tokens.buttonDisabled = light ? color(0.82, 0.84, 0.88) : color(0.22, 0.24, 0.28);
-		tokens.controlSelected = tokens.accent;
-		tokens.controlUnselected = light ? color(0.78, 0.81, 0.86) : color(0.16, 0.18, 0.22);
-		tokens.controlDisabled = light ? color(0.82, 0.84, 0.88) : color(0.20, 0.21, 0.24);
-		tokens.progressTrack = light ? color(0.78, 0.84, 0.92) : color(0.20, 0.25, 0.33);
-		tokens.progressFill = tokens.accent;
-		tokens.selectionField = light ? color(0.98, 0.99, 1.0) : color(0.12, 0.15, 0.20);
-		tokens.selectionHover = light ? color(0.91, 0.94, 0.98) : color(0.18, 0.23, 0.31);
-		tokens.selectionPressed = light ? color(0.85, 0.90, 0.97) : color(0.15, 0.20, 0.28);
-		tokens.selectionHighlight = light ? color(0.82, 0.89, 0.98) : color(0.16, 0.29, 0.50);
-		tokens.selectionBorder = light ? color(0.67, 0.72, 0.80) : color(0.32, 0.38, 0.48);
-		tokens.selectionPopupShadow = color(0.0, 0.0, 0.0, light ? 0.20 : 0.42);
-		tokens.panelBackground = light ? color(0.98, 0.98, 1.0) : color(0.14, 0.16, 0.20);
-		tokens.overlayBackdrop = color(0.0, 0.0, 0.0, 0.54);
-		tokens.tooltipBackground = light ? color(0.13, 0.17, 0.23) : color(0.08, 0.09, 0.11);
-		tokens.navigationBackground = light ? color(0.87, 0.90, 0.95) : color(0.075, 0.10, 0.16);
-		tokens.navigationHover = light ? color(0.79, 0.85, 0.94) : color(0.12, 0.18, 0.28);
-		tokens.navigationPressed = light ? color(0.72, 0.81, 0.92) : color(0.15, 0.23, 0.36);
-		tokens.navigationFocused = light ? color(0.76, 0.84, 0.94) : color(0.14, 0.25, 0.41);
-		tokens.navigationSelected = light ? color(0.74, 0.83, 0.95) : color(0.16, 0.29, 0.50);
-		tokens.navigationDisabled = light ? color(0.89, 0.90, 0.92) : color(0.10, 0.12, 0.16);
-		tokens.textPrimary = tokens.text;
-		tokens.textSecondary = tokens.mutedText;
-		tokens.surface = tokens.panelBackground;
-		tokens.surfaceSunken = tokens.selectionField;
-		tokens.border = tokens.selectionBorder;
-		var theme = new Theme(tokens);
-		theme.textCaret = light ? color(0.10, 0.14, 0.21) : color(0.91, 0.94, 0.98);
-		return theme;
-	}
 
 	static inline function color(red:Float, green:Float, blue:Float, alpha:Float = 1.0):Color return Color.rgba(red,
 		green,

@@ -90,7 +90,7 @@ class Theme {
 		tokens.buttonSelected = light ? rgba(0.16, 0.36, 0.65) : rgba(0.17, 0.37, 0.68);
 		tokens.buttonDisabled = light ? rgba(0.82, 0.84, 0.88) : rgba(0.22, 0.24, 0.28);
 		tokens.controlSelected = tokens.accent;
-		tokens.controlUnselected = light ? rgba(0.78, 0.81, 0.86) : rgba(0.16, 0.18, 0.22);
+		tokens.controlUnselected = light ? rgba(0.78, 0.81, 0.86) : rgba(0.45, 0.50, 0.58);
 		tokens.controlDisabled = light ? rgba(0.82, 0.84, 0.88) : rgba(0.20, 0.21, 0.24);
 		tokens.progressTrack = light ? rgba(0.78, 0.84, 0.92) : rgba(0.20, 0.25, 0.33);
 		tokens.progressFill = tokens.accent;
@@ -124,6 +124,8 @@ class Theme {
 		tokens.focusRing = tokens.buttonFocused;
 		tokens.selection = tokens.selectionHighlight;
 		tokens.info = tokens.accent;
+		tokens.success = light ? rgba(0.09, 0.47, 0.29) : rgba(0.35, 0.85, 0.69);
+		tokens.warning = light ? rgba(0.68, 0.34, 0.03) : rgba(0.96, 0.58, 0.31);
 		tokens.deriveComponents();
 		var theme = new Theme(tokens);
 		theme.textCaret = tokens.text;
@@ -301,6 +303,11 @@ class Theme {
 			[StyleValue.textColor(disabledText)]);
 		styles.rule(StyleSelector.widget("text-field").state(StyleState.Focused),
 			[StyleValue.borderColor(tokens.focusRing)]);
+		styles.rule(StyleSelector.widget("text-field").className("search-input"), [
+			StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0)),
+			StyleValue.padding(new Insets(0.0, 0.0, 0.0, 0.0)),
+			StyleValue.borderWidth(0.0)
+		]);
 		styles.rule(StyleSelector.widget("text-field").className("property-input"), [
 			StyleValue.height(LayoutAxis.fixed(32.0)),
 			StyleValue.padding(new Insets(8.0, 5.0, 8.0, 5.0)),

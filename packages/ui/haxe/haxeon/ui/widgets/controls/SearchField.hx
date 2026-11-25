@@ -74,12 +74,12 @@ class SearchField implements View {
 			var inputStyle = new LayoutStyle();
 			inputStyle.width = LayoutAxis.grow();
 			inputStyle.height = LayoutAxis.fixed(24.0);
-			inputStyle.padding = new Insets(0.0, 0.0, 0.0, 0.0);
-			inputStyle.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
 			var input = new TextField("input", value, function(next) {
 				value = next;
 				if (onChange != null) onChange(next);
 			}, inputStyle, label);
+			// The field's box is the row around it; the theme's search-input rule makes the input's own box invisible.
+			input.classes = ["search-input"];
 			input.placeholder = placeholder;
 			input.enabled = enabled;
 			input.onSubmit = onSubmit;

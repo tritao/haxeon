@@ -38,6 +38,9 @@
     const visualWidth = Math.max(1, Number(query.get("width") || 1200));
     const visualHeight = Math.max(1, Number(query.get("height") || 800));
     const visualTime = Math.max(0, Number(query.get("time") || 0));
+    // The embedding page names its theme; opened directly, the explorer follows the browser's.
+    const lightTheme = query.has("theme") ? query.get("theme") !== "dark"
+      : !matchMedia("(prefers-color-scheme: dark)").matches;
     if (visual) {
       document.body.style.padding = "0";
       canvas.width = visualWidth;
@@ -495,7 +498,7 @@
               return;
             }
             guest["ShowcaseWeb.configure"](visualWidth, visualHeight,
-              uiVisualCase === null && visual ? 1 : 0, uiVisualCase ?? -1, benchmark ? benchmarkScenario : -1);
+              uiVisualCase === null && visual ? 1 : 0, uiVisualCase ?? -1, benchmark ? benchmarkScenario : -1, lightTheme ? 1 : 0);
             guest.main();
           } catch (error) {
             setResult(25, guestFailureMessage("Haxeon guest main failed: " + error.message, 25, 0));

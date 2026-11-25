@@ -27,6 +27,7 @@ private typedef ShowcaseOptions = {
 	final graphics:Bool;
 	final visualCase:Int;
 	final benchmark:ShowcaseBenchmark;
+	final lightTheme:Bool;
 }
 
 /** The UI Explorer and Graphics Lab share a window, fonts, and frame transaction. */
@@ -42,19 +43,19 @@ class ShowcaseWeb implements UiFrameApplication {
 	var renderCount = 0;
 	var startedAt:Null<Float>;
 
-	public static function configure(width:Int, height:Int, mode:Int, visualCase:Int, benchmark:Int):Void {
+	public static function configure(width:Int, height:Int, mode:Int, visualCase:Int, benchmark:Int, light:Int):Void {
 		if (width <= 0 || height <= 0 || mode < 0 || mode > 1 || visualCase < -1 || visualCase > 34
-			|| benchmark < -1 || benchmark > 3 || active != null)
+			|| benchmark < -1 || benchmark > 3 || light < 0 || light > 1 || active != null)
 			throw BindingError.invalidArgument("ShowcaseWeb.configure", "Invalid showcase configuration");
 		configuration = {
 			width: width, height: height, graphics: mode == 1 || benchmark >= 0,
-			visualCase: visualCase, benchmark: cast benchmark
+			visualCase: visualCase, benchmark: cast benchmark, lightTheme: light == 1
 		};
 	}
 
 	public static function main():Void {
 		var config = configuration ?? {
-			width:1200, height:800, graphics:false, visualCase:-1, benchmark:None
+			width:1200, height:800, graphics:false, visualCase:-1, benchmark:None, lightTheme:true
 		};
 		var options = new UiHostOptions();
 		options.title = "Haxeon UI Explorer";
@@ -87,6 +88,8 @@ class ShowcaseWeb implements UiFrameApplication {
 		explorer = new UiExplorer(host.fonts, "WEBGL2 · WASM", openGraphics, false, null, null, null, false);
 		var opened = false;
 		defer if (!opened) dispose();
+		// A visual case sets its own theme.
+		if (config.visualCase < 0) explorer.setLightTheme(config.lightTheme);
 		if (config.visualCase >= 0 && !explorer.setVisualCase(config.visualCase))
 			throw BindingError.invalidArgument("ShowcaseWeb", "UI Explorer rejected the visual case");
 		if (config.graphics) openGraphics();
@@ -99,13 +102,12 @@ class ShowcaseWeb implements UiFrameApplication {
 				case PointerButton(source, _, action, _, x, y) if (lab != null && matches(source)):
 					lab.pointerButton(x, y, action == InputAction.Press);
 					host.requestFrame();
-				case Key(source, Key.Escape, _, InputAction.Press, _) if (matches(source)):
-					if (lab == null || config.graphics) host.requestClose();
-					else {
-						graphics = null;
-						lab.dispose();
-						host.requestFrame();
-					}
+				// A page has no window to close, so Escape only leaves the graphics lab opened from the explorer.
+				case Key(source, Key.Escape, _, InputAction.Press,
+					_) if (lab != null && !config.graphics && matches(source)):
+					graphics = null;
+					lab.dispose();
+					host.requestFrame();
 				case _:
 			}
 		});

@@ -44,9 +44,10 @@ class ControlsPage {
 		items.push(explorer.keyed("controls-row",
 			new Row("controls-row", [explorer.keyed("buttons", explorer.panel("buttons-card", [explorer.keyed("heading",
 			explorer.heading("Buttons")),
-			explorer.keyed("primary", explorer.button("Primary action", "primary-action", function() {
+			explorer.keyed("primary", new Button("Primary action", ShowcaseKit.buttonStyle(), function() {
 				explorer.state.controls.progress = Math.min(1.0, explorer.state.controls.progress + 0.08);
-			})), explorer.keyed("secondary", explorer.button("Selected", "selected-action", function() {}, true)),
+			}, "primary-action", true, ButtonVariant.Primary)),
+				explorer.keyed("secondary", explorer.button("Selected", "selected-action", function() {}, true)),
 				explorer.keyed("disabled", explorer.disabledButton("Disabled action")), explorer.keyed("icon-label",
 				explorer.caption("Icon-only · accessible name: Search")), explorer.keyed("icon-button",
 				iconButtonSample()), explorer.keyed("labeled-icon-label",

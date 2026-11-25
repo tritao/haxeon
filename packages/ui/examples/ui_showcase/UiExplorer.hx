@@ -782,7 +782,7 @@ class UiExplorer implements Disposable {
 		return ShowcaseKit.paletteMuted(this);
 
 	public static function makeTheme(light:Bool):Theme
-		return ShowcaseKit.makeTheme(light);
+		return light ? Theme.light() : Theme.dark();
 
 	static inline function color(red:Float, green:Float, blue:Float, alpha:Float = 1.0):Color
 		return ShowcaseKit.color(red, green, blue, alpha);
