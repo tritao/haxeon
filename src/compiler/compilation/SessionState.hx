@@ -269,8 +269,10 @@ class SessionState {
 		return state;
 	}
 
-	/** The function a program of the entry module starts at. */
+	/** The function a program of the entry module starts at; an analysis without an entry gives the name a program would. */
 	public function executableEntryPoint(entryModule:String):String {
+		if (entryModule == compiler.modules.ModuleReachability.NO_ENTRY)
+			return "main";
 		var state:ModuleState = modules.get(entryModule),
 			ast = state.parsedAst();
 		for (fn in ast.functions)
@@ -287,7 +289,10 @@ class SessionState {
 	 * Where a missing entry point is reported: at the entry module's type named as the module, as Haxe reports `-main Main` at
 	 * class Main, else at the module's first declaration, else at the start of its file.
 	 */
-	public function executableEntrySpan(entryModule:String):SourceSpan {
+	public function executableEntrySpan(entryModule:String):Null<SourceSpan> {
+		// An analysis without an entry requires none, so has no missing entry point to report.
+		if (entryModule == compiler.modules.ModuleReachability.NO_ENTRY)
+			return null;
 		var state:ModuleState = modules.get(entryModule),
 			ast = state.parsedAst(),
 			typeName = QualifiedName.last(entryModule);
@@ -313,17 +318,18 @@ class SessionState {
 		return first ?? new SourceSpan(state.source, 0, 0);
 	}
 
-	public function cachedReachability(entry:String):Null<ReachabilityCache>
-		return reachabilityCache.get(entry);
+	/** The modules reachable for `key`, the entry and the roots of a build (`FrontendCompilation`). */
+	public function cachedReachability(key:String):Null<ReachabilityCache>
+		return reachabilityCache.get(key);
 
-	public function cacheReachability(entry:String, names:Array<String>, initializationClasses:Array<String>):Void {
+	public function cacheReachability(key:String, names:Array<String>, initializationClasses:Array<String>):Void {
 		var dependencyKeys:Map<String, String> = [];
 		for (name in names) {
 			var state = modules.get(name);
 			if (state != null)
 				dependencyKeys.set(name, CompilationContext.dependencyKey(state.dependencies));
 		}
-		reachabilityCache.set(entry, {
+		reachabilityCache.set(key, {
 			names: names.copy(),
 			dependencyKeys: dependencyKeys,
 			initializationClasses: initializationClasses.copy()

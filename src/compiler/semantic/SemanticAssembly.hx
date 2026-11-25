@@ -32,7 +32,7 @@ typedef SemanticAssemblyResult = {
 	final entryPoint:String;
 
 	/** Where a missing entry point is reported (SessionState.executableEntrySpan). */
-	final entrySpan:compiler.core.Source.SourceSpan;
+	final entrySpan:Null<compiler.core.Source.SourceSpan>;
 
 	/** The canonical names of the declarations whose type is inferred from their own body or initializer. */
 	final inferredDeclarations:Map<String, Bool>;

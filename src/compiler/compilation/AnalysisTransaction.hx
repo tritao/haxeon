@@ -17,8 +17,13 @@ class AnalysisTransaction {
 	/** Fail, as a build does, when the program has no executable entry point. */
 	final requireEntry:Bool;
 
-	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, requireEntry = false) {
+	/** Modules this analysis types beside the compiler's roots, whatever its entry reaches. */
+	final roots:Array<String>;
+
+	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, requireEntry = false,
+			?roots:Array<String>) {
 		this.requireEntry = requireEntry;
+		this.roots = roots ?? [];
 		this.compiler = compiler;
 		this.entryModule = entryModule;
 		this.token = token;
@@ -28,7 +33,8 @@ class AnalysisTransaction {
 		var snapshot = compiler.state,
 			candidate = snapshot.copyForCandidate(),
 			startedAt = Sys.time() * 1000.0;
-		var diagnosticWork = [entryModule],
+		// Diagnostics are cleared where the analysis will look: from the entry and the modules every entry includes.
+		var diagnosticWork = [entryModule].concat(compiler.rootModules).concat(roots),
 			diagnosticSeen:Map<String, Bool> = [],
 			diagnosticCursor = 0;
 		while (diagnosticCursor < diagnosticWork.length) {
@@ -43,6 +49,9 @@ class AnalysisTransaction {
 		}
 		try {
 			var context = new CompilationContext(compiler, candidate, true, requireEntry);
+			for (root in roots)
+				if (context.rootModules.indexOf(root) < 0)
+					context.rootModules.push(root);
 			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt, false);
 			var typed = frontend.typedProgram;
 			if (typed == null)

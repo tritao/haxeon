@@ -17,6 +17,7 @@ import compiler.ffi.CHeaderEmitter;
 import compiler.hl.HlWriter;
 import compiler.ir.codec.CanonicalIrCodec;
 import compiler.ir.model.Ir.IrProgram;
+import compiler.modules.ModuleReachability;
 import compiler.types.NativeTypeDescriptorCodec;
 import haxe.Json;
 import haxe.crypto.Base64;
@@ -66,23 +67,11 @@ class CompilerDriver {
 		var preparedAt = Sys.time() * 1000.0;
 		var allocationAfterPrepare = AllocationMeter.sample();
 		progressReport("compiling entry " + request.entry);
-		var apiJson:Null<String> = null,
-			observe:Null<compiler.compilation.CompilationContext.TypedDeclarationsObserver> = null;
-		if (request.apiJsonOutput != null) {
-			var roots = request.roots.concat([request.stdlib]);
-			for (root in request.packageRoots)
-				roots.push(root.path);
-			observe = (semantic, modules) -> {
-				apiJson = ApiJsonWriter.emit(ApiModelBuilder.build(semantic, modules, roots));
-			};
-		}
-		var result = compiler.compile(request.entry, cancellation, false, observe);
+		var result = compiler.compile(request.entry, cancellation, false);
 		var printer = new DiagnosticPrinter(request), warned = diagnostics == null ? report : diagnostics;
 		for (warning in compiler.warnings(result.moduleNames))
 			warned(printer.warning(warning));
 		try {
-			if (request.apiJsonOutput != null)
-				File.saveContent(request.apiJsonOutput, apiJson);
 			if (target == HashLinkC)
 				return writeC(compiler, result, request, report, preparedAt);
 			// Checked before anything is written: a module its host cannot call is not published.
@@ -252,14 +241,33 @@ class CompilerDriver {
 		var report = progress == null ? function(message:String) {} : progress,
 			progressReport = request.verbosity.atLeast(Verbosity.Normal) ? report : function(message:String) {};
 		progressReport("loading " + Std.string(request.paths.length) + " sources");
-		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report);
-		progressReport("checking entry " + request.entry);
-		var result = compiler.analyze(request.entry, cancellation, true),
+		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report),
+			apiJsonOutput = request.apiJsonOutput;
+		// A description covers every source it was given, not only what an entry reaches: each loaded module but the standard
+		// library's is typed as a root. Without an entry, those roots are the whole program.
+		var roots = apiJsonOutput == null ? [] : [
+			for (name => state in compiler.modules)
+				if (!state.source.isStandardLibrarySource) name
+		];
+		roots.sort(Reflect.compare);
+		var hasEntry = request.entry != ModuleReachability.NO_ENTRY;
+		progressReport(hasEntry ? "checking entry " + request.entry : "checking " + roots.length + " modules");
+		var result = compiler.analyze(request.entry, cancellation, hasEntry, roots),
 			printer = new DiagnosticPrinter(request),
 			warned = diagnostics == null ? report : diagnostics;
 		for (warning in compiler.warnings(result.moduleNames))
 			warned(printer.warning(warning));
 		progressReport("checked " + Std.string(result.moduleNames.length) + " modules");
+		if (apiJsonOutput != null) {
+			var semantic = compiler.state.semanticProgram;
+			if (semantic == null)
+				throw new InternalError("An analysis keeps its semantic program");
+			var sourceRoots = request.roots.concat([request.stdlib]);
+			for (root in request.packageRoots)
+				sourceRoots.push(root.path);
+			File.saveContent(apiJsonOutput,
+				ApiJsonWriter.emit(ApiModelBuilder.build(semantic, compiler.modules, sourceRoots)));
+		}
 		return result;
 	}
 

@@ -9,6 +9,9 @@ import compiler.core.InternalError;
 
 /** Incrementally discovers and validates the source-module closure rooted at an entry module. */
 class ModuleReachability {
+	/** The entry of an analysis that has none: a description of sources (`--api-json`) reaches what its roots do. */
+	public static inline final NO_ENTRY = "";
+
 	final modules:Map<String, ModuleState>;
 	final pending:Array<String>;
 	final seen:Map<String, Bool> = [];
@@ -17,10 +20,10 @@ class ModuleReachability {
 
 	/** `roots` are modules compiled with every entry (Compiler.addRootModule); missing ones are skipped. */
 	public function new(modules:Map<String, ModuleState>, entryModule:String, ?roots:Array<String>) {
-		if (!modules.exists(entryModule))
+		if (entryModule != NO_ENTRY && !modules.exists(entryModule))
 			throw new InternalError('Missing entry module "$entryModule"');
 		this.modules = modules;
-		pending = [entryModule];
+		pending = entryModule == NO_ENTRY ? [] : [entryModule];
 		if (roots != null)
 			for (root in roots)
 				if (root != entryModule && modules.exists(root))

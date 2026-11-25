@@ -33,6 +33,7 @@ class CompilerArguments {
 			baselineOutput:Null<String> = null,
 			entryIdOutput:Null<String> = null,
 			entry = "compiler.tools.HaxeonCompiler",
+			entryGiven = false,
 			dumpFunction = -1,
 			live = false,
 			noOutput = false,
@@ -74,9 +75,11 @@ class CompilerArguments {
 			}
 				else if (StringTools.startsWith(argument, "--api-json="))
 				apiJsonOutput = value(argument, "--api-json=");
-			else if (StringTools.startsWith(argument, "--entry="))
+			else if (StringTools.startsWith(argument, "--entry=")) {
 				entry = value(argument, "--entry=");
-			else if (StringTools.startsWith(argument, "--ir-output="))
+				entryGiven = true;
+			}
+				else if (StringTools.startsWith(argument, "--ir-output="))
 				irOutput = value(argument, "--ir-output=");
 			else if (StringTools.startsWith(argument, "--inputs-output="))
 				inputsOutput = value(argument, "--inputs-output=");
@@ -182,10 +185,15 @@ class CompilerArguments {
 		if (live && backend != HashLink)
 			throw new UsageError("--live requires --target=hl");
 		if (noOutput
-			&& (live || baselineOutput != null || entryIdOutput != null || apiJsonOutput != null
+			&& (live || baselineOutput != null || entryIdOutput != null
 			|| irOutput != null
 			|| inputsOutput != null || ffiHeader != null))
-			throw new UsageError("--no-output writes nothing, so it takes no option that writes a file or a live publication");
+			throw new UsageError("--no-output builds nothing, so it takes no option that writes a build's file or a live publication");
+		// A description of the sources is an analysis: it types them and builds nothing, and needs no entry.
+		if (apiJsonOutput != null && !noOutput)
+			throw new UsageError("--api-json describes the sources without building them: use it with --no-output");
+		if (apiJsonOutput != null && !entryGiven)
+			entry = compiler.modules.ModuleReachability.NO_ENTRY;
 		if (baseline != null && !live)
 			throw new UsageError("--baseline requires --live");
 		if ((baselineOutput != null || entryIdOutput != null) && backend != HashLink)

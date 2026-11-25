@@ -577,11 +577,12 @@ class Compiler {
 
 	/**
 	 * Update semantic state without assembling or publishing a runtime artifact. `requireEntry` fails it, as a build fails, when the
-	 * program has no executable entry point.
+	 * program has no executable entry point. `roots` are typed with the entry for this analysis only, beside `rootModules`.
 	 */
-	public function analyze(entryModule:String, ?token:CancellationToken, requireEntry = false):AnalysisResult {
+	public function analyze(entryModule:String, ?token:CancellationToken, requireEntry = false,
+			?roots:Array<String>):AnalysisResult {
 		refreshEmbeddedInputs();
-		return new AnalysisTransaction(this, entryModule, token, requireEntry).run();
+		return new AnalysisTransaction(this, entryModule, token, requireEntry, roots ?? []).run();
 	}
 
 	public function dependentModules(module:String):Array<String>
@@ -665,11 +666,10 @@ class Compiler {
 		}
 	}
 
-	public function compile(entryModule:String, ?token:CancellationToken, ?indexSemantics = true,
-			?observeTypedDeclarations:compiler.compilation.CompilationContext.TypedDeclarationsObserver):CompileResult {
+	public function compile(entryModule:String, ?token:CancellationToken, ?indexSemantics = true):CompileResult {
 		refreshEmbeddedInputs();
 		var cached = cachedCompileResult, cachedEntry = cachedCompileEntry;
-		if (observeTypedDeclarations == null && !publication.status().tracking
+		if (!publication.status().tracking
 			&& cached != null
 			&& cachedCompileGeneration == sourceGeneration
 			&& cachedEntry != null
@@ -764,8 +764,7 @@ class Compiler {
 						movedFunctions: 0
 					}};
 		}
-		var result = new CompilationTransaction(this, entryModule, token, null, indexSemantics,
-			observeTypedDeclarations).run();
+		var result = new CompilationTransaction(this, entryModule, token, null, indexSemantics).run();
 		rememberCompile(entryModule, result);
 		return result;
 	}

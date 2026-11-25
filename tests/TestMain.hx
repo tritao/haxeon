@@ -43,6 +43,7 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.tools.IrInterpreter;
+import compiler.modules.ModuleReachability;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticSignature;
@@ -1559,8 +1560,6 @@ class TestMain {
 		var compilerRequest = CompilerArguments.parse([
 			"--target=wasm32",
 			"--output=out/sample.hl",
-			"--api-json",
-			"out/api.json",
 			"--ir-output=out/sample.hir",
 			"--entry=sample.Main",
 			"--root=source",
@@ -1580,7 +1579,6 @@ class TestMain {
 		if (compilerRequest.target != "wasm32"
 			|| compilerRequest.defines.join(",") != "feature,version=3.0"
 			|| compilerRequest.output != "out/sample.hl"
-			|| compilerRequest.apiJsonOutput != "out/api.json"
 			|| compilerRequest.irOutput != "out/sample.hir"
 			|| compilerRequest.entry != "sample.Main"
 			|| compilerRequest.dumpFunction != 42
@@ -1674,17 +1672,29 @@ class TestMain {
 		if (wasmDefines.join(",") != "haxeon,target=wasm32,wasm,wasm32"
 			|| hlDefines.join(",") != "haxeon,target=hl,hl,sys,target.sys,target.threaded")
 			throw "Compiler targets did not expose their canonical conditional defines";
-		var equalsApiRequest = CompilerArguments.parse(["--api-json=out/equals.json", "source/Main.hx"]);
-		if (equalsApiRequest.apiJsonOutput != "out/equals.json")
-			throw "Compiler CLI did not accept the equals form of --api-json";
-		var missingApiOutput = false;
-		try {
-			CompilerArguments.parse(["source/Main.hx", "--api-json"]);
-		} catch (error:Dynamic) {
-			missingApiOutput = true;
+		var apiRequest = CompilerArguments.parse(["--no-output", "--api-json", "out/api.json", "source/Main.hx"]),
+			equalsApiRequest = CompilerArguments.parse([
+				"--no-output",
+				"--api-json=out/equals.json",
+				"--entry=app.Main",
+				"source/Main.hx"
+			]);
+		if (apiRequest.apiJsonOutput != "out/api.json" || apiRequest.entry != ModuleReachability.NO_ENTRY
+			|| equalsApiRequest.apiJsonOutput != "out/equals.json" || equalsApiRequest.entry != "app.Main")
+			throw "Compiler CLI did not read --api-json, with or without an entry";
+		for (rejected in [
+			["source/Main.hx", "--no-output", "--api-json"],
+			["--api-json=out/api.json", "source/Main.hx"]
+		]) {
+			var refused = false;
+			try {
+				CompilerArguments.parse(rejected);
+			} catch (error:Dynamic) {
+				refused = true;
+			}
+			if (!refused)
+				throw 'Compiler CLI accepted ${rejected.join(" ")}: --api-json needs a path and --no-output';
 		}
-		if (!missingApiOutput)
-			throw "Compiler CLI accepted --api-json without an output path";
 		var normalizedDocumentation =
 			DocumentationTools.normalize(" Adds values.\n * @param left First value.\n * @returns the sum.\n * @throws Overflow on failure.\n * @since 1.0");
 		if (normalizedDocumentation.parameters.get("left") != "First value."

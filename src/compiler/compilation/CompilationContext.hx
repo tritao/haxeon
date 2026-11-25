@@ -10,8 +10,6 @@ import compiler.runtime.NativeRegistry;
 import compiler.semantic.ModuleAnalyzer;
 import haxe.io.Bytes;
 
-typedef TypedDeclarationsObserver = (compiler.semantic.SemanticProgram, Map<String, ModuleState>) -> Void;
-
 /**
  * One build: the state it works on (`state`, a copy of the compiler's that the compiler takes when the build succeeds), the
  * compiler's configuration as the build sees it, and the services the build derives from both (module graph, module analysis,
@@ -51,9 +49,6 @@ class CompilationContext {
 	 * for a build (`--no-output`), not when the editor types a library.
 	 */
 	public final requireEntry:Bool;
-
-	/** An optional output consumer that reads declarations before a one-shot build releases them. */
-	public var observeTypedDeclarations:Null<TypedDeclarationsObserver>;
 
 	/** The functions the frontend typed: those an edit invalidated, or every one in a first build. */
 	public var frontendTypedFunctions = 0;

@@ -1,4 +1,5 @@
-Status: Phase 1 implemented: the model and its JSON (`--api-json=FILE` on the direct compiler). Phase 2 is planned below.
+Status: Phase 1 implemented: the model and its JSON (`--no-output --api-json=FILE` on the direct compiler); `--xml` is
+deleted. The rest of phase 2 is planned below.
 
 # Haxeon API model
 
@@ -6,13 +7,17 @@ The API model describes the public types, members and module-level functions and
 program. It is what Haxeon's package reference is generated from, and what editor hover and signature help will read, so
 that the editor and the published reference never disagree. Its serialized form is a Haxeon-owned JSON format with a
 version and the schema below. Haxe's type-description XML (`--xml`, the input of dox) is not a goal: it is built from the
-syntax tree, so it spells types as written in each module rather than qualified, and loses optional arguments; phase 2
-deletes it.
+syntax tree, so it spells types as written in each module rather than qualified, and loses optional arguments; it is
+deleted.
 
 ## Built from the semantic program
 
-The model is built after typing, from the semantic program, not from the syntax tree, which cannot give resolved types,
-caller-visible nullability or inferred signatures.
+The model is built by an analysis, not a build: `--api-json` takes `--no-output`, so the sources are typed and nothing is
+generated. Every module the request loads, except the standard library's, is typed as a root of that analysis, so the
+model describes all of them rather than what an entry reaches, and `--entry` is optional: a library has none. The roots
+belong to the one analysis, so a compile server's later builds are unchanged. The model is read from the semantic program
+the analysis keeps, not from the syntax tree, which cannot give resolved types, caller-visible nullability or inferred
+signatures.
 
 - `SemanticProgram.program` gives the canonical declarations (names already qualified), their members, visibility, spans,
   metadata, accessor policies, argument names, optional markers and default expressions. The module table maps each
@@ -86,8 +91,8 @@ A typedef, as written in a module:
 
 The same program always gives the same bytes: types and modules are sorted by path; members stay in the order the source
 declares them (a module's variables and functions by line), which is how their author grouped them; signature arguments,
-constraints and annotations keep their declaration order; and the JSON is written field by field. Writing it changes
-neither the compiled module nor its runtime identity tables, and it is not part of a compile's fingerprint.
+constraints and annotations keep their declaration order; and the JSON is written field by field. A description is the
+same with or without an entry.
 
 ## Phase 2
 
@@ -97,5 +102,4 @@ neither the compiled module nor its runtime identity tables, and it is not part 
   `hoverDocumentation` its comment and tags, and `signatureHelp` the callable, with each `@param` for the active argument;
   the position, symbol and active-argument lookups stay. Locals, incomplete edits and declarations not in the model keep the
   editor's semantic or recovery path.
-- `--xml` and `HaxeXmlWriter` are deleted.
 - The website's `build:api` step renders one page per exposed Haxe package from the model, and reports doc-comment coverage.

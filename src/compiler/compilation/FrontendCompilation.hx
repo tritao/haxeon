@@ -269,9 +269,6 @@ class FrontendCompilation {
 		resolveGraph(build, pendingBody, pendingSignatures, pendingStructural);
 		assembleSemantics(build);
 		typeProgram(build);
-		var observe = context.observeTypedDeclarations;
-		if (observe != null)
-			observe(context.state.semanticProgram, context.state.modules);
 		TypingWarnings.publish(context, entryModule, build.names, build.typed(), rollbackModules);
 		rebuildSemanticIndex(build, typedFieldTypes(build));
 		publishObjects(build);
@@ -362,9 +359,11 @@ class FrontendCompilation {
 		if (context.options.parseThreads > 1)
 			context.moduleAnalyzer.prefetchParses([for (name in sortedModuleNames(modules)) modules.get(name)],
 				context.options.parseThreads);
-		var names:Array<String> = [],
+		// What is reachable depends on the roots as much as on the entry (an analysis can add roots of its own).
+		var reachabilityKey = entryModule + "\n" + context.rootModules.join("\n"),
+			names:Array<String> = [],
 			initializationClasses:Array<String> = [],
-			cachedReachability = context.state.cachedReachability(entryModule),
+			cachedReachability = context.state.cachedReachability(reachabilityKey),
 			reuseGraph = cachedReachability != null;
 		if (cachedReachability != null)
 			for (name in cachedReachability.names) {
@@ -405,7 +404,7 @@ class FrontendCompilation {
 				for (classDecl in ast.classes)
 					initializationClasses.push(ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name));
 			}
-			context.state.cacheReachability(entryModule, names, initializationClasses);
+			context.state.cacheReachability(reachabilityKey, names, initializationClasses);
 			build.graphInitializationMs = now() - initializationStartedAt;
 		}
 		build.names = names;
