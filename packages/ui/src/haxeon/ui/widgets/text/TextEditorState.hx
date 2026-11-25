@@ -23,32 +23,53 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 	// layout that creates a visual line per character across large documents.
 	static inline var initialLayoutWidth:Float = 1.0e30;
 
+	/** The text being edited. */
 	public var text(get, never):String;
+
+	/** Where the selection starts, in codepoints: the smaller of its ends. */
 	public var selectionStart(default, null):Int;
+
+	/** Where the selection ends, in codepoints: the larger of its ends; the caret when it equals the start. */
 	public var selectionEnd(default, null):Int;
+
+	/** Where the input method's composition starts; equal to its end when there is none. */
 	public var compositionStart(default, null):Int;
+
+	/** Where the composition ends. */
 	public var compositionEnd(default, null):Int;
+
+	/** The selection's fixed end, where it started. */
 	public var selectionAnchor(default, null):Int;
+
+	/** The selection's moving end, where the caret is. */
 	public var selectionFocus(default, null):Int;
-	public var selectionAnchorLayoutOffset(default, null):Int;
-	public var selectionFocusLayoutOffset(default, null):Int;
-	public var selectionAnchorAffinity(default, null):Int;
-	public var selectionFocusAffinity(default, null):Int;
-	public var lastEditTransaction(default, null):Null<TextEditTransaction>;
+	internal var selectionAnchorLayoutOffset(default, null):Int;
+	internal var selectionFocusLayoutOffset(default, null):Int;
+	internal var selectionAnchorAffinity(default, null):Int;
+	internal var selectionFocusAffinity(default, null):Int;
+	internal var lastEditTransaction(default, null):Null<TextEditTransaction>;
 	/** Vertical scroll offset in the editor's content coordinate space. */
 	public var scrollOffsetY(default, null):Float;
 	/** Read-only logs keep the newest text in view until the user scrolls away from the end. */
 	public var tailFollowing:Bool = false;
 	var tailEnabled:Bool = false;
+
+	/** Whether the editor has keyboard focus, which shows its caret. */
 	public var focused:Bool;
-	public var draggingSelection:Bool;
+	internal var draggingSelection:Bool;
+
+	/** How the text is laid out: hit testing, carets and word and line ranges. */
 	public final layout:TextEditorLayout;
-	public final renderContent:LayoutRenderableContent;
+	internal final renderContent:LayoutRenderableContent;
 	var presentationRevision:Int = -1;
 	var surroundingWindow:Null<TextInputWindow>;
 	var surroundingRevision:Int = -1;
 	var surroundingDocument:Null<TextDocumentBuffer>;
+
+	/** The font, size and spacing. */
 	public var textStyle:TextStyle;
+
+	/** Wrapping, alignment and line height. */
 	public var paragraphStyle:ParagraphStyle;
 	/** Cached conversions between document code points, UTF-8 bytes and UTF-16 units. */
 	var offsets:TextDocumentBuffer;
@@ -71,13 +92,13 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 	var disposed:Bool;
 	// Bit 0: local history enabled; bit 1: deferred clear; bit 2: deferred group break.
 	var historyFlags:Int = 1;
-	public var historyEnabled(get, never):Bool;
+	internal var historyEnabled(get, never):Bool;
 	inline function get_historyEnabled():Bool return (historyFlags & 1) != 0;
 	final history = new EditHistory(256, 2097152);
 	var replayingHistory:Bool = false;
 	var lastHistoryEdit:Null<FieldHistoryEdit>;
 
-	public function configureHistory(enabled:Bool):Void {
+	internal function configureHistory(enabled:Bool):Void {
 		if (historyEnabled != enabled) {
 			history.clear();
 			lastHistoryEdit = null;
@@ -85,7 +106,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		}
 	}
 
-	public function breakHistoryGroup(?deferUntilResolved:Bool = false):Void {
+	internal function breakHistoryGroup(?deferUntilResolved:Bool = false):Void {
 		if (deferUntilResolved) historyFlags |= 4;
 		else {
 			history.breakCoalescing();
@@ -93,12 +114,16 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		}
 		lastHistoryEdit = null;
 	}
+
+	/** Undoes the last edit step. Returns whether there was one. */
 	public function undo():Bool {
 		ensureLive();
 		if (offsets.revision != lastLayoutRevision) syncBuffer(offsets, offsets.revision);
 		lastHistoryEdit = null;
 		return historyEnabled && history.undo();
 	}
+
+	/** Redoes the last undone step. Returns whether there was one. */
 	public function redo():Bool {
 		ensureLive();
 		if (offsets.revision != lastLayoutRevision) syncBuffer(offsets, offsets.revision);
@@ -153,6 +178,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		lastHistoryEdit = join ? previous : edit;
 	}
 
+	/** An editor of `text`, laid out with `fonts`. */
 	public function new(fonts:FontCollection, text:String, ?textStyle:TextStyle,
 			?paragraphStyle:ParagraphStyle, ?document:TextDocument) {
 		if (fonts == null || fonts.isDisposed())
@@ -203,6 +229,10 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		disposed = false;
 	}
 
+	/**
+	 * Replaces the text with `value`, changed outside the editor, keeping the selection where it can. Returns whether
+	 * it changed.
+	 */
 	public function syncExternal(value:String, ?deferHistoryClear:Bool = false):Bool {
 		ensureLive();
 		if (sharedDocument != null) {
@@ -250,7 +280,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		presentationRevision = revision;
 	}
 
-	public function syncDocument(document:TextDocument, ?deferHistoryClear:Bool = false):Bool {
+	internal function syncDocument(document:TextDocument, ?deferHistoryClear:Bool = false):Bool {
 		if (document == null)
 			throw "Text editor document cannot be null";
 		sharedDocument = document;
@@ -302,7 +332,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		return shared == null ? offsets.replace(start, end, value) : shared.replace(start, end, value);
 	}
 
-	public function updateLayout(width:Float):Void {
+	internal function updateLayout(width:Float):Void {
 		ensureLive();
 		var nextWidth = Math.max(1.0, width);
 		if (nextWidth != lastLayoutWidth || offsets.revision != lastLayoutRevision) {
@@ -429,12 +459,12 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 			|| previousCompositionStart != compositionStart || previousCompositionEnd != compositionEnd;
 	}
 
-	public function documentOffsets():TextDocumentBuffer {
+	internal function documentOffsets():TextDocumentBuffer {
 		ensureLive();
 		return offsets;
 	}
 
-	public function setRenderColor(color:Null<Color>):Void {
+	internal function setRenderColor(color:Null<Color>):Void {
 		ensureLive();
 		if (color == null)
 			return;
@@ -444,12 +474,13 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		renderMeasurement.invalidate();
 	}
 
+	/** How many codepoints the text has. */
 	public function documentLength():Int {
 		ensureLive();
 		return offsets.codepointCount;
 	}
 
-	public function documentRevision():Int {
+	internal function documentRevision():Int {
 		ensureLive();
 		return offsets.revision;
 	}
@@ -460,7 +491,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		selection's focus, widened to hold a composition. The window does not grow with the selection, so a large one is
 		reported clamped into it; a selection within the bounds is reported whole.
 	**/
-	public function surroundingText(maxBefore:Int, maxAfter:Int):TextInputWindow {
+	internal function surroundingText(maxBefore:Int, maxAfter:Int):TextInputWindow {
 		ensureLive();
 		var first = selectionFocus;
 		var last = selectionFocus;
@@ -538,6 +569,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		return true;
 	}
 
+	/** Selects from `start` to `end`, in codepoints, clamped to the text. Returns whether the selection changed. */
 	public function setSelection(start:Int, end:Int, ?focusAffinity:Int = 0):Bool {
 		ensureLive();
 		var count = offsets.codepointCount;
@@ -577,6 +609,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		};
 	}
 
+	/** Selects the whole text. Returns whether the selection changed. */
 	public function selectAll():Bool {
 		preserveViewport();
 		breakHistoryGroup();
@@ -759,14 +792,14 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		return true;
 	}
 
-	public function isScrolledToEnd():Bool {
+	internal function isScrolledToEnd():Bool {
 		ensureLive();
 		if (viewportHeight <= 0.0)
 			return true;
 		return scrollOffsetY >= Math.max(0.0, layout.measure().height - viewportHeight) - 0.5;
 	}
 
-	public function scrollToEnd():Bool {
+	internal function scrollToEnd():Bool {
 		ensureLive();
 		if (viewportHeight <= 0.0)
 			return false;
@@ -781,9 +814,9 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 	/** Selection state and viewport movement are independent; layout only consumes explicit requests. */
 	public function requestCaretReveal():Void caretRevealPending = true;
 
-	public function preserveViewport():Void caretRevealPending = false;
+	internal function preserveViewport():Void caretRevealPending = false;
 
-	public function resolveCaretReveal(height:Float):Bool {
+	internal function resolveCaretReveal(height:Float):Bool {
 		setViewportHeight(height);
 		if (!caretRevealPending || !Math.isFinite(height) || height <= 0.0) return false;
 		caretRevealPending = false;
@@ -858,6 +891,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		return changed;
 	}
 
+	/** Deletes the selection, or the grapheme before the caret. Returns whether anything changed. */
 	public function deleteBackward():Bool {
 		if (selectionStart != selectionEnd)
 			return replace(selectionStart, selectionEnd, "");
@@ -877,6 +911,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 			Std.int(Math.max(other, selectionFocus)), "");
 	}
 
+	/** Deletes the selection, or the grapheme after the caret. Returns whether anything changed. */
 	public function deleteForward():Bool {
 		var length = offsets.codepointCount;
 		if (selectionStart != selectionEnd)
@@ -896,7 +931,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		return hitTest(x, viewportY);
 	}
 
-	public function hitTest(x:Float, y:Float):TextPosition {
+	internal function hitTest(x:Float, y:Float):TextPosition {
 		ensureLive();
 		var hit = layout.hitTest(x, y);
 		return new TextPosition(layout.alignGrapheme(hit.offset), hit.affinity);
@@ -923,10 +958,10 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		return changed || previousFocusLayoutOffset != selectionFocusLayoutOffset;
 	}
 
-	public function focusPosition():TextPosition
+	internal function focusPosition():TextPosition
 		return new TextPosition(selectionFocusLayoutOffset, selectionFocusAffinity);
 
-	public function anchorPosition():TextPosition
+	internal function anchorPosition():TextPosition
 		return new TextPosition(selectionAnchorLayoutOffset, selectionAnchorAffinity);
 
 	/** Restarts the caret blink after keyboard, pointer, or text-edit activity. */
@@ -999,7 +1034,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		return changed;
 	}
 
-	public function extendPointerSelection(position:TextPosition):Bool {
+	internal function extendPointerSelection(position:TextPosition):Bool {
 		if (pointerGesture.granularity == 1) return placeCaretAt(position, true);
 		var first:Int;
 		var last:Int;
@@ -1028,9 +1063,9 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		return pointerGesture.register(range[0] + ":" + range[1], timestamp, x, y);
 	}
 
-	public function completePointerClick(x:Float, y:Float):Void pointerGesture.complete(x, y);
-	public function cancelPointerClickIfMoved(x:Float, y:Float):Void pointerGesture.cancelIfMoved(x, y);
-	public function cancelPointerClick():Void pointerGesture.cancel();
+	internal function completePointerClick(x:Float, y:Float):Void pointerGesture.complete(x, y);
+	internal function cancelPointerClickIfMoved(x:Float, y:Float):Void pointerGesture.cancelIfMoved(x, y);
+	internal function cancelPointerClick():Void pointerGesture.cancel();
 
 	public function dispose():Void {
 		history.clear();
@@ -1042,6 +1077,7 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		disposed = true;
 	}
 
+	/** Whether the editor has been disposed of. */
 	public function isDisposed():Bool
 		return disposed;
 
@@ -1149,11 +1185,16 @@ private class FieldHistoryEdit {
 
 /** Anchored selection in absolute document codepoints, retaining direction and caret affinity. */
 class TextSelection {
+	/** Where the selection started, in document codepoints. */
 	public final anchor:Int;
+	/** Where it ends, where the caret is; before `anchor` for a backward selection. */
 	public final focus:Int;
+	/** The caret affinity hit testing gave `anchor`: which side of a line wrap it is on. Opaque; passed back as it is. */
 	public final anchorAffinity:Int;
+	/** The caret affinity hit testing gave `focus`. Opaque; passed back as it is. */
 	public final focusAffinity:Int;
 
+	/** A selection from `anchor` to `focus`. */
 	public function new(anchor:Int, focus:Int, anchorAffinity:Int = 0, focusAffinity:Int = 0) {
 		if (anchor < 0 || focus < 0) throw "Selection offsets must be non-negative";
 		this.anchor = anchor;
@@ -1165,16 +1206,22 @@ class TextSelection {
 
 /** An editing operation that a controlled document owner may consume before widget mutation. */
 enum TextEditIntent {
+	/** Typing `text` at the selection. */
 	Insert(text:String);
+	/** Pasting `text` at the selection. */
 	Paste(text:String);
+	/** Deleting the character before the caret, or the selection. */
 	DeleteBackward;
+	/** Deleting the character after the caret, or the selection. */
 	DeleteForward;
+	/** Deleting to the start of the word; `macStyle` follows macOS's word rules. */
 	DeleteWordBackward(macStyle:Bool);
+	/** Deleting to the end of the word; `macStyle` follows macOS's word rules. */
 	DeleteWordForward(macStyle:Bool);
 }
 
 /** Keyboard navigation delegated by a controlled editor with multiple selections. */
-enum TextNavigationIntent {
+internal enum TextNavigationIntent {
 	Character(direction:Int, extend:Bool);
 	Word(direction:Int, extend:Bool, macStyle:Bool);
 	Paragraph(direction:Int, extend:Bool, macStyle:Bool);
@@ -1184,7 +1231,7 @@ enum TextNavigationIntent {
 }
 
 /** Editor actions shared by widget input and application command surfaces. */
-enum TextEditorAction {
+internal enum TextEditorAction {
 	Copy;
 	Cut;
 	Paste;
@@ -1195,30 +1242,50 @@ enum TextEditorAction {
 
 /** Source/coalescing policy attached to one edit transaction. */
 enum TextEditorHistoryKind {
+	/** An edit that undoes on its own. */
 	Generic;
+	/** Typed text: typing within one word, less than a second apart, undoes as one step. */
 	Typing;
+	/** Backspacing, which undoes on its own. */
 	DeleteBackward;
+	/** Forward deletion, which undoes on its own. */
 	DeleteForward;
+	/** A paste, which undoes on its own. */
 	Paste;
+	/** A correction the platform made, which undoes on its own. */
 	Autocorrect;
+	/** An input method's composition: its updates merge, so it undoes as the text it committed. */
 	Composition;
 }
 
 /** Frame-local text and IME state exposed by an active TextField. */
 class TextEditorDiagnostics {
+	/** The field's key. */
 	public final key:String;
+	/** The field's accessible name. */
 	public final label:String;
+	/** Whether the field has focus. */
 	public final focused:Bool;
+	/** Where the selection starts, in codepoints. */
 	public final selectionStart:Int;
+	/** Where the selection ends, in codepoints. */
 	public final selectionEnd:Int;
+	/** Where the caret is, in codepoints. */
 	public final caretOffset:Int;
+	/** Where the input method's composition starts, when there is one. */
 	public final compositionStart:Int;
+	/** Where it ends. */
 	public final compositionEnd:Int;
+	/** The text being composed. */
 	public final compositionText:String;
+	/** The caret's rectangle on screen, as the input method is told it; null when hidden. */
 	public final caretRect:Null<Rect>;
+	/** Whether the platform supports text input on the window. */
 	public final platformSupported:Bool;
+	/** Whether the platform text editor is active for the field. */
 	public final platformActive:Bool;
 
+	/** A snapshot of a field's editing state. */
 	public function new(key:String, label:String, focused:Bool, selectionStart:Int,
 			selectionEnd:Int, caretOffset:Int, compositionStart:Int, compositionEnd:Int,
 			compositionText:String, caretRect:Null<Rect>, platformSupported:Bool,
@@ -1246,24 +1313,32 @@ class TextEditorDiagnostics {
  * creating this value. A null replacement text is treated as an empty string.
  */
 class TextEditTransaction {
+	/** Where the replaced range starts, in codepoints. */
 	public final replacementStart:CodepointOffset;
+	/** Where the replaced range ends, in codepoints. */
 	public final replacementEnd:CodepointOffset;
+	/** The text put in its place; null deletes the range. */
 	public final replacementText:Null<String>;
+	/** Where the selection starts afterwards, in codepoints. */
 	public final selectionStart:CodepointOffset;
+	/** Where the selection ends afterwards, in codepoints. */
 	public final selectionEnd:CodepointOffset;
+	/** Whether an input method is composing afterwards. */
 	public final hasComposition:Bool;
+	/** Where the composition starts afterwards, when there is one. */
 	public final compositionStart:CodepointOffset;
+	/** Where the composition ends afterwards, when there is one. */
 	public final compositionEnd:CodepointOffset;
 	/** Caret affinity for the resulting selection focus. */
 	public final selectionAffinity:Int;
 	/** Optional generic clause metadata for the resulting composition. */
-	public final compositionAttributes:Null<Array<TextCompositionSpan>>;
+	internal final compositionAttributes:Null<Array<TextCompositionSpan>>;
 	/** History grouping policy for this transaction. */
 	public final historyKind:TextEditorHistoryKind;
 	/** Text removed by an applied transaction; null for an unannotated request. */
 	public final replacedText:Null<String>;
 
-	public function new(replacementStart:CodepointOffset, replacementEnd:CodepointOffset,
+	internal function new(replacementStart:CodepointOffset, replacementEnd:CodepointOffset,
 			replacementText:Null<String>, selectionStart:CodepointOffset,
 			selectionEnd:CodepointOffset, ?hasComposition:Bool = false,
 			?compositionStart:CodepointOffset = -1, ?compositionEnd:CodepointOffset = -1,
@@ -1293,7 +1368,7 @@ class TextEditTransaction {
  * flags describe semantic state only; themes choose how selected and target
  * clauses are painted.
  */
-class TextCompositionSpan {
+internal class TextCompositionSpan {
 	public final start:CodepointOffset;
 	public final end:CodepointOffset;
 	public final selected:Bool;

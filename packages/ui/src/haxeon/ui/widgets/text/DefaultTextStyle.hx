@@ -7,9 +7,13 @@ import haxeon.ui.core.View;
 
 /** Applies sparse typography to a subtree while preserving outer inheritance. */
 class DefaultTextStyle implements View {
+	/** What the style applies to. */
 	public final child:View;
+
+	/** The changes to the inherited text style. */
 	public final style:TextStyleOverride;
 
+	/** Applies `style` to the text `child` builds, over what it inherits. */
 	public function new(child:View, style:TextStyleOverride) {
 		if (child == null || style == null)
 			throw "Default text styles require a child and style";

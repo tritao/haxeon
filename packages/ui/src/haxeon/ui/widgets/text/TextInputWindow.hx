@@ -6,7 +6,7 @@ import haxeon.editor.CodepointOffset;
 	A bounded UTF-8 window with absolute document code-point offsets, and the selection as reported with it: clamped
 	into the window, since platform text input requires it there, when a selection reaches past it.
 **/
-class TextInputWindow {
+internal class TextInputWindow {
 	public final text:String;
 	public final start:CodepointOffset;
 	public final end:CodepointOffset;

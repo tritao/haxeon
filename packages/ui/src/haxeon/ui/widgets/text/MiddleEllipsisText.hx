@@ -16,12 +16,22 @@ import haxeon.ui.theme.TextRole;
 
 /** Fits a single-line label with an ellipsis, preserving both ends by default or only the prefix. */
 class MiddleEllipsisText implements View {
+	/** Identifies the label among its siblings, so its last fit is reused. */
 	public final key:String;
+
+	/** The full text. */
 	public final value:String;
+
+	/** Whether the ellipsis goes in the middle, keeping both ends, or at the end, keeping the start. */
 	public final middle:Bool;
+
+	/** Changes to the inherited text style. */
 	public final textStyle:Null<TextStyleOverride>;
+
+	/** Whether the last build had to shorten the text. */
 	public var truncated(default, null):Bool = false;
 
+	/** A single line showing `value`, shortened with an ellipsis when it does not fit. */
 	public function new(key:String, value:String, middle:Bool = true, ?textStyle:TextStyleOverride) {
 		this.key = key;
 		this.value = value;

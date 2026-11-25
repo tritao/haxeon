@@ -26,21 +26,55 @@ import haxeon.ui.widgets.collections.VirtualViewport;
 class TableView implements View {
 	static inline var minimumColumnWidth:Float = 24.0;
 
+	/**
+	 * Identifies the table among its siblings, so its scroll position and selection survive rebuilds: required, and
+	 * never empty.
+	 */
 	public final key:String;
+
+	/** How many rows the table has. */
 	public final rowCount:Int;
+
+	/** The columns, in display order. */
 	public final columns:Array<TableColumn>;
+
+	/** The height of every row, in logical pixels. */
 	public final rowHeight:Float;
+
+	/** The height of the header row, in logical pixels. */
 	public final headerHeight:Float;
+
+	/** The visible viewport's box, inside which the content scrolls. */
 	public final viewportStyle:LayoutStyle;
+
+	/** How many rows past the visible ones are built, and whether row nodes are reused. */
 	public final virtualization:VirtualizationPolicy;
+
+	/** The scroll position, which a caller can share to read or move it. */
 	public var controller(default, null):ScrollController;
+
+	/** The selected row, or -1 for none. */
 	public var selectedRow(default, null):Int;
+
+	/** The selected cell's column, or -1 for none. */
 	public var selectedColumn(default, null):Int;
+
+	/** The column the table is sorted by, or -1 for none. */
 	public var sortColumn(default, null):Int;
+
+	/** Whether the sort is ascending. */
 	public var sortAscending(default, null):Bool;
+
+	/** Called with the newly selected row. */
 	public var onRowSelected:Null<Int->Void>;
+
+	/** Called with the row and column of the newly selected cell. */
 	public var onCellSelected:Null<Int->Int->Void>;
+
+	/** Called with the column and direction when the user clicks a header to sort; the caller reorders its rows. */
 	public var onSort:Null<Int->Bool->Void>;
+
+	/** Called with a column's index and new width when the user resizes it. */
 	public var onColumnResized:Null<Int->Float->Void>;
 	final cellBuilder:Int->TableColumn->View;
 	final rowKeyForIndex:Null<Int->String>;
@@ -50,6 +84,10 @@ class TableView implements View {
 	var columnRevisionState:Null<State<Int>>;
 	var cellIds:Map<String, WidgetId>;
 
+	/**
+	 * A table of `rowCount` rows of `rowHeight` over `columns`, `cellBuilder` building each visible cell. Throws when
+	 * `key` is empty.
+	 */
 	public function new(key:String,
 			rowCount:Int,
 			columns:Array<TableColumn>,
@@ -433,10 +471,14 @@ private class TableSelectionCell implements View {
 
 /** Stable metadata describing one resizable table column. */
 class TableColumn {
+	/** Identifies the column. */
 	public final key:String;
+	/** The header text. */
 	public final label:String;
+	/** The width, in logical pixels; the user can resize it. */
 	public var width(default, null):Float;
 
+	/** A column headed `label`, `width` pixels wide. */
 	public function new(key:String, label:String, width:Float) {
 		if (key == null || key.length == 0 || width <= 0.0 || !finite(width))
 			throw "Table columns require a stable key and finite positive width";

@@ -43,21 +43,40 @@ import haxeon.ui.widgets.text.TextEditorState;
 class TextField implements View {
 	/** Shared only by internal read-only selection paths. */
 	static final NoAdditionalSelections:Array<TextSelection> = [];
+
+	/**
+	 * Identifies the field among its siblings, so its selection and history survive rebuilds: required, and never
+	 * empty.
+	 */
 	public final key:String;
+
+	/** The text; kept in sync with the document when the field edits one. */
 	public var value:String;
 	/** Paint-only whitespace visibility: off, selection, or all. */
 	public var renderWhitespace:String = "off";
+
+	/** The color whitespace is drawn in when `renderWhitespace` shows it; the theme's muted text color when null. */
 	public var whitespaceColor:Null<Color>;
+
+	/** The field's accessible name. */
 	public var label:Null<String>;
 	/** Muted visual hint shown only while the editor is empty. */
 	public var placeholder:Null<String>;
 	/** Show a trailing ellipsis while an overflowing single-line value is not being edited. */
 	public var ellipsizeWhenUnfocused:Bool = false;
+
+	/** Whether Enter inserts a line break rather than submitting. */
 	public final multiline:Bool;
 	/** What the on-screen keyboard's action key is (NativeKit text-input action: 0 default, 5 send); Enter reaches the field as a key either way. */
 	public var imeAction:Int = 0;
+
+	/** The field's box. */
 	public final style:LayoutStyle;
+
+	/** Its typography; the theme's body style when null. */
 	public final textStyle:Null<TextStyle>;
+
+	/** Its text color; the theme's when null. */
 	public final textColor:Null<Color>;
 	/** Sorted, disjoint absolute codepoint foreground ranges for a visible chunk. */
 	public var colorRangeProvider:Null<(Int, Int) -> Array<TextColorRange>>;
@@ -70,12 +89,17 @@ class TextField implements View {
 	/** Reports widget selection after edit callbacks have synchronized a caller-owned document. */
 	public var onSelectionChange:Null<TextSelection->Void>;
 	/** Explicit navigation/edit request for owners that manage an outer viewport. */
-	public var onEditorAction:Null<TextEditorAction->Bool>;
+	internal var onEditorAction:Null<TextEditorAction->Bool>;
+
+	/**
+	 * Called when an edit or a caret move needs the caret scrolled into view, for a field inside a scroll view of its
+	 * own.
+	 */
 	public var onCaretRevealRequest:Null<Void->Void>;
 	/** Additional owner-controlled selections; the primary stays in selectionProvider. */
 	public var additionalSelectionProvider:Null<Void->Array<TextSelection>>;
 	/** Handles navigation of all selections when additional carets are present. */
-	public var onNavigationIntent:Null<(TextNavigationIntent, TextEditorLayout) -> Bool>;
+	internal var onNavigationIntent:Null<(TextNavigationIntent, TextEditorLayout) -> Bool>;
 	/** Logical viewport height when an outer scroll container owns scrolling. */
 	public var pageHeightProvider:Null<Void->Float>;
 	/** Return true after applying an operation; the live layout supplies shaped word boundaries. */
@@ -83,6 +107,11 @@ class TextField implements View {
 	public var historyManagedExternally:Bool = false;
 	/** Optional external viewport scroll; delta uses application layout coordinates. */
 	public var onSelectionDragScroll:Null<Float->Bool>;
+
+	/**
+	 * Offered each edit before the field makes it; returning true takes it over, for a document owner that applies
+	 * edits itself.
+	 */
 	public var onEditIntent:Null<(TextEditIntent, TextEditorLayout) -> Bool>;
 	/** Optional aggregate selected text for clipboard copy/cut. */
 	public var selectionTextProvider:Null<Void->Null<String>>;
@@ -92,17 +121,25 @@ class TextField implements View {
 	public var onTextPointerMove:Null<Int->UiEvent->Void>;
 	/** Typed selector classes used by composite fields such as ComboBox. */
 	public var classes:Array<String>;
+
+	/** Whether the field accepts input and focus. */
 	public var enabled:Bool;
 	/** Selectable and copyable but not editable; multiline fields also scroll with the wheel. */
 	public var readOnly:Bool;
 	/** With readOnly, keeps the newest text in view until the user scrolls away from the end. */
 	public var followTail:Bool;
+
+	/** Called with the text after each edit. */
 	public var onChange:Null<String->Void>;
 	/** Applied edit notifications for a caller-owned EditorKit document. */
 	public var onEdit:Null<TextEditTransaction->Void>;
 	/** Optional mutable EditorKit model shared with the persistent editor state. */
 	public var document:Null<TextDocument>;
+
+	/** Called with the text when the user presses Enter in a single-line field. */
 	public var onSubmit:Null<String->Void>;
+
+	/** Called each frame with the editor's state, for an input method debugging panel. */
 	public var onDiagnostics:Null<TextEditorDiagnostics->Void>;
 	/** Current logical-screen caret bounds after layout, or null when clipped out. */
 	public var onCaretRect:Null<Null<Rect>->Void>;
@@ -113,6 +150,10 @@ class TextField implements View {
 	/** Semantic action capabilities override used by composite editable controls. */
 	public var semanticActions:AccessibilityAction;
 
+	/**
+	 * A field editing `value`, or `document` when given, which several editors may share; `onEdit` then receives each
+	 * transaction. Throws when `key` is empty, or with `onEdit` and no document.
+	 */
 	public function new(key:String,
 			value:String = "",
 			?onChange:String->Void,

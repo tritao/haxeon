@@ -113,7 +113,7 @@ class TextInputBridge implements Disposable {
 	}
 
 	/** Publishes the active document, selection, composition and screen caret. */
-	public function update(window:TextInputWindow, documentLength:Int, selectionStart:Int,
+	internal function update(window:TextInputWindow, documentLength:Int, selectionStart:Int,
 			selectionEnd:Int, compositionStart:Int, compositionEnd:Int,
 			inputType:Int, flags:TextInputFlags, cursor:Rect,
 			selectionRects:Array<TextRangeRect>, compositionRects:Array<TextRangeRect>, action:Int = 0):Void {

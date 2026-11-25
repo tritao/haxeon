@@ -20,13 +20,31 @@ import haxeon.ui.widgets.collections.ListView;
 import haxeon.ui.widgets.collections.VirtualViewport;
 /** Fixed-height virtual list composed from ordinary rows inside ScrollView. */
 class VirtualList implements View {
+	/**
+	 * Identifies the list among its siblings, so its scroll position and selection survive rebuilds: required, and
+	 * never empty.
+	 */
 	public final key:String;
+
+	/** How many items the list has. */
 	public final itemCount:Int;
+
+	/** The height of every item, in logical pixels. */
 	public final itemHeight:Float;
+
+	/** The visible viewport's box, inside which the content scrolls. */
 	public final viewportStyle:LayoutStyle;
+
+	/** How many items past the visible ones are built, and whether item nodes are reused. */
 	public final virtualization:VirtualizationPolicy;
+
+	/** The scroll position, which a caller can share to read or move it. */
 	public var controller(default, null):ScrollController;
+
+	/** The index of the first item built in the last frame: the first visible one, less the overscan. */
 	public var materializedFirst(default, null):Int;
+
+	/** The index after the last item built in the last frame. */
 	public var materializedLast(default, null):Int;
 	final itemBuilder:Int->View;
 	final itemMetadata:Null<ListViewItemMetadata>;
@@ -34,6 +52,10 @@ class VirtualList implements View {
 	final fallbackViewportHeight:Float;
 	final suppliedController:Bool;
 
+	/**
+	 * A list of `itemCount` items of `itemHeight`, `itemBuilder` building each visible one; for items of varying
+	 * height, use `ListView`. Throws when `key` is empty.
+	 */
 	public function new(key:String,
 			itemCount:Int,
 			itemHeight:Float,

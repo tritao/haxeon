@@ -4,7 +4,7 @@ package haxeon.ui.widgets.collections;
  * Computes a bounded materialization window for a fixed-extent collection.
  * The range is half-open: first is inclusive and last is exclusive.
  */
-class VirtualViewport {
+internal class VirtualViewport {
 	public final itemCount:Int;
 	public final itemExtent:Float;
 	public final viewportExtent:Float;
@@ -59,11 +59,14 @@ class VirtualViewport {
 
 /** Shared materialization policy for virtual collection controls. */
 class VirtualizationPolicy {
+	/** How many items before the visible ones are built, so scrolling back shows them at once. */
 	public final leadingOverscan:Int;
+	/** How many items after the visible ones are built. */
 	public final trailingOverscan:Int;
 	/** Reuses the outer row node while replacing its keyed item content. */
 	public final recycleSlots:Bool;
 
+	/** A policy building `leadingOverscan` and `trailingOverscan` items beyond the visible ones. */
 	public function new(leadingOverscan:Int = 1, trailingOverscan:Int = 1,
 			recycleSlots:Bool = true) {
 		if (leadingOverscan < 0 || trailingOverscan < 0)
@@ -73,12 +76,12 @@ class VirtualizationPolicy {
 		this.recycleSlots = recycleSlots;
 	}
 
-	public function fixed(itemCount:Int, itemExtent:Float, viewportExtent:Float,
+	internal function fixed(itemCount:Int, itemExtent:Float, viewportExtent:Float,
 			offset:Float):VirtualViewport
 		return new VirtualViewport(itemCount, itemExtent, viewportExtent, offset,
 			leadingOverscan, trailingOverscan);
 
-	public function variable(extents:Array<Float>, viewportExtent:Float,
+	internal function variable(extents:Array<Float>, viewportExtent:Float,
 			offset:Float):VirtualExtentViewport
 		return new VirtualExtentViewport(extents, viewportExtent, offset,
 			leadingOverscan, trailingOverscan);
@@ -88,7 +91,7 @@ class VirtualizationPolicy {
  * Computes a bounded materialization window for variable-extent items.
  * Offsets are indexed by item start, and the materialized range is half-open.
  */
-class VirtualExtentViewport {
+internal class VirtualExtentViewport {
 	public final itemCount:Int;
 	public var viewportExtent(default, null):Float;
 	public var offset(default, null):Float;
@@ -175,7 +178,7 @@ class VirtualExtentViewport {
  * delta through a Fenwick tree, so prefix offsets remain logarithmic without
  * asking the model for every item up front.
  */
-class VirtualExtentIndex {
+internal class VirtualExtentIndex {
 	public final itemCount:Int;
 	public final estimatedExtent:Float;
 	public var viewportExtent(default, null):Float;

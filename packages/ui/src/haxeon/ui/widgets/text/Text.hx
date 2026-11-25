@@ -15,12 +15,22 @@ import haxeon.ui.theme.TextRole;
 
 /** Text view backed by the NativeUI/Skribidi text layout primitive. */
 class Text implements View {
+	/** The text shown. */
 	public final value:String;
+
+	/** The text's box. */
 	public final style:LayoutStyle;
+
+	/** The text color; the role's when null. */
 	public final color:Null<Color>;
+
+	/** Changes to the inherited text style. */
 	public final textStyle:Null<TextStyleOverride>;
+
+	/** The theme text role it takes its typography from, such as body or heading. */
 	public final role:TextRole;
 
+	/** Text showing `value`, in the theme's body style unless `role` or `textStyle` say otherwise. */
 	public function new(value:String, ?style:LayoutStyle, ?color:Color, ?textStyle:TextStyleOverride, ?role:TextRole) {
 		this.value = value == null ? "" : value;
 		this.style = style == null ? new LayoutStyle() : style;

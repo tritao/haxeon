@@ -9,6 +9,7 @@ import haxeon.ui.core.View;
 import haxeon.ui.widgets.text.TextEditorState;
 /** Multiline text editor sharing the TextField IME and selection model. */
 class TextArea extends TextField implements View {
+	/** A multiline editor of `value`; `onChange` receives the text after each edit. Throws when `key` is empty. */
 	public function new(key:String, value:String = "", ?onChange:String->Void,
 			?style:LayoutStyle, ?label:String, ?textStyle:TextStyle, ?textColor:Color,
 			?document:TextDocument, ?onEdit:TextEditTransaction->Void) {

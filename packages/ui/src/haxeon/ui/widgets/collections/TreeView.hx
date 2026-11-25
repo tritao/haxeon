@@ -32,17 +32,39 @@ import haxeon.ui.widgets.scroll.ScrollView;
 import haxeon.ui.widgets.collections.VirtualViewport;
 /** Model-backed virtual tree with lazy visible-branch indexing and stable selection state. */
 class TreeView implements View {
+	/**
+	 * Identifies the tree among its siblings, so its scroll position and selection survive rebuilds: required, and
+	 * never empty.
+	 */
 	public final key:String;
+
+	/** Where the hierarchy comes from: its roots, children, expansion defaults and item views. */
 	public final model:TreeViewModel;
+
+	/** The visible viewport's box, inside which the content scrolls. */
 	public final viewportStyle:LayoutStyle;
+
+	/** How many items past the visible ones are built, and whether item nodes are reused. */
 	public final virtualization:VirtualizationPolicy;
+
+	/** The scroll position, which a caller can share to read or move it. */
 	public var controller(default, null):ScrollController;
+
+	/** The index of the first item built in the last frame: the first visible one, less the overscan. */
 	public var materializedFirst(default, null):Int;
+
+	/** The index after the last item built in the last frame. */
 	public var materializedLast(default, null):Int;
+
+	/** The selected item's key, or null for none. */
 	public var selectedKey(default, null):Null<String>;
+
+	/** Called with the newly selected key when the user selects an item. */
 	public var onSelectionChanged:Null<String->Void>;
 	/** Synchronize external state after retained selection/expansion loads, before rows materialize. */
 	public var onStateReady:Null<TreeView->Void>;
+
+	/** Called with an item's key when the user activates it, by Enter or a double click. */
 	public var onItemActivated:Null<String->Void>;
 	/** Enter or double-click on any row, branches included. Return true to consume the activation; false (or unset) keeps the default toggle/open. */
 	public var onActivate:Null<(String, UiEvent) -> Bool>;
@@ -54,11 +76,22 @@ class TreeView implements View {
 	public var hasChildrenHint:Null<String->Bool>;
 	/** Toggle branches on every primary row click; otherwise toggle only on double-click. */
 	public var expandOnSingleClick:Bool = false;
+
+	/** Called with an item's key and the event when the user asks for its context menu. */
 	public var onItemContextMenu:Null<String->UiEvent->Void>;
+
+	/** Called with the selected item's key when the user presses F2. */
 	public var onItemRename:Null<String->Void>;
 	/** Optional intra-tree drag/drop policy. Drops use stable model keys. */
 	public var canDragItem:Null<String->Bool>;
+
+	/**
+	 * Whether the dragged item (the first key) may be dropped on the target (the second); without it, no drop is
+	 * accepted.
+	 */
 	public var canDropItem:Null<(String, String) -> Bool>;
+
+	/** Called with the dragged item's key and the target's when the user drops one on the other. */
 	public var onItemDrop:Null<(String, String) -> Void>;
 	var drag = new TreeItemDrag();
 	/** Optional row builder receiving the current expansion state. */
@@ -67,6 +100,8 @@ class TreeView implements View {
 	public var onExpansionRequested:Null<(String, Bool, Bool) -> Bool>;
 	/** Called even when no visible branch needs collapsing, so pending requests can be canceled. */
 	public var onCollapseAll:Null<Void->Void>;
+
+	/** Called with an item's key and whether it is now expanded, when the user expands or collapses it. */
 	public var onExpandedChanged:Null<String->Bool->Void>;
 	/** Horizontal indentation between tree hierarchy levels. */
 	public var indentWidth:Float = 16.0;
@@ -106,6 +141,10 @@ class TreeView implements View {
 	var pendingFocusKey:Null<String>;
 	var pendingFocusUntil = 0.0;
 
+	/**
+	 * A tree of `model`'s items, `viewportHeight` pixels tall unless `viewportStyle` says otherwise, with
+	 * `selectedKey` selected and `expandedKeys` expanded. Throws when `key` is empty.
+	 */
 	public function new(key:String,
 			model:TreeViewModel,
 			?viewportStyle:LayoutStyle,
@@ -337,6 +376,7 @@ class TreeView implements View {
 		return true;
 	}
 
+	/** Expands the item `nodeKey` if collapsed, or collapses it. Returns whether it changed. */
 	public function toggleExpanded(nodeKey:String):Bool {
 		ensureTreeMetrics();
 		var entry = branchByKey.get(nodeKey);
@@ -344,6 +384,7 @@ class TreeView implements View {
 		return setExpanded(nodeKey, !entry.expanded, true);
 	}
 
+	/** Whether the item `nodeKey` is expanded. */
 	public function isExpanded(nodeKey:String):Bool {
 		ensureTreeMetrics();
 		var entry = branchByKey.get(nodeKey);
@@ -1230,9 +1271,12 @@ private class TreeDisclosure implements View {
 
 /** Bulk metadata for one TreeView root. */
 class TreeRootMetadata {
+	/** The root's key. */
 	public final key:String;
+	/** Whether it starts expanded. */
 	public final initiallyExpanded:Bool;
 
+	/** A root's metadata, for `TreeViewModel.rootRange`. */
 	public function new(key:String, initiallyExpanded:Bool = false) {
 		this.key = key;
 		this.initiallyExpanded = initiallyExpanded;
@@ -1247,15 +1291,22 @@ class TreeRootMetadata {
  * large root set does not cross the model boundary once per root.
  */
 interface TreeViewModel {
+	/** How many roots there are. */
 	function rootCount():Int;
+	/** The keys and expansion defaults of `count` roots from `start`, in one call. */
 	function rootRange(start:Int, count:Int):Array<TreeRootMetadata>;
+	/** How many children the item `parentKey` has. */
 	function childCount(parentKey:String):Int;
+	/** The key of the child at `index` of the item `parentKey`. */
 	function childKeyAt(parentKey:String, index:Int):String;
+	/** Whether the item `key` starts expanded. */
 	function initiallyExpanded(key:String):Bool;
 	/** Estimate used for branches that have not entered the materialization window. */
 	function estimatedExtent():Float;
 	/** Allows TreeView to skip all extent callbacks for uniform rows. */
 	function extentIsUniform():Bool;
+	/** The height of the item `key`. */
 	function extentAt(key:String):Float;
+	/** The view of the item `key`. */
 	function buildItem(key:String):View;
 }

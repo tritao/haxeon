@@ -4,6 +4,7 @@ import haxe.io.Bytes;
 
 /** UTF-8 helpers using the code-point offsets used by NativeKit text APIs. */
 class Utf8Text {
+	/** How many codepoints `text` has. */
 	public static function length(text:String):Int {
 		if (text == null)
 			return 0;
@@ -17,6 +18,7 @@ class Utf8Text {
 		return count;
 	}
 
+	/** The codepoints of `text` from `start` to `end`. */
 	public static function slice(text:String, start:Int, end:Int):String {
 		var bytes = Bytes.ofString(text == null ? "" : text);
 		var count = codePointLength(bytes);
@@ -27,6 +29,7 @@ class Utf8Text {
 		return bytes.sub(byteStart, byteEnd - byteStart).toString();
 	}
 
+	/** `text` with the codepoints from `start` to `end` replaced by `replacement` (removed when null). */
 	public static function replace(text:String, start:Int, end:Int, replacement:Null<String>):String {
 		var source = Bytes.ofString(text == null ? "" : text);
 		var insert = Bytes.ofString(replacement == null ? "" : replacement);

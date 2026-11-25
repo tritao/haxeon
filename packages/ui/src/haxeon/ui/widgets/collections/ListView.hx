@@ -28,24 +28,51 @@ import haxeon.ui.widgets.collections.VirtualViewport;
  * window, so variable-height scroll positions can converge as rows are seen.
  */
 class ListView implements View {
+	/**
+	 * Identifies the list among its siblings, so its scroll position and selection survive rebuilds: required, and
+	 * never empty.
+	 */
 	public final key:String;
+
+	/** Where the items come from: their count, keys, heights and views. */
 	public final model:ListViewModel;
+
+	/** The visible viewport's box, inside which the content scrolls. */
 	public final viewportStyle:LayoutStyle;
+
+	/** How many items past the visible ones are built, and whether item nodes are reused. */
 	public final virtualization:VirtualizationPolicy;
+
+	/** The scroll position, which a caller can share to read or move it. */
 	public var controller(default, null):ScrollController;
+
+	/** The index of the first item built in the last frame: the first visible one, less the overscan. */
 	public var materializedFirst(default, null):Int;
+
+	/** The index after the last item built in the last frame. */
 	public var materializedLast(default, null):Int;
 	/** Number of model extent measurements performed by this control. */
 	public var extentMeasurements(default, null):Int;
 	/** Number of cached extents reused after checking their item generation. */
 	public var extentReuses(default, null):Int;
+
+	/** The selected item's index, or -1 for none. */
 	public var selectedIndex(default, null):Int;
+
+	/** Called with the newly selected index when the user selects an item. */
 	public var onSelectionChanged:Null<Int->Void>;
+
+	/**
+	 * Called with an item's index when the user activates it, by Enter or Space, or by a primary click with
+	 * `activateOnClick`.
+	 */
 	public var onItemActivated:Null<Int->Void>;
 	/** Opt in for launcher lists whose primary click invokes the selected item. */
 	public var activateOnClick:Bool = false;
 	/** Optional observed owner selection; -1 clears it. Only input notifies the owner. */
 	public var selectionProvider:Null<Void->Int> = null;
+
+	/** Called with each scroll event the list handles. */
 	public var onScroll:Null<UiEvent->Void> = null;
 
 	final fallbackViewportHeight:Float;
@@ -60,6 +87,10 @@ class ListView implements View {
 	final modelDependencies:Dependencies = new Dependencies();
 	final itemMetadata:Null<ListViewItemMetadata>;
 
+	/**
+	 * A list of `model`'s items, `viewportHeight` pixels tall unless `viewportStyle` says otherwise, with
+	 * `selectedIndex` selected. Throws when `key` is empty.
+	 */
 	public function new(key:String,
 			model:ListViewModel,
 			?viewportStyle:LayoutStyle,
@@ -449,7 +480,9 @@ private class ListViewRow implements View {
 
 /** Optional row metadata for lists whose items need names or disabled states. */
 interface ListViewItemMetadata {
+	/** The item's name, which type-ahead matches and assistive technology announces. */
 	function labelAt(index:Int):String;
+	/** Whether the item can be selected. */
 	function enabledAt(index:Int):Bool;
 }
 
@@ -468,12 +501,20 @@ interface ListViewItemMetadata {
  * expect anchor corrections as rows are seen.
  */
 interface ListViewModel {
+	/** How many items there are. */
 	function count():Int;
+	/** The key of the item at `index`: stable while the item is in the model. */
 	function keyAt(index:Int):String;
+	/** The height to assume for an item not measured yet. */
 	function estimatedExtent():Float;
+	/** Whether every item is `estimatedExtent` tall, so the list need not ask. */
 	function extentIsUniform():Bool;
+	/** The height of the item at `index`. */
 	function extentAt(index:Int):Float;
+	/** Changes when `extentAt(index)` may return something else, so the list measures it again. */
 	function extentRevisionAt(index:Int):Int;
+	/** The exact total height, when the model knows it cheaply; null otherwise. */
 	function totalExtent():Null<Float>;
+	/** The view of the item at `index`. */
 	function buildItem(index:Int):View;
 }

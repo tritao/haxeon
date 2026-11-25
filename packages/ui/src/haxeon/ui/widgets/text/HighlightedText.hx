@@ -13,6 +13,8 @@ class HighlightedText implements View {
 	final color:Null<Color>;
 	final textStyle:Null<TextStyleOverride>;
 	final role:Null<TextRole>;
+
+	/** Text showing `value` with every match of `query` marked. */
 	public function new(value:String, query:String, ?style:LayoutStyle, ?color:Color,
 			?textStyle:TextStyleOverride, ?role:TextRole) {
 		this.value = value;

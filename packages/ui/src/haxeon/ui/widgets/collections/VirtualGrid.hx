@@ -23,15 +23,37 @@ import haxeon.ui.widgets.layout.Spacer;
 import haxeon.ui.widgets.collections.VirtualViewport;
 /** Fixed-row virtual grid with optional variable-width columns. */
 class VirtualGrid implements View {
+	/**
+	 * Identifies the grid among its siblings, so its scroll position and selection survive rebuilds: required, and
+	 * never empty.
+	 */
 	public final key:String;
+
+	/** How many rows the grid has. */
 	public final rowCount:Int;
+
+	/** How many columns it has. */
 	public final columnCount:Int;
+
+	/** The height of every row, in logical pixels. */
 	public final rowHeight:Float;
+
+	/** The width of every column, in logical pixels. */
 	public final columnWidth:Float;
+
+	/** The visible viewport's box, inside which the content scrolls. */
 	public final viewportStyle:LayoutStyle;
+
+	/** How many items past the visible ones are built, and whether item nodes are reused. */
 	public final virtualization:VirtualizationPolicy;
+
+	/** The scroll position, which a caller can share to read or move it. */
 	public var controller(default, null):ScrollController;
+
+	/** The index of the first item built in the last frame: the first visible one, less the overscan. */
 	public var materializedFirst(default, null):Int;
+
+	/** The index after the last item built in the last frame. */
 	public var materializedLast(default, null):Int;
 	final cellBuilder:Int->Int->View;
 	final keyForCell:Null<Int->Int->String>;
@@ -43,6 +65,10 @@ class VirtualGrid implements View {
 	final fallbackViewportWidth:Float;
 	final fallbackViewportHeight:Float;
 
+	/**
+	 * A grid of `rowCount` by `columnCount` cells, `cellBuilder` building each visible one. Throws when `key` is
+	 * empty.
+	 */
 	public function new(key:String,
 			rowCount:Int,
 			columnCount:Int,

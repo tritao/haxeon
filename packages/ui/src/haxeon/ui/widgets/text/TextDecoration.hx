@@ -8,11 +8,19 @@ import haxeon.ui.TextLayout.TextPosition;
 
 /** Immutable decoration in absolute document codepoint coordinates. */
 class TextDecoration {
+	/** Where it starts, in document codepoints. */
 	public final start:Int;
+
+	/** Where it ends, in document codepoints. */
 	public final end:Int;
+
+	/** Its color. */
 	public final color:Color;
+
+	/** How it is drawn. */
 	public final kind:TextDecorationKind;
 
+	/** A decoration of the text from `start` to `end`. */
 	public function new(start:Int, end:Int, color:Color, kind:TextDecorationKind) {
 		if (start < 0 || end < start || kind == null)
 			throw "Text decoration arguments are invalid";
@@ -95,8 +103,12 @@ class TextDecoration {
 
 /** Geometry decorations applied behind or above retained text. */
 enum TextDecorationKind {
+	/** A fill behind the range, as a search match is marked. */
 	Background;
+	/** A fill across the whole lines the range is on, as the current line is marked. */
 	WholeLineBackground;
+	/** A straight line under the range. */
 	Underline;
+	/** A wavy line under the range, as a spelling or compile error is marked. */
 	WavyUnderline;
 }

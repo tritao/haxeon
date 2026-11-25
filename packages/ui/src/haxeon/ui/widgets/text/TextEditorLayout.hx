@@ -30,20 +30,32 @@ class TextEditorLayout implements Disposable {
 	static inline var maximumParagraphsPerLayout:Int = 128;
 	/** Explicit code editing policy, independent of wrapping and syntax highlighting. */
 	public var codeWordBoundaries:Bool = false;
+
+	/** The whole text. */
 	public var text(get, never):String;
+
+	/** The width it wraps at, in logical pixels. */
 	public var width(default, null):Float;
 	/** Changes whenever edits or shaping constraints recompute paragraph geometry. */
 	public var geometryRevision(default, null):Int = 0;
 	/** Logical/visual row boundaries and vertical placement; unwrapped viewport widths do not change these. */
 	public var visualRowsRevision(default, null):Int = 0;
+
+	/** The font, size and spacing it is shaped with. */
 	public var textStyle:TextStyle;
+
+	/** The wrapping, alignment and line height it is laid out with. */
 	public var paragraphStyle:ParagraphStyle;
+
+	/** How many paragraphs the text has. */
 	public var paragraphCount(get, never):Int;
 	/** Supplies sorted, disjoint absolute codepoint ranges for one visible chunk.
 	 * Ranges may extend beyond the requested chunk and are clipped to it.
 	 * The provider is queried at paint time, so text edits can refresh styles.
 	 */
 	public var colorRangeProvider:Null<(Int, Int) -> Array<TextColorRange>>;
+
+	/** Supplies the decorations of a range of the text, as `colorRangeProvider` its colors: queried at paint time. */
 	public var decorationProvider:Null<(Int, Int) -> Array<TextDecoration>>;
 
 	final fonts:FontCollection;
@@ -65,6 +77,10 @@ class TextEditorLayout implements Disposable {
 	var hasBaseline:Bool;
 	var disposed:Bool;
 
+	/**
+	 * A layout of `value` at `width`; `offsetMap` shares a document's buffer instead of a copy. Throws when the fonts
+	 * are gone.
+	 */
 	public function new(fonts:FontCollection, value:String, width:Float, textStyle:TextStyle,
 			paragraphStyle:ParagraphStyle, ?offsetMap:TextDocumentBuffer) {
 		if (fonts == null || fonts.isDisposed())
@@ -217,6 +233,7 @@ class TextEditorLayout implements Disposable {
 		recomputeMetrics();
 	}
 
+	/** Replaces the text; `offsetMap` shares a document's buffer. */
 	public function setText(value:String, ?offsetMap:TextDocumentBuffer):Void
 		update(value, width, textStyle, paragraphStyle, offsetMap);
 
@@ -324,6 +341,7 @@ class TextEditorLayout implements Disposable {
 		recomputeMetrics();
 	}
 
+	/** The size of the laid-out text. */
 	public function measure():TextMetrics
 		return new TextMetrics(0.0, 0.0, contentWidth, contentHeight);
 
@@ -699,6 +717,7 @@ class TextEditorLayout implements Disposable {
 		}
 	}
 
+	/** The text position at the point (`x`, `y`), in the layout's coordinates. */
 	public function hitTest(x:Float, y:Float):TextPosition {
 		ensureLive();
 		if (paragraphs.length == 0)
@@ -712,6 +731,7 @@ class TextEditorLayout implements Disposable {
 		return new TextPosition(clamp(hit.offset + record.start, record.start, record.end), hit.affinity);
 	}
 
+	/** The codepoint offset a text position is at. */
 	public function offsetFromPosition(position:TextPosition):Int {
 		ensureLive();
 		if (position == null)
@@ -722,6 +742,7 @@ class TextEditorLayout implements Disposable {
 			position.affinity)) + record.start, record.start, record.end);
 	}
 
+	/** Where the caret at `position` is drawn. */
 	public function caret(position:TextPosition):TextCaret {
 		ensureLive();
 		if (position == null)
@@ -741,6 +762,7 @@ class TextEditorLayout implements Disposable {
 			value.slope, value.direction);
 	}
 
+	/** The rectangles a selection from `start` to `end` covers. */
 	public function selectionRects(start:TextPosition, end:TextPosition,
 			minY:Float = -1.0e30, maxY:Float = 1.0e30):Array<Rect> {
 		ensureLive();
@@ -884,6 +906,7 @@ class TextEditorLayout implements Disposable {
 		return result;
 	}
 
+	/** The offset of the grapheme after the one at `offset`. */
 	public function nextGrapheme(offset:Int):Int {
 		ensureLive();
 		var recordIndex = paragraphIndexAtOffset(offset);
@@ -895,6 +918,7 @@ class TextEditorLayout implements Disposable {
 		return clamp(record.start + next, record.start, record.end);
 	}
 
+	/** The offset of the grapheme before the one at `offset`. */
 	public function previousGrapheme(offset:Int):Int {
 		ensureLive();
 		var recordIndex = paragraphIndexAtOffset(offset);
@@ -906,6 +930,7 @@ class TextEditorLayout implements Disposable {
 		return clamp(record.start + previous, record.start, record.end);
 	}
 
+	/** `offset` moved back to the start of the grapheme it is in. */
 	public function alignGrapheme(offset:Int):Int {
 		ensureLive();
 		var record = paragraphAtOffset(offset);
@@ -913,6 +938,7 @@ class TextEditorLayout implements Disposable {
 		return clamp(record.start + record.layout.alignGrapheme(local), record.start, record.end);
 	}
 
+	/** The start and end offsets of the word at `position`. */
 	public function wordRange(position:TextPosition):Array<Int> {
 		ensureLive();
 		var record = paragraphAtOffset(position.offset);
@@ -922,6 +948,7 @@ class TextEditorLayout implements Disposable {
 		return [record.start + range[0], record.start + range[1]];
 	}
 
+	/** The word at the codepoint `offset`. */
 	public function wordRangeAt(offset:Int):TextRange {
 		ensureLive();
 		var record = paragraphAtOffset(offset);
@@ -931,6 +958,7 @@ class TextEditorLayout implements Disposable {
 		return new TextRange(record.start + range.start, record.start + range.end);
 	}
 
+	/** The visual line at the codepoint `offset`, as wrapped. */
 	public function lineRangeAt(offset:Int):TextRange {
 		ensureLive();
 		var record = paragraphAtOffset(offset);
@@ -942,6 +970,10 @@ class TextEditorLayout implements Disposable {
 		return new TextRange(record.start + range.start, end);
 	}
 
+	/**
+	 * The offset a word step from `offset` reaches, backward for a `direction` of -1 and forward for 1; `macStyle`
+	 * follows macOS's word rules.
+	 */
 	public function moveWord(offset:Int, direction:Int, macStyle:Bool = false):Int {
 		ensureLive();
 		if (direction != -1 && direction != 1)
@@ -959,6 +991,10 @@ class TextEditorLayout implements Disposable {
 		return clamp(record.start + moved, record.start, record.end);
 	}
 
+	/**
+	 * The offset a paragraph step from `offset` reaches, crossing to the neighbouring paragraph at its edge;
+	 * `direction` is -1 or 1, and anything else throws.
+	 */
 	public function moveParagraph(offset:Int, direction:Int, macStyle:Bool = false):Int {
 		ensureLive();
 		if (direction != -1 && direction != 1)
@@ -978,6 +1014,7 @@ class TextEditorLayout implements Disposable {
 		return clamp(record.start + moved, record.start, record.end);
 	}
 
+	/** Whether the layout has been disposed of. */
 	public function isDisposed():Bool return disposed;
 
 	public function dispose():Void {
@@ -1128,7 +1165,7 @@ class TextEditorLayout implements Disposable {
 		return value < low ? low : (value > high ? high : value);
 }
 
-class TextEditorParagraphRecord implements Disposable {
+internal class TextEditorParagraphRecord implements Disposable {
 	public var start:Int;
 	public var end:Int;
 	public var text:String;
@@ -1244,7 +1281,7 @@ class TextEditorParagraphRecord implements Disposable {
 }
 
 /** Cached selection geometry for one active editor range and viewport. */
-class TextEditorRangeGeometryCache {
+internal class TextEditorRangeGeometryCache {
 	public final start:Int;
 	public final end:Int;
 	public final startAffinity:Int;
@@ -1266,7 +1303,7 @@ class TextEditorRangeGeometryCache {
 }
 
 /** One visual row of a paragraph, in offsets and vertical bounds relative to the paragraph. */
-class TextEditorParagraphRow {
+internal class TextEditorParagraphRow {
 	public final start:Int;
 	public final end:Int;
 	public final top:Float;
