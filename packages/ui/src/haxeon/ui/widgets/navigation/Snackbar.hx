@@ -12,12 +12,22 @@ import haxeon.ui.semantics.Semantics;
 
 /** A transient message bar with an optional action. The caller decides when to show and hide it. */
 class Snackbar implements ScopeView {
+	/** Identifies the bar among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The message. */
 	public final text:String;
+
+	/** The action button's text; no button when null. */
 	public final actionLabel:Null<String>;
+
+	/** Called when the user presses the action. */
 	public final onAction:Null<Void->Void>;
+
+	/** The bar's box. */
 	public final style:LayoutStyle;
 
+	/** A message bar showing `text`, with an action when `actionLabel` is given. */
 	public function new(key:String, text:String, ?actionLabel:String, ?onAction:Void->Void, ?style:LayoutStyle) {
 		if (key == null || key.length == 0 || text == null) throw "Snackbars require a stable key and text";
 		this.key = key;

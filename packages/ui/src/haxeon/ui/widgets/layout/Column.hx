@@ -13,8 +13,11 @@ import haxeon.ui.style.StyleTarget;
 class Column implements View {
 	final key:Key;
 	final children:Array<KeyedView>;
+
+	/** The column's box: its children laid out top to bottom, with its gap, padding and alignment. */
 	public final style:LayoutStyle;
 
+	/** A column of `children`, each keyed so its state survives reordering. */
 	public function new(key:String, children:Array<KeyedView>, ?style:LayoutStyle) {
 		this.key = new Key(key);
 		this.children = children == null ? [] : children;

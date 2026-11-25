@@ -36,11 +36,20 @@ import haxeon.ui.widgets.docking.DockWorkspaceInteraction;
 
 /** Renders a DockWorkspaceModel using split panes, tab groups, and lazy panels. */
 class DockWorkspace implements View {
+	/** The draggable thickness of the dividers between panes, in logical pixels. */
 	public static inline final DividerExtent = 8.0;
+
+	/** The narrowest a pane in a side-by-side split can be dragged to, in logical pixels. */
 	public static inline final MinimumHorizontalExtent = 190.0;
+
+	/** Identifies the workspace among its siblings, so its state survives rebuilds. Required, and never empty. */
 	public final key:String;
+
+	/** The layout: the panels and how they are split and grouped. */
 	public final model:DockWorkspaceModel;
-	public var interaction(default, null):DockWorkspaceInteraction;
+	internal var interaction(default, null):DockWorkspaceInteraction;
+
+	/** The workspace's box. */
 	public final style:LayoutStyle;
 	/** Available content height when the workspace sits below application chrome. */
 	public var availableHeight:Null<Float> = null;
@@ -54,23 +63,24 @@ class DockWorkspace implements View {
 	public var expandedGroup:Null<Array<String>> = null;
 	/** Presentation-only suppression; preserves the model, split paths and saved layout. */
 	public var hiddenPanels:Array<String> = [];
-	final suppliedInteraction:Bool;
 	final panelContents:Map<String, DockPanelContent>;
 	/** Scratch for `fillPaneCacheKey`; read straight after it fills, before any other pane's key is built. */
 	final paneKeyHash:KeyHash = new KeyHash();
 	/** Where panel content is keyed while building: under the workspace, by panel ID (see DockPanelView). */
 	var panelScope:Null<KeyScope> = null;
 
+	/**
+	 * A workspace laying out `model`'s panels, `panelContents` building their views. Throws when `key` is empty or
+	 * there is no model.
+	 */
 	public function new(key:String,
 			model:DockWorkspaceModel,
 			?panelContents:Array<DockPanelContent>,
-			?style:LayoutStyle,
-			?interaction:DockWorkspaceInteraction) {
+			?style:LayoutStyle) {
 		if (key == null || key.length == 0 || model == null) throw "Dock workspaces require a stable key and model";
 		this.key = key;
 		this.model = model;
-		suppliedInteraction = interaction != null;
-		this.interaction = interaction == null ? new DockWorkspaceInteraction(model) : interaction;
+		interaction = new DockWorkspaceInteraction(model);
 		this.style = style == null ? defaultStyle() : style.copy();
 		this.panelContents = new Map();
 		if (panelContents != null) for (content in panelContents) {
@@ -89,7 +99,7 @@ class DockWorkspace implements View {
 			value.dispose();
 		});
 		var mount = mounted.value;
-		mount.bind(model, suppliedInteraction ? interaction : null);
+		mount.bind(model);
 		interaction = mount.interaction;
 		interaction.beginFrame();
 		var labelWidths:DockTextWidthCache = context.lazyState(context.id("tab-label-width-cache"),
@@ -472,10 +482,11 @@ private class DockWorkspaceMount implements Disposable {
 		this.interaction = interaction;
 	}
 
-	public function bind(nextModel:DockWorkspaceModel, requestedInteraction:Null<DockWorkspaceInteraction>):Void {
-		if (model == nextModel && (requestedInteraction == null || interaction == requestedInteraction)) return;
+	/** Follows the workspace's model: a new one starts a new interaction. */
+	public function bind(nextModel:DockWorkspaceModel):Void {
+		if (model == nextModel) return;
 		model = nextModel;
-		interaction = requestedInteraction == null ? new DockWorkspaceInteraction(nextModel) : requestedInteraction;
+		interaction = new DockWorkspaceInteraction(nextModel);
 	}
 
 	public function dispose():Void {}

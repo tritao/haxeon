@@ -11,8 +11,11 @@ import haxeon.ui.core.View;
 /** Empty layout node that can consume available space on either axis. */
 class Spacer implements View {
 	final key:Key;
+
+	/** The empty box. */
 	public final style:LayoutStyle;
 
+	/** An empty box sized by `width` and `height`; grow an axis to push the siblings apart. */
 	public function new(key:String, ?width:LayoutAxis, ?height:LayoutAxis) {
 		this.key = new Key(key);
 		style = new LayoutStyle();

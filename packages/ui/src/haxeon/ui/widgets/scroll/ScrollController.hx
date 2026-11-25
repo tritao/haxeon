@@ -7,17 +7,34 @@ import haxeon.ui.widgets.scroll.ScrollView;
  * offset change goes to the bound callback, which moves content in place or asks for a rebuild itself.
  */
 class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimation {
+	/** How long a smooth scroll takes, in seconds. */
 	public var animationDuration(default, null):Float = 0.12;
+
+	/** Whether scrolls are smoothed. */
 	public var animated(default, null):Bool = false;
 	var targetX:Float;
 	var targetY:Float;
 	final binding:ScrollControllerBindingState = new ScrollControllerBindingState();
+
+	/** How far the content is scrolled left, in logical pixels. */
 	public var offsetX(default, null):Float;
+
+	/** How far the content is scrolled up, in logical pixels. */
 	public var offsetY(default, null):Float;
+
+	/** The viewport's width, as the last layout found it. */
 	public var viewportWidth(default, null):Float;
+
+	/** The viewport's height, as the last layout found it. */
 	public var viewportHeight(default, null):Float;
+
+	/** The content's width, as the last layout found it. */
 	public var contentWidth(default, null):Float;
+
+	/** The content's height, as the last layout found it. */
 	public var contentHeight(default, null):Float;
+
+	/** Whether a layout has measured the viewport and content yet. */
 	public var hasMetrics(default, null):Bool;
 	/** Fling decay: velocity is multiplied by this much per second, so about 2 s bring 4000 px/s to rest. */
 	static inline var FlingFriction:Float = 0.135;
@@ -30,6 +47,7 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 	inline function get_isFlinging():Bool
 		return flingX != 0.0 || flingY != 0.0;
 
+	/** A scroll position starting at (`offsetX`, `offsetY`). */
 	public function new(offsetX:Float = 0.0, offsetY:Float = 0.0) {
 		if (!finiteNonNegative(offsetX) || !finiteNonNegative(offsetY))
 			throw "Scroll offsets must be finite and non-negative";
@@ -44,10 +62,12 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 		hasMetrics = false;
 	}
 
+	/** The largest horizontal offset: the content's overflow. */
 	public var maxScrollX(get, never):Float;
 	inline function get_maxScrollX():Float
 		return Math.max(0.0, contentWidth - viewportWidth);
 
+	/** The largest vertical offset: the content's overflow. */
 	public var maxScrollY(get, never):Float;
 	inline function get_maxScrollY():Float
 		return Math.max(0.0, contentHeight - viewportHeight);
@@ -161,6 +181,7 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 		return flinging || offsetX != targetX || offsetY != targetY;
 	}
 
+	/** Stops a smooth scroll or a fling where it is. */
 	public function cancelAnimation():Void {
 		stopFling();
 		if (binding.scheduler != null) binding.scheduler.remove(this);

@@ -14,13 +14,25 @@ import haxeon.ui.widgets.Icon;
 
 /** Pill chip: label, optional trailing chevron or clear (x); `active` uses the dark fill. */
 class Chip implements ScopeView {
+	/** Identifies the chip among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The text it shows. */
 	public final label:String;
+
+	/** Called when the chip is activated. */
 	public final onClick:Void->Void;
+
+	/** Whether it shows as on, in the dark fill. */
 	public final active:Bool;
+
+	/** What follows the label. */
 	public final trailing:ChipTrailing;
+
+	/** The chip's box. */
 	public final style:LayoutStyle;
 
+	/** A chip labelled `label`. */
 	public function new(key:String, label:String, onClick:Void->Void, active:Bool = false,
 			trailing:ChipTrailing = None, ?style:LayoutStyle) {
 		if (key == null || key.length == 0 || label == null) throw "Chips require a stable key and a label";
@@ -113,7 +125,10 @@ class Chip implements ScopeView {
 
 /** What a Chip shows after its label. */
 enum ChipTrailing {
+	/** Nothing. */
 	None;
+	/** A chevron, for a chip that opens a choice. */
 	Chevron;
+	/** A clear button, which calls `onClear`. */
 	Clear(onClear:Void->Void);
 }

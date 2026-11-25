@@ -26,25 +26,64 @@ import haxeon.ui.widgets.text.TextField;
 /** Search input and virtualized results with input-owned keyboard focus. Retain across builds. */
 class SearchPicker implements View {
 	final key:String;
+
+	/** The results, query and selection. */
 	public var model:SearchPickerModel;
+
+	/**
+	 * Builds a result row from the context, its index, whether it is selected and hovered, and a revision that changes
+	 * when tooltips should close.
+	 */
 	public var buildRow:(BuildContext, Int, Bool, Bool, Int) -> View;
+
+	/** Called when the user dismisses the picker, by Escape or a click outside. */
 	public var onDismiss:Void->Void;
+
+	/** Called after the query or selection changes, so the owner rebuilds. */
 	public var onChanged:Void->Void;
+
+	/** Its width, in logical pixels. */
 	public var width:Float = 480;
+
+	/** The height of every result row. */
 	public var rowHeight:Float = 32;
+
+	/** The tallest the result list grows before it scrolls. */
 	public var maxListHeight:Float = 360;
+
+	/** Its left edge, unless `centered`. */
 	public var x:Float = 0;
+
+	/** Its top edge. */
 	public var y:Float = 10;
+
+	/** Whether it is centered horizontally in the viewport. */
 	public var centered:Bool = true;
+
+	/** The search field's accessible name. */
 	public var label:String = "Search";
+
+	/** The hint in the search field while it is empty. */
 	public var placeholder:String = "Search";
+
+	/** Text shown before the query in the search field, such as a mode marker. */
 	public var prefix:String = "";
+
+	/** Shown when there are no results. */
 	public var emptyText:String = "No matching results";
 	/** Keeps the whole query selected until the user edits it or moves the caret, so typing replaces a value the owner filled in. */
 	public var selectQuery:Bool = false;
+
+	/** Whether it keeps keyboard focus within itself. */
 	public var modal:Bool = true;
+
+	/** Whether the rest of the UI is dimmed behind it. */
 	public var dimBackdrop:Bool = false;
+
+	/** Whether it is drawn as a menu surface, with its border and shadow. */
 	public var menuSurface:Bool = true;
+
+	/** Its stacking order among overlays. */
 	public var layerZIndex:Int = 0;
 	final scroll = new ScrollController();
 	var focusPending:Bool = true;
@@ -55,6 +94,10 @@ class SearchPicker implements View {
 	var hovered:Int = -1;
 	var tooltipDismissRevision:Int = 0;
 
+	/**
+	 * A picker over `model`'s results, `buildRow` building each. Throws when `key` is empty or there is no model or
+	 * row builder.
+	 */
 	public function new(key:String,
 			model:SearchPickerModel,
 			buildRow:(BuildContext, Int, Bool, Bool, Int) -> View,
@@ -265,13 +308,18 @@ private class SearchPickerRow implements View {
 
 /** Application-owned results and selection; the picker owns focus and scrolling. */
 interface SearchPickerModel extends haxeon.ui.widgets.collections.ListView.ListViewItemMetadata {
+	/** The search text. */
 	public function query():String;
+	/** The selected result's index, or -1 for none. */
 	public function selectedIndex():Int;
+	/** How many results there are. */
 	public function count():Int;
 	public function labelAt(index:Int):String;
 	public function enabledAt(index:Int):Bool;
+	/** The user changed the search text to `value`. */
 	public function setQuery(value:String):Void;
 	/** Normalized UiKey/UiModifier values; pageSize is the visible row count. */
 	public function navigate(key:Int, modifiers:UiModifier, pageSize:Int):Void;
+	/** The user chose the result at `index`. */
 	public function activate(index:Int):Void;
 }

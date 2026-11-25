@@ -25,20 +25,45 @@ class SplitView implements View {
 	final key:Key;
 	final leading:View;
 	final trailing:View;
+
+	/** Whether the panes are side by side or stacked. */
 	public final orientation:SplitOrientation;
+
+	/** Which pane has the set extent; the other takes the rest. */
 	public final resizableSide:SplitSide;
+
+	/** The smallest extent the user can drag it to. */
 	public final minimumExtent:Float;
+
+	/** The largest extent the user can drag it to. */
 	public final maximumExtent:Float;
+
+	/** The divider's draggable thickness, in logical pixels. */
 	public final dividerExtent:Float;
+
+	/** The divider's drawn thickness. */
 	public final dividerVisualExtent:Float;
 	final dividerHairline:Bool;
+
+	/** Called with the new extent as the user drags the divider. */
 	public final onResize:Null<Float->Void>;
+
+	/** Called when the user collapses or restores the resizable pane. */
 	public final onCollapsedChanged:Null<Bool->Void>;
+
+	/** The split's box. */
 	public final style:LayoutStyle;
+
+	/** The divider's box. */
 	public final dividerStyle:LayoutStyle;
+
+	/** The resizable pane's extent, in logical pixels. */
 	public var extent:Float;
+
+	/** Whether the resizable pane is collapsed. */
 	public var collapsed:Bool;
 
+	/** Two panes, `leading` and `trailing`, split by a draggable divider as `options` sets it up. */
 	public function new(key:String, leading:View, trailing:View, ?options:SplitViewOptions) {
 		if (leading == null || trailing == null) throw "SplitView requires leading and trailing views";
 		var resolved = options == null ? new SplitViewOptions() : options;
@@ -352,34 +377,50 @@ private class SplitDragState {
 
 /** Main axis used by a SplitView. */
 enum SplitOrientation implements Hashable {
+	/** Panes side by side, divided by a vertical bar. */
 	Horizontal;
+	/** Panes one above the other, divided by a horizontal bar. */
 	Vertical;
 }
 
 /** Which edge contains a SplitView's resizable pane. */
 enum SplitSide implements Hashable {
+	/** The first pane (left or top) has the set extent; the second takes the rest. */
 	Leading;
+	/** The second pane (right or bottom) has the set extent; the first takes the rest. */
 	Trailing;
 }
 
 /** Policies and controlled state for a SplitView's resizable pane. */
 class SplitViewOptions {
+	/** `SplitView.orientation`: side by side unless set. */
 	public var orientation:SplitOrientation;
+	/** `SplitView.resizableSide`. */
 	public var resizableSide:SplitSide;
+	/** The starting extent of the resizable pane. */
 	public var extent:Float;
+	/** `SplitView.minimumExtent`. */
 	public var minimumExtent:Float;
+	/** `SplitView.maximumExtent`. */
 	public var maximumExtent:Float;
+	/** Whether the resizable pane starts collapsed. */
 	public var collapsed:Bool;
+	/** `SplitView.dividerExtent`. */
 	public var dividerExtent:Float;
 	/** Visible divider width; null uses the full draggable extent. */
 	public var dividerVisualExtent:Null<Float>;
 	/** Paint a device-aligned one-pixel separator with an overlapping resize target and no layout gap. */
 	public var dividerHairline:Bool = false;
+	/** `SplitView.style`; the default when null. */
 	public var style:Null<LayoutStyle>;
+	/** `SplitView.dividerStyle`; the default when null. */
 	public var dividerStyle:Null<LayoutStyle>;
+	/** `SplitView.onResize`. */
 	public var onResize:Null<Float->Void>;
+	/** `SplitView.onCollapsedChanged`. */
 	public var onCollapsedChanged:Null<Bool->Void>;
 
+	/** The default options: side by side, the trailing pane resizable, 280 pixels wide within 160 to 480. */
 	public function new() {
 		orientation = SplitOrientation.Horizontal;
 		resizableSide = SplitSide.Trailing;

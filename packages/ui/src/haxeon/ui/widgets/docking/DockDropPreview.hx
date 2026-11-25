@@ -3,7 +3,7 @@ package haxeon.ui.widgets.docking;
 import haxeon.ui.docking.DockDropZone;
 
 /** Current target and zone preview while a dock tab is being dragged. */
-class DockDropPreview {
+internal class DockDropPreview {
 	public final sourcePanelId:String;
 	public final targetPanelId:String;
 	public final zone:DockDropZone;

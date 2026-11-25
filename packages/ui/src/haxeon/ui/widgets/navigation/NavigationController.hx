@@ -11,7 +11,10 @@ import haxeon.ui.core.View;
  * `hostContext.onBack = controller.handleBack` (or calls it from its own handler after closing sheets and menus).
  */
 class NavigationController {
+	/** The screens, the root first and the shown one last. */
 	public var entries(default, null):Array<NavigationEntry>;
+
+	/** Counts the changes, so the stack knows to rebuild. */
 	public var revision(default, null):Int;
 
 	/** Transition in flight: 1 push, -1 pop, 0 none. Read by NavigationStack. */
@@ -25,6 +28,7 @@ class NavigationController {
 	/** Running slide, kept so a new change can stop it. */
 	public var motion:Null<AnimationController>;
 
+	/** A stack of one screen, `root`. Throws without a root. */
 	public function new(root:NavigationEntry) {
 		if (root == null) throw "A navigation controller requires a root entry";
 		check(root);
@@ -37,10 +41,12 @@ class NavigationController {
 		motion = null;
 	}
 
+	/** How many screens there are. */
 	public var depth(get, never):Int;
 
 	function get_depth():Int return entries.length;
 
+	/** The shown screen. */
 	public var top(get, never):NavigationEntry;
 
 	function get_top():NavigationEntry return entries[entries.length - 1];

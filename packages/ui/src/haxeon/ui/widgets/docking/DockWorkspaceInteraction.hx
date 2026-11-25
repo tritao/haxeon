@@ -5,7 +5,7 @@ import Observable;
 import haxeon.ui.docking.DockWorkspaceModel;
 
 /** Shared tab-drag controller that translates pointer geometry into model docks. */
-class DockWorkspaceInteraction implements Observable {
+internal class DockWorkspaceInteraction implements Observable {
 	public final model:DockWorkspaceModel;
 	public var draggingPanelId(default, null):Null<String>;
 	public var preview(default, null):Null<DockDropPreview>;

@@ -12,7 +12,7 @@ import haxeon.ui.style.StyleTarget;
 import haxeon.ui.widgets.text.Text;
 
 /** Phone design tokens (docs/phone-ui/CONTRACTS.md) and small node builders shared by the navigation widgets. */
-class NavUi {
+internal class NavUi {
 	public static final surface:Color = rgb(0xffffff);
 	public static final text:Color = rgb(0x16181d);
 	public static final secondary:Color = rgb(0x555b66);

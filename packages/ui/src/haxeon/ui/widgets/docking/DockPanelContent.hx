@@ -3,10 +3,14 @@ package haxeon.ui.widgets.docking;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.View;
 
+/** Builds a panel's view. */
 typedef DockPanelBuilder = BuildContext->View;
+
+/** Builds a panel's view for the width of its pane. */
 typedef WidthAwareDockPanelBuilder = BuildContext->Float->View;
 /** Lazy view factory kept separate from the view-independent dock model. */
 class DockPanelContent {
+	/** The panel in the dock model whose view this builds. */
 	public final panelId:String;
 	/** Builds the panel when it has no `buildWithWidth`. */
 	public final build:Null<DockPanelBuilder>;
@@ -34,6 +38,10 @@ class DockPanelContent {
 		return content;
 	}
 
+	/**
+	 * Content for the panel `panelId`, built by `build` or `buildWithWidth`. Throws when `panelId` is empty or there
+	 * is no builder.
+	 */
 	public function new(panelId:String, build:Null<DockPanelBuilder>,
 			?buildWithWidth:WidthAwareDockPanelBuilder) {
 		if (panelId == null || panelId.length == 0 || (build == null && buildWithWidth == null))

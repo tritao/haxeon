@@ -12,19 +12,35 @@ import haxeon.ui.icons.IconName;
 
 /** Button whose label, enabled state, and action are owned by a Command. */
 class CommandButton implements View {
+	/** Identifies the button among its siblings, so its state survives rebuilds. */
 	public final key:String;
+
+	/** The command the button runs, whose label and enabled state it shows. */
 	public final commandId:String;
+
+	/** The registry the commands come from; the build context's when null. */
 	public final registry:Null<CommandRegistry>;
+
+	/** What the commands act on; the build context's when null. */
 	public final invocationContext:Null<CommandContext>;
+
+	/** The button's box; the default when null. */
 	public final style:Null<LayoutStyle>;
 	/** Defaults to Secondary; callers mark primary commands explicitly. */
 	public var variant:ButtonVariant;
+
+	/** Text shown in place of the command's label. */
 	public var displayLabel:Null<String>;
+
+	/** An icon before the label. */
 	public var leadingIcon:Null<IconName>;
 	/** Additional presentation classes for toolbar and other command surfaces. */
 	public var classes:Array<String>;
+
+	/** Called with the outcome of each command run. */
 	public var onResult:Null<CommandResult->Void>;
 
+	/** A button running the command `commandId`. */
 	public function new(key:String,
 			commandId:String,
 			?registry:CommandRegistry,

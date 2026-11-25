@@ -14,8 +14,11 @@ class Padding implements View {
 	final key:Key;
 	final child:View;
 	final insets:Insets;
+
+	/** The box, with the padding set. */
 	public final style:LayoutStyle;
 
+	/** `child` with `insets` of space around it. */
 	public function new(key:String, child:View, ?insets:Insets, ?style:LayoutStyle) {
 		if (child == null) throw "Padding requires a child view";
 		this.key = new Key(key);

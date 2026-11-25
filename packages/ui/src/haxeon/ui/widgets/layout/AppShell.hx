@@ -23,9 +23,17 @@ class AppShell implements View {
 	final sidebar:Null<View>;
 	final content:View;
 	final inspector:Null<View>;
+
+	/** The whole shell's box. */
 	public final style:LayoutStyle;
+
+	/** The box of the row between the bars, holding the sidebar, content and inspector. */
 	public final bodyStyle:LayoutStyle;
 
+	/**
+	 * A window's frame: `content` growing in the middle, with an optional `topBar` and `bottomBar` across it and
+	 * `sidebar` and `inspector` beside it. Throws without content.
+	 */
 	public function new(key:String, content:View, ?topBar:View, ?sidebar:View,
 			?inspector:View, ?style:LayoutStyle, ?bodyStyle:LayoutStyle, ?bottomBar:View) {
 		if (content == null)

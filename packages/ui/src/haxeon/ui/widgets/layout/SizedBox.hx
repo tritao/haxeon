@@ -13,8 +13,11 @@ import haxeon.ui.style.StyleTarget;
 class SizedBox implements View {
 	final key:Key;
 	final child:View;
+
+	/** The box, with the width and height given. */
 	public final style:LayoutStyle;
 
+	/** `child` sized by `width` and `height`; an axis left out fits the child. */
 	public function new(key:String, child:View, ?width:LayoutAxis, ?height:LayoutAxis) {
 		if (child == null) throw "SizedBox requires a child view";
 		this.key = new Key(key);

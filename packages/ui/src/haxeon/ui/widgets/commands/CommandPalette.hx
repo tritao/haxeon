@@ -23,17 +23,33 @@ import haxeon.ui.core.View;
 import haxeon.ui.widgets.commands.SearchPicker;
 /** Searchable, virtualized command launcher suitable for editor key palettes. */
 class CommandPalette implements View {
+	/** Identifies the palette among its siblings, so its state survives rebuilds. Required, and never empty. */
 	public final key:String;
+
+	/** The registry the commands come from; the build context's when null. */
 	public final registry:Null<CommandRegistry>;
+
+	/** What the commands act on; the build context's when null. */
 	public final invocationContext:Null<CommandContext>;
+
+	/** Its left edge, unless `centered`. */
 	public final x:Float;
+
+	/** Its top edge, unless `centered`. */
 	public final y:Float;
+
+	/** The search text, which filters the commands by label. */
 	public var query:String;
 	/** Center the palette in the viewport, fitting its list into smaller windows. */
 	public var centered:Bool;
+
+	/** Called when the palette closes without a choice. */
 	public var onDismiss:Null<Void->Void>;
+
+	/** Called with the outcome of each command run. */
 	public var onResult:Null<CommandResult->Void>;
 
+	/** A palette searching every registered command, starting with `query`. Throws when `key` is empty. */
 	public function new(key:String, ?registry:CommandRegistry, ?invocationContext:CommandContext,
 			x:Float = 0.0, y:Float = 0.0, query:String = "",
 			?onDismiss:Void->Void, ?onResult:CommandResult->Void) {

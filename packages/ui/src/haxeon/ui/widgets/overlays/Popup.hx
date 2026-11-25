@@ -21,16 +21,34 @@ import haxeon.ui.style.StyleTarget;
 class Popup implements View {
 	final key:Key;
 	final child:View;
+
+	/** Its left edge, in its parent's coordinates. */
 	public final x:Float;
+
+	/** Its top edge, in its parent's coordinates. */
 	public final y:Float;
+
+	/** The popup's box. */
 	public final style:LayoutStyle;
 	/** Optional live anchor in logical screen coordinates; placement uses measured panel size. */
 	public var anchorRectProvider:Null<Void->Null<Rect>>;
+
+	/** The popup's accessible name. */
 	public var label:Null<String>;
+
+	/** Whether it keeps keyboard focus within itself. */
 	public var modal:Bool;
+
+	/** Whether the rest of the UI is dimmed behind it. */
 	public var dimBackdrop:Bool;
+
+	/** Whether a click outside it dismisses it. */
 	public var dismissOnOutside:Bool;
+
+	/** Whether Escape dismisses it. */
 	public var dismissOnEscape:Bool;
+
+	/** The color of the dimmed backdrop; the theme's when null. */
 	public var backdropColor:Null<Color>;
 	/** Absolute layer shared by the backdrop; content paints one layer above it. */
 	public var layerZIndex:Int;
@@ -46,8 +64,15 @@ class Popup implements View {
 	public var flipHorizontally:Bool;
 	/** Handle an outside click (for example, a sibling menu trigger); true skips default dismissal. */
 	public var onOutsideClick:Null<UiEvent->Bool> = null;
+
+	/** Called when the user dismisses it; the caller removes it. */
 	public var onDismiss:Void->Void;
-	public var hasDismissHandler(default, null):Bool;
+	internal var hasDismissHandler(default, null):Bool;
+
+	/**
+	 * A popup showing `child` at (`x`, `y`) in its parent. Throws without content or with a position that is not
+	 * finite.
+	 */
 	public function new(key:String,
 			child:View, x:Float = 0.0, y:Float = 0.0, ?style:LayoutStyle, ?onDismiss:Void->Void) {
 		if (child == null || !finite(x)

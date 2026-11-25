@@ -17,6 +17,7 @@ class ShortcutKeycaps implements View {
 	final shortcut:String;
 	final selected:Bool;
 
+	/** Shows `shortcut` as keycaps, in the selected row's colors when `selected`. */
 	public function new(shortcut:String, selected:Bool = false) {
 		this.shortcut = shortcut;
 		this.selected = selected;

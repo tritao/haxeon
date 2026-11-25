@@ -5,7 +5,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.docking.DockDropZone;
 
 /** Resolved render geometry that accepts a dock drop for one panel group. */
-class DockDropTarget {
+internal class DockDropTarget {
 	public final targetPanelId:String;
 	public final node:RenderNode;
 

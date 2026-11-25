@@ -5,7 +5,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.docking.DockDropZone;
 
 /** Header geometry used to reorder tabs without materializing another dock. */
-class DockTabDropTarget {
+internal class DockTabDropTarget {
 	public final targetPanelId:String;
 	public final node:RenderNode;
 

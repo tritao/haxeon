@@ -17,10 +17,16 @@ import haxeon.ui.widgets.navigation.NavigationController;
  * old one out (220 ms). Back is `NavigationController.handleBack`.
  */
 class NavigationStack implements ScopeView {
+	/** Identifies the stack among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The screens and their changes. */
 	public final controller:NavigationController;
+
+	/** The stack's box. */
 	public final style:LayoutStyle;
 
+	/** A stack showing `controller`'s top screen. */
 	public function new(key:String, controller:NavigationController, ?style:LayoutStyle) {
 		if (key == null || key.length == 0 || controller == null)
 			throw "Navigation stacks require a stable key and a controller";

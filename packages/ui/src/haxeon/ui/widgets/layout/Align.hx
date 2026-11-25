@@ -13,8 +13,11 @@ import haxeon.ui.style.StyleTarget;
 class Align implements View {
 	final key:Key;
 	final child:View;
+
+	/** The box `child` is placed in. */
 	public final style:LayoutStyle;
 
+	/** `child` placed by `alignmentX` and `alignmentY` within the box, centered by default. Throws without a child. */
 	public function new(key:String,
 			child:View,
 			alignmentX:LayoutAlignmentX = LayoutAlignmentX.Center,

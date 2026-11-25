@@ -37,12 +37,22 @@ class BottomSheet implements ScopeView {
 	static inline var MaxHeightFraction:Float = 0.85;
 	static inline var DismissDrag:Float = 80.0;
 
+	/** Identifies the sheet among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The title over its content. */
 	public final title:String;
+
+	/** What the sheet shows. */
 	public final content:View;
+
+	/** Called when the user dismisses the sheet; the caller removes it. */
 	public final onDismiss:Void->Void;
+
+	/** The sheet's box. */
 	public final style:LayoutStyle;
 
+	/** A sheet titled `title` showing `content`. Throws when `key` is empty or there is no content. */
 	public function new(key:String, title:String, content:View, onDismiss:Void->Void, ?style:LayoutStyle) {
 		if (key == null || key.length == 0 || content == null) throw "Bottom sheets require a stable key and content";
 		this.key = key;

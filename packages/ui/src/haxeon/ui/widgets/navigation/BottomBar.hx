@@ -20,13 +20,25 @@ class BottomBar implements ScopeView {
 	 */
 	public static var defaultBottomInset:Float = 0.0;
 
+	/** Identifies the bar among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The destinations, in order. */
 	public final items:Array<BottomBarItem>;
+
+	/** The key of the current destination. */
 	public final selected:String;
+
+	/** Called with an item's key when the user chooses it. */
 	public final onSelect:String->Void;
+
+	/** The bar's box. */
 	public final style:LayoutStyle;
+
+	/** Space kept below the items for the device's safe area, in logical pixels. */
 	public var bottomInset:Float;
 
+	/** A bottom bar over `items` with `selected` current. Throws when `key` is empty. */
 	public function new(key:String, items:Array<BottomBarItem>, selected:String, onSelect:String->Void,
 			?style:LayoutStyle) {
 		if (key == null || key.length == 0) throw "Bottom bars require a stable key";

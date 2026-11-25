@@ -26,9 +26,17 @@ class Tooltip implements View {
 	public var placement:Null<TooltipPlacement> = null;
 	/** Initial hover delay for side-positioned tooltips. */
 	public var delaySeconds:Float = 0.8;
+
+	/** A group shared by neighbouring tooltips, so moving between them shows each at once without the delay again. */
 	public var hoverGroup:Null<TooltipHoverGroup> = null;
+
+	/** Whether its group shows it now; the group sets it. */
 	public var groupVisible:Bool = false;
+
+	/** The area the tooltip must stay within; the viewport when null. */
 	public var boundsProvider:Null<Void->Rect> = null;
+
+	/** Whether a tooltip placed by `placement` starts at the anchor's horizontal middle rather than its left edge. */
 	public var startAtAnchorMiddle:Bool = false;
 	static inline final PADDING = 10.0;
 	static inline final EDGE = 6.0;
@@ -60,7 +68,11 @@ class Tooltip implements View {
 	final key:Key;
 	final anchor:View;
 	final content:View;
+
+	/** Its left edge, from the anchor's, when `placement` is null. */
 	public final x:Float;
+
+	/** Its top edge, from the anchor's, when `placement` is null. */
 	public final y:Float;
 	/** Fill the available row width when the anchor needs to clip long text. */
 	public var fillAnchor:Bool = false;
@@ -71,6 +83,7 @@ class Tooltip implements View {
 	/** Change this value to dismiss a tooltip when its surrounding content moves. */
 	public var dismissRevision:Int = 0;
 
+	/** A tooltip showing `content` over `anchor`, at (`x`, `y`) from it unless `placement` places it. */
 	public function new(key:String, anchor:View, content:View, x:Float = 0.0, y:Float = -28.0) {
 		if (anchor == null || content == null) throw "Tooltip requires an anchor and content view";
 		this.key = new Key(key);
@@ -377,11 +390,15 @@ private class TooltipPointerState {
 
 /** Preferred side of a tooltip, independent of hover timing. */
 enum TooltipPlacement {
+	/** Under the anchor. */
 	Below;
+	/** Over the anchor. */
 	Above;
+	/** To the anchor's right. */
 	Right;
 }
 
+/** The rest before a tooltip shows: started when the pointer comes over its anchor, cancelled when it leaves. */
 class TooltipHoverDelay implements DelayedAnimation implements Disposable {
 	final scheduler:AnimationScheduler;
 	final changed:Bool->Void;
@@ -389,14 +406,17 @@ class TooltipHoverDelay implements DelayedAnimation implements Disposable {
 	var pending:Bool = false;
 	var disposed:Bool = false;
 
+	/** How long the pointer must rest before the tooltip shows. */
 	public var durationSeconds:Float;
 
+	/** A delay that calls `changed` with true once `delaySeconds` pass after `start`, and with false when cancelled. */
 	public function new(scheduler:AnimationScheduler, changed:Bool->Void, delaySeconds:Float = 0.8) {
 		this.durationSeconds = delaySeconds;
 		this.scheduler = scheduler;
 		this.changed = changed;
 	}
 
+	/** Starts the delay again. */
 	public function start():Void {
 		if (disposed)
 			return;
@@ -406,6 +426,7 @@ class TooltipHoverDelay implements DelayedAnimation implements Disposable {
 		scheduler.track(this);
 	}
 
+	/** Stops the delay and hides the tooltip. */
 	public function cancel():Void {
 		scheduler.remove(this);
 		pending = false;
@@ -441,14 +462,20 @@ class TooltipHoverGroup implements Animation implements Disposable {
 	var hovered:Null<String>;
 	var visible:Null<String>;
 	var remaining:Float = 0;
+	/** How long the pointer must rest before the group's first tooltip shows. */
 	public var delaySeconds:Float;
 
+	/** A group calling `changed` with the key of the tooltip to show, or null for none. */
 	public function new(scheduler:AnimationScheduler, changed:Null<String>->Void, delaySeconds:Float) {
 		this.scheduler = scheduler;
 		this.changed = changed;
 		this.delaySeconds = delaySeconds;
 	}
 
+	/**
+	 * The pointer came over the tooltip `key`: shows it after the delay, or at once when another of the group is
+	 * showing.
+	 */
 	public function enter(key:String):Void {
 		hovered = key;
 		if (visible != null || delaySeconds <= 0) {
@@ -460,6 +487,7 @@ class TooltipHoverGroup implements Animation implements Disposable {
 		}
 	}
 
+	/** The pointer left the tooltip `key`. */
 	public function leave(key:String):Void {
 		if (hovered != key) return;
 		hovered = null;
@@ -470,6 +498,7 @@ class TooltipHoverGroup implements Animation implements Disposable {
 		}
 	}
 
+	/** Hides the group's tooltips and resets the delay. */
 	public function cancel():Void {
 		hovered = null;
 		scheduler.remove(this);
@@ -494,6 +523,7 @@ class TooltipHoverGroup implements Animation implements Disposable {
 /** Lift tooltip surfaces out of clipped stacking contexts before layout. */
 class TooltipOverlayHost implements View {
 	final content:View;
+	/** Hosts `content`, lifting its tooltips above it so a clipped container does not cut them off. */
 	public function new(content:View) this.content = content;
 	public function build(context:BuildContext):RenderNode {
 		var lifted = context.lazyState(context.id("lifted-tooltips"),

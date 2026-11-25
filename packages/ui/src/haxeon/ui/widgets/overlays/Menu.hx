@@ -29,15 +29,22 @@ import haxeon.ui.widgets.scroll.ScrollView;
 class Menu implements View {
 	final key:String;
 	final items:Array<MenuItem>;
+
+	/** Its left edge, in its parent's coordinates. */
 	public final x:Float;
+
+	/** Its top edge, in its parent's coordinates. */
 	public final y:Float;
 	/** Optional outside-click routing for associated menu triggers. */
 	public var onOutsideClick:Null<haxeon.ui.core.UiEvent->Bool> = null;
+
+	/** Called when the menu closes without a choice, by Escape or a click outside. */
 	public var onDismiss:Void->Void;
-	public var hasDismissHandler(default, null):Bool;
+	internal var hasDismissHandler(default, null):Bool;
 	/** Keyboard invocation selects an item; pointer invocation focuses only the menu. */
 	public var selectFirstOnOpen:Bool = false;
 
+	/** A menu of `items` at (`x`, `y`). */
 	public function new(key:String, items:Array<MenuItem>, x:Float = 0.0, y:Float = 0.0, ?onDismiss:Void->Void) {
 		this.key = key;
 		this.items = items == null ? [] : items.copy();
@@ -263,15 +270,23 @@ private class MenuFocusState {
 
 /** Immutable menu command description. */
 class MenuItem {
+	/** Identifies the item within its menu. */
 	public final key:String;
+	/** The text it shows. */
 	public final label:String;
+	/** Called when the user chooses it. */
 	public final onSelect:Void->Void;
-	public final hasSelectHandler:Bool;
+	internal final hasSelectHandler:Bool;
+	/** Whether it can be chosen. */
 	public final enabled:Bool;
+	/** The shortcut shown beside it, as text; it does not bind the keys. */
 	public final shortcut:Null<String>;
+	/** Whether a separator line comes before it. */
 	public final separatorBefore:Bool;
+	/** Whether it is a heading that labels the items after it rather than one to choose. */
 	public final isHeading:Bool;
 
+	/** A menu item labelled `label`. */
 	public function new(key:String, label:String, ?onSelect:Void->Void, enabled:Bool = true,
 			?shortcut:String, separatorBefore:Bool = false, isHeading:Bool = false) {
 		this.shortcut = shortcut;

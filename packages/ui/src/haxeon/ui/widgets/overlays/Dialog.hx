@@ -17,13 +17,24 @@ import haxeon.ui.theme.TextRole;
 class Dialog implements View {
 	final key:Key;
 	final content:View;
-	public final title:String;
-	public final width:Float;
-	public var dismissOnOutside:Bool;
-	public var dismissOnEscape:Bool;
-	public var onDismiss:Void->Void;
-	public var hasDismissHandler(default, null):Bool;
 
+	/** The dialog's title, which also names it to assistive technology. */
+	public final title:String;
+
+	/** Its width, in logical pixels. */
+	public final width:Float;
+
+	/** Whether a click outside it dismisses it. */
+	public var dismissOnOutside:Bool;
+
+	/** Whether Escape dismisses it. */
+	public var dismissOnEscape:Bool;
+
+	/** Called when the user dismisses it; the caller removes it. */
+	public var onDismiss:Void->Void;
+	internal var hasDismissHandler(default, null):Bool;
+
+	/** A modal dialog titled `title` showing `content`, `width` pixels wide. */
 	public function new(key:String, title:String, content:View, ?onDismiss:Void->Void, width:Float = 440.0) {
 		if (content == null || !finite(width)
 			|| width <= 0.0) throw "Dialog requires content and a positive finite width";

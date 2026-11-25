@@ -10,9 +10,11 @@ import haxeon.ui.core.View;
  * this scope's shortcut precedence during keyboard routing.
  */
 class CommandScope implements View {
+	/** The scope whose shortcuts take precedence while focus is inside `child`. */
 	public final scope:String;
 	final child:View;
 
+	/** Shows `child`, with `scope`'s shortcuts first while focus is inside it. */
 	public function new(scope:String, child:View) {
 		if (scope == null || scope.length == 0 || child == null)
 			throw "Command scopes require a stable name and child view";

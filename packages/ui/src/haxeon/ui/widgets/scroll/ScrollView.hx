@@ -32,8 +32,14 @@ class ScrollView implements View {
 	final child:View;
 	final axis:Int;
 	final suppliedController:Bool;
+
+	/** The viewport's box, which clips the content. */
 	public final style:LayoutStyle;
+
+	/** The scroll position, which a caller can share to read or move it. */
 	public var controller(default, null):ScrollController;
+
+	/** Called with each scroll event the view handles. */
 	public var onScroll:UiEvent->Void;
 	/** Shows an interactive overlay scrollbar when vertical content overflows. */
 	public var showScrollbar:Bool;
@@ -51,6 +57,7 @@ class ScrollView implements View {
 	/** Optional non-scrolling ancestor with the same vertical extent. */
 	public var scrollbarOverlayHost:Null<RenderNode> = null;
 
+	/** A viewport scrolling `child` along `axis`. Throws without a child or with an unknown axis. */
 	public function new(key:String,
 			child:View,
 			?style:LayoutStyle,
@@ -576,20 +583,26 @@ private class TouchScrollState {
 
 /** Axes whose content may move inside a ScrollView viewport. */
 class ScrollAxis {
+	/** Content scrolls up and down. */
 	public static inline var Vertical:Int = 0;
+	/** Content scrolls left and right. */
 	public static inline var Horizontal:Int = 1;
+	/** Content scrolls both ways. */
 	public static inline var Both:Int = 2;
 }
 
 /** Shared scrollbar visibility policy; Auto reveals on pane hover or scroll activity. */
 class ScrollbarVisibility {
+	/** Scrollbars show while the pane is hovered or scrolling. */
 	public static inline var Auto:Int = 0;
+	/** Scrollbars always show. */
 	public static inline var Always:Int = 1;
+	/** Scrollbars never show; the content still scrolls. */
 	public static inline var Hidden:Int = 2;
 }
 
 /** Mount-owned binding; replacing or unmounting a viewport retires its animation. */
-class ScrollBinding implements Disposable {
+internal class ScrollBinding implements Disposable {
 	var controller:Null<ScrollController>;
 	public function new() {}
 	public function attach(value:ScrollController, scheduler:AnimationScheduler, changed:ScrollController->Void):Void {

@@ -13,8 +13,11 @@ import haxeon.ui.style.StyleTarget;
 class Stack implements View {
 	final key:Key;
 	final layers:Array<StackChild>;
+
+	/** The stack's box, which its layers are positioned in. */
 	public final style:LayoutStyle;
 
+	/** Layers placed at their own positions within one box, later and higher `zIndex` layers on top. */
 	public function new(key:String, layers:Array<StackChild>, ?style:LayoutStyle) {
 		this.key = new Key(key);
 		this.layers = layers == null ? [] : layers.copy();
@@ -60,15 +63,24 @@ class Stack implements View {
 
 /** A positioned child layer submitted to a Stack. */
 class StackChild {
+	/** Identifies the layer among the stack's layers. */
 	public final key:String;
+	/** What the layer shows. */
 	public final view:View;
+	/** Its left edge, from the stack's, in logical pixels. */
 	public final x:Float;
+	/** Its top edge, from the stack's, in logical pixels. */
 	public final y:Float;
+	/** Its order: higher layers draw on top and take the pointer first. */
 	public final zIndex:Int;
+	/** Its width; the view's own when null. */
 	public final width:Null<LayoutAxis>;
+	/** Its height; the view's own when null. */
 	public final height:Null<LayoutAxis>;
+	/** Whether the stack's box clips it. */
 	public final clipToParent:Bool;
 
+	/** A layer showing `view` at (`x`, `y`). */
 	public function new(key:String, view:View, x:Float = 0.0, y:Float = 0.0,
 			zIndex:Int = 0, ?width:LayoutAxis, ?height:LayoutAxis,
 			clipToParent:Bool = true) {

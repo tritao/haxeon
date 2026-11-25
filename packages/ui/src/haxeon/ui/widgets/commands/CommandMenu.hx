@@ -10,16 +10,34 @@ import haxeon.ui.core.View;
 
 /** Popup menu projection of registered commands, including live enablement. */
 class CommandMenu implements View {
+	/** Identifies the menu among its siblings, so its state survives rebuilds. */
 	public final key:String;
+
+	/** The commands it lists, in order. */
 	public final commandIds:Array<String>;
+
+	/** The registry the commands come from; the build context's when null. */
 	public final registry:Null<CommandRegistry>;
+
+	/** What the commands act on; the build context's when null. */
 	public final invocationContext:Null<CommandContext>;
+
+	/** Its left edge, in its parent's coordinates. */
 	public final x:Float;
+
+	/** Its top edge, in its parent's coordinates. */
 	public final y:Float;
+
+	/** Called when the menu closes without a choice. */
 	public var onDismiss:Null<Void->Void>;
+
+	/** Called with the outcome of each command run. */
 	public var onResult:Null<CommandResult->Void>;
+
+	/** Whether the first enabled command is selected when the menu opens, as when it is opened from the keyboard. */
 	public var selectFirstOnOpen:Bool = false;
 
+	/** A menu of the commands `commandIds` at (`x`, `y`). */
 	public function new(key:String, commandIds:Array<String>, x:Float = 0.0, y:Float = 0.0,
 			?registry:CommandRegistry, ?invocationContext:CommandContext,
 			?onDismiss:Void->Void, ?onResult:CommandResult->Void) {

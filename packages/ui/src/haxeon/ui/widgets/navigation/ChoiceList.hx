@@ -21,13 +21,25 @@ class ChoiceList implements ScopeView {
 	static inline var RowHeight:Float = 52.0;
 	static inline var IndentPerDepth:Float = 16.0;
 
+	/** Identifies the list among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The choices, in order. */
 	public final items:Array<ChoiceItem>;
+
+	/** The keys of the chosen items. */
 	public final selected:Array<String>;
+
+	/** Whether several items can be chosen. */
 	public final multi:Bool;
+
+	/** Called with the chosen keys after each change. */
 	public final onChange:Array<String>->Void;
+
+	/** The hint in the search field while it is empty. */
 	public final searchPlaceholder:String;
 
+	/** A searchable list of `items` with `selected` chosen. Throws when `key` is empty. */
 	public function new(key:String, items:Array<ChoiceItem>, selected:Array<String>, multi:Bool,
 			onChange:Array<String>->Void, ?searchPlaceholder:String) {
 		if (key == null || key.length == 0) throw "Choice lists require a stable key";
