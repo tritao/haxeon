@@ -34,6 +34,15 @@ class QueryKindBase {
 	/** The recording frame that last recorded each key (`QueryDatabase.record`), so that a frame records a read once. */
 	var recordedBy:Array<Int> = [];
 
+	/**
+	 * For a kind that keeps its memos in columns (`ComputedQueryKind`), by key: the revision its memo was last verified at (0 for
+	 * none) and the revision it last changed at. A verification reads a key verified in its revision here without a call (most
+	 * reads are of such keys); other kinds leave them empty.
+	 */
+	final verifiedAt:Array<Int> = [];
+
+	final changes:Array<Int> = [];
+
 	function new(name:String)
 		kindName = name;
 
@@ -46,6 +55,10 @@ class QueryKindBase {
 		this.index = index;
 	}
 
+	/** The revision at which `key`'s value last changed when it is known without a call: it was verified at `revision`; else -1. */
+	public inline function changeIfVerified(key:Int, revision:Int):Int
+		return key < verifiedAt.length && verifiedAt[key] == revision ? changes[key] : -1;
+
 	/** The revision at which `key`'s value last changed, bringing it up to date first. */
 	public function changedAt(database:QueryDatabase, key:Int):Int
 		throw new compiler.core.InternalError("query kind " + kindName + " has no changedAt");
@@ -54,7 +67,7 @@ class QueryKindBase {
 	public function sweep(since:Int):Int
 		return 0;
 
-	/** Drops the computed memos computed after revision `since`: a rollback undid results they may have read (`QueryDatabase.rollBack`). */
+	/** Drops the memos computed after revision `since`: a rollback undid results they may have read (`QueryDatabase.rollBack`). */
 	@:allow(compiler.query.QueryDatabase)
 	function forgetComputedAfter(since:Int):Void {}
 

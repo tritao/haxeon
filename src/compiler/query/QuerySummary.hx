@@ -83,7 +83,7 @@ class QuerySummary extends QueryKindBase {
 		replace(database.revision, old, keys);
 	}
 
-	/** Ends the run: the contributors it did not give are retracted. `--check-reuse` counts the keys again from the contributions. */
+	/** Ends the run: the contributors it did not give are retracted. `--check-reuse` counts keys again from the contributions. */
 	public function close(database:QueryDatabase):Void {
 		if (!opened)
 			throw new InternalError("summary " + kindName + " is closed without being open");
@@ -132,7 +132,7 @@ class QuerySummary extends QueryKindBase {
 		if (opened)
 			throw new InternalError("summary " + kindName + " is read while its contributions are open");
 
-	/** Applies a contribution replacing `old` (null for none) with `keys` (null for none): a key whose count leaves or reaches 0 changes. */
+	/** Replaces contribution `old` with `keys` (either null for none): a key whose count leaves or reaches 0 changes. */
 	function replace(revision:Int, old:Null<Array<Int>>, keys:Null<Array<Int>>):Void {
 		replaced++;
 		var mark = ++replacement;

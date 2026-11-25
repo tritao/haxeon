@@ -13,22 +13,31 @@ import compiler.query.QueryKind.QueryRead;
  * equality): its readers verify without computing, and a reader that compares by identity finds the object it saw before.
  * Values are compared only where a key was computed again, never digested.
  *
- * The memos are columns by key, so verifying a key whose reads did not change reads a few Ints and allocates nothing: no frame,
- * no handler. A computation that throws ends the build: the next build drops the frames it left (`QueryDatabase.newRevision`), and
- * the marks of the keys it was busy with are of the revision it ended in.
+ * The memos are columns by key and their reads one pool of Ints, so verifying a key whose reads did not change reads a few Ints
+ * and allocates nothing: no frame, no handler, no element of an array of arrays (which HashLink casts on each read), and no call
+ * for a read of a key verified in the revision (`QueryKindBase.changeIfVerified`). A computation that throws ends the build: the
+ * next build drops the frames it left (`QueryDatabase.newRevision`), and the marks of the keys it was busy with are of the
+ * revision it ended in.
  */
 class ComputedQueryKind<V> extends QueryKindBase {
 	final same:(V, V) -> Bool;
 	final compute:Null<(QueryDatabase, Int) -> V>;
 	final keyName:Null<Int->String>;
 
-	// The memos, by key: the value, the revisions it was last verified at (0 for no memo), last changed at and computed at, and
-	// what its computation read (`QueryRead`).
+	// The memos, by key, besides `verifiedAt` and `changes`: the value, the revision it was computed at, and where in `pool` what
+	// its computation read (`QueryRead`) starts, and how many reads.
 	final values:Array<V> = [];
-	final verifiedAt:Array<Int> = [];
-	final changes:Array<Int> = [];
 	final computedAt:Array<Int> = [];
-	final reads:Array<Null<Array<Int>>> = [];
+	final readStart:Array<Int> = [];
+	final readCount:Array<Int> = [];
+
+	/** The memos' reads, each memo's in one run; a run a memo no longer has is garbage until `compact`. */
+	var pool:Array<Int> = [];
+
+	var garbage = 0;
+
+	/** How many verifications of this kind are under way: the pool is compacted only when none is, as they index it. */
+	var verifying = 0;
 
 	/** By key, the revision in which it is being computed or verified: a read that comes back to it is a cycle. */
 	final busy:Array<Int> = [];
@@ -84,13 +93,19 @@ class ComputedQueryKind<V> extends QueryKindBase {
 		if (verified == 0 || busy[key] == revision)
 			return false;
 		busy[key] = revision;
-		var held = true, through = reads[key];
-		if (through != null)
-			for (read in through)
-				if (database.kindAt(QueryRead.kind(read)).changedAt(database, QueryRead.key(read)) > verified) {
-					held = false;
-					break;
-				}
+		verifying++;
+		var held = true, index = readStart[key], last = index + readCount[key];
+		while (index < last) {
+			var read = pool[index++], kind = database.kindAt(QueryRead.kind(read)), target = QueryRead.key(read);
+			var change = kind.changeIfVerified(target, revision);
+			if (change < 0)
+				change = kind.changedAt(database, target);
+			if (change > verified) {
+				held = false;
+				break;
+			}
+		}
+		verifying--;
 		busy[key] = 0;
 		if (held) {
 			verifiedAt[key] = revision;
@@ -121,7 +136,7 @@ class ComputedQueryKind<V> extends QueryKindBase {
 		var recorded = finish(database, key), revision = database.revision, verified = verifiedAt[key];
 		database.countComputation();
 		usedAt = revision;
-		reads[key] = recorded;
+		keepReads(key, verified != 0, recorded);
 		verifiedAt[key] = revision;
 		computedAt[key] = revision;
 		if (verified != 0 && same(values[key], value))
@@ -156,13 +171,22 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	 */
 	override public function changedAt(database:QueryDatabase, key:Int):Int {
 		var revision = database.revision;
-		if (key < busy.length && busy[key] == revision)
+		if (key >= verifiedAt.length)
+			return compute == null ? revision : computedChange(database, key);
+		// Most reads are of a key its stage brought up to date in this revision.
+		if (verifiedAt[key] == revision)
+			return changes[key];
+		if (busy[key] == revision)
 			return revision;
 		if (current(database, key))
 			return changes[key];
+		return compute == null ? revision : computedChange(database, key);
+	}
+
+	function computedChange(database:QueryDatabase, key:Int):Int {
 		var computeValue = compute;
 		if (computeValue == null)
-			return revision;
+			return database.revision;
 		begin(database, key);
 		end(database, key, computeValue(database, key));
 		return changes[key];
@@ -179,6 +203,8 @@ class ComputedQueryKind<V> extends QueryKindBase {
 				dropped++;
 			}
 		}
+		if (garbage > pool.length >> 1)
+			compact();
 		return dropped;
 	}
 
@@ -193,7 +219,41 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	function drop(key:Int):Void {
 		verifiedAt[key] = 0;
 		values[key] = null;
-		reads[key] = null;
+		garbage += readCount[key];
+		readCount[key] = 0;
+	}
+
+	/** Puts `reads` in the pool as `key`'s: in place of its old ones when they fit (`had`), else at the end. */
+	function keepReads(key:Int, had:Bool, reads:Array<Int>):Void {
+		var count = reads.length, start = readStart[key];
+		if (had && count <= readCount[key])
+			garbage += readCount[key] - count;
+		else {
+			if (had)
+				garbage += readCount[key];
+			if (verifying == 0 && garbage > (pool.length >> 1) + 4096)
+				compact();
+			start = pool.length;
+			pool.resize(start + count);
+		}
+		for (index in 0...count)
+			pool[start + index] = reads[index];
+		readStart[key] = start;
+		readCount[key] = count;
+	}
+
+	/** Copies the memos' reads into a pool of their own, without the garbage. */
+	function compact():Void {
+		var kept:Array<Int> = [];
+		for (key in 0...verifiedAt.length)
+			if (verifiedAt[key] != 0) {
+				var start = readStart[key], count = readCount[key];
+				readStart[key] = kept.length;
+				for (index in start...start + count)
+					kept.push(pool[index]);
+			}
+		pool = kept;
+		garbage = 0;
 	}
 
 	/** Makes room for `key`, and for half as many keys again, since keys are given densely and in order. */
@@ -205,7 +265,8 @@ class ComputedQueryKind<V> extends QueryKindBase {
 		verifiedAt.resize(length);
 		changes.resize(length);
 		computedAt.resize(length);
-		reads.resize(length);
+		readStart.resize(length);
+		readCount.resize(length);
 		busy.resize(length);
 	}
 }
