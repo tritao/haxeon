@@ -1,5 +1,6 @@
 package compiler.documentation;
 
+import compiler.core.InternalError;
 import compiler.documentation.ApiModel.ApiArgument;
 import compiler.documentation.ApiModel.ApiDeclaration;
 import compiler.documentation.ApiModel.ApiMember;
@@ -7,7 +8,6 @@ import compiler.documentation.ApiModel.ApiModule;
 import compiler.documentation.ApiModel.ApiSource;
 import compiler.documentation.ApiModel.ApiType;
 import compiler.documentation.ApiModel.ApiTypeParameter;
-import compiler.core.InternalError;
 import haxe.Json;
 
 /**
