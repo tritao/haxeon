@@ -128,9 +128,12 @@ another name. It is not urgent at these sizes; settle it with the bodies-only se
 Two naming fixes are worth doing regardless, since they cut bytes and needless work:
 - **`$try` cells (done):** they were named by their absolute file offset, so an edit above a `try` renamed its cell and
   lowered that function again. They are now numbered within the body they are written in (`Parser.tryResultName`).
-- **Names that spell whole types:** a fixed-length digest would cut the dead bytes by about 80%. The generators are
-  `SemanticSignature.anonymousTypeName`, `GeneratedNames.specializationKey`, the shared array helpers and
-  `$iteration-adapter`.
+- **Names that spell whole types (done):** a structure's name spelled its fields in full, nested structures included, and
+  the other generators (`GeneratedNames.specializationKey`, the shared array helpers, `$iteration-adapter`, method
+  references) were long only because they embed one. A structure is now named by a digest of its spelling
+  (`SemanticSignature.anonymousTypeName`), and the others stay readable, spelling short type arguments. Over 40 replayed
+  commits the dead names went from about 810 characters on average to about 95, and from about 14 K characters a commit
+  to under 2 K; the live names of a self-compile went from about 90 characters on average to about 51.
 
 ## 5. Gates in CI
 
