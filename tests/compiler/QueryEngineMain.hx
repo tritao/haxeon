@@ -187,12 +187,13 @@ class QueryEngineMain {
 		summaries();
 		computedSweep();
 		computedTransactions();
+		putKinds();
 
 		Sys.println("PASS: query engine reuses, cuts off early, verifies reads in order, reports cycles, sweeps, checks reuse, "
 			+ "verifies recorded results through components, records a stage's reads in frames, tells input revisions from build revisions, "
 			+ "commits and rolls back written results, cuts computed values off by equality on demand and in a stage's run, updates "
 			+ "summaries per changed contribution with per-key reads, sweeps the computed memos a build did not use, and drops those "
-			+ "computed over results a rollback undid");
+			+ "computed over results a rollback undid, and keeps what a stage puts by identity or equality");
 	}
 
 	/** Results a stage computes itself change when they or anything they read did, transitively; a component changes as one. */
@@ -581,7 +582,10 @@ class QueryEngineMain {
 			"check mode counts again and finds a contribution changed after it was given");
 	}
 
-	/** Sweep drops the computed memos a build did not use, of the kinds it used; a dropped memo is computed again when read. */
+	/**
+	 * Sweep drops the computed memos a build did not use, of the kinds it used that gained memos since they were last swept; a
+	 * dropped memo is computed again when read.
+	 */
 	static function computedSweep():Void {
 		var database = new QueryDatabase();
 		var source = database.register(QueryKind.input("source", digestInt, sameInt));
@@ -605,6 +609,15 @@ class QueryEngineMain {
 		expect(database.computations == computations, "what is kept holds");
 		used.get(database, 1);
 		expect(database.computations == computations + 1, "what was dropped is computed again");
+		database.newRevision();
+		used.get(database, 0);
+		used.get(database, 1);
+		expect(database.sweep() == 0, "a sweep drops nothing the build used");
+		database.newRevision();
+		used.get(database, 0);
+		expect(database.sweep() == 0, "a kind that gained no memo since its last sweep is left alone");
+		used.get(database, 1);
+		expect(database.computations == computations + 1, "so what it holds still holds");
 	}
 
 	/**
@@ -648,5 +661,43 @@ class QueryEngineMain {
 		database.rollBack(taken);
 		reader.get(database, 0);
 		expect(runs == 4, "a rollback that undoes nothing drops nothing");
+	}
+
+	/**
+	 * Values a stage puts, made from what it was given: an equal one keeps the object and the revision it changed at, so a reader
+	 * holds; a key read in the revision changes in a later one, so the reader does not hold over the new value.
+	 */
+	static function putKinds():Void {
+		var database = new QueryDatabase();
+		var given = database.register(new ComputedQueryKind<Box>("given", Box.same));
+		var runs = 0;
+		var reader = database.register(new ComputedQueryKind<Box>("reader", Box.same, function(db, key) {
+			runs++;
+			return new Box(given.get(db, key).value * 10);
+		}));
+		database.newRevision();
+		var first = new Box(1);
+		expect(given.put(database, 0, first) == first, "a new key takes the value put");
+		expect(reader.get(database, 0).value == 10 && runs == 1, "a reader computes over it");
+
+		database.newRevision();
+		expect(given.put(database, 0, first) == first, "the same object is kept");
+		expect(given.put(database, 0, new Box(1)) == first, "an equal value keeps the object");
+		reader.get(database, 0);
+		expect(runs == 1, "a reader of a value put equal holds");
+
+		database.newRevision();
+		var revision = database.revision;
+		reader.get(database, 0);
+		var second = new Box(2);
+		expect(given.put(database, 0, second) == second && database.revision > revision,
+			"a key read in the revision changes in a later one");
+		database.newRevision();
+		given.put(database, 0, second);
+		expect(reader.get(database, 0).value == 20 && runs == 2, "its reader computes again");
+
+		given.clear();
+		expect(throwsInternal(() -> given.get(database, 0)), "a cleared kind has no memos");
+		expect(given.put(database, 0, first) == first, "and takes values again");
 	}
 }

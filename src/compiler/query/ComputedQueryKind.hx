@@ -26,10 +26,10 @@ class ComputedQueryKind<V> extends QueryKindBase {
 
 	// The memos, by key, besides `verifiedAt` and `changes`: the value, the revision it was computed at, and where in `pool` what
 	// its computation read (`QueryRead`) starts, and how many reads.
-	final values:Array<V> = [];
-	final computedAt:Array<Int> = [];
-	final readStart:Array<Int> = [];
-	final readCount:Array<Int> = [];
+	var values:Array<V> = [];
+	var computedAt:Array<Int> = [];
+	var readStart:Array<Int> = [];
+	var readCount:Array<Int> = [];
 
 	/** The memos' reads, each memo's in one run; a run a memo no longer has is garbage until `compact`. */
 	var pool:Array<Int> = [];
@@ -40,10 +40,13 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	var verifying = 0;
 
 	/** By key, the revision in which it is being computed or verified: a read that comes back to it is a cycle. */
-	final busy:Array<Int> = [];
+	var busy:Array<Int> = [];
 
 	/** The last revision a memo was verified or computed at: a sweep leaves a kind the build did not use alone. */
 	var usedAt = 0;
+
+	/** Whether a key gained a memo since the last sweep: a kind that gained none holds no more memos than the sweep left. */
+	var grown = false;
 
 	/**
 	 * A kind whose values `compute` makes, reading other queries only through the database, or, without it, that a stage computes
@@ -118,6 +121,10 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	public inline function value(key:Int):V
 		return values[key];
 
+	/** The value of `key`'s memo whether or not it holds, or null when it has none; brings nothing up to date. */
+	public function kept(key:Int):Null<V>
+		return key < verifiedAt.length && verifiedAt[key] != 0 ? values[key] : null;
+
 	/** Starts computing `key` in a stage's run: what is read until `end` (or `check`) is what its computation read. */
 	public function begin(database:QueryDatabase, key:Int):Void {
 		grow(key);
@@ -141,9 +148,56 @@ class ComputedQueryKind<V> extends QueryKindBase {
 		computedAt[key] = revision;
 		if (verified != 0 && same(values[key], value))
 			return values[key];
+		if (verified == 0)
+			grown = true;
 		values[key] = value;
 		changes[key] = revision;
 		return value;
+	}
+
+	/**
+	 * Gives `key` the value its stage made of what the stage was given, reading nothing through the database (the IR the generator
+	 * made of a typed function, an object of the typed program), and returns the value kept: the memo's when it is `same` (early
+	 * cutoff), else `value`, changed now. Such a key holds until its stage puts it again, which it does in every build before
+	 * anything reads it. A key read in this revision changes in a revision of its own, so what read the old value does not hold over
+	 * the new one. A stage puts the same object again often, so `same` should answer that first, typed: an `==` here, on the type
+	 * parameter, is a dynamic comparison and costs many times more.
+	 */
+	public function put(database:QueryDatabase, key:Int, value:V):V {
+		var revision = database.revision, verified = key < verifiedAt.length ? verifiedAt[key] : 0;
+		usedAt = revision;
+		if (verified != 0 && same(values[key], value)) {
+			verifiedAt[key] = revision;
+			return values[key];
+		}
+		grow(key);
+		if (verified == revision)
+			revision = database.advance();
+		else if (verified == 0)
+			grown = true;
+		garbage += readCount[key];
+		readCount[key] = 0;
+		values[key] = value;
+		verifiedAt[key] = revision;
+		computedAt[key] = revision;
+		changes[key] = revision;
+		usedAt = revision;
+		return value;
+	}
+
+	/** Drops every memo and the columns, for a compile that keeps no session: their values would stay alive. */
+	public function clear():Void {
+		values = [];
+		verifiedAt = [];
+		changes = [];
+		computedAt = [];
+		readStart = [];
+		readCount = [];
+		busy = [];
+		pool = [];
+		garbage = 0;
+		grown = false;
+		clearRecorded();
 	}
 
 	/**
@@ -193,8 +247,9 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	}
 
 	override public function sweep(since:Int):Int {
-		if (usedAt < since)
+		if (usedAt < since || !grown)
 			return 0;
+		grown = false;
 		var dropped = 0;
 		for (key in 0...verifiedAt.length) {
 			var verified = verifiedAt[key];
@@ -262,11 +317,11 @@ class ComputedQueryKind<V> extends QueryKindBase {
 			return;
 		var length = key + 1 + (key >> 1);
 		values.resize(length);
-		verifiedAt.resize(length);
-		changes.resize(length);
-		computedAt.resize(length);
-		readStart.resize(length);
-		readCount.resize(length);
-		busy.resize(length);
+		QueryRead.extend(verifiedAt, length);
+		QueryRead.extend(changes, length);
+		QueryRead.extend(computedAt, length);
+		QueryRead.extend(readStart, length);
+		QueryRead.extend(readCount, length);
+		QueryRead.extend(busy, length);
 	}
 }

@@ -2,6 +2,7 @@ package compiler.query;
 
 import compiler.core.InternalError;
 import compiler.query.QueryKind.QueryKindBase;
+import compiler.query.QueryKind.QueryRead;
 
 /**
  * A whole-program step's summary over per-key contributions (`docs/design/QUERY_ENGINE.md`, Whole-program steps): each
@@ -66,7 +67,7 @@ class QuerySummary extends QueryKindBase {
 			throw new InternalError("summary " + kindName + " takes contributions only while open");
 		if (contributor >= givenIn.length) {
 			var length = contributor + 1 + (contributor >> 1);
-			givenIn.resize(length);
+			QueryRead.extend(givenIn, length);
 			contributions.resize(length);
 		}
 		if (givenIn[contributor] == run)
@@ -145,9 +146,9 @@ class QuerySummary extends QueryKindBase {
 			for (key in keys) {
 				if (key >= counts.length) {
 					var length = key + 1 + (key >> 1);
-					counts.resize(length);
-					keyChanges.resize(length);
-					inOld.resize(length);
+					QueryRead.extend(counts, length);
+					QueryRead.extend(keyChanges, length);
+					QueryRead.extend(inOld, length);
 				}
 				if (counts[key]++ == 0 && inOld[key] != mark)
 					changed(key, revision);
@@ -165,7 +166,7 @@ class QuerySummary extends QueryKindBase {
 
 	function checkCounts():Void {
 		var expected:Array<Int> = [];
-		expected.resize(counts.length);
+		QueryRead.extend(expected, counts.length);
 		for (contribution in contributions)
 			if (contribution != null)
 				for (key in contribution)

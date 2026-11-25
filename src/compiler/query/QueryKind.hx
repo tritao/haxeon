@@ -19,6 +19,17 @@ class QueryRead {
 
 	public static inline function key(read:Int):Int
 		return read & KEY_MASK;
+
+	/**
+	 * Lengthens `column` to `length` with zeros. Not `resize` alone: the Haxe interpreter, which runs the compiler in some tests,
+	 * fills what `resize` adds with null.
+	 */
+	public static function extend(column:Array<Int>, length:Int):Void {
+		var from = column.length;
+		column.resize(length);
+		for (index in from...length)
+			column[index] = 0;
+	}
 }
 
 /**
@@ -39,9 +50,9 @@ class QueryKindBase {
 	 * none) and the revision it last changed at. A verification reads a key verified in its revision here without a call (most
 	 * reads are of such keys); other kinds leave them empty.
 	 */
-	final verifiedAt:Array<Int> = [];
+	var verifiedAt:Array<Int> = [];
 
-	final changes:Array<Int> = [];
+	var changes:Array<Int> = [];
 
 	function new(name:String)
 		kindName = name;
