@@ -215,8 +215,11 @@ class CompileOptions {
 			flags.push(SCRIPT_MODULE + scriptModule);
 		for (rule in nullSafety)
 			flags.push(NULL_SAFETY + rule.argument());
-		for (entry in sourcePackages)
+		for (entry in sourcePackages) {
 			flags.push(SOURCE_PACKAGE + entry.argument());
+			for (friend in entry.friends)
+				flags.push(PACKAGE_FRIEND + entry.name + "=" + friend);
+		}
 		return flags;
 	}
 
@@ -232,6 +235,9 @@ class CompileOptions {
 
 	/** One package and its directory (`sourcePackages`). */
 	public static inline final SOURCE_PACKAGE = "--source-package=";
+
+	/** A package that may use another's internal declarations (`SourcePackage.friends`): OWNER=FRIEND. */
+	public static inline final PACKAGE_FRIEND = "--package-friend=";
 
 	public static inline final NO_KEEP_SESSION = "--no-keep-session";
 	public static inline final NO_VERIFY_IR = "--no-verify-ir";
@@ -268,7 +274,8 @@ class CompileOptions {
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
 				INLINE_ALLOCATION: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, NULL_SAFETY)
-				|| StringTools.startsWith(argument, SOURCE_PACKAGE) || StringTools.startsWith(argument, SCRIPT_MODULE);
+				|| StringTools.startsWith(argument, SOURCE_PACKAGE) || StringTools.startsWith(argument, PACKAGE_FRIEND)
+				|| StringTools.startsWith(argument, SCRIPT_MODULE);
 		};
 
 	/** The options the flags among `arguments` state, the others left at their defaults. */
@@ -296,7 +303,7 @@ class CompileOptions {
 
 	/** The packages of the `--source-package=` flags among `arguments`, in order. A malformed one is a usage error. */
 	static function sourcePackagesFrom(arguments:Array<String>):Array<SourcePackage> {
-		var packages:Array<SourcePackage> = [];
+		var packages:Array<SourcePackage> = [], friends:Map<String, Array<String>> = [];
 		for (argument in arguments)
 			if (StringTools.startsWith(argument, SOURCE_PACKAGE)) {
 				var value = argument.substr(SOURCE_PACKAGE.length), entry = SourcePackage.parse(value);
@@ -304,8 +311,20 @@ class CompileOptions {
 					throw new compiler.core
 						.UsageError('Compiler option "$SOURCE_PACKAGE" takes NAME=DIRECTORY, not "$value"');
 				packages.push(entry);
+			} else if (StringTools.startsWith(argument, PACKAGE_FRIEND)) {
+				var value = argument.substr(PACKAGE_FRIEND.length), separator = value.indexOf("=");
+				if (separator <= 0 || separator == value.length - 1)
+					throw new compiler.core
+						.UsageError('Compiler option "$PACKAGE_FRIEND" takes OWNER=FRIEND, not "$value"');
+				var owner = value.substr(0, separator);
+				if (!friends.exists(owner))
+					friends.set(owner, []);
+				friends.get(owner).push(value.substr(separator + 1));
 			}
-		return packages;
+		return [
+			for (entry in packages)
+				friends.exists(entry.name) ? new SourcePackage(entry.name, entry.root, friends.get(entry.name)) : entry
+		];
 	}
 
 	static function scriptModuleFrom(arguments:Array<String>):Null<String> {

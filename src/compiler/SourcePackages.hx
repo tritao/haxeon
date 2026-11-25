@@ -2,14 +2,19 @@ package compiler;
 
 import haxe.io.Path;
 
-/** A package and its directory: the package `name` owns every source under `root` (`--source-package=NAME=DIRECTORY`). */
+/**
+ * A package and its directory: the package `name` owns every source under `root` (`--source-package=NAME=DIRECTORY`), and
+ * `friends` may use its internal declarations (`--package-friend=NAME=FRIEND`, from the manifest's `package.friends`).
+ */
 class SourcePackage {
 	public final name:String;
 	public final root:String;
+	public final friends:Array<String>;
 
-	public function new(name:String, root:String) {
+	public function new(name:String, root:String, ?friends:Array<String>) {
 		this.name = name;
 		this.root = root;
+		this.friends = friends == null ? [] : friends.copy();
 	}
 
 	/** The package `NAME=DIRECTORY` states, or null when it is not one. */
@@ -33,8 +38,12 @@ class SourcePackage {
 class SourcePackages {
 	final entries:Array<{name:String, root:String}>;
 	final owners:Map<String, Null<{name:String, file:String}>> = [];
+	final friends:Map<String, Array<String>> = [];
 
 	public function new(packages:Array<SourcePackage>) {
+		for (entry in packages)
+			if (entry.friends.length > 0)
+				friends.set(entry.name, entry.friends);
 		entries = [for (entry in packages) {
 			name: entry.name, root: Path.addTrailingSlash(absolute(entry.root))
 		}];
@@ -54,6 +63,14 @@ class SourcePackages {
 		owners.set(path, found);
 		return found;
 	}
+
+	/**
+	 * Whether the code of the package `user` may use what the package `owner` declares `internal`: its own, or a friend's
+	 * it names. Null is the sources outside any package, which share theirs.
+	 */
+	public function mayUseInternals(owner:Null<String>, user:Null<String>):Bool
+		return owner == user || owner != null && user != null && friends.exists(owner)
+			&& friends.get(owner).indexOf(user) >= 0;
 
 	/** The name of the package holding the source at `path`, or null for none. */
 	public function packageOf(path:String):Null<String> {

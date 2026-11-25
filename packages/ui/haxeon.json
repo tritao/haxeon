@@ -1,7 +1,8 @@
 {
   "version": 1,
   "package": {
-    "name": "haxeon-ui"
+    "name": "haxeon-ui",
+    "friends": ["haxeon-ui-property-tests", "ui-restyle-in-place-tests"]
   },
   "sourceRoots": [
     "haxe",

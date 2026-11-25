@@ -62,7 +62,7 @@ class HaxeProjectConfiguration {
 		].join("\n"));
 		id = TextDigest.sha256(scopeId + "\n" + this.defines.join("|") + "\n"
 			+ [for (rule in this.nullSafety) rule.argument()].join("|") + "\n"
-			+ [for (entry in this.sourcePackages) entry.argument()].join("|"));
+			+ [for (entry in this.sourcePackages) entry.argument() + ":" + entry.friends.join(",")].join("|"));
 	}
 
 	public function owns(path:String):Bool {

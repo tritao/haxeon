@@ -23,5 +23,6 @@ class InternalAccess {
 
 	/** Whether the code at `use` is in the package of the internal declaration at `declared`. */
 	public static function allows(packages:SourcePackages, declared:SourceSpan, use:SourceSpan):Bool
-		return packages.packageOf(declared.file.physicalPath) == packages.packageOf(use.file.physicalPath);
+		return packages.mayUseInternals(packages.packageOf(declared.file.physicalPath),
+			packages.packageOf(use.file.physicalPath));
 }

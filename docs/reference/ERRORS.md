@@ -255,7 +255,8 @@ The code cannot access the constructor or member under its visibility rules. Use
 An `internal` type or member belongs to the package that declares it: only that package's code can name it, construct it or
 reach its members, and a public declaration may not expose an internal type in what other packages see of it (a public
 method's argument or result, a supertype, a typedef's type). Use the package's public API instead, make the exposing
-declaration internal too, or make the internal declaration public if it is meant for other packages.
+declaration internal too, or make the internal declaration public if it is meant for other packages. A package's own tests,
+built as a project of their own, can be named among its `package.friends`.
 Here the `widgets` package declares `internal class LayoutCache`, and an application that depends on it uses it:
 
 ```haxe

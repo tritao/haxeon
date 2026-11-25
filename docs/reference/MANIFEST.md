@@ -87,6 +87,7 @@ Paths are relative to the manifest's directory.
 | `version` | integer | `1` | The manifest format; only 1 exists. |
 | `package.name` | string | the directory's name | The package's name, which dependencies use. |
 | `package.version` | string | | The package's version; publishing writes it. |
+| `package.friends` | array of strings | `[]` | Packages that may use this package's `internal` declarations as its own code does, such as its tests built as a project of their own. Only the package can name its friends. |
 | `entry` | string | none | The entry module of a program; a library has none. |
 | `sourceRoots` | array of strings | `["src"]` | Source directories. |
 | `scopeSourceRoots` | boolean | `true` | A root holds only this package's modules. |

@@ -145,7 +145,9 @@ The current subset includes:
   `internal` type, or an `internal` field, property, method or module-level function or variable, can be used by any code
   of the package that declares it, and nowhere else: naming it, constructing it or reaching one of its members from
   another package is `E1031`. A package is a [manifest](MANIFEST.md) package, its source roots together; a project's own
-  sources are its package. Every member of an internal type is internal. What other packages see may not name an internal
+  sources are its package. Every member of an internal type is internal. A package can let named
+  packages use its internals too, such as its tests built as a project of their own (`package.friends` in its
+  [manifest](MANIFEST.md)); only the package itself can name them. What other packages see may not name an internal
   type either: a public declaration's supertypes and constraints, a typedef's type, an abstract's underlying and
   conversion types, an enum constructor's arguments, and its public members' types (`E1031`), since its users could not
   name what they hold. `@:allow`, `@:access` and `@:privateAccess`

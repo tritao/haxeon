@@ -75,8 +75,11 @@ class CompilerProvider {
 		arguments.push(context.checkOnly ? "--no-output" : "--inputs-output=" + output + ".inputs.json");
 		// The package each source belongs to: where its `internal` declarations may be used, and, in an API description, what its
 		// sources are given relative to, never as this machine's path.
-		for (entry in compilerInputs.sourcePackages)
+		for (entry in compilerInputs.sourcePackages) {
 			arguments.push(compiler.CompileOptions.SOURCE_PACKAGE + entry.argument());
+			for (friend in entry.friends)
+				arguments.push(compiler.CompileOptions.PACKAGE_FRIEND + entry.name + "=" + friend);
+		}
 		if (describe) {
 			arguments.push("--api-json=" + context.apiJson);
 			for (root in project.rootPackage.sourceRoots)

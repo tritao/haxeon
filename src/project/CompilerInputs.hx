@@ -136,7 +136,8 @@ class CompilerInputs {
 		return new CompilerInputs(compilerTarget(buildTarget), entry, roots, packageRoots, sources, ffiInterfaces,
 			ffiProjections, generatedFfi, defines, project.manifest.inlineEnabled != false, nullSafety, [
 				for (resolvedPackage in project.packages.packages)
-					new compiler.SourcePackages.SourcePackage(resolvedPackage.name, resolvedPackage.root)
+					new compiler.SourcePackages.SourcePackage(resolvedPackage.name, resolvedPackage.root,
+					resolvedPackage.manifest.friends)
 			]);
 	}
 

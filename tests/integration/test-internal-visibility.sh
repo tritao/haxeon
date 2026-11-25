@@ -17,6 +17,8 @@ sourceRoots = ["src"]
 
 [package]
 name = "widgets"
+# Its tests, a project of their own, may use its internals; no other package can grant itself that.
+friends = ["widgets-tests"]
 TOML
 # Shared by two modules in two Haxe packages of `widgets`: what `private` cannot do.
 cat > "$work/widgets/src/widgets/layout/Measure.hx" <<'HAXE'
@@ -152,6 +154,32 @@ if "$haxeon" doc --output "$work/api.json" > "$work/out.txt" 2>&1 || ! grep -q "
 fi
 # An internal or private member may name it.
 sed -i 's/public static function measure/internal static function measure/' "$work/widgets/src/widgets/Leak.hx"
+
+# A friend the package names uses its internals as its own code does.
+mkdir -p "$work/widgets-tests/src"
+cat > "$work/widgets-tests/haxeon.toml" <<'TOML'
+version = 1
+entry = "Main"
+sourceRoots = ["src"]
+
+[package]
+name = "widgets-tests"
+
+[dependencies]
+widgets = { path = "../widgets" }
+TOML
+cat > "$work/widgets-tests/src/Main.hx" <<'HAXE'
+import widgets.Label;
+import widgets.layout.Measure;
+
+function main():Int {
+	var label = new Label("ok");
+	label.invalidate();
+	return Measure.width("ok") == label.measured ? 42 : 1;
+}
+HAXE
+cd "$work/widgets-tests"
+"$haxeon" check
 
 # The description of `widgets` leaves its internals out.
 "$haxeon" doc --output "$work/api.json"

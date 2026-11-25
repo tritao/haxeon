@@ -169,6 +169,12 @@ class PackageManifest {
 	public final version:Int;
 	public final packageName:String;
 	public final packageId:PackageId;
+
+	/**
+	 * `package.friends`: the packages that may use this package's `internal` declarations as its own code does, such as its
+	 * tests built as a project of their own. The package names them, so no other package can grant itself the access.
+	 */
+	public final friends:Array<String>;
 	public final entry:Null<String>;
 	public final legacySources:Array<String>;
 	public final sourceRoots:Array<String>;
@@ -227,9 +233,11 @@ class PackageManifest {
 			compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
 			nullSafety:NullSafetyMode, nullSafetyRules:Array<NullSafetyRule>, ?instrument:InstrumentManifest,
 			?app:AppManifest, ?packageVersion:String, ?publish:PublishManifest,
-			?patches:Map<String, Map<String, String>>, ?shaderVariants:Map<String, Map<String, Array<String>>>) {
+			?patches:Map<String, Map<String, String>>, ?shaderVariants:Map<String, Map<String, Array<String>>>,
+			?friends:Array<String>) {
 		this.version = version;
 		this.packageName = packageName;
+		this.friends = friends == null ? [] : friends.copy();
 		this.packageId = new PackageId(packageName);
 		this.entry = entry;
 		this.legacySources = legacySources.copy();
@@ -469,7 +477,8 @@ class PackageManifest {
 			outputDir, dependencies, native, ffi, compatibility, inlineEnabled,
 			parseNullSafety(raw, path), [], parseInstrument(raw, path), parseApp(raw, packageName, path),
 			packageData == null ? null : optionalNullableString(packageData, "version", '$path package'),
-			parsePublish(raw, path), parsePatches(raw, path), parseShaderVariants(raw, path));
+			parsePublish(raw, path), parsePatches(raw, path), parseShaderVariants(raw, path),
+			packageData == null ? [] : stringArray(packageData, "friends", '$path package', []));
 	}
 
 	/** `publish`: false, or a table with `exclude` and `vendor` (PublishManifest). */
