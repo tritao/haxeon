@@ -19,6 +19,11 @@ class SidebarHost implements View {
 	public var headerActions:Null<String->Null<View>> = null;
 	/** Evaluate against the built pane; hidden actions retain their layout space. */
 	public var headerActionsVisible:Null<RenderNode->Bool> = null;
+
+	/**
+	 * A sidebar showing `model`'s selected destination under a strip of its destinations, calling `onSelect` with the
+	 * one the user picks; `iconProvider` gives each an icon.
+	 */
 	public function new(key:String, model:SidebarModel, onSelect:String->Void,
 			?iconProvider:String->Null<haxeon.ui.icons.IconName>, activeOnly:Bool = false) {
 		this.activeOnly = activeOnly;

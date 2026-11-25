@@ -15,15 +15,31 @@ import haxeon.ui.style.StyleTarget;
 
 /** Accessible image view that preserves four edge insets while stretching its center. */
 class NineSliceView implements View {
+	/** Identifies the view among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The image sliced. */
 	public final image:Image;
+
+	/** Its accessible name; without one, assistive technology skips it. */
 	public final label:Null<String>;
+
+	/** The view's box. */
 	public final style:LayoutStyle;
+
+	/** The width of the left edge kept unstretched, in image pixels. */
 	public final left:Float;
+
+	/** The height of the top edge kept unstretched. */
 	public final top:Float;
+
+	/** The width of the right edge kept unstretched. */
 	public final right:Float;
+
+	/** The height of the bottom edge kept unstretched. */
 	public final bottom:Float;
 
+	/** `image` stretched to the box, its corners kept and its edges stretched along their length only. */
 	public function new(key:String,
 			image:Image,
 			left:Float,

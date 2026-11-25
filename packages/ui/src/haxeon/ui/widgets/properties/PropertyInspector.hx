@@ -26,20 +26,45 @@ import haxeon.ui.semantics.Semantics;
  * same binding, validation, custom-extension, and undo behavior.
  */
 class PropertyInspector implements View {
+	/** Identifies the inspector among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The properties shown when there are no sections. */
 	public final descriptors:Array<PropertyDescriptor>;
+
+	/** The properties grouped under collapsible headings. */
 	public final sections:Array<PropertyInspectorSection>;
+
+	/** The inspector's box; set with `setStyle`. */
 	public var style(default, null):LayoutStyle;
+
+	/** Which control edits each kind of value, including the application's own. */
 	public final registry:PropertyEditorRegistry;
+
+	/** The scroll position, which a caller can share to read or move it. */
 	public var controller(default, null):ScrollController;
+
+	/** Whether the rows take input. */
 	public var enabled:Bool;
+
+	/** The label column's width, in logical pixels. */
 	public var labelWidth:Float;
+
+	/** Whether labels sit above their controls rather than beside them, for narrow panes. */
 	public var stackedRows:Bool = false;
+
+	/** Text that filters the rows by label. */
 	public var searchQuery:String = "";
 	/** Disable when a parent pane already owns scrolling. */
 	public var scrollable:Bool;
+
+	/** Whether the scrollbar is shown when the content overflows. */
 	public var showScrollbar:Bool;
+
+	/** The inspector's accessible name. */
 	public var label:Null<String>;
+
+	/** Called with a section's ID and whether it is now expanded, when the user toggles it. */
 	public var onSectionExpanded:Null<String->Bool->Void>;
 	final editors:Map<String, PropertyEditor>;
 	final sectionByDescriptor:Map<String, PropertyEditor>;
@@ -47,6 +72,7 @@ class PropertyInspector implements View {
 	final initialScrollX:Float;
 	final initialScrollY:Float;
 
+	/** An inspector of `sections`, or of `descriptors` as one list when there are none. Throws when `key` is empty. */
 	public function new(key:String,
 			?descriptors:Array<PropertyDescriptor>,
 			?style:LayoutStyle,
@@ -102,12 +128,12 @@ class PropertyInspector implements View {
 		return changed;
 	}
 
+	/** Whether the section `sectionId` is expanded. */
 	public function isSectionExpanded(sectionId:String):Bool {
 		var section = findSection(sectionId);
 		return section != null && section.expanded;
 	}
 
-	/** Revision of transient editor state that must invalidate a retained panel. */
 	/** Whether discarding and rebuilding this inspector would keep all of its transient user state unchanged. */
 	public function isPristine():Bool {
 		if (sections.length != initialExpanded.length || controller.offsetX != initialScrollX

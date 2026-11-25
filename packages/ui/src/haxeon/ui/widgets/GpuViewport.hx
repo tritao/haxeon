@@ -32,20 +32,45 @@ import haxeon.ui.style.StyleTarget;
  * keeps simulation/CAD renderers independent from the UI tree.
  */
 class GpuViewport implements View {
+	/** Identifies the viewport among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** What the viewport shows: its size, revision and painting. */
 	public final content:ViewportContent;
+
+	/** The pan and zoom, which a caller can share to read or move it. */
 	public final camera:ViewportCamera;
+
+	/** The viewport's box. */
 	public final style:LayoutStyle;
+
+	/** The flat background, behind the content. */
 	public var background(default, null):Color;
+
+	/** The background gradient's top color. */
 	public var backgroundTop(default, null):Color;
+
+	/** The background gradient's bottom color. */
 	public var backgroundBottom(default, null):Color;
+
+	/** The color of the background grid's lines. */
 	public var gridColor(default, null):Color;
+
+	/** The spacing of the grid's lines, in content units. */
 	public var gridSize(default, null):Float;
+
+	/** Whether the grid is drawn. */
 	public var gridEnabled(default, null):Bool;
 	/** Native pointer button used to pan; defaults to the primary button. */
 	public var panButton:Int = 0;
+
+	/** Whether the viewport takes input: panning, zooming and the added handlers. */
 	public var enabled:Bool;
+
+	/** Its accessible name; without one, assistive technology skips it. */
 	public var label:Null<String>;
+
+	/** Paints over the content, in viewport coordinates; set with `setOverlay`. */
 	public var overlay(default, null):Null<Canvas->ResolvedLayoutItem->Void>;
 	var overlayRevision:Int;
 	final handlers:Map<String, Array<UiEvent->Void>>;
@@ -58,6 +83,7 @@ class GpuViewport implements View {
 	var paintedWidth = 0.0;
 	var paintedHeight = 0.0;
 
+	/** A viewport showing `content` through `camera`. Throws when `key` is empty or there is no content. */
 	public function new(key:String, content:ViewportContent, ?camera:ViewportCamera, ?style:LayoutStyle,
 			?label:String) {
 		if (key == null || key.length == 0 || content == null) throw "GPU viewports require a stable key and content";
@@ -82,6 +108,7 @@ class GpuViewport implements View {
 		lastPointerY = 0.0;
 	}
 
+	/** A viewport showing a GPU `surface` whose content is `width` by `height`. */
 	public static function fromSurface(key:String,
 			surface:GraphicsSurface,
 			width:Float,
@@ -94,6 +121,7 @@ class GpuViewport implements View {
 		style,
 		label);
 
+	/** Adds `handler` for events of `kind` on the viewport, and returns it, for chaining. */
 	public function on(kind:String, handler:UiEvent->Void):GpuViewport {
 		if (kind == null
 			|| kind.length == 0 || handler == null) throw "GPU viewport handlers require an event kind and callback";
@@ -123,6 +151,7 @@ class GpuViewport implements View {
 		return this;
 	}
 
+	/** Sets the flat background and the grid. Throws when `gridSize` is not positive and finite. */
 	public function setAppearance(background:Color, gridColor:Color, gridSize:Float = 1.0,
 			gridEnabled:Bool = true):Void {
 		if (!finite(gridSize) || gridSize <= 0.0) throw "Viewport appearance values are invalid";
@@ -141,6 +170,7 @@ class GpuViewport implements View {
 		backgroundBottom = bottom;
 	}
 
+	/** Sets what is painted over the content, or removes it with null. */
 	public function setOverlay(overlay:Null<Canvas->ResolvedLayoutItem->Void>):Void {
 		this.overlay = overlay;
 		overlayRevision++;

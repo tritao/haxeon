@@ -17,6 +17,7 @@ class WindowChrome implements View {
 	final kind:WindowDecorationRegionKind;
 	final cursor:Null<CursorShape>;
 
+	/** Marks `child` as a window region of `kind`, such as a drag area or a resize edge, showing `cursor` over it. */
 	public function new(key:String, kind:WindowDecorationRegionKind, child:View,
 			?cursor:CursorShape) {
 		if (key == null || key.length == 0 || kind == null || child == null)

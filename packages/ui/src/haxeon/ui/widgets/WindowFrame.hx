@@ -15,6 +15,8 @@ class WindowFrame implements View {
 	final key:String;
 	final child:View;
 	final controls:WindowControls;
+
+	/** Shows `child` with resize edges around it, for a window drawing its own frame. */
 	public function new(key:String, child:View, controls:WindowControls) {
 		this.key = key;
 		this.child = child;

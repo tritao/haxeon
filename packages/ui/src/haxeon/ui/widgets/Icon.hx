@@ -32,12 +32,22 @@ class Icon implements View {
 	static final colorKeys:Array<ColorKey> = [for (_ in 0...16) new ColorKey()];
 	static final namePrefixes:Map<Int, String> = new Map();
 
+	/** Identifies the icon among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** Which icon it shows. */
 	public final name:IconName;
+
+	/** The icon's box, `size` pixels square. */
 	public final style:LayoutStyle;
+
+	/** Its color; the theme's text color when null. */
 	public final color:Null<Color>;
+
+	/** Its accessible name; without one it is decorative and assistive technology skips it. */
 	public final label:Null<String>;
 
+	/** The icon `name`, `size` pixels square. Throws when `key` is empty or `size` is not positive and finite. */
 	public function new(key:String, name:IconName, size:Float = 16.0, ?color:Color, ?label:String) {
 		if (key == null || key.length == 0
 			|| size <= 0.0 || !Math.isFinite(size)) throw "Icons require a stable key and positive finite size";

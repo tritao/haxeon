@@ -65,11 +65,21 @@ class PropertyEditor implements View implements Observable {
 		return cached;
 	}
 	static var nextGeneration:Int = 0;
+
+	/** Identifies the editor among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The properties edited, in order. */
 	public final descriptors:Array<PropertyDescriptor>;
+
+	/** The editor's box. */
 	public final style:LayoutStyle;
+
+	/** Which control edits each kind of value, including the application's own. */
 	public final registry:PropertyEditorRegistry;
 	final generation:Int;
+
+	/** Counts the edits started and finished, so a host can tell when the editor's state changed. */
 	@:unobservable public var revision(default, null):Int;
 	@:allow(haxeon.ui.widgets.properties.PropertyEditorRow) final rowIds:Map<String, WidgetId> = new Map();
 	// The rows' content, a private class of this module, reads the options, the pending edits and the editors it lays out.
@@ -80,6 +90,7 @@ class PropertyEditor implements View implements Observable {
 	@:allow(haxeon.ui.widgets.properties)
 	final pending:Map<String, haxeon.ui.properties.PropertyPendingEdit> = new Map();
 
+	/** An editor of `descriptors`, one row each. Throws when `key` is empty. */
 	public function new(key:String,
 			descriptors:Array<PropertyDescriptor>,
 			?style:LayoutStyle,
@@ -102,6 +113,10 @@ class PropertyEditor implements View implements Observable {
 		errors = new Map();
 	}
 
+	/**
+	 * Sets whether the rows take input, the label column's width, whether labels sit above their controls, and the
+	 * search text that filters the rows.
+	 */
 	public function configure(enabled:Bool, labelWidth:Float, stackedRows:Bool, searchQuery:String):Void {
 		options.enabled = enabled;
 		options.labelWidth = labelWidth;
@@ -109,6 +124,7 @@ class PropertyEditor implements View implements Observable {
 		options.searchQuery = searchQuery;
 	}
 
+	/** Whether category headings separate the rows. */
 	public function showCategoryHeaders(value:Bool):Void options.showCategories = value;
 
 	/** Applies through the document or external transaction owner. Pending returns false. */
@@ -155,6 +171,7 @@ class PropertyEditor implements View implements Observable {
 		};
 	}
 
+	/** Sets the property back to its default, through the document like an edit. */
 	public function resetValue(context:BuildContext, descriptor:PropertyDescriptor):Void {
 		var reset = descriptor.reset;
 		if (reset == null) {
@@ -221,6 +238,7 @@ class PropertyEditor implements View implements Observable {
 	public static function accessibleName(descriptor:PropertyDescriptor):String return descriptor.unit
 		== null ? descriptor.label : descriptor.label + " (" + descriptor.unit + ")";
 
+	/** The current validation or edit error of the property `id`, or null. */
 	public function errorFor(id:String):Null<String> return errors.get(id);
 
 	@:allow(haxeon.ui.widgets.properties)

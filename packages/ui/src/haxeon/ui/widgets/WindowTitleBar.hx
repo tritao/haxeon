@@ -15,12 +15,17 @@ import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
 
 /** Native drag surface with interactive child exclusions and accessible window controls. */
 class WindowTitleBar implements View {
+	/** The width of each window control button, in logical pixels. */
 	public static inline final CONTROL_WIDTH:Float = 44.0;
+
+	/** The width of the three window controls together. */
 	public static inline final CONTROLS_WIDTH:Float = CONTROL_WIDTH * 3;
 	final key:String;
 	final content:View;
 	final controls:WindowControls;
 	final height:Float;
+
+	/** A title bar `height` pixels tall that drags the window, showing `content` beside the window `controls`. */
 	public function new(key:String, content:View, controls:WindowControls, height:Float = 38) {
 		this.key = key;
 		this.content = content;

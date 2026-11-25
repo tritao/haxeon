@@ -30,21 +30,41 @@ import haxeon.ui.widgets.text.Text;
  * onChanged so the host can rebuild.
  */
 class SettingsPanel implements View implements Observable implements Disposable {
+	/** Identifies the panel among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The settings, their categories and their store. */
 	public final catalog:SettingsCatalog;
+
+	/** The search text; set with `setFilter`. */
 	public var filter(default, null):String;
+
+	/** Whether advanced settings are listed; set with `setShowAdvanced`. */
 	public var showAdvanced(default, null):Bool;
+
+	/** Whether only settings changed from their defaults are listed; set with `setModifiedOnly`. */
 	public var modifiedOnly(default, null):Bool = false;
+
+	/** Whether only changes waiting for a restart are listed; set with `showRestartChanges`. */
 	public var restartOnly(default, null):Bool = false;
 	@:unobservable var focusSearchPending:Bool = false;
 	@:unobservable var storeRevision:Int = -1;
 	@:unobservable var visibleCounts:Map<String, Int> = new Map();
 	/** The category shown on the right, or null when nothing matches. */
 	public var selectedCategory(default, null):Null<String>;
+
+	/** Called after every change of the panel's state, so the host rebuilds. */
 	public var onChanged:Null<Void->Void>;
+
+	/** The width of the category tree, which the user can drag. */
 	@:unobservable public var treeWidth:Float;
+	/** The width of the settings' label column, unless `compact`. */
 	public var labelWidth:Float;
+
+	/** Which control edits each kind of setting; register the application's own here. */
 	public final editorRegistry = new haxeon.ui.properties.PropertyEditorRegistry();
+
+	/** Whether it lays out for a narrow window: the header stacked, and labels above their controls. */
 	public var compact:Bool = false;
 
 	@:unobservable final treeModel:SettingsTreeModel;
@@ -52,6 +72,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 	@:unobservable var inspectorKey:String;
 	@:unobservable var unsubscribeStore:Null<Void->Void>;
 
+	/** A panel over the settings in `store`. Throws when `key` is empty. */
 	public function new(key:String, store:SettingsStore, ?onChanged:Void->Void) {
 		if (key == null || key.length == 0) throw "Settings panels require a stable key";
 		this.key = key;
@@ -71,6 +92,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		unsubscribeStore = store.onChanged("", function(_) refresh());
 	}
 
+	/** Stops following the store; call when the panel closes. */
 	public function dispose():Void {
 		if (unsubscribeStore != null) {
 			unsubscribeStore();
@@ -78,9 +100,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		}
 	}
 
-	public function hasUnsavedChanges():Bool return false;
-	public function discardUnsavedChanges():Void {}
-
+	/** Moves keyboard focus to the search field in the next frame. */
 	public function requestSearchFocus():Void {
 		focusSearchPending = true;
 		changed();
@@ -95,11 +115,13 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		refresh();
 	}
 
+	/** Lists every setting again, after `showRestartChanges`. */
 	public function showAllSettings():Void {
 		restartOnly = false;
 		refresh();
 	}
 
+	/** Filters the settings by `value`. */
 	public function setFilter(value:String):Void {
 		var next = value == null ? "" : value;
 		if (next == filter) return;
@@ -107,6 +129,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		refresh();
 	}
 
+	/** Lists or hides the advanced settings, remembering the choice in the store. */
 	public function setShowAdvanced(value:Bool):Void {
 		if (value == showAdvanced) return;
 		showAdvanced = value;
@@ -114,6 +137,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		refresh();
 	}
 
+	/** Lists only the settings changed from their defaults, or all of them. */
 	public function setModifiedOnly(value:Bool):Void {
 		if (modifiedOnly == value) return;
 		modifiedOnly = value;
@@ -132,17 +156,14 @@ class SettingsPanel implements View implements Observable implements Disposable 
 	/** Categories the tree lists for the current filter, in order. */
 	public function categories():Array<String> return treeModel.categories.copy();
 
-	/** The inspector for the selected category; rebuilt only when the category, filter or Advanced switch changes. */
+	/** How many of `category`'s settings the current filter shows. */
 	public function categoryCount(category:String):Int {
 		if (storeRevision != catalog.store.revision) refresh();
 		var count = visibleCounts.get(category);
 		return count == null ? 0 : count;
 	}
 
-	public function invalidateInspector():Void {
-		inspector = null;
-	}
-
+	/** The inspector for the selected category; rebuilt only when the category, filter or Advanced switch changes. */
 	public function currentInspector():Null<PropertyInspector> {
 		if (storeRevision != catalog.store.revision) refresh();
 		if (selectedCategory == null) return null;
@@ -262,9 +283,8 @@ class SettingsPanel implements View implements Observable implements Disposable 
 			new KeyedView("status",
 				new Text(catalog.store.lastError != null
 				? catalog.store.lastError
-				: (hasUnsavedChanges() ? "Unsaved list changes · Apply each list to save" : (current
-				== null ? "0 settings" : Std.string(current.descriptors.length) + " settings")
-				+ " · Changes save automatically")))
+				: (current == null ? "0 settings" : Std.string(current.descriptors.length) + " settings")
+				+ " · Changes save automatically"))
 		];
 		var restart = catalog.store.restartChanges();
 		if (restart.length > 0 || restartOnly) {

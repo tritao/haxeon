@@ -4,13 +4,22 @@ import haxeon.ui.core.View;
 
 /** View-independent sidebar registration and validated persistent presentation. */
 class SidebarModel {
+	/** The registered destinations, in display order. */
 	public final modes:Array<SidebarMode> = [];
+
+	/** The selected destination's ID. */
 	public var activeId(default, null):String = "";
+
+	/** Whether the sidebar is shown. */
 	public var visible(default, null):Bool = true;
+
+	/** Called after every change, so the host rebuilds and saves. */
 	public var onChange:Void->Void = function() {};
 	var savedActive:String = "";
 	var sequence:Int = 0;
 	static final widthPattern = ~/^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$/;
+
+	/** The sidebar's width, shared by every destination. */
 	public var width(default, null):Float = 240;
 	var savedVisible:Map<String, Bool> = [];
 	/** The user's destination order, including saved ids that are not registered yet. Empty keeps the default order. */
@@ -19,8 +28,11 @@ class SidebarModel {
 	/** True once the user has moved a destination; the saved order then overrides the default one. */
 	public var customOrder(get, never):Bool;
 	function get_customOrder():Bool return savedOrder.length > 0;
+
+	/** An empty sidebar. */
 	public function new() {}
 
+	/** Adds the destination `id`, built by `provider`. Throws when `id` is invalid or taken, or the label is empty. */
 	public function register(id:String, provider:Void->View, options:SidebarModeOptions):Void {
 		if (!validId(id) || provider == null || options == null || options.label.length == 0
 			|| find(id) != null) throw "Invalid or duplicate sidebar mode";
@@ -32,6 +44,7 @@ class SidebarModel {
 		onChange();
 	}
 
+	/** Removes the destination `id`, remembering whether it was listed. Returns whether it was registered. */
 	public function unregister(id:String):Bool {
 		var mode = find(id);
 		if (mode == null) return false;
@@ -43,16 +56,22 @@ class SidebarModel {
 		onChange();
 		return true;
 	}
+
+	/** The destination `id`, or null. */
 	public function find(id:String):Null<SidebarMode> {
 		for (mode in modes) if (mode.id == id) return mode;
 		return null;
 	}
+
+	/** The destination shown: the selected one if listed, or the first listed; null when none is. */
 	public function selected():Null<SidebarMode> {
 		var active = find(activeId);
 		if (active != null && active.visible) return active;
 		for (mode in modes) if (mode.visible) return mode;
 		return null;
 	}
+
+	/** Shows the destination `id`, and the sidebar. Returns false when it is not registered or not listed. */
 	public function select(id:String):Bool {
 		var mode = find(id);
 		if (mode == null || !mode.visible) return false;
@@ -62,6 +81,8 @@ class SidebarModel {
 		onChange();
 		return true;
 	}
+
+	/** Shows or hides the sidebar. */
 	public function setVisible(value:Bool):Void {
 		if (visible == value) return;
 		visible = value;
@@ -71,6 +92,8 @@ class SidebarModel {
 	public function rememberWidth(width:Float):Void {
 		if (validWidth(width)) this.width = width;
 	}
+
+	/** Lists or hides the destination `id`. Returns whether it changed. */
 	public function setModeVisible(id:String, value:Bool):Bool {
 		var mode = find(id);
 		if (mode == null) return false;
@@ -127,6 +150,10 @@ class SidebarModel {
 		placed.sort(function(a, b) return savedOrder.indexOf(a.id) - savedOrder.indexOf(b.id));
 		for (i in 0...slots.length) modes[slots[i]] = placed[i];
 	}
+
+	/**
+	 * The whole presentation, as text for `restore`: the selection, visibility, width, listed destinations and order.
+	 */
 	public function encode():String {
 		return "3|" + (savedActive == "" ? activeId : savedActive) + "|" + (visible ? "1" : "0") + "|" + width + "|"
 			+ encodeShown() + "|" + savedOrder.join(",");

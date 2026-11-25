@@ -35,17 +35,25 @@ import haxeon.ui.widgets.text.Text;
  * scope used is moved to this one, and the panel says so.
  */
 class ShortcutsPanel implements View implements Observable {
+	/** Identifies the panel among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The commands' shortcuts, which the panel edits. */
 	public final bindings:ShortcutBindings;
+
+	/** The search text; set with `setFilter`. */
 	public var filter(default, null):String;
 	/** The command waiting for a key chord, or null. */
 	public var recordingId(default, null):Null<String>;
 	/** What the last change did besides the obvious, such as taking a chord from another command. */
 	public var notice(default, null):Null<String>;
+
+	/** Called after every change of the panel's state, so the host rebuilds. */
 	public var onChanged:Null<Void->Void>;
 	/** Width of each row's shortcut button. */
 	public var shortcutWidth:Float;
 
+	/** A panel editing `bindings`. Throws when `key` is empty. */
 	public function new(key:String, bindings:ShortcutBindings, ?onChanged:Void->Void) {
 		if (key == null || key.length == 0)
 			throw "Shortcut panels require a stable key";
@@ -58,6 +66,7 @@ class ShortcutsPanel implements View implements Observable {
 		shortcutWidth = 240.0;
 	}
 
+	/** Filters the commands by name or shortcut. */
 	public function setFilter(value:String):Void {
 		var next = value == null ? "" : value;
 		if (next == filter)
@@ -97,6 +106,7 @@ class ShortcutsPanel implements View implements Observable {
 		return true;
 	}
 
+	/** Removes the command's shortcuts. */
 	public function clear(id:String):Void {
 		bindings.clear(id);
 		recordingId = null;
@@ -104,6 +114,7 @@ class ShortcutsPanel implements View implements Observable {
 		changed();
 	}
 
+	/** Gives the command its default shortcuts back. */
 	public function reset(id:String):Void {
 		bindings.reset(id);
 		recordingId = null;
@@ -234,9 +245,13 @@ class ShortcutsPanel implements View implements Observable {
 
 /** Command IDs listed under one heading. */
 class ShortcutGroup {
+	/** The heading. */
 	public final name:String;
+
+	/** The command IDs under it, in order. */
 	public final ids:Array<String>;
 
+	/** An empty group headed `name`. */
 	public function new(name:String) {
 		this.name = name;
 		ids = [];

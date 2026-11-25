@@ -14,8 +14,11 @@ class GestureDetector implements View {
 	final key:Key;
 	final child:View;
 	final recognizers:Array<GestureRecognizer>;
+
+	/** The box around `child`. */
 	public final style:LayoutStyle;
 
+	/** Shows `child`, feeding its pointer events to `recognizers`. */
 	public function new(key:String, child:View, recognizers:Array<GestureRecognizer>, ?style:LayoutStyle) {
 		if (child == null) throw "GestureDetector requires a child view";
 		this.key = new Key(key);

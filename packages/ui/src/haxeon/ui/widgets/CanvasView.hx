@@ -19,9 +19,16 @@ import haxeon.ui.style.StyleTarget;
  * Painters draw in local coordinates; native layout places the retained list.
  */
 class CanvasView implements View {
+	/** Identifies the canvas among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** Its accessible name; without one, assistive technology skips it. */
 	public final label:Null<String>;
+
+	/** The canvas's box. */
 	public final style:LayoutStyle;
+
+	/** Whether it takes pointer events itself, over its own box. */
 	public final hitTestSelf:Bool;
 	/** Native raster reuse policy for this retained paint plane. */
 	public final cachePolicy:CachePolicy;
@@ -30,6 +37,10 @@ class CanvasView implements View {
 	final painter:Canvas->ResolvedLayoutItem->Void;
 	final handlers:Map<String, Array<UiEvent->Void>>;
 
+	/**
+	 * A region painted by `painter`, called with a canvas and the region's laid-out box. Throws when `key` is empty or
+	 * there is no painter.
+	 */
 	public function new(key:String,
 			painter:Canvas->ResolvedLayoutItem->Void,
 			?style:LayoutStyle,
@@ -62,6 +73,10 @@ class CanvasView implements View {
 			cacheKey);
 	}
 
+	/**
+	 * Adds `handler` for events of `kind` on the region, and returns the view, for chaining. Throws without a kind or
+	 * handler.
+	 */
 	public function on(kind:String, handler:UiEvent->Void):CanvasView {
 		if (kind == null
 			|| kind.length == 0 || handler == null) throw "Canvas view handlers require an event kind and callback";

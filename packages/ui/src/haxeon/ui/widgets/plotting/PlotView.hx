@@ -19,17 +19,37 @@ import haxeon.ui.style.StyleTarget;
 
 /** Retained Canvas plot for telemetry, graphs, and simulation diagnostics. */
 class PlotView implements View {
+	/** Identifies the plot among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The series plotted and their ranges. */
 	public final model:PlotModel;
+
+	/** The plot's box. */
 	public final style:LayoutStyle;
+
+	/** The color behind the plot. */
 	public var background(default, null):Color;
+
+	/** The color of the grid lines. */
 	public var gridColor(default, null):Color;
+
+	/** The color of the axes. */
 	public var axisColor(default, null):Color;
+
+	/** How many grid cells each axis is divided into. */
 	public var gridDivisions(default, null):Int;
+
+	/** Space between the box's edge and the plot area, in logical pixels. */
 	public var padding(default, null):Float;
+
+	/** Whether the plot takes pointer input. */
 	public var enabled:Bool;
+
+	/** Its accessible name; without one, assistive technology skips it. */
 	public var label:Null<String>;
 
+	/** A plot of `model`. Throws when `key` is empty or there is no model. */
 	public function new(key:String, model:PlotModel, ?style:LayoutStyle, ?label:String) {
 		if (key == null || key.length == 0 || model == null) throw "Plots require a stable key and model";
 		this.key = key;
@@ -44,6 +64,10 @@ class PlotView implements View {
 		this.label = label == null ? "Plot" : label;
 	}
 
+	/**
+	 * Sets the colors, grid and padding. Throws when `gridDivisions` is below 1 or `padding` is negative or not
+	 * finite.
+	 */
 	public function setAppearance(background:Color,
 			gridColor:Color,
 			axisColor:Color,

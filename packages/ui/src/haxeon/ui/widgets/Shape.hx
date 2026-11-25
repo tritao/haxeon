@@ -19,20 +19,46 @@ import haxeon.ui.style.StyleTarget;
  * resolved layout bounds; path-accurate hit testing can be added separately.
  */
 class Shape implements View {
+	/** Identifies the shape among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
+
+	/** The outline drawn. */
 	public final path:Path;
+
+	/** The color or gradient it is drawn with. */
 	public final paint:Paint;
+
+	/** The shape's box. */
 	public final style:LayoutStyle;
+
+	/** Its accessible name; without one, assistive technology skips it. */
 	public final label:Null<String>;
+
+	/** Whether it takes pointer events itself, over its own box. */
 	public final hitTestSelf:Bool;
+
+	/** Whether the path is filled; otherwise it is stroked. */
 	public final filled:Bool;
+
+	/** The stroke's width, when stroked. */
 	public final strokeWidth:Float;
+
+	/** How open stroke ends are drawn. */
 	public final strokeCap:LineCap;
+
+	/** How stroke corners are drawn. */
 	public final strokeJoin:LineJoin;
+
+	/** How far a mitered corner may reach before it is beveled, as a multiple of the stroke width. */
 	public final miterLimit:Float;
+
+	/** Whether its drawing is kept as a raster between frames. */
 	public final cachePolicy:CachePolicy;
+
+	/** Identifies the drawing, so it is reused across builds while the key is the same. */
 	public final cacheKey:Null<String>;
 
+	/** A shape drawing `path` with `paint`; prefer `fill` and `stroke`. */
 	public function new(key:String,
 			path:Path,
 			paint:Paint,
