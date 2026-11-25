@@ -5,7 +5,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderTreeTopology;
 import haxeon.ui.core.UiDirtyFlag;
-import haxeon.ui.style.StyleDiff;
+import haxeon.ui.style.ComputedStyle;
 
 /** Per-submit style invalidation counts, compared by stable render-node ID. */
 class UiStyleInvalidationMetrics {

@@ -1,10 +1,6 @@
 package haxeon.ui.style;
 
-import haxeon.ui.style.BrightnessEffect;
-import haxeon.ui.style.ColorMatrixEffect;
-import haxeon.ui.style.ContrastEffect;
-import haxeon.ui.style.HueRotateEffect;
-import haxeon.ui.style.SaturateEffect;
+import haxeon.ui.style.VisualEffect;
 
 /** Ordered, value-semantic collection of post-layout visual effects. */
 class EffectChain {
@@ -104,13 +100,13 @@ class EffectChain {
 		for (effect in effects) {
 			var next:Array<Float> = switch effect.kind {
 				case EffectKind.Brightness:
-					var value:BrightnessEffect = cast effect;
+					var value:ColorFactorEffect = cast effect;
 					brightnessMatrix(value.factor);
 				case EffectKind.Contrast:
-					var value:ContrastEffect = cast effect;
+					var value:ColorFactorEffect = cast effect;
 					contrastMatrix(value.factor);
 				case EffectKind.Saturate:
-					var value:SaturateEffect = cast effect;
+					var value:ColorFactorEffect = cast effect;
 					saturateMatrix(value.factor);
 				case EffectKind.HueRotate:
 					var value:HueRotateEffect = cast effect;
@@ -138,13 +134,13 @@ class EffectChain {
 	static function matrixFor(effect:VisualEffect):Array<Float> {
 		switch effect.kind {
 			case EffectKind.Brightness:
-				var value:BrightnessEffect = cast effect;
+				var value:ColorFactorEffect = cast effect;
 				return brightnessMatrix(value.factor);
 			case EffectKind.Contrast:
-				var value:ContrastEffect = cast effect;
+				var value:ColorFactorEffect = cast effect;
 				return contrastMatrix(value.factor);
 			case EffectKind.Saturate:
-				var value:SaturateEffect = cast effect;
+				var value:ColorFactorEffect = cast effect;
 				return saturateMatrix(value.factor);
 			case EffectKind.HueRotate:
 				var value:HueRotateEffect = cast effect;

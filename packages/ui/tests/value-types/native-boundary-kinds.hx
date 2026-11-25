@@ -6,7 +6,7 @@ import haxeon.ui.LineJoin;
 import haxeon.ui.core.CachePolicy;
 import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.style.MaskKind;
+import haxeon.ui.style.Mask;
 
 struct NativeBoundaryChoices implements Hashable {
 	public var choice0:CompositeMode;

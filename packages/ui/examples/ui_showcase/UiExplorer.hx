@@ -35,7 +35,7 @@ import haxeon.ui.debug.UiFrameMetrics;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.StyleSelector;
+import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleValue;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.KeyedView;

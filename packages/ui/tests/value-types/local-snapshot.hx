@@ -5,8 +5,6 @@ import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Transform2D;
 import haxeon.ui.style.ComputedStyle;
-import haxeon.ui.style.StyleDiff;
-import haxeon.ui.style.StyleImpact;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleProperty.StyleColorProperty;
 import haxeon.ui.style.StyleResolver;

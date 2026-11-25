@@ -1,4 +1,4 @@
-import haxeon.ui.style.EffectKind;
+import haxeon.ui.style.VisualEffect;
 
 function main():Int {
 	var state:EffectKind = "blur";

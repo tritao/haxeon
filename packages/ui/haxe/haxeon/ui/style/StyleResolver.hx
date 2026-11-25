@@ -1,16 +1,18 @@
 package haxeon.ui.style;
 
-import haxeon.ui.widgets.layout.Padding;
-
-
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Transform2D;
+import haxeon.ui.animation.Animation;
 import haxeon.ui.animation.AnimationScheduler;
+import haxeon.ui.animation.Easing;
 import haxeon.ui.style.StyleProperty.StylePropertyBase;
+import haxeon.ui.style.StyleSheet;
+import haxeon.ui.widgets.layout.Padding;
 
+import haxeon.ui.style.ComputedStyle;
 /** Deterministic framework/inheritance/theme/application/state/local cascade. */
 class StyleResolver {
 	static inline var MaxCacheEntries:Int = 8192;
@@ -547,4 +549,53 @@ class StyleResolverCacheEntry {
 			&& this.applicationIdentity == applicationIdentity && this.applicationRevision == applicationRevision
 			&& this.localKey == localKey && this.environmentIdentity == environmentIdentity
 			&& this.environmentRevision == environmentRevision && this.localTextColor == localTextColor;
+}
+
+/** One property transition requested by a stylesheet. */
+class StyleTransition {
+	public final property:StylePropertyBase;
+	public final duration:Float;
+	public final easing:Int;
+
+	public function new(property:StylePropertyBase, duration:Float, easing:Int = Easing.EaseOut) {
+		if (property == null || duration < 0.0 || easing < Easing.Linear || easing > Easing.EaseInOut)
+			throw "Style transitions require a property, duration, and valid easing";
+		this.property = property;
+		this.duration = duration;
+		this.easing = easing;
+	}
+}
+
+/** Scheduler adapter for typed style interpolation. */
+class StyleTransitionAnimation implements Animation {
+	final from:StyleValue;
+	final to:StyleValue;
+	final duration:Float;
+	final easing:Int;
+	final onUpdate:StyleValue->Void;
+	final onComplete:Void->Void;
+	var elapsed:Float;
+
+	public function new(from:StyleValue, to:StyleValue, duration:Float, easing:Int,
+			onUpdate:StyleValue->Void, onComplete:Void->Void) {
+		this.from = from;
+		this.to = to;
+		this.duration = duration;
+		this.easing = easing;
+		this.onUpdate = onUpdate;
+		this.onComplete = onComplete;
+		elapsed = 0.0;
+	}
+
+	public function advance(deltaSeconds:Float):Bool {
+		elapsed += deltaSeconds;
+		var complete = duration <= 0.0 || elapsed >= duration;
+		var amount = complete ? 1.0 : Easing.apply(elapsed / duration, easing);
+		onUpdate(complete ? to : from.interpolateTo(to, amount));
+		if (complete) {
+			onComplete();
+			return false;
+		}
+		return true;
+	}
 }

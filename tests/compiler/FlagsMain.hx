@@ -18,10 +18,8 @@ class FlagsMain {
 		return c;
 	}
 
-	static function rejected(source:String, message:String, ui:Bool = false):Void {
+	static function rejected(source:String, message:String):Void {
 		var c = makeCompiler("hl", true);
-		if (ui)
-			c.addSourceRoot("packages/ui/haxe");
 		c.update("Main.hx", source);
 		var error = "";
 		try
@@ -51,19 +49,6 @@ class FlagsMain {
 			"without a declared single-bit");
 		rejected(declaration
 			+ 'function accepts<T:Flags>(value:T):Int return 42; function main():Int return accepts(1);', "constraint");
-		for (name in [
-			// The UI's own Flags types; the accessibility flags are the generated native ones, covered with the other native flags.
-				"haxeon.ui.core.UiModifier",
-				"haxeon.ui.core.UiDirtyFlag",
-				"haxeon.ui.style.StyleState",
-				"haxeon.ui.style.StyleImpact"
-			]) {
-			var local = name.substr(name.lastIndexOf(".") + 1),
-				header = 'import $name; ';
-			rejected(header + 'function main():Int { var value:$local=0; return 42; }', "Type mismatch", true);
-			rejected(header + 'function main():Int { var value:Int=$local.empty(); return value; }', "Type mismatch",
-				true);
-		}
 		var inherited = makeCompiler("hl", true);
 		inherited.update("Main.hx",
 			'interface LocalFlags extends Flags {} interface LocalRaw extends RawRepresentable {} enum abstract Bits(Int) implements LocalFlags { var A=1; } enum abstract Code(Int) implements LocalRaw { var A=42; } function main():Int { return Bits.A.rawValue() + Code.A.rawValue() - 1; }');

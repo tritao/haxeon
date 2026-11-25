@@ -6,7 +6,6 @@ import haxeon.ui.core.StateStore;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleValue;
 import haxeon.ui.theme.Theme;

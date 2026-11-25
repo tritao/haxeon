@@ -38,7 +38,7 @@ import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleSource;
+import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;

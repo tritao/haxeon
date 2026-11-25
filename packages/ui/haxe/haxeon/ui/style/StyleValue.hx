@@ -21,6 +21,8 @@ import haxeon.ui.style.StyleProperty.StyleInterpolatedProperty;
 import haxeon.ui.style.StyleProperty.StylePropertyBase;
 import haxeon.ui.style.StyleProperty.StyleTransformProperty;
 
+import haxeon.ui.style.ComputedStyle;
+import haxeon.ui.style.Decoration;
 /** One typed declaration passed to a StyleRule. */
 class StyleValue {
 	public final property:StylePropertyBase;

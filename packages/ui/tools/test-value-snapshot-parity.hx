@@ -14,7 +14,7 @@ class Fixtures {
 	public static final GROUPS = [
 		"local-snapshot", "host-lifecycle", "style-kinds", "cursor-shape", "layout-codes", "layout-policies",
 		"text-codes", "widget-kinds",
-		"presentation-kinds", "native-boundary-kinds"
+		"presentation-kinds", "native-boundary-kinds", "ui-flags"
 	];
 
 	public static final MEMORY_CONTRACT =

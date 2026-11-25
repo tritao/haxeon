@@ -1,9 +1,5 @@
 import haxeon.ui.style.Decoration;
-import haxeon.ui.style.DecorationKind;
-import haxeon.ui.style.EffectKind;
-import haxeon.ui.style.EffectParameter;
-import haxeon.ui.style.EffectParameterType;
-import haxeon.ui.style.EffectParameterTypeUtil;
+import haxeon.ui.style.CustomEffect;
 import haxeon.ui.style.VisualEffect;
 
 @:access(haxeon.ui.style.VisualEffect)

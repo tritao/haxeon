@@ -7,8 +7,6 @@ import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.InkOverflow;
-import haxeon.ui.style.StyleInspectionEntry;
-import haxeon.ui.style.StyleSource;
 import haxeon.ui.style.StyleState;
 
 /** Grouped effect diagnostics carried by a node inspection snapshot. */

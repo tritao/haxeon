@@ -2,7 +2,7 @@ package haxeon.ui.core;
 
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
-import haxeon.ui.style.StyleDiff;
+import haxeon.ui.style.ComputedStyle;
 
 /** A text leaf owns its previous submitted value without a render-tree snapshot. */
 @:access(haxeon.ui.core.RenderNode)

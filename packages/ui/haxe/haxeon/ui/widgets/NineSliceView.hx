@@ -9,10 +9,9 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.DecorationChain;
-import haxeon.ui.style.NineSliceDecoration;
+import haxeon.ui.style.Decoration;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleSource;
+import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleTarget;
 
 /** Accessible image view that preserves four edge insets while stretching its center. */

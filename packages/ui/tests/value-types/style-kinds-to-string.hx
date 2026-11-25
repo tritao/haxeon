@@ -1,4 +1,4 @@
-import haxeon.ui.style.DecorationKind;
+import haxeon.ui.style.Decoration;
 
 function main():Int {
 	var state:String = DecorationKind.Background;

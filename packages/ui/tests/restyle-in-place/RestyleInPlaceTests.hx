@@ -692,15 +692,16 @@ private class UpdatingResources implements View {
 		check(constructed.getAxis(height).sizing == haxeon.ui.LayoutSizing.Grow,
 			"Constructed style lost its axis snapshot");
 		var copy = constructed.copy();
-		check(!haxeon.ui.style.StyleDiff.compare(constructed, copy).changed, "Copied inline axes compare differently");
+		check(!haxeon.ui.style.ComputedStyle.StyleDiff.compare(constructed, copy).changed,
+			"Copied inline axes compare differently");
 		var dynamicStyle = new haxeon.ui.style.ComputedStyle();
 		dynamicStyle.setAxis(width, LayoutAxis.fixed(7), null);
 		dynamicStyle.setAxis(height, LayoutAxis.grow(), null);
-		check(!haxeon.ui.style.StyleDiff.compare(constructed, dynamicStyle).changed,
+		check(!haxeon.ui.style.ComputedStyle.StyleDiff.compare(constructed, dynamicStyle).changed,
 			"Inline and dynamically stored axes compare differently");
 		copy.setAxis(width, LayoutAxis.fixed(3), null);
 		check(copy.getAxis(width).value == 3 && constructed.getAxis(width).value == 7
-			&& haxeon.ui.style.StyleDiff.compare(constructed,
+			&& haxeon.ui.style.ComputedStyle.StyleDiff.compare(constructed,
 			copy).changed,
 			"Dynamic axis replacement lost value or isolation");
 		var entries = constructed.entries();
@@ -715,7 +716,7 @@ private class UpdatingResources implements View {
 			"value") && Reflect.fields(entries[0]).indexOf("value") >= 0 && reflected != null && reflected.value == 7,
 			"Reflection lost the inspected axis value");
 		var node = new RenderNode(new WidgetId(723), LayoutVisualKind.Box);
-		constructed.setDecorations(new haxeon.ui.style.DecorationChain([new InspectionDecoration()]), null);
+		constructed.setDecorations(new haxeon.ui.style.Decoration.DecorationChain([new InspectionDecoration()]), null);
 		node.computedStyle = constructed;
 		InspectionDecoration.copies = 0;
 		var snapshots = haxeon.ui.debug.UiInspector.snapshot(node, null);
@@ -760,7 +761,7 @@ private class UpdatingResources implements View {
 			&& forked.padding.left == 1 && forked.background.red == 0.1 && forked.transform.tx == 5,
 			"A local struct snapshot changed when its input style was edited");
 		var clone = computed.copy();
-		check(!haxeon.ui.style.StyleDiff.compare(computed, clone).changed,
+		check(!haxeon.ui.style.ComputedStyle.StyleDiff.compare(computed, clone).changed,
 			"Copying lazy local values changed their style");
 		var typedStyle = new haxeon.ui.style.ComputedStyle();
 		typedStyle.setInsets(padding, materialized.padding, null);
@@ -1424,10 +1425,12 @@ private class UpdatingResources implements View {
 			haxeon.ui.core.UiModifier.Control) != new haxeon.ui.core.Shortcut(65,
 			haxeon.ui.core.UiModifier.Alt),
 			"Shortcut equality is wrong");
-		check(haxeon.ui.style.EffectParameter.vec2(1.0,
-			2.0) == haxeon.ui.style.EffectParameter.vec2(1.0, 2.0) && haxeon.ui.style.EffectParameter.vec2(1.0,
-			2.0) != haxeon.ui.style.EffectParameter.vec2(1.0,
-			3.0) && haxeon.ui.style.EffectParameter.scalar(1.0) != haxeon.ui.style.EffectParameter.vec2(1.0,
+		check(haxeon.ui.style.CustomEffect.EffectParameter.vec2(1.0,
+			2.0) == haxeon.ui.style.CustomEffect.EffectParameter.vec2(1.0, 2.0)
+			&& haxeon.ui.style.CustomEffect.EffectParameter.vec2(1.0,
+			2.0) != haxeon.ui.style.CustomEffect.EffectParameter.vec2(1.0,
+			3.0) && haxeon.ui.style.CustomEffect.EffectParameter.scalar(1.0)
+			!= haxeon.ui.style.CustomEffect.EffectParameter.vec2(1.0,
 			0.0),
 			"EffectParameter equality is wrong");
 
@@ -1442,25 +1445,26 @@ private class UpdatingResources implements View {
 			5.0),
 			"InkOverflow equality is wrong");
 		var definition = function(id:Int, overflow:Float,
-				types:Array<haxeon.ui.style.EffectParameterType>) return new haxeon.ui.style.CustomEffectDefinition(id,
+				types:Array<haxeon.ui.style.CustomEffect.EffectParameterType>) return new haxeon.ui.style.CustomEffect
+			.CustomEffectDefinition(id,
 			"effect",
 			types,
 			new haxeon.ui.style.InkOverflow(overflow, 0.0, 0.0, 0.0));
-		check(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) == definition(1,
+		check(definition(1, 1.0, [haxeon.ui.style.CustomEffect.EffectParameterType.Float]) == definition(1,
 			1.0,
-			[haxeon.ui.style.EffectParameterType.Float]) && definition(1,
+			[haxeon.ui.style.CustomEffect.EffectParameterType.Float]) && definition(1,
 			1.0,
-			[haxeon.ui.style.EffectParameterType.Float]) != definition(2,
+			[haxeon.ui.style.CustomEffect.EffectParameterType.Float]) != definition(2,
 			1.0,
-			[haxeon.ui.style.EffectParameterType.Float]) && definition(1,
+			[haxeon.ui.style.CustomEffect.EffectParameterType.Float]) && definition(1,
 			1.0,
-			[haxeon.ui.style.EffectParameterType.Float]) != definition(1,
+			[haxeon.ui.style.CustomEffect.EffectParameterType.Float]) != definition(1,
 			2.0,
-			[haxeon.ui.style.EffectParameterType.Float]) && definition(1,
+			[haxeon.ui.style.CustomEffect.EffectParameterType.Float]) && definition(1,
 			1.0,
-			[haxeon.ui.style.EffectParameterType.Float]) != definition(1,
+			[haxeon.ui.style.CustomEffect.EffectParameterType.Float]) != definition(1,
 			1.0,
-			[haxeon.ui.style.EffectParameterType.Vec2]),
+			[haxeon.ui.style.CustomEffect.EffectParameterType.Vec2]),
 			"CustomEffectDefinition equality is wrong");
 		check(haxeon.ui.style.StyleResolver.valueKeysComplete(),
 			"A Color, LayoutAxis, Insets or Transform2D field is missing from the style cache's value keys");

@@ -89,3 +89,243 @@ class VisualEffect {
 			interpolateFloat(left.blue, right.blue, amount),
 			interpolateFloat(left.alpha, right.alpha, amount));
 }
+
+/** Typed effect families understood by the native compositor. */
+enum EffectKind implements Equatable {
+	Blur;
+	Brightness;
+	Contrast;
+	Saturate;
+	HueRotate;
+	ColorMatrix;
+	DropShadow;
+	/** A renderer-owned shader/effect registration. */
+	Custom;
+}
+
+/** Gaussian blur described by its standard deviation in logical pixels. */
+class BlurEffect extends VisualEffect {
+	public final sigma:Float;
+
+	public function new(sigma:Float) {
+		super(EffectKind.Blur);
+		this.sigma = VisualEffect.requireNonNegative(sigma,
+			"Blur sigma must be finite and non-negative");
+	}
+
+	public static function withSigma(value:Float):BlurEffect
+		return new BlurEffect(value);
+
+	override public function isEqual(other:VisualEffect):Bool {
+		if (other == null || other.kind != EffectKind.Blur)
+			return false;
+		var value:BlurEffect = cast other;
+		return value != null && kind == value.kind && sigma == value.sigma;
+	}
+
+	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
+		if (other == null || other.kind != EffectKind.Blur)
+			return VisualEffect.discrete(this, other, amount);
+		var value:BlurEffect = cast other;
+		return new BlurEffect(VisualEffect.interpolateFloat(sigma, value.sigma, amount));
+	}
+
+	override public function copy():VisualEffect
+		return new BlurEffect(sigma);
+
+	override public function inkOverflow():InkOverflow
+		return new InkOverflow(sigma * 3.0, sigma * 3.0, sigma * 3.0, sigma * 3.0);
+
+	override public function describe():String
+		return 'blur($sigma)';
+}
+
+/** Multiplicative color adjustment by one factor: brightness, contrast or saturation. */
+class ColorFactorEffect extends VisualEffect {
+	public final factor:Float;
+
+	function new(kind:EffectKind, factor:Float) {
+		super(kind);
+		this.factor = VisualEffect.requireNonNegative(factor, switch kind {
+			case EffectKind.Brightness: "Brightness factor must be finite and non-negative";
+			case EffectKind.Contrast: "Contrast factor must be finite and non-negative";
+			case EffectKind.Saturate: "Saturation factor must be finite and non-negative";
+			default: throw "A color factor effect is brightness, contrast or saturation";
+		});
+	}
+
+	/** Multiplicative RGB brightness. */
+	public static function brightness(factor:Float):ColorFactorEffect
+		return new ColorFactorEffect(EffectKind.Brightness, factor);
+
+	/** Multiplicative RGB contrast. */
+	public static function contrast(factor:Float):ColorFactorEffect
+		return new ColorFactorEffect(EffectKind.Contrast, factor);
+
+	/** Multiplicative color saturation. */
+	public static function saturate(factor:Float):ColorFactorEffect
+		return new ColorFactorEffect(EffectKind.Saturate, factor);
+
+	override public function isEqual(other:VisualEffect):Bool {
+		if (other == null || other.kind != kind)
+			return false;
+		var value:ColorFactorEffect = cast other;
+		return value != null && factor == value.factor;
+	}
+
+	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
+		if (other == null || other.kind != kind)
+			return VisualEffect.discrete(this, other, amount);
+		var value:ColorFactorEffect = cast other;
+		return new ColorFactorEffect(kind, VisualEffect.interpolateFloat(factor, value.factor, amount));
+	}
+
+	override public function copy():VisualEffect
+		return new ColorFactorEffect(kind, factor);
+
+	override public function describe():String
+		return switch kind {
+			case EffectKind.Brightness: 'brightness($factor)';
+			case EffectKind.Contrast: 'contrast($factor)';
+			default: 'saturate($factor)';
+		};
+}
+
+/** Hue rotation in degrees. */
+class HueRotateEffect extends VisualEffect {
+	public final degrees:Float;
+
+	public function new(degrees:Float) {
+		super(EffectKind.HueRotate);
+		this.degrees = VisualEffect.requireFinite(degrees,
+			"Hue rotation must be finite");
+	}
+
+	public static function withDegrees(value:Float):HueRotateEffect
+		return new HueRotateEffect(value);
+
+	override public function isEqual(other:VisualEffect):Bool {
+		if (other == null || other.kind != EffectKind.HueRotate)
+			return false;
+		var value:HueRotateEffect = cast other;
+		return value != null && degrees == value.degrees;
+	}
+
+	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
+		if (other == null || other.kind != EffectKind.HueRotate)
+			return VisualEffect.discrete(this, other, amount);
+		var value:HueRotateEffect = cast other;
+		return new HueRotateEffect(VisualEffect.interpolateFloat(degrees, value.degrees, amount));
+	}
+
+	override public function copy():VisualEffect
+		return new HueRotateEffect(degrees);
+
+	override public function describe():String
+		return 'hue-rotate($degrees)';
+}
+
+/** Four-channel color matrix in row-major 4x5 form. */
+class ColorMatrixEffect extends VisualEffect {
+	public static inline var ComponentCount:Int = 20;
+	public final matrix:Array<Float>;
+
+	public function new(matrix:Array<Float>) {
+		super(EffectKind.ColorMatrix);
+		if (matrix == null || matrix.length != ComponentCount)
+			throw "Color matrices require 20 components";
+		this.matrix = [];
+		for (value in matrix)
+			this.matrix.push(VisualEffect.requireFinite(value,
+				"Color matrix components must be finite"));
+	}
+
+	public static function identity():ColorMatrixEffect {
+		var matrix:Array<Float> = [];
+		for (row in 0...4)
+			for (column in 0...5)
+				matrix.push(row == column ? 1.0 : 0.0);
+		return new ColorMatrixEffect(matrix);
+	}
+
+	override public function isEqual(other:VisualEffect):Bool {
+		if (other == null || other.kind != EffectKind.ColorMatrix)
+			return false;
+		var value:ColorMatrixEffect = cast other;
+		if (value == null || matrix.length != value.matrix.length)
+			return false;
+		for (index in 0...matrix.length)
+			if (matrix[index] != value.matrix[index])
+				return false;
+		return true;
+	}
+
+	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
+		if (other == null || other.kind != EffectKind.ColorMatrix)
+			return VisualEffect.discrete(this, other, amount);
+		var value:ColorMatrixEffect = cast other;
+		var result:Array<Float> = [];
+		for (index in 0...matrix.length)
+			result.push(VisualEffect.interpolateFloat(matrix[index], value.matrix[index], amount));
+		return new ColorMatrixEffect(result);
+	}
+
+	override public function copy():VisualEffect
+		return new ColorMatrixEffect(matrix);
+
+	override public function describe():String {
+		var values:Array<String> = [];
+		for (value in matrix)
+			values.push(Std.string(value));
+		return 'color-matrix(' + values.join(",") + ')';
+	}
+}
+
+/** Subtree alpha shadow; distinct from the lightweight ShadowDecoration. */
+class DropShadowEffect extends VisualEffect {
+	public final offsetX:Float;
+	public final offsetY:Float;
+	public final sigma:Float;
+	public final color:Color;
+
+	public function new(offsetX:Float, offsetY:Float, sigma:Float, color:Color) {
+		super(EffectKind.DropShadow);
+		this.offsetX = VisualEffect.requireFinite(offsetX, "Drop-shadow X offset must be finite");
+		this.offsetY = VisualEffect.requireFinite(offsetY, "Drop-shadow Y offset must be finite");
+		this.sigma = VisualEffect.requireNonNegative(sigma,
+			"Drop-shadow sigma must be finite and non-negative");
+		this.color = VisualEffect.copyColor(color);
+	}
+
+	override public function isEqual(other:VisualEffect):Bool {
+		if (other == null || other.kind != EffectKind.DropShadow)
+			return false;
+		var value:DropShadowEffect = cast other;
+		return value != null && offsetX == value.offsetX && offsetY == value.offsetY && sigma == value.sigma
+			&& VisualEffect.equalColor(color, value.color);
+	}
+
+	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
+		if (other == null || other.kind != EffectKind.DropShadow)
+			return VisualEffect.discrete(this, other, amount);
+		var value:DropShadowEffect = cast other;
+		return new DropShadowEffect(VisualEffect.interpolateFloat(offsetX, value.offsetX, amount),
+			VisualEffect.interpolateFloat(offsetY, value.offsetY, amount),
+			VisualEffect.interpolateFloat(sigma, value.sigma, amount),
+			VisualEffect.interpolateColor(color, value.color, amount));
+	}
+
+	override public function copy():VisualEffect
+		return new DropShadowEffect(offsetX, offsetY, sigma, color);
+
+	override public function inkOverflow():InkOverflow {
+		var spread = sigma * 3.0;
+		return new InkOverflow(Math.max(0.0, spread - offsetX),
+			Math.max(0.0, spread - offsetY), Math.max(0.0, spread + offsetX),
+			Math.max(0.0, spread + offsetY));
+	}
+
+	override public function describe():String
+		return 'drop-shadow($offsetX,$offsetY,$sigma,' + color.red + ',' + color.green + ',' + color.blue + ','
+			+ color.alpha + ')';
+}

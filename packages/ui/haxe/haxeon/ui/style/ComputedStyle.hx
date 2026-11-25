@@ -5,6 +5,7 @@ import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Transform2D;
+import haxeon.ui.style.Decoration;
 import haxeon.ui.style.StyleProperty.StyleAxisProperty;
 import haxeon.ui.style.StyleProperty.StyleColorProperty;
 import haxeon.ui.style.StyleProperty.StyleInsetsProperty;
@@ -249,5 +250,117 @@ class ComputedStyle {
 		values = values.copy();
 		sources = sources.copy();
 		shared = false;
+	}
+}
+
+/** Value-level difference between two computed styles, classified by impact. */
+class StyleDiff {
+	public final changed:Bool;
+	public final impact:StyleImpact;
+
+	public function new(changed:Bool, impact:StyleImpact) {
+		this.changed = changed;
+		this.impact = impact;
+	}
+
+	static final Unchanged = new StyleDiff(false, StyleImpact.None);
+	/** Results are immutable and `impact` is a mask of six bits, so each distinct changed result is created once. */
+	static final changedByImpact:Array<Null<StyleDiff>> = [for (_ in 0...64) null];
+
+	static function changedWith(impact:StyleImpact):StyleDiff {
+		var cached = changedByImpact[impact.rawValue()];
+		if (cached != null)
+			return cached;
+		var created = new StyleDiff(true, impact);
+		changedByImpact[impact.rawValue()] = created;
+		return created;
+	}
+
+	/**
+	 * Compares resolved values only. Provenance changes do not invalidate work
+	 * when the resulting value is unchanged.
+	 */
+	public static function compare(previous:Null<ComputedStyle>, current:Null<ComputedStyle>):StyleDiff {
+		if (previous == current || previous != null && previous.sharesValuesWith(current))
+			return Unchanged;
+
+		var changed = false;
+		var impact:StyleImpact = StyleImpact.None;
+		for (property in StyleProperty.all()) {
+			var previousHas = previous != null && previous.has(property);
+			var currentHas = current != null && current.has(property);
+			if (previousHas == currentHas && (!previousHas || previous.sameValue(property, current)))
+				continue;
+			changed = true;
+			impact |= property.impact;
+		}
+		return changed ? changedWith(impact) : Unchanged;
+	}
+}
+
+/** Work categories affected by a resolved style property. */
+enum abstract StyleImpact(Int) implements Flags {
+	var None = 0;
+	var Layout = 1 << 0;
+	var TextLayout = 1 << 1;
+	var Paint = 1 << 2;
+	var Composite = 1 << 3;
+	var Semantics = 1 << 4;
+	/** Changes resolved visual geometry used by native picking without relayout. */
+	var HitGeometry = 1 << 5;
+}
+
+/** Optional provenance attached to one computed property. */
+class StyleSource {
+	public final stylesheet:String;
+	public final selector:String;
+	public final rule:Int;
+	public final layer:String;
+
+	public function new(stylesheet:String, selector:String, rule:Int, layer:String) {
+		this.stylesheet = stylesheet == null ? "" : stylesheet;
+		this.selector = selector == null ? "" : selector;
+		this.rule = rule;
+		this.layer = layer == null ? "" : layer;
+	}
+
+	public function toString():String
+		return stylesheet + " " + selector + " (rule " + rule + ", " + layer + ")";
+}
+
+/** Inspectable computed property entry kept as a standalone Haxe module. */
+class StyleInspectionEntry {
+	public final name:String;
+	public final value:Dynamic;
+	public final source:Null<StyleSource>;
+
+	public function new(name:String, value:Dynamic, source:Null<StyleSource>) {
+		this.name = name;
+		this.value = value;
+		this.source = source;
+	}
+
+	/** Formats common typed values for headless logs and the interactive inspector. */
+	public function describe():String {
+		return switch name {
+			case "background" | "borderColor" | "outlineColor" | "shadowColor" | "textColor" | "progressTrackColor"
+				| "progressFillColor" | "sliderTrackColor" | "sliderFillColor" | "sliderThumbColor":
+				var color:Null<Color> = cast value;
+				color == null ? "null" : 'rgba(${color.red}, ${color.green}, ${color.blue}, ${color.alpha})';
+			case "padding":
+				var insets:Null<Insets> = cast value;
+				insets == null ? "null" : '${insets.left}, ${insets.top}, ${insets.right}, ${insets.bottom}';
+			case "width" | "height":
+				var axis:Null<LayoutAxis> = cast value;
+				axis == null ? "null" : Std.string(axis.sizing) + "(" + Std.string(axis.value) + ")";
+			case "effects" | "backdropEffects":
+				var effects:EffectChain = cast value;
+				effects == null ? "null" : effects.toString();
+			case "mask":
+				var mask:Mask = cast value;
+				mask == null ? "null" : mask.toString();
+			default:
+				Std.string(value);
+		};
 	}
 }

@@ -1,6 +1,6 @@
 package haxeon.ui;
 
-import haxeon.ui.style.EffectKind;
+import haxeon.ui.style.VisualEffect;
 
 /**
  * The one UI choice with no single native counterpart: effects include operations normalization removes before they reach

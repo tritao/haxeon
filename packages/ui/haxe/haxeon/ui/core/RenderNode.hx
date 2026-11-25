@@ -27,8 +27,6 @@ import haxeon.ui.Rect;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.Decoration;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleDiff;
-import haxeon.ui.style.StyleImpact;
 import haxeon.ui.semantics.Semantics;
 
 /** One Haxe-owned node joins visual layout, interaction, focus, and state identity. */

@@ -11,12 +11,11 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.EffectChain;
-import haxeon.ui.style.EffectKind;
+import haxeon.ui.style.VisualEffect;
 import haxeon.ui.style.InkOverflow;
 import haxeon.ui.style.Mask;
-import haxeon.ui.style.StyleInspectionEntry;
+import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleSource;
 import haxeon.ui.style.StyleState;
 
 /** Produces deterministic, headless snapshots and readable render-tree dumps. */

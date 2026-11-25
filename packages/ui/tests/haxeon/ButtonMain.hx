@@ -16,7 +16,6 @@ import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleValue;

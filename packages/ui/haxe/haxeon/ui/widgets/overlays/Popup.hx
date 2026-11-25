@@ -16,7 +16,7 @@ import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleSource;
+import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleTarget;
 
 /** Parent-sized popup layer with optional modal focus and outside-click dismissal. */

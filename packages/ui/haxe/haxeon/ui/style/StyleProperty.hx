@@ -15,6 +15,8 @@ import haxeon.ui.LayoutSelfAlignment;
 import haxeon.ui.LayoutWrapMode;
 import haxeon.ui.Transform2D;
 
+import haxeon.ui.style.ComputedStyle;
+import haxeon.ui.style.Decoration;
 /** Metadata shared by typed style properties. */
 class StylePropertyBase {
 	public final name:String;

@@ -12,16 +12,15 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.TextStyle;
-import haxeon.ui.style.BackgroundDecoration;
-import haxeon.ui.style.DecorationChain;
-import haxeon.ui.style.DropShadowEffect;
+import haxeon.ui.style.Decoration;
+import haxeon.ui.style.VisualEffect;
 import haxeon.ui.style.EffectChain;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleValue;
 
+import haxeon.ui.theme.TextRole;
 /** Theme tokens plus the stylesheet generated from those tokens. */
 class Theme {
 	public final tokens:ThemeTokens;

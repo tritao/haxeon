@@ -206,39 +206,18 @@ import haxeon.ui.theme.Theme;
 import haxeon.ui.theme.ThemeTokens;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.style.ComputedStyle;
-import haxeon.ui.style.DecorationChain;
 import haxeon.ui.style.Decoration;
-import haxeon.ui.style.BackgroundDecoration;
-import haxeon.ui.style.BorderDecoration;
-import haxeon.ui.style.GradientDecoration;
-import haxeon.ui.style.ShadowDecoration;
-import haxeon.ui.style.StyleDiff;
 import haxeon.ui.style.StyleResolver;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleImpact;
-import haxeon.ui.style.StyleSource;
-import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleValue;
 import haxeon.ui.style.EffectChain;
-import haxeon.ui.style.EffectKind;
-import haxeon.ui.style.BlurEffect;
-import haxeon.ui.style.BrightnessEffect;
-import haxeon.ui.style.ContrastEffect;
-import haxeon.ui.style.SaturateEffect;
-import haxeon.ui.style.HueRotateEffect;
-import haxeon.ui.style.ColorMatrixEffect;
-import haxeon.ui.style.DropShadowEffect;
+import haxeon.ui.style.VisualEffect;
 import haxeon.ui.style.CustomEffect;
-import haxeon.ui.style.CustomEffectDefinition;
-import haxeon.ui.style.EffectParameter;
-import haxeon.ui.style.EffectParameterType;
 import haxeon.ui.style.InkOverflow;
 import haxeon.ui.style.Mask;
-import haxeon.ui.style.Environment;
-import haxeon.ui.style.EnvironmentColorScheme;
 import haxeon.ui.style.StyleEnvironment;
 import haxeon.ui.gestures.GestureEvent;
 import haxeon.ui.gestures.TapRecognizer;
@@ -3348,21 +3327,22 @@ class FrameworkSmoke {
 		if (animatedComputed.getColor(StyleProperty.Background).red != 1.0
 			|| transitionScheduler.activeCount != 0 || normalComputed.getColor(StyleProperty.Background).red != 0.0
 			|| transitionResolver.cacheHits != 0 || transitionResolver.cacheMisses != 0) return 218;
-		var effectChain = EffectChain.of([BlurEffect.withSigma(12.0), new SaturateEffect(1.15)]);
+		var effectChain = EffectChain.of([BlurEffect.withSigma(12.0), ColorFactorEffect.saturate(1.15)]);
 		var effectOverflow = effectChain.inkOverflow();
 		if (effectChain.effects.length != 2
 			|| effectOverflow.left != 36.0 || effectOverflow.top != 36.0 || effectOverflow.right != 36.0
 			|| effectOverflow.bottom != 36.0 || !effectChain.isEqual(effectChain.copy())) return 240;
 		var normalizedEffects = EffectChain.of([
-			new BrightnessEffect(1.2),
-			new ContrastEffect(0.8),
+			ColorFactorEffect.brightness(1.2),
+			ColorFactorEffect.contrast(0.8),
 			BlurEffect.withSigma(3.0),
-			new SaturateEffect(1.1)
+			ColorFactorEffect.saturate(1.1)
 		]).normalized();
 		if (normalizedEffects.effects.length != 3 || normalizedEffects.effects[0].kind != EffectKind.ColorMatrix
 			|| normalizedEffects.effects[1].kind != EffectKind.Blur
 			|| normalizedEffects.effects[2].kind != EffectKind.ColorMatrix) return 242;
-		var blurThenMatrix = EffectChain.of([BlurEffect.withSigma(2.0), new BrightnessEffect(1.2)]).normalized();
+		var blurThenMatrix = EffectChain.of([BlurEffect.withSigma(2.0),
+			ColorFactorEffect.brightness(1.2)]).normalized();
 		var multipleBlurs = EffectChain.of([BlurEffect.withSigma(2.0), BlurEffect.withSigma(4.0)]).normalized();
 		if (blurThenMatrix.effects.length != 2 || blurThenMatrix.effects[0].kind != EffectKind.Blur
 			|| blurThenMatrix.effects[1].kind != EffectKind.ColorMatrix
@@ -3393,22 +3373,22 @@ class FrameworkSmoke {
 		var customRuntime = new CustomEffect(new CustomEffectDefinition(8, "multiply", [EffectParameterType.Float],
 			new InkOverflow(1.0, 1.0, 1.0, 1.0)),
 			[EffectParameter.scalar(0.75)]);
-		var mixedCustom = EffectChain.of([new BrightnessEffect(1.2),
+		var mixedCustom = EffectChain.of([ColorFactorEffect.brightness(1.2),
 			customRuntime, BlurEffect.withSigma(3.0)]).normalized();
 		if (mixedCustom.effects.length != 3 || mixedCustom.effects[0].kind != EffectKind.ColorMatrix
 			|| mixedCustom.effects[1].kind != EffectKind.Custom
 			|| mixedCustom.effects[2].kind != EffectKind.Blur) return 246;
 		var interpolatedEffects = EffectChain.interpolate(EffectChain.of([
 			BlurEffect.withSigma(4.0),
-			new BrightnessEffect(1.0)
+			ColorFactorEffect.brightness(1.0)
 		]),
 			EffectChain.of([
 				BlurEffect.withSigma(12.0),
-				new BrightnessEffect(2.0)
+				ColorFactorEffect.brightness(2.0)
 			]),
 			0.5);
 		var interpolatedBlur:BlurEffect = cast interpolatedEffects.effects[0];
-		var interpolatedBrightness:BrightnessEffect = cast interpolatedEffects.effects[1];
+		var interpolatedBrightness:ColorFactorEffect = cast interpolatedEffects.effects[1];
 		if (interpolatedBlur == null || interpolatedBlur.sigma != 8.0
 			|| interpolatedBrightness == null || interpolatedBrightness.factor != 1.5) return 241;
 		var effectTransitionSheet = new StyleSheet("EffectTransitionSheet");
@@ -3441,8 +3421,11 @@ class FrameworkSmoke {
 			cast effectTransitionComputed.getEffects(StyleProperty.Effects).effects[0];
 		if (effectTransitionBlur == null || effectTransitionBlur.sigma != 8.0) return 246;
 		var dropShadow = new DropShadowEffect(0.0, 6.0, 12.0, Color.rgba(0.0, 0.0, 0.0, 0.35));
-		var matrixDropMatrix = EffectChain.of([new BrightnessEffect(1.2),
-			dropShadow, new ContrastEffect(0.8)]).normalized();
+		var matrixDropMatrix = EffectChain.of([
+			ColorFactorEffect.brightness(1.2),
+			dropShadow,
+			ColorFactorEffect.contrast(0.8)
+		]).normalized();
 		if (matrixDropMatrix.effects.length != 3 || matrixDropMatrix.effects[0].kind != EffectKind.ColorMatrix
 			|| matrixDropMatrix.effects[1].kind != EffectKind.DropShadow
 			|| matrixDropMatrix.effects[2].kind != EffectKind.ColorMatrix) return 246;
@@ -3455,7 +3438,7 @@ class FrameworkSmoke {
 				StyleValue.effects(effectChain),
 				StyleValue.backdropEffects(EffectChain.of([
 					BlurEffect.withSigma(8.0),
-					new ContrastEffect(1.1),
+					ColorFactorEffect.contrast(1.1),
 					HueRotateEffect.withDegrees(12.0),
 					ColorMatrixEffect.identity(),
 					dropShadow
@@ -3479,7 +3462,7 @@ class FrameworkSmoke {
 			< StyleProperty.all().length || effectDescription.indexOf("[blur(12") != 0) return 244;
 		var decorationContractResult = decorationStyleContract();
 		if (decorationContractResult != 0) return decorationContractResult;
-		var colorAdjustments = EffectChain.of([new BrightnessEffect(2.0), new ContrastEffect(0.5)]);
+		var colorAdjustments = EffectChain.of([ColorFactorEffect.brightness(2.0), ColorFactorEffect.contrast(0.5)]);
 		var colorMatrix = colorAdjustments.colorMatrix();
 		if (colorMatrix.length != ColorMatrixEffect.ComponentCount
 			|| colorMatrix[0] != 1.0 || colorMatrix[6] != 1.0 || colorMatrix[12] != 1.0 || colorMatrix[18] != 1.0
@@ -3559,7 +3542,7 @@ class FrameworkSmoke {
 		effectCanvas.withLayer(1.0, function(canvas) {
 			canvas.fillRect(new Rect(4.0, 6.0, 24.0, 18.0), Color.rgba(0.2, 0.4, 0.8, 1.0));
 		}, CompositeMode.SourceOver,
-			new Rect(4.0, 6.0, 24.0, 18.0), null, null, EffectChain.of([new BrightnessEffect(1.1)]));
+			new Rect(4.0, 6.0, 24.0, 18.0), null, null, EffectChain.of([ColorFactorEffect.brightness(1.1)]));
 		effectCanvas.update(backdropList);
 		if (backdropList.info().commandCount != 4) return 255;
 		backdropList.dispose();
@@ -4027,7 +4010,7 @@ class FrameworkSmoke {
 		inspectorEffects.rule(StyleSelector.widget("button"),
 			[
 				StyleValue.effects(EffectChain.of([BlurEffect.withSigma(4.0)])),
-				StyleValue.backdropEffects(EffectChain.of([new BrightnessEffect(1.1)])),
+				StyleValue.backdropEffects(EffectChain.of([ColorFactorEffect.brightness(1.1)])),
 				StyleValue.mask(Mask.roundedRect(6.0))
 			]);
 		context.setStyleSheet(inspectorEffects);
@@ -4856,7 +4839,7 @@ class FrameworkSmoke {
 		var decorated = new ComputedStyle();
 		decorated.setDecorations(new DecorationChain([new BorderDecoration(Color.fromBytes(255, 0, 0), 2)]), null);
 		node.computedStyle = decorated;
-		node.syncRevisions(node, haxeon.ui.style.StyleDiff.compare(before, decorated));
+		node.syncRevisions(node, haxeon.ui.style.ComputedStyle.StyleDiff.compare(before, decorated));
 		var styled = node.retainedPaintKey();
 		if (styled == normal) return false;
 		node.onPaint(function(_, _) {}, "second");

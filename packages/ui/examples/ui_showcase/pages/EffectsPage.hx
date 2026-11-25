@@ -8,16 +8,11 @@ import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Rect;
-import haxeon.ui.style.BlurEffect;
-import haxeon.ui.style.BrightnessEffect;
-import haxeon.ui.style.ContrastEffect;
-import haxeon.ui.style.DropShadowEffect;
 import haxeon.ui.style.EffectChain;
-import haxeon.ui.style.HueRotateEffect;
 import haxeon.ui.style.Mask;
-import haxeon.ui.style.SaturateEffect;
-import haxeon.ui.style.StyleSelector;
+import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleValue;
+import haxeon.ui.style.VisualEffect;
 import haxeon.ui.widgets.CanvasView;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
@@ -32,8 +27,8 @@ class EffectsPage {
 		]);
 		explorer.context.buildContext.styleSheet.rule(StyleSelector.key("effects-color"), [
 			StyleValue.effects(EffectChain.of([
-				new BrightnessEffect(1.12), new ContrastEffect(1.18),
-				new SaturateEffect(1.35), HueRotateEffect.withDegrees(10.0)
+				ColorFactorEffect.brightness(1.12), ColorFactorEffect.contrast(1.18),
+				ColorFactorEffect.saturate(1.35), HueRotateEffect.withDegrees(10.0)
 			]))
 		]);
 		explorer.context.buildContext.styleSheet.rule(StyleSelector.key("effects-shadow"), [

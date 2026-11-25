@@ -1,7 +1,7 @@
 package haxeon.ui;
 
 import NativeKitUI;
-import haxeon.ui.style.CustomEffectDefinition;
+import haxeon.ui.style.CustomEffect;
 
 /**
  * Native shader implementation for a typed custom effect definition.

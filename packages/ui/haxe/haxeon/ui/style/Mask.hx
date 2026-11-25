@@ -84,3 +84,6 @@ class Mask {
 	public function toString():String
 		return describe();
 }
+
+/** Typed source-alpha mask families understood by the native compositor. */
+typedef MaskKind = NativeKitUI.UiMaskKind;
