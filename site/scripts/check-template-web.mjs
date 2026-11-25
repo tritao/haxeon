@@ -1,23 +1,19 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright-core';
+import { launchChrome, origin, screenshot, serveDirectory } from './browser.mjs';
 
 const haxeon = fileURLToPath(new URL('../../scripts/haxeon', import.meta.url));
-const work = mkdtempSync(join(tmpdir(), 'haxeon-browser-app-'));
+const work = mkdtempSync(join(tmpdir(), 'site-template-web-'));
 const app = join(work, 'browser-counter');
 execFileSync(haxeon, ['create', 'browser-counter', '--platforms', 'web'], { cwd: work, stdio: 'inherit' });
 execFileSync(haxeon, ['build', '--target', 'wasm32', '--jobs', '2'], { cwd: app, stdio: 'inherit' });
 
-const origin = 'http://localhost';
 const bundle = join(app, 'build/web/wasm32');
-const browser = await chromium.launch({
-  ...(process.env.CHROME_BIN ? { executablePath: process.env.CHROME_BIN } : { channel: 'chrome' }),
-  args: ['--enable-unsafe-swiftshader'],
-});
+const browser = await launchChrome();
 try {
   for (const [name, viewport, mobile] of [
     ['light', { width: 800, height: 480 }, false],
@@ -26,11 +22,7 @@ try {
     const page = await browser.newPage({
       viewport, colorScheme: 'light', isMobile: mobile, hasTouch: mobile,
     });
-    await page.route('**/*', async route => {
-      const url = new URL(route.request().url());
-      if (url.origin !== origin) return route.abort();
-      await route.fulfill({ path: join(bundle, url.pathname) });
-    });
+    await serveDirectory(page, bundle);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(origin + '/index.html');
@@ -68,12 +60,12 @@ try {
     const final = await page.screenshot({ clip: label });
     assert.notDeepEqual(final, initial, 'Clicks must change the rendered counter label');
     assert.deepEqual(errors, []);
-    if (process.env.HAXEON_SCREENSHOT_DIR)
-      await page.screenshot({ path: resolve(process.env.HAXEON_SCREENSHOT_DIR, `template-counter-${name}.png`) });
+    await screenshot(page, `template-counter-${name}`);
     await page.close();
   }
 } finally {
   await browser.close();
+  rmSync(work, { recursive: true, force: true });
 }
 
 console.log('Generated counter rendered in Chrome and counted mouse clicks at both sizes and a touch tap and pen press at mobile size.');

@@ -1,9 +1,14 @@
 import { existsSync, globSync, readFileSync } from 'node:fs';
 import { posix } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { visit } from 'unist-util-visit';
 
-export const docsRoot = new URL('../docs/', import.meta.url);
+// Page code is bundled away from this file, so astro.config.mjs passes the site's directory in as __SITE_ROOT__;
+// code the config itself runs still finds it from this file's location.
+const siteRoot =
+  typeof __SITE_ROOT__ === 'string' ? pathToFileURL(__SITE_ROOT__) : new URL('./', import.meta.url);
+export const docsRoot = new URL('../docs/', siteRoot);
+const repositoryRoot = new URL('../', siteRoot);
 const userDocs = '{guides,reference,learn,coming-from}/**/*.md';
 const examples = '**/examples/**';
 export const docsPatterns = [userDocs, '!' + examples];
@@ -27,11 +32,17 @@ export const publishedDocs = new Set(
     .sort(),
 );
 
-export const docsUrl = (path) => `/${docsSlug(path)}/`;
+// Both link helpers fail the build on a missing target, so a renamed page or directory cannot ship as a dead link.
+export function docsUrl(path) {
+  if (!publishedDocs.has(path)) throw new Error(`docsUrl: ${path} is not a published docs page`);
+  return `/${docsSlug(path)}/`;
+}
+
 export const projectRepo = 'https://github.com/tritao/haxeon';
 export const sourceRef = process.env.HAXEON_SITE_VERSION || 'main';
 
 export function repositorySource(path) {
+  if (!existsSync(new URL(path, repositoryRoot))) throw new Error(`repositorySource: ${path} does not exist in the repository`);
   return `${projectRepo}/tree/${encodeURIComponent(sourceRef)}/${path}`;
 }
 

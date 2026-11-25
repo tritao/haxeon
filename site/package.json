@@ -10,9 +10,11 @@
     "build:gpu-modules": "bash scripts/build-gpu-modules.sh",
     "preview": "astro preview",
     "check:commands": "node scripts/check-commands.mjs",
+    "check:embeds": "node scripts/check-embeds.mjs",
     "check:examples": "node scripts/check-examples.mjs",
     "check:links": "node scripts/check-links.mjs",
-    "check:grammars": "node scripts/check-grammars.mjs"
+    "check:grammars": "node scripts/check-grammars.mjs",
+    "check:template-web": "node scripts/check-template-web.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "7.3.0",

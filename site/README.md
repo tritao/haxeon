@@ -10,9 +10,15 @@ npm ci
 npm run dev
 npm run build
 npm run check:commands
+npm run check:embeds
 npm run check:links
+npm run check:template-web
+npm run check:grammars
 npm run check:examples
 ```
+
+The Website workflow (`.github/workflows/site.yml`) runs these after `npm run build:gpu-modules`, `npm run build`,
+`npm run build:showcase` and `npm run build:circuit-run`; run the same list before pushing a site change.
 
 `npm run build:gpu-modules`, before `npm run build`, generates the shader module the GPU page
 quotes from the Triangle example into the git-ignored `generated/`. It needs the native Haxeon
@@ -38,17 +44,19 @@ relative to the source files. The site rewrites links between published pages an
 repository. The build appends the overview help to the CLI overview and inserts each command's help under its heading
 on the corresponding group page. The help and group order come from `../src/tools/CliHelp.hx`.
 
-The home, Language, UI, GPU, Build, Examples and About pages use `StarlightPage` with the `splash` template. Starlight owns
-page metadata, search and the theme switch. Its component overrides provide the shared site header and footer,
-including page navigation and last-updated metadata where available. Splash pages provide their own visible heading
-and full-width section layout.
+The home, Language, UI, GPU, Build, Examples and About pages use `src/layouts/SplashPage.astro`, Starlight's `splash`
+template with the product-page wrapper. Starlight owns page metadata, search and the theme switch. Its component
+overrides provide the shared site header and footer, including page navigation and last-updated metadata where
+available. Splash pages provide their own visible heading and full-width section layout; the sections more than one
+page uses live in `src/components/sections/`.
 
 `src/styles/tokens.json` defines the palette and typography. `src/styles/theme.css` maps them to Starlight's
-custom properties and defines the Haxeon properties for details such as the display font and card radii. Keep
-component styles in their Astro components and use the shared landing styles for section and button primitives.
+custom properties and defines the site's own properties for details such as the display font and card radii. Keep
+component styles in their Astro components and use the shared landing styles (`src/styles/landing.css`) for section,
+grid and button primitives. Those rules have no specificity, so a component's own rule always overrides them.
 
-`Command.astro`, `CodeCard.astro`, `Card.astro` and `PlatformTable.astro` live in `src/components/` and can also
-be imported in Astro or MDX docs pages. Expressive Code renders the component and Markdown code examples
+`Command.astro`, `CodeCard.astro`, `Card.astro` and `PlatformTable.astro` live in `src/components/` for the Astro
+pages; the docs are plain Markdown. Expressive Code renders the component and Markdown code examples
 with the same grammar and theme. Use `sh`, `bash`, `shell`, or `console` for shell commands and
 `powershell`, `ps1`, or `pwsh` for PowerShell commands. Use `text` for output. The command strip adds a
 display prompt to each command line and a copy button for the fence contents. Shell script examples and
@@ -56,9 +64,14 @@ transcripts can use the Expressive Code `frame="code"` option. With Google Chrom
 `npm run check:commands` after building to verify the Get started guide's command text, prompts, wrapping,
 and clipboard contents.
 
-After bootstrapping and building the native toolchain, run `npm run check:examples` to verify the homepage program
-outputs, the generated geometry binding, and the UI page's rendered counter. The counter runs the first-app guide project
-and exercises its button. On headless Linux the check uses Xvfb.
+After building the Showcase and Circuit Run, run `npm run check:embeds` to start every live embed in Chrome at desktop
+and mobile widths and check that a failed load can be retried. `npm run check:template-web` builds the app template for
+the web and clicks its counter. The browser checks use `CHROME_BIN` when it is set, and save what they saw under
+`SCREENSHOT_DIR` when that is set.
+
+After bootstrapping and building the native toolchain, run `npm run check:examples` to run every code sample a built page
+marks with `example`, compare its output, check the generated geometry binding, and run the UI page's counter. The
+counter runs the first-app guide project and exercises its button. On headless Linux the check uses Xvfb.
 Run `npm run check:grammars` to check the shared TextMate grammars against
 the lexer and an imported C fixture. The repository's `docs-guides` suite verifies the guide projects.
 

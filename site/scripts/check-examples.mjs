@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { globSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,27 +9,30 @@ import { load } from 'cheerio';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const haxeon = join(root, 'scripts/haxeon');
 const haxe = join(root, '.tools/haxe/haxe');
-const $ = load(await readFile(new URL('../dist/index.html', import.meta.url), 'utf8'));
-if (!$('[data-example]').length) throw new Error('The homepage has no runnable examples.');
-// The homepage's examples, then the Language page's; the tour appears on both, so each name runs once.
-const examples = [];
-const seen = new Set();
-for (const page of ['index.html', 'language/index.html']) {
-  const document = load(await readFile(new URL('../dist/' + page, import.meta.url), 'utf8'));
-  for (const element of document('[data-example]').toArray()) {
-    const name = document(element).attr('data-example');
-    if (!seen.has(name)) {
-      seen.add(name);
-      examples.push(element);
-    }
-  }
+const dist = fileURLToPath(new URL('../dist/', import.meta.url));
+
+/** The example's rendered lines in `language`, as plain text. */
+function sourceFor(block, language) {
+  const lines = block.find(`pre[data-language="${language}"] .ec-line > .code`);
+  if (!lines.length) throw new Error(`Missing rendered ${language} example`);
+  return lines.toArray().map((_, index) => lines.eq(index).text().trimEnd()).join('\n') + '\n';
 }
 
-function sourceFor(block, language) {
-  const lines = block.find(`pre[data-language="${language}"] .ec-line > .code`).toArray();
-  if (!lines.length) throw new Error(`Missing rendered ${language} example`);
-  return lines.map((line) => $(line).text().trimEnd()).join('\n') + '\n';
+// Every block a built page marks with data-example. The language tour appears on several pages, so each name runs
+// once, and the same name showing different code on two pages is an error.
+const examples = new Map();
+for (const page of globSync('**/*.html', { cwd: dist }).sort()) {
+  const $ = load(await readFile(join(dist, page), 'utf8'));
+  for (const element of $('[data-example]').toArray()) {
+    const block = $(element);
+    const name = block.attr('data-example');
+    const source = sourceFor(block, 'haxe');
+    const seen = examples.get(name);
+    if (seen && seen.source !== source) throw new Error(`${name}: ${seen.page} and ${page} show different code`);
+    if (!seen) examples.set(name, { block, source, page });
+  }
 }
+if (!examples.size) throw new Error('The built site has no runnable examples.');
 
 function run(args, cwd) {
   return execFileSync(haxeon, args, {
@@ -111,31 +115,9 @@ void geo_translate(geo_point *point, double dx, double dy) {
   return run(['run', '--quiet', '--jobs', '2'], project);
 }
 
-const directory = await mkdtemp(join(tmpdir(), 'haxeon-site-examples-'));
-try {
-  for (const example of examples) {
-    const block = $(example);
-    const name = block.attr('data-example');
-    const source = sourceFor(block, 'haxe');
-    const output = block.find('.output-pane').clone();
-    output.find('[data-prompt]').remove();
-    const expected = output.text().trim();
-    let actual;
-    if (name === 'geometry') {
-      actual = await runGeometry(block, source, directory);
-    } else {
-      const file = join(directory, `${name}.hx`);
-      await writeFile(file, source);
-      actual = run([file], directory);
-    }
-    if (actual !== expected) {
-      throw new Error(`${name}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
-    }
-    console.log(`${name}: output verified`);
-  }
-
-  const ui = load(await readFile(new URL('../dist/ui/index.html', import.meta.url), 'utf8'));
-  const view = sourceFor(ui('[data-example="ui-counter"]'), 'haxe').trimEnd();
+/** The UI page's view(): it must be the first-app project's, which then runs and counts two scripted clicks. */
+async function runUiCounter(block, source, directory) {
+  const view = source.trimEnd();
   const project = join(directory, 'my_app');
   await cp(new URL('../../docs/guides/examples/01-first-app/my_app/', import.meta.url), project, {
     recursive: true,
@@ -166,7 +148,37 @@ try {
   }
   const { count } = JSON.parse(await readFile(join(capture, 'app-state.json'), 'utf8'));
   if (count !== 2) throw new Error(`ui-counter: expected two clicks, got ${count}`);
-  console.log('ui-counter: native window and clicks verified');
+  return 'native window and clicks verified';
+}
+
+/** Fails unless the example printed exactly the output its page shows. */
+function checkOutput(block, name, actual) {
+  const shown = block.find('.output-pane').clone();
+  shown.find('[data-prompt]').remove();
+  const expected = shown.text().trim();
+  if (actual !== expected) throw new Error(`${name}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  return 'output verified';
+}
+
+/** A standalone script: run it with `haxeon file.hx`. */
+async function runScript(block, source, directory, name) {
+  const file = join(directory, `${name}.hx`);
+  await writeFile(file, source);
+  return checkOutput(block, name, run([file], directory));
+}
+
+/** Examples that need more than a script run, by name. */
+const runners = {
+  geometry: async (block, source, directory, name) => checkOutput(block, name, await runGeometry(block, source, directory)),
+  'ui-counter': runUiCounter,
+};
+
+const directory = await mkdtemp(join(tmpdir(), 'site-examples-'));
+try {
+  for (const [name, { block, source }] of examples) {
+    const runner = runners[name] ?? runScript;
+    console.log(`${name}: ${await runner(block, source, directory, name)}`);
+  }
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

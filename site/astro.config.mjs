@@ -2,10 +2,13 @@ import tokens from './src/styles/tokens.json' with { type: 'json' };
 import { defineConfig } from 'astro/config';
 import { unified } from '@astrojs/markdown-remark';
 import starlight from '@astrojs/starlight';
+import { fileURLToPath } from 'node:url';
 import { repositoryLinks, sidebar } from './docs.mjs';
 
 export default defineConfig({
   vite: {
+    // docs.mjs resolves docs and repository paths from here once page code is bundled; see the note there.
+    define: { __SITE_ROOT__: JSON.stringify(fileURLToPath(new URL('./', import.meta.url))) },
     plugins: [
       {
         name: 'theme-tokens',
