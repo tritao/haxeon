@@ -365,7 +365,8 @@ class IrLineage {
 	public function set(fn:IrFunction, version:Int):Void
 		setAt(slots.of(fn), fn, version);
 
-	function setAt(slot:Int, fn:IrFunction, version:Int):Void {
+	/** Records `version` as the version of `fn`, whose slot is `slot`. */
+	public function setAt(slot:Int, fn:IrFunction, version:Int):Void {
 		if (slot >= cellFunctions.length || cellFunctions[slot] == null) {
 			cellCount++;
 			live++;
@@ -384,27 +385,46 @@ class IrLineage {
 	 * is changed in place.
 	 */
 	public function settle(stage:String, functions:Array<IrFunction>):Void {
-		var memo:Null<IrStageMemo> = null, mark = ++settling, build = memos.build;
+		var mark = startSettling();
 		for (index in 0...functions.length) {
-			var fn = functions[index], slot = slots.of(fn);
-			if (slot >= cellFunctions.length || cellFunctions[slot] != fn || cellBuilds[slot] != build) {
-				if (bodies)
-					setAt(slot, fn, memos.versions.next());
-				else {
-					if (memo == null)
-						memo = memos.stage(stage);
-					functions[index] = settleAt(memo, slot, fn, versionAt(slot));
-				}
-			}
-			cellSeen[slot] = mark;
+			var fn = functions[index], settled = settleEntry(stage, slots.of(fn), fn, mark);
+			if (settled != fn)
+				functions[index] = settled;
 		}
-		// A name the stage dropped stands for nothing from here on.
-		if (live > functions.length) {
-			for (slot in 0...cellFunctions.length)
-				if (cellBuilds[slot] == build && cellSeen[slot] != mark)
-					cellBuilds[slot] = 0;
-			live = functions.length;
+		endSettling(mark, functions.length);
+	}
+
+	/**
+	 * Starts settling a list (`settle`), entry by entry (`settleEntry`) where the caller knows the slots, until `endSettling`; the
+	 * mark returned tells the names the list has.
+	 */
+	public function startSettling():Int
+		return ++settling;
+
+	/**
+	 * The function of `slot` at its place in the list being settled with `mark`: `fn` when it already stands for its name, else
+	 * `fn` settled as `settle` does.
+	 */
+	public function settleEntry(stage:String, slot:Int, fn:IrFunction, mark:Int):IrFunction {
+		if (slot >= cellFunctions.length || cellFunctions[slot] != fn || cellBuilds[slot] != memos.build) {
+			if (bodies)
+				setAt(slot, fn, memos.versions.next());
+			else
+				fn = settleAt(memos.stage(stage), slot, fn, versionAt(slot));
 		}
+		cellSeen[slot] = mark;
+		return fn;
+	}
+
+	/** Ends settling a list of `count` functions: a name it does not have stands for nothing from here on. */
+	public function endSettling(mark:Int, count:Int):Void {
+		if (live <= count)
+			return;
+		var build = memos.build;
+		for (slot in 0...cellFunctions.length)
+			if (cellBuilds[slot] == build && cellSeen[slot] != mark)
+				cellBuilds[slot] = 0;
+		live = count;
 	}
 
 	/** `fn`, made from the function of version `input` (0 for none), settled with `memo` and recorded. */

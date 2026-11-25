@@ -217,9 +217,11 @@ class IrFacts {
 
 	/** Whether every fact of `facts`, pairs of a fact and the print it was read at, still has its print. */
 	public function hold(facts:Array<Int>, pass:IrFactSource):Bool {
-		var index = 0;
-		while (index < facts.length) {
-			if (print(facts[index], pass) != facts[index + 1])
+		var index = 0, count = facts.length;
+		while (index < count) {
+			// A fact computed in this run was read in this build (`startBuild` starts a run): its print is all there is to read.
+			var id = facts[index];
+			if ((computed[id] == run ? prints[id] : print(id, pass)) != facts[index + 1])
 				return false;
 			index += 2;
 		}
@@ -229,6 +231,7 @@ class IrFacts {
 	/** Starts a build: what the last build read is kept, and the rest dropped when it is much (`sweep`). */
 	public function startBuild():Void {
 		build++;
+		run++;
 		readLast = readNow;
 		readNow = 0;
 		if (keys.length - free.length > readLast * 2 + 1024)
