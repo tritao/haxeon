@@ -20,7 +20,10 @@ grep -q '^enum FixtureVariant {' "$generated"
 grep -qF '@:assertLayout(48, "shift", 0, "weights", 16, "weights_1", 32)' "$generated"
 grep -qF 'public var weights_1_c3:Float32;' "$generated"
 grep -qF 'textures: [{view: 0, sampler: 0, stage: ShaderStage.Fragment, type: ImageType.TwoD, name: "tex_smp"}]' "$generated"
-grep -qF 'layout: new VertexLayout(16, [{slot: 0, bufferIndex: 0, offset: 0, format: VertexFormat.Float2}, {slot: 1, bufferIndex: 0, offset: 8, format: VertexFormat.Float2}])' "$generated"
+# The vertex record writes one field and one attribute per line.
+grep -qF 'layout: new VertexLayout(16, [' "$generated"
+grep -qF '{slot: 0, bufferIndex: 0, offset: 0, format: VertexFormat.Float2},' "$generated"
+grep -qF '{slot: 1, bufferIndex: 0, offset: 8, format: VertexFormat.Float2}' "$generated"
 
 hashlink_dir=$("$haxeon_dir/scripts/hashlink-path.sh")
 set +e
