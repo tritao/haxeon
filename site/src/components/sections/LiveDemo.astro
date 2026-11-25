@@ -44,25 +44,31 @@ const shown: [string, string[]][] = [
 for (const [source, texts] of shown)
   for (const text of texts)
     if (!source.includes(text)) throw new Error(`The live demo shows ${text}, which ${example} no longer has`);
-const views = versions.map(({ counter, button, step }) => ({ counter: counter.split(count), button, step }));
+// Everything that changes with the version, for the markup's first paint and the script's later ones.
+const views = versions.map(({ counter, button, step }, index) => ({
+  counter: counter.split(count),
+  button,
+  step,
+  apply: index === 0 ? 'Apply the edit' : 'Undo the edit',
+}));
 ---
 
 <live-edit-demo class="demo" data-versions={JSON.stringify(views)}>
   <div class="editor code-panel">
     <div class="bar"><span>src/Main.hx</span><span data-version>version 1</span></div>
     {
-      [1, 2].map((version) => {
-        const lines = diff.filter(([change]) => version === 2 || change !== 'add');
+      views.map((_, version) => {
+        const lines = diff.filter(([change]) => version === 1 || change !== 'add');
         return (
-          <div data-code={version} hidden={version !== 1}>
+          <div data-version-code hidden={version !== 0}>
             <Code
               code={lines.map(([, text]) => text).join('\n')}
               lang="haxe"
               frame="none"
               wrap
               preserveIndent
-              ins={version === 2 ? lines.flatMap(([change], i) => (change === 'add' ? [i + 1] : [])) : []}
-              del={version === 2 ? lines.flatMap(([change], i) => (change === 'del' ? [i + 1] : [])) : []}
+              ins={version === 1 ? lines.flatMap(([change], i) => (change === 'add' ? [i + 1] : [])) : []}
+              del={version === 1 ? lines.flatMap(([change], i) => (change === 'del' ? [i + 1] : [])) : []}
             />
           </div>
         );
@@ -82,7 +88,7 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
       </div>
     </div>
     <div class="controls">
-      <button class="btn primary" data-apply type="button">Apply the edit</button>
+      <button class="btn primary" data-apply type="button">{views[0].apply}</button>
       <button class="reject" data-reject type="button">Try a broken edit</button>
     </div>
     <span class="status" role="status">Running version 1</span>
@@ -99,20 +105,25 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
       const versionLabel = this.querySelector('[data-version]')!;
       const status = this.querySelector('[role="status"]')!;
       const apply = this.querySelector<HTMLButtonElement>('[data-apply]')!;
-      const code = [...this.querySelectorAll<HTMLElement>('[data-code]')];
-      const views: { counter: string[]; button: string; step: number }[] = JSON.parse(this.dataset.versions!);
-      // The running app's state, which an edit keeps.
+      const code = [...this.querySelectorAll<HTMLElement>('[data-version-code]')];
+      const views: { counter: string[]; button: string; step: number; apply: string }[] = JSON.parse(this.dataset.versions!);
+      // The running app's state, which an edit keeps, and the version running.
       let count = 0;
-      let version = 1;
+      let version = 0;
 
       const render = () => {
-        const view = views[version - 1];
+        const view = views[version];
         label.textContent = view.counter.join(String(count));
         add.textContent = view.button;
+        apply.textContent = view.apply;
+        versionLabel.textContent = `version ${version + 1}`;
+        code.forEach((panel, index) => {
+          panel.hidden = index !== version;
+        });
       };
 
       add.addEventListener('click', () => {
-        count += views[version - 1].step;
+        count += views[version].step;
         render();
       });
       this.querySelector('[data-reset]')!.addEventListener('click', () => {
@@ -128,20 +139,15 @@ const views = versions.map(({ counter, button, step }) => ({ counter: counter.sp
       };
 
       apply.addEventListener('click', () => {
-        version = version === 1 ? 2 : 1;
-        code.forEach((panel) => {
-          panel.hidden = Number(panel.dataset.code) !== version;
-        });
+        version = 1 - version;
         render();
-        versionLabel.textContent = `version ${version}`;
-        apply.textContent = version === 1 ? 'Apply the edit' : 'Undo the edit';
         windowPanel.classList.remove('flash');
         requestAnimationFrame(() => requestAnimationFrame(() => windowPanel.classList.add('flash')));
-        announce(`Patched to version ${version}.`);
+        announce(`Patched to version ${version + 1}.`);
       });
 
       this.querySelector('[data-reject]')!.addEventListener('click', () => {
-        announce(`Patch rejected. Still running version ${version}.`);
+        announce(`Patch rejected. Still running version ${version + 1}.`);
       });
     }
   }
