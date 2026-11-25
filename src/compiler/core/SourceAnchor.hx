@@ -30,6 +30,13 @@ class SourceAnchor {
 	@:processWide("how many anchors are interned, written under the lock")
 	static var count = 0;
 
+	/**
+	 * By path, the text whose parse last declared the file's anchors: where a lowering given no build's sources places them (a
+	 * test, the stateless backend). A build always places them in its own sources.
+	 */
+	@:processWide("the last parsed text of each path, read only by a lowering given no build's sources, written under the lock")
+	static final declaredFiles:Map<String, SourceFile> = [];
+
 	public final id:Int;
 	public final path:String;
 
@@ -75,6 +82,21 @@ class SourceAnchor {
 		return chunk[id & (CHUNK_SIZE - 1)];
 	}
 
+	/** Records that `file`'s parse declared its anchors (`declaredFile`). */
+	public static function declared(file:SourceFile):Void {
+		lock.acquire();
+		declaredFiles.set(file.path, file);
+		lock.release();
+	}
+
+	/** The text whose parse last declared the anchors of `path`, if any did. */
+	public static function declaredFile(path:String):Null<SourceFile> {
+		lock.acquire();
+		var file = declaredFiles.get(path);
+		lock.release();
+		return file;
+	}
+
 	/** The anchor of the whole file at `path`, from which positions count as they do in the file. */
 	public static inline function file(path:String):Int
 		return of(path, "").id;
@@ -82,8 +104,9 @@ class SourceAnchor {
 
 /**
  * Where a build's sources put each anchor: its file, the offset and line it starts at, and the content hash of the file's text,
- * which names the snapshot a module carries of it. The files are the build's modules; an anchor of the whole file of anything
- * else (generated code, a file no module reads) starts at offset 0 on line 1 and has no snapshot.
+ * which names the snapshot a module carries of it. The files are the build's modules; without one at an anchor's path, the text
+ * that last declared its anchors (`SourceAnchor.declaredFile`), for a lowering made without a build. An anchor of the whole file
+ * of anything else (generated code) starts at offset 0 on line 1 and has no snapshot.
  */
 @:nullSafety(Strict)
 class SourceAnchors {
@@ -100,7 +123,7 @@ class SourceAnchors {
 
 	/** Whether the build's sources place `anchor`, which a declaration that is gone does not. */
 	public function places(anchor:Int):Bool {
-		var entry = SourceAnchor.at(anchor), file = files.get(entry.path);
+		var entry = SourceAnchor.at(anchor), file = fileAt(entry.path);
 		return file == null ? entry.key == "" : file.anchorIndex(anchor) != SourceFile.NO_ANCHOR;
 	}
 
@@ -126,8 +149,11 @@ class SourceAnchors {
 		return hashes[anchor];
 	}
 
+	function fileAt(path:String):Null<SourceFile>
+		return files.get(path) ?? SourceAnchor.declaredFile(path);
+
 	function find(anchor:Int):Int {
-		var entry = SourceAnchor.at(anchor), file = files.get(entry.path), offset = 0, line = 1, hash = 0;
+		var entry = SourceAnchor.at(anchor), file = fileAt(entry.path), offset = 0, line = 1, hash = 0;
 		if (file != null) {
 			hash = file.contentHash();
 			var index = file.anchorIndex(anchor);
@@ -136,7 +162,7 @@ class SourceAnchors {
 			offset = file.anchorOffset(index);
 			line = file.anchorLine(index);
 		} else if (entry.key != "")
-			throw new InternalError('Source anchor "${entry.key}" names ${entry.path}, which the build does not read');
+			throw new InternalError('Source anchor "${entry.key}" names ${entry.path}, which nothing parsed');
 		while (offsets.length <= anchor) {
 			offsets.push(-1);
 			lines.push(0);
