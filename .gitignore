@@ -3,6 +3,8 @@ out/
 
 # Native integration package artifacts.
 /packages/ui/build*/
+# What haxeon writes for a package built, checked or described in its own directory (site/scripts/build-api.sh does).
+/packages/*/build/
 /packages/ui/out/
 /packages/ui/tests/settings/build/
 packages/ui/tests/*/build/

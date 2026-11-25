@@ -6,7 +6,16 @@ import { promisify } from 'node:util';
 import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { docsSchema } from '@astrojs/starlight/schema';
-import { cliDirectory, cliGroupPages, cliOverview, docsPatterns, docsRoot, docsSlug, sourceRef } from '../docs.mjs';
+import {
+  apiPackages,
+  cliDirectory,
+  cliGroupPages,
+  cliOverview,
+  docsPatterns,
+  docsRoot,
+  docsSlug,
+  sourceRef,
+} from '../docs.mjs';
 
 const cliSource = new URL('../src/tools/CliHelp.hx', docsRoot);
 const checkoutHaxe = new URL(
@@ -137,4 +146,34 @@ const docs = defineCollection({
   },
 });
 
-export const collections = { docs };
+/**
+ * The first-party packages' API descriptions (scripts/build-api.sh, api.mjs): an entry per package, whose `model` is null
+ * when this build did not describe it, so its reference says how to generate it.
+ */
+const generatedApi = new URL('../generated/api/', import.meta.url);
+const api = defineCollection({
+  loader: {
+    name: 'haxeon-api',
+    async load({ store, watcher, generateDigest }) {
+      const read = () => {
+        store.clear();
+        for (const directory of apiPackages) {
+          const file = new URL(`${directory}.json`, generatedApi);
+          const text = existsSync(file) ? readFileSync(file, 'utf8') : null;
+          store.set({
+            id: directory,
+            data: { directory, model: text == null ? null : JSON.parse(text) },
+            digest: generateDigest(text ?? directory),
+          });
+        }
+      };
+      read();
+      watcher?.add(fileURLToPath(generatedApi));
+      watcher?.on('change', (path) => {
+        if (path.startsWith(fileURLToPath(generatedApi))) read();
+      });
+    },
+  },
+});
+
+export const collections = { docs, api };

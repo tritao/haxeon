@@ -218,6 +218,7 @@ class ApiModelBuilder {
 					kind: "field",
 					name: field.name,
 					isStatic: field.isStatic,
+					isFinal: field.isFinal,
 					type: type
 				});
 			else

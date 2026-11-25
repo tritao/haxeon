@@ -97,7 +97,10 @@ class ApiJsonWriter {
 		output.boolean("isStatic", value.isStatic);
 		output.field("source", () -> source(output, value.source));
 		switch value.kind {
-			case "field" | "enumValue":
+			case "field":
+				output.boolean("isFinal", required(value.isFinal, value.kind, "isFinal"));
+				output.field("type", () -> type(output, required(value.type, value.kind, "type")));
+			case "enumValue":
 				output.field("type", () -> type(output, required(value.type, value.kind, "type")));
 			case "property":
 				output.field("type", () -> type(output, required(value.type, value.kind, "type")));

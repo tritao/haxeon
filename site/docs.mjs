@@ -65,6 +65,18 @@ export const cliOverview = 'reference/CLI.md';
 export const cliDirectory = 'reference/cli/';
 export const cliGroupPages = linkedDocs(cliOverview, 'reference/', cliDirectory);
 
+// The packages under packages/ with Haxe sources of their own: each has an API reference at /reference/api/<directory>/,
+// generated from its sources (api.mjs), and an entry in the sidebar whether or not this build generated it.
+const packagesRoot = fileURLToPath(new URL('packages/', repositoryRoot));
+export const apiBase = '/reference/api/';
+export const apiPackages = [
+  ...new Set(
+    globSync('*/**/*.hx', { cwd: packagesRoot, exclude: ['*/{tests,examples,vendor,build}/**', '**/node_modules/**'] })
+      .map((path) => path.split(/[\\/]/)[0])
+      .filter((name) => ['haxeon.json', 'haxeon.toml'].some((file) => existsSync(`${packagesRoot}${name}/${file}`))),
+  ),
+].sort();
+
 // A group lists its pages, or a directory whose unlisted pages follow, or nested groups.
 const groups = [
   ['Start here', ['guides/00-get-started.md', 'guides/01-first-app.md']],
@@ -103,6 +115,7 @@ const groups = [
         ],
       ],
       ['Platforms and runtime', ['reference/LIVE_PATCHING.md', 'reference/ANDROID.md', 'reference/WASM_BACKEND.md']],
+      ['Packages', apiPackages.map((directory) => ({ label: directory, link: `${apiBase}${directory}/` }))],
       // A reference page not placed above still gets published.
       ['Other', [], 'reference/'],
     ],
@@ -123,6 +136,8 @@ function sidebarGroups(entries) {
       if (items[0]?.label === 'Overview') items.splice(0, 1, ...items[0].items);
       return [{ label, items }];
     }
+    // Pages that are not documents (the generated API reference) are listed by link.
+    if (Array.isArray(pages) && pages.length > 0 && typeof pages[0] === 'object') return [{ label, items: pages }];
     const prefix = typeof pages === 'string' ? pages : directory;
     const paths = [
       ...(Array.isArray(pages) ? pages : []),

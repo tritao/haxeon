@@ -72,7 +72,7 @@ the package's location joined with it. Without a package (the standard library, 
 `package` is null and the file is relative to its source root. No path in the model is this machine's.
 | Tag | `name` (`param`, `return`, `throws`, `see`, `deprecated`, `since`), `parameter` (the name for `param`, otherwise null), `text` |
 | Type parameter | `name`, `constraints` (types) |
-| Member | `name`, `kind`, `isStatic`, `source`, then by kind: `field` and `enumValue` have `type`; `property` has `type`, `get` and `set` (`default`, `null`, `never`, `get`, `set`, `dynamic`); `constructor`, `method`, `function` (a module's), `enumConstructor`, `conversion` and `operator` have `typeParameters`, `arguments` and `result`, with `operatorText` for an operator and `conversion` (`from` or `to`) for a conversion |
+| Member | `name`, `kind`, `isStatic`, `source`, then by kind: `field` has `isFinal` and `type`, `enumValue` has `type`; `property` has `type`, `get` and `set` (`default`, `null`, `never`, `get`, `set`, `dynamic`); `constructor`, `method`, `function` (a module's), `enumConstructor`, `conversion` and `operator` have `typeParameters`, `arguments` and `result`, with `operatorText` for an operator and `conversion` (`from` or `to`) for a conversion |
 | Argument | `name` (null for an unnamed enum payload), `type`, `optional`, `defaultValue` (source text or null) |
 
 Class inheritance and interface extension are `supertypes`; implemented interfaces and declared conformances are

@@ -63,6 +63,10 @@ typedef ApiMember = {
 	final name:String;
 	final isStatic:Bool;
 	final ?type:ApiType;
+
+	/** A field written `final`: set once, by its declaration or the constructor. */
+	final ?isFinal:Bool;
+
 	final ?get:String;
 	final ?set:String;
 	final ?arguments:Array<ApiArgument>;

@@ -24,6 +24,11 @@ The Website workflow (`.github/workflows/site.yml`) runs these after `npm run bu
 quotes from the Triangle example into the git-ignored `generated/`. It needs the native Haxeon
 CLI from `scripts/build-native.sh`; without it the page build stops and names this step.
 
+`npm run build:api`, before `npm run build`, describes each package under `packages/` with `haxeon doc` into
+`generated/api/`, and prints each package's doc-comment coverage. The reference renders a page per Haxe package of each
+package's API from it (`api.mjs`, `src/pages/reference/api/`), with signatures as the source writes them, linked types and
+links to the source. It needs the native CLI too; without it each package's reference page says how to generate it.
+
 `npm run build:showcase`, after `npm run build`, builds the live WebGL2 UI Showcase on /ui/ from
 source with CMake, Ninja, the pinned Emscripten toolchain and Python FontTools, into `dist/`. It
 installs Emscripten on its first run and reuses the build directory under `out/site-showcase`

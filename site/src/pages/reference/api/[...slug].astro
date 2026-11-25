@@ -1,0 +1,229 @@
+---
+/*
+ * The API reference of a first-party package (api.mjs): its overview at /reference/api/<directory>/, and a page per Haxe
+ * package of its API with every type and member, from what `haxeon doc` describes. Without the descriptions
+ * (npm run build:api), each package's overview says so and links to its sources.
+ */
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { createMarkdownProcessor } from '@astrojs/markdown-remark';
+import { getCollection } from 'astro:content';
+import {
+  apiBase,
+  apiIndex,
+  declarationHtml,
+  haxePackages,
+  haxePackageSlug,
+  haxePackageUrl,
+  memberAnchor,
+  memberHtml,
+  shortName,
+  sourceUrl,
+  typeAnchor,
+} from '../../../../api.mjs';
+import { repositorySource } from '../../../../docs.mjs';
+
+export async function getStaticPaths() {
+  const entries = (await getCollection('api')).map((entry) => entry.data);
+  return entries.flatMap(({ directory, model }) => {
+    const groups = model ? haxePackages(model) : [];
+    return [
+      { params: { slug: directory }, props: { directory, group: null } },
+      ...groups.map((group) => ({
+        params: { slug: `${directory}/${haxePackageSlug(group.name)}` },
+        props: { directory, group: group.name },
+      })),
+    ];
+  });
+}
+
+const { directory, group } = Astro.props;
+const entries = (await getCollection('api')).map((entry) => entry.data);
+const model = entries.find((entry) => entry.directory === directory)?.model ?? null;
+const groups = model ? haxePackages(model) : [];
+const index = apiIndex(entries);
+const packageName = model?.types.find((type) => model.described.includes(type.module))?.package ?? directory;
+const current = group == null ? null : groups.find((entry) => entry.name === group);
+const markdown = await createMarkdownProcessor();
+const render = async (text) => (text ? (await markdown.render(text)).code : '');
+
+// Each doc comment's prose and tags, rendered once.
+const docs = new Map();
+async function documentation(source) {
+  const doc = source.documentation;
+  if (!doc || docs.has(source)) return;
+  docs.set(source, {
+    html: await render(doc.markdown),
+    tags: await Promise.all(doc.tags.map(async (tag) => ({ ...tag, html: await render(tag.text) }))),
+  });
+}
+if (current) {
+  for (const type of current.types) {
+    await documentation(type.source);
+    for (const member of type.members) await documentation(member.source);
+  }
+  for (const module of current.modules) for (const member of module.members) await documentation(member.source);
+}
+
+const coverage = (types, modules) => {
+  let total = 0;
+  let documented = 0;
+  const count = (source) => {
+    total++;
+    if (source.documentation) documented++;
+  };
+  for (const type of types) {
+    count(type.source);
+    type.members.forEach((member) => count(member.source));
+  }
+  for (const module of modules) module.members.forEach((member) => count(member.source));
+  return { total, documented };
+};
+const tagLabel = { param: 'Parameter', return: 'Returns', throws: 'Throws', see: 'See', deprecated: 'Deprecated', since: 'Since' };
+
+const title = current ? (current.name === '' ? `${packageName} (top level)` : current.name) : `${packageName} API`;
+const description = current
+  ? `The types of ${current.name || 'the top level'} in the ${packageName} package.`
+  : `The public API of the ${packageName} package.`;
+const headings = current
+  ? [
+      ...current.types.map((type) => ({ depth: 2, slug: typeAnchor(type.path), text: shortName(type.path) })),
+      ...(current.modules.length ? [{ depth: 2, slug: 'module-members', text: 'Module functions and variables' }] : []),
+    ]
+  : [];
+---
+
+<StarlightPage frontmatter={{ title, description }} headings={headings}>
+  {
+    !model && (
+      <p>
+        This package's reference is generated from its sources by <code>npm run build:api</code>, which this build of the
+        site did not run. Its sources are in <a href={repositorySource(`packages/${directory}`)}>packages/{directory}</a>.
+      </p>
+    )
+  }
+  {
+    model && !current && (
+      <>
+        <p>
+          The public API of <code>{packageName}</code>: its modules except those of a package named <code>internal</code>.
+          A declaration without a doc comment is listed with its signature only.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Haxe package</th><th>Types</th><th>Documented</th></tr>
+          </thead>
+          <tbody>
+            {groups.map((entry) => {
+              const { total, documented } = coverage(entry.types, entry.modules);
+              return (
+                <tr>
+                  <td><a href={haxePackageUrl(directory, entry.name)}><code>{entry.name || '(top level)'}</code></a></td>
+                  <td>{entry.types.length}</td>
+                  <td>{total === 0 ? '–' : `${Math.round((100 * documented) / total)}%`}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </>
+    )
+  }
+  {
+    current && (
+      <>
+        <p>
+          In <a href={`${apiBase}${directory}/`}>{packageName}</a>. Import a type with{' '}
+          <code>import {current.name ? `${current.name}.` : ''}{current.types[0] ? shortName(current.types[0].path) : 'Name'};</code>
+        </p>
+        {current.types.map((type) => {
+          const doc = docs.get(type.source);
+          const source = sourceUrl(type.package, type.source.position, index);
+          return (
+            <section class="api-type">
+              <h2 id={typeAnchor(type.path)}>{shortName(type.path)}</h2>
+              <pre class="api-signature"><code set:html={declarationHtml(type, index)} /></pre>
+              {doc && <Fragment set:html={doc.html} />}
+              {doc && doc.tags.length > 0 && (
+                <dl class="api-tags">
+                  {doc.tags.map((tag) => (
+                    <>
+                      <dt>{tagLabel[tag.name] ?? tag.name}{tag.parameter ? ` ${tag.parameter}` : ''}</dt>
+                      <dd set:html={tag.html} />
+                    </>
+                  ))}
+                </dl>
+              )}
+              {source && <p class="api-source"><a href={source}>Source</a></p>}
+              {type.members.length > 0 && (
+                <ul class="api-members">
+                  {type.members.map((member) => {
+                    const memberDoc = docs.get(member.source);
+                    return (
+                      <li id={memberAnchor(type, member)}>
+                        <code set:html={memberHtml(member, index)} />
+                        {memberDoc && <div class="api-doc" set:html={memberDoc.html} />}
+                        {memberDoc && memberDoc.tags.length > 0 && (
+                          <dl class="api-tags">
+                            {memberDoc.tags.map((tag) => (
+                              <>
+                                <dt>{tagLabel[tag.name] ?? tag.name}{tag.parameter ? ` ${tag.parameter}` : ''}</dt>
+                                <dd set:html={tag.html} />
+                              </>
+                            ))}
+                          </dl>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          );
+        })}
+        {current.modules.length > 0 && (
+          <section class="api-type">
+            <h2 id="module-members">Module functions and variables</h2>
+            {current.modules.map((module) => (
+              <>
+                <p><code>{module.path}</code></p>
+                <ul class="api-members">
+                  {module.members.map((member) => {
+                    const memberDoc = docs.get(member.source);
+                    return (
+                      <li id={`${shortName(module.path)}-${member.name}`}>
+                        <code set:html={memberHtml(member, index)} />
+                        {memberDoc && <div class="api-doc" set:html={memberDoc.html} />}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            ))}
+          </section>
+        )}
+      </>
+    )
+  }
+</StarlightPage>
+
+<style>
+  .api-signature {
+    white-space: pre-wrap;
+  }
+  .api-members {
+    list-style: none;
+    padding-left: 0;
+  }
+  .api-members > li {
+    margin-block: 0.9rem;
+  }
+  .api-doc :global(p) {
+    margin-block: 0.25rem;
+  }
+  .api-tags dt {
+    font-weight: 600;
+  }
+  .api-source {
+    font-size: var(--sl-text-sm);
+  }
+</style>
