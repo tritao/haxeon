@@ -195,6 +195,17 @@ class Triangle {
 		}
 	}
 
+	/** Queries until the GPU finishes the work or a generous deadline passes, sleeping between queries. */
+	static function settle<T>(query:Void->T, pending:T->Bool):T {
+		var deadline = Sys.monotonicTime() + 5.0;
+		var info = query();
+		while (pending(info) && Sys.monotonicTime() < deadline) {
+			Sys.sleep(0.001);
+			info = query();
+		}
+		return info;
+	}
+
 	static function exerciseOptionalFeatures(renderer:Renderer):Void {
 		var features = renderer.features();
 		var limits = renderer.limits();
@@ -214,12 +225,7 @@ class Triangle {
 			renderer.endPass();
 			renderer.endFrame();
 			var readback = Readback.begin(readbackImage, 0, 0, 1, 1);
-			var info = readback.query();
-			var polls = 0;
-			while (info.state == ReadbackState.Pending && polls < 1000) {
-				info = readback.query();
-				polls += 1;
-			}
+			var info = settle(readback.query, info -> info.state == ReadbackState.Pending);
 			if (info.state != ReadbackState.Ready || info.size != 4 || info.rowPitch != 4)
 				throw "GPU image readback did not become a packed RGBA8 result";
 			var pixel = Bytes.alloc(info.size);
@@ -239,12 +245,7 @@ class Triangle {
 				expected.set(index, 11 + index * 11);
 			buffer.update(0, expected);
 			var readback = Readback.beginBuffer(buffer, 2, 4);
-			var info = readback.query();
-			var polls = 0;
-			while (info.state == ReadbackState.Pending && polls < 1000) {
-				info = readback.query();
-				polls += 1;
-			}
+			var info = settle(readback.query, info -> info.state == ReadbackState.Pending);
 			if (info.state != ReadbackState.Ready || info.size != 4 || info.rowPitch != 4)
 				throw "GPU buffer readback did not become a packed range";
 			var actual = Bytes.alloc(info.size);
@@ -261,12 +262,7 @@ class Triangle {
 			renderer.endFrame();
 			if (timestamp.label() != "triangle")
 				throw "GPU timestamp label was not retained";
-			var timestampInfo = timestamp.query();
-			var timestampPolls = 0;
-			while (timestampInfo.state == TimestampState.Pending && timestampPolls < 1000) {
-				timestampInfo = timestamp.query();
-				timestampPolls += 1;
-			}
+			var timestampInfo = settle(timestamp.query, info -> info.state == TimestampState.Pending);
 			if (timestampInfo.state != TimestampState.Ready)
 				throw "GPU timestamp did not become ready";
 			timestamp.dispose();
@@ -290,12 +286,7 @@ class Triangle {
 			renderer.endFrame();
 			if (features.bufferReadback) {
 				var computeReadback = Readback.beginBuffer(computeBuffer, 0, 4);
-				var computeInfo = computeReadback.query();
-				var computePolls = 0;
-				while (computeInfo.state == ReadbackState.Pending && computePolls < 1000) {
-					computeInfo = computeReadback.query();
-					computePolls += 1;
-				}
+				var computeInfo = settle(computeReadback.query, info -> info.state == ReadbackState.Pending);
 				var computeBytes = Bytes.alloc(computeInfo.size > 0 ? computeInfo.size : 4);
 				if (computeInfo.state != ReadbackState.Ready || computeInfo.size != 4
 					|| computeReadback.read(computeBytes) != 4 || computeBytes.get(0) != 1 || computeBytes.get(1) != 0
