@@ -73,7 +73,8 @@ class ShaderModule {
 				attributes.push('{slot: ${attr.slot}, bufferIndex: 0, offset: $offset, format: VertexFormat.${types.get(attr.type)}}');
 				offset += 4 * components(attr.type);
 			}
-			declarations.push('public static final Vertex = {stride: $offset, ${fields.join(", ")}, layout: new VertexLayout($offset, [${attributes.join(", ")}])};');
+			// One field per line: people read this record to see the offsets the shader implies.
+			declarations.push('public static final Vertex = {\n\t\tstride: $offset,\n\t\t${fields.join(",\n\t\t")},\n\t\tlayout: new VertexLayout($offset, [\n\t\t\t${attributes.join(",\n\t\t\t")}\n\t\t])\n\t};');
 		}
 		var names = [for (key in programs.keys()) key];
 		names.sort(Reflect.compare);
