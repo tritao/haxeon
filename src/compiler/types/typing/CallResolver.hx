@@ -2523,6 +2523,16 @@ class CallResolver {
 				case "String": TString;
 				case "Array": TArray(TDynamic);
 				default:
+					// A typedef names what it stands for, as in Haxe; an abstract has no runtime type to test against.
+					if (session.declarations.aliases.exists(targetName))
+						switch session.declarations.resolve(NamedType(targetName), span) {
+							case TInstance(_, path, _): targetName = path;
+							case TAbstract(_, _, _):
+								fail(DiagnosticCode.VALUE_CONVERSION, "Cannot use abstract as value", span);
+							case _:
+						}
+					if (session.declarations.abstractDeclaration(targetName) != null)
+						fail(DiagnosticCode.VALUE_CONVERSION, "Cannot use abstract as value", span);
 					if (!session.classDecls.exists(targetName)
 						&& !session.interfaceDecls.exists(targetName)
 						&& !session.enumDecls.exists(targetName))

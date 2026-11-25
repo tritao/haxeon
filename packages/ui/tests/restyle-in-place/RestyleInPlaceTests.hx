@@ -1481,10 +1481,9 @@ private class UpdatingResources implements View {
 			if (notCompared.indexOf(name) >= 0) continue;
 			var changed = new Semantics(AccessibilityRole.Button, "label", "value");
 			var current:Dynamic = Reflect.field(changed, name), next:Dynamic;
-			if (Std.isOfType(current, AccessibilityRole)) next = AccessibilityRole.Text;
-			else if (Std.isOfType(current,
-				haxeon.ui.semantics.Semantics.AccessibilityOrientation)) next =
-				haxeon.ui.semantics.Semantics.AccessibilityOrientation.Horizontal;
+			// The role and orientation are enum abstracts, which have no runtime type to test: they are chosen by name.
+			if (name == "role") next = AccessibilityRole.Text;
+			else if (name == "orientation") next = haxeon.ui.semantics.Semantics.AccessibilityOrientation.Horizontal;
 			else if (Std.isOfType(current, String)) next = current + "!";
 			else if (Std.isOfType(current, Bool)) next = !current;
 			else if (Std.isOfType(current, Int)) next = current + 1;

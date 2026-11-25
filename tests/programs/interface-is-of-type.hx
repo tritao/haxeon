@@ -25,6 +25,10 @@ class SpecialChild extends Special {
 	}
 }
 
+// A typedef names what it stands for, as in Haxe.
+typedef SolverAlias = Solver;
+typedef SpecialAlias = Special;
+
 function check(solver:Solver):Int {
 	if (Std.isOfType(solver, Special)) {
 		var special:Special = cast solver;
@@ -49,6 +53,8 @@ function main():Int {
 		return 3;
 	if (!Std.isOfType(plain, Plain) || Std.isOfType(special, Plain))
 		return 4;
+	if (!Std.isOfType(special, SpecialAlias) || Std.isOfType(plain, SpecialAlias) || !Std.isOfType(plain, SolverAlias))
+		return 7;
 	if (check(plain) != 1)
 		return 5;
 	return check(special);

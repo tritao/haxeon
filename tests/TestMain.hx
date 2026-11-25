@@ -1959,6 +1959,13 @@ class TestMain {
 		if (!invalidTypeTestRejected)
 			throw "Std.isOfType accepted a runtime value as its type operand";
 		Sys.println("PASS: Std.isOfType requires a compile-time type operand");
+		// An abstract has no runtime type to test against, named itself or through a typedef, as Haxe reports it.
+		expectCompileError('enum abstract Role(Int) { var Button = 1; } function main():Int { var value:Dynamic = 1; '
+			+ 'return Std.isOfType(value, Role) ? 1 : 0; }', "Cannot use abstract as value");
+		expectCompileError('enum abstract Role(Int) { var Button = 1; } typedef RoleAlias = Role; function main():Int { '
+			+ 'var value:Dynamic = 1; return Std.isOfType(value, RoleAlias) ? 1 : 0; }',
+			"Cannot use abstract as value");
+		Sys.println("PASS: Std.isOfType rejects an abstract, and one a typedef names, as Haxe does");
 		Frontend.compile('function read(value:Dynamic):Int { if (Std.isOfType(value, String)) return value.length; return 0; } function convert(value:Dynamic):Int return Std.int(value); function main():Int return read("haxeon") + convert(42.5);');
 		Sys.println("PASS: Dynamic type tests refine locals and Std.int accepts numeric Dynamic values");
 		var nullObjectCompiler = new Compiler();
