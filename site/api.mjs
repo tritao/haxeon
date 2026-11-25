@@ -185,8 +185,16 @@ export function memberHtml(member, index) {
       return `${statically}var ${escape(member.name)}(${member.get}, ${member.set}):${typeHtml(member.type, index)}`;
     case 'enumValue':
       return escape(member.name);
-    case 'enumConstructor':
-      return member.arguments.length ? `${escape(member.name)}(${argumentsHtml(member.arguments, index)})` : escape(member.name);
+    case 'enumConstructor': {
+      const signature = member.arguments.length
+        ? `${escape(member.name)}(${argumentsHtml(member.arguments, index)})`
+        : escape(member.name);
+      // The per-case constants the case sets itself, as its declaration writes them; defaults show on the constant.
+      const given = (member.constants ?? []).filter(constant => !constant.isDefault);
+      return given.length
+        ? `${signature} {${given.map(constant => `${escape(constant.name)}: ${escape(constant.value)}`).join(', ')}}`
+        : signature;
+    }
     case 'constructor':
       return `new(${argumentsHtml(member.arguments, index)})`;
     case 'operator':

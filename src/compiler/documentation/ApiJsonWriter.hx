@@ -119,6 +119,14 @@ class ApiJsonWriter {
 					output.string("conversion", required(value.conversion, value.kind, "conversion"));
 				if (value.kind == "method")
 					overrides(output, value);
+				if (value.kind == "enumConstructor" && value.constants != null)
+					output.list("constants", value.constants, (output, constant) -> {
+						output.open();
+						output.string("name", constant.name);
+						output.string("value", constant.value);
+						output.boolean("isDefault", constant.isDefault);
+						output.close();
+					});
 		}
 		output.close();
 	}

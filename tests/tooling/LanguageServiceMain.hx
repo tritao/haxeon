@@ -142,6 +142,23 @@ class LanguageServiceMain {
 				hasTwo = true;
 		if (!hasTwo || service.hover("Main.hx", kindPosition) != "One")
 			throw "language service member completion or enum hover failed";
+		// An enum's members complete as a class's do: statics on its name, constants and methods on a value, getters never.
+		var enumService = new LanguageService(),
+			enumSource = 'enum Unit { public final factor:Int; Single {factor: 1}; Dozen {factor: 12}; '
+				+ 'public static final ALL:Array<Unit> = [Single, Dozen]; public static function base():Unit return Single; '
+				+ 'public function count(units:Int):Int return units * factor; } '
+				+ 'function main():Int { var value:Unit = Unit.base(); return value.count(1) + Unit.ALL.length; }';
+		enumService.update("Main.hx", enumSource);
+		enumService.compile("Main");
+		var labels = (items:Array<compiler.service.LanguageService.CompletionItem>) -> [for (item in items) item.label];
+		var statics = labels(enumService.complete("Main.hx", enumSource.indexOf("Unit.base") + "Unit.".length)),
+			values = labels(enumService.complete("Main.hx", enumSource.indexOf("value.count") + "value.".length));
+		if (statics.indexOf("Single") < 0 || statics.indexOf("base") < 0 || statics.indexOf("ALL") < 0
+			|| statics.indexOf("count") >= 0 || values.indexOf("factor") < 0 || values.indexOf("count") < 0
+			|| values.indexOf("base") >= 0
+			|| [for (label in statics.concat(values)) if (label.indexOf("$") >= 0) label].length > 0)
+			throw 'language service did not complete enum members: statics $statics, values $values';
+		Sys.println("PASS: enum statics, constants and methods complete, and constant getters stay hidden");
 		var classPosition = source.indexOf("Editor.make") + "Editor.".length,
 			classCompletion = service.complete("Main.hx", classPosition),
 			hasMake = false;

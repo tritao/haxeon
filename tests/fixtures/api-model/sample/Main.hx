@@ -107,6 +107,27 @@ enum Choice<T> {
 	Some(value:T, ?label:String);
 }
 
+/** A unit of count, with per-case constants and members. */
+enum Unit {
+	/** How many single items it is. */
+	public final factor:Int;
+
+	public final symbol:String = "?";
+
+	Single {factor: 1, symbol: "x"};
+	Dozen {factor: 12};
+
+	/** The unit everything is counted in. */
+	public static function base():Unit
+		return Single;
+
+	public function count(units:Int):Int
+		return units * factor;
+
+	function hidden():Int
+		return 0;
+}
+
 abstract Distance(Int) from Int to Int {
 	public function new(value:Int) {
 		this = value;

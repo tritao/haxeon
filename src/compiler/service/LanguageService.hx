@@ -1,37 +1,39 @@
 package compiler.service;
 
+import compiler.Compiler.CompileResult;
+import compiler.Compiler;
 import compiler.core.CancellationToken;
-import compiler.formatter.FormatConfig;
-import compiler.formatter.Formatter;
-import compiler.semantic.ModuleCanonicalizer;
-import compiler.syntax.Ast.AstType;
+import compiler.core.Diagnostic.CompileError;
 import compiler.core.Diagnostic;
 import compiler.core.Source.SourceFile;
 import compiler.core.Source.SourceSpan;
-import compiler.syntax.Token.TokenKind;
-import compiler.syntax.TokenTable;
-import compiler.Compiler;
-import compiler.modules.ModulePath;
-import compiler.modules.ModuleState;
-import compiler.semantic.SemanticIndex.SemanticSymbolId;
-import compiler.semantic.SemanticIndex.SemanticCompletionContext;
-import compiler.semantic.SemanticModel;
-import compiler.Compiler.CompileResult;
-import compiler.types.Type.CompilerType;
-import compiler.types.DeclarationIndex.DeclarationKind;
-import compiler.types.TypeRelations;
-import compiler.runtime.CompilerIntrinsics;
-import compiler.syntax.Lexer;
-import compiler.syntax.Parser;
-import compiler.syntax.ConditionalCompilation;
-import compiler.core.Diagnostic.CompileError;
 import compiler.documentation.ApiModel.ApiDeclaration;
 import compiler.documentation.ApiModel.ApiMember;
 import compiler.documentation.ApiModelBuilder;
 import compiler.documentation.ApiText;
-import compiler.documentation.Documentation;
-import compiler.documentation.Documentation.DocumentationTools;
 import compiler.documentation.Documentation.DocumentationComment;
+import compiler.documentation.Documentation.DocumentationTools;
+import compiler.documentation.Documentation;
+import compiler.formatter.FormatConfig;
+import compiler.formatter.Formatter;
+import compiler.modules.ModulePath;
+import compiler.modules.ModuleState;
+import compiler.runtime.CompilerIntrinsics;
+import compiler.semantic.EnumConstants;
+import compiler.semantic.ModuleCanonicalizer;
+import compiler.semantic.SemanticIndex.SemanticCompletionContext;
+import compiler.semantic.SemanticIndex.SemanticSymbolId;
+import compiler.semantic.SemanticModel;
+import compiler.semantic.TypeStatics;
+import compiler.syntax.Ast.AstType;
+import compiler.syntax.ConditionalCompilation;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
+import compiler.syntax.Token.TokenKind;
+import compiler.syntax.TokenTable;
+import compiler.types.DeclarationIndex.DeclarationKind;
+import compiler.types.Type.CompilerType;
+import compiler.types.TypeRelations;
 
 /** Editor-facing declaration summary, optionally marked as stale. */
 typedef DocumentSymbol = {
@@ -950,7 +952,7 @@ class LanguageService {
 						addMember(symbol.name.substring(separator + 1), "enumCase", symbol.name, prefix, result);
 				}
 			for (enumDecl in ast.enums)
-				if (enumDecl.name == qualifier)
+				if (enumDecl.name == qualifier) {
 					for (caseDecl in enumDecl.cases)
 						if (prefix.length == 0 || StringTools.startsWith(caseDecl.name, prefix))
 							result.push({
@@ -958,6 +960,12 @@ class LanguageService {
 								kind: "enumCase",
 								detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})'
 							});
+					// Its static methods, and its static variables, which its storage class keeps (`TypeStatics`).
+					addEnumMembers(state, ast, enumDecl, true, prefix, result);
+					for (classDecl in ast.classes)
+						if (classDecl.name == TypeStatics.storageName(enumDecl.name))
+							addClassMembers(state, ast, classDecl, true, prefix, result);
+				}
 			if (semanticContext == null || semanticContext.receiver == null) {
 				var owner = memberQualifier(state.source, position, true);
 				for (entry in ast.imports)
@@ -1659,6 +1667,16 @@ class LanguageService {
 										'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
 										prefix, result);
 				}
+			case TInstance(Enum, name, _):
+				// A value of an enum: its per-case constants and instance methods (docs/design/ENUM_MEMBERS.md).
+				for (state in compiler.modules) {
+					var ast = effectiveAst(state);
+					if (ast != null)
+						for (enumDecl in ast.enums)
+							if (enumDecl.name == name
+								|| ModuleCanonicalizer.qualifiedTypeName(ast.packageName, enumDecl.name) == name)
+								addEnumMembers(state, ast, enumDecl, false, prefix, result);
+				}
 			case TArray(_):
 				addMember("length", "field", "length:Int", prefix, result);
 				addMember("copy", "method", "copy():Array", prefix, result);
@@ -1693,6 +1711,17 @@ class LanguageService {
 					prefix, result);
 		for (method in declaration.methods)
 			if (method.isStatic == isStatic)
+				addMember(method.name, "method", methodDetail(state, ast, declaration.name, method), prefix, result);
+	}
+
+	/** An enum's static members, or a value's per-case constants and instance methods; never a constant's getter. */
+	static function addEnumMembers(state:ModuleState, ast:compiler.syntax.Ast.AstProgram,
+			declaration:compiler.syntax.Ast.AstEnum, isStatic:Bool, prefix:String, result:Array<CompletionItem>):Void {
+		if (!isStatic)
+			for (constant in declaration.constants ?? [])
+				addMember(constant.name, "field", '${constant.name}:${typeName(constant.type)}', prefix, result);
+		for (method in declaration.methods ?? [])
+			if (method.isStatic == isStatic && !EnumConstants.isGetter(method.name))
 				addMember(method.name, "method", methodDetail(state, ast, declaration.name, method), prefix, result);
 	}
 
@@ -1996,6 +2025,13 @@ class LanguageService {
 				for (item in decl.cases)
 					addWorkspaceSymbol(result, state, item.name, "enumCase", decl.name, decl.name + "." + item.name,
 						item.span);
+				for (constant in decl.constants ?? [])
+					addWorkspaceSymbol(result, state, constant.name, "field", decl.name,
+						'${constant.name}:${typeName(constant.type)}', constant.span);
+				for (method in decl.methods ?? [])
+					if (!EnumConstants.isGetter(method.name))
+						addWorkspaceSymbol(result, state, method.name, "method", decl.name,
+							'${method.name}():${resultText(state, ast, decl.name, method)}', method.span);
 			}
 			for (decl in ast.classes) {
 				addWorkspaceSymbol(result, state, decl.name, "class", null, 'class ${decl.name}', decl.span);

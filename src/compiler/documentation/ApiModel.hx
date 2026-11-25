@@ -75,11 +75,21 @@ typedef ApiMember = {
 	final ?operatorText:String;
 	final ?conversion:String;
 
+	/** An enum case's per-case constant values, in the enum's declaration order (docs/design/ENUM_MEMBERS.md). */
+	final ?constants:Array<ApiCaseConstant>;
+
 	/**
 	 * For an instance field, property or method of a class or interface: the supertype whose member of the same name this
 	 * one overrides or implements (`ApiModelBuilder.overridden`), whose comment documents it when it has none of its own.
 	 */
 	final ?overrides:String;
+}
+
+/** One case's value for a per-case constant: its source text, and whether the case leaves it at the default. */
+typedef ApiCaseConstant = {
+	final name:String;
+	final value:String;
+	final isDefault:Bool;
 }
 
 typedef ApiArgument = {

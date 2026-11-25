@@ -207,8 +207,7 @@ class ApiModelBuilder {
 			scope = parametersIn(decl.name, decl.typeParameters),
 			result = ApiTypeEncoder.encode(TInstance(compiler.types.Type.NominalKind.Enum, decl.name,
 				[for (parameter in decl.typeParameters) scope.get(parameter)])),
-			members:Array<ApiMember> = [for (entry in decl.cases) {
-				source: source(entry.span, entry.metadata),
+			members:Array<ApiMember> = [for (entry in decl.cases) {source: source(entry.span, entry.metadata),
 				kind: "enumConstructor",
 				name: entry.name,
 				isStatic: true,
@@ -222,8 +221,19 @@ class ApiModelBuilder {
 					defaultValue: null
 				}],
 				result: result,
-				typeParameters: []
-			}];
+				typeParameters: [],
+				constants: decl.constants == null
+				|| decl.constants.length == 0 ? null : [for (constant in decl.constants) {
+					var given = null;
+					for (value in entry.constants ?? [])
+						if (value.name == constant.name)
+							given = value.value;
+					{
+						name:constant.name,
+							value:expressionText(given ?? constant.defaultValue),
+							isDefault:given == null
+					};
+				}]}];
 		// Its static variables are kept in a storage class (`TypeStatics`); its members are private unless written public.
 		var storage = semantic.declarations.classes.get(TypeStatics.storageName(decl.name));
 		if (storage != null)
