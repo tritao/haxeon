@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { Code } from '@astrojs/starlight/components';
 import { parse } from 'yaml';
 import SplashPage from '../layouts/SplashPage.astro';
+import Card from '../components/Card.astro';
+import PlatformIcon, { type Platform } from '../components/PlatformIcon.astro';
 import StatusBadge from '../components/StatusBadge.astro';
 import { docsUrl, projectRepo, repositorySource } from '../../docs.mjs';
 
@@ -14,17 +16,17 @@ const latest: string | null = null;
 const releaseWorkflow = '.github/workflows/release.yml';
 const workflow = parse(readFileSync(join(__SITE_ROOT__, '..', releaseWorkflow), 'utf8'));
 const builds: { platform: string; aot: boolean; experimental: boolean }[] = workflow.jobs.package.strategy.matrix.include;
-const platformNames: Record<string, string> = {
-  'linux-x86_64': 'Linux x86-64',
-  'windows-x86_64': 'Windows x86-64',
-  'macos-arm64': 'macOS Apple Silicon',
+const platformNames: Record<string, { name: string; architecture: string; icon: Platform }> = {
+  'linux-x86_64': { name: 'Linux', architecture: 'x86-64', icon: 'linux' },
+  'windows-x86_64': { name: 'Windows', architecture: 'x86-64', icon: 'windows' },
+  'macos-arm64': { name: 'macOS', architecture: 'Apple Silicon', icon: 'apple' },
 };
 const archives = builds.map(({ platform, aot, experimental }) => {
-  const name = platformNames[platform];
-  if (!name) throw new Error(`${releaseWorkflow} builds ${platform}, which the download page does not name`);
+  const names = platformNames[platform];
+  if (!names) throw new Error(`${releaseWorkflow} builds ${platform}, which the download page does not name`);
   const file = `haxeon-${latest}-${platform}.${platform.startsWith('windows') ? 'zip' : 'tar.gz'}`;
   return {
-    name,
+    ...names,
     status: experimental ? ('Experimental' as const) : ('Supported' as const),
     note: aot ? 'Compiler and CLI built ahead of time.' : 'Compiler and CLI run on the included VM, so commands start more slowly.',
     href: latest && `${projectRepo}/releases/download/v${latest}/${file}`,
@@ -76,24 +78,28 @@ npm ci && npm run build`;
           <code>haxeon doctor</code> then checks the C toolchain and CMake that app builds need.
         </p>
       </div>
-      <div class="table-scroll">
-        <table aria-label="Release archives">
-          <thead>
-            <tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Archive</th></tr>
-          </thead>
-          <tbody>
-            {
-              archives.map(({ name, status, note, href, file }) => (
-                <tr>
-                  <th scope="row">{name}<small>{note}</small></th>
-                  <td><StatusBadge status={status} /></td>
-                  <td>{href ? <a href={href}>{file}</a> : 'Not yet published'}</td>
-                </tr>
-              ))
-            }
-          </tbody>
-        </table>
-      </div>
+      <ul class="grid three archives" aria-label="Release archives">
+        {
+          archives.map(({ name, architecture, icon, status, note, href, file }) => (
+            <Card as="li">
+              <div class="platform">
+                <PlatformIcon platform={icon} />
+                <div>
+                  <h3>{name}</h3>
+                  <span class="architecture">{architecture}</span>
+                </div>
+                <StatusBadge status={status} />
+              </div>
+              <p class="detail">{note}</p>
+              {href ? (
+                <a class="btn primary" href={href}>Download <span class="file">{file}</span></a>
+              ) : (
+                <span class="pending">Not yet published</span>
+              )}
+            </Card>
+          ))
+        }
+      </ul>
       <p class="note">
         On other machines, including Linux arm64 and Intel Macs, build from source. <a
           href={docsUrl('reference/RELEASES.md')}>What an archive holds</a
@@ -139,6 +145,40 @@ npm ci && npm run build`;
 </SplashPage>
 
 <style>
+  .archives {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .platform {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--hx-space-3);
+    --platform-icon-size: 2rem;
+  }
+  .platform h3 {
+    margin: 0;
+  }
+  .architecture {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  /* The note takes the slack, so the cards' buttons line up. */
+  .archives > :global(li) {
+    grid-template-rows: auto 1fr auto;
+  }
+  .archives .btn {
+    justify-self: start;
+  }
+  .file {
+    font: var(--sl-text-xs) var(--sl-font-mono);
+    opacity: 0.8;
+  }
+  .pending {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
   .notice {
     padding: var(--hx-space-3) var(--hx-space-4);
     border: 1px solid var(--sl-color-gray-5);

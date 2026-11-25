@@ -1,45 +1,46 @@
 ---
+import PlatformIcon, { type Platform } from './PlatformIcon.astro';
 import StatusBadge, { type Status } from './StatusBadge.astro';
 
-const platforms: { platform: string; detail?: string; icon: string; status: Status; live: string }[] = [
+const platforms: { platform: string; detail?: string; icon: Platform; status: Status; live: string }[] = [
   {
     platform: 'Linux',
     detail: 'x86-64, arm64',
-    icon: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M7 9l3 2-3 2M12 13h4M9 20h6"/>',
+    icon: 'linux',
     status: 'Supported',
     live: 'Yes',
   },
   {
     platform: 'macOS',
     detail: 'Intel, Apple Silicon',
-    icon: '<path d="M5 6h14v10H5z"/><path d="M2 19h20"/>',
+    icon: 'apple',
     status: 'Supported',
     live: 'Yes',
   },
   {
     platform: 'Windows',
     detail: 'x86-64',
-    icon: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M3 8h18M9 20h6"/>',
+    icon: 'windows',
     status: 'Supported',
     live: 'Yes',
   },
   {
     platform: 'Android',
     detail: 'arm64-v8a, x86_64; debug APKs',
-    icon: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+    icon: 'android',
     status: 'Preview',
     live: 'Yes',
   },
   {
     platform: 'Web',
     detail: 'WebAssembly',
-    icon: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>',
+    icon: 'webassembly',
     status: 'Experimental',
     live: 'Not yet',
   },
   {
     platform: 'iOS',
-    icon: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+    icon: 'apple',
     status: 'In progress',
     live: 'Not yet',
   },
@@ -60,7 +61,7 @@ const platforms: { platform: string; detail?: string; icon: string; status: Stat
           <tr>
             <th scope="row">
               <span class="platform">
-                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" set:html={icon} />
+                <PlatformIcon platform={icon} />
                 <span>{platform}{detail && <small>{detail}</small>}</span>
               </span>
             </th>
@@ -81,8 +82,7 @@ const platforms: { platform: string; detail?: string; icon: string; status: Stat
     align-items: center;
     gap: var(--hx-space-3);
   }
-  .platform .ico {
-    --ico-size: 20px;
+  .platform :global(.platform-icon) {
     color: var(--sl-color-gray-3);
   }
 </style>
