@@ -1,7 +1,6 @@
 ---
 import Card from '../Card.astro';
 import LiveDemo from './LiveDemo.astro';
-import Showcase from './Showcase.astro';
 import { docsUrl, repositorySource } from '../../../docs.mjs';
 ---
 
@@ -33,7 +32,8 @@ import { docsUrl, repositorySource } from '../../../docs.mjs';
           </svg><h3>UI that looks the same everywhere</h3>
         </div><p class="lede" style="font-size:0.95rem">
           The <a href="/ui/"><code>ui</code> package</a> draws on the GPU,
-          with real text handling built in.
+          with real text handling built in. Draw your own scenes beside it with
+          the <a href="/gpu/">GPU layer</a>.
         </p><div class="chips">
           <span>Layout</span><span>Text shaping</span><span>Right-to-left text</span><span>
             CJK line breaking
@@ -88,7 +88,6 @@ import { docsUrl, repositorySource } from '../../../docs.mjs';
     </div>
     <p class="note">NativeKit is experimental and pre-1.0. Its ABI is still evolving.</p>
 
-    <Showcase />
     <div class="ctas">
       <a class="btn primary" href={docsUrl('guides/01-first-app.md')}>Build your first app</a><a
         class="btn ghost"
