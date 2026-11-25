@@ -123,15 +123,15 @@ const generatedExcerpt = [
           edges={['creates', 'bound in', 'sealed in', 'submitted to']}
         />
         <div class="stack">
-          <Card compact>
+          <Card>
             <h3>Frames only when needed</h3>
             <p>Switch a surface to <a href={guide + '#run-it'}>on-demand frames</a> and request one when something changes, so an idle app does not redraw.</p>
           </Card>
-          <Card compact>
+          <Card>
             <h3>Record once, submit again</h3>
             <p>Seal passes and their commands into a batch, then submit the same batch on later frames without recording it again.</p>
           </Card>
-          <Card compact>
+          <Card>
             <h3>Clear failures</h3>
             <p>Errors name the operation that failed, including device loss. Misuse, such as binding a resource from another renderer, is rejected before it reaches the GPU.</p>
           </Card>
@@ -156,11 +156,11 @@ const generatedExcerpt = [
         <CodeCard code={triangleShader} lang="sokol-shdc" title="src/shaders/Triangle.glsl" />
         <div class="stack">
           <CodeCard code={generatedExcerpt} lang="haxe" title="Generated · shaders/Triangle.hx" />
-          <Card compact>
+          <Card>
             <h3>Typed layouts and uniforms</h3>
             <p>Offsets, strides and the vertex layout come from the shader, so they cannot drift from it. Each uniform block becomes a record with checked std140 offsets.</p>
           </Card>
-          <Card compact>
+          <Card>
             <h3>Rebuilt while you work</h3>
             <p><a href={docsUrl('reference/cli/build-run.md') + '#watch-mode'}><code>haxeon run --watch</code></a> rebuilds a shader when it or one of its includes changes, then relaunches the app.</p>
           </Card>
@@ -221,11 +221,11 @@ const generatedExcerpt = [
     <div class="wrap">
       <div class="head"><h2>Going lower</h2></div>
       <div class="grid two">
-        <Card compact>
+        <Card>
           <h3>Native handles</h3>
           <p>Pass renderer, shader and pipeline handles to <a href={repositorySource('packages/gpu/bindings/nativekit-gpu.hxi')}>NativeKit’s C GPU API</a>, or borrow the underlying device and context where available.</p>
         </Card>
-        <Card compact>
+        <Card>
           <h3>Your own graphics code</h3>
           <p>Keep an existing renderer in C or C++ and call it through <a href={docsUrl('reference/C_HEADER_FFI.md')}>the C FFI</a>.</p>
         </Card>

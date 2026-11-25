@@ -12,13 +12,13 @@ import Command from '../Command.astro';
         plugins to assemble.
       </p>
     </div>
-    <div class="tools">
+    <div class="grid four tools">
       <div>
         <div class="titled">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 5h16v10H9l-5 4z"></path><path d="M10.5 8l-2 2 2 2M13.5 8l2 2-2 2"></path>
           </svg><h3>Language server</h3>
-        </div><Command command="haxeon lsp" /><p>
+        </div><Command command="haxeon lsp" /><p class="detail">
           Completion, go to definition, diagnostics as you type. The VS Code extension uses it.
         </p>
       </div>
@@ -30,7 +30,7 @@ import Command from '../Command.astro';
             >
             </path>
           </svg><h3>Debugger</h3>
-        </div><div class="cmd">Debug Adapter Protocol</div><p>
+        </div><div class="cmd">Debug Adapter Protocol</div><p class="detail">
           Breakpoints, stepping, watchpoints, logpoints and exception breaks, even across a live
           edit.
         </p>
@@ -40,7 +40,7 @@ import Command from '../Command.astro';
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 6h16M4 10h10M4 14h16M4 18h8"></path>
           </svg><h3>Formatter and linter</h3>
-        </div><div class="cmd">haxeon fmt · haxeon lint</div><p>
+        </div><div class="cmd">haxeon fmt · haxeon lint</div><p class="detail">
           One house style, and checks that know your types.
         </p>
       </div>
@@ -49,7 +49,7 @@ import Command from '../Command.astro';
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 20h16M7 20v-6M11 20V7M15 20v-9M19 20v-4"></path>
           </svg><h3>Profiler</h3>
-        </div><Command command="haxeon run --profile" /><p>
+        </div><Command command="haxeon run --profile" /><p class="detail">
           A timeline of your running program, opened in Perfetto or in VS Code.
         </p>
       </div>
@@ -59,7 +59,7 @@ import Command from '../Command.astro';
             <rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8.5 12l2.5 2.5 4.5-5"
             ></path>
           </svg><h3>Build and test</h3>
-        </div><div class="cmd">haxeon build · check · test</div><p>
+        </div><div class="cmd">haxeon build · check · test</div><p class="detail">
           Incremental builds through a compile server that stays warm.
         </p>
       </div>
@@ -69,7 +69,7 @@ import Command from '../Command.astro';
             <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"></path><path d="M4 7.5l8 4.5 8-4.5M12 12v9"
             ></path>
           </svg><h3>Packages</h3>
-        </div><Command command="haxeon add ui" /><p>
+        </div><Command command="haxeon add ui" /><p class="detail">
           A registry, version ranges and a lockfile. Publish with <code>haxeon publish</code>.
         </p>
       </div>
@@ -78,14 +78,14 @@ import Command from '../Command.astro';
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 3v5M15 3v5M7 8h10v3a5 5 0 0 1-10 0z"></path><path d="M12 16v5"></path>
           </svg><h3>C and C++ bindings</h3>
-        </div><Command command="haxeon ffi import" /><p>Bindings generated from headers.</p>
+        </div><Command command="haxeon ffi import" /><p class="detail">Bindings generated from headers.</p>
       </div>
       <div>
         <div class="titled">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M3 12h4l2-5 4 10 2-5h6"></path>
           </svg><h3>Setup check</h3>
-        </div><Command command="haxeon doctor" /><p>
+        </div><Command command="haxeon doctor" /><p class="detail">
           Names what is missing and the command that installs it.
         </p>
       </div>
@@ -94,11 +94,6 @@ import Command from '../Command.astro';
 </section>
 
 <style>
-  .tools {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--hx-space-4);
-  }
   .tools > div {
     border-top: 2px solid var(--sl-color-gray-5);
     padding-top: 14px;
@@ -106,20 +101,5 @@ import Command from '../Command.astro';
     gap: var(--hx-space-2);
     align-content: start;
     min-width: 0;
-  }
-  .tools p {
-    color: var(--sl-color-gray-3);
-    font-size: 0.92rem;
-  }
-
-  @media (max-width: 900px) {
-    .tools {
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-  @media (max-width: 560px) {
-    .tools {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

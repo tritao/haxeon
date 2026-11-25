@@ -38,7 +38,7 @@ const arrows = boxes.slice(0, -1).map(({ y, height: boxHeight }, index) => ({
 }));
 // Each layer's title, and its quieter detail line when it has one.
 const lines = boxes.flatMap(({ layer, y }) => [
-  { parts: layer.title, y: y + 23, className: 'ttl' },
+  { parts: layer.title, y: y + 23, className: 'title' },
   ...(layer.detail ? [{ parts: layer.detail, y: y + 43, className: undefined }] : []),
 ]);
 const path = arrows.map(({ from, length }) => `M${centre} ${from}v${length}m-4-5 4 5 4-5`).join('');
@@ -48,16 +48,16 @@ const path = arrows.map(({ from, length }) => `M${centre} ${from}v${length}m-4-5
   <svg class="drawing" viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title`}>
     <title id={`${id}-title`}>{label}</title>
     {boxes.map(({ y, height: boxHeight }) => <rect class="box" x={boxX} {y} width={boxWidth} height={boxHeight} rx="6" />)}
-    <path class="acc" d={path} />
+    <path class="accent" d={path} />
     {arrows.map(({ from, edge }) => edge && <text x={centre + 12} y={from + 21}>{edge}</text>)}
     {lines.map(({ parts, y, className }) => (
       <text class={className} x={centre} {y} text-anchor="middle">
-        {segments(parts).map((part) => typeof part === 'string' ? part : <a href={part.href}><tspan class="lnk">{part.text}</tspan></a>)}
+        {segments(parts).map((part) => typeof part === 'string' ? part : <a href={part.href}><tspan class="link">{part.text}</tspan></a>)}
       </text>
     ))}
   </svg>
 </Diagram>
 
 <style>
-  .drawing .lnk { fill: var(--sl-color-text-accent); font-weight: 600; text-decoration: underline; }
+  .drawing .link { fill: var(--sl-color-text-accent); font-weight: 600; text-decoration: underline; }
 </style>

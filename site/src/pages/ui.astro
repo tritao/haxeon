@@ -76,15 +76,15 @@ const tools: Feature[] = [
           ]}
         />
         <div class="stack">
-          <Card compact>
+          <Card>
             <h3>Views from state</h3>
             <p>Your <code>view()</code> describes the window from your app’s state. Keys tell the UI which view is which from one frame to the next, and a <code>Signal</code> marks what changed, so you never update widgets by hand.</p>
           </Card>
-          <Card compact>
+          <Card>
             <h3>A retained core underneath</h3>
             <p>Your code owns behaviour: state, focus, events, semantics and animation. The native core owns layout, text and drawing. It keeps a retained display list, compiles it into a render plan and repaints only what changed.</p>
           </Card>
-          <Card compact>
+          <Card>
             <h3>One renderer everywhere</h3>
             <p>The toolkit draws its own widgets, with text shaped by HarfBuzz, so a layout looks the same on every platform. It can own a window, or draw inside your <a href="/gpu/">GPU app</a> through a <code>UiOverlay</code>.</p>
           </Card>

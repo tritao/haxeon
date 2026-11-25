@@ -92,15 +92,15 @@ const comingFrom = withSummaries(listedPages(comingFromReadme, 'docs/coming-from
         <p class="lede">Familiar where it can be, strict where it pays off, and quick enough to keep up with you.</p>
       </div>
       <div class="grid three">
-        <Card compact>
+        <Card>
           <h3>Types without ceremony</h3>
           <p>Every value has a static type, and the compiler infers most of them. Where you want flexibility, opt into <code>Dynamic</code> for just that value. <a href={learn('basics.md')}>Values and functions</a></p>
         </Card>
-        <Card compact>
+        <Card>
           <h3>Values, not only objects</h3>
           <p>A <code>struct</code> copies on assignment and, when you ask, compares and hashes by its fields. Abstracts give a value a type of its own at no runtime cost. <a href={learn('value-types.md')}>Structs and value equality</a></p>
         </Card>
-        <Card compact>
+        <Card>
           <h3>Safe and predictable</h3>
           <p><code>Null&lt;T&gt;</code> marks what can be absent, <code>switch</code> must cover every case, and <code>defer</code> runs cleanup on every way out of a block. <a href={learn('null-safety.md')}>Null safety</a></p>
         </Card>
@@ -142,7 +142,7 @@ const comingFrom = withSummaries(listedPages(comingFromReadme, 'docs/coming-from
       </div>
       <div class="grid four">
         {comingFrom.map(({ title, text, page }) => (
-          <Card compact>
+          <Card>
             <h3><a href={docsUrl('coming-from/' + page)}>{title}</a></h3>
             <p>{text}</p>
           </Card>

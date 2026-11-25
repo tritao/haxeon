@@ -42,7 +42,7 @@ moved to: 4, 5`;
         the library owns close exactly once.
       </p>
     </div>
-    <div class="trio" data-example="geometry">
+    <div class="grid three trio" data-example="geometry">
       <div>
         <h3>geometry.h</h3>
         <CodeCard code={header} lang="c" />
@@ -73,18 +73,18 @@ moved to: 4, 5`;
             markerHeight="7"
             orient="auto-start-reverse"
           >
-            <path d="M0 0L10 5L0 10z" class="accf"></path>
+            <path d="M0 0L10 5L0 10z" class="accent-fill"></path>
           </marker>
         </defs>
-        <text x="300" y="30" class="ttl">geo_point · 16 bytes</text>
-        <path d="M302 56H582M302 56v8M582 56v8" class="ln"></path><text
+        <text x="300" y="30" class="title">geo_point · 16 bytes</text>
+        <path d="M302 56H582M302 56v8M582 56v8" class="line"></path><text
           x="442"
           y="50"
           text-anchor="middle"
         >
           double x
         </text>
-        <path d="M590 56H870M590 56v8M870 56v8" class="ln"></path><text
+        <path d="M590 56H870M590 56v8M870 56v8" class="line"></path><text
           x="730"
           y="50"
           text-anchor="middle"
@@ -107,7 +107,7 @@ moved to: 4, 5`;
           x="125"
           y="63"
           text-anchor="middle"
-          class="codet"
+          class="code-text"
         >
           C geo_point *a
         </text>
@@ -115,12 +115,12 @@ moved to: 4, 5`;
           x="125"
           y="147"
           text-anchor="middle"
-          class="codet"
+          class="code-text"
         >
           Haxeon Point corner
         </text>
-        <path d="M230 58C265 58 268 84 296 86" class="acc" marker-end="url(#ah2)"></path>
-        <path d="M230 142C265 142 268 100 296 98" class="acc" marker-end="url(#ah2)"></path>
+        <path d="M230 58C265 58 268 84 296 86" class="accent" marker-end="url(#ah2)"></path>
+        <path d="M230 142C265 142 268 100 296 98" class="accent" marker-end="url(#ah2)"></path>
         <text x="300" y="178">
           Both sides read and write the same bytes: no copying, no conversion layer.
         </text>
@@ -137,9 +137,6 @@ moved to: 4, 5`;
 <style>
   .trio {
     margin-bottom: var(--hx-space-6);
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--hx-space-4);
     --ec-codeFontSize: 0.78rem;
     --hx-output-size: 0.78rem;
   }
@@ -147,7 +144,8 @@ moved to: 4, 5`;
     font-size: 0.95rem;
     margin-bottom: var(--hx-space-2);
   }
-  @media (max-width: 1100px) {
+  /* Three code panels need more room than three cards before they stack. */
+  @media (max-width: 68.75rem) {
     .trio {
       grid-template-columns: minmax(0, 1fr);
     }

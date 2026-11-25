@@ -1,12 +1,11 @@
 ---
 interface Props {
   as?: 'div' | 'li';
-  compact?: boolean;
 }
-const { as: Tag = 'div', compact = false } = Astro.props;
+const { as: Tag = 'div' } = Astro.props;
 ---
 
-<Tag class:list={['card', { compact }]}><slot /></Tag>
+<Tag class="card"><slot /></Tag>
 
 <style>
   .card {
@@ -18,9 +17,5 @@ const { as: Tag = 'div', compact = false } = Astro.props;
     gap: 10px;
     align-content: start;
     min-width: 0;
-  }
-
-  .compact {
-    padding: 18px;
   }
 </style>

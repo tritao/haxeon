@@ -85,6 +85,10 @@
   flex-wrap: wrap;
   margin-top: var(--hx-space-6);
 }
+:where(.landing-content .detail) {
+  color: var(--sl-color-gray-3);
+  font-size: 0.95rem;
+}
 :where(.landing-content .note) {
   font-size: 0.85rem;
   color: var(--sl-color-gray-3);
@@ -128,7 +132,7 @@
 :where(.landing-content .head .lede) {
   max-width: 76ch;
 }
-@media (min-width: 1000px) {
+@media (min-width: 62.5rem) {
   :where(.landing-content .head) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
     column-gap: 56px;
@@ -155,17 +159,20 @@
 }
 :where(.landing-content .intro .lede) {
   max-width: 76ch;
+  font-size: 1.15rem;
 }
 :where(.landing-content .intro .ctas) {
   margin-top: 0;
 }
-@media (min-width: 1000px) {
+@media (min-width: 62.5rem) {
   :where(.landing-content .intro .lede) {
     max-width: 60ch;
   }
 }
 :where(.page-intro h1) {
   font-size: clamp(2.4rem, 6vw, 4rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
 }
 :where(.page-intro .prose) {
   max-width: 65ch;

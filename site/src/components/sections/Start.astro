@@ -10,9 +10,9 @@ import { docsUrl } from '../../../docs.mjs';
       <span class="eyebrow">Start building</span>
       <h2>Three steps to a running app.</h2>
     </div>
-    <ol>
+    <ol class="grid three">
       <Card as="li">
-        <h3>Install</h3><p class="lede" style="font-size:0.95rem">
+        <h3>Install</h3><p class="detail">
           Unpack <a href={docsUrl('reference/RELEASES.md')}>a release</a> and put its <code
             >bin</code
           > on your PATH. <code>haxeon doctor</code> checks your C toolchain.
@@ -20,16 +20,14 @@ import { docsUrl } from '../../../docs.mjs';
       </Card>
       <Card as="li">
         <h3>Create</h3><Command command="haxeon create my_app" /><p
-          class="lede"
-          style="font-size:0.95rem"
+          class="detail"
         >
           A windowed app for Linux, macOS and Windows.
         </p>
       </Card>
       <Card as="li">
         <h3>Run and edit</h3><Command command="haxeon run --watch" /><p
-          class="lede"
-          style="font-size:0.95rem"
+          class="detail"
         >
           Run from <code>my_app</code>. Change <code>src/Main.hx</code> and watch the app update.
         </p>
@@ -51,9 +49,6 @@ import { docsUrl } from '../../../docs.mjs';
     list-style: none;
     padding: 0;
     margin: 0;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--hx-space-4);
     counter-reset: s;
   }
   .start :global(li) {
@@ -75,10 +70,5 @@ import { docsUrl } from '../../../docs.mjs';
     background: var(--sl-color-accent);
     color: var(--sl-color-text-invert);
     font: 700 0.9rem/1 var(--sl-font-mono);
-  }
-  @media (max-width: 900px) {
-    .start ol {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

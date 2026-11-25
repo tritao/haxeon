@@ -29,34 +29,34 @@ import { docsUrl } from '../../../docs.mjs';
             markerHeight="7"
             orient="auto-start-reverse"
           >
-            <path d="M0 0L10 5L0 10z" class="accf"></path>
+            <path d="M0 0L10 5L0 10z" class="accent-fill"></path>
           </marker>
         </defs>
         <rect x="430" y="12" width="140" height="38" rx="6" class="codebox"></rect><text
           x="500"
           y="36"
           text-anchor="middle"
-          class="codet"
+          class="code-text"
         >
           Main.hx
         </text>
-        <path d="M500 50C500 95 170 90 170 136" class="ln" marker-end="url(#ah3)"></path>
-        <path d="M500 50V136" class="ln" marker-end="url(#ah3)"></path>
-        <path d="M500 50C500 95 830 90 830 136" class="ln" marker-end="url(#ah3)"></path>
+        <path d="M500 50C500 95 170 90 170 136" class="line" marker-end="url(#ah3)"></path>
+        <path d="M500 50V136" class="line" marker-end="url(#ah3)"></path>
+        <path d="M500 50C500 95 830 90 830 136" class="line" marker-end="url(#ah3)"></path>
         <rect x="70" y="140" width="200" height="38" rx="6" class="box"></rect><text
           x="170"
           y="164"
           text-anchor="middle"
-          class="ttl"
+          class="title"
         >
           JIT VM
         </text>
-        <path d="M252 150a7 7 0 1 1-4 12" class="acc" marker-end="url(#ah3)"></path>
+        <path d="M252 150a7 7 0 1 1-4 12" class="accent" marker-end="url(#ah3)"></path>
         <rect x="400" y="140" width="200" height="38" rx="6" class="box"></rect><text
           x="500"
           y="164"
           text-anchor="middle"
-          class="ttl"
+          class="title"
         >
           native executable
         </text>
@@ -64,7 +64,7 @@ import { docsUrl } from '../../../docs.mjs';
           x="830"
           y="164"
           text-anchor="middle"
-          class="ttl"
+          class="title"
         >
           .wasm module
         </text>
@@ -73,27 +73,24 @@ import { docsUrl } from '../../../docs.mjs';
         ><text x="665" y="78" text-anchor="middle"> WebAssembly </text>
       </svg>
     </Diagram>
-    <div class="outputs">
+    <div class="grid three outputs">
       <Card>
         <h3>Develop on the VM</h3><Command command="haxeon run --watch" /><p
-          class="lede"
-          style="font-size:0.95rem"
+          class="detail"
         >
           A fast JIT VM that starts at once and takes your edits while the program runs.
         </p>
       </Card>
       <Card>
         <h3>Ship a native executable</h3><Command command="haxeon build --build-mode=release" /><p
-          class="lede"
-          style="font-size:0.95rem"
+          class="detail"
         >
           Compiled ahead of time through C into one executable, with the VM linked in.
         </p>
       </Card>
       <Card>
         <h3>Build WebAssembly</h3><Command command="haxeon build --target wasm32" /><p
-          class="lede"
-          style="font-size:0.95rem"
+          class="detail"
         >
           A .wasm module, not a JavaScript bundle. Experimental.
         </p>
@@ -107,14 +104,6 @@ import { docsUrl } from '../../../docs.mjs';
 <style>
   .outputs {
     margin-top: var(--hx-space-5);
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--hx-space-4);
-  }
-  @media (max-width: 900px) {
-    .outputs {
-      grid-template-columns: 1fr;
-    }
   }
 
   .platforms {

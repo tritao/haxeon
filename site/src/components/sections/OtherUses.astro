@@ -10,50 +10,27 @@ import { docsUrl } from '../../../docs.mjs';
       <span class="eyebrow">What else you can build</span>
       <h2>The same language, beyond apps.</h2>
     </div>
-    <div class="tiles">
-      <Card compact>
+    <div class="grid four">
+      <Card>
         <h3><a href={docsUrl('reference/cli/project.md') + '#create'}>Tools</a></h3><Command
           command="haxeon create my_tool -t console"
-        /><p>Command-line programs, built into one executable.</p>
+        /><p class="detail">Command-line programs, built into one executable.</p>
       </Card>
-      <Card compact>
+      <Card>
         <h3><a href="/gpu/">Games and 3D</a></h3><div class="cmd">
           gpu · audio · animation
-        </div><p>Tune a game's logic while you play it.</p>
+        </div><p class="detail">Tune a game's logic while you play it.</p>
       </Card>
-      <Card compact>
+      <Card>
         <h3><a href={docsUrl('reference/cli/build-run.md') + '#scripthx'}>Scripts</a></h3><Command
           command="haxeon script.hx"
-        /><p>One file, no project, started at once.</p>
+        /><p class="detail">One file, no project, started at once.</p>
       </Card>
-      <Card compact>
-        <h3>Embedding</h3><div class="cmd">C or C++ host</div><p>
+      <Card>
+        <h3>Embedding</h3><div class="cmd">C or C++ host</div><p class="detail">
           Run Haxeon inside an existing application. Guide forthcoming.
         </p>
       </Card>
     </div>
   </div>
 </section>
-
-<style>
-  .tiles {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--hx-space-4);
-  }
-  .tiles p {
-    color: var(--sl-color-gray-3);
-    font-size: 0.92rem;
-  }
-
-  @media (max-width: 900px) {
-    .tiles {
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-  @media (max-width: 560px) {
-    .tiles {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
