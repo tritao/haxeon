@@ -3,6 +3,7 @@ import compiler.ir.model.IrSymbol;
 
 import compiler.core.InternalError;
 import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.passes.scalars.IrScalarArguments;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.Ir.IrValue;
@@ -62,6 +63,18 @@ class WasmLinearClosureAdapters {
 
 	static function dispatcherName(arity:Int):String
 		return '__haxeon_closure_invoke_$arity';
+
+	/**
+	 * Whether a closure of `type` can be boxed, and so reach a dispatcher: not a scalar closure, nor one that takes or gives
+	 * one, which the verifier keeps from crossing a Dynamic or cast boundary. Such a signature has no invoker or adapter.
+	 */
+	static function crossesDynamic(type:IrType):Bool
+		return switch type {
+			case Function(arguments, result):
+				!IrScalarArguments.isPrivateClosureType(type) && crossesDynamic(result)
+					&& !Lambda.exists(arguments, argument -> !crossesDynamic(argument));
+			case _: true;
+		};
 
 	static function closureKey(type:IrType):String
 		return IrTypeIdentity.text(type);
@@ -129,13 +142,15 @@ class WasmLinearClosureAdapters {
 						case InstanceClosure(_, name, _) if (name.name == WasmDynamicCalls.VARARGS_TARGET):
 						case StaticClosure(output, _) | InstanceClosure(output, _, _):
 							noteType(output.type);
-							if (reachable.exists(fn.name) && !scalarClosures.exists(IrTypeIdentity.text(output.type)))
+							if (reachable.exists(fn.name) && !scalarClosures.exists(IrTypeIdentity.text(output.type))
+								&& crossesDynamic(output.type))
 								planned.set(closureKey(output.type), output.type);
 						case SafeCast(output, _):
 							switch output.type {
 								case Function(_, _):
 									noteType(output.type);
-									if (reachable.exists(fn.name)) planned.set(closureKey(output.type), output.type);
+									if (reachable.exists(fn.name) && crossesDynamic(output.type))
+										planned.set(closureKey(output.type), output.type);
 								default:
 							}
 						case TypeValue(_, type):
@@ -162,7 +177,7 @@ class WasmLinearClosureAdapters {
 							switch output.type {
 								case Function(_, _):
 									var key = closureKey(output.type);
-									if (!planned.exists(key)) {
+									if (!planned.exists(key) && crossesDynamic(output.type)) {
 										planned.set(key, output.type);
 										added = true;
 									}
