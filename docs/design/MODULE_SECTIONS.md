@@ -1,8 +1,8 @@
 # Module sections and load-time linking (design note)
 
-Status: designed 2026-11-25, not started; the open questions are decided (section 9). The user's decision: per-module
-sections and load-time linking replace "stable output indices" ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3,
-[QUERY_ENGINE.md](QUERY_ENGINE.md) row B).
+Status: designed 2026-11-25; the open questions are decided (section 9); slice 1, the loader, has landed. The user's
+decision: per-module sections and load-time linking replace "stable output indices"
+([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3, [QUERY_ENGINE.md](QUERY_ENGINE.md) row B).
 
 **Problem.** HashLink's function, type, global, string and constant tables are dense and numbered in first-use order, so a
 cold build's index depends on everything lowered before it. A warm build that adds an entry renumbers, relinks and
@@ -83,17 +83,68 @@ stock-Haxe bytecode (≤ 5) and older bootstraps. HLB 6 to 8 are already fork-on
 No process-local type id appears in a key: keys are text, as INTEGER_IDENTITIES.md rule 2 already requires for
 HashLink's tables.
 
+A recursive anonymous type (`typedef Node = {next:Node}`) refers to itself through structural types, which would make
+them cyclic. Such a virtual or object is a shared definition, keyed by its anonymous type name, so the cycle passes
+through a keyed entry as it passes through a nominal type, and the structural types stay acyclic.
+
 **Deduplication.** The loader deduplicates strings and literal-constant globals by content, and ints, floats and bytes by
 value. The runtime therefore holds one global per literal, as it does today.
 
 **Not imports.** Field indices (`OField`, `OSetField`) and prototype slots (`OCallMethod`) stay as numbers. They are
 layout facts that lowering already records as reads (`HlLoweringView`), not table positions.
 
+### Encoding
+
+Decided with slice 1, where the text above leaves it open. Numbers are HashLink's index encoding (`uindex`) unless said
+otherwise; a text is its UTF-8 length then its bytes; a string table is HLB 8's (the byte size as an i32, the
+NUL-terminated strings, then each length).
+
+- **Header.** `HLB`, the byte 9, flags (bit 0: debug information), the section count.
+- **Directory.** For each section: its module path (a text, unique and not empty), its offset and length (i32, from the
+  start of the section area), and its digest (8 bytes, the compiler's 64-bit reuse key, which the loader does not read).
+- **Program record**, right after the directory: the entry function's key, two texts. The section area follows it and
+  runs to the end of the file. The record comes before the sections so the file reads front to back, and offsets count
+  from the area so they do not depend on the record. It names no boot section: the entry's key names its module.
+- **A section** starts with its kind, version and flags. Kind 1 version 1 is a module's code; flag bit 0 marks an LZ4
+  payload (the decoded size, then one LZ4 block, as for debug sections), so import keys and duplicated literals compress.
+  The payload:
+  1. Counts: names, function imports, global imports, type imports, natives, types, owned globals, functions, ints,
+     floats, strings, bytes, constants, debug files.
+  2. The names, a string table: module paths, members, native libraries and names.
+  3. The interface. Function and global imports (module, member, expected local type), type imports (module, member, kind
+     byte), natives (lib, name, local type). One head per local type: its role (structural, owned or shared), its kind byte
+     and, for an owned or shared type, its key member. One head per owned global and per function: its member and local
+     type. The loader reads every section's interface before any body.
+  4. The body. Ints (i32), floats (f64), strings (a string table), bytes (each a length and its bytes), debug files (a
+     string table), the type bodies in HLB 8's encoding with local indices, the constants (local type, field count, field
+     values), then each function's registers, opcodes, debug lines and assignments as HLB 8 has them, with local indices.
+- **Index spaces.** Types: the type imports, then the type table. Globals: the global imports, the owned globals, then
+  the constants. Functions: the function imports, the natives, then the owned functions.
+- **Roles.** A structural type refers only to structural entries before it, but to any import or definition. Owned types
+  are objects, structs, enums, enum tags and virtuals; shared definitions are objects, structs, virtuals and enums, and
+  their key's module is empty. A type definition refers only to imported or owned globals (a class value, an enum's
+  constant caches), never to a constant; a constant refers only to the constants before it.
+- **Natives** are keyed by (lib, name). Every section that declares one must give it the same type.
+- **Numbering**, which the compiler's static link (slice 2) reproduces: owned and shared types in section order, then the
+  structural ones in order of first appearance; functions in section and declaration order, then the natives in order of
+  first declaration; owned globals, then the distinct constants in order of first appearance; strings, ints, floats,
+  bytes and debug files in order of first appearance.
+- **Names and identities.** A function's key member is its name in the linked code (`function_names`): members are
+  qualified declaration paths, readable alone. Its stable id is its findex until the loader mints ids (slice 4).
+- **Debug.** Each function carries its lines and assignments as in HLB 8, with section-local files. The debug sections
+  (function identities, opcode source spans, source snapshots) are not part of HLB 9 yet: they come with slice 2, keyed
+  by local function index, together with the readers that need them.
+
 ## 2. Loader
 
-`hl_code_link(data, size, &error)` in a new `vendor/hashlink/src/link.c`. It returns the same `hl_code` that
-`hl_code_read` builds, so `hl_module_alloc`, `hl_module_init`, the JIT, `hl_module_init_aot`, the debugger and the profiler
-do not change. `main.c` and `hlruntime.c` dispatch to it on the version byte.
+`hl_code_link(data, size, &error)` in `vendor/hashlink/src/link.c`. It returns the same `hl_code` that `hl_code_read`
+builds, so `hl_module_alloc`, `hl_module_init`, the JIT, `hl_module_init_aot`, the debugger and the profiler do not
+change. `hl_code_read` dispatches to it on the version byte, so `main.c`, `hlruntime.c`, plugins and `hldump` read both
+formats without a change of their own.
+
+As built, the steps below run in three passes over the sections: the interfaces (step 2, and natives), then per section
+its imports, literals and types (steps 3 and 4) followed by the import type checks of step 5, then per section its
+constants and functions (step 5).
 
 1. **Directory.** Read the counts of every section and size the global arrays and hash tables.
 2. **Exports.** Give each owned function a findex in section order, with natives after all functions, deduplicated by
@@ -112,7 +163,12 @@ do not change. `main.c` and `hlruntime.c` dispatch to it on the version byte.
    The loader also gives each key a stable id (see 4).
 
 **Cost.** Linear in entries plus operands. Estimated at about 10–15 ms for the compiler (simulated 9–11 ms), against
-80 ms to read and about 1 s to JIT. An AOT image is linked by the compiler (see 5), so it costs nothing at load. While
+80 ms to read and about 1 s to JIT. Measured with slice 1 on a synthetic image of the server's size (`code_link --bench`:
+458 sections, 16,010 imports, 7,860 functions, 904 k opcodes where the server has 760 k, 2.34 M operands; a performance
+core of a loaded machine):
+238 M instructions and 72 M cycles a link, against 183 M instructions and 91 M cycles to read the 27.9 MB dense file. The
+first link in a process takes 58–88 ms of wall time and the first dense read 78–99 ms, both mostly page faults. The link
+replaces the read rather than adding to it. An AOT image is linked by the compiler (see 5), so it costs nothing at load. While
 loaded, the link state (the key tables, about 1–2 MB, an estimate) is kept only by modules that accept patches.
 
 **Failures.** Each is a load error that names the section (module), the key, and the other section involved where there
@@ -190,6 +246,7 @@ None of these can come from a correct compiler. The compiler-side linker (see 5)
 |---|---|
 | VM loader (`code.c`, `main.c`, `hlruntime.c`) | `hl_code_link` for HLB 9. The dense reader stays |
 | JIT, `module.c`, `debugger.c`, `prof.c`, hlprof, `jit_gdb.c` | None: they read the linked `hl_code`. Function names come from keys |
+| hashlink-debugger (`hld/Module.hx`) | Reads the `.hl` file itself (`format.hl.Reader`), and a runtime module's bytes through `debug_hlb`. It needs an HLB 9 reader that links as the loader does before plain builds write HLB 9 (slice 2) |
 | HLD3 protocol, DAP | Unchanged fields. The findex is the runtime's, and the stable id is minted by the loader |
 | Patch loader (`hlpatch.c`) | HLP 12 (see 4) |
 | AOT (`HlcImage`, `HlcModule`, `native/aot/hlc_main.c`) | Gets its indices from a compiler-side link (`HlStaticLink`: the loader's algorithm in Haxe, one pass in a cold build) and keeps writing a dense image |
@@ -241,7 +298,7 @@ and perf-guard, including startup.
 | # | Slice | Size (est.) | Extra checks | Depends on |
 |---|---|---|---|---|
 | A | Positions relative to their declaration (in progress elsewhere) | — | — | — |
-| 1 | Fork: `link.c` and the HLB 9 reader beside the dense one. C tests on hand-built two-section modules cover every failure mode, plus `hldump` | +700 C | fork tests; existing suites untouched (the compiler still writes HLB 8) | — |
+| 1 | Fork: `link.c` and the HLB 9 reader beside the dense one. C tests on hand-built two-section modules cover every failure mode, plus `hldump`. Landed: `tests/native/code_link.c` (the `code-link` suite) | +1,500 C (+1,400 C tests) | fork tests; existing suites untouched (the compiler still writes HLB 8) | — |
 | 2 | Compiler: home modules, `HlSectionWriter`, `HlStaticLink`. Plain builds write HLB 9; live builds stay on HLB 8. AOT, `hl-stat` and the binary-size report link statically | +1,100 / −150 | the self-compile takes its new base. New validation: the loader's linked-table digest (behind a flag) equals `HlStaticLink`'s. The ci debug-metadata suite | 1, A |
 | 3 | Plain warm builds without link and replay. One memo per module section, then folded into engine slice 7 | −1,000 / +150 | `--check-reuse` | 2 |
 | 4 | Live patching on sections: HLP 12, the patch linker, loader stable ids, slots and codecs removed, HXR | −2,100 / +500 compiler, −450 / +450 fork | the ci hot-reload suite, the patch mains, `NominalInterfacePatchMain`, an Android watch run | 3 |
