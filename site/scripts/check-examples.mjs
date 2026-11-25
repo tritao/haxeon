@@ -153,9 +153,7 @@ async function runUiCounter(block, source, directory) {
 
 /** Fails unless the example printed exactly the output its page shows. */
 function checkOutput(block, name, actual) {
-  const shown = block.find('.output-pane').clone();
-  shown.find('[data-prompt]').remove();
-  const expected = shown.text().trim();
+  const expected = block.find('.output-pane').text().trim();
   if (actual !== expected) throw new Error(`${name}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
   return 'output verified';
 }

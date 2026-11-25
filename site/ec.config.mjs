@@ -56,6 +56,31 @@ const commandStrip = {
   },
 };
 
+// A text fence titled "Output" is a program's output: drawn without the editor frame, under the same run strip as a
+// CodeCard's output (theme.css), instead of as a file tab.
+const outputBlocks = new WeakSet();
+const outputBlock = {
+  name: 'output block',
+  hooks: {
+    preprocessCode({ codeBlock }) {
+      if (codeBlock.language !== 'text' || codeBlock.props.title !== 'Output') return;
+      outputBlocks.add(codeBlock);
+      codeBlock.props.title = undefined;
+      codeBlock.props.frame = 'none';
+    },
+    postprocessRenderedBlockGroup({ renderedGroupContents, renderData }) {
+      if (renderedGroupContents.length !== 1 || !outputBlocks.has(renderedGroupContents[0].codeBlock)) return;
+      renderData.groupAst.properties.className.push('output-block');
+      renderData.groupAst.children.unshift({
+        type: 'element',
+        tagName: 'div',
+        properties: { className: ['run-bar'] },
+        children: [{ type: 'text', value: 'Output' }],
+      });
+    },
+  },
+};
+
 export default defineEcConfig({
   themes: ['dark', 'light'].map((name) => {
     const colors = tokens[name];
@@ -89,7 +114,7 @@ export default defineEcConfig({
       ],
     });
   }),
-  plugins: [commandStrip],
+  plugins: [commandStrip, outputBlock],
   shiki: { langs: [haxe, hxi, ...glsl, sokolShdc] },
   defaultProps: { wrap: true, preserveIndent: true, hangingIndent: 4 },
   styleOverrides: {

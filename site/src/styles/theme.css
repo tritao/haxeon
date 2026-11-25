@@ -49,6 +49,8 @@
   --hx-code-muted: token(dark.code-comment);
   --hx-code-line: token(dark.code-line);
   --hx-code-divider: token(dark.code-divider);
+  --hx-code-output-bg: token(dark.code-output-bg);
+  --hx-code-run: token(dark.code-run);
   --hx-grid: token(dark.grid);
 }
 
@@ -68,6 +70,8 @@
   --hx-code-muted: token(light.code-comment);
   --hx-code-line: token(light.code-line);
   --hx-code-divider: token(light.code-divider);
+  --hx-code-output-bg: token(light.code-output-bg);
+  --hx-code-run: token(light.code-run);
   --hx-grid: token(light.grid);
 }
 
@@ -212,6 +216,41 @@ pre.output-pane {
   color: var(--hx-code-fg);
   border: 0;
   font: var(--hx-output-size, var(--sl-text-code)) / 1.65 var(--sl-font-mono);
+}
+
+/*
+ * A program's output: a run strip naming what produced it (a ▶ and the command, or "Output"), then the output on a
+ * deeper surface, so code and its result read as cause and effect. CodeCard draws the strip, and in the docs the output
+ * block plugin (ec.config.mjs) does for a text fence titled "Output".
+ */
+.run-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--hx-space-2);
+  padding: var(--hx-space-2) var(--hx-space-5);
+  border: 0;
+  border-top: 1px solid var(--hx-code-divider);
+  background: var(--hx-code-line);
+  font: var(--sl-text-xs) var(--sl-font-mono);
+  /* The muted code colour, lifted to read at small size on the strip's lighter surface. */
+  color: color-mix(in srgb, var(--hx-code-muted) 70%, var(--hx-code-fg));
+}
+.run-bar::before {
+  content: '';
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  background: var(--hx-code-run);
+  clip-path: polygon(10% 0, 100% 50%, 10% 100%);
+}
+pre.output-pane,
+.expressive-code.output-block .frame > pre[data-language='text'] {
+  background: var(--hx-code-output-bg);
+}
+.expressive-code.output-block {
+  border-radius: var(--hx-radius-m);
+  overflow: hidden;
+  background: var(--sl-color-bg-inline-code);
 }
 
 .expressive-code:has(pre[data-language='text']) {

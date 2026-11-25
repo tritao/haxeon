@@ -10,19 +10,13 @@ interface Props {
   example?: string;
 }
 const { code, lang, title, output, command, example } = Astro.props;
-const prompt = command ? `$ ${command}\n` : undefined;
 ---
 
 <div class="code-card code-panel" data-example={example}>
   {title && <div class="bar">{title}</div>}
   <Code {code} {lang} frame="none" />
-  {
-    output !== undefined && (
-      <pre
-        class="output-pane"
-        aria-label="Program output">{prompt && <span class="p" data-prompt>{prompt}</span>}{output}</pre>
-    )
-  }
+  {output !== undefined && <div class="run-bar">{command ?? 'Output'}</div>}
+  {output !== undefined && <pre class="output-pane" aria-label="Program output">{output}</pre>}
 </div>
 
 <style>
@@ -36,9 +30,5 @@ const prompt = command ? `$ ${command}\n` : undefined;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     tab-size: 2;
-    border-top: 1px dashed var(--hx-code-divider);
-  }
-  .output-pane .p {
-    color: var(--hx-code-muted);
   }
 </style>
