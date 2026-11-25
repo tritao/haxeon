@@ -33,10 +33,9 @@ class HlcBackendSession implements BackendSession {
 		return new HlcBackendSession();
 
 	public function environmentKey(context:CompilationContext):String
-		return "hlc:" + context.options.key();
+		return "hlc:" + context.options.key() + ",sources:" + context.sourcesKey();
 
 	public function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>,
-			relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		var abi = RuntimeAbi.describe(ir), abiPlanningDoneAt = Sys.time() * 1000.0;
@@ -44,6 +43,7 @@ class HlcBackendSession implements BackendSession {
 		var plain = HlPlainBuild.reachable(ir, context.options.checkReuse).program,
 			assembler = HlPlainBuild.assembler(false);
 		assembler.keepsProgram = true;
+		assembler.sources = context.sourceAnchors();
 		var assembly = assembler.assemble(plain, [for (fn in plain.functions) fn.name], Patch);
 		var assembledAt = Sys.time() * 1000.0, allocationAfterAssembly = AllocationMeter.sample();
 		if (token != null)

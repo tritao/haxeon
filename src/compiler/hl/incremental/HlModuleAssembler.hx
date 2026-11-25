@@ -1,6 +1,7 @@
 package compiler.hl.incremental;
 
 import compiler.core.InternalError;
+import compiler.core.SourceAnchor.SourceAnchors;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.pipeline.IrProgramAssembler;
 import compiler.ir.model.IrFunction;
@@ -169,6 +170,9 @@ class HlModuleAssembler {
 
 	public var developmentMetadata:Bool = true;
 
+	/** The build's sources, which place the module's debug locations (`HlCode.sources`): none for a module made without them. */
+	public var sources = new SourceAnchors([]);
+
 	/** Lower what the lowering cache would reuse again and compare (`CompileOptions.checkReuse`). */
 	public var checkReuse:Bool = false;
 
@@ -226,6 +230,7 @@ class HlModuleAssembler {
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
 		result.developmentMetadata = developmentMetadata;
+		result.sources = sources;
 		result.loweredCache = loweredCache;
 		result.irVerified = irVerified;
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
@@ -480,17 +485,17 @@ class HlModuleAssembler {
 			// After a restore nothing says what the last program had, so every function no build has counts as dropped.
 			if (programNames != null && !programNames.exists(name))
 				continue;
-			guards.push({name: name, description: describeDropped(name, cache.functions.get(name))});
+			guards.push({name: name, description: describeDropped(name, cache.functions.get(name), sources)});
 		}
 		return guards;
 	}
 
-	static function describeDropped(name:String, fn:Null<IrFunction>):String {
+	static function describeDropped(name:String, fn:Null<IrFunction>, sources:SourceAnchors):String {
 		if (!LambdaName.is(name))
 			return '$name was deleted';
 		var location = fn == null ? null : firstLocation(fn);
-		if (location != null)
-			return 'a deleted lambda at ${location.path}:${location.line}';
+		if (location != null && sources.places(location.anchor))
+			return 'a deleted lambda at ${sources.path(location.anchor)}:${sources.line(location.anchor) + location.line}';
 		return 'a deleted lambda in ${LambdaName.outermost(name)}';
 	}
 
@@ -805,7 +810,6 @@ class HlModuleAssembler {
 	 * resumed form is not a change.
 	 */
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision,
-			?relocated:Array<String>,
 			?dispatched:Map<String, Bool>, ?resumed:Map<String, haxe.io.Bytes>):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		// Runtime calls the lowering writes a fast path for go through one helper each (`IrSharedRuntimeCalls`); a helper this module
@@ -970,12 +974,11 @@ class HlModuleAssembler {
 				published = new HlLoweredCache();
 			liveCache = published;
 		}
-		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds,
-			relocated == null ? regenerated : regenerated.concat(relocated),
+		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, regenerated,
 			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false,
 			livePatching || keepsLowered ? liveCache : null, irVerified,
 			livePatching,
-			name -> RetiredName.is(name) || !present.exists(name), checkReuse),
+			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;

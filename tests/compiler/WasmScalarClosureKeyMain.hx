@@ -34,7 +34,7 @@ class WasmScalarClosureKeyMain {
 								identity: binding.identity,
 								name: binding.name,
 								value: nullableArgument,
-								path: binding.path,
+								anchor: binding.anchor,
 								scopeStart: binding.scopeStart,
 								scopeEnd: binding.scopeEnd
 							} : binding

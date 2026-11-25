@@ -57,9 +57,6 @@ typedef FrontendResult = {
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
 
-	/** Functions whose code is unchanged but whose positions moved in their file: lowered again, not patched. */
-	final relocated:Array<String>;
-
 	final typerMetrics:TyperPhaseMetrics;
 	final frontendGraphDoneAt:Float;
 	final semanticAliasMs:Float;
@@ -183,7 +180,6 @@ private class FrontendBuild {
 
 	// The input of the IR pipeline.
 	public var cachedNames:Array<String>;
-	public var currentHashes:Map<String, Int>;
 	public var cached:Array<IrFunction>;
 	public var irNatives:Array<IrNative>;
 	public var irCNatives:Array<IrCNative>;
@@ -202,7 +198,6 @@ private class FrontendBuild {
 	public var reuseMiss:Null<String>;
 	public var matchesPrevious:Bool;
 	public var checkingReuse:Bool;
-	public var relocated:Array<String>;
 
 	public function new(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
 			rollbackModules:Map<String, ModuleState>, lowerToIr:Bool, indexSemantics:Bool) {
@@ -246,7 +241,7 @@ class FrontendCompilation {
 		var irAssemblyDoneAt = now();
 		build.allocationPhases.push(AllocationMeter.delta("ir-assembly", build.allocationAfterTyping,
 			AllocationMeter.sample()));
-		return result(build, build.ir, build.relocated, irAssemblyDoneAt, build.reusedPipeline, build.reuseMiss);
+		return result(build, build.ir, irAssemblyDoneAt, build.reusedPipeline, build.reuseMiss);
 	}
 
 	/**
@@ -282,7 +277,7 @@ class FrontendCompilation {
 		finishTyping(build);
 		if (!lowerToIr)
 			return {
-				result: result(build, null, [], build.typingLoweringDoneAt, null, null),
+				result: result(build, null, build.typingLoweringDoneAt, null, null),
 				build: null
 			};
 		collectCachedIr(build);
@@ -1395,9 +1390,7 @@ class FrontendCompilation {
 		build.allocationPhases = allocationPhases;
 	}
 
-	/**
-	 * The IR bodies the program is assembled from, one per cached function name, with the current file hashes in their locations.
-	 */
+	/** The IR bodies the program is assembled from, one per cached function name. */
 	static function collectCachedIr(build:FrontendBuild):Void {
 		var context = build.context,
 			modules = context.state.modules,
@@ -1414,49 +1407,6 @@ class FrontendCompilation {
 		cachedNames.sort(Reflect.compare);
 		cachedNames = uniqueSorted(cachedNames);
 		build.cachedNames = cachedNames;
-		// A function kept across an edit of its file names the file's old text in its locations; give it the current hashes (see IrSourceRehash).
-		var currentHashes:Map<String, Int> = [for (state in modules) state.source.path => state.source.contentHash()];
-		build.currentHashes = currentHashes;
-		var anyEdited = false;
-		for (moduleName in names) {
-			var edited = modules.get(moduleName);
-			if (edited != null && edited.editedSinceIrScan) {
-				anyEdited = true;
-				break;
-			}
-		}
-		if (anyEdited) {
-			// What each function names is kept while it is the same object, so an edit reads only the functions it made.
-			var sources = context.state.irSources;
-			for (moduleName in names) {
-				var state = modules.get(moduleName);
-				if (state == null)
-					continue;
-				var rehashed:Map<String, IrFunction> = [];
-				for (functionName => fn in state.irFunctions) {
-					var named = sources.get(fn);
-					if (named == null) {
-						named = compiler.ir.pipeline.IrSourceRehash.sourcesOf(fn);
-						sources.set(fn, named);
-					}
-					if (!compiler.ir.pipeline.IrSourceRehash.namesStale(named, currentHashes))
-						continue;
-					var replacement = compiler.ir.pipeline.IrSourceRehash.of(fn, currentHashes);
-					if (replacement != fn)
-						rehashed.set(functionName, replacement);
-				}
-				if (!rehashed.keys().hasNext() && !state.editedSinceIrScan)
-					continue;
-				var writable = context.state.writableState(moduleName, build.rollbackModules);
-				// A rehashed function is another IR (its locations name other hashes), so it takes a version of its own.
-				for (functionName => replacement in rehashed) {
-					writable.irFunctions.set(functionName, replacement);
-					writable.irVersions.set(functionName, context.state.irVersions.next());
-				}
-				writable.editedSinceIrScan = false;
-			}
-			sources.endBuild();
-		}
 		var cached:Array<IrFunction> = [];
 		for (functionName in cachedNames) {
 			if (!owners.exists(functionName))
@@ -1470,15 +1420,6 @@ class FrontendCompilation {
 			cached.push(functions.get(functionName));
 		}
 		build.cached = cached;
-		if (context.options.checkReuse)
-			for (functionName in cachedNames) {
-				var holder = modules.get(owners.get(functionName));
-				if (holder == null)
-					throw new InternalError('--check-reuse: cached function "$functionName" has no owning module');
-				var held = holder.irFunctions.get(functionName);
-				if (compiler.ir.pipeline.IrSourceRehash.of(held, currentHashes) != held)
-					throw new InternalError('--check-reuse: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one');
-			}
 		dropUnusedKeyPathFields(build.typed(), cached);
 	}
 
@@ -1527,18 +1468,15 @@ class FrontendCompilation {
 				&& published.isPublished() ? IrProgramAssembler.liveInitializersFrom(generator, typedNew,
 				name -> published.publishedObject(name),
 				(name, field) -> published.publishedField(name, field)) : [];
-		var currentHashes = build.currentHashes;
 		build.objects = [for (name in objectNames) resolvedObjects.get(name)];
 		build.interfaces = IrProgramAssembler.interfacesFrom(generator, typedNew);
 		build.enums = IrProgramAssembler.enumsFrom(generator, typedNew);
 		build.staticFields = IrProgramAssembler.staticFieldsFrom(generator, typedNew);
 		var generationWarnings:Array<compiler.core.Diagnostic> = [];
 		context.state.initializerFunctions.checks = context.options.checkReuse;
-		build.initializers = [
-			for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, build.initializationClasses,
-				build.cached, generationWarnings, context.state.staticReferences, context.state.initializerFunctions))
-				compiler.ir.pipeline.IrSourceRehash.of(fn, currentHashes)
-		].concat(liveInitializers);
+		build.initializers = IrProgramAssembler.staticInitializersFrom(generator, typedNew, build.initializationClasses,
+			build.cached, generationWarnings, context.state.staticReferences, context.state.initializerFunctions)
+			.concat(liveInitializers);
 		context.state.staticReferences.endBuild();
 		context.state.initializerFunctions.sweep();
 		TypingWarnings.publishGeneration(context, build.names, generationWarnings, build.rollbackModules);
@@ -1621,10 +1559,11 @@ class FrontendCompilation {
 			}
 			if (context.livePatching) {
 				var texts:Map<String, String> =
-					[for (state in context.state.modules) state.source.path => state.source.text];
+					[for (state in context.state.modules) state.source.path => state.source.text],
+					sources = context.sourceAnchors();
 				for (fn in cached)
 					if (PositionalName.is(fn.name)) {
-						var place = PositionalName.placeOf(fn),
+						var place = PositionalName.placeOf(fn, sources),
 							parsed = PositionalName.parsePlace(place);
 						if (place == null || parsed == null || !texts.exists(parsed.path))
 							continue;
@@ -1640,6 +1579,7 @@ class FrontendCompilation {
 				context.valueArrayTarget());
 			passes.livePatching = context.livePatching;
 			passes.developmentMetadata = context.developmentMetadata;
+			passes.sources = context.sourceAnchors();
 			passes.reflectable = build.reflectable;
 			passes.inlineCache = context.state.inlineCache;
 			passes.options = context.options;
@@ -1697,12 +1637,9 @@ class FrontendCompilation {
 			}
 		regenerated.sort(Reflect.compare);
 		build.regenerated = regenerated;
-		build.relocated = build.matchesPrevious
-			&& !build.checkingReuse
-			? [] : [for (name in build.context.state.inlineCache.relocated) if (!listed.exists(name)) name];
 	}
 
-	static function result(build:FrontendBuild, ir:Null<IrProgram>, relocated:Array<String>, irAssemblyDoneAt:Float,
+	static function result(build:FrontendBuild, ir:Null<IrProgram>, irAssemblyDoneAt:Float,
 			reused:Null<PipelineSnapshot>, reuseMiss:Null<String>):FrontendResult {
 		var context = build.context,
 			semanticAssembly = build.semanticAssembly;
@@ -1714,7 +1651,6 @@ class FrontendCompilation {
 			retyped: build.retyped,
 			invalidations: semanticAssembly.invalidations,
 			regenerated: build.regenerated,
-			relocated: relocated,
 			typerMetrics: build.typerMetrics,
 			frontendGraphDoneAt: build.frontendGraphDoneAt,
 			semanticAliasMs: semanticAssembly.aliasSetupMs,

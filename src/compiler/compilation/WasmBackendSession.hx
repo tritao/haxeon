@@ -72,7 +72,6 @@ class WasmBackendSession implements BackendSession {
 		return "wasm:" + Json.stringify(options(context));
 
 	public function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>,
-			relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		compiler.ir.analysis.IrReachability.IrReachabilityReport.report("final program", ir);

@@ -18,7 +18,7 @@ class DebugLineEncodingFixture {
 		var locations = [for (index in 0...operations.length) {
 			var file = index == 24 ? "second.hx" : "first.hx";
 			var line = index <= 20 ? 1 : index == 21 ? 32 : index == 22 ? 64 : index <= 24 ? 2 : 3;
-			new HlDebugLocation(file, line, 1, line, 1, 0, -1, -1, 0);
+			HlDebugLocation.inFile(file, line, 1, line, 1, -1, -1, 0);
 		}];
 		code.functions = [new HlFunction(1, 0, [0], operations, locations)];
 		HlWriter.reportSize(code);

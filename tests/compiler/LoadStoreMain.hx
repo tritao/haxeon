@@ -158,7 +158,7 @@ class LoadStoreMain {
 			identity: "n",
 			name: "n",
 			value: reload,
-			path: "test.hx",
+			anchor: compiler.core.SourceAnchor.file("test.hx"),
 			scopeStart: 0,
 			scopeEnd: 10
 		};

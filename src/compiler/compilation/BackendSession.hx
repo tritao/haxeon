@@ -82,7 +82,7 @@ interface BackendSession {
 	/** What assembly reads besides the IR: equal keys and an equal IR give the same artifact (see `PipelineSnapshot`). */
 	function environmentKey(context:CompilationContext):String;
 
-	function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, relocated:Array<String>,
+	function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult;
 
 	/** An earlier result for this build: the artifact and the state it left stay, the timings are this build's (none). */

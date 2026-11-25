@@ -151,8 +151,9 @@ whoever pushes, and a cost taken on purpose is written as `--raise=METRIC=REASON
 
 ## Smaller, related
 
-- **Positions relative to their declaration** (WARM_REBUILD_REUSE.md, open items): a comment at the top of a file
-  currently lowers every function after it again. This belongs with item 3, since both change what lowering keys on.
+- **Positions relative to their declaration (done):** IR and lowered locations count from the member declaration they lie
+  in, and the writer places them (WARM_REBUILD_REUSE.md, "Positions"), so a comment at the top of a file lowers nothing
+  again.
 - **Structures of another layout are copied on conversion from Dynamic, where Haxe aliases them through virtual views**
   (LANGUAGE_SUPPORT.md). Exact semantics there would need a view representation for structural subtyping. It is a
   language-representation question, not a reuse one; keep it separate.

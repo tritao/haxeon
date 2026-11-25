@@ -139,7 +139,7 @@ class ReceiverCheckElisionMain {
 			identity: "checked",
 			name: "checked",
 			value: checked,
-			path: "test.hx",
+			anchor: compiler.core.SourceAnchor.file("test.hx"),
 			scopeStart: 0,
 			scopeEnd: 1
 		};

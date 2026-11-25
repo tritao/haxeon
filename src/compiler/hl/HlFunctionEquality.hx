@@ -28,9 +28,9 @@ class HlFunctionEquality {
 		for (index in 0...a.debugLocations.length) {
 			var x = a.debugLocations[index], y = b.debugLocations[index];
 			if (x != y
-				&& (x.path != y.path || x.line != y.line || x.column != y.column || x.endLine != y.endLine
+				&& (x.anchor != y.anchor || x.line != y.line || x.column != y.column || x.endLine != y.endLine
 				|| x.endColumn != y.endColumn
-				|| x.sourceHash != y.sourceHash || x.start != y.start || x.end != y.end || x.flags != y.flags))
+				|| x.generatedText != y.generatedText || x.start != y.start || x.end != y.end || x.flags != y.flags))
 				return 'debug location $index differs';
 		}
 		if (a.debugAssignments.length != b.debugAssignments.length)

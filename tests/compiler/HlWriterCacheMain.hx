@@ -16,10 +16,11 @@ class HlWriterCacheMain {
 			expect(cache.isValidated(fn),
 				"a function validated by the first encode stays validated after the writer prepared the cache");
 		var function_ = code.functions[0];
-		expect(cache.get(function_) != null, "its encoding is cached");
+		expect(cache.get(function_, code.sources) != null, "its encoding is cached");
 		cache.prepare(["other.hx"]);
 		expect(cache.isValidated(function_), "a new debug file list keeps validation marks");
-		expect(cache.get(function_) == null, "a new debug file list drops the encodings, which name files by index");
+		expect(cache.get(function_, code.sources) == null,
+			"a new debug file list drops the encodings, which name files by index");
 		Sys.println("PASS: writer cache validation marks survive a new debug file list");
 
 		// The snapshot section is compared with its model only when the compile checks its reuse (both come from the same model otherwise).

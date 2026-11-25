@@ -137,7 +137,7 @@ class IrBodyMain {
 					identity: "local:a",
 					name: "a",
 					value: a,
-					path: "test.hx",
+					anchor: compiler.core.SourceAnchor.file("test.hx"),
 					scopeStart: 0,
 					scopeEnd: 5
 				},
@@ -145,7 +145,7 @@ class IrBodyMain {
 					identity: "local:phi",
 					name: "phi",
 					value: phi,
-					path: "test.hx",
+					anchor: compiler.core.SourceAnchor.file("test.hx"),
 					scopeStart: 6,
 					scopeEnd: 12
 				}

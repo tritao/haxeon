@@ -38,20 +38,22 @@ class PositionalName {
 	}
 
 	/**
-	 * Where `fn`'s code starts: the earliest source location among its instructions, in the file most of them come from (code
-	 * inlined from elsewhere aside); null when it has none.
+	 * Where `fn`'s code starts in `sources`: the earliest source location among its instructions, in the file most of them come
+	 * from (code inlined from elsewhere aside); null when it has none.
 	 */
-	public static function placeOf(fn:compiler.ir.model.IrFunction):Null<String> {
-		var counts:Map<String, Int> = [], earliest:Map<String, compiler.ir.model.SourceProvenance.SourceLocation> = [];
+	public static function placeOf(fn:compiler.ir.model.IrFunction,
+			sources:compiler.core.SourceAnchor.SourceAnchors):Null<String> {
+		var counts:Map<String, Int> = [], earliest:Map<String, {line:Int, start:Int}> = [];
 		for (block in fn.blocks)
 			for (instruction in block.instructions) {
 				var location = instruction.provenance.location;
 				if (location == null)
 					continue;
-				counts.set(location.path, (counts.exists(location.path) ? counts.get(location.path) : 0) + 1);
-				var known = earliest.get(location.path);
-				if (known == null || location.start < known.start)
-					earliest.set(location.path, location);
+				var path = sources.path(location.anchor), start = sources.offset(location.anchor) + location.start;
+				counts.set(path, (counts.exists(path) ? counts.get(path) : 0) + 1);
+				var known = earliest.get(path);
+				if (known == null || start < known.start)
+					earliest.set(path, {line: sources.line(location.anchor) + location.line, start: start});
 			}
 		var path:Null<String> = null, most = 0;
 		for (candidate => count in counts)

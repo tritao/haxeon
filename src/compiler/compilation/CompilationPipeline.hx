@@ -77,7 +77,7 @@ class CompilationPipeline {
 			context.state.releaseRetained();
 		}
 		var backend = backendReused ? session.reuse(previousBackend,
-			irAssemblyDoneAt) : session.assemble(context, ir, regenerated, frontend.relocated, token);
+			irAssemblyDoneAt) : session.assemble(context, ir, regenerated, token);
 		if (previousBackend != null && checkingReuse) {
 			var difference = session.difference(previousBackend, backend);
 			if (difference != null)
@@ -88,7 +88,8 @@ class CompilationPipeline {
 			// A new object: the one in the compiler is the last successful build's, and a build that fails must leave it as it is.
 			var next = new PipelineSnapshot(snapshot.inputs, snapshot.ir);
 			next.backend = backend;
-			next.backendEnvironment = backendKey;
+			// Read again: what the assembly read can depend on the module it made (the files it placed positions in).
+			next.backendEnvironment = session.environmentKey(context);
 			context.state.pipelineSnapshot = next;
 		}
 		var nextAbi = backend.abi,

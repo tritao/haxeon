@@ -29,7 +29,7 @@ class DeadPureValuesMain {
 			identity: "debug",
 			name: "debug",
 			value: debug,
-			path: "test.hx",
+			anchor: compiler.core.SourceAnchor.file("test.hx"),
 			scopeStart: 0,
 			scopeEnd: 1
 		};

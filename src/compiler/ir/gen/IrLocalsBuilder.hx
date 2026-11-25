@@ -49,7 +49,6 @@ class IrLocalsBuilder {
 
 
 	var activeTraps:Array<{id:Int, preserveExceptionStack:Bool}> = [];
-	var provenance:SourceProvenance = SourceProvenance.generated("cfg-builder");
 
 	var internalNames = 0;
 
@@ -59,6 +58,7 @@ class IrLocalsBuilder {
 	 */
 	public function internalName(kind:String):String
 		return '$' + kind + ':' + internalNames++;
+	var provenance:SourceProvenance = SourceProvenance.generated("cfg-builder");
 
 	public function new(scratch:IrSsaScratch, ?localTypes:Map<String, IrType>) {
 		this.scratch = scratch;
@@ -146,8 +146,7 @@ class IrLocalsBuilder {
 	/** `SourceProvenance.user(span)`, or the current provenance when it already names that place: nested syntax often shares a span. */
 	function userProvenance(span:SourceSpan):SourceProvenance {
 		var current = provenance, location = current.location;
-		if (location != null && span.generatedReason == null && location.start == span.start && location.end == span.end
-			&& location.path == span.file.path && location.sourceHash == span.file.contentHash())
+		if (location != null && span.generatedReason == null && location.isAt(span))
 			switch current.origin {
 				case UserSource:
 					return current;
@@ -367,15 +366,17 @@ class IrLocalsBuilder {
 
 	function bind(bindings:Array<IrDebugBinding>, variable:Int, value:IrValue):Void {
 		var local = debugLocals.get(variables.variableName(variable));
-		if (local != null && value.id >= 0)
+		if (local != null && value.id >= 0) {
+			var file = local.span.file, anchor = file.anchorAt(local.span.start), offset = file.anchorOffset(anchor);
 			bindings.push({
 				identity: local.identity,
 				name: local.name,
 				value: value,
-				path: local.span.file.path,
-				scopeStart: local.span.start,
-				scopeEnd: local.scopeEnd
+				anchor: file.anchorId(anchor),
+				scopeStart: local.span.start - offset,
+				scopeEnd: local.scopeEnd - offset
 			});
+		}
 	}
 
 	public function globalGet(name:String, type:IrType):IrValue {

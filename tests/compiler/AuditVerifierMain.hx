@@ -237,7 +237,7 @@ class AuditVerifierMain {
 				identity: "local:dropped",
 				name: "dropped",
 				value: value,
-				path: "test.hx",
+				anchor: compiler.core.SourceAnchor.file("test.hx"),
 				scopeStart: 0,
 				scopeEnd: 1
 			};

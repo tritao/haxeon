@@ -108,7 +108,7 @@ class HlPatchWriter {
 			functions.write(encoded);
 		}
 		var out = new BytesOutput();
-		var debug = encodeDebug(selected, stableIdsBySlot),
+		var debug = encodeDebug(selected, stableIdsBySlot, code.sources),
 			snapshots = encodeSourceSnapshots(code, selected),
 			added = addedFunctions == null
 				|| addedFunctions.length == 0 ? null : encodeAddedFunctions(selected, addedFunctions, stableIdsBySlot),
@@ -306,11 +306,13 @@ class HlPatchWriter {
 	}
 
 	static function encodeSourceSnapshots(code:HlCode, functions:Array<HlFunction>):Null<HaxeBytes> {
-		var referenced:Map<Int, Bool> = [];
+		var referenced:Map<Int, Bool> = [], sources = code.sources;
 		for (fn in functions)
-			for (location in fn.debugLocations)
-				if (location.sourceHash != 0)
-					referenced.set(location.sourceHash, true);
+			for (location in fn.debugLocations) {
+				var hash = location.generatedText ? 0 : sources.hash(location.anchor);
+				if (hash != 0)
+					referenced.set(hash, true);
+			}
 		var selected = [
 			for (snapshot in code.sourceSnapshots)
 				if (referenced.exists(snapshot.sourceHash)) snapshot
@@ -318,17 +320,20 @@ class HlPatchWriter {
 		return selected.length == 0 ? null : HlWriter.encodeSourceSnapshots(selected).flatten();
 	}
 
-	static function encodeDebug(functions:Array<HlFunction>, stableIdsBySlot:Map<Int, Int>):Null<HaxeBytes> {
+	static function encodeDebug(functions:Array<HlFunction>, stableIdsBySlot:Map<Int, Int>,
+			sources:compiler.core.SourceAnchor.SourceAnchors):Null<HaxeBytes> {
 		for (fn in functions)
 			if (fn.debugLocations.length == 0)
 				return null;
 		var files:Array<String> = [], fileIndices:Map<String, Int> = [];
 		for (fn in functions)
-			for (location in fn.debugLocations)
-				if (!fileIndices.exists(location.path)) {
-					fileIndices.set(location.path, files.length);
-					files.push(location.path);
+			for (location in fn.debugLocations) {
+				var path = sources.path(location.anchor);
+				if (!fileIndices.exists(path)) {
+					fileIndices.set(path, files.length);
+					files.push(path);
 				}
+			}
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		writeIndex(out, files.length);
@@ -349,17 +354,21 @@ class HlPatchWriter {
 			for (index in 0...fn.debugLocations.length) {
 				if (positions[index + 1] == positions[index])
 					continue;
-				var location = fn.debugLocations[index];
-				if (!fileIndices.exists(location.path))
-					throw new InternalError('Missing patch debug source index for "${location.path}"');
-				writeIndex(out, fileIndices.get(location.path));
-				writeIndex(out, location.line);
+				var location = fn.debugLocations[index],
+					anchor = location.anchor,
+					path = sources.path(anchor),
+					line = sources.line(anchor),
+					offset = sources.offset(anchor);
+				if (!fileIndices.exists(path))
+					throw new InternalError('Missing patch debug source index for "$path"');
+				writeIndex(out, fileIndices.get(path));
+				writeIndex(out, line + location.line);
 				writeIndex(out, location.column);
-				writeIndex(out, location.endLine);
+				writeIndex(out, line + location.endLine);
 				writeIndex(out, location.endColumn);
-				out.writeInt32(location.sourceHash);
-				writeIndex(out, location.start < 0 ? 0 : location.start + 1);
-				writeIndex(out, location.end < 0 ? 0 : location.end + 1);
+				out.writeInt32(location.generatedText ? 0 : sources.hash(anchor));
+				writeIndex(out, location.start < 0 ? 0 : offset + location.start + 1);
+				writeIndex(out, location.end < 0 ? 0 : offset + location.end + 1);
 				writeIndex(out, location.flags);
 			}
 		}

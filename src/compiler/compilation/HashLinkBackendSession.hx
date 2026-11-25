@@ -37,6 +37,14 @@ class HashLinkBackendSession implements BackendSession {
 	/** The lowered functions of the last plain build (see `HlLoweredCache`). */
 	public var loweredCache:HlLoweredCache;
 
+	/**
+	 * The files the last module's debug locations are placed in (`HlCode.sources`): the module stays right while their texts do.
+	 * Each function's, while it is the same object, in `placedBy`.
+	 */
+	var placedFiles:Map<String, Bool> = [];
+
+	var placedBy = new haxe.ds.ObjectMap<compiler.hl.HlFunction, Array<String>>();
+
 	public function new(assembler:HlModuleAssembler, ?loweredCache:HlLoweredCache) {
 		this.assembler = assembler;
 		this.loweredCache = loweredCache == null ? new HlLoweredCache() : loweredCache;
@@ -52,8 +60,12 @@ class HashLinkBackendSession implements BackendSession {
 		return null;
 
 	/** The same assembler, with a copy of the lowered cache the candidate build can fill. */
-	public function forCandidate():BackendSession
-		return new HashLinkBackendSession(assembler, loweredCache.copy());
+	public function forCandidate():BackendSession {
+		var candidate = new HashLinkBackendSession(assembler, loweredCache.copy());
+		candidate.placedFiles = placedFiles;
+		candidate.placedBy = placedBy;
+		return candidate;
+	}
 
 	/** A session that assembles a fresh layout with the same stable function ids (`Compiler.compact`). */
 	public function compacting():HashLinkBackendSession
@@ -65,7 +77,9 @@ class HashLinkBackendSession implements BackendSession {
 			"live:" + context.livePatching,
 			"development:" + context.developmentMetadata,
 			"options:" + context.options.key(),
-			"fieldReserve:" + context.liveFieldReserve
+			"fieldReserve:" + context.liveFieldReserve,
+			// The module places its debug locations in the sources (`HlCode.sources`), which the IR leaves out.
+			"sources:" + context.sourcesKey(placedFiles)
 		].join(",");
 
 	/** An earlier result for this build: the module and everything derived from it stay, the timings are this build's (none). */
@@ -164,7 +178,6 @@ class HashLinkBackendSession implements BackendSession {
 
 	/** Assembles `ir`; the session keeps the candidate assembler, which the compiler adopts with the candidate. */
 	public function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>,
-			relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		PeakProbe.mark("backend-start");
@@ -183,7 +196,6 @@ class HashLinkBackendSession implements BackendSession {
 				reachable = plain.reachable;
 			assemblyIr = plain.program;
 			regenerated = [for (name in regenerated) if (reachable.exists(name)) name];
-			relocated = [for (name in relocated) if (reachable.exists(name)) name];
 		}
 		// Lambdas are named by their position among their siblings. When an edit moved those names onto other functions, give
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
@@ -221,6 +233,7 @@ class HashLinkBackendSession implements BackendSession {
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching ? context.liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
+		candidateAssembler.sources = context.sourceAnchors();
 		candidateAssembler.checkReuse = context.options.checkReuse;
 		candidateAssembler.irVerified = !context.livePatching;
 		candidateAssembler.livePatching = context.livePatching;
@@ -232,7 +245,7 @@ class HashLinkBackendSession implements BackendSession {
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
 		// Only a live build keeps slots for the functions prototypes dispatch to; a plain one lays out a fresh module.
-		var assembly = candidateAssembler.assemble(assemblyIr, regenerated, decision, relocated,
+		var assembly = candidateAssembler.assemble(assemblyIr, regenerated, decision,
 			nextAbi == null || !context.livePatching ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi),
 			context.state.rehydrationBaseline);
 		summaries.endBuild();
@@ -246,14 +259,16 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAfterAssembly = AllocationMeter.sample();
 		if (candidateAssembler.developmentMetadata)
 			attachSourceSnapshots(context, assembly.module);
+		notePlacedFiles(assembly.module);
 		if (loweredCache != null && candidateAssembler.reusedFunctions > 0 && context.options.checkReuse) {
 			// The module with functions linked from the last build must be the module lowering every function gives.
 			var fresh = new HlModuleAssembler();
 			fresh.fieldReserve = candidateAssembler.fieldReserve;
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
+			fresh.sources = candidateAssembler.sources;
 			fresh.irVerified = candidateAssembler.irVerified;
 			fresh.loweredCache = new HlLoweredCache();
-			var freshAssembly = fresh.assemble(assemblyIr, regenerated, decision, relocated,
+			var freshAssembly = fresh.assemble(assemblyIr, regenerated, decision,
 				nextAbi == null ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi),
 				context.state.rehydrationBaseline);
 			if (fresh.developmentMetadata)
@@ -353,12 +368,44 @@ class HashLinkBackendSession implements BackendSession {
 		return result;
 	}
 
+	/** Records the files `code`'s debug locations are placed in (`placedFiles`). */
+	function notePlacedFiles(code:HlCode):Void {
+		var files:Map<String, Bool> = [],
+			memo = new haxe.ds.ObjectMap<compiler.hl.HlFunction, Array<String>>(),
+			sources = code.sources;
+		for (fn in code.functions) {
+			var paths = placedBy.get(fn);
+			if (paths == null) {
+				paths = [];
+				var previous = -1;
+				for (location in fn.debugLocations)
+					if (location.anchor != previous) {
+						previous = location.anchor;
+						var path = sources.path(previous);
+						if (paths.indexOf(path) < 0)
+							paths.push(path);
+					}
+			}
+			memo.set(fn, paths);
+			for (path in paths)
+				files.set(path, true);
+		}
+		placedFiles = files;
+		placedBy = memo;
+	}
+
 	static function attachSourceSnapshots(context:CompilationContext, code:HlCode):Void {
-		var referenced:Map<Int, Bool> = [];
-		for (fn in code.functions)
+		var referenced:Map<Int, Bool> = [], sources = code.sources;
+		for (fn in code.functions) {
+			var previous = -1;
 			for (location in fn.debugLocations)
-				if (location.sourceHash != 0)
-					referenced.set(location.sourceHash, true);
+				if (location.anchor != previous && !location.generatedText) {
+					previous = location.anchor;
+					var hash = sources.hash(previous);
+					if (hash != 0)
+						referenced.set(hash, true);
+				}
+		}
 		var byHash:Map<Int, Bytes> = [];
 		for (state in context.state.modules) {
 			var source = state.source, hash = source.contentHash();

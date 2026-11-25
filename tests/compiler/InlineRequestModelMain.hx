@@ -210,7 +210,7 @@ class InlineRequestModelMain {
 					identity: "input",
 					name: "value",
 					value: value,
-					path: "fixture.hx",
+					anchor: compiler.core.SourceAnchor.file("fixture.hx"),
 					scopeStart: 0,
 					scopeEnd: 1
 				}

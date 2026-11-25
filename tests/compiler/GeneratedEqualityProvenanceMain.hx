@@ -21,8 +21,8 @@ class GeneratedEqualityProvenanceMain {
 			0));
 		var generatedSpan = compiler.core.Source.SourceSpan.generated("test-helper");
 		var generated = compiler.ir.model.SourceProvenance.user(generatedSpan.merge(generatedSpan));
-		if (user.location.sourceHash == 0
-			|| generated.location.sourceHash != 0
+		if (user.location.generatedText
+			|| !generated.location.generatedText
 			|| !Type.enumEq(generated.origin,
 			compiler.ir.model.SourceProvenance.SourceOrigin.CompilerGenerated("test-helper")))
 			throw "Generated spans must have explicit provenance without pretending to name a user snapshot";
@@ -58,7 +58,7 @@ class GeneratedEqualityProvenanceMain {
 										case CompilerGenerated("value-equality"):
 											generatedOps++;
 											if (located.provenance.location == null
-												|| located.provenance.location.sourceHash != 0)
+												|| !located.provenance.location.generatedText)
 												throw "Built-in equality cannot borrow a caller snapshot";
 										default:
 									}

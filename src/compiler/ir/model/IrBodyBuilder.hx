@@ -56,7 +56,7 @@ class IrBodyBuilder {
 	final argumentIds:Array<Int> = [];
 	final bindingIdentities:Array<String> = [];
 	final bindingNames:Array<String> = [];
-	final bindingPaths:Array<String> = [];
+	final bindingAnchors:Array<Int> = [];
 	final bindingStarts:Array<Int> = [];
 	final bindingEnds:Array<Int> = [];
 	final bindingValues:Array<Int> = [];
@@ -91,7 +91,7 @@ class IrBodyBuilder {
 		argumentIds.resize(0);
 		bindingIdentities.resize(0);
 		bindingNames.resize(0);
-		bindingPaths.resize(0);
+		bindingAnchors.resize(0);
 		bindingStarts.resize(0);
 		bindingEnds.resize(0);
 		bindingValues.resize(0);
@@ -192,7 +192,7 @@ class IrBodyBuilder {
 	public function copyBinding(source:IrBody, index:Int, value:IrValueId):Void {
 		bindingIdentities.push(source.bindingIdentities[index]);
 		bindingNames.push(source.bindingNames[index]);
-		bindingPaths.push(source.bindingPaths[index]);
+		bindingAnchors.push(source.bindingAnchors[index]);
 		bindingStarts.push(source.bindingStarts[index]);
 		bindingEnds.push(source.bindingEnds[index]);
 		bindingValues.push(value);
@@ -339,7 +339,7 @@ class IrBodyBuilder {
 		for (index in 0...source.bindingIdentities.length) {
 			builder.bindingIdentities.push(source.bindingIdentities[index]);
 			builder.bindingNames.push(source.bindingNames[index]);
-			builder.bindingPaths.push(source.bindingPaths[index]);
+			builder.bindingAnchors.push(source.bindingAnchors[index]);
 		}
 		copyColumn(builder.bindingStarts, source.bindingStarts);
 		copyColumn(builder.bindingEnds, source.bindingEnds);
@@ -424,7 +424,7 @@ class IrBodyBuilder {
 	public function binding(binding:IrDebugBinding):Void {
 		bindingIdentities.push(binding.identity);
 		bindingNames.push(binding.name);
-		bindingPaths.push(binding.path);
+		bindingAnchors.push(binding.anchor);
 		bindingStarts.push(binding.scopeStart);
 		bindingEnds.push(binding.scopeEnd);
 		bindingValues.push(value(binding.value));

@@ -109,7 +109,7 @@ class HlValidator {
 			if (fn.debugLocations.length != 0 && fn.debugLocations.length != fn.opcodes.length)
 				throw new InternalError('Debug location count does not match opcodes in function ${fn.functionIndex}');
 			for (location in fn.debugLocations)
-				if (location.path == null || location.line < 1)
+				if (location.anchor < 0 || location.line < 0)
 					throw new InternalError('Invalid debug location in function ${fn.functionIndex}');
 			for (registerType in fn.registers)
 				requireType(code, registerType, 'register in function', fn.functionIndex);

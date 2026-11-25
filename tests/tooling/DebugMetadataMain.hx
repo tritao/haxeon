@@ -54,7 +54,7 @@ class DebugMetadataMain {
 			if (actual.identity != expected.identity
 				|| actual.name != expected.name
 				|| actual.value.id != expected.value.id
-				|| actual.path != expected.path
+				|| actual.anchor != expected.anchor
 				|| actual.scopeStart != expected.scopeStart
 				|| actual.scopeEnd != expected.scopeEnd)
 				throw "IR cache round trip changed a debug binding";
@@ -110,10 +110,11 @@ class DebugMetadataMain {
 		var originalLocations = fn.debugLocations.copy();
 		for (index in 0...3) {
 			var location = originalLocations[index];
-			fn.debugLocations[index] = new compiler.hl.HlFunction.HlDebugLocation(index == 1
-				? "second-source.hx" : "first-source.hx", location.line,
-				location.column, location.endLine, location.endColumn, location.sourceHash, location.start,
-				location.end, location.flags);
+			fn.debugLocations[index] =
+				new compiler.hl.HlFunction.HlDebugLocation(compiler.core.SourceAnchor.file(index == 1
+				? "second-source.hx" : "first-source.hx"), location.line,
+				location.column, location.endLine, location.endColumn, location.start, location.end, location.flags,
+				location.generatedText);
 		}
 		var mixedPaths = HlWriter.encode(code).flatten(),
 			mixedCache = new HlWriterCache();
@@ -148,17 +149,24 @@ class DebugMetadataMain {
 				];
 			if (actual.length != expected.length)
 				throw "HLP lost opcode source spans";
-			for (opcode in 0...actual.length)
-				if (patch.debugFiles[actual[opcode].file] != expected[opcode].path
-					|| actual[opcode].line != expected[opcode].line
-					|| actual[opcode].column != expected[opcode].column
-					|| actual[opcode].endLine != expected[opcode].endLine
-					|| actual[opcode].endColumn != expected[opcode].endColumn
-					|| actual[opcode].sourceHash != expected[opcode].sourceHash
-					|| actual[opcode].start != expected[opcode].start
-					|| actual[opcode].end != expected[opcode].end
-					|| actual[opcode].flags != expected[opcode].flags)
+			// The module's locations count from their anchors (`HlDebugLocation`); the patch has them placed in its sources.
+			var sources = code.sources;
+			for (opcode in 0...actual.length) {
+				var location = expected[opcode],
+					anchor = location.anchor,
+					line = sources.line(anchor),
+					offset = sources.offset(anchor);
+				if (patch.debugFiles[actual[opcode].file] != sources.path(anchor)
+					|| actual[opcode].line != line + location.line
+					|| actual[opcode].column != location.column
+					|| actual[opcode].endLine != line + location.endLine
+					|| actual[opcode].endColumn != location.endColumn
+					|| actual[opcode].sourceHash != (location.generatedText ? 0 : sources.hash(anchor))
+					|| actual[opcode].start != (location.start < 0 ? -1 : offset + location.start)
+					|| actual[opcode].end != (location.end < 0 ? -1 : offset + location.end)
+					|| actual[opcode].flags != location.flags)
 					throw "HLP changed an opcode source span";
+			}
 		}
 		Sys.println("PASS: HLP preserves precise opcode source spans");
 

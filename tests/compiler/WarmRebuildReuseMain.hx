@@ -211,6 +211,7 @@ class WarmRebuildReuseMain {
 		liveFieldInitializer(failures);
 		tryAfterEditAbove(failures);
 		afterValidation(failures);
+		linesInsertedAbove(failures);
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
@@ -312,7 +313,6 @@ class WarmRebuildReuseMain {
 	 * a plain build equals a fresh one.
 	 */
 	static function tryAfterEditAbove(failures:Array<String>):Void {
-		// Lines and columns are part of a function's IR, so the edit lengthens a line above without adding one.
 		var guardSource = "class Guard {\n\tpublic static function above(n:Int):Int return n + 1;\n"
 			+ "\tpublic static function parse(text:String):Int { var length = try text.length catch (error:Dynamic) -1; "
 			+ "var nested = () -> try length * 2 catch (error:Dynamic) 0; return length + nested(); }\n}";
@@ -384,6 +384,97 @@ class WarmRebuildReuseMain {
 		} catch (error:Dynamic) {
 			failures.push('after a validation of an unsaved edit: ${Std.string(error)}');
 		}
+	}
+
+	/**
+	 * Positions count from their declarations, so lines inserted above a function leave its IR as it was: it is not generated
+	 * again, a live build does not patch it, and a plain build equals a fresh one. Code the inliner copied from a callee counts
+	 * from the callee's declaration, so lines inserted above the callee change none of its callers. A function whose code holds its
+	 * line as a value, the `haxe.PosInfos` a trace passes, is generated again, as its code changed.
+	 */
+	static function linesInsertedAbove(failures:Array<String>):Void {
+		var movedSource = "class Moved {\n\tpublic static function above(n:Int):Int return n + 1;\n"
+			+ "\tpublic static function below(n:Int):Int { var total = 0; for (i in 0...n) total += i; "
+			+ "var add = (x:Int) -> x + total; return add(n) + new Callee(n).value; }\n"
+			+ "\tpublic static function traced(n:Int):Int { trace(\"traced\"); return n; }\n}";
+		var calleeSource =
+			"class Callee {\n\tpublic final value:Int;\n\tpublic function new(value:Int) this.value = value * 2;\n}";
+		var userSource = "class User { public static function use(n:Int):Int return new Callee(n).value + 1; }";
+		var mainSource =
+			"class Main { static function main():Int return Moved.above(1) + Moved.below(3) + Moved.traced(2) + User.use(4); }";
+		function calls(result:CompileResult, caller:String, callee:String):Bool {
+			for (fn in result.ir.functions)
+				if (fn.name == caller)
+					for (block in fn.blocks)
+						for (located in block.instructions)
+							switch located.value {
+								case Call(_, target, _) if (target.name == callee):
+									return true;
+								default:
+							}
+			return false;
+		}
+		var edits = [
+			{
+				label: "lines inserted above a function",
+				path: "Moved.hx",
+				text: StringTools.replace(movedSource, "\tpublic static function below",
+					"\t// a comment\n\n\tpublic static function below"),
+				kept: ["Moved.below", "User.use", "Callee.new"],
+				changed: ["Moved.traced"]
+			},
+			{
+				label: "lines inserted above an inlined callee",
+				path: "Callee.hx",
+				text: "// a comment\n\n" + calleeSource,
+				kept: ["Callee.new", "User.use", "Moved.below"],
+				changed: []
+			}
+		];
+		for (edit in edits)
+			for (live in [false, true])
+				try {
+					var files = [
+						"Moved.hx" => movedSource,
+						"Callee.hx" => calleeSource,
+						"User.hx" => userSource,
+						"Main.hx" => mainSource
+					];
+					var compiler = newCompiler(files);
+					compiler.livePatching = live;
+					var first = compiler.compile("Main");
+					if (!live && calls(first, "User.use", "Callee.new"))
+						throw "the fixture's constructor is not inlined into its caller";
+					var warm = rebuild(compiler, files, files -> files.set(edit.path, edit.text));
+					for (name in warm.regenerated)
+						for (kept in edit.kept)
+							if (name == kept || StringTools.contains(name, kept + ":"))
+								throw 'lines inserted above generated $name again: ${warm.regenerated}';
+					for (name in edit.changed)
+						if (warm.regenerated.indexOf(name) < 0)
+							throw '$name holds its line as a value but was not generated again: ${warm.regenerated}';
+					if (live) {
+						var ids = warm.artifact.hashLink().functionIds;
+						for (name in ids.keys())
+							for (kept in edit.kept)
+								if ((name == kept || StringTools.contains(name, kept + ":"))
+									&& warm.changedFunctions.indexOf(ids.get(name)) >= 0)
+									throw 'the patch carries $name';
+						for (name in edit.changed)
+							if (warm.changedFunctions.indexOf(ids.get(name)) < 0)
+								throw 'the patch does not carry $name, whose line changed';
+					}
+					if (!live) {
+						var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
+							freshBytes =
+								HlWriter.encode(newCompiler(files).compile("Main").artifact.hashLink().module)
+								.flatten();
+						if (warmBytes.compare(freshBytes) != 0)
+							throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
+					}
+				} catch (error:Dynamic) {
+					failures.push('${edit.label}${live ? ", live" : ""}: ${Std.string(error)}');
+				}
 	}
 
 	/** The names of the anonymous types of the last typed program, sorted: a warm program lists what a fresh one does. */

@@ -24,6 +24,9 @@ class HlCode {
 	public var sourceSnapshots:Array<HlSourceSnapshot> = [];
 	public var entryPoint:Int = 0;
 
+	/** The sources the functions' debug locations count from (`HlDebugLocation`): the build's, or none for a module made without. */
+	public var sources:compiler.core.SourceAnchor.SourceAnchors = new compiler.core.SourceAnchor.SourceAnchors([]);
+
 	public function new() {}
 }
 

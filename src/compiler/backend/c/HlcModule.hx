@@ -476,7 +476,7 @@ class HlcModule {
 
 	/** Each function's file: the Haxe source most of its rows come from, so functions group by module. */
 	function sourceFiles(bodies:Array<compiler.ir.model.IrBody>):Array<String> {
-		var paths:Array<String> = [];
+		var paths:Array<String> = [], sources = code.sources;
 		for (body in bodies) {
 			var counts:Map<String, Int> = [], best = "", bestCount = 0;
 			for (block in 0...body.blockCount()) {
@@ -484,10 +484,11 @@ class HlcModule {
 				while (row >= 0) {
 					var location = body.provenance(row).location;
 					if (location != null) {
-						var count = (counts.exists(location.path) ? counts.get(location.path) : 0) + 1;
-						counts.set(location.path, count);
-						if (count > bestCount || count == bestCount && location.path < best) {
-							best = location.path;
+						var path = sources.path(location.anchor),
+							count = (counts.exists(path) ? counts.get(path) : 0) + 1;
+						counts.set(path, count);
+						if (count > bestCount || count == bestCount && path < best) {
+							best = path;
 							bestCount = count;
 						}
 					}

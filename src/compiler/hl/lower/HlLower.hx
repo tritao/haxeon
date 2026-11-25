@@ -16,6 +16,7 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
+import compiler.hl.lower.HlDebugMetadataCache.HlFunctionPlace;
 import compiler.hl.HlCode.HlDebugSection;
 import compiler.hl.HlFunction.HlDebugAssignment;
 import compiler.hl.HlLz4;
@@ -157,7 +158,8 @@ class HlLower {
 			fieldReserve:Int = 0,
 			developmentMetadata:Bool = true, recordLowering:Bool = false,
 			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
-			trustCache:Bool = false, ?frozen:String->Bool, checkReuse:Bool = false):MeasuredHlCode {
+			trustCache:Bool = false, ?frozen:String->Bool, checkReuse:Bool = false,
+			?sources:compiler.core.SourceAnchor.SourceAnchors):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -176,9 +178,8 @@ class HlLower {
 			} else if (!irVerified)
 				IrVerifier.verify(program);
 		} else {
-			// Only regenerated functions are lowered again. Every other function's IR compared equal, provenance and file
-			// hash included, so its cached lowering is still exact; re-lowering every function that touched a changed file
-			// redid most of the program on each edit and produced the same bytes.
+			// Only regenerated functions are lowered again. Every other function's IR compared equal, provenance included, so its
+			// cached lowering is still exact: its locations count from their declarations, which the writer places.
 			var selected:Map<String, Bool> = [];
 			for (name in regenerated)
 				selected.set(name, true);
@@ -189,14 +190,14 @@ class HlLower {
 			lowerer = new HlLower(program, symbols, indices, stableIds, affected, runtimeNatives, debugCache,
 				fieldReserve,
 				developmentMetadata, recordLowering,
-				loweredCache, trustCache, frozen, checkReuse),
+				loweredCache, trustCache, frozen, checkReuse, true, sources),
 			kept = lowerer.lowerProgram(program);
 		var code:HlCode = if (kept != null) kept else {
 			// The last build's tables did not fit what this one asks: lower with fresh ones.
 			symbols.clear();
 			lowerer = new HlLower(program, symbols, indices, stableIds, affected, runtimeNatives, debugCache,
 				fieldReserve,
-				developmentMetadata, recordLowering, loweredCache, trustCache, frozen, checkReuse, false);
+				developmentMetadata, recordLowering, loweredCache, trustCache, frozen, checkReuse, false, sources);
 			lowerer.lowerProgram(program) ?? throw new InternalError("HashLink lowering: fresh tables did not fit");
 		}
 		return {
@@ -248,7 +249,8 @@ class HlLower {
 			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
 			developmentMetadata:Bool = true,
 			recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, trustCache:Bool = false,
-			?frozen:String->Bool, checkReuse:Bool = false, keepTables:Bool = true) {
+			?frozen:String->Bool, checkReuse:Bool = false, keepTables:Bool = true,
+			?sources:compiler.core.SourceAnchor.SourceAnchors) {
 		this.frozen = frozen;
 		this.keepTables = keepTables;
 		this.symbols = symbols;
@@ -269,6 +271,8 @@ class HlLower {
 			for (name in regenerated)
 				this.regenerated.set(name, true);
 		code = new HlCode();
+		if (sources != null)
+			code.sources = sources;
 		code.ints = symbols.ints;
 		code.floats = symbols.floats;
 		code.strings = symbols.strings;
@@ -768,7 +772,7 @@ class HlLower {
 			allocationAfterSpanGroups = AllocationMeter.sample();
 			// The groups only point at the functions' locations; the section is encoded when the module is written.
 			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0,
-				cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, cache), HlLz4.FAST));
+				cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, code.sources, cache), HlLz4.FAST));
 		}
 		if (debugCache != null)
 			debugCache.endGeneration();
@@ -917,59 +921,18 @@ class HlLower {
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
-		// A function keeps its identity while its index and stable id hold; a fresh layout can move either without the other.
-		var cached = debugCache == null ? null : debugCache.identity(fn), functionIndex = requireFunction(fn.name);
-		if (cached != null && cached.functionIndex == functionIndex
-			&& cached.stableId == stableIdOf(fn.name, functionIndex))
-			return cached;
-		var identity = functionIdentity(fn);
-		if (debugCache != null)
-			debugCache.rememberIdentity(fn, identity);
-		return identity;
+		// A function keeps its identity while its index, stable id and place hold; a fresh layout can move either id without the other.
+		var functionIndex = requireFunction(fn.name),
+			stableId = stableIdOf(fn.name, functionIndex),
+			body = fn.encodedBody(scratch.bodyBuilder);
+		return debugCache == null ? HlFunctionPlace.of(body).identity(fn.name, functionIndex, stableId,
+			code.sources) : debugCache.identity(fn, body, functionIndex, stableId, code.sources);
 	}
 
 	/** The stable id function `name` is known by: its session's, else its index. */
 	function stableIdOf(name:String, functionIndex:Int):Int {
 		var ids = stableIds, id = ids == null ? null : ids.get(name);
 		return id == null ? functionIndex : id;
-	}
-
-	function functionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
-		var functionIndex = requireFunction(fn.name),
-			sourcePath = "",
-			start = -1,
-			end = -1,
-			line = 0,
-			body = fn.encodedBody(scratch.bodyBuilder);
-		for (block in 0...body.blockCount()) {
-			var row = body.firstRow(block), terminator = body.terminatorRow(block);
-			while (row >= 0 && row != terminator) {
-				var location = body.provenance(row).location;
-				row = body.nextRow(row);
-				if (location == null)
-					continue;
-				if (sourcePath == "")
-					sourcePath = location.path;
-				if (start < 0 || location.start < start)
-					start = location.start;
-				if (end < location.end)
-					end = location.end;
-				if (line == 0 || location.line < line)
-					line = location.line;
-			}
-		}
-		var parts = fn.name.split(".");
-		return {
-			stableId: stableIdOf(fn.name, functionIndex),
-			functionIndex: functionIndex,
-			qualifiedName: fn.name,
-			displayName: parts[parts.length - 1],
-			sourcePath: sourcePath,
-			start: start,
-			end: end,
-			line: line,
-			flags: StringTools.startsWith(fn.name, "__") ? 1 : 0
-		};
 	}
 
 	function objectTypeReady(type:IrType):Bool
@@ -2214,7 +2177,7 @@ class HlLower {
 		for (_ in 0...count)
 			output.push(debugLocation(provenance));
 
-	static final generatedDebugLocation:HlDebugLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
+	static final generatedDebugLocation:HlDebugLocation = HlDebugLocation.inFile("<generated>", 1, 1, 1, 1, -1, -1, 1);
 
 	// The last location made, and what it was made from: consecutive instructions mostly share their source.
 	var lastProvenance:Null<SourceProvenance> = null;
@@ -2239,8 +2202,8 @@ class HlLower {
 			lastProvenance = provenance;
 			return last;
 		}
-		var result = new HlDebugLocation(location.path, location.line, location.column, location.endLine,
-			location.endColumn, location.sourceHash, location.start, location.end, flags);
+		var result = new HlDebugLocation(location.anchor, location.line, location.column, location.endLine,
+			location.endColumn, location.start, location.end, flags, location.generatedText);
 		lastProvenance = provenance;
 		lastSource = location;
 		lastFlags = flags;
@@ -2261,13 +2224,15 @@ class HlLower {
 		var lastInScope = lastByScope[binding];
 		if (lastInScope == -2) {
 			lastInScope = -1;
+			// Offsets of one anchor compare as the file's do; a location of another declaration is outside a binding of this one.
 			var start = body.bindingScopeStart(binding),
 				end = body.bindingScopeEnd(binding),
-				path = body.bindingPath(binding),
+				anchor = body.bindingAnchor(binding),
 				index = locations.length - 1;
 			while (index >= 0) {
 				var location = locations[index];
-				if (location.start >= 0 && location.start >= start && location.start < end && location.path == path) {
+				if (location.start >= 0 && location.anchor == anchor && location.start >= start
+					&& location.start < end) {
 					lastInScope = index;
 					break;
 				}

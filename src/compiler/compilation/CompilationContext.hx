@@ -113,6 +113,38 @@ class CompilationContext {
 	public function isWasmTarget():Bool
 		return owner.isWasmTarget();
 
+	/** The build's sources, which place the anchors IR locations count from (`SourceAnchors`). */
+	public function sourceAnchors():compiler.core.SourceAnchor.SourceAnchors
+		return new compiler.core.SourceAnchor
+			.SourceAnchors([for (module in state.modules) module.source.path => module.source]);
+
+	/**
+	 * What `sourceAnchors` places anchors from, as a short text: the same for the same texts at the same paths, of every module or of
+	 * those at `paths`. Two independent 32-bit sums, so the modules' order does not matter and nothing is sorted or allocated per
+	 * module.
+	 */
+	public function sourcesKey(?paths:Map<String, Bool>):String {
+		var first = 0, second = 0, count = 0;
+		for (module in state.modules) {
+			var source = module.source, path = source.path, pathHash:Int = cast 0x811C9DC5;
+			if (paths != null && !paths.exists(path))
+				continue;
+			for (index in 0...path.length)
+				pathHash = (pathHash ^ StringTools.fastCodeAt(path, index)) * 16777619;
+			first += mix(pathHash ^ source.contentHash());
+			second += mix(pathHash + source.secondContentHash() * 31);
+			count++;
+		}
+		return count + ":" + StringTools.hex(first, 8) + StringTools.hex(second, 8);
+	}
+
+	/** Spreads every bit of `value` over the result (a 32-bit finalizer), so sums of mixed values rarely collide. */
+	static function mix(value:Int):Int {
+		value = (value ^ (value >>> 16)) * 0x7FEB352D;
+		value = (value ^ (value >>> 15)) * (cast 0x846CA68B:Int);
+		return value ^ (value >>> 16);
+	}
+
 	/**
 	 * Whether the build describes its runtime ABI (`RuntimeAbi`): a live build plans against it, a kept session plans its next build
 	 * with it, and a Wasm build records it in its state. A plain HashLink build that keeps no session has no reader for it.

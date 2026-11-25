@@ -3,41 +3,58 @@ package compiler.ir.model;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 
-/** Stable source coordinates retained independently of a compiler source snapshot. */
+/**
+ * Where an operation's source is, counted from its anchor (`SourceAnchor`): the member declaration the position lies in, or the
+ * whole file. Offsets and lines are distances from the anchor's start and the line it starts on; columns are the file's. So a
+ * location says nothing about where its declaration sits in the file, and text moved above the declaration changes no function;
+ * whatever writes positions out finds the anchor in its build's sources (`SourceAnchors`).
+ */
 @:nullSafety(Strict)
 class SourceLocation {
-	public final path:String;
+	public final anchor:Int;
 	public final start:Int;
 	public final end:Int;
 	public final line:Int;
 	public final column:Int;
 	public final endLine:Int;
 	public final endColumn:Int;
-	public final sourceHash:Int;
 
-	public function new(path:String, start:Int, end:Int, line:Int, column:Int = 1, ?endLine:Int, ?endColumn:Int,
-			sourceHash:Int = 0) {
-		this.endLine = endLine == null ? line : endLine;
-		this.endColumn = endColumn == null ? column : endColumn;
-		if (path == null || start < 0 || end < start || line < 1 || column < 1 || this.endLine < line
-			|| this.endColumn < 1 || this.endLine == line
-			&& this.endColumn < column)
+	/** Whether the span is text the compiler wrote, which no snapshot of the file holds. */
+	public final generatedText:Bool;
+
+	public function new(anchor:Int, start:Int, end:Int, line:Int, column:Int, endLine:Int, endColumn:Int,
+			generatedText:Bool) {
+		if (anchor < 0 || start < 0 || end < start || line < 0 || column < 1 || endLine < line || endColumn < 1
+			|| endLine == line && endColumn < column)
 			throw new InternalError("Invalid source location");
-		this.path = path;
+		this.anchor = anchor;
 		this.start = start;
 		this.end = end;
 		this.line = line;
 		this.column = column;
-		this.sourceHash = sourceHash;
+		this.endLine = endLine;
+		this.endColumn = endColumn;
+		this.generatedText = generatedText;
 	}
 
 	public static function fromSpan(span:SourceSpan):SourceLocation {
 		var file = span.file,
+			index = file.anchorAt(span.start),
+			offset = file.anchorOffset(index),
+			line = file.anchorLine(index),
 			startLine = file.lineAt(span.start),
 			endLine = file.lineAt(span.end);
-		return new SourceLocation(file.path, span.start, span.end, startLine, file.columnOnLine(span.start, startLine),
-			endLine,
-			file.columnOnLine(span.end, endLine), span.generatedReason == null ? file.contentHash() : 0);
+		return new SourceLocation(file.anchorId(index), span.start - offset, span.end - offset, startLine - line,
+			file.columnOnLine(span.start, startLine), endLine - line, file.columnOnLine(span.end, endLine),
+			span.generatedReason != null);
+	}
+
+	/** Whether this is where `span` is. */
+	public function isAt(span:SourceSpan):Bool {
+		if (end - start != span.end - span.start || generatedText != (span.generatedReason != null))
+			return false;
+		var file = span.file, index = file.anchorAt(span.start), offset = file.anchorOffset(index);
+		return anchor == file.anchorId(index) && start == span.start - offset;
 	}
 }
 

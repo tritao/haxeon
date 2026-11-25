@@ -309,7 +309,9 @@ class HlcFunctionLower {
 			return;
 		var location = body.provenance(row).location;
 		// Rows of no source are where `HlLower` puts them: line 1 of `<generated>`.
-		var line = location == null ? 1 : location.line, path = location == null ? "<generated>" : location.path;
+		var sources = module.code.sources,
+			line = location == null ? 1 : sources.line(location.anchor) + location.line,
+			path = location == null ? "<generated>" : sources.path(location.anchor);
 		if (line <= 0 || line == lastLine && path == lastPath)
 			return;
 		lastLine = line;

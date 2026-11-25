@@ -12,7 +12,10 @@ typedef IrDebugBinding = {
 	final identity:String;
 	final name:String;
 	final value:IrValue;
-	final path:String;
+
+	/** The anchor (`SourceAnchor`) the scope's offsets count from, as `SourceLocation`'s do. */
+	final anchor:Int;
+
 	final scopeStart:Int;
 	final scopeEnd:Int;
 }

@@ -108,10 +108,6 @@ class SessionState {
 	/** The functions each IR function of the modules calls (`FrontendCompilation.callsOf`), while it is the same object. */
 	public var irCalls(default, null) = new compiler.ir.reuse.IrFunctionMemo<Array<String>>();
 
-	/** The files each IR function's locations name, with the hashes they name them by (`IrSourceRehash.sourcesOf`). */
-	public var irSources(default,
-		null) = new compiler.ir.reuse.IrFunctionMemo<Array<compiler.ir.pipeline.IrSourceRehash.NamedSource>>();
-
 	/** What each IR function references for the static initialization order (`IrStaticReferences`), while it is the same object. */
 	public var staticReferences(default, null) =
 		new compiler.ir.reuse.IrFunctionMemo<compiler.ir.pipeline.StaticInitializationOrder.IrStaticReferences>();
@@ -172,7 +168,6 @@ class SessionState {
 			state.irFunctions = [];
 		irTypeMentions.clear();
 		irCalls.clear();
-		irSources.clear();
 		staticReferences.clear();
 		structurePrinters.clear();
 		initializerFunctions.clear();
@@ -278,7 +273,6 @@ class SessionState {
 		result.stageMemos = stageMemos;
 		result.irTypeMentions = irTypeMentions;
 		result.irCalls = irCalls;
-		result.irSources = irSources;
 		result.staticReferences = staticReferences;
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.verifyMemo = verifyMemo;

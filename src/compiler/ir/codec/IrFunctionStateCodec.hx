@@ -23,7 +23,7 @@ import compiler.ir.model.SourceProvenance.SourceOrigin;
 /** Deterministic framing for a complete SSA IR function. */
 @:nullSafety(Strict)
 class IrFunctionStateCodec {
-	static inline final VERSION = 20;
+	static inline final VERSION = 21;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -126,7 +126,7 @@ class IrFunctionStateCodec {
 			IrTypeCodec.writeString(output, binding.identity);
 			IrTypeCodec.writeString(output, binding.name);
 			IrValueTableCodec.writeReference(output, binding.value);
-			IrTypeCodec.writeString(output, binding.path);
+			writeAnchor(output, binding.anchor);
 			output.writeInt32(binding.scopeStart);
 			output.writeInt32(binding.scopeEnd);
 		}
@@ -187,8 +187,8 @@ class IrFunctionStateCodec {
 			var arguments = [for (_ in 0...argumentCount) IrValueTableCodec.readReference(input, values)],
 				result = IrTypeCodec.readType(input, bytes.length, 0),
 				debugBindings:Array<compiler.ir.model.IrFunction.IrDebugBinding> = [];
-			var inlineHint = version >= 9 && input.readByte() != 0,
-				retention:compiler.ir.model.IrFunction.IrRetention = version >= 10 ? input.readByte() : Reachable;
+			var inlineHint = input.readByte() != 0,
+				retention:compiler.ir.model.IrFunction.IrRetention = input.readByte();
 			var kind:compiler.ir.model.IrFunction.IrFunctionKind = switch input.readByte() {
 				case 0: Ordinary;
 				case 1: ClosureAdapter(IrTypeCodec.readType(input, bytes.length, 0),
@@ -229,30 +229,21 @@ class IrFunctionStateCodec {
 					Provider(subject, cast IrTypeCodec.readString(input, bytes.length));
 				default: throw new InternalError("Invalid IR function kind");
 			};
-			if (version >= 3) {
-				var bindingCount = input.readInt32();
-				if (bindingCount < 0 || bindingCount > IrValueTableCodec.MAX_VALUES)
-					throw new InternalError("Invalid IR debug binding count");
-				for (_ in 0...bindingCount) {
-					var identity = version >= 4 ? IrTypeCodec.readString(input, bytes.length) : "",
-						name = IrTypeCodec.readString(input, bytes.length),
-						value = IrValueTableCodec.readReference(input, values);
-					debugBindings.push(version >= 4 ? {
-						identity: identity,
-						name: name,
-						value: value,
-						path: IrTypeCodec.readString(input, bytes.length),
-						scopeStart: input.readInt32(),
-						scopeEnd: input.readInt32()
-					} : {
-						identity: name,
-						name: name,
-						value: value,
-						path: "",
-						scopeStart: -1,
-						scopeEnd: -1
-					});
-				}
+			var bindingCount = input.readInt32();
+			if (bindingCount < 0 || bindingCount > IrValueTableCodec.MAX_VALUES)
+				throw new InternalError("Invalid IR debug binding count");
+			for (_ in 0...bindingCount) {
+				var identity = IrTypeCodec.readString(input, bytes.length),
+					name = IrTypeCodec.readString(input, bytes.length),
+					value = IrValueTableCodec.readReference(input, values);
+				debugBindings.push({
+					identity: identity,
+					name: name,
+					value: value,
+					anchor: readAnchor(input, bytes.length),
+					scopeStart: input.readInt32(),
+					scopeEnd: input.readInt32()
+				});
 			}
 			var blockCount = input.readInt32();
 			if (blockCount <= 0 || blockCount > MAX_BLOCKS)
@@ -271,20 +262,17 @@ class IrFunctionStateCodec {
 					throw new InternalError("Invalid IR instruction count");
 				for (_ in 0...instructionCount) {
 					var instruction = IrInstructionCodec.decode(readBytes(input, bytes.length), values),
-						provenance = version >= 2 ? readProvenance(input, bytes.length,
-							version) : SourceProvenance.generated("legacy-ir-cache");
+						provenance = readProvenance(input, bytes.length);
 					block.instructions.push(new Located(instruction, provenance));
 				}
 				var terminatorLength = input.readInt32();
-				if (terminatorLength == -1 && version >= 12)
+				if (terminatorLength == -1)
 					continue;
 				var terminatorBytes = readSized(input, bytes.length, terminatorLength),
 					terminatorInput = new BytesInput(terminatorBytes);
 				terminatorInput.bigEndian = false;
 				var decodedTerminator = IrTerminatorCodec.read(terminatorInput, values, blockIds);
-				block.terminator = new Located(decodedTerminator,
-					version >= 2 ? readProvenance(input, bytes.length,
-					version) : SourceProvenance.generated("legacy-ir-cache"));
+				block.terminator = new Located(decodedTerminator, readProvenance(input, bytes.length));
 				if (terminatorInput.position != terminatorBytes.length)
 					throw new InternalError("Trailing IR terminator data");
 			}
@@ -300,14 +288,14 @@ class IrFunctionStateCodec {
 		var location = provenance.location;
 		output.writeByte(location == null ? 0 : 1);
 		if (location != null) {
-			IrTypeCodec.writeString(output, location.path);
+			writeAnchor(output, location.anchor);
 			output.writeInt32(location.start);
 			output.writeInt32(location.end);
 			output.writeInt32(location.line);
 			output.writeInt32(location.column);
 			output.writeInt32(location.endLine);
 			output.writeInt32(location.endColumn);
-			output.writeInt32(location.sourceHash);
+			output.writeByte(location.generatedText ? 1 : 0);
 		}
 		switch provenance.origin {
 			case UserSource:
@@ -318,13 +306,15 @@ class IrFunctionStateCodec {
 		}
 	}
 
-	static function readProvenance(input:BytesInput, limit:Int, version:Int):SourceProvenance {
+	static function readProvenance(input:BytesInput, limit:Int):SourceProvenance {
 		var hasLocation = input.readByte();
 		if (hasLocation != 0 && hasLocation != 1)
 			throw new InternalError("Invalid IR provenance location flag");
 		var location:Null<SourceLocation> = null;
 		if (hasLocation == 1)
-			location = versionedLocation(input, limit, version);
+			location = new SourceLocation(readAnchor(input, limit), input.readInt32(), input.readInt32(),
+				input.readInt32(),
+				input.readInt32(), input.readInt32(), input.readInt32(), input.readByte() != 0);
 		var origin:SourceOrigin = switch input.readByte() {
 			case 0: UserSource;
 			case 1: CompilerGenerated(IrTypeCodec.readString(input, limit));
@@ -333,14 +323,17 @@ class IrFunctionStateCodec {
 		return new SourceProvenance(location, origin);
 	}
 
-	static function versionedLocation(input:BytesInput, limit:Int, version:Int):SourceLocation {
-		var path = IrTypeCodec.readString(input, limit),
-			start = input.readInt32(),
-			end = input.readInt32(),
-			line = input.readInt32();
-		return version >= 5 ? new SourceLocation(path, start, end, line, input.readInt32(), input.readInt32(),
-			input.readInt32(),
-			input.readInt32()) : new SourceLocation(path, start, end, line);
+	/** An anchor by its file and name, which outlive the process's numbering of anchors. */
+	static function writeAnchor(output:BytesOutput, anchor:Int):Void {
+		var entry = compiler.core.SourceAnchor.at(anchor);
+		IrTypeCodec.writeString(output, entry.path + "\n" + entry.key);
+	}
+
+	static function readAnchor(input:BytesInput, limit:Int):Int {
+		var text = IrTypeCodec.readString(input, limit), separator = text.indexOf("\n");
+		if (separator <= 0)
+			throw new InternalError("Invalid IR source anchor");
+		return compiler.core.SourceAnchor.of(text.substr(0, separator), text.substr(separator + 1)).id;
 	}
 
 	public static function verify(functions:Array<IrFunction>, context:compiler.ir.model.Ir.IrProgram):Void {

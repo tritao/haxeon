@@ -180,7 +180,7 @@ class IrNullableErasure {
 				identity: binding.identity,
 				name: binding.name,
 				value: use(binding.value),
-				path: binding.path,
+				anchor: binding.anchor,
 				scopeStart: binding.scopeStart,
 				scopeEnd: binding.scopeEnd
 			}];

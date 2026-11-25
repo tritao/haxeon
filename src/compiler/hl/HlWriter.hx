@@ -1,6 +1,7 @@
 package compiler.hl;
 
 import compiler.core.InternalError;
+import compiler.core.SourceAnchor.SourceAnchors;
 import compiler.hl.HlCode.HlDebugSection;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlDebugLocation;
@@ -40,6 +41,12 @@ class HlWriter {
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
 	var debugFileIndices:Map<String, Int> = [];
+
+	/** Where the module's debug locations count from (`HlCode.sources`). */
+	var sources:SourceAnchors = new SourceAnchors([]);
+
+	/** By anchor id, the index of its file in `debugFiles` once looked up, else -1. */
+	var anchorFiles:Array<Int> = [];
 
 	var functionScratch:Null<HlFunctionScratch>;
 
@@ -251,6 +258,7 @@ class HlWriter {
 		hasDebug = prepared.hasDebug;
 		debugFiles = prepared.debugFiles;
 		debugFileIndices = prepared.debugFileIndices;
+		sources = prepared.sources;
 		writePrefix(code);
 	}
 
@@ -297,10 +305,10 @@ class HlWriter {
 				writeFunction(fn);
 				continue;
 			}
-			var encoded = cache.get(fn);
+			var encoded = cache.get(fn, sources);
 			if (encoded == null) {
 				encoded = encodePreparedFunction(fn);
-				cache.set(fn, encoded);
+				cache.set(fn, encoded, hasDebug ? sources : null);
 			}
 			writeShared(encoded);
 		}
@@ -363,6 +371,8 @@ class HlWriter {
 		writer.hasDebug = hasDebug;
 		writer.debugFiles = debugFiles;
 		writer.debugFileIndices = debugFileIndices;
+		writer.sources = sources;
+		writer.anchorFiles = anchorFiles;
 		writer.functionScratch = scratch();
 		writer.writeFunction(fn);
 		return writer.bytes();
@@ -426,15 +436,17 @@ class HlWriter {
 	/** Encode the locations that lowering already keeps grouped by stable function identity: one mapping per opcode. */
 	/**
 	 * With a cache, a group whose `locations` array is the very one encoded last time (an unchanged function) reuses those bytes as long
-	 * as every file it names has the same index; only the changed functions are encoded.
+	 * as every file it names has the same index and every anchor it names the same place in `sources`; only the changed functions
+	 * are encoded.
 	 */
-	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>,
+	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>, sources:SourceAnchors,
 			?cache:HlWriterCache):SegmentedBytes {
 		var writer = new HlWriter(),
 			files:Array<String> = [],
 			fileIndices:Map<String, Int> = [],
 			seenFunctions:Map<Int, Bool> = [];
-		var previousPath = "";
+		writer.sources = sources;
+		var previousAnchor = -1;
 		for (group in groups) {
 			if (group.stableId < 0 || seenFunctions.exists(group.stableId))
 				throw new InternalError("Invalid HLB opcode source-span function");
@@ -442,8 +454,7 @@ class HlWriter {
 			for (location in group.locations) {
 				var validRange = location.start == -1 && location.end == -1 || location.start >= 0
 					&& location.end >= location.start;
-				if (location.path == ""
-					|| location.line < 1
+				if (location.line < 0
 					|| location.column < 1
 					|| location.endLine < location.line
 					|| location.endColumn < 1
@@ -452,13 +463,15 @@ class HlWriter {
 					|| location.flags < 0
 					|| !validRange)
 					throw new InternalError("Invalid HLB opcode source span");
-				if (location.path != previousPath) {
-					previousPath = location.path;
-					var fileIndex = fileIndices.get(previousPath);
+				if (location.anchor != previousAnchor) {
+					previousAnchor = location.anchor;
+					var path = sources.path(previousAnchor), fileIndex = fileIndices.get(path);
 					if (fileIndex == null) {
+						if (path == "")
+							throw new InternalError("Invalid HLB opcode source span");
 						fileIndex = files.length;
-						fileIndices.set(previousPath, fileIndex);
-						files.push(previousPath);
+						fileIndices.set(path, fileIndex);
+						files.push(path);
 					}
 				}
 			}
@@ -471,13 +484,14 @@ class HlWriter {
 		writer.writeUnsignedIndex(ordered.length);
 		var used:Null<Array<Array<HlDebugLocation>>> = cache == null ? null : [];
 		for (group in ordered) {
-			var cached = cache == null ? null : cache.spanGroup(group.locations, group.stableId, fileIndices);
+			var cached = cache == null ? null : cache.spanGroup(group.locations, group.stableId, fileIndices, sources);
 			if (cached == null) {
 				var groupWriter = new HlWriter();
+				groupWriter.sources = sources;
 				groupWriter.writeSpanGroup(group, fileIndices);
 				cached = groupWriter.bytes();
 				if (cache != null)
-					cache.setSpanGroup(group.locations, group.stableId, cached, fileIndices);
+					cache.setSpanGroup(group.locations, group.stableId, cached, fileIndices, sources);
 			}
 			if (used != null)
 				used.push(group.locations);
@@ -493,24 +507,27 @@ class HlWriter {
 		layoutInto(group.opcodes, positions, scratch().labelIndices, scratch().loopHeads);
 		writeUnsignedIndex(group.stableId);
 		writeUnsignedIndex(positions[group.opcodes.length]);
-		var previousPath = "", previousFileIndex = -1;
+		var previousAnchor = -1, previousFileIndex = -1, offset = 0, line = 0, hash = 0;
 		for (index in 0...group.locations.length) {
 			if (positions[index + 1] == positions[index])
 				continue;
 			var location = group.locations[index];
 			writeUnsignedIndex(positions[index]);
-			if (location.path != previousPath) {
-				previousPath = location.path;
-				previousFileIndex = cast fileIndices.get(previousPath);
+			if (location.anchor != previousAnchor) {
+				previousAnchor = location.anchor;
+				previousFileIndex = cast fileIndices.get(sources.path(previousAnchor));
+				offset = sources.offset(previousAnchor);
+				line = sources.line(previousAnchor);
+				hash = sources.hash(previousAnchor);
 			}
 			writeUnsignedIndex(previousFileIndex);
-			writeIndex(location.start + 1);
-			writeIndex(location.end + 1);
-			writeUnsignedIndex(location.line);
+			writeIndex(location.start < 0 ? 0 : offset + location.start + 1);
+			writeIndex(location.end < 0 ? 0 : offset + location.end + 1);
+			writeUnsignedIndex(line + location.line);
 			writeUnsignedIndex(location.column);
-			writeUnsignedIndex(location.endLine);
+			writeUnsignedIndex(line + location.endLine);
 			writeUnsignedIndex(location.endColumn);
-			output.writeInt32(location.sourceHash);
+			output.writeInt32(location.generatedText ? 0 : hash);
 			writeUnsignedIndex(location.flags);
 		}
 	}
@@ -771,6 +788,7 @@ class HlWriter {
 	}
 
 	function prepareDebugFiles(code:HlCode):Void {
+		sources = code.sources;
 		hasDebug = false;
 		for (fn in code.functions)
 			if (fn.debugLocations.length > 0)
@@ -788,18 +806,20 @@ class HlWriter {
 			}
 			if (cache == null) {
 				for (location in fn.debugLocations)
-					internDebugFile(location.path);
+					internDebugFile(sources.path(location.anchor));
 				continue;
 			}
+			// An anchor is always in the same file, so the paths a function names last while it is the same object.
 			var paths = cache.paths(fn);
 			if (paths == null) {
 				paths = [];
-				var previousPath = "";
+				var previousAnchor = -1;
 				for (location in fn.debugLocations)
-					if (location.path != previousPath) {
-						previousPath = location.path;
-						if (paths.indexOf(previousPath) < 0)
-							paths.push(previousPath);
+					if (location.anchor != previousAnchor) {
+						previousAnchor = location.anchor;
+						var path = sources.path(previousAnchor);
+						if (paths.indexOf(path) < 0)
+							paths.push(path);
 					}
 			}
 			activePaths.set(fn, paths);
@@ -822,7 +842,20 @@ class HlWriter {
 	}
 
 	/** The location of a function that was given none. */
-	static final generatedLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
+	static final generatedLocation = HlDebugLocation.inFile("<generated>", 1, 1, 1, 1, -1, -1, 1);
+
+	/** The index in `debugFiles` of the file `anchor` is in. */
+	function anchorFile(anchor:Int):Int {
+		if (anchor < anchorFiles.length && anchorFiles[anchor] >= 0)
+			return anchorFiles[anchor];
+		var path = sources.path(anchor), file = debugFileIndices.get(path);
+		if (file == null)
+			throw new InternalError('Missing HashLink debug file index for "$path"');
+		while (anchorFiles.length <= anchor)
+			anchorFiles.push(-1);
+		anchorFiles[anchor] = file;
+		return file;
+	}
 
 	function writeDebugLocations(fn:HlFunction, positions:Array<Int>, located:Array<HlDebugLocation>):Void {
 		located.resize(0);
@@ -831,37 +864,36 @@ class HlWriter {
 				located.push(fn.debugLocations.length == 0 ? generatedLocation : fn.debugLocations[index]);
 		var currentFile = -1, currentLine = 0, index = 0;
 		while (index < located.length) {
-			var location:HlDebugLocation = located[index];
-			if (location.line > 0x1FFFFF)
-				throw new InternalError('Debug line ${location.line} exceeds the HashLink format limit');
-			if (!debugFileIndices.exists(location.path))
-				throw new InternalError('Missing HashLink debug file index for "${location.path}"');
-			var file = debugFileIndices.get(location.path);
+			var location:HlDebugLocation = located[index],
+				line = sources.line(location.anchor) + location.line;
+			if (line > 0x1FFFFF)
+				throw new InternalError('Debug line $line exceeds the HashLink format limit');
+			var file = anchorFile(location.anchor);
 			if (file != currentFile) {
 				output.writeByte(((file >> 8) << 1) | 1);
 				output.writeByte(file & 0xFF);
 				currentFile = file;
 			}
-			if (location.line == currentLine) {
+			if (line == currentLine) {
 				var count = 1;
 				while (count < 15 && index + count < located.length) {
 					var next = located[index + count];
-					if (next.path != location.path || next.line != currentLine)
+					if (anchorFile(next.anchor) != file || sources.line(next.anchor) + next.line != currentLine)
 						break;
 					count++;
 				}
 				output.writeByte((count << 2) | 2);
 				index += count;
 			} else {
-				var delta = location.line - currentLine;
+				var delta = line - currentLine;
 				if (delta > 0 && delta <= 31)
 					output.writeByte((delta << 3) | 4);
 				else {
-					output.writeByte((location.line & 0x1F) << 3);
-					output.writeByte((location.line >> 5) & 0xFF);
-					output.writeByte((location.line >> 13) & 0xFF);
+					output.writeByte((line & 0x1F) << 3);
+					output.writeByte((line >> 5) & 0xFF);
+					output.writeByte((line >> 13) & 0xFF);
 				}
-				currentLine = location.line;
+				currentLine = line;
 				index++;
 			}
 		}

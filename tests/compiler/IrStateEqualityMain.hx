@@ -21,7 +21,7 @@ class IrStateEqualityMain {
 				identity: "local",
 				name: "v",
 				value: v,
-				path: "test.hx",
+				anchor: compiler.core.SourceAnchor.file("test.hx"),
 				scopeStart: 0,
 				scopeEnd: 1
 			}
@@ -542,7 +542,7 @@ class IrStateEqualityMain {
 				identity: "other",
 				name: "other",
 				value: w,
-				path: "other.hx",
+				anchor: compiler.core.SourceAnchor.file("other.hx"),
 				scopeStart: 1,
 				scopeEnd: 2
 			}

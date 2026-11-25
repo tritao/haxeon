@@ -37,8 +37,16 @@ makes from the same sources, and its work is proportional to the edit.
   its append-only tables and trusts every lowered function it is not told to regenerate.
 - **Verification:** a function stays verified while it and what the verifier read about the rest of the program
   (`IrVerifyMemo`) are unchanged.
-- **Source hashes:** a function kept across an edit of its file is given the file's current content hash
-  (`IrSourceRehash`), so its debug spans name a snapshot the module has.
+- **Positions:** an IR location counts from its anchor (`SourceAnchor`, `SourceLocation`), the member declaration it lies in
+  (a method, a field, an enum constructor) or else the whole file: its offsets and lines are distances from the anchor's start,
+  its columns the file's, and it names no file hash. So lines moved above a declaration change no function, and code the
+  inliner copied keeps its callee's anchor, so moving the callee changes none of its callers. Lowered code keeps its
+  locations so (`HlDebugLocation`); writing the module places each anchor in the build's sources (`SourceAnchors`, from the
+  parse of each file, `SourceFile.declareAnchors`): the line tables, the opcode spans, the function identities and the
+  snapshots they name. The writer keeps each function's encoding while its anchors are where they were (`HlWriterCache`), and
+  a build reuses the last module only while its sources are the same (`CompilationContext.sourcesKey`). A function whose code
+  holds a line as a value, the `haxe.PosInfos` a call passes, does change. Names the generator gives its own locals are
+  numbered within the function (`IrLocalsBuilder.internalName`), not taken from offsets.
 
 A failed or rejected build leaves every cache as the last successful build left it: a build works on a copy of the
 `SessionState` it started from, and what its units read is written in a transaction of the session's query database that only
@@ -120,10 +128,14 @@ and no edge between declarations is kept by hand.
   variable-length indices still force encoding a function whose operand widths change, and the validator and the debug
   sections read the rewritten `HlFunction`. Not done: it is a writer and encoding-cache change for a constant factor on
   one kind of edit.
-- **Positions are absolute.** IR provenance and debug locations carry byte offsets in the file, so a comment at the top of
-  a file lowers every function after it again. Positions relative to the declaration, made absolute when the debug section
-  is encoded, would confine an edit to its function; it changes the IR codec, `HlLower`, the debug section and the patch
-  format.
+- **A live patch leaves the lines of the functions it keeps.** A function whose declaration only moved is not patched, so
+  the running module keeps the line table it loaded: a stack trace through it names the line the function had then, until
+  the module reloads (the module written out is right). The patch would need a section that replaces the line table and opcode
+  spans of a kept function, and the HashLink fork's loader (`hlpatch.c`) to swap `hl_function.debug` and its spans in place.
+- **Names the typer and parser give temporaries carry offsets** (`$compound:`, `$null-coalesce:`, `$downcast:`, `$diff:`,
+  `$constructor-test:`). They reach the IR only as the name of a phi, where a temporary is assigned on more than one path; such a
+  function still changes when text above it moves. Numbering them within the function, as the generator's locals are
+  (`IrLocalsBuilder.internalName`), would remove that; it touches the parser and five typer sites.
 - **The inliner does not memoize functions in call cycles** whose inlining depends on the walk order; they are inlined
   again on every build.
 - **A value-array shape's pass visits every function** to learn it is not selected, about 95 bytes per function per shape

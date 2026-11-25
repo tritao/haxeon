@@ -63,7 +63,8 @@ class HlModuleRoundTripMain {
 			if (written.debugLocations.length > 0)
 				for (at in 0...written.opcodes.length)
 					if (positions[at + 1] != positions[at]) {
-						expect(read.lines[positions[at]].line == written.debugLocations[at].line,
+						var location = written.debugLocations[at];
+						expect(read.lines[positions[at]].line == code.sources.line(location.anchor) + location.line,
 							'function ${written.functionIndex}, instruction ${positions[at]}: its debug line reads back');
 						lines++;
 					}

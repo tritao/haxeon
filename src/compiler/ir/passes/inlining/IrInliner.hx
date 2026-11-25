@@ -1,7 +1,6 @@
 package compiler.ir.passes.inlining;
 
 import compiler.ir.tools.IrInstrumentation.IrInstrumentationScope;
-import compiler.ir.tools.IrAllocationReport;
 import compiler.ir.model.IrBody;
 import compiler.ir.passes.cleanup.IrCopyElision;
 import compiler.ir.passes.cleanup.IrDeadPureValues;
@@ -104,9 +103,6 @@ class IrInlineCache {
 
 	/** Each function's instrumented form, kept while its inlined form and the scope are unchanged. */
 	public var instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
-
-	/** Functions the last run found unchanged except for where they sit in their file: lowered again, never patched. */
-	public var relocated:Array<String> = [];
 
 	/**
 	 * By object name, the object (null for one not in the program) and direct subclasses an object fact (`IrInliner.OBJECT`) last
@@ -662,8 +658,7 @@ class IrInliner extends IrFactSource {
 		var settings = options == null ? new compiler.CompileOptions() : options;
 		var inliner = new IrInliner(program, cache, profile, settings, lineage),
 			functions:Array<IrFunction> = [],
-			changed:Array<String> = [],
-			relocated:Array<String> = [];
+			changed:Array<String> = [];
 		var published:Map<String, IrFunction> = [],
 			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 		// Every function is inlined before any is cleaned up: a caller inlines a callee's form before its cleanup, which edits it.
@@ -708,10 +703,6 @@ class IrInliner extends IrFactSource {
 					// The next compile then finds the published form itself and compares nothing.
 					if (instrument == null)
 						cleaned = previous;
-				} else if (IrFunctionStateEquality.sameCode(previous, result)) {
-					// The same code on the same lines, only moved within its file: it keeps its new positions, so its debug
-					// information names the snapshot this build carries; it is lowered again but needs no patch.
-					relocated.push(fn.name);
 				} else
 					changed.push(fn.name);
 			} else if (previous == null)
@@ -731,10 +722,8 @@ class IrInliner extends IrFactSource {
 				if (fn.body != null)
 					fn.releaseDecoded();
 		IrOpportunityCensus.report(program, inliner.allowInline);
-		IrAllocationReport.report(program);
 		cache.published = published;
 		cache.instrumented = instrumented;
-		cache.relocated = relocated;
 		inliner.keepOriginals();
 		return changed;
 	}
@@ -1425,7 +1414,7 @@ class IrInliner extends IrFactSource {
 				identity: binding.identity,
 				name: binding.name,
 				value: use(binding.value),
-				path: binding.path,
+				anchor: binding.anchor,
 				scopeStart: binding.scopeStart,
 				scopeEnd: binding.scopeEnd
 			} : binding];

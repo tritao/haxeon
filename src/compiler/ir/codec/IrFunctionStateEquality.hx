@@ -12,31 +12,18 @@ import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.SourceOrigin;
 
 /**
- * Conservative, allocation-light equality of all state encoded by IrFunctionStateCodec.
- *
- * `same` compares everything. `sameCode` leaves out where the code sits in its file: each location's whole-file content hash and
- * byte offsets, and each debug binding's scope offsets. Those move with any edit before the function, so an edit anywhere in a
- * file would make every later function of it look different; lines and columns still count, so a function whose lines moved
- * differs and its stack traces stay right. Two functions with the same code that are not `same` only moved within their file:
- * one cannot stand in for the other in a build, whose debug information must name the source snapshot it carries. Neither
- * decodes a body: a function compared with a body is encoded instead.
+ * Conservative, allocation-light equality of all state encoded by IrFunctionStateCodec, locations included: they count from
+ * their declarations (`SourceLocation`), so a function only moved in its file is the same. It decodes no body: a function
+ * compared with a body is encoded instead.
  */
 @:nullSafety(Strict)
 class IrFunctionStateEquality {
-	public static inline function same(left:IrFunction, right:IrFunction):Bool
-		return compare(left, right, true);
-
-	/** Whether `left` and `right` run the same code on the same lines, wherever their file placed them (see the class). */
-	public static inline function sameCode(left:IrFunction, right:IrFunction):Bool
-		return compare(left, right, false);
-
-	/** `same` with `placed`, or `sameCode` without. */
-	static function compare(left:IrFunction, right:IrFunction, placed:Bool):Bool {
+	public static function same(left:IrFunction, right:IrFunction):Bool {
 		if (left == right)
 			return true;
 		var leftBody = left.body, rightBody = right.body;
 		if (leftBody != null && rightBody != null)
-			return compareBodies(leftBody, rightBody, placed);
+			return compareBodies(leftBody, rightBody);
 		// One that is its body alone (a session releases the objects of what it keeps frozen, `IrFunction.releaseDecoded`) is not
 		// decoded: the other is encoded and the bodies compared, after the header shows they could be the same.
 		if (leftBody != null || rightBody != null) {
@@ -44,9 +31,9 @@ class IrFunctionStateEquality {
 				|| !IrVerifier.sameType(left.result, right.result))
 				return false;
 			if (leftBody != null)
-				return compareBodies(leftBody, IrBodyBuilder.encode(right), placed);
+				return compareBodies(leftBody, IrBodyBuilder.encode(right));
 			if (rightBody != null)
-				return compareBodies(IrBodyBuilder.encode(left), rightBody, placed);
+				return compareBodies(IrBodyBuilder.encode(left), rightBody);
 		}
 		if (left.name != right.name
 			|| !sameKind(left.kind, right.kind)
@@ -62,9 +49,8 @@ class IrFunctionStateEquality {
 				return false;
 		for (i in 0...left.debugBindings.length) {
 			var a = left.debugBindings[i], b = right.debugBindings[i];
-			if (a.identity != b.identity || a.name != b.name || a.path != b.path
-				|| placed && (a.scopeStart != b.scopeStart || a.scopeEnd != b.scopeEnd)
-				|| !value(a.value, b.value))
+			if (a.identity != b.identity || a.name != b.name || a.anchor != b.anchor || a.scopeStart != b.scopeStart
+				|| a.scopeEnd != b.scopeEnd || !value(a.value, b.value))
 				return false;
 		}
 		for (i in 0...left.blocks.length) {
@@ -75,14 +61,14 @@ class IrFunctionStateEquality {
 				return false;
 			for (j in 0...a.instructions.length) {
 				var x = a.instructions[j], y = b.instructions[j];
-				if (x != y && (!provenance(x.provenance, y.provenance, placed) || !instruction(x.value, y.value)))
+				if (x != y && (!provenance(x.provenance, y.provenance) || !instruction(x.value, y.value)))
 					return false;
 			}
 			var x = a.terminator, y = b.terminator;
 			if (x != y) {
 				if (x == null || y == null)
 					return false;
-				if (!provenance(x.provenance, y.provenance, placed) || !terminator(x.value, y.value))
+				if (!provenance(x.provenance, y.provenance) || !terminator(x.value, y.value))
 					return false;
 			}
 		}
@@ -91,13 +77,9 @@ class IrFunctionStateEquality {
 
 	/** `same` on two functions that are bodies (`IrFunction.ofBody`), read as rows, so neither is decoded. */
 	public static inline function sameBodies(left:IrBody, right:IrBody):Bool
-		return compareBodies(left, right, true);
+		return compareBodies(left, right);
 
-	/** `sameCode` on two bodies. */
-	public static inline function sameBodyCode(left:IrBody, right:IrBody):Bool
-		return compareBodies(left, right, false);
-
-	static function compareBodies(left:IrBody, right:IrBody, placed:Bool):Bool {
+	static function compareBodies(left:IrBody, right:IrBody):Bool {
 		if (left == right)
 			return true;
 		if (left.name != right.name
@@ -115,9 +97,9 @@ class IrFunctionStateEquality {
 		for (i in 0...left.bindingCount())
 			if (left.bindingIdentity(i) != right.bindingIdentity(i)
 				|| left.bindingName(i) != right.bindingName(i)
-				|| left.bindingPath(i) != right.bindingPath(i)
-				|| placed && (left.bindingScopeStart(i) != right.bindingScopeStart(i)
-				|| left.bindingScopeEnd(i) != right.bindingScopeEnd(i))
+				|| left.bindingAnchor(i) != right.bindingAnchor(i)
+				|| left.bindingScopeStart(i) != right.bindingScopeStart(i)
+				|| left.bindingScopeEnd(i) != right.bindingScopeEnd(i)
 				|| !bodyValue(left, left.bindingValue(i), right, right.bindingValue(i)))
 				return false;
 		for (block in 0...left.blockCount()) {
@@ -125,7 +107,7 @@ class IrFunctionStateEquality {
 				return false;
 			var x = left.firstRow(block), y = right.firstRow(block);
 			while (x >= 0 || y >= 0) {
-				if (x < 0 || y < 0 || !sameRow(left, x, right, y, placed))
+				if (x < 0 || y < 0 || !sameRow(left, x, right, y))
 					return false;
 				x = left.nextRow(x);
 				y = right.nextRow(y);
@@ -140,9 +122,9 @@ class IrFunctionStateEquality {
 			&& left.valueTypeId(a) == right.valueTypeId(b);
 
 	/** Whether row `x` of `left` and row `y` of `right` are the same instruction or terminator, from the same place. */
-	static function sameRow(left:IrBody, x:Int, right:IrBody, y:Int, placed:Bool):Bool {
+	static function sameRow(left:IrBody, x:Int, right:IrBody, y:Int):Bool {
 		var opcode = left.opcode(x);
-		if (opcode != right.opcode(y) || !provenance(left.provenance(x), right.provenance(y), placed))
+		if (opcode != right.opcode(y) || !provenance(left.provenance(x), right.provenance(y)))
 			return false;
 		var a = left.output(x), b = right.output(y);
 		if (a.exists() != b.exists() || a.exists() && !bodyValue(left, a, right, b))
@@ -191,7 +173,7 @@ class IrFunctionStateEquality {
 			return 'debug binding count ${left.debugBindings.length} / ${right.debugBindings.length}';
 		for (i in 0...left.debugBindings.length) {
 			var a = left.debugBindings[i], b = right.debugBindings[i];
-			if (a.identity != b.identity || a.name != b.name || a.path != b.path || a.scopeStart != b.scopeStart
+			if (a.identity != b.identity || a.name != b.name || a.anchor != b.anchor || a.scopeStart != b.scopeStart
 				|| a.scopeEnd != b.scopeEnd
 				|| !value(a.value, b.value))
 				return 'debug binding $i: ${a.name} ${describe(a.value)} / ${b.name} ${describe(b.value)}';
@@ -208,7 +190,7 @@ class IrFunctionStateEquality {
 				var x = a.instructions[j], y = b.instructions[j];
 				if (!instruction(x.value, y.value))
 					return 'block ${a.id} instruction $j: ${x.value} / ${y.value}';
-				if (!provenance(x.provenance, y.provenance, true))
+				if (!provenance(x.provenance, y.provenance))
 					return 'block ${a.id} instruction $j provenance';
 			}
 			var x = a.terminator, y = b.terminator;
@@ -217,7 +199,7 @@ class IrFunctionStateEquality {
 					return 'block ${a.id} terminator presence';
 			} else if (!terminator(x.value, y.value))
 				return 'block ${a.id} terminator: ${x.value} / ${y.value}';
-			else if (!provenance(x.provenance, y.provenance, true))
+			else if (!provenance(x.provenance, y.provenance))
 				return 'block ${a.id} terminator provenance';
 		}
 		return "unlocated";
@@ -277,16 +259,16 @@ class IrFunctionStateEquality {
 	static function value(a:IrValue, b:IrValue):Bool
 		return a == b || (a.id == b.id && a.name == b.name && IrVerifier.sameType(a.type, b.type));
 
-	static function provenance(a:SourceProvenance, b:SourceProvenance, placed:Bool):Bool {
+	static function provenance(a:SourceProvenance, b:SourceProvenance):Bool {
 		if (a == b)
 			return true;
 		if (!origin(a.origin, b.origin))
 			return false;
 		var x = a.location, y = b.location;
 		return x == y
-			|| (x != null && y != null && x.path == y.path && x.line == y.line && x.column == y.column
-			&& x.endLine == y.endLine && x.endColumn == y.endColumn
-			&& (!placed || x.start == y.start && x.end == y.end && x.sourceHash == y.sourceHash));
+			|| (x != null && y != null && x.anchor == y.anchor && x.start == y.start && x.end == y.end
+			&& x.line == y.line && x.column == y.column && x.endLine == y.endLine && x.endColumn == y.endColumn
+			&& x.generatedText == y.generatedText);
 	}
 
 	static function origin(a:SourceOrigin, b:SourceOrigin):Bool

@@ -523,7 +523,49 @@ class ModuleAnalyzer {
 				};
 		}
 		program = ModuleFields.fold(AbstractStatics.fold(program), state.name);
+		declareAnchors(state.source, program);
 		return new LookupParse(state.source, conditional.defines, tokens, program, embedded.inputs());
+	}
+
+	/**
+	 * Gives `file` its member declarations as anchors (`SourceAnchor`): the methods, fields and constructors of its types, and its
+	 * module-level functions.
+	 */
+	public static function declareAnchors(file:compiler.core.Source.SourceFile,
+			program:compiler.syntax.Ast.AstProgram):Void {
+		var starts:Array<Int> = [], ends:Array<Int> = [], keys:Array<String> = [], seen:Map<String, Int> = [];
+		function add(type:String, name:String, span:compiler.core.Source.SourceSpan):Void {
+			if (span.file != file)
+				return;
+			var key = type + "." + name, repeat = seen.get(key) ?? 0;
+			seen.set(key, repeat + 1);
+			starts.push(span.start);
+			ends.push(span.end);
+			keys.push(repeat == 0 ? key : key + "#" + repeat);
+		}
+		for (fn in program.functions)
+			add("", fn.name, fn.span);
+		for (decl in program.classes) {
+			for (field in decl.fields)
+				add(decl.name, field.name, field.span);
+			for (method in decl.methods)
+				add(decl.name, method.name, method.span);
+		}
+		for (decl in program.enums) {
+			for (entry in decl.cases)
+				add(decl.name, entry.name, entry.span);
+			for (method in decl.methods ?? [])
+				add(decl.name, method.name, method.span);
+		}
+		for (decl in program.abstracts) {
+			for (field in decl.fields)
+				add(decl.name, field.name, field.span);
+			for (method in decl.methods)
+				add(decl.name, method.name, method.span);
+			for (value in decl.values ?? [])
+				add(decl.name, value.name, value.span);
+		}
+		file.declareAnchors(starts, ends, keys);
 	}
 
 	static function scanFunctionBodies(functions:Array<AstFunction>, ownerParameters:Array<String>,

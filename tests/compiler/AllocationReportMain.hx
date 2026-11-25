@@ -61,7 +61,7 @@ function main():Int { var t = new T(); return t.pure(1) + t.dispatch(new Heavy()
 		var program = Frontend.compile(source);
 		IrInliner.run(program, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		var before = [for (fn in program.functions) IrFunctionStateCodec.encode(fn)];
-		var rows = IrAllocationReport.analyze(program, ["T.*"]);
+		var rows = IrAllocationReport.analyze(program, ["T.*"], new compiler.core.SourceAnchor.SourceAnchors([]));
 
 		// Nothing to report: arithmetic, a scalar-replaced value class, an array loop, a map of references, recursion, an error message built only to throw.
 		for (name in ["pure", "valueTemp", "arrIter", "mapExists", "mapGetRef", "rec", "guarded"])
@@ -91,10 +91,13 @@ function main():Int { var t = new T(); return t.pure(1) + t.dispatch(new Heavy()
 			"interface implementor is followed");
 
 		// Roots: exact names, prefixes, and no match.
-		expect(IrAllocationReport.analyze(program, ["T.pure"]).length == 1, "exact root");
-		expect(IrAllocationReport.analyze(program, " T.pure , T.rec".split(",")).length == 2,
+		expect(IrAllocationReport.analyze(program, ["T.pure"], new compiler.core.SourceAnchor.SourceAnchors([])).length
+			== 1, "exact root");
+		expect(IrAllocationReport.analyze(program, " T.pure , T.rec".split(","),
+			new compiler.core.SourceAnchor.SourceAnchors([])).length == 2,
 			"comma list ignores spaces");
-		expect(IrAllocationReport.analyze(program, ["Nope.*"]).length == 0, "unmatched pattern");
+		expect(IrAllocationReport.analyze(program, ["Nope.*"], new compiler.core.SourceAnchor.SourceAnchors([])).length
+			== 0, "unmatched pattern");
 
 		// Native classification.
 		expect(IrAllocationReport.classifyNative("__math_sqrt") == null, "math is free");

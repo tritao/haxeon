@@ -54,19 +54,20 @@ class IrAllocationReport {
 	/** A method call with more implementations than this is a boundary: reported, not followed. A frame root would otherwise reach every widget. */
 	public static inline var FanOutLimit = 8;
 
-	public static function report(program:IrProgram):Void {
+	public static function report(program:IrProgram, sources:compiler.core.SourceAnchor.SourceAnchors):Void {
 		var spec = Sys.getEnv("HAXEON_IR_ALLOC_ROOTS");
 		if (spec == null || spec == "")
 			return;
 		// `@path` names a file of patterns, one per line, read on every compile: a compiler server reads its environment once.
 		var patterns = StringTools.startsWith(spec, "@")
 			? sys.io.File.getContent(spec.substr(1)).split("\n") : spec.split(",");
-		for (row in analyze(program, patterns))
+		for (row in analyze(program, patterns, sources))
 			Sys.stderr().writeString("IR_ALLOC " + haxe.Json.stringify(row) + "\n");
 	}
 
-	public static function analyze(program:IrProgram, patterns:Array<String>):Array<AllocationRootReport> {
-		var walker = new Walker(program);
+	public static function analyze(program:IrProgram, patterns:Array<String>,
+			sources:compiler.core.SourceAnchor.SourceAnchors):Array<AllocationRootReport> {
+		var walker = new Walker(program, sources);
 		var roots = [for (fn in program.functions) if (matches(fn.name, patterns)) fn.name];
 		roots.sort(Reflect.compare);
 		return [for (root in roots) walker.from(root)];
@@ -180,8 +181,10 @@ private class Walker {
 	final children:Map<String, Array<String>> = [];
 	final interfaces:Map<String, IrInterface> = [];
 	final implementorCache:Map<String, Array<String>> = [];
+	final sources:compiler.core.SourceAnchor.SourceAnchors;
 
-	public function new(program:IrProgram) {
+	public function new(program:IrProgram, sources:compiler.core.SourceAnchor.SourceAnchors) {
+		this.sources = sources;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
 		for (object in program.objects) {
@@ -239,8 +242,8 @@ private class Walker {
 							kind: kind,
 							what: what,
 							inFunction: name,
-							path: location == null ? null : location.path,
-							line: location == null ? 0 : location.line,
+							path: location == null ? null : sources.path(location.anchor),
+							line: location == null ? 0 : sources.line(location.anchor) + location.line,
 							chain: chainTo(name)
 						});
 					};

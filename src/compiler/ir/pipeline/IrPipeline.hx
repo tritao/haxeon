@@ -493,7 +493,7 @@ class IrPipeline {
 		var builder = context.passScratch.bodyBuilder,
 			retained = context.options.keepSession;
 		// A session keeps the frozen body alone: the stages after this point read bodies, the memos before it hand on a function
-		// they reuse without reading it, and the whole-program scans read bodies (`IrSourceRehash`, `IrStaticReferences`, the
+		// they reuse without reading it, and the whole-program scans read bodies (`IrStaticReferences`, the
 		// contributions); what a later build reads as objects is decoded again from its body.
 		for (fn in functions) {
 			fn.encodedBody(builder);
@@ -636,6 +636,7 @@ class IrPipeline {
 			throw new InternalError("The inliner stage needs the session's inline cache");
 		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.options,
 			context.instrumentScope, context.lineage);
+		compiler.ir.tools.IrAllocationReport.report(program, context.sources);
 		// The lineage ends here: no stage after the inliner reads versions.
 		context.lineage = null;
 		// `--check-reuse`: what the session keeps for the next compile is frozen, so no stage of this one changed it in place.

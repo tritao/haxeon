@@ -271,48 +271,34 @@ class InlinerMain {
 		// Both arguments are copies: one is written by the callee, and the other could alias what the callee stores into.
 		expect(allocations(programFunction(elisionProgram, "storeCaller")) == 2,
 			"a callee that stores elsewhere could alias the source, so it gets a copy");
-		// An edit elsewhere in the file changes its content hash but not a function's own code or positions, so the function is
-		// not reported as changed; one whose positions shift or whose code changes still is.
+		// A function's locations count from its declaration (`SourceLocation`), so an edit elsewhere in its file, or text moved
+		// above it, leaves it unchanged; one whose own code changes is reported.
 		var editBase =
-			"function stay(x:Int):Int return x + 1; function edit(x:Int):Int return x + 2; function main():Int return stay(1) + edit(1);";
+			"function stay(x:Int):Int return x + 1;\nfunction edit(x:Int):Int return x + 2;\nfunction main():Int return stay(1) + edit(1);";
 		var editCache = new InlinerSession();
-		editCache.run(Frontend.compile(editBase));
-		var tailEdit = editCache.run(Frontend.compile(editBase + " function extra():Int return 5;"));
+		editCache.run(anchored(editBase));
+		var tailEdit = editCache.run(anchored(editBase + "\nfunction extra():Int return 5;"));
 		expect(tailEdit.indexOf("stay") < 0 && tailEdit.indexOf("edit") < 0,
 			"an edit after a function leaves it unchanged");
 		expect(tailEdit.indexOf("extra") >= 0, "an added function is reported as changed");
-		var bodyEdit = editCache.run(Frontend.compile(StringTools.replace(editBase, "x + 2",
-			"x + 3") + " function extra():Int return 5;"));
+		var bodyEdit = editCache.run(anchored(StringTools.replace(editBase, "x + 2", "x + 3")
+			+ "\nfunction extra():Int return 5;"));
 		expect(bodyEdit.indexOf("edit") >= 0, "a function whose code changed is reported as changed");
 		expect(bodyEdit.indexOf("stay") < 0, "a function before the edit stays unchanged");
-		var shifted = editCache.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase,
-			"x + 2", "x + 3")
-			+ " function extra():Int return 5;"));
-		expect(shifted.indexOf("stay") >= 0,
-			"a function whose positions shifted is reported as changed so its line information is refreshed");
-		// Lengthening an earlier line moves every later byte offset but no later line or column, which leaves those functions unchanged.
-		var linesFor = (comment:String) -> comment
-			+ "
-function stay(x:Int):Int return x + 1;
-function main():Int return stay(1);
-";
-		var lineCache = new InlinerSession();
-		lineCache.run(Frontend.compile(linesFor("// a")));
-		var offsetProgram = Frontend.compile(linesFor("// a longer comment"));
-		var offsetEdit = lineCache.run(offsetProgram);
-		expect(offsetEdit.indexOf("stay") < 0,
-			"a function whose lines and columns held is unchanged when only byte offsets moved");
-		expect(lineCache.cache.relocated.indexOf("stay") >= 0,
-			"a function that only moved within its file is lowered again");
-		// It keeps the new positions, so a warm build names the same source snapshot as a cold one.
-		var coldProgram = Frontend.compile(linesFor("// a longer comment"));
+		var shiftedSource = "function pad():Int return 0;\n// a comment\n" + StringTools.replace(editBase, "x + 2",
+			"x + 3")
+			+ "\nfunction extra():Int return 5;";
+		var shiftedProgram = anchored(shiftedSource), shifted = editCache.run(shiftedProgram);
+		expect(shifted.indexOf("stay") < 0 && shifted.indexOf("edit") < 0,
+			"a function moved down its file by lines inserted above it is unchanged");
+		// It is the function a cold compile of the moved text makes.
+		var coldProgram = anchored(shiftedSource);
 		IrInliner.run(coldProgram, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
-		expect(IrFunctionStateCodec.encode(programFunction(offsetProgram, "stay"))
+		expect(IrFunctionStateCodec.encode(programFunction(shiftedProgram, "stay"))
 			.compare(IrFunctionStateCodec.encode(programFunction(coldProgram, "stay"))) == 0,
-			"a function that only moved carries the positions a cold compile gives it");
-		var lineEdit = lineCache.run(Frontend.compile(linesFor("// a
-// b")));
-		expect(lineEdit.indexOf("stay") >= 0, "a function whose line number moved is reported as changed");
+			"a function that only moved is the one a cold compile makes");
+		var columnEdit = editCache.run(anchored(StringTools.replace(shiftedSource, "function stay", "function  stay")));
+		expect(columnEdit.indexOf("stay") >= 0, "a function whose own text changed is reported as changed");
 		// A lambda's code fingerprint is remembered by its IR function, also in the copy a compile runs on, and taken again
 		// for a new function object or a different set of C natives.
 		var printProgram =
@@ -476,6 +462,14 @@ function main():Int return stay(1);
 		expect(cache.run(program).length == 0,
 			"the published cache is unaffected by a discarded copy");
 		Sys.println("PASS: inliner replaces small calls, keeps recursion and handlers, verifies, and leaves cached IR alone");
+	}
+
+	/** `source` compiled as a module is, its member declarations being the anchors its locations count from. */
+	static function anchored(source:String):IrProgram {
+		var file = new compiler.core.Source.SourceFile("<memory>", source);
+		compiler.semantic.ModuleAnalyzer.declareAnchors(file,
+			new compiler.syntax.Parser(new compiler.syntax.Lexer(file).tokenizeTable()).parseProgram());
+		return Frontend.compileFile(file);
 	}
 
 	static function programFunction(program:IrProgram, name:String):IrFunction {

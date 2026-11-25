@@ -46,8 +46,9 @@ class HelperRequesterIndependenceMain {
 				for (block in fn.blocks)
 					for (located in block.instructions) {
 						var location = located.provenance.location;
-						if (location != null && paths.indexOf(location.path) < 0)
-							paths.push(location.path);
+						var path = location == null ? null : compiler.core.SourceAnchor.at(location.anchor).path;
+						if (path != null && paths.indexOf(path) < 0)
+							paths.push(path);
 					}
 				found.set(fn.name, paths.join("|") + " " + compiler.ir.codec.IrFunctionStateCodec.codeFingerprint(fn));
 			}

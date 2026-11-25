@@ -511,7 +511,7 @@ class TestMain {
 				Throw(2)
 			], [
 				for (line in 10...17)
-					new compiler.hl.HlFunction.HlDebugLocation("patch-debug.hx", line, 1, line, 1, 0, -1, -1, 0)
+					compiler.hl.HlFunction.HlDebugLocation.inFile("patch-debug.hx", line, 1, line, 1, -1, -1, 0)
 			]),
 		];
 		var testModuleId = haxe.io.Bytes.alloc(16),
@@ -1089,8 +1089,8 @@ class TestMain {
 				for (block in fn.blocks) {
 					for (instruction in block.instructions) {
 						var location = instruction.provenance.location;
-						if (location != null && location.path == "debug-lines.hx")
-							provenanceLines.set(location.line, true);
+						if (location != null && compiler.core.SourceAnchor.at(location.anchor).path == "debug-lines.hx")
+							provenanceLines.set(location.line + 1, true);
 					}
 					var terminator = block.terminator;
 					if (terminator != null && terminator.provenance.location != null)

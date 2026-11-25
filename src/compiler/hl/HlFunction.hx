@@ -1,33 +1,44 @@
 package compiler.hl;
 
 /**
- * HashLink debugger location corresponding exactly to one encoded opcode. Immutable and shared by the opcodes of one source position;
- * a class, because a typedef record costs a virtual object with its own field table, about three times the size, for every one of them.
+ * HashLink debugger location corresponding exactly to one encoded opcode, counted from its anchor as an IR location is
+ * (`SourceLocation`): the writer finds the file, offsets and lines in the module's sources (`HlCode.sources`), so a lowered
+ * function stays valid wherever its declarations moved. Immutable and shared by the opcodes of one source position; a class,
+ * because a typedef record costs a virtual object with its own field table, about three times the size, for every one of them.
  * `start` and `end` are -1 when the location has no byte range.
  */
 class HlDebugLocation {
-	public final path:String;
+	public final anchor:Int;
 	public final line:Int;
 	public final column:Int;
 	public final endLine:Int;
 	public final endColumn:Int;
-	public final sourceHash:Int;
 	public final start:Int;
 	public final end:Int;
 	public final flags:Int;
 
-	public function new(path:String, line:Int, column:Int, endLine:Int, endColumn:Int, sourceHash:Int, start:Int,
-			end:Int, flags:Int) {
-		this.path = path;
+	/** Whether the location is text the compiler wrote, which no snapshot holds: its source hash is 0. */
+	public final generatedText:Bool;
+
+	public function new(anchor:Int, line:Int, column:Int, endLine:Int, endColumn:Int, start:Int, end:Int, flags:Int,
+			generatedText:Bool) {
+		this.anchor = anchor;
 		this.line = line;
 		this.column = column;
 		this.endLine = endLine;
 		this.endColumn = endColumn;
-		this.sourceHash = sourceHash;
 		this.start = start;
 		this.end = end;
 		this.flags = flags;
+		this.generatedText = generatedText;
 	}
+
+	/** A location in a file with no declarations, by its lines as they are: what a module made without sources holds. */
+	public static function inFile(path:String, line:Int, column:Int, endLine:Int, endColumn:Int, start:Int, end:Int,
+			flags:Int):HlDebugLocation
+		return new HlDebugLocation(compiler.core.SourceAnchor.file(path), line - 1, column, endLine - 1, endColumn,
+			start,
+			end, flags, true);
 }
 
 /** HashLink debugger binding at an encoded opcode, or -1 for an argument. */

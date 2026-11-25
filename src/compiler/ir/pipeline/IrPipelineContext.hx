@@ -43,6 +43,10 @@ class IrPipelineContext {
 	// Target lowering (`IrPipeline.target`).
 	public var livePatching:Bool = false;
 	public var developmentMetadata:Bool = false;
+
+	/** The build's sources, for what reports positions in them (`SourceAnchors`). */
+	public var sources = new compiler.core.SourceAnchor.SourceAnchors([]);
+
 	public var reflectable:Null<Array<String>> = null;
 	public var inlineCache:Null<IrInlineCache> = null;
 	public var instrumentScope:Null<IrInstrumentationScope> = null;

@@ -13,6 +13,28 @@ class SourceFile {
 	final hash:Int;
 	final secondHash:Int;
 
+	/** `anchorIndex` of an anchor that is not this file's. */
+	public static inline final NO_ANCHOR = -2;
+
+	/** `anchorAt` of a position in no member declaration: the whole file is its anchor. */
+	public static inline final FILE_ANCHOR = -1;
+
+	/**
+	 * The file's member declarations (`SourceAnchor`), sorted by start and none inside another, as the parse of this text found
+	 * them (`declareAnchors`): their ranges, anchor ids and first lines. Empty until then, which anchors every position to the
+	 * whole file.
+	 */
+	var anchorStarts:Array<Int> = NO_DECLARATIONS;
+
+	var anchorEnds:Array<Int> = NO_DECLARATIONS;
+	var anchorIds:Array<Int> = NO_DECLARATIONS;
+	var anchorLines:Array<Int> = NO_DECLARATIONS;
+	var anchorIndices:Null<Map<Int, Int>> = null;
+	var wholeFile = -1;
+
+	@:processWide("the declarations of a file not parsed yet, never changed")
+	static final NO_DECLARATIONS:Array<Int> = [];
+
 	public function new(path:String, text:String, isStandardLibrarySource:Bool = false, ?physicalPath:String) {
 		this.path = path;
 		this.physicalPath = physicalPath ?? path;
@@ -35,6 +57,78 @@ class SourceFile {
 
 	public function span(start:Int, end:Int):SourceSpan
 		return new SourceSpan(this, start, end);
+
+	/**
+	 * Records the member declarations a parse of this text found, by range and name (`SourceAnchor.key`), once: every parse of
+	 * one text under one set of defines finds the same. A range inside one already taken is left out, so no two overlap.
+	 */
+	public function declareAnchors(starts:Array<Int>, ends:Array<Int>, keys:Array<String>):Void {
+		if (anchorIndices != null)
+			return;
+		var order = [for (index in 0...starts.length) index];
+		order.sort((a, b) -> starts[a] != starts[b] ? starts[a] - starts[b] : ends[b] - ends[a]);
+		var indices:Map<Int, Int> = [],
+			kept:Array<Int> = [],
+			keptEnds:Array<Int> = [],
+			ids:Array<Int> = [],
+			lines:Array<Int> = [],
+			lastEnd = -1;
+		for (index in order) {
+			var start = starts[index], end = ends[index];
+			if (start < lastEnd || start < 0 || end < start || end > bytes.length)
+				continue;
+			var id = SourceAnchor.of(path, keys[index]).id;
+			indices.set(id, ids.length);
+			kept.push(start);
+			keptEnds.push(end);
+			ids.push(id);
+			lines.push(lineAt(start));
+			lastEnd = end;
+		}
+		anchorStarts = kept;
+		anchorEnds = keptEnds;
+		anchorIds = ids;
+		anchorLines = lines;
+		anchorIndices = indices;
+	}
+
+	/** The declaration whose range holds `offset`, as an index for `anchorId` and the others, or `FILE_ANCHOR`. */
+	public function anchorAt(offset:Int):Int {
+		var low = 0, high = anchorStarts.length;
+		while (low < high) {
+			var middle = low + ((high - low) >> 1);
+			if (anchorStarts[middle] <= offset)
+				low = middle + 1;
+			else
+				high = middle;
+		}
+		return low > 0 && offset < anchorEnds[low - 1] ? low - 1 : FILE_ANCHOR;
+	}
+
+	/** The index of anchor `id` in this file (`FILE_ANCHOR` for the whole file), or `NO_ANCHOR`. */
+	public function anchorIndex(id:Int):Int {
+		if (id == anchorId(FILE_ANCHOR))
+			return FILE_ANCHOR;
+		var indices = anchorIndices, index = indices == null ? null : indices.get(id);
+		return index == null ? NO_ANCHOR : index;
+	}
+
+	/** The anchor id of declaration `index`. */
+	public function anchorId(index:Int):Int {
+		if (index != FILE_ANCHOR)
+			return anchorIds[index];
+		if (wholeFile < 0)
+			wholeFile = SourceAnchor.file(path);
+		return wholeFile;
+	}
+
+	/** The byte offset declaration `index` starts at. */
+	public inline function anchorOffset(index:Int):Int
+		return index == FILE_ANCHOR ? 0 : anchorStarts[index];
+
+	/** The line declaration `index` starts on. */
+	public inline function anchorLine(index:Int):Int
+		return index == FILE_ANCHOR ? 1 : anchorLines[index];
 
 	/**
 	 * The length in bytes of `text` when the source holds exactly it at byte `offset`, or -1 when it does not. Compares in place:

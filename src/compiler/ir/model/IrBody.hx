@@ -75,7 +75,7 @@ class IrBody {
 	var argumentIds:Array<Int>;
 	var bindingIdentities:Array<String>;
 	var bindingNames:Array<String>;
-	var bindingPaths:Array<String>;
+	var bindingAnchors:Array<Int>;
 	var bindingStarts:Array<Int>;
 	var bindingEnds:Array<Int>;
 	var bindingValues:Array<Int>;
@@ -126,7 +126,7 @@ class IrBody {
 			argumentIds = shared.argumentIds;
 			bindingIdentities = shared.bindingIdentities;
 			bindingNames = shared.bindingNames;
-			bindingPaths = shared.bindingPaths;
+			bindingAnchors = shared.bindingAnchors;
 			bindingStarts = shared.bindingStarts;
 			bindingEnds = shared.bindingEnds;
 			bindingValues = shared.bindingValues;
@@ -155,7 +155,7 @@ class IrBody {
 			argumentIds = builder.argumentIds.copy();
 			bindingIdentities = builder.bindingIdentities.copy();
 			bindingNames = builder.bindingNames.copy();
-			bindingPaths = builder.bindingPaths.copy();
+			bindingAnchors = builder.bindingAnchors.copy();
 			bindingStarts = builder.bindingStarts.copy();
 			bindingEnds = builder.bindingEnds.copy();
 			bindingValues = builder.bindingValues.copy();
@@ -364,8 +364,8 @@ class IrBody {
 	public inline function bindingName(index:Int):String
 		return bindingNames[index];
 
-	public inline function bindingPath(index:Int):String
-		return bindingPaths[index];
+	public inline function bindingAnchor(index:Int):Int
+		return bindingAnchors[index];
 
 	public inline function bindingScopeStart(index:Int):Int
 		return bindingStarts[index];
@@ -437,7 +437,7 @@ class IrBody {
 		argumentIds = argumentIds.copy();
 		bindingIdentities = bindingIdentities.copy();
 		bindingNames = bindingNames.copy();
-		bindingPaths = bindingPaths.copy();
+		bindingAnchors = bindingAnchors.copy();
 		bindingStarts = bindingStarts.copy();
 		bindingEnds = bindingEnds.copy();
 		bindingValues = bindingValues.copy();
@@ -840,7 +840,7 @@ class IrBody {
 		overwriting();
 		bindingIdentities.splice(index, 1);
 		bindingNames.splice(index, 1);
-		bindingPaths.splice(index, 1);
+		bindingAnchors.splice(index, 1);
 		bindingStarts.splice(index, 1);
 		bindingEnds.splice(index, 1);
 		bindingValues.splice(index, 1);
@@ -946,7 +946,7 @@ class IrBody {
 				identity: bindingIdentities[index],
 				name: bindingNames[index],
 				value: valueOf(bindingValues[index], values),
-				path: bindingPaths[index],
+				anchor: bindingAnchors[index],
 				scopeStart: bindingStarts[index],
 				scopeEnd: bindingEnds[index]
 			}];
