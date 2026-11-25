@@ -47,6 +47,8 @@
   --sl-color-bg-inline-code: token(dark.code-bg);
   --hx-code-fg: token(dark.code-fg);
   --hx-code-muted: token(dark.code-comment);
+  --hx-code-line: token(dark.code-line);
+  --hx-code-divider: token(dark.code-divider);
   --hx-grid: token(dark.grid);
 }
 
@@ -64,6 +66,8 @@
   --sl-color-bg-inline-code: token(light.code-bg);
   --hx-code-fg: token(light.code-fg);
   --hx-code-muted: token(light.code-comment);
+  --hx-code-line: token(light.code-line);
+  --hx-code-divider: token(light.code-divider);
   --hx-grid: token(light.grid);
 }
 
@@ -176,6 +180,28 @@ samp {
   position: absolute;
   inset-inline-end: 100%;
   white-space: nowrap;
+}
+
+/* A dark code surface with an optional title bar: code cards and the live edit demo's editor. */
+.code-panel {
+  background: var(--sl-color-bg-inline-code);
+  color: var(--hx-code-fg);
+}
+:where(.code-panel > .bar) {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--hx-code-line);
+  font: 0.75rem var(--sl-font-mono);
+  color: var(--hx-code-muted);
+}
+.code-panel .expressive-code pre {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+.code-panel .expressive-code .copy {
+  display: none;
 }
 
 /* Plain-text fences and the home page's program output use the same surface. */

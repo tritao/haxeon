@@ -1,5 +1,5 @@
 ---
-import Diagram from './home/Diagram.astro';
+import Diagram from './Diagram.astro';
 
 /** Plain text, or a link drawn in the accent colour. */
 export type Segment = string | { text: string; href: string };
@@ -44,7 +44,7 @@ const lines = boxes.flatMap(({ layer, y }) => [
 const path = arrows.map(({ from, length }) => `M${centre} ${from}v${length}m-4-5 4 5 4-5`).join('');
 ---
 
-<Diagram spaced>
+<Diagram>
   <svg class="drawing" viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title`}>
     <title id={`${id}-title`}>{label}</title>
     {boxes.map(({ y, height: boxHeight }) => <rect class="box" x={boxX} {y} width={boxWidth} height={boxHeight} rx="6" />)}

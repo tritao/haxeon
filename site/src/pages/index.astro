@@ -1,28 +1,26 @@
 ---
-import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import Hero from '../components/home/Hero.astro';
-import Apps from '../components/home/Apps.astro';
-import LanguageTour from '../components/home/LanguageTour.astro';
-import Interop from '../components/home/Interop.astro';
-import Outputs from '../components/home/Outputs.astro';
-import Toolchain from '../components/home/Toolchain.astro';
-import OtherUses from '../components/home/OtherUses.astro';
-import Start from '../components/home/Start.astro';
+import SplashPage from '../layouts/SplashPage.astro';
+import Hero from '../components/sections/Hero.astro';
+import Apps from '../components/sections/Apps.astro';
+import LanguageTour from '../components/sections/LanguageTour.astro';
+import Interop from '../components/sections/Interop.astro';
+import Outputs from '../components/sections/Outputs.astro';
+import Toolchain from '../components/sections/Toolchain.astro';
+import OtherUses from '../components/sections/OtherUses.astro';
+import Start from '../components/sections/Start.astro';
 
 const title = 'A language and runtime for cross-platform apps and tools.';
 const description =
   "Develop on a live VM that keeps your program's state as you edit, ship one codebase as native executables or WebAssembly, and call C and C++ directly.";
 ---
 
-<StarlightPage frontmatter={{ title, description, template: 'splash', prev: false, next: false }}>
-  <div class="landing-content">
-    <Hero {title} {description} />
-    <Apps />
-    <LanguageTour eyebrow="The language" />
-    <Interop />
-    <Outputs />
-    <Toolchain />
-    <OtherUses />
-    <Start />
-  </div>
-</StarlightPage>
+<SplashPage {title} {description}>
+  <Hero {title} {description} />
+  <Apps />
+  <LanguageTour eyebrow="The language" />
+  <Interop />
+  <Outputs />
+  <Toolchain />
+  <OtherUses />
+  <Start />
+</SplashPage>

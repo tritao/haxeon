@@ -84,7 +84,7 @@
         : "NativeKit Haxeon browser smoke test failed (" + result + ")");
       document.documentElement.dataset.nativekitResult = String(result);
       if (result !== 0 && embedded)
-        parent.postMessage("haxeon-showcase-failed", location.origin);
+        parent.postMessage({type: "haxeon-app", state: "failed"}, location.origin);
     }
 
     function percentile(sorted, fraction) {
@@ -530,7 +530,7 @@
         if (!presented && frameResult === 1) {
           presented = true;
           if (embedded)
-            parent.postMessage("haxeon-showcase-ready", location.origin);
+            parent.postMessage({type: "haxeon-app", state: "ready"}, location.origin);
         }
         if (!presented) {
           requestAnimationFrame(tick);

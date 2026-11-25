@@ -1,0 +1,19 @@
+---
+/*
+ * A full-width product page. Starlight draws no title on splash pages (see PageTitle.astro), so the page supplies its
+ * own h1, and it must be <h1 id="_top" tabindex="-1">: Starlight's skip link targets #_top.
+ */
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+
+interface Props {
+  title: string;
+  description: string;
+}
+const { title, description } = Astro.props;
+---
+
+<StarlightPage frontmatter={{ title, description, template: 'splash', prev: false, next: false }}>
+  <div class="landing-content">
+    <slot />
+  </div>
+</StarlightPage>

@@ -20,7 +20,7 @@ const { default: glsl } = await bundledLanguages.glsl();
 
 const commandBlocks = new WeakSet();
 const commandStrip = {
-  name: 'Haxeon command strip',
+  name: 'command strip',
   hooks: {
     preprocessCode({ codeBlock, addGutterElement }) {
       const prompt = shellPrompts.get(codeBlock.language);

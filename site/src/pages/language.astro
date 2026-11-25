@@ -1,9 +1,9 @@
 ---
-import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import SplashPage from '../layouts/SplashPage.astro';
 import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
 import FeatureList, { type Feature } from '../components/FeatureList.astro';
-import LanguageTour from '../components/home/LanguageTour.astro';
+import LanguageTour from '../components/sections/LanguageTour.astro';
 import learnReadme from '../../../docs/learn/README.md?raw';
 import comingFromReadme from '../../../docs/coming-from/README.md?raw';
 import { docsUrl } from '../../docs.mjs';
@@ -67,97 +67,90 @@ const comingFrom = withSummaries(listedPages(comingFromReadme, 'docs/coming-from
 }, 'docs/coming-from/README.md').map((guide) => ({ ...guide, title: guide.title.replace(/^Coming from /, '') }));
 ---
 
-<StarlightPage
-  frontmatter={{
-    title: 'Language',
-    template: 'splash',
-    prev: false,
-    next: false,
-    description: 'Explore Haxeon’s types, values, pattern matching, null safety and deterministic cleanup.',
-  }}
+<SplashPage
+  title="Language"
+  description="Explore Haxeon’s types, values, pattern matching, null safety and deterministic cleanup."
 >
-  <div class="landing-content">
-    <section class="page-intro paper">
-      <div class="wrap hero">
-        <div class="head">
-          <h1 id="_top" tabindex="-1">A typed language, built for apps and tools.</h1>
-          <p class="lede">Static types with inference, values that compare by content, pattern matching, null safety and deterministic cleanup, compiled fast enough to change a program while it runs.</p>
-          <div class="ctas">
-            <a class="btn primary" href={learn('README.md')}>Learn the language</a>
-            <a class="btn ghost" href={docsUrl('coming-from/README.md')}>Coming from another platform</a>
-          </div>
+  <section class="page-intro paper">
+    <div class="wrap hero">
+      <div class="intro">
+        <h1 id="_top" tabindex="-1">A typed language, built for apps and tools.</h1>
+        <p class="lede">Static types with inference, values that compare by content, pattern matching, null safety and deterministic cleanup, compiled fast enough to change a program while it runs.</p>
+        <div class="ctas">
+          <a class="btn primary" href={learn('README.md')}>Learn the language</a>
+          <a class="btn ghost" href={docsUrl('coming-from/README.md')}>Coming from another platform</a>
         </div>
-        <CodeCard code={overview} lang="haxe" title="shapes.hx" output={'6\n0\ntrue'} example="overview" />
       </div>
-    </section>
+      <CodeCard code={overview} lang="haxe" title="shapes.hx" output={'6\n0\ntrue'} example="overview" />
+    </div>
+  </section>
 
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>How it’s designed</h2>
-          <p class="lede">Familiar where it can be, strict where it pays off, and quick enough to keep up with you.</p>
-        </div>
-        <div class="grid three">
+  <section>
+    <div class="wrap">
+      <div class="head">
+        <h2>How it’s designed</h2>
+        <p class="lede">Familiar where it can be, strict where it pays off, and quick enough to keep up with you.</p>
+      </div>
+      <div class="grid three">
+        <Card compact>
+          <h3>Types without ceremony</h3>
+          <p>Every value has a static type, and the compiler infers most of them. Where you want flexibility, opt into <code>Dynamic</code> for just that value. <a href={learn('basics.md')}>Values and functions</a></p>
+        </Card>
+        <Card compact>
+          <h3>Values, not only objects</h3>
+          <p>A <code>struct</code> copies on assignment and, when you ask, compares and hashes by its fields. Abstracts give a value a type of its own at no runtime cost. <a href={learn('value-types.md')}>Structs and value equality</a></p>
+        </Card>
+        <Card compact>
+          <h3>Safe and predictable</h3>
+          <p><code>Null&lt;T&gt;</code> marks what can be absent, <code>switch</code> must cover every case, and <code>defer</code> runs cleanup on every way out of a block. <a href={learn('null-safety.md')}>Null safety</a></p>
+        </Card>
+      </div>
+    </div>
+  </section>
+
+  <LanguageTour title="See it in code" lede="Short programs and their output. The site compiles and runs each one when it builds." />
+
+  <section>
+    <div class="wrap">
+      <div class="head">
+        <h2>Beyond the basics</h2>
+        <p class="lede">The parts you reach for once a program grows.</p>
+      </div>
+      <FeatureList features={beyond} />
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="head">
+        <h2>Learn it in order</h2>
+        <p class="lede">Short lessons, each with a complete program and its output. Read them in order or start with the topic you need.</p>
+      </div>
+      <ol class="lessons">
+        {lessons.map(({ title, text, page }) => (
+          <li><a href={learn(page)}><span class="title">{title}</span><span class="text">{text}</span></a></li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="head">
+        <h2>Coming from another platform</h2>
+        <p class="lede">The equivalents for the language, build and deployment tools you already use.</p>
+      </div>
+      <div class="grid four">
+        {comingFrom.map(({ title, text, page }) => (
           <Card compact>
-            <h3>Types without ceremony</h3>
-            <p>Every value has a static type, and the compiler infers most of them. Where you want flexibility, opt into <code>Dynamic</code> for just that value. <a href={learn('basics.md')}>Values and functions</a></p>
+            <h3><a href={docsUrl('coming-from/' + page)}>{title}</a></h3>
+            <p>{text}</p>
           </Card>
-          <Card compact>
-            <h3>Values, not only objects</h3>
-            <p>A <code>struct</code> copies on assignment and, when you ask, compares and hashes by its fields. Abstracts give a value a type of its own at no runtime cost. <a href={learn('value-types.md')}>Structs and value equality</a></p>
-          </Card>
-          <Card compact>
-            <h3>Safe and predictable</h3>
-            <p><code>Null&lt;T&gt;</code> marks what can be absent, <code>switch</code> must cover every case, and <code>defer</code> runs cleanup on every way out of a block. <a href={learn('null-safety.md')}>Null safety</a></p>
-          </Card>
-        </div>
+        ))}
       </div>
-    </section>
-
-    <LanguageTour title="See it in code" lede="Short programs and their output. The site compiles and runs each one when it builds." />
-
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>Beyond the basics</h2>
-          <p class="lede">The parts you reach for once a program grows.</p>
-        </div>
-        <FeatureList features={beyond} />
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>Learn it in order</h2>
-          <p class="lede">Short lessons, each with a complete program and its output. Read them in order or start with the topic you need.</p>
-        </div>
-        <ol class="lessons">
-          {lessons.map(({ title, text, page }) => (
-            <li><a href={learn(page)}><span class="title">{title}</span><span class="text">{text}</span></a></li>
-          ))}
-        </ol>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>Coming from another platform</h2>
-          <p class="lede">The equivalents for the language, build and deployment tools you already use.</p>
-        </div>
-        <div class="grid four">
-          {comingFrom.map(({ title, text, page }) => (
-            <Card compact>
-              <h3><a href={docsUrl('coming-from/' + page)}>{title}</a></h3>
-              <p>{text}</p>
-            </Card>
-          ))}
-        </div>
-      </div>
-    </section>
-  </div>
-</StarlightPage>
+    </div>
+  </section>
+</SplashPage>
 
 <style>
   .lessons {
@@ -169,7 +162,7 @@ const comingFrom = withSummaries(listedPages(comingFromReadme, 'docs/coming-from
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--hx-space-4) var(--hx-space-5);
   }
-  .lessons li { margin: 0; counter-increment: lesson; }
+  .lessons li { counter-increment: lesson; }
   .lessons a {
     display: grid;
     grid-template-columns: 2rem minmax(0, 1fr);

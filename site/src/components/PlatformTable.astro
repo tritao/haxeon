@@ -41,7 +41,7 @@ const platforms: { platform: string; icon: string; status: Status; live: string 
 ];
 ---
 
-<div class="plat">
+<div class="platforms">
   <table aria-label="Platforms">
     <thead>
       <tr
@@ -53,12 +53,12 @@ const platforms: { platform: string; icon: string; status: Status; live: string 
       {
         platforms.map(({ platform, icon, status, live }) => (
           <tr>
-            <td>
-              <span class="pn">
-                <svg class="pico" viewBox="0 0 24 24" aria-hidden="true" set:html={icon} />
+            <th scope="row">
+              <span class="platform">
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" set:html={icon} />
                 {platform}
               </span>
-            </td>
+            </th>
             <td>
               <StatusBadge status={status} />
             </td>
@@ -71,43 +71,16 @@ const platforms: { platform: string; icon: string; status: Status; live: string 
 </div>
 
 <style>
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    font-size: 0.92rem;
+  .platforms {
+    overflow-x: auto;
   }
-  th,
-  td {
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--sl-color-gray-5);
-  }
-  th {
-    font: 600 0.75rem var(--sl-font-mono);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--sl-color-gray-3);
-  }
-  .pn {
+  .platform {
     display: inline-flex;
     align-items: center;
     gap: 10px;
   }
-  .pico {
-    width: 20px;
-    height: 20px;
-    flex: none;
+  .platform .ico {
+    --ico-size: 20px;
     color: var(--sl-color-gray-3);
-  }
-  .pico :global(*) {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: var(--hx-stroke-icon);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .plat {
-    overflow-x: auto;
   }
 </style>

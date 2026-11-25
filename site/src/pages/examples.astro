@@ -1,53 +1,46 @@
 ---
-import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import SplashPage from '../layouts/SplashPage.astro';
 import { docsUrl, repositorySource } from '../../docs.mjs';
 ---
 
-<StarlightPage
-  frontmatter={{
-    title: 'Examples',
-    template: 'splash',
-    prev: false,
-    next: false,
-    description: 'Explore Haxeon apps and their source.',
-  }}
+<SplashPage
+  title="Examples"
+  description="Explore Haxeon apps and their source."
 >
-  <div class="landing-content">
-    <section class="page-intro">
-      <div class="wrap">
-        <div class="head">
-          <h1 id="_top" tabindex="-1">Examples</h1><p class="lede">
-            Explore Haxeon apps and their source.
-          </p>
-        </div>
-        <div class="prose">
-          <h2>Task List</h2>
-          <p>
-            A small app covering layout, text, lists, forms, navigation and theming. Read the <a
-              href={docsUrl('guides/03-ui-basics.md')}
-            >
-              UI basics guide
-            </a> or <a href={repositorySource('docs/guides/examples/03-ui-basics/tasks/')}
-              >get the source</a
-            >.
-          </p>
-          <h2>UI Showcase and Audio Lab</h2>
-          <p>
-            Try the <a href="/ui/showcase/">UI Showcase</a> in your browser, or run <a
-              href={repositorySource('packages/ui/examples/ui_showcase')}
-            >the Showcase</a> and the <a href={repositorySource('packages/audio/examples/audio-lab')}>Audio Lab</a> from
-            their source.
-          </p>
-          <h2 id="games-and-3d">Games and 3D</h2>
-          <p>
-            The <a href={docsUrl('guides/06-gpu-basics.md')}>GPU basics guide</a> draws a triangle, moves a particle
-            fountain with a compute shader and shows it in a UI viewport; <a
-              href={repositorySource('docs/guides/examples/06-gpu-basics/')}
-            >get its projects</a>. <a href="/gpu/">Circuit Run</a> is a small maze game you can play on the GPU page;
-            read <a href={repositorySource('packages/gpu/examples/circuit-run')}>its source</a>.
-          </p>
-        </div>
+  <section class="page-intro">
+    <div class="wrap">
+      <div class="intro">
+        <h1 id="_top" tabindex="-1">Examples</h1><p class="lede">
+          Explore Haxeon apps and their source.
+        </p>
       </div>
-    </section>
-  </div>
-</StarlightPage>
+      <div class="prose">
+        <h2>Task List</h2>
+        <p>
+          A small app covering layout, text, lists, forms, navigation and theming. Read the <a
+            href={docsUrl('guides/03-ui-basics.md')}
+          >
+            UI basics guide
+          </a> or <a href={repositorySource('docs/guides/examples/03-ui-basics/tasks/')}
+            >get the source</a
+          >.
+        </p>
+        <h2>UI Showcase and Audio Lab</h2>
+        <p>
+          Try the <a href="/ui/showcase/">UI Showcase</a> in your browser, or run <a
+            href={repositorySource('packages/ui/examples/ui_showcase')}
+          >the Showcase</a> and the <a href={repositorySource('packages/audio/examples/audio-lab')}>Audio Lab</a> from
+          their source.
+        </p>
+        <h2 id="games-and-3d">Games and 3D</h2>
+        <p>
+          The <a href={docsUrl('guides/06-gpu-basics.md')}>GPU basics guide</a> draws a triangle, moves a particle
+          fountain with a compute shader and shows it in a UI viewport; <a
+            href={repositorySource('docs/guides/examples/06-gpu-basics/')}
+          >get its projects</a>. <a href="/gpu/">Circuit Run</a> is a small maze game you can play on the GPU page;
+          read <a href={repositorySource('packages/gpu/examples/circuit-run')}>its source</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+</SplashPage>

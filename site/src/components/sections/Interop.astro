@@ -1,5 +1,5 @@
 ---
-import Diagram from './Diagram.astro';
+import Diagram from '../Diagram.astro';
 import CodeCard from '../CodeCard.astro';
 import binding from './geometry.hxi?raw';
 import { docsUrl } from '../../../docs.mjs';
@@ -136,6 +136,7 @@ moved to: 4, 5`;
 
 <style>
   .trio {
+    margin-bottom: var(--hx-space-6);
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--hx-space-4);

@@ -104,7 +104,7 @@ void geo_translate(geo_point *point, double dx, double dy) {
   const generated = execFileSync(haxe, [
     'common.hxml', '-cp', 'site/scripts', '--run', 'RenderGeometryHxi', join(project, 'geometry.hxi'),
   ], { cwd: root, encoding: 'utf8' });
-  const sample = await readFile(new URL('../src/components/home/geometry.hxi', import.meta.url), 'utf8');
+  const sample = await readFile(new URL('../src/components/sections/geometry.hxi', import.meta.url), 'utf8');
   if (generated !== sample || generated.replaceAll('\t', '  ') !== shown) {
     throw new Error('geometry: rendered HXI differs from the generated binding');
   }

@@ -1,11 +1,8 @@
 ---
-interface Props {
-  spaced?: boolean;
-}
-const { spaced = false } = Astro.props;
+/* A framed drawing on the dotted paper background; callers place it. */
 ---
 
-<div class:list={['figure', 'paper', { spaced }]}><slot /></div>
+<div class="figure paper"><slot /></div>
 
 <style>
   .figure :global(.drawing) {
@@ -49,13 +46,9 @@ const { spaced = false } = Astro.props;
     fill: var(--hx-code-fg);
   }
   .figure {
-    margin-top: var(--hx-space-6);
     border: 1px solid var(--sl-color-gray-5);
     border-radius: var(--hx-radius-m);
     padding: 18px;
     overflow-x: auto;
-  }
-  .spaced {
-    margin-block: 0 20px;
   }
 </style>

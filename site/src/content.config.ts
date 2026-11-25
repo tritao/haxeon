@@ -69,7 +69,7 @@ const files = glob({
 const docs = defineCollection({
   schema: docsSchema(),
   loader: {
-    name: 'haxeon-docs',
+    name: 'repository-docs',
     async load(context) {
       const entryTypes = new Map(context.entryTypes);
       const markdown = entryTypes.get('.md');

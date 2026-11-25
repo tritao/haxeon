@@ -8,7 +8,7 @@ export default defineConfig({
   vite: {
     plugins: [
       {
-        name: 'haxeon-theme-tokens',
+        name: 'theme-tokens',
         enforce: 'pre',
         transform(css, id) {
           if (!id.endsWith('/src/styles/theme.css')) return;

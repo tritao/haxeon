@@ -1,45 +1,38 @@
 ---
-import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import SplashPage from '../layouts/SplashPage.astro';
 import { projectRepo, sourceRef } from '../../docs.mjs';
 
 const source = `${projectRepo}/blob/${encodeURIComponent(sourceRef)}`;
 ---
 
-<StarlightPage
-  frontmatter={{
-    title: 'About',
-    template: 'splash',
-    prev: false,
-    next: false,
-    description: 'About the Haxeon project, support channels and licenses.',
-  }}
+<SplashPage
+  title="About"
+  description="About the Haxeon project, support channels and licenses."
 >
-  <div class="landing-content">
-    <section class="page-intro">
-      <div class="wrap">
-        <div class="head"><h1 id="_top" tabindex="-1">About Haxeon</h1></div>
-        <div class="prose">
-          <p>
-            Haxeon is an open-source language and runtime for apps, tools and games. It is built on
-            Haxe, compiles a growing subset of it, and is independent of the Haxe Foundation.
-          </p>
-          <h2>Project and support</h2>
-          <p>
-            Follow development and find contributors on <a href={projectRepo}>GitHub</a>. Use the <a
-              href={`${projectRepo}/issues`}
-            >
-              issue tracker
-            </a> to report bugs and request features.
-          </p>
-          <h2 id="licenses">Licenses</h2>
-          <p>
-            Haxeon is distributed under the <a href={`${source}/LICENSE`}>Apache License 2.0</a>.
-            The <a href={`${source}/stdlib/LICENSE`}> standard library </a> and vendored dependencies
-            carry their own licenses. See the project's <a href={`${source}/NOTICE`}> NOTICE </a> for
-            attribution.
-          </p>
-        </div>
+  <section class="page-intro">
+    <div class="wrap">
+      <div class="intro"><h1 id="_top" tabindex="-1">About Haxeon</h1></div>
+      <div class="prose">
+        <p>
+          Haxeon is an open-source language and runtime for apps, tools and games. It is built on
+          Haxe, compiles a growing subset of it, and is independent of the Haxe Foundation.
+        </p>
+        <h2>Project and support</h2>
+        <p>
+          Follow development and find contributors on <a href={projectRepo}>GitHub</a>. Use the <a
+            href={`${projectRepo}/issues`}
+          >
+            issue tracker
+          </a> to report bugs and request features.
+        </p>
+        <h2 id="licenses">Licenses</h2>
+        <p>
+          Haxeon is distributed under the <a href={`${source}/LICENSE`}>Apache License 2.0</a>.
+          The <a href={`${source}/stdlib/LICENSE`}> standard library </a> and vendored dependencies
+          carry their own licenses. See the project's <a href={`${source}/NOTICE`}> NOTICE </a> for
+          attribution.
+        </p>
       </div>
-    </section>
-  </div>
-</StarlightPage>
+    </div>
+  </section>
+</SplashPage>

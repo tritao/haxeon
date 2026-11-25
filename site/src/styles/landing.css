@@ -1,3 +1,4 @@
+/* Global pieces the header and footer use as well. */
 .paper {
   background-color: var(--sl-color-bg);
   background-image: radial-gradient(var(--hx-grid) 1px, transparent 1.2px);
@@ -8,39 +9,6 @@
   margin-inline: auto;
   padding-left: max(var(--hx-space-4), env(safe-area-inset-left, 0px));
   padding-right: max(var(--hx-space-4), env(safe-area-inset-right, 0px));
-}
-.landing-content :is(h1, h2, h3) {
-  font-family: var(--hx-font-display);
-  line-height: 1.1;
-  text-wrap: balance;
-  margin: 0;
-}
-.landing-content h2 {
-  font-size: clamp(1.8rem, 3.6vw, 2.6rem);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.landing-content h3 {
-  font-size: 1.15rem;
-  font-weight: 600;
-}
-.landing-content :where(p) {
-  margin: 0;
-}
-.kicker {
-  font: 600 clamp(1.15rem, 2vw, 1.4rem) / 1.3 var(--hx-font-display);
-  color: var(--sl-color-white);
-}
-.lede {
-  color: var(--sl-color-gray-3);
-  max-width: 62ch;
-  font-size: 1.05rem;
-}
-.eyebrow {
-  font: 600 0.75rem/1 var(--sl-font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--sl-color-gray-3);
 }
 .btn {
   display: inline-flex;
@@ -64,70 +32,65 @@
   color: var(--sl-color-white);
   background: var(--sl-color-bg-sidebar);
 }
-.landing-content > section {
+
+/*
+ * The product pages. Each selector below sits wholly inside :where(), so it has no specificity: any component's own
+ * rule overrides it whatever order the stylesheets load in, and Starlight's styles, in cascade layers, never win.
+ */
+:where(.landing-content :is(h1, h2, h3)) {
+  font-family: var(--hx-font-display);
+  line-height: 1.1;
+  text-wrap: balance;
+  margin: 0;
+}
+:where(.landing-content h2) {
+  font-size: clamp(1.8rem, 3.6vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+:where(.landing-content h3) {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+:where(.landing-content p) {
+  margin: 0;
+}
+:where(.landing-content a) {
+  color: var(--sl-color-text-accent);
+}
+:where(.landing-content > section) {
   padding-block: var(--hx-space-8);
 }
-.landing-content > section + section {
+:where(.landing-content > section + section) {
   border-top: 1px solid var(--sl-color-gray-5);
 }
-.head {
-  display: grid;
-  gap: 14px;
-  margin-bottom: 36px;
+:where(.landing-content .kicker) {
+  font: 600 clamp(1.15rem, 2vw, 1.4rem) / 1.3 var(--hx-font-display);
+  color: var(--sl-color-white);
 }
-.head .lede {
-  max-width: 76ch;
+:where(.landing-content .lede) {
+  color: var(--sl-color-gray-3);
+  max-width: 62ch;
+  font-size: 1.05rem;
 }
-/* Wide screens: the heading block left, its intro right, sharing the width. */
-@media (min-width: 1000px) {
-  .head {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    column-gap: 56px;
-  }
-  .head > * {
-    grid-column: 1;
-  }
-  .head > .lede {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: end;
-    max-width: 60ch;
-  }
-  .head:has(> .kicker) > .lede {
-    grid-row: 1 / span 3;
-  }
+:where(.landing-content .eyebrow) {
+  font: 600 0.75rem/1 var(--sl-font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
 }
-
-.ctas {
+:where(.landing-content .ctas) {
   display: flex;
   gap: var(--hx-space-3);
   flex-wrap: wrap;
   margin-top: var(--hx-space-6);
 }
-.ico {
-  width: 26px;
-  height: 26px;
-  flex: none;
-  color: var(--sl-color-accent);
-}
-.th {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.ico * {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: var(--hx-stroke-icon);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.note {
+:where(.landing-content .note) {
   font-size: 0.85rem;
   color: var(--sl-color-gray-3);
   margin-top: 14px;
 }
-.cmd {
+:where(.landing-content .cmd) {
   font: 0.82rem / normal var(--sl-font-mono);
   background: var(--sl-color-accent-low);
   border-radius: var(--hx-radius-s);
@@ -135,113 +98,183 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 560px) {
-  .landing-content > section {
+/* An outline icon in the accent colour; --ico-size sets its size. */
+:where(.landing-content .ico) {
+  width: var(--ico-size, 26px);
+  height: var(--ico-size, 26px);
+  flex: none;
+  color: var(--sl-color-accent);
+}
+:where(.landing-content .ico *) {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--hx-stroke-icon);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* A card title with its icon beside it. */
+:where(.landing-content .titled) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* A section's heading block; on wide screens the heading sits left and its intro right. */
+:where(.landing-content .head) {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 36px;
+}
+:where(.landing-content .head .lede) {
+  max-width: 76ch;
+}
+@media (min-width: 1000px) {
+  :where(.landing-content .head) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    column-gap: 56px;
+  }
+  :where(.landing-content .head > *) {
+    grid-column: 1;
+  }
+  :where(.landing-content .head > .lede) {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: end;
+    max-width: 60ch;
+  }
+  :where(.landing-content .head:has(> .kicker) > .lede) {
+    grid-row: 1 / span 3;
+  }
+}
+
+/* A page's opening copy: its title, intro and links in one column. */
+:where(.landing-content .intro) {
+  display: grid;
+  row-gap: var(--hx-space-4);
+  margin-bottom: 36px;
+}
+:where(.landing-content .intro .lede) {
+  max-width: 76ch;
+}
+:where(.landing-content .intro .ctas) {
+  margin-top: 0;
+}
+@media (min-width: 1000px) {
+  :where(.landing-content .intro .lede) {
+    max-width: 60ch;
+  }
+}
+:where(.page-intro h1) {
+  font-size: clamp(2.4rem, 6vw, 4rem);
+}
+:where(.page-intro .prose) {
+  max-width: 65ch;
+}
+:where(.page-intro .prose > * + *) {
+  margin-top: var(--hx-space-4);
+}
+:where(.page-intro .prose h2) {
+  margin-top: var(--hx-space-6);
+}
+:where(.page-intro .prose h2[id]) {
+  scroll-margin-top: calc(var(--sl-nav-height) + var(--hx-space-3));
+}
+@media (max-width: 34rem) {
+  :where(.landing-content > section) {
     padding-block: var(--hx-space-6);
   }
-  .head {
+  :where(.landing-content :is(.head, .intro)) {
     margin-bottom: var(--hx-space-5);
   }
 }
-.page-intro .head {
-  grid-template-columns: 1fr;
-  row-gap: var(--hx-space-4);
-}
-.page-intro .head > .lede {
-  grid-column: 1;
-  grid-row: auto;
-}
-.page-intro h1 {
-  font-size: clamp(2.4rem, 6vw, 4rem);
-}
-.page-intro .prose {
-  max-width: 65ch;
-}
-.page-intro .prose > * + * {
-  margin-top: var(--hx-space-4);
-}
-.page-intro .prose h2 {
-  margin-top: var(--hx-space-6);
-}
-.page-intro .prose h2[id] {
-  scroll-margin-top: calc(var(--sl-nav-height) + var(--hx-space-3));
-}
 
 /* A page intro with its copy beside a sample or picture; a page may set --hero-columns. */
-:where(.page-intro) .hero {
+:where(.page-intro .hero) {
   display: grid;
   grid-template-columns: var(--hero-columns, minmax(0, 1fr) minmax(0, 1.1fr));
   gap: var(--hx-space-6);
   align-items: start;
 }
-.page-intro .head .ctas {
-  margin-top: 0;
-}
 
 /* Layout for the product pages: card grids, a wide column beside a narrow one, and stacked cards. */
-:where(.landing-content) .grid {
+:where(.landing-content .grid) {
   display: grid;
   gap: var(--hx-space-5);
 }
-:where(.landing-content) .two {
+:where(.landing-content .two) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-:where(.landing-content) .three {
+:where(.landing-content .three) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-:where(.landing-content) .four {
+:where(.landing-content .four) {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-:where(.landing-content) .split {
+:where(.landing-content .split) {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   gap: var(--hx-space-5);
   align-items: stretch;
 }
-:where(.landing-content) .split:where(.wide-end) {
+:where(.landing-content .split:where(.wide-end)) {
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
 }
-:where(.landing-content) .split > .figure {
+:where(.landing-content .split > .figure) {
   display: grid;
   align-content: center;
 }
-:where(.landing-content) .stack {
+:where(.landing-content .stack) {
   display: grid;
   gap: var(--hx-space-5);
   align-content: start;
 }
-:where(.landing-content) :is(.grid, .stack) p {
-  margin: 0;
-}
 @media (max-width: 62rem) {
-  :where(.landing-content) .four {
+  :where(.landing-content .four) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 55rem) {
-  :where(.page-intro) .hero,
-  :where(.landing-content) :is(.two, .three, .split) {
+  :where(.page-intro .hero),
+  :where(.landing-content :is(.two, .three, .split)) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 34rem) {
-  :where(.landing-content) .four {
+  :where(.landing-content .four) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
+/* Data tables: a mono header row, then a row per item, its first cell the row's header. */
+:where(.landing-content table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+:where(.landing-content :is(th, td)) {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--sl-color-gray-5);
+}
+:where(.landing-content thead th) {
+  font: 600 0.75rem var(--sl-font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+}
+
 /* Screenshots and their captions on the product pages. */
-:where(.landing-content) figure {
+:where(.landing-content figure) {
   margin: 0;
 }
-:where(.landing-content) :is(figure, .live-embed) > img {
+:where(.landing-content :is(figure, .live-embed) > img) {
   display: block;
   width: 100%;
   height: auto;
   border-radius: var(--hx-radius-m);
   border: 1px solid var(--sl-color-gray-5);
 }
-:where(.landing-content) figcaption {
+:where(.landing-content figcaption) {
   margin-top: var(--hx-space-2);
   color: var(--sl-color-gray-3);
 }
@@ -263,8 +296,4 @@ main:has(.landing-content) {
 }
 .sl-container > .landing-content + .site-footer {
   margin-top: 0;
-}
-
-.landing-content a {
-  color: var(--sl-color-text-accent);
 }

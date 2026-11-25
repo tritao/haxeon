@@ -1,5 +1,5 @@
 ---
-import Diagram from './Diagram.astro';
+import Diagram from '../Diagram.astro';
 import Card from '../Card.astro';
 import Command from '../Command.astro';
 import PlatformTable from '../PlatformTable.astro';
@@ -12,7 +12,7 @@ import { docsUrl } from '../../../docs.mjs';
       <span class="eyebrow">One codebase, three outputs</span>
       <h2>Develop live, ship native or WebAssembly.</h2>
     </div>
-    <Diagram spaced>
+    <Diagram>
       <svg
         class="drawing"
         viewBox="0 0 1000 190"
@@ -106,6 +106,7 @@ import { docsUrl } from '../../../docs.mjs';
 
 <style>
   .outputs {
+    margin-top: var(--hx-space-5);
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--hx-space-4);

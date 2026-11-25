@@ -40,7 +40,7 @@ for (const [source, texts] of shown)
 ---
 
 <live-edit-demo class="demo">
-  <div class="editor">
+  <div class="editor code-panel">
     <div class="bar"><span>src/Main.hx</span><span data-version>version 1</span></div>
     {
       [1, 2].map((version) => {
@@ -153,17 +153,10 @@ for (const [source, texts] of shown)
     min-width: 0;
   }
   .demo .editor {
-    background: var(--sl-color-bg-inline-code);
-    color: var(--hx-code-fg);
     display: flex;
     flex-direction: column;
   }
   .demo .editor .bar {
-    padding: 10px 14px;
-    font: 0.75rem var(--sl-font-mono);
-    color: var(--hx-code-muted);
-    border-bottom: 1px solid #ffffff14;
-    display: flex;
     justify-content: space-between;
     gap: var(--hx-space-2);
     flex-wrap: wrap;
@@ -204,9 +197,6 @@ for (const [source, texts] of shown)
     display: grid;
     gap: 10px;
     justify-items: start;
-  }
-  .window .body p {
-    margin: 0;
   }
   .window .body button {
     padding: var(--hx-space-2) 12px;
@@ -264,14 +254,6 @@ for (const [source, texts] of shown)
     font-size: 0.85rem;
   }
 
-  .demo :global(.expressive-code pre) {
-    border: 0;
-    border-radius: 0;
-    padding: 0;
-  }
-  .demo :global(.expressive-code .copy) {
-    display: none;
-  }
   @media (max-width: 900px) {
     .demo {
       grid-template-columns: 1fr;

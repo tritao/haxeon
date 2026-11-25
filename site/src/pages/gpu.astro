@@ -1,5 +1,5 @@
 ---
-import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import SplashPage from '../layouts/SplashPage.astro';
 import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
 import LayerDiagram from '../components/LayerDiagram.astro';
@@ -53,192 +53,186 @@ const generatedExcerpt = [
 ].join('\n').replace(/\t/g, '  ');
 ---
 
-<StarlightPage frontmatter={{
-  title: 'GPU',
-  template: 'splash',
-  prev: false,
-  next: false,
-  description: 'Draw custom views, games and visualisations with Haxeon’s portable GPU layer.',
-}}>
-  <div class="landing-content">
-    <section class="page-intro paper">
-      <div class="wrap hero">
-        <div class="head">
-          <h1 id="_top" tabindex="-1">A portable GPU layer, built in.</h1>
-          <p class="lede">Add your own drawing to an app: charts, maps, editor viewports, games and compute work. Buffers, pipelines and passes are objects in your code, submitted through each platform’s graphics API.</p>
-          <ul class="chips" aria-label="Supported graphics backends">
-            {available.map(({ api, status }) => <li><StatusBadge status={status}>{api}</StatusBadge></li>)}
-          </ul>
-          <div class="ctas">
-            <a class="btn primary" href={guide}>GPU basics</a>
-            <a class="btn ghost" href={repositorySource(circuit + 'src')}>Circuit Run source</a>
-          </div>
-        </div>
-        <LiveEmbed
-          as="figure"
-          src="/gpu/circuit-run/index.html"
-          title="Circuit Run"
-          name="Circuit Run"
-          button="Play in the browser"
-          protocol="app"
-          aspect="540 / 510"
-        >
-          <img slot="poster" src="/gpu/circuit-run.webp" width="540" height="452" alt="Circuit Run: a teal runner and a pink drone in a maze, with a node counter, sound toggle and restart button." />
-          <figcaption>Circuit Run draws its maze and actors with one GPU draw per frame, with UI controls on top.</figcaption>
-        </LiveEmbed>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>Draw your first frame</h2>
-          <p class="lede">The triangle from the GPU basics guide sets up once when its surface is ready, then submits the same draw each frame.</p>
-        </div>
-        <div class="grid two top">
-          <CodeCard code={ready} lang="haxe" title="Once · src/Scene.hx" />
-          <div class="stack">
-            <CodeCard code={frame} lang="haxe" title="Each frame · src/Scene.hx" />
-            <figure>
-              <img src="/gpu/triangle.webp" width="640" height="360" loading="lazy" alt="A triangle shaded from pink at the top to green and blue at its lower corners, on a dark background." />
-            </figure>
-          </div>
-        </div>
-        <p class="note"><a href={guide + '#set-up-once'}>Walk through it</a> · <a href={repositorySource(triangle + 'src')}>Read the whole app</a></p>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head"><h2>How the API fits together</h2></div>
-        <div class="split wide-end">
-          <LayerDiagram
-            id="gpu-api"
-            label="A Renderer creates buffers, images, samplers, shaders and pipelines. They are bound in a CommandBuffer, sealed into a Batch and submitted to a surface frame."
-            layers={[
-              { title: { text: 'Renderer', href: gpu('Renderer') } },
-              {
-                title: [{ text: 'Buffer', href: gpu('Buffer') }, ' · ', { text: 'Image', href: gpu('Image') }, ' · ', { text: 'Sampler', href: gpu('Sampler') }],
-                detail: [{ text: 'Shader', href: gpu('Shader') }, ' → ', { text: 'Pipeline', href: gpu('Pipeline') }],
-              },
-              { title: { text: 'CommandBuffer', href: gpu('CommandBuffer') } },
-              { title: { text: 'Batch', href: gpu('Batch') } },
-              { title: 'Surface frame' },
-            ]}
-            edges={['creates', 'bound in', 'sealed in', 'submitted to']}
-          />
-          <div class="stack">
-            <Card compact>
-              <h3>Frames only when needed</h3>
-              <p>Switch a surface to <a href={guide + '#run-it'}>on-demand frames</a> and request one when something changes, so an idle app does not redraw.</p>
-            </Card>
-            <Card compact>
-              <h3>Record once, submit again</h3>
-              <p>Seal passes and their commands into a batch, then submit the same batch on later frames without recording it again.</p>
-            </Card>
-            <Card compact>
-              <h3>Clear failures</h3>
-              <p>Errors name the operation that failed, including device loss. Misuse, such as binding a resource from another renderer, is rejected before it reaches the GPU.</p>
-            </Card>
-          </div>
+<SplashPage
+  title="GPU"
+  description="Draw custom views, games and visualisations with Haxeon’s portable GPU layer."
+>
+  <section class="page-intro paper">
+    <div class="wrap hero">
+      <div class="intro">
+        <h1 id="_top" tabindex="-1">A portable GPU layer, built in.</h1>
+        <p class="lede">Add your own drawing to an app: charts, maps, editor viewports, games and compute work. Buffers, pipelines and passes are objects in your code, submitted through each platform’s graphics API.</p>
+        <ul class="chips" aria-label="Supported graphics backends">
+          {available.map(({ api, status }) => <li><StatusBadge status={status}>{api}</StatusBadge></li>)}
+        </ul>
+        <div class="ctas">
+          <a class="btn primary" href={guide}>GPU basics</a>
+          <a class="btn ghost" href={repositorySource(circuit + 'src')}>Circuit Run source</a>
         </div>
       </div>
-    </section>
+      <LiveEmbed
+        as="figure"
+        src="/gpu/circuit-run/index.html"
+        title="Circuit Run"
+        name="Circuit Run"
+        button="Play in the browser"
+        aspect="540 / 510"
+      >
+        <img slot="poster" src="/gpu/circuit-run.webp" width="540" height="452" alt="Circuit Run: a teal runner and a pink drone in a maze, with a node counter, sound toggle and restart button." />
+        <figcaption>Circuit Run draws its maze and actors with one GPU draw per frame, with UI controls on top.</figcaption>
+      </LiveEmbed>
+    </div>
+  </section>
 
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>Shaders</h2>
-          <p class="lede">Write a shader once in GLSL. The build compiles it for each backend with <a href="https://github.com/floooh/sokol-tools/blob/master/docs/sokol-shdc.md" class="nowrap">sokol-shdc</a> and generates a typed module for it.</p>
-        </div>
-        <ol class="shader-flow" aria-label="Shader build">
-          <li><span>Triangle.glsl</span></li>
-          <li><span>sokol-shdc</span></li>
-          <li><span>GLSL 4.1 · GLSL ES 3.0 · HLSL 5 · Metal</span></li>
-          <li><span>shaders.Triangle</span></li>
-        </ol>
-        <div class="grid two top">
-          <CodeCard code={triangleShader} lang="sokol-shdc" title="src/shaders/Triangle.glsl" />
-          <div class="stack">
-            <CodeCard code={generatedExcerpt} lang="haxe" title="Generated · shaders/Triangle.hx" />
-            <Card compact>
-              <h3>Typed layouts and uniforms</h3>
-              <p>Offsets, strides and the vertex layout come from the shader, so they cannot drift from it. Each uniform block becomes a record with checked std140 offsets.</p>
-            </Card>
-            <Card compact>
-              <h3>Rebuilt while you work</h3>
-              <p><a href={docsUrl('reference/cli/build-run.md') + '#watch-mode'}><code>haxeon run --watch</code></a> rebuilds a shader when it or one of its includes changes, then relaunches the app.</p>
-            </Card>
-          </div>
-        </div>
+  <section>
+    <div class="wrap">
+      <div class="head">
+        <h2>Draw your first frame</h2>
+        <p class="lede">The triangle from the GPU basics guide sets up once when its surface is ready, then submits the same draw each frame.</p>
       </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>Compute</h2>
-          <p class="lede">A compute shader moves 8,192 particles in a storage buffer. The draw reads the same buffer, so nothing goes back to the CPU.</p>
-        </div>
-        <div class="grid two top">
+      <div class="grid two top">
+        <CodeCard code={ready} lang="haxe" title="Once · src/Scene.hx" />
+        <div class="stack">
+          <CodeCard code={frame} lang="haxe" title="Each frame · src/Scene.hx" />
           <figure>
-            <img src="/gpu/particles.webp" width="640" height="640" loading="lazy" alt="A fountain of small square particles, pink and fast near the spout, green and slow near the top." />
+            <img src="/gpu/triangle.webp" width="640" height="360" loading="lazy" alt="A triangle shaded from pink at the top to green and blue at its lower corners, on a dark background." />
           </figure>
-          <CodeCard code={computeStage[0]} lang="sokol-shdc" title="src/shaders/Particles.glsl" />
-        </div>
-        <p class="note"><a href={guide + '#compute-a-particle-fountain'}>Walk through it</a> · <a href={repositorySource(particles + 'src/shaders/Particles.glsl')}>Read the shaders</a> · <a href={repositorySource(particles + 'src')}>Read the app</a></p>
-      </div>
-    </section>
-
-    <section id="backends">
-      <div class="wrap">
-        <div class="head">
-          <h2>Backends</h2>
-          <p class="lede">Rendering goes through <a href="https://github.com/floooh/sokol">sokol_gfx</a>, a small C library that targets each platform’s native graphics API. It also has WebGPU and Vulkan backends, which are planned here.</p>
-        </div>
-        <div class="split">
-          <div class="backend-table">
-            <table aria-label="GPU backends">
-              <thead><tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Compute</th><th scope="col">Timestamps</th></tr></thead>
-              <tbody>
-                {backends.map(({ platform, api, status, compute, timestamps }) => (
-                  <tr><th scope="row">{platform}<span class="api-name">{api}</span></th><td><StatusBadge status={status} /></td><td>{compute}</td><td>{timestamps}</td></tr>
-                ))}
-              </tbody>
-            </table>
-            <p class="note">Image and buffer readback work on every backend.</p>
-          </div>
-          <LayerDiagram
-            id="gpu-stack"
-            label="Your draw code calls the GPU layer, which runs on sokol_gfx and the platform graphics API."
-            layers={[
-              { title: 'Your draw code' },
-              { title: 'GPU layer', detail: 'Buffers · Pipelines · Passes' },
-              { title: 'sokol_gfx' },
-              { title: 'OpenGL · WebGL2 · Metal · D3D11' },
-            ]}
-          />
         </div>
       </div>
-    </section>
+      <p class="note"><a href={guide + '#set-up-once'}>Walk through it</a> · <a href={repositorySource(triangle + 'src')}>Read the whole app</a></p>
+    </div>
+  </section>
 
-    <section>
-      <div class="wrap">
-        <div class="head"><h2>Going lower</h2></div>
-        <div class="grid two">
+  <section>
+    <div class="wrap">
+      <div class="head"><h2>How the API fits together</h2></div>
+      <div class="split wide-end">
+        <LayerDiagram
+          id="gpu-api"
+          label="A Renderer creates buffers, images, samplers, shaders and pipelines. They are bound in a CommandBuffer, sealed into a Batch and submitted to a surface frame."
+          layers={[
+            { title: { text: 'Renderer', href: gpu('Renderer') } },
+            {
+              title: [{ text: 'Buffer', href: gpu('Buffer') }, ' · ', { text: 'Image', href: gpu('Image') }, ' · ', { text: 'Sampler', href: gpu('Sampler') }],
+              detail: [{ text: 'Shader', href: gpu('Shader') }, ' → ', { text: 'Pipeline', href: gpu('Pipeline') }],
+            },
+            { title: { text: 'CommandBuffer', href: gpu('CommandBuffer') } },
+            { title: { text: 'Batch', href: gpu('Batch') } },
+            { title: 'Surface frame' },
+          ]}
+          edges={['creates', 'bound in', 'sealed in', 'submitted to']}
+        />
+        <div class="stack">
           <Card compact>
-            <h3>Native handles</h3>
-            <p>Pass renderer, shader and pipeline handles to <a href={repositorySource('packages/gpu/bindings/nativekit-gpu.hxi')}>NativeKit’s C GPU API</a>, or borrow the underlying device and context where available.</p>
+            <h3>Frames only when needed</h3>
+            <p>Switch a surface to <a href={guide + '#run-it'}>on-demand frames</a> and request one when something changes, so an idle app does not redraw.</p>
           </Card>
           <Card compact>
-            <h3>Your own graphics code</h3>
-            <p>Keep an existing renderer in C or C++ and call it through <a href={docsUrl('reference/C_HEADER_FFI.md')}>the C FFI</a>.</p>
+            <h3>Record once, submit again</h3>
+            <p>Seal passes and their commands into a batch, then submit the same batch on later frames without recording it again.</p>
+          </Card>
+          <Card compact>
+            <h3>Clear failures</h3>
+            <p>Errors name the operation that failed, including device loss. Misuse, such as binding a resource from another renderer, is rejected before it reaches the GPU.</p>
           </Card>
         </div>
       </div>
-    </section>
-  </div>
-</StarlightPage>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="head">
+        <h2>Shaders</h2>
+        <p class="lede">Write a shader once in GLSL. The build compiles it for each backend with <a href="https://github.com/floooh/sokol-tools/blob/master/docs/sokol-shdc.md" class="nowrap">sokol-shdc</a> and generates a typed module for it.</p>
+      </div>
+      <ol class="shader-flow" aria-label="Shader build">
+        <li><span>Triangle.glsl</span></li>
+        <li><span>sokol-shdc</span></li>
+        <li><span>GLSL 4.1 · GLSL ES 3.0 · HLSL 5 · Metal</span></li>
+        <li><span>shaders.Triangle</span></li>
+      </ol>
+      <div class="grid two top">
+        <CodeCard code={triangleShader} lang="sokol-shdc" title="src/shaders/Triangle.glsl" />
+        <div class="stack">
+          <CodeCard code={generatedExcerpt} lang="haxe" title="Generated · shaders/Triangle.hx" />
+          <Card compact>
+            <h3>Typed layouts and uniforms</h3>
+            <p>Offsets, strides and the vertex layout come from the shader, so they cannot drift from it. Each uniform block becomes a record with checked std140 offsets.</p>
+          </Card>
+          <Card compact>
+            <h3>Rebuilt while you work</h3>
+            <p><a href={docsUrl('reference/cli/build-run.md') + '#watch-mode'}><code>haxeon run --watch</code></a> rebuilds a shader when it or one of its includes changes, then relaunches the app.</p>
+          </Card>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="head">
+        <h2>Compute</h2>
+        <p class="lede">A compute shader moves 8,192 particles in a storage buffer. The draw reads the same buffer, so nothing goes back to the CPU.</p>
+      </div>
+      <div class="grid two top">
+        <figure>
+          <img src="/gpu/particles.webp" width="640" height="640" loading="lazy" alt="A fountain of small square particles, pink and fast near the spout, green and slow near the top." />
+        </figure>
+        <CodeCard code={computeStage[0]} lang="sokol-shdc" title="src/shaders/Particles.glsl" />
+      </div>
+      <p class="note"><a href={guide + '#compute-a-particle-fountain'}>Walk through it</a> · <a href={repositorySource(particles + 'src/shaders/Particles.glsl')}>Read the shaders</a> · <a href={repositorySource(particles + 'src')}>Read the app</a></p>
+    </div>
+  </section>
+
+  <section id="backends">
+    <div class="wrap">
+      <div class="head">
+        <h2>Backends</h2>
+        <p class="lede">Rendering goes through <a href="https://github.com/floooh/sokol">sokol_gfx</a>, a small C library that targets each platform’s native graphics API. It also has WebGPU and Vulkan backends, which are planned here.</p>
+      </div>
+      <div class="split">
+        <div class="backend-table">
+          <table aria-label="GPU backends">
+            <thead><tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Compute</th><th scope="col">Timestamps</th></tr></thead>
+            <tbody>
+              {backends.map(({ platform, api, status, compute, timestamps }) => (
+                <tr><th scope="row">{platform}<span class="api-name">{api}</span></th><td><StatusBadge status={status} /></td><td>{compute}</td><td>{timestamps}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <p class="note">Image and buffer readback work on every backend.</p>
+        </div>
+        <LayerDiagram
+          id="gpu-stack"
+          label="Your draw code calls the GPU layer, which runs on sokol_gfx and the platform graphics API."
+          layers={[
+            { title: 'Your draw code' },
+            { title: 'GPU layer', detail: 'Buffers · Pipelines · Passes' },
+            { title: 'sokol_gfx' },
+            { title: 'OpenGL · WebGL2 · Metal · D3D11' },
+          ]}
+        />
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="head"><h2>Going lower</h2></div>
+      <div class="grid two">
+        <Card compact>
+          <h3>Native handles</h3>
+          <p>Pass renderer, shader and pipeline handles to <a href={repositorySource('packages/gpu/bindings/nativekit-gpu.hxi')}>NativeKit’s C GPU API</a>, or borrow the underlying device and context where available.</p>
+        </Card>
+        <Card compact>
+          <h3>Your own graphics code</h3>
+          <p>Keep an existing renderer in C or C++ and call it through <a href={docsUrl('reference/C_HEADER_FFI.md')}>the C FFI</a>.</p>
+        </Card>
+      </div>
+    </div>
+  </section>
+</SplashPage>
 
 <style>
   .shader-flow {
@@ -251,7 +245,7 @@ const generatedExcerpt = [
     margin: 0 0 var(--hx-space-5);
     font: 600 0.82rem var(--sl-font-mono);
   }
-  .shader-flow li { margin: 0; display: flex; align-items: center; gap: var(--hx-space-3); }
+  .shader-flow li { display: flex; align-items: center; gap: var(--hx-space-3); }
   .shader-flow li + li::before { content: '→'; color: var(--sl-color-accent); }
   .shader-flow span { padding: 4px 10px; border: 1px solid var(--sl-color-gray-5); border-radius: var(--hx-radius-s); background: var(--sl-color-bg-sidebar); }
   .nowrap { white-space: nowrap; }
@@ -260,12 +254,9 @@ const generatedExcerpt = [
   .backend-table { display: grid; gap: var(--hx-space-3); align-content: start; }
   .hero { --hero-columns: minmax(0, 1fr) minmax(0, 34rem); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; }
-  .chips li { margin: 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--sl-color-gray-5); }
-  thead th { font: 600 0.75rem var(--sl-font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--sl-color-gray-3); }
   @media (max-width: 30rem) {
-    th, td { padding-inline: 4px; font-size: 0.8rem; }
+    th, td { padding-inline: 4px; }
+    tbody :is(th, td) { font-size: 0.8rem; }
   }
 </style>
 
