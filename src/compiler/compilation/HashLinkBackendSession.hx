@@ -302,15 +302,31 @@ class HashLinkBackendSession implements BackendSession {
 			}], candidateAssembler.symbols.namedGlobals());
 		var allocationAfterPatch = AllocationMeter.sample();
 		assembler = candidateAssembler;
-		var stableIds = candidateAssembler.cache.stableIds;
+		var stableIds = candidateAssembler.cache.stableIds,
+			functionIndices = assembly.functionIndices,
+			sections:Null<haxeon.io.SegmentedBytes> = null;
+		if (context.options.moduleSections && !context.livePatching) {
+			// The loader numbers a module of sections itself, and a function's stable id is its index there.
+			var written = compiler.hl.HlSectionWriter.write(assembly.module, compiler.hl.HlLz4.FAST,
+				context.options.checkReuse);
+			sections = written.bytes;
+			functionIndices = [];
+			for (name => index in assembly.functionIndices) {
+				var linked = index < written.linkedIndices.length ? written.linkedIndices[index] : -1;
+				if (linked >= 0)
+					functionIndices.set(name, linked);
+			}
+			stableIds = functionIndices;
+		}
 		return {
 			artifact: HashLinkBuild({
 				module: assembly.module,
-				functionIndices: CompilationContext.copyIndices(assembly.functionIndices),
+				functionIndices: CompilationContext.copyIndices(functionIndices),
 				functionIds: CompilationContext.copyIndices(stableIds),
-				runtimeIdentity: HlRuntimeIdentity.encode(context.moduleId, assembly.revision, assembly.functionIndices,
+				runtimeIdentity: HlRuntimeIdentity.encode(context.moduleId, assembly.revision, functionIndices,
 					stableIds),
-				patchBytes: patchBytes
+				patchBytes: patchBytes,
+				sections: sections
 			}),
 			assembler: candidateAssembler,
 			abi: nextAbi,

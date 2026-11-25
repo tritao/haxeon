@@ -737,7 +737,7 @@ class HlSymbolTable {
 	 * instead of addressing them as slots. No value ever has this type; a register is cast to it.
 	 */
 	public function internRuntimeHeader(kind:HlRuntimeHeader):Int {
-		var key = 'runtime-header:' + Std.string(kind);
+		var key = RUNTIME_HEADER_PREFIX + Std.string(kind);
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
 		writable(TYPES);
@@ -1155,11 +1155,29 @@ class HlSymbolTable {
 	public function internStringConstant(value:String):Int
 		return internGlobal(STRING_CONSTANT_PREFIX + value, IrType.Bytes);
 
-	/** The literal globals, in index order, with the literal each one holds. */
+	/** The name of each global by index (`HlCode.globalNames`): null for a class value, which its object type names. */
+	public function globalNames():Array<Null<String>> {
+		var names:Array<Null<String>> = [for (_ in 0...globals.length) null];
+		for (name => index in globalIndices)
+			names[index] = name;
+		return names;
+	}
+
+	/**
+	 * Whether the object type named `name` is defined by every module section that uses it rather than owned by one
+	 * (`HlSectionWriter`): String, the runtime headers and the anonymous structures, which no declaration owns.
+	 */
+	public static function isSharedDefinition(name:String):Bool
+		return name == "String" || StringTools.startsWith(name, RUNTIME_HEADER_PREFIX)
+			|| compiler.semantic.SemanticSignature.isAnonymousName(name);
+
+	static inline final RUNTIME_HEADER_PREFIX = "runtime-header:";
+
 	/** Every named global (the static fields), by name: what a refused patch names a stored closure's holder by. */
 	public function namedGlobals():Map<String, Int>
 		return [for (name => index in globalIndices) name => index];
 
+	/** The literal globals, in index order, with the literal each one holds. */
 	public function stringConstantGlobals():Array<{global:Int, value:String}>
 		return stringConstants;
 

@@ -28,6 +28,7 @@ private typedef HlStoredSection = {
 }
 
 /** Serializes the in-memory HashLink model using canonical HLB encodings. */
+@:allow(compiler.hl.HlSectionWriter)
 class HlWriter {
 	public static inline final FUNCTION_IDENTITIES = 1;
 	public static inline final OPCODE_SOURCE_SPANS = 2;
@@ -49,6 +50,9 @@ class HlWriter {
 	var anchorFiles:Array<Int> = [];
 
 	var functionScratch:Null<HlFunctionScratch>;
+
+	/** In a module section, the section's index of each table entry the functions name (`HlSectionWriter`); null in a dense module. */
+	var local:Null<HlSectionIndices>;
 
 	public function new(?cache:HlWriterCache) {
 		this.cache = cache;
@@ -762,13 +766,16 @@ class HlWriter {
 	function writeFunction(fn:HlFunction):Void {
 		var scratch = scratch(), positions = scratch.positions;
 		layoutInto(fn.opcodes, positions, scratch.labelIndices, scratch.loopHeads);
-		var count = fn.opcodes.length;
-		writeIndex(fn.type);
-		writeUnsignedIndex(fn.functionIndex);
+		var count = fn.opcodes.length, local = this.local;
+		// A section's function is named by its head, not by its body.
+		if (local == null) {
+			writeIndex(fn.type);
+			writeUnsignedIndex(fn.functionIndex);
+		}
 		writeUnsignedIndex(fn.registers.length);
 		writeUnsignedIndex(positions[count]);
 		for (type in fn.registers)
-			writeIndex(type);
+			writeIndex(local == null ? type : local.types[type]);
 		for (index in 0...count) {
 			if (positions[index + 1] == positions[index])
 				continue;
@@ -780,7 +787,7 @@ class HlWriter {
 			writeDebugLocations(fn, positions, scratch.located);
 			writeUnsignedIndex(fn.debugAssignments.length);
 			for (assignment in fn.debugAssignments) {
-				writeUnsignedIndex(assignment.name);
+				writeUnsignedIndex(local == null ? assignment.name : local.strings[assignment.name]);
 				writeIndex(assignment.position < 0 ? 0 : positions[assignment.position] + 1);
 				writeIndex(assignment.scopeEnd < 0 ? 0 : positions[assignment.scopeEnd] + 1);
 			}
@@ -935,6 +942,7 @@ class HlWriter {
 
 	/** Lowers the instruction at `position` into `opcode` and the operands left in `operands`; nothing is allocated per instruction. */
 	function lowerInstruction(instruction:HlInstruction, position:Int, scratch:HlFunctionScratch):HlOpcode {
+		var local = this.local;
 		return switch instruction {
 			case Move(destination, source): {
 				put2(destination, source);
@@ -942,17 +950,17 @@ class HlWriter {
 			}
 			case LoadInt(destination, constant):
 				{
-					put2(destination, constant);
+					put2(destination, local == null ? constant : local.ints[constant]);
 					HlOpcode.Int;
 				}
 			case LoadFloat(destination, constant):
 				{
-					put2(destination, constant);
+					put2(destination, local == null ? constant : local.floats[constant]);
 					HlOpcode.Float;
 				}
 			case LoadString(destination, constant):
 				{
-					put2(destination, constant);
+					put2(destination, local == null ? constant : local.strings[constant]);
 					HlOpcode.String;
 				}
 			case LoadBool(destination, value):
@@ -967,7 +975,7 @@ class HlWriter {
 				}
 			case LoadType(destination, type):
 				{
-					put2(destination, type);
+					put2(destination, local == null ? type : local.types[type]);
 					HlOpcode.Type;
 				}
 			case ToDyn(destination, source):
@@ -1022,12 +1030,12 @@ class HlWriter {
 				}
 			case GlobalGet(destination, global):
 				{
-					put2(destination, global);
+					put2(destination, local == null ? global : local.globals[global]);
 					HlOpcode.GetGlobal;
 				}
 			case GlobalSet(global, source):
 				{
-					put2(global, source);
+					put2(local == null ? global : local.globals[global], source);
 					HlOpcode.SetGlobal;
 				}
 			case Add(destination, left, right):
@@ -1078,32 +1086,33 @@ class HlWriter {
 			}
 			case Call0(destination, functionIndex):
 				{
-					put2(destination, functionIndex);
+					put2(destination, local == null ? functionIndex : local.functions[functionIndex]);
 					HlOpcode.Call0;
 				}
 			case Call1(destination, functionIndex, argument):
 				{
-					put3(destination, functionIndex, argument);
+					put3(destination, local == null ? functionIndex : local.functions[functionIndex], argument);
 					HlOpcode.Call1;
 				}
 			case Call2(destination, functionIndex, argument1, argument2):
 				{
-					put4(destination, functionIndex, argument1, argument2);
+					put4(destination, local == null ? functionIndex : local.functions[functionIndex], argument1,
+						argument2);
 					HlOpcode.Call2;
 				}
 			case CallN(destination, functionIndex, arguments):
 				{
-					putCall(destination, functionIndex, arguments);
+					putCall(destination, local == null ? functionIndex : local.functions[functionIndex], arguments);
 					HlOpcode.CallN;
 				}
 			case StaticClosure(destination, functionIndex):
 				{
-					put2(destination, functionIndex);
+					put2(destination, local == null ? functionIndex : local.functions[functionIndex]);
 					HlOpcode.StaticClosure;
 				}
 			case InstanceClosure(destination, functionIndex, receiver):
 				{
-					put3(destination, functionIndex, receiver);
+					put3(destination, local == null ? functionIndex : local.functions[functionIndex], receiver);
 					HlOpcode.InstanceClosure;
 				}
 			case NullCheck(register):
@@ -1388,4 +1397,19 @@ private class HlFunctionScratch {
 			throw new InternalError('Unknown HashLink jump label $target');
 		return positions[index];
 	}
+}
+
+/**
+ * By index in a dense module's tables, the index in one module section's tables of each entry the section names
+ * (`HlSectionWriter`); an entry the section does not name is unset.
+ */
+class HlSectionIndices {
+	public final ints:Array<Int> = [];
+	public final floats:Array<Int> = [];
+	public final strings:Array<Int> = [];
+	public final types:Array<Int> = [];
+	public final globals:Array<Int> = [];
+	public final functions:Array<Int> = [];
+
+	public function new() {}
 }

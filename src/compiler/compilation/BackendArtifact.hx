@@ -20,6 +20,12 @@ typedef HlArtifact = {
 
 	/** HLP: the patch from the build's base revision to this one, or null when the build is not delivered as a patch. */
 	final patchBytes:Null<Bytes>;
+
+	/**
+	 * The module as HLB 9 module sections (`HlSectionWriter`), or null when the build writes `module` as one dense HLB 8 module.
+	 * The function indices are then the ones the loader's link gives.
+	 */
+	final sections:Null<haxeon.io.SegmentedBytes>;
 }
 
 /** What a Wasm build emits. */
@@ -56,6 +62,13 @@ class BackendArtifacts {
 			case HashLinkBuild(_): throw new InternalError("The build emitted a HashLink module, not a Wasm module");
 			case HashLinkCBuild(_): throw new InternalError("The build emitted C, not a Wasm module");
 		};
+
+	/** The bytes of a HashLink build's module: its sections, or `module` encoded densely with `cache`. */
+	public static function hashLinkBytes(build:HlArtifact, ?cache:compiler.hl.HlWriterCache,
+			checkReuse:Bool = false):haxeon.io.SegmentedBytes {
+		var sections = build.sections;
+		return sections != null ? sections : compiler.hl.HlWriter.encode(build.module, cache, checkReuse);
+	}
 
 	/** The C artifact; a build by another backend is an error. */
 	public static function c(artifact:BackendArtifact):HlcArtifact

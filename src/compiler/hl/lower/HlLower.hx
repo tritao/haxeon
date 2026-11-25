@@ -785,6 +785,8 @@ class HlLower {
 		code.strings = symbols.strings;
 		code.types = symbols.types;
 		code.globals = symbols.globals;
+		code.functionNames = [for (fn in program.functions) fn.name];
+		code.globalNames = symbols.globalNames();
 		var finalizedAt = Sys.time() * 1000.0;
 		var allocationAfterFinalize = AllocationMeter.sample();
 		allocationPhases = [

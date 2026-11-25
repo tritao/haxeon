@@ -692,7 +692,8 @@ class Compiler {
 						functionIndices: build.functionIndices,
 						functionIds: build.functionIds,
 						runtimeIdentity: build.runtimeIdentity,
-						patchBytes: null
+						patchBytes: null,
+						sections: build.sections
 					});
 					case WasmBuild(build): WasmBuild(build);
 					case HashLinkCBuild(build): HashLinkCBuild(build);

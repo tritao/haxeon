@@ -20,6 +20,12 @@ class HlCode {
 	/** Objects the VM creates when the module loads, each stored in one global. */
 	public var constants:Array<HlConstant> = [];
 
+	/** The name of each function, by its position in `functions`: what a module of sections keys it by (`HlSectionWriter`). */
+	public var functionNames:Array<String> = [];
+
+	/** The name of each global, by index, or null for one the symbol tables name by what it belongs to (a class value). */
+	public var globalNames:Array<Null<String>> = [];
+
 	public var debugSections:Array<HlDebugSection> = [];
 	public var sourceSnapshots:Array<HlSourceSnapshot> = [];
 	public var entryPoint:Int = 0;

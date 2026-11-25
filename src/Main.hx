@@ -1,7 +1,6 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
-import compiler.hl.HlWriter;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
 import haxe.io.Path;
@@ -32,7 +31,8 @@ class Main {
 		for (warning in compiler.warnings(result.moduleNames))
 			Sys.stderr().writeString(warning.format() + "\n");
 		File.saveBytes(outputPath,
-			HlWriter.encode(BackendArtifacts.hashLink(result.artifact).module, null, options.checkReuse).flatten());
+			BackendArtifacts.hashLinkBytes(BackendArtifacts.hashLink(result.artifact), null,
+			options.checkReuse).flatten());
 		Sys.println('compiled $sourcePath -> $outputPath');
 	}
 

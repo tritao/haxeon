@@ -3,6 +3,8 @@ package compiler.tools;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.compilation.BackendArtifact.HlArtifact;
 import compiler.core.FileVersion;
 import compiler.core.InternalError;
 import compiler.ffi.FfiRegistry.FfiConfiguration;
@@ -78,16 +80,17 @@ class CompilerSession {
 	 */
 	var encodedModule:Null<{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>}>;
 
-	public function encodeHashLink(code:HlCode):haxeon.io.SegmentedBytes
-		return encoded(code).bytes;
+	public function encodeHashLink(artifact:HlArtifact):haxeon.io.SegmentedBytes
+		return encoded(artifact).bytes;
 
-	function encoded(code:HlCode):{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>} {
+	function encoded(artifact:HlArtifact):{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>} {
 		var known = encodedModule;
-		if (known == null || known.code != code) {
+		if (known == null || known.code != artifact.module) {
 			var session = compiler;
 			known = {
-				code: code,
-				bytes: HlWriter.encode(code, writerCache, session != null && session.options.checkReuse),
+				code: artifact.module,
+				bytes: BackendArtifacts.hashLinkBytes(artifact, writerCache,
+					session != null && session.options.checkReuse),
 				buildId: null
 			};
 			encodedModule = known;
@@ -95,9 +98,9 @@ class CompilerSession {
 		return known;
 	}
 
-	/** The build id of `code`'s module: the SHA-256 of the bytes `writeHashLink` writes, worked out once for them. */
-	public function hashLinkBuildId(code:HlCode):String {
-		var known = encoded(code), id = known.buildId;
+	/** The build id of `artifact`'s module: the SHA-256 of the bytes `writeHashLink` writes, worked out once for them. */
+	public function hashLinkBuildId(artifact:HlArtifact):String {
+		var known = encoded(artifact), id = known.buildId;
 		if (id == null) {
 			id = build.execution.ContentDigest.makeHex(known.bytes.flatten());
 			known.buildId = id;
@@ -105,8 +108,8 @@ class CompilerSession {
 		return id;
 	}
 
-	public function writeHashLink(code:HlCode, path:String):Void
-		HlWriter.saveSegments(encodeHashLink(code), path);
+	public function writeHashLink(artifact:HlArtifact, path:String):Void
+		HlWriter.saveSegments(encodeHashLink(artifact), path);
 
 	/** Wasm guests import their host services through this interface of the standard library at `stdlib`. */
 	static function hostInterfaces(target:Null<BackendTarget>, stdlib:String):{

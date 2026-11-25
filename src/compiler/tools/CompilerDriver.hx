@@ -188,7 +188,7 @@ class CompilerDriver {
 			// A session works the HashLink module's id out from the bytes it wrote, once for an unchanged module.
 			var buildId = session == null
 				|| isWasm ? build.execution.ContentDigest.makeHex(File.getBytes(request.output))
-				: session.hashLinkBuildId(BackendArtifacts.hashLink(result.artifact).module);
+				: session.hashLinkBuildId(BackendArtifacts.hashLink(result.artifact));
 			File.saveContent(request.output + ".build-id", buildId);
 			if (request.irOutput != null)
 				File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
@@ -430,11 +430,11 @@ class CompilerDriver {
 	}
 
 	static function writeModule(result:CompileResult, output:String, session:Null<CompilerSession>):Void {
-		var module = BackendArtifacts.hashLink(result.artifact).module;
+		var build = BackendArtifacts.hashLink(result.artifact);
 		if (session == null)
-			HlWriter.writeFile(module, output);
+			HlWriter.saveSegments(BackendArtifacts.hashLinkBytes(build), output);
 		else
-			session.writeHashLink(module, output);
+			session.writeHashLink(build, output);
 	}
 
 	static function deleteIfExists(path:String):Void
