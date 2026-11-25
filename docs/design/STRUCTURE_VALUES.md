@@ -11,9 +11,9 @@ lowering, reviews the note before it is sliced.
 
 ## Problem
 
-Haxeon lowers each distinct field set of an anonymous structure to a class of its own, `$anon:{a:Int,b:String}`
-(`SemanticSignature.anonymousTypeName`, `IrProgramAssembler.objectsFrom`, `IrGenerator.lowerType`:
-`TAnonymous(name, _) → Obj(name)`). A value of a structure type is an instance of exactly that class. Every divergence
+Haxeon lowers each distinct field set of an anonymous structure to a class of its own, named by a digest of the field
+set's spelling (`$anon:` and 32 hex digits for `{a:Int,b:String}`; `SemanticSignature.anonymousTypeName`,
+`IrProgramAssembler.objectsFrom`, `IrGenerator.lowerType`: `TAnonymous(name, _) → Obj(name)`). A value of a structure type is an instance of exactly that class. Every divergence
 below follows from it:
 
 1. **Literals do not gain optional fields.** `var c = {name: "y"}; var d:{name:String, ?optional:Bool} = c;` is
@@ -117,7 +117,7 @@ instance, an interface's object, a dynamic object. Converting between structure 
 reflection are those of the object, as in Haxe. A field access dispatches on the object's class:
 
 - **The record of a literal** keeps today's layout: a class per closed field set, named by it
-  (`$anon:{a:Int,b:String}`), with no header beyond the object's type. It is the *exact shape* of that structure type.
+  (`$anon:` and a digest of `{a:Int,b:String}`), with no header beyond the object's type. It is the *exact shape* of that structure type.
 - **A structure slot** (local, field, array element, argument, result) has a new IR type, `Structure(S)`. Its physical
   type is the backend's "any object" reference: `dyn` on HashLink, the object root reference on Wasm GC, a pointer on
   Wasm32. Every structure type has the same physical type, so `Array<W>` to `Array<S>` and function variance need no

@@ -10,21 +10,31 @@ import compiler.types.Type.NominalKind;
 
 /** Deterministic spelling for resolved semantic types and callable signatures. */
 class SemanticSignature {
-	/** Final controls field writes; it does not change the anonymous object layout. */
+	/**
+	 * A structure's name: a digest of its fields' spelling, so that a name stays the same length however deep the structure
+	 * nests, and the names the process keeps (`GlobalNames`, `IrSymbol`) stop holding whole type spellings. 128 bits of SHA-256
+	 * make a collision between two structures out of reach, where checking for one would keep every spelling for the
+	 * process. Final controls field writes; it does not change the anonymous object layout.
+	 */
 	public static function anonymousTypeName(fields:Array<compiler.types.Type.AnonymousField>):String
-		return compiler.core.GlobalNames.of('$' + 'anon:' + anonymousFields([for (field in fields) {
+		return compiler.core.GlobalNames.of(anonymousName(fields, false));
+
+	static function anonymousName(fields:Array<compiler.types.Type.AnonymousField>, provisional:Bool):String
+		return '$' + 'anon:' + compiler.core.TextDigest.sha256(anonymousFields([for (field in fields) {
 			name: field.name, type: field.type, optional: field.optional, isFinal: false
-		}]));
+		}], provisional)).substr(0, 32);
 
 	/**
 	 * A structure that contains itself cannot be spelled out from its fields, since the spelling would never end.
 	 * It is named after the typedef that declares it instead.
 	 */
 	public static function recursiveAnonymousName(declaration:String):String
-		return '$' + 'anon:rec:' + declaration;
+		return RECURSIVE_ANONYMOUS_PREFIX + declaration;
 
 	public static function isRecursiveAnonymousName(name:String):Bool
-		return StringTools.startsWith(name, '$' + 'anon:rec:');
+		return StringTools.startsWith(name, RECURSIVE_ANONYMOUS_PREFIX);
+
+	static inline final RECURSIVE_ANONYMOUS_PREFIX = '$' + 'anon:rec:';
 
 	public static function isAnonymousName(name:String):Bool
 		return StringTools.startsWith(name, '$' + 'anon:');
@@ -95,9 +105,7 @@ class SemanticSignature {
 			case TAnonymous(name, fields) if (compiler.types.Monomorphs.isOpenStructureName(name)):
 				if (!provisional)
 					throw new InternalError('An open literal structure ($name) was spelled before its unit closed it');
-				'$' + 'anon:' + anonymousFields([for (field in fields) {
-					name: field.name, type: field.type, optional: field.optional, isFinal: false
-				}], true);
+				anonymousName(fields, true);
 			case TAnonymous(name, _): name;
 			// A filled type variable is spelled as its type, so keys made while it is in a type match the ones made after.
 			case TMonomorph(cell): cell.bound == null ? 'unknown:${cell.origin}' : spell(cell.bound, provisional);
@@ -132,9 +140,12 @@ class SemanticSignature {
 				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + display(root) + "," + display(value) + ">";
 			case TFunction(arguments, result,
 				optional): '(${[for (index in 0...arguments.length) optionalMark(optional, index) + display(arguments[index])].join(",")})->${display(result)}';
-			case TAnonymous(name, fields): compiler.types.Monomorphs.isOpenStructureName(name) ? '$' + 'anon:{'
+			// A structure's name is a digest; a recursive one is shown by the typedef that declares it, since its fields contain it.
+			case TAnonymous(name,
+				_) if (isRecursiveAnonymousName(name)): name.substr(RECURSIVE_ANONYMOUS_PREFIX.length);
+			case TAnonymous(_, fields): "{"
 				+ [for (field in fields)(field.optional ? "?" : "") + field.name + ":" + display(field.type)].join(",")
-				+ "}" : name;
+				+ "}";
 			case TMonomorph(cell): cell.bound == null ? "Unknown" : display(cell.bound);
 		};
 

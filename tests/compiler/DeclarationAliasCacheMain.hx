@@ -27,35 +27,40 @@ class Marker {}
 			tokens = new Lexer(source).tokenize(),
 			index = DeclarationIndex.registered(new Parser(tokens).parseProgram());
 
-		var inner = "$anon:{a:Int,b:Float}";
-		var outer = "$anon:{first:" + inner + ",second:" + inner + ",third:Array<" + inner + ">}";
+		var inner = "{a:Int,b:Float}";
+		var outer = "{first:" + inner + ",second:" + inner + ",third:Array<" + inner + ">}";
 
-		// A cached result must equal the first, freshly computed one, and match the spelling by hand.
+		// A cached result must equal the first, freshly computed one, and show the shape written by hand.
 		var before = SemanticSignature.anonymousSpellings;
-		var first = spell(index.resolve(AstType.NamedType("Outer")));
+		var first = index.resolve(AstType.NamedType("Outer"));
 		var spelledFirst = SemanticSignature.anonymousSpellings - before;
-		var second = spell(index.resolve(AstType.NamedType("Outer")));
+		var second = index.resolve(AstType.NamedType("Outer"));
 		var spelledAgain = SemanticSignature.anonymousSpellings - before - spelledFirst;
-		expect(first == outer, 'resolved alias spelling should be exact, got $first');
-		expect(second == first, "a cached alias should resolve to the same type as the first resolution");
-		expect(spell(index.resolve(AstType.NamedType("Inner"))) == inner, "a nested alias resolves to its own shape");
+		expect(shown(first) == outer, 'resolved alias shape should be exact, got ${shown(first)}');
+		expect(spell(second) == spell(first), "a cached alias should resolve to the same type as the first resolution");
+		expect(shown(index.resolve(AstType.NamedType("Inner"))) == inner, "a nested alias resolves to its own shape");
+		// A structure's name is a digest: it does not grow with the structures nested in it.
+		expect(spell(first).length == spell(index.resolve(AstType.NamedType("Inner"))).length,
+			'a structure name should not spell its nested structures, got ${spell(first)}');
 
 		// `Inner` is mentioned three times inside `Outer`, but each declaration is spelled once: Inner and Outer.
 		expect(spelledFirst == 2, 'Outer and its nested Inner should be spelled once each, spelled $spelledFirst');
 		expect(spelledAgain == 0, 'a repeated mention must not spell anything again, spelled $spelledAgain');
 
 		// Generic aliases resolve per argument and never share results across arguments.
-		var wrappedInt = spell(index.resolve(AstType.AppliedType("Wrapper", [AstType.IntType])));
-		var wrappedFloat = spell(index.resolve(AstType.AppliedType("Wrapper", [AstType.FloatType])));
-		var wrappedIntAgain = spell(index.resolve(AstType.AppliedType("Wrapper", [AstType.IntType])));
-		expect(wrappedInt == "$anon:{value:Int}", 'Wrapper<Int> should substitute Int, got $wrappedInt');
-		expect(wrappedFloat == "$anon:{value:Float}", 'Wrapper<Float> must not reuse Wrapper<Int>, got $wrappedFloat');
-		expect(wrappedIntAgain == wrappedInt, "Wrapper<Int> resolves the same way every time");
+		var wrappedInt = index.resolve(AstType.AppliedType("Wrapper", [AstType.IntType]));
+		var wrappedFloat = index.resolve(AstType.AppliedType("Wrapper", [AstType.FloatType]));
+		var wrappedIntAgain = index.resolve(AstType.AppliedType("Wrapper", [AstType.IntType]));
+		expect(shown(wrappedInt) == "{value:Int}", 'Wrapper<Int> should substitute Int, got ${shown(wrappedInt)}');
+		expect(shown(wrappedFloat) == "{value:Float}",
+			'Wrapper<Float> must not reuse Wrapper<Int>, got ${shown(wrappedFloat)}');
+		expect(spell(wrappedFloat) != spell(wrappedInt), "Wrapper<Float> and Wrapper<Int> are named apart");
+		expect(spell(wrappedIntAgain) == spell(wrappedInt), "Wrapper<Int> resolves the same way every time");
 
 		// Resolving under a substitution map never disturbs the plain alias.
 		var substituted = index.resolve(AstType.NamedType("Inner"), null, ["T" => CompilerType.TFloat]);
-		expect(spell(substituted) == inner, "an unrelated substitution should not change a non-generic alias");
-		expect(spell(index.resolve(AstType.NamedType("Inner"))) == inner, "the plain alias is unchanged afterwards");
+		expect(shown(substituted) == inner, "an unrelated substitution should not change a non-generic alias");
+		expect(shown(index.resolve(AstType.NamedType("Inner"))) == inner, "the plain alias is unchanged afterwards");
 
 		// Failures throw every time: a cyclic or broken alias is never cached as a value.
 		expectError(function() index.resolve(AstType.NamedType("Loop")), "a cyclic alias should be rejected");
@@ -65,13 +70,17 @@ class Marker {}
 			"an alias to a missing type should be rejected");
 		expectError(function() index.resolve(AstType.NamedType("Broken")),
 			"a broken alias should still be rejected on the second try");
-		expect(spell(index.resolve(AstType.NamedType("Outer"))) == outer, "failures must not disturb cached aliases");
+		expect(spell(index.resolve(AstType.NamedType("Outer"))) == spell(first),
+			"failures must not disturb cached aliases");
 
 		Sys.println("PASS: alias resolution memoization");
 	}
 
 	static function spell(type:CompilerType):String
 		return SemanticSignature.type(type);
+
+	static function shown(type:CompilerType):String
+		return SemanticSignature.display(type);
 
 	static function expect(condition:Bool, message:String):Void {
 		if (!condition)

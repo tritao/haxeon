@@ -59,11 +59,15 @@ class Marker {}
 		expect(nameOf(tree) == SemanticSignature.recursiveAnonymousName("Tree"), 'unexpected name ${nameOf(tree)}');
 		expect(SemanticSignature.isRecursiveAnonymousName(nameOf(tree)), "the name marks the structure as recursive");
 		expect(SemanticSignature.type(tree) == nameOf(tree), "its signature is that name");
+		expect(SemanticSignature.display(tree) == "Tree",
+			'it is shown as its typedef, got ${SemanticSignature.display(tree)}');
 
-		// A typedef that does not refer to itself is spelled from its fields, exactly as before.
+		// A typedef that does not refer to itself is named from its fields, exactly as before.
 		var plain = resolve("Plain");
-		expect(nameOf(plain) == "$anon:{count:Int,name:String}",
+		expect(nameOf(plain) == SemanticSignature.anonymousTypeName(fieldsOf(plain)),
 			'a plain structure keeps its structural name, got ${nameOf(plain)}');
+		expect(SemanticSignature.display(plain) == "{count:Int,name:String}",
+			'a plain structure shows its fields, got ${SemanticSignature.display(plain)}');
 		expect(!SemanticSignature.isRecursiveAnonymousName(nameOf(plain)), "a plain structure is not recursive");
 
 		// Resolving again gives the same structure.
