@@ -9,8 +9,10 @@ import PlatformIcon, { type Platform } from '../components/PlatformIcon.astro';
 import StatusBadge from '../components/StatusBadge.astro';
 import { docsUrl, projectRepo, repositorySource } from '../../docs.mjs';
 
-// The newest published release, as its tag names it without the `v`; null until the first one is published.
+// The newest published release, as its tag names it without the `v`; null until the first one is published. A version
+// with a suffix (0.3.0-preview.1) is a pre-release, as the release workflow publishes it.
 const latest: string | null = null;
+const preview = latest?.includes('-') ?? false;
 
 // The archives are the release workflow's build matrix, so the page lists exactly what a release builds.
 const releaseWorkflow = '.github/workflows/release.yml';
@@ -60,6 +62,14 @@ npm ci && npm run build`;
           One archive per platform holds the <code>haxeon</code> command, the VM, the compiler, the standard library and
           the project templates. Haxeon is pre-1.0: the language, the CLI and the packages may change between releases.
         </p>
+        {
+          latest && (
+            <p class="notice">
+              {preview ? <>Haxeon {latest} is a preview release for testing: expect rough edges.</> : <>Haxeon {latest}.</>}{' '}
+              <a href={`${projectRepo}/releases/tag/v${latest}`}>Release notes</a>
+            </p>
+          )
+        }
         {
           latest && (
             <div class="detected">
@@ -122,6 +132,14 @@ npm ci && npm run build`;
           ))
         }
       </ul>
+      {
+        latest && (
+          <p class="note">
+            The archives are not signed yet. On macOS, clear the quarantine before the first run:{' '}
+            <code>xattr -dr com.apple.quarantine haxeon-{latest}-macos-arm64</code>
+          </p>
+        )
+      }
       <p class="note">
         On other machines, including Linux arm64 and Intel Macs, build from source. <a
           href={docsUrl('reference/RELEASES.md')}>What an archive holds</a

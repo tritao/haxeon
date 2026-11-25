@@ -214,9 +214,21 @@ jobs:
             fi
             echo
             echo "Check a download against \`SHA256SUMS\`."
+            if [[ $version == *-* ]]; then
+              echo
+              echo "This is a pre-release for testing: expect rough edges, and changes before the release it leads to."
+            fi
+            if [[ $macos != 0 ]]; then
+              echo
+              echo "The archives are not signed yet. On macOS, clear the download's quarantine before the first run:"
+              echo "\`xattr -dr com.apple.quarantine haxeon-$version-macos-arm64\`."
+            fi
           } > notes.md
+          # A version with a suffix (0.3.0-preview.1) is a pre-release: listed, but never GitHub's "latest" release.
+          prerelease=()
+          [[ $version == *-* ]] && prerelease=(--prerelease)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "Haxeon $version" --notes-file notes.md
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag "${prerelease[@]}" --title "Haxeon $version" --notes-file notes.md
           fi
