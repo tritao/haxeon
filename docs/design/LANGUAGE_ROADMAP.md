@@ -30,6 +30,7 @@ The rules for every entry:
 | Result builders | Conditional proposal: a library-declared builder lowers `if`, `switch` and `for`; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 | Lazy parameters | Conditional proposal: `Lazy<T>` parameters receive the caller's expression unevaluated; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 | `internal` | An access level for what a package's modules share but its users may not use, enforced per manifest package, with named friends (`package.friends`) for its own test projects and no public declaration exposing an internal type. Implemented. | [LANGUAGE_SUPPORT.md](../reference/LANGUAGE_SUPPORT.md) |
+| Enum members and per-case constants | `enum` is the one construct for closed value sets: any methods and static members, and immutable per-case constants (`final` fields each case sets, checked complete at the declaration). Raw codes stay `RawRepresentable` enum abstracts. Decided, not implemented. | [ENUM_MEMBERS.md](ENUM_MEMBERS.md) |
 
 ### RawRepresentable (implemented)
 

@@ -264,6 +264,9 @@ decides (change 16).
 `RawRepresentable` semantics, with checked conversion from declared constants and no implicit conversions; the syntax
 says what they are.
 
+Not adopted for Haxeon itself: [ENUM_MEMBERS.md](ENUM_MEMBERS.md) keeps raw codes as `RawRepresentable` enum
+abstracts, whose representation is the code, and gives enums per-case constants for every other number per case.
+
 ### 4. Newtypes without implicit conversions
 
 A Haxe abstract wraps a representation type and can declare implicit conversions both ways:
