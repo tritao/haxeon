@@ -49,9 +49,7 @@ private class StyleKindsProbe {
 		];
 		var counts = [1, 2, 4, 4], typeNames = ["float", "vec2", "vec4", "color"];
 		for (index in 0...types.length)
-			if (EffectParameterTypeUtil.componentCount(types[index]) != counts[index]
-				|| EffectParameterTypeUtil.label(types[index]) != typeNames[index]) return 3;
-		if (EffectParameterTypeUtil.componentCount(null) != 0) return 4;
+			if (types[index].componentCount != counts[index] || types[index].label != typeNames[index]) return 3;
 		var scalar = EffectParameter.scalar(2.0);
 		if (scalar.describe() != "float(2)" || EffectParameter.vec2(1, 2) != EffectParameter.vec2(1, 2)) return 5;
 		return 42;

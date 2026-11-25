@@ -2155,6 +2155,24 @@ class BodyTyper implements BodyTyping {
 						return new TypedExpression(TEnumLiteral(enumName, index), literalType, span, false, null, null,
 							isEnumAlias ? qualifierName : null);
 					}
+					// A member of an enum's case (`Fill.None.layers`): the case, then the rest as its members.
+					var caseEnd = parts.length - 1;
+					while (caseEnd >= 2) {
+						var caseEnum =
+							BodyTyper.enumName(session.declarations.enumQualifierType(leadingParts(name, parts,
+							caseEnd - 1))),
+							caseName = parts[caseEnd - 1];
+						if (caseEnum != null && enumDeclaresCase(caseEnum, caseName)) {
+							var caseReference = leadingParts(name, parts, caseEnd),
+								value = typeExpression(Variable(caseReference,
+									referencePrefixSpan(caseReference, span)), scope);
+							for (index in caseEnd...parts.length)
+								value = typedMemberWithFlow(value, parts[index],
+									referencePrefixSpan(leadingParts(name, parts, index + 1), span), scope);
+							return value;
+						}
+						caseEnd--;
+					}
 					var classEnd = parts.length - 1;
 					while (classEnd > 0) {
 						var className = leadingParts(name, parts, classEnd);

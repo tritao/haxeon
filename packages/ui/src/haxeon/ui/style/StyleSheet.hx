@@ -65,7 +65,7 @@ class StyleSheet {
 
 	/** Animates changes of `property` over `duration` seconds with `easing`, replacing any earlier transition of it. */
 	public function transition(property:StylePropertyBase, duration:Float,
-			easing:Int = Easing.EaseOut):StyleTransition {
+			easing:Easing = Easing.EaseOut):StyleTransition {
 		var result = new StyleTransition(property, duration, easing);
 		transitions.push(result);
 		revision++;

@@ -40,6 +40,18 @@ enum Slot<T> {
 	Full(value:T) {filled: true};
 }
 
+// A case named as a type in scope is still the case where its constants are read.
+class Paint {
+	public function new() {}
+}
+
+enum Fill {
+	public final layers:Int;
+
+	Paint {layers: 2};
+	None {layers: 0};
+}
+
 function main():Int {
 	if (Pair.components != 2 || Scalar.label != "float" || Pair.label != "vec2" || Quad.scale != 1.0
 		|| Pair.scale != 0.5)
@@ -58,5 +70,8 @@ function main():Int {
 	var empty:Slot<Int> = Empty, full:Slot<String> = Full("x");
 	if (empty.filled || !full.filled)
 		return 5;
+	var fill:Fill = Paint;
+	if (fill.layers != 2 || Fill.None.layers != 0 || new Paint() == null)
+		return 6;
 	return 42;
 }

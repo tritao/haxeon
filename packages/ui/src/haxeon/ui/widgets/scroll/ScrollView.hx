@@ -30,7 +30,7 @@ class ScrollView implements View {
 	static inline var TouchSlop:Float = 8.0;
 	final key:Key;
 	final child:View;
-	final axis:Int;
+	final axis:ScrollAxis;
 	final suppliedController:Bool;
 
 	/** The viewport's box, which clips the content. */
@@ -53,7 +53,7 @@ class ScrollView implements View {
 	/** Optional intrinsic content dimensions for clipped or virtualized document widgets. */
 	public var contentExtentProvider:Null<(Float, Float) -> {width:Float, height:Float}>;
 	/** Null inherits the application environment policy. */
-	public var scrollbarVisibility:Null<Int> = null;
+	public var scrollbarVisibility:Null<ScrollbarVisibility> = null;
 	/** Optional non-scrolling ancestor with the same vertical extent. */
 	public var scrollbarOverlayHost:Null<RenderNode> = null;
 
@@ -61,7 +61,7 @@ class ScrollView implements View {
 	public function new(key:String,
 			child:View,
 			?style:LayoutStyle,
-			axis:Int = ScrollAxis.Vertical,
+			axis:ScrollAxis = ScrollAxis.Vertical,
 			?controller:ScrollController) {
 		if (child == null || (axis != ScrollAxis.Vertical && axis != ScrollAxis.Horizontal
 			&& axis != ScrollAxis.Both)) throw "ScrollView requires a child and a supported axis";
@@ -117,7 +117,7 @@ class ScrollView implements View {
 			// The scrollbar, when there is one, attaches its own callback, which edits its nodes in place (see addScrollbar).
 			visibility.value.attach(context.animations, function() {});
 			visibility.value.bindSource(controller);
-			var policy:Int = scrollbarVisibility == null
+			var policy:ScrollbarVisibility = scrollbarVisibility == null
 				? context.environment.scrollbarVisibility : scrollbarVisibility;
 			visibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden,
 				context.environment.reducedMotion);
@@ -582,23 +582,23 @@ private class TouchScrollState {
 }
 
 /** Axes whose content may move inside a ScrollView viewport. */
-class ScrollAxis {
+enum ScrollAxis {
 	/** Content scrolls up and down. */
-	public static inline var Vertical:Int = 0;
+	Vertical;
 	/** Content scrolls left and right. */
-	public static inline var Horizontal:Int = 1;
+	Horizontal;
 	/** Content scrolls both ways. */
-	public static inline var Both:Int = 2;
+	Both;
 }
 
-/** Shared scrollbar visibility policy; Auto reveals on pane hover or scroll activity. */
-class ScrollbarVisibility {
+/** When scrollbars show; `Auto` reveals them on pane hover or scroll activity. */
+enum ScrollbarVisibility {
 	/** Scrollbars show while the pane is hovered or scrolling. */
-	public static inline var Auto:Int = 0;
+	Auto;
 	/** Scrollbars always show. */
-	public static inline var Always:Int = 1;
+	Always;
 	/** Scrollbars never show; the content still scrolls. */
-	public static inline var Hidden:Int = 2;
+	Hidden;
 }
 
 /** Mount-owned binding; replacing or unmounting a viewport retires its animation. */

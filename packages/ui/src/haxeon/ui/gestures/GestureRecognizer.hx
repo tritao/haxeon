@@ -4,15 +4,15 @@ import haxeon.ui.core.WidgetId;
 
 /** Configurable callback and threshold shared by concrete gesture recognizers. */
 class GestureRecognizer {
-	public final kind:Int;
+	public final kind:GestureKind;
 	public final threshold:Float;
 	public final interval:Float;
 	public final onRecognized:GestureEvent->Void;
 	public final hasHandler:Bool;
 
-	public function new(kind:Int, threshold:Float, interval:Float,
+	public function new(kind:GestureKind, threshold:Float, interval:Float,
 			onRecognized:Null<GestureEvent->Void>) {
-		if (kind < GestureKind.Tap || kind > GestureKind.Swipe || !finite(threshold) || !finite(interval)
+		if (!finite(threshold) || !finite(interval)
 			|| threshold < 0.0 || interval < 0.0
 			|| ((kind == GestureKind.DoubleTap || kind == GestureKind.LongPress) && interval == 0.0))
 			throw "Gesture thresholds and intervals must be finite and valid";
@@ -27,26 +27,35 @@ class GestureRecognizer {
 		return value == value && value - value == 0.0;
 }
 
-/** Gesture recognizer output categories. */
-class GestureKind {
-	public static inline var Tap:Int = 1;
-	public static inline var DoubleTap:Int = 2;
-	public static inline var LongPress:Int = 3;
-	public static inline var DragStart:Int = 4;
-	public static inline var Drag:Int = 5;
-	public static inline var DragEnd:Int = 6;
-	/** Recognizer category for two-pointer pinch; its events are PinchStart, PinchUpdate and PinchEnd. */
-	public static inline var Pinch:Int = 7;
-	public static inline var PinchStart:Int = 8;
-	public static inline var PinchUpdate:Int = 9;
-	public static inline var PinchEnd:Int = 10;
-	/** Recognizer category and event for a fast horizontal flick. */
-	public static inline var Swipe:Int = 11;
+/** What a gesture recognizer recognized, or which recognizer it is. */
+enum GestureKind {
+	/** One tap. */
+	Tap;
+	/** Two taps in quick succession. */
+	DoubleTap;
+	/** A press held without moving. */
+	LongPress;
+	/** A drag began. */
+	DragStart;
+	/** A drag moved. */
+	Drag;
+	/** A drag ended. */
+	DragEnd;
+	/** The two-pointer pinch recognizer; its events are `PinchStart`, `PinchUpdate` and `PinchEnd`. */
+	Pinch;
+	/** A pinch began. */
+	PinchStart;
+	/** A pinch changed scale. */
+	PinchUpdate;
+	/** A pinch ended. */
+	PinchEnd;
+	/** A fast horizontal flick: the recognizer and its event. */
+	Swipe;
 }
 
 /** Position and pointer data emitted by a Haxe gesture recognizer. */
 class GestureEvent {
-	public final kind:Int;
+	public final kind:GestureKind;
 	public final target:WidgetId;
 	public final pointerId:Int;
 	public final startX:Float;
@@ -67,7 +76,7 @@ class GestureEvent {
 	/** Swipe events: SwipeRecognizer.Left or SwipeRecognizer.Right; zero otherwise. */
 	public final direction:Int;
 
-	public function new(kind:Int, target:WidgetId, pointerId:Int, startX:Float, startY:Float,
+	public function new(kind:GestureKind, target:WidgetId, pointerId:Int, startX:Float, startY:Float,
 			x:Float, y:Float, deltaX:Float, deltaY:Float, elapsedSeconds:Float, velocityX:Float = 0.0,
 			velocityY:Float = 0.0, scale:Float = 1.0, focusX:Float = 0.0, focusY:Float = 0.0, direction:Int = 0) {
 		this.kind = kind;

@@ -252,7 +252,7 @@ class GestureArena {
 		}
 	}
 
-	function makeEvent(kind:Int, sequence:GestureSequence, deltaX:Float, deltaY:Float, velocityX:Float = 0.0,
+	function makeEvent(kind:GestureKind, sequence:GestureSequence, deltaX:Float, deltaY:Float, velocityX:Float = 0.0,
 			velocityY:Float = 0.0, direction:Int = 0):GestureEvent
 		return new GestureEvent(kind, sequence.target, sequence.pointerId, sequence.startX,
 			sequence.startY, sequence.x, sequence.y, deltaX, deltaY, sequence.elapsed, velocityX, velocityY, 1.0, 0.0,
@@ -330,7 +330,7 @@ class GestureArena {
 				recognizer.onEnd(makePinchEvent(GestureKind.PinchEnd, state));
 	}
 
-	function makePinchEvent(kind:Int, state:PinchState):GestureEvent
+	function makePinchEvent(kind:GestureKind, state:PinchState):GestureEvent
 		return new GestureEvent(kind, state.first.target, state.first.pointerId, state.startFocusX,
 			state.startFocusY, state.focusX, state.focusY, state.focusX - state.startFocusX,
 			state.focusY - state.startFocusY, state.first.elapsed, 0.0, 0.0, state.scale, state.focusX, state.focusY,

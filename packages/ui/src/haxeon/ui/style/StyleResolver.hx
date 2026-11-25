@@ -558,14 +558,14 @@ class StyleTransition {
 	/** How long a change takes, in seconds. */
 	public final duration:Float;
 	/** An `Easing` value: how the change speeds up and slows down. */
-	public final easing:Int;
+	public final easing:Easing;
 
 	/**
 	 * A transition; sheets make them with `StyleSheet.transition`. Throws when `duration` is negative or `easing` is
 	 * unknown.
 	 */
-	public function new(property:StylePropertyBase, duration:Float, easing:Int = Easing.EaseOut) {
-		if (property == null || duration < 0.0 || easing < Easing.Linear || easing > Easing.EaseInOut)
+	public function new(property:StylePropertyBase, duration:Float, easing:Easing = Easing.EaseOut) {
+		if (property == null || duration < 0.0)
 			throw "Style transitions require a property, duration, and valid easing";
 		this.property = property;
 		this.duration = duration;
@@ -578,12 +578,12 @@ internal class StyleTransitionAnimation implements Animation {
 	final from:StyleValue;
 	final to:StyleValue;
 	final duration:Float;
-	final easing:Int;
+	final easing:Easing;
 	final onUpdate:StyleValue->Void;
 	final onComplete:Void->Void;
 	var elapsed:Float;
 
-	public function new(from:StyleValue, to:StyleValue, duration:Float, easing:Int,
+	public function new(from:StyleValue, to:StyleValue, duration:Float, easing:Easing,
 			onUpdate:StyleValue->Void, onComplete:Void->Void) {
 		this.from = from;
 		this.to = to;
@@ -597,7 +597,7 @@ internal class StyleTransitionAnimation implements Animation {
 	public function advance(deltaSeconds:Float):Bool {
 		elapsed += deltaSeconds;
 		var complete = duration <= 0.0 || elapsed >= duration;
-		var amount = complete ? 1.0 : Easing.apply(elapsed / duration, easing);
+		var amount = complete ? 1.0 : easing.apply(elapsed / duration);
 		onUpdate(complete ? to : from.interpolateTo(to, amount));
 		if (complete) {
 			onComplete();

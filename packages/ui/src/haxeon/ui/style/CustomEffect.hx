@@ -103,9 +103,9 @@ struct CustomEffectDefinition implements Equatable {
 			throw "Custom effect registrations require parameter types";
 		var components = 0;
 		for (type in parameterTypes) {
-			if (type == null || EffectParameterTypeUtil.componentCount(type) <= 0)
+			if (type == null || type.componentCount <= 0)
 				throw "Custom effect registrations contain an invalid parameter type";
-			components += EffectParameterTypeUtil.componentCount(type);
+			components += type.componentCount;
 		}
 		if (components > 20)
 			throw "Custom effect registrations support at most 20 float components";
@@ -162,7 +162,7 @@ struct EffectParameter implements Equatable {
 	public final w:Float;
 
 	private function new(type:EffectParameterType, x:Float, y:Float, z:Float, w:Float) {
-		var count = type == null ? 0 : EffectParameterTypeUtil.componentCount(type);
+		var count = type == null ? 0 : type.componentCount;
 		if (count == 0)
 			throw "Custom effect parameter shape does not match its type";
 		this.type = type;
@@ -226,40 +226,29 @@ struct EffectParameter implements Equatable {
 		var text:Array<String> = [];
 		for (index in 0...componentCount)
 			text.push(Std.string(valueAt(index)));
-		return EffectParameterTypeUtil.label(type) + "(" + text.join(",") + ")";
+		return type.label + "(" + text.join(",") + ")";
 	}
 }
 
 /** Component shape used by a renderer-owned custom effect parameter. */
 enum EffectParameterType implements Equatable {
-	/** One number. */
-	Float;
-	/** Two numbers. */
-	Vec2;
-	/** Four numbers. */
-	Vec4;
-	/** A color. */
-	Color;
-}
+	/** How many numbers a parameter of this type takes. */
+	public final componentCount:Int;
 
-/** Explicit parameter metadata and display labels, independent of enum representation. */
-class EffectParameterTypeUtil {
-	/** How many numbers a parameter of `type` takes; 0 for null. */
-	public static function componentCount(type:EffectParameterType):Int {
-		if (type == null) return 0;
-		return switch type {
-			case EffectParameterType.Float: 1;
-			case EffectParameterType.Vec2: 2;
-			case EffectParameterType.Vec4 | EffectParameterType.Color: 4;
-		};
-	}
 	/** The type's name, as shaders spell it. */
-	public static function label(type:EffectParameterType):String {
-		return switch type {
-			case EffectParameterType.Float: "float";
-			case EffectParameterType.Vec2: "vec2";
-			case EffectParameterType.Vec4: "vec4";
-			case EffectParameterType.Color: "color";
-		};
-	}
+	public final label:String;
+
+	/** One number. */
+	Float {
+		componentCount:1, label:"float"
+	};
+
+	/** Two numbers. */
+	Vec2 {componentCount: 2, label: "vec2"};
+
+	/** Four numbers. */
+	Vec4 {componentCount: 4, label: "vec4"};
+
+	/** A color. */
+	Color {componentCount: 4, label: "color"};
 }

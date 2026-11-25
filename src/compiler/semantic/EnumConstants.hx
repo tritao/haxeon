@@ -94,8 +94,10 @@ class EnumConstants {
 				for (given in constructor.constants)
 					if (given.name == constant.name)
 						value = given.value;
-			var pattern:AstExpression = constructor.params.length == 0 ? Variable(constructor.name,
-				span) : Call(constructor.name, [for (_ in constructor.params) Variable("_", span)], span);
+			// Qualified, so a case named as an imported type (`Color`) is still the case.
+			var caseName = declaration.name + "." + constructor.name,
+				pattern:AstExpression = constructor.params.length == 0 ? Variable(caseName, span) : Call(caseName,
+					[for (_ in constructor.params) Variable("_", span)], span);
 			cases.push({
 				patterns: [pattern],
 				guard: null,

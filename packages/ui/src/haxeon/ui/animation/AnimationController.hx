@@ -44,7 +44,7 @@ class AnimationController implements Animation {
 	}
 
 	public function play(from:Float, to:Float, duration:Float,
-			easing:Int = Easing.Linear):Void {
+			easing:Easing = Easing.Linear):Void {
 		var next = new Tween(from, to, duration, easing);
 		value = from;
 		elapsed = 0.0;
@@ -104,12 +104,11 @@ class Tween {
 	public final from:Float;
 	public final to:Float;
 	public final duration:Float;
-	public final easing:Int;
+	public final easing:Easing;
 
-	public function new(from:Float, to:Float, duration:Float, easing:Int = Easing.Linear) {
-		if (!finite(from) || !finite(to) || !finite(duration) || duration < 0.0 || easing < Easing.Linear
-			|| easing > Easing.EaseInOut)
-			throw "Tween endpoints, duration, and easing must be valid";
+	public function new(from:Float, to:Float, duration:Float, easing:Easing = Easing.Linear) {
+		if (!finite(from) || !finite(to) || !finite(duration) || duration < 0.0)
+			throw "Tween endpoints and duration must be finite, and the duration non-negative";
 		this.from = from;
 		this.to = to;
 		this.duration = duration;
@@ -120,7 +119,7 @@ class Tween {
 		if (!finite(seconds))
 			throw "Tween sample time must be finite";
 		var progress = duration == 0.0 ? 1.0 : seconds / duration;
-		var eased = Easing.apply(progress, easing);
+		var eased = easing.apply(progress);
 		return from + (to - from) * eased;
 	}
 
@@ -128,21 +127,25 @@ class Tween {
 		return value == value && value - value == 0.0;
 }
 
-/** Numeric easing curves evaluated by Haxe before each render transaction. */
-class Easing {
-	public static inline var Linear:Int = 0;
-	public static inline var EaseIn:Int = 1;
-	public static inline var EaseOut:Int = 2;
-	public static inline var EaseInOut:Int = 3;
+/** An easing curve, evaluated by Haxe before each render transaction. */
+enum Easing {
+	/** Constant speed. */
+	Linear;
+	/** Starts slow and speeds up. */
+	EaseIn;
+	/** Starts fast and slows down. */
+	EaseOut;
+	/** Slow at both ends. */
+	EaseInOut;
 
-	public static function apply(value:Float, curve:Int):Float {
+	/** The curve at `value`, clamped to 0..1. */
+	public function apply(value:Float):Float {
 		var t = value < 0.0 ? 0.0 : value > 1.0 ? 1.0 : value;
-		return switch curve {
+		return switch this {
 			case EaseIn: t * t;
 			case EaseOut: 1.0 - (1.0 - t) * (1.0 - t);
 			case EaseInOut: t * t * (3.0 - 2.0 * t);
 			case Linear: t;
-			default: throw "Unknown easing curve";
 		};
 	}
 }

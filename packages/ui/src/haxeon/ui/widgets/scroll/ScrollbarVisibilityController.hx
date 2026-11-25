@@ -19,7 +19,7 @@ internal class ScrollbarVisibilityController implements DelayedAnimation impleme
 	public var hovered(default, null):Bool = false;
 	public var dragging(default, null):Bool = false;
 	public var focused(default, null):Bool = false;
-	var policy:Int = ScrollbarVisibility.Auto;
+	var policy:ScrollbarVisibility = ScrollbarVisibility.Auto;
 	var reducedMotion:Bool = false;
 	var available:Bool = false;
 	var targetOpacity:Float = 0.0;
@@ -43,16 +43,13 @@ internal class ScrollbarVisibilityController implements DelayedAnimation impleme
 		setAvailable(false);
 	}
 
-	public function configure(value:Int, reduceMotion:Bool):Void {
-		if (value < ScrollbarVisibility.Auto || value > ScrollbarVisibility.Hidden)
-			throw "Invalid scrollbar visibility";
+	public function configure(value:ScrollbarVisibility, reduceMotion:Bool):Void {
 		if (policy == value && reducedMotion == reduceMotion) return;
 		var previousPolicy = policy;
 		policy = value;
 		reducedMotion = reduceMotion;
 		if (!available || policy == ScrollbarVisibility.Hidden) hide();
 		else if (policy == ScrollbarVisibility.Always) showAlways();
-		else if (policy == ScrollbarVisibility.Always && available) showAlways();
 		else if (held()) reveal();
 		else {
 			if (previousPolicy == ScrollbarVisibility.Always) {
