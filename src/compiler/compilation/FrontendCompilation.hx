@@ -761,6 +761,23 @@ class FrontendCompilation {
 		return generation.end(queries, key, IrProgramAssembler.anonymousString(generator, anonymous));
 	}
 
+	/** What `fn` references for the static initialization order, kept by the session while `fn` is the same. */
+	static function staticReferencesOf(state:SessionState,
+			fn:IrFunction):compiler.ir.pipeline.StaticInitializationOrder.IrStaticReferences
+		return state.staticReferences.get(state.queries, generated(state, fn));
+
+	/**
+	 * The key of `fn` in the generation kind (`SessionState.irGeneration`), which holds `fn` or an equal function once this returns:
+	 * a module's function is put unless the kind holds that very object, as it does unless an edit or a rollback replaced it. The
+	 * check is typed here, as the kind's own would be a dynamic one.
+	 */
+	static inline function generated(state:SessionState, fn:IrFunction):Int {
+		var key = fn.symbol.id;
+		if (state.irGeneration.kept(key) != fn)
+			state.irGeneration.put(state.queries, key, fn);
+		return key;
+	}
+
 	/**
 	 * The boot function `name` made from `from` (`IrProgramAssembler.staticInitializersFrom`), a result in the session's database:
 	 * last build's while it is made from the same typed fields (`SessionState.initializerInputs`), else made now.
@@ -1076,7 +1093,7 @@ class FrontendCompilation {
 		build.allocationBeforeModulePrune = AllocationMeter.sample();
 		// Shared generated helpers have one origin, but every retained caller needs their dependencies.
 		var calledGeneratedHelpers = generatedHelpersStillCalled(modules, names, build.typedByName, owners,
-			build.semanticAssembly.invalidated, context.state.irCalls);
+			build.semanticAssembly.invalidated, context.state);
 		var readSpecializations = reachedSpecializations(build);
 		for (name in names) {
 			checkCancelled(build.token);
@@ -1468,13 +1485,12 @@ class FrontendCompilation {
 		var generationWarnings:Array<compiler.core.Diagnostic> = [];
 		var state = context.state, queries = state.queries, generation = state.irGeneration;
 		var initializers = IrProgramAssembler.staticInitializersFrom(generator, typedNew, build.initializationClasses,
-			build.cached, generationWarnings, context.state.staticReferences,
+			build.cached, generationWarnings, fn -> staticReferencesOf(state, fn),
 			(name, from, make) -> bootFunction(state, name, from, make)).concat(liveInitializers);
 		// `__init`, made from names alone, and the live initializers are made every build: one made the same is last build's.
 		for (index in 0...initializers.length)
 			initializers[index] = generation.put(queries, initializers[index].symbol.id, initializers[index]);
 		build.initializers = initializers;
-		context.state.staticReferences.endBuild();
 		TypingWarnings.publishGeneration(context, build.names, generationWarnings, build.rollbackModules);
 		// The printers made with the objects (`structurePrinter`), for every structure the program has.
 		if (printsStructures(context)) {
@@ -1955,16 +1971,12 @@ class FrontendCompilation {
 				for (member in members)
 					pending.push(member);
 		}
-		var mentions = context.state.irTypeMentions;
+		var state = context.state;
 		while (pending.length > 0) {
 			var name = pending.pop(), fn = functions.get(name);
 			if (fn == null)
 				throw new InternalError('Missing function $name during inline enum reflection reachability');
-			var named = mentions.get(fn);
-			if (named == null) {
-				named = typeMentions(fn);
-				mentions.set(fn, named);
-			}
+			var named = state.irTypeMentions.get(state.queries, generated(state, fn));
 			for (target in named.classes)
 				if (known.exists(target))
 					retain(target);
@@ -1972,7 +1984,6 @@ class FrontendCompilation {
 				if (knownEnums.exists(target))
 					retainEnum(target);
 		}
-		mentions.endBuild();
 		return {
 			program: previous,
 			classes: result,
@@ -1981,12 +1992,17 @@ class FrontendCompilation {
 		};
 	}
 
+	/** Whether two functions name the same classes and enums, in the same order. */
+	public static function sameTypeMentions(left:TypeMentions, right:TypeMentions):Bool
+		return compiler.ir.model.Ir.IrObjectTools.sameNames(left.classes, right.classes)
+			&& compiler.ir.model.Ir.IrObjectTools.sameNames(left.enums, right.enums);
+
 	/**
 	 * The classes and specialized-enum candidates `fn` names in its signature, values, type values and globals, each
-	 * once: what `retainedFromPrevious` reads of a function, kept by the session while the function is the same object
+	 * once: what `retainedFromPrevious` reads of a function, kept by the session while the function is the same
 	 * (`SessionState.irTypeMentions`), so an unchanged one is not read again.
 	 */
-	static function typeMentions(fn:IrFunction):TypeMentions {
+	public static function typeMentions(fn:IrFunction):TypeMentions {
 		var names:TypeMentions = {classes: [], enums: []};
 		function add(mention:String):Void
 			if (names.classes.indexOf(mention) < 0)
@@ -2165,7 +2181,7 @@ class FrontendCompilation {
 
 	static function generatedHelpersStillCalled(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>,
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>,
-			invalidated:Map<String, Bool>, calls:compiler.ir.reuse.IrFunctionMemo<Array<String>>):Map<String, Bool> {
+			invalidated:Map<String, Bool>, session:SessionState):Map<String, Bool> {
 		var reachable = [for (name in names) name => true];
 		var holders:Map<String, compiler.modules.ModuleState> = [],
 			kept:Map<String, Bool> = [],
@@ -2199,7 +2215,7 @@ class FrontendCompilation {
 			for (cached => body in state.irFunctions) {
 				if (!owners.exists(cached) || typedByName.exists(cached))
 					continue;
-				for (callee in callsOf(body, calls))
+				for (callee in callsOf(body, session))
 					if (holders.exists(callee) && !invalidated.exists(callee)) {
 						result.set(callee, true);
 						var dependencyOwner = holders.get(callee).name;
@@ -2221,7 +2237,7 @@ class FrontendCompilation {
 			var body = holder.irFunctions.get(current);
 			if (body == null)
 				continue;
-			for (callee in callsOf(body, calls))
+			for (callee in callsOf(body, session))
 				if (holders.exists(callee)) {
 					result.set(callee, true);
 					var dependencyOwner = holders.get(callee).name;
@@ -2235,19 +2251,19 @@ class FrontendCompilation {
 					}
 				}
 		}
-		calls.endBuild();
 		names.sort(Reflect.compare);
 		return result;
 	}
 
 	/**
-	 * The functions `fn` calls, each once, in the order it first calls them: kept by the session while `fn` is the same object
-	 * (`SessionState.irCalls`), so the helpers a build keeps are found without reading every function that stays.
+	 * The functions `fn` calls (`callsIn`), kept by the session while `fn` is the same (`SessionState.irCalls`), so the helpers a
+	 * build keeps are found without reading every function that stays.
 	 */
-	static function callsOf(fn:IrFunction, calls:compiler.ir.reuse.IrFunctionMemo<Array<String>>):Array<String> {
-		var known = calls.get(fn);
-		if (known != null)
-			return known;
+	static function callsOf(fn:IrFunction, session:SessionState):Array<String>
+		return session.irCalls.get(session.queries, generated(session, fn));
+
+	/** The functions `fn` calls, each once, in the order it first calls them. */
+	public static function callsIn(fn:IrFunction):Array<String> {
 		var found:Array<String> = [], body = fn.body;
 		// A function kept as its body alone is read from the body, not decoded.
 		if (body != null) {
@@ -2262,7 +2278,6 @@ class FrontendCompilation {
 					row = body.nextRow(row);
 				}
 			}
-			calls.set(fn, found);
 			return found;
 		}
 		for (block in fn.blocks)
@@ -2272,7 +2287,6 @@ class FrontendCompilation {
 						found.push(callee.name);
 					default:
 				}
-		calls.set(fn, found);
 		return found;
 	}
 

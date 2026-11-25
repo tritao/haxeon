@@ -121,8 +121,7 @@ class IrProgramAssembler {
 	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram,
 			classOrder:Null<Array<String>>,
 			program:Array<IrFunction>, ?warnings:Array<compiler.core.Diagnostic>,
-			?references:compiler.ir.reuse
-		.IrFunctionMemo<StaticInitializationOrder.IrStaticReferences>,
+			?references:IrFunction->StaticInitializationOrder.IrStaticReferences,
 			?generated:(String, Array<compiler.types.TypedAst.TypedField>,
 		() -> IrFunction) -> IrFunction):Array<IrFunction> {
 		function made(key:String, from:Array<compiler.types.TypedAst.TypedField>, make:() -> IrFunction):IrFunction
@@ -135,8 +134,10 @@ class IrProgramAssembler {
 			for (field in classDecl.fields)
 				if (field.isStatic && !field.isInline && field.isDynamicMethod != true && field.initializer != null) {
 					var global = classDecl.name + "." + field.name;
-					probes.set(global, made("__init$probe:" + global, [field],
-						() -> initializerFunction(generator, "__init$probe", [assign(classDecl, field)], field.span)));
+					// Named for its field: a probe is never emitted, and a session keeps each by its name.
+					var probe = "__init$probe:" + global;
+					probes.set(global, made(probe, [field],
+						() -> initializerFunction(generator, probe, [assign(classDecl, field)], field.span)));
 				}
 		var initialization = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, program,
 			references),

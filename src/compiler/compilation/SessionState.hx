@@ -3,10 +3,17 @@ package compiler.compilation;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.core.QualifiedName;
 import compiler.core.Source.SourceSpan;
+import compiler.ir.codec.IrFunctionStateEquality;
 import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.IrDeclarationEquality;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
+import compiler.ir.pipeline.StaticInitializationOrder.IrStaticReferences;
 import compiler.ir.verify.IrVerifyMemo;
 import compiler.modules.ModuleState;
+import compiler.query.ComputedQueryKind;
+import compiler.query.QueryDatabase;
 import compiler.semantic.DeclarationOwners;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.ModuleCanonicalizer;
@@ -14,6 +21,7 @@ import compiler.semantic.SemanticProgram;
 import compiler.semantic.SemanticWorkspace;
 import compiler.syntax.TokenTable;
 import compiler.types.TypeRegistry;
+import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedProgram;
 import haxe.io.Bytes;
 
@@ -57,7 +65,7 @@ class SessionState {
 	 * unit read. Every copy shares it, as an input is set outside builds and a print only moves forward; the units' records are
 	 * written in a transaction the state taken from the build commits (`committed`).
 	 */
-	public var queries(default, null):compiler.query.QueryDatabase;
+	public var queries(default, null):QueryDatabase;
 
 	/**
 	 * The database commit this state was taken at (`Compiler.adoptCandidate`): the units' records that go with its modules. A
@@ -86,20 +94,20 @@ class SessionState {
 	 * whatever reads it holds. Every copy shares it: a function's IR is put again every build it is read in, from the modules of
 	 * the state the build started from.
 	 */
-	public var irGeneration(default, null):compiler.query.ComputedQueryKind<compiler.ir.model.IrFunction>;
+	public var irGeneration(default, null):ComputedQueryKind<IrFunction>;
 
 	/**
 	 * Each object of the program (`objects`) by its name's symbol, put every build: one made again the same is last build's, so
 	 * what compares objects downstream finds the same object, and a structure's printer, which reads its object here, is kept.
 	 */
-	public var irObjects(default, null):compiler.query.ComputedQueryKind<IrObject>;
+	public var irObjects(default, null):ComputedQueryKind<IrObject>;
 
 	/**
 	 * What each boot function (`IrProgramAssembler.staticInitializersFrom`) is made from, the typed fields it initializes, by the
 	 * function's key: the same while each field is the same object, which it is while its initializer's unit is current.
 	 */
 	public var initializerInputs(default,
-		null):compiler.query.ComputedQueryKind<Array<compiler.types.TypedAst.TypedField>>;
+		null):ComputedQueryKind<Array<TypedField>>;
 
 	/**
 	 * What the assembly stages before the encode point made of each function (`IrStageMemos`), keyed on the versions of their
@@ -108,17 +116,16 @@ class SessionState {
 	public var stageMemos(default, null):compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 	/**
-	 * What each previous IR function names of classes and enums (`FrontendCompilation.typeMentions`), while it is the same object;
-	 * every copy shares it, as an object's answer never changes.
+	 * What each function of `irGeneration` names of classes and enums (`FrontendCompilation.typeMentions`), by the same key: it
+	 * holds while the function does. Every copy shares it, as `irGeneration`.
 	 */
-	public var irTypeMentions(default, null) = new compiler.ir.reuse.IrFunctionMemo<FrontendCompilation.TypeMentions>();
+	public var irTypeMentions(default, null):ComputedQueryKind<FrontendCompilation.TypeMentions>;
 
-	/** The functions each IR function of the modules calls (`FrontendCompilation.callsOf`), while it is the same object. */
-	public var irCalls(default, null) = new compiler.ir.reuse.IrFunctionMemo<Array<String>>();
+	/** The functions each function of `irGeneration` calls (`FrontendCompilation.callsIn`), as `irTypeMentions`. */
+	public var irCalls(default, null):ComputedQueryKind<Array<String>>;
 
-	/** What each IR function references for the static initialization order (`IrStaticReferences`), while it is the same object. */
-	public var staticReferences(default, null) =
-		new compiler.ir.reuse.IrFunctionMemo<compiler.ir.pipeline.StaticInitializationOrder.IrStaticReferences>();
+	/** What each function of `irGeneration` references for the static initialization order, as `irTypeMentions`. */
+	public var staticReferences(default, null):ComputedQueryKind<IrStaticReferences>;
 
 	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
@@ -239,17 +246,29 @@ class SessionState {
 			backend:BackendSession, ?sharing:SessionState) {
 		semanticWorkspace = new SemanticWorkspace(modules);
 		if (sharing == null) {
-			queries = new compiler.query.QueryDatabase();
+			queries = new QueryDatabase();
 			declarationFacts = new compiler.semantic.DeclarationFacts(queries);
 			inputs = new BuildInputs(queries);
-			var symbolName = (id:Int) -> compiler.ir.model.IrSymbol.at(id).name;
-			irGeneration =
-				queries.register(new compiler.query.ComputedQueryKind<compiler.ir.model.IrFunction>("ir-generation",
-				compiler.ir.codec.IrFunctionStateEquality.same, null, symbolName));
-			irObjects = queries.register(new compiler.query.ComputedQueryKind<IrObject>("ir-objects",
-				compiler.ir.model.IrDeclarationEquality.sameObject, null, symbolName));
-			initializerInputs = queries.register(new compiler.query
-				.ComputedQueryKind<Array<compiler.types.TypedAst.TypedField>>("initializer-inputs", sameFields, null,
+			var symbolName = (id:Int) -> IrSymbol.at(id).name;
+			var generation = queries.register(new ComputedQueryKind<IrFunction>("ir-generation",
+				IrFunctionStateEquality.same, null,
+				symbolName));
+			irGeneration = generation;
+			irObjects = queries.register(new ComputedQueryKind<IrObject>("ir-objects", IrDeclarationEquality.sameObject,
+				null,
+				symbolName));
+			initializerInputs = queries.register(new ComputedQueryKind<Array<TypedField>>("initializer-inputs",
+				sameFields, null,
+				symbolName));
+			irTypeMentions =
+				queries.register(new ComputedQueryKind<FrontendCompilation.TypeMentions>("ir-type-mentions",
+				FrontendCompilation.sameTypeMentions,
+				(database, key) -> FrontendCompilation.typeMentions(generation.get(database, key)), symbolName));
+			irCalls = queries.register(new ComputedQueryKind<Array<String>>("ir-calls",
+				compiler.ir.model.Ir.IrObjectTools.sameNames,
+				(database, key) -> FrontendCompilation.callsIn(generation.get(database, key)), symbolName));
+			staticReferences = queries.register(new ComputedQueryKind<IrStaticReferences>("static-references",
+				IrStaticReferences.same, (database, key) -> IrStaticReferences.of(generation.get(database, key)),
 				symbolName));
 		} else {
 			queries = sharing.queries;
@@ -258,6 +277,9 @@ class SessionState {
 			irGeneration = sharing.irGeneration;
 			irObjects = sharing.irObjects;
 			initializerInputs = sharing.initializerInputs;
+			irTypeMentions = sharing.irTypeMentions;
+			irCalls = sharing.irCalls;
+			staticReferences = sharing.staticReferences;
 		}
 		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(queries, irGeneration);
 		this.types = types;
@@ -287,9 +309,6 @@ class SessionState {
 		result.rehydrationBaseline = rehydrationBaseline;
 		result.inlineCache = inlineCache.copy();
 		result.stageMemos = stageMemos;
-		result.irTypeMentions = irTypeMentions;
-		result.irCalls = irCalls;
-		result.staticReferences = staticReferences;
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.verifyMemo = verifyMemo;
 		result.reachabilityCache = reachabilityCache.copy();
@@ -298,8 +317,7 @@ class SessionState {
 	}
 
 	/** Whether two lists hold the same typed fields, in order: a typed field is never changed once made. */
-	static function sameFields(left:Array<compiler.types.TypedAst.TypedField>,
-			right:Array<compiler.types.TypedAst.TypedField>):Bool {
+	static function sameFields(left:Array<TypedField>, right:Array<TypedField>):Bool {
 		if (left.length != right.length)
 			return false;
 		for (index in 0...left.length)

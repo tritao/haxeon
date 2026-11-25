@@ -4,7 +4,6 @@ import compiler.core.Diagnostic;
 import compiler.core.DiagnosticCode;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
-import compiler.ir.reuse.IrFunctionMemo;
 import compiler.semantic.AbstractStatics;
 import compiler.semantic.LambdaName;
 import compiler.semantic.ModuleFields;
@@ -89,23 +88,23 @@ class StaticInitializationOrder {
 	 * initializer, and `program` the program's functions.
 	 */
 	public static function of(classes:Array<TypedClass>, initializers:Map<String, IrFunction>,
-			program:Array<IrFunction>, ?memo:IrFunctionMemo<IrStaticReferences>):{
+			program:Array<IrFunction>, ?references:IrFunction->IrStaticReferences):{
 				order:Array<TypedClass>,
 				loops:Array<TypedClass>
 			} {
-		var walk = new StaticInitializationOrder(classes, initializers, program, memo);
+		var walk = new StaticInitializationOrder(classes, initializers, program, references ?? IrStaticReferences.of);
 		for (classDecl in classes)
 			walk.place(classDecl.name);
 		return {order: walk.order, loops: walk.loops};
 	}
 
-	/** What each function references (`IrStaticReferences`), kept by the session while the function is the same object. */
-	final memo:Null<IrFunctionMemo<IrStaticReferences>>;
+	/** What each function references (`IrStaticReferences`): a session keeps it while the function is the same. */
+	final referencesOf:IrFunction->IrStaticReferences;
 
 	function new(classList:Array<TypedClass>, initializers:Map<String, IrFunction>, program:Array<IrFunction>,
-			memo:Null<IrFunctionMemo<IrStaticReferences>>) {
+			referencesOf:IrFunction->IrStaticReferences) {
 		this.initializers = initializers;
-		this.memo = memo;
+		this.referencesOf = referencesOf;
 		functions = [for (fn in program) fn.name => fn];
 		for (classDecl in classList) {
 			classes.set(classDecl.name, classDecl);
@@ -180,12 +179,7 @@ class StaticInitializationOrder {
 	}
 
 	function walk(fn:IrFunction):Void {
-		var references = memo == null ? null : memo.get(fn);
-		if (references == null) {
-			references = IrStaticReferences.of(fn);
-			if (memo != null)
-				memo.set(fn, references);
-		}
+		var references = referencesOf(fn);
 		for (index in 0...references.kinds.length) {
 			var name = references.names[index];
 			switch references.kinds[index] {
@@ -270,6 +264,16 @@ class IrStaticReferences {
 					case _:
 				}
 		return references;
+	}
+
+	/** Whether two functions reference the same, in the same order. */
+	public static function same(left:IrStaticReferences, right:IrStaticReferences):Bool {
+		if (left.kinds.length != right.kinds.length)
+			return false;
+		for (index in 0...left.kinds.length)
+			if (left.kinds[index] != right.kinds[index] || left.names[index] != right.names[index])
+				return false;
+		return true;
 	}
 
 	inline function add(kind:Int, name:String):Void {
