@@ -1,10 +1,8 @@
 package haxeon.ui.widgets.collections;
-import haxeon.ui.LayoutSizing;
-
-import haxeon.ui.widgets.KeyedView;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
@@ -22,12 +20,13 @@ import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
+import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Spacer;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
 
+import haxeon.ui.widgets.collections.VirtualViewport;
 /**
  * Model-backed variable-extent list that materializes only its viewport
  * window. Unmeasured rows use the model estimate until they enter that
@@ -451,4 +450,35 @@ private class ListViewRow implements View {
 			return node;
 		});
 	}
+}
+
+/** Optional row metadata for lists whose items need names or disabled states. */
+interface ListViewItemMetadata {
+	function labelAt(index:Int):String;
+	function enabledAt(index:Int):Bool;
+}
+
+/**
+ * Application-owned data source for ListView.
+ *
+ * Keys must remain stable for an item while it is present in the model. Models
+ * with mutable data should implement Observable; tracked reads then invalidate
+ * the retained list when count, keys, extents or item content change.
+ * `extentRevisionAt` changes whenever `extentAt` can return a different value
+ * for that item. `estimatedExtent` is used for
+ * unmeasured items; declare `extentIsUniform` when it is exact for every item
+ * so the list can skip all extent callbacks. `totalExtent` may return an
+ * exact content height when the model can provide one cheaply; return null
+ * when only the sparse estimate is available. Variable-height models should
+ * expect anchor corrections as rows are seen.
+ */
+interface ListViewModel {
+	function count():Int;
+	function keyAt(index:Int):String;
+	function estimatedExtent():Float;
+	function extentIsUniform():Bool;
+	function extentAt(index:Int):Float;
+	function extentRevisionAt(index:Int):Int;
+	function totalExtent():Null<Float>;
+	function buildItem(index:Int):View;
 }

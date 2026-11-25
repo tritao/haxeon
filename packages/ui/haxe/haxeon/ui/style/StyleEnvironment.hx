@@ -23,7 +23,7 @@ class StyleEnvironment {
 	public var textScale(get, set):Float;
 	var reducedMotionValue:Bool;
 	public var reducedMotion(get, set):Bool;
-	var scrollbarVisibilityValue:Int = haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto;
+	var scrollbarVisibilityValue:Int = haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Auto;
 	public var scrollbarVisibility(get, set):Int;
 	var highContrastValue:Bool;
 	public var highContrast(get, set):Bool;

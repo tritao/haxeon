@@ -117,3 +117,10 @@ class Chip implements ScopeView {
 		return node;
 	}
 }
+
+/** What a Chip shows after its label. */
+enum ChipTrailing {
+	None;
+	Chevron;
+	Clear(onClear:Void->Void);
+}

@@ -18,6 +18,7 @@ import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.Icon;
 
+import haxeon.ui.widgets.controls.Button;
 /** Reusable single-line search input with leading affordance and clear action. */
 class SearchField implements View {
 	/** Identifies the field among its siblings, so its text and focus survive rebuilds: required, and never empty. */

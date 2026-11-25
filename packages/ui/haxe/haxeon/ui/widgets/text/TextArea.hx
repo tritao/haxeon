@@ -6,6 +6,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.TextStyle;
 import haxeon.ui.core.View;
 
+import haxeon.ui.widgets.text.TextEditorState;
 /** Multiline text editor sharing the TextField IME and selection model. */
 class TextArea extends TextField implements View {
 	public function new(key:String, value:String = "", ?onChange:String->Void,

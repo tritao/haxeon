@@ -1,11 +1,10 @@
 package haxeon.ui.widgets.text;
 
-import haxeon.ui.TextLayout.TextPosition;
-
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.PathBuilder;
 import haxeon.ui.Rect;
+import haxeon.ui.TextLayout.TextPosition;
 
 /** Immutable decoration in absolute document codepoint coordinates. */
 class TextDecoration {
@@ -92,4 +91,12 @@ class TextDecoration {
 			}
 		}
 	}
+}
+
+/** Geometry decorations applied behind or above retained text. */
+enum TextDecorationKind {
+	Background;
+	WholeLineBackground;
+	Underline;
+	WavyUnderline;
 }

@@ -10,7 +10,7 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.text.TextArea;
-import haxeon.ui.widgets.text.TextEditorDiagnostics;
+import haxeon.ui.widgets.text.TextEditorState;
 import haxeon.ui.widgets.text.TextField;
 
 /** Interactive text editing, multilingual shaping, selection and IME diagnostics. */

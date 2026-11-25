@@ -1,5 +1,5 @@
 import haxeon.ui.widgets.scroll.ScrollController;
-import haxeon.ui.widgets.text.TextEditorDiagnostics;
+import haxeon.ui.widgets.text.TextEditorState;
 import state.ControlsDemoState;
 import state.GestureDemoState;
 import state.InspectorState;

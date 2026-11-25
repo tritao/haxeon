@@ -32,11 +32,9 @@ import haxeon.ui.widgets.controls.IconButton;
 import haxeon.ui.widgets.controls.ProgressBar;
 import haxeon.ui.widgets.controls.Radio;
 import haxeon.ui.widgets.controls.RadioGroup;
-import haxeon.ui.widgets.controls.RadioOption;
 import haxeon.ui.widgets.controls.Slider;
 import haxeon.ui.widgets.controls.Toggle;
 import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
 import haxeon.ui.widgets.text.Text;
@@ -204,7 +202,7 @@ private class StrictVariantCounter implements View {
 	}
 }
 
-private class WindowItems implements haxeon.ui.widgets.collections.ListViewModel {
+private class WindowItems implements haxeon.ui.widgets.collections.ListView.ListViewModel {
 	public function new() {}
 	public function count():Int return 40;
 	public function keyAt(index:Int):String return "row-" + index;
@@ -475,13 +473,14 @@ private class TabsRig {
 		ui = new UiContext(null, fonts);
 		ui.buildContext.updateInPlace = patched;
 		ui.buildContext.environment.reducedMotion = true;
-		var first = new haxeon.ui.widgets.controls.TabItem("first",
+		var first = new haxeon.ui.widgets.controls.Tabs.TabItem("first",
 			"First",
 			new RetainedView("first-page", _ -> new Text("First page")));
-		var second = new haxeon.ui.widgets.controls.TabItem("second",
+		var second = new haxeon.ui.widgets.controls.Tabs.TabItem("second",
 			"Second",
 			new RetainedView("second-page", _ -> new Text("Second page")));
-		var disabled = new haxeon.ui.widgets.controls.TabItem("disabled", "Disabled", new Text("Disabled page"), false);
+		var disabled = new haxeon.ui.widgets.controls.Tabs.TabItem("disabled", "Disabled", new Text("Disabled page"),
+			false);
 		first.onClose = () -> closes++;
 		second.onClose = () -> closes++;
 		var style = new LayoutStyle();
@@ -522,8 +521,8 @@ private class PopupRig implements View {
 		ui = new UiContext(null, fonts);
 		ui.buildContext.updateInPlace = patched;
 		ui.buildContext.environment.reducedMotion = true;
-		var options:Array<haxeon.ui.widgets.controls.SelectOption<Dynamic>> =
-			[for (index in 0...24) new haxeon.ui.widgets.controls.SelectOption<Dynamic>("option-" + index,
+		var options:Array<haxeon.ui.widgets.controls.Select.SelectOption<Dynamic>> =
+			[for (index in 0...24) new haxeon.ui.widgets.controls.Select.SelectOption<Dynamic>("option-" + index,
 			"Option " + index,
 			index,
 			index != 3)];
@@ -1639,7 +1638,7 @@ private class UpdatingResources implements View {
 			null,
 			null,
 			null,
-			haxeon.ui.widgets.controls.ButtonVariant.Navigation,
+			haxeon.ui.widgets.controls.Button.ButtonVariant.Navigation,
 			null,
 			callerClasses);
 		var right = new Button("Right",
@@ -1647,7 +1646,7 @@ private class UpdatingResources implements View {
 			null,
 			null,
 			null,
-			haxeon.ui.widgets.controls.ButtonVariant.Navigation,
+			haxeon.ui.widgets.controls.Button.ButtonVariant.Navigation,
 			null,
 			callerClasses);
 		callerClasses[0] = "caller-change";
@@ -1661,7 +1660,7 @@ private class UpdatingResources implements View {
 			null,
 			null,
 			null,
-			haxeon.ui.widgets.controls.ButtonVariant.Navigation,
+			haxeon.ui.widgets.controls.Button.ButtonVariant.Navigation,
 			null,
 			callerClasses);
 		root = ui.submit(new Column("identity-test",

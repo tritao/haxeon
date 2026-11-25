@@ -1,6 +1,4 @@
 package haxeon.ui.widgets.controls;
-import haxeon.ui.widgets.Icon;
-import haxeon.ui.widgets.text.MiddleEllipsisText;
 
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutDirection;
@@ -23,6 +21,8 @@ import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
+import haxeon.ui.widgets.Icon;
+import haxeon.ui.widgets.text.MiddleEllipsisText;
 
 /** Compositional Haxe button; the native engine sees only box and text nodes. */
 class Button implements ScopeView {
@@ -249,4 +249,16 @@ class Button implements ScopeView {
 		for (index in 0...classes.length) if (target.classes[index] != classes[index]) return false;
 		return true;
 	}
+}
+
+/** Semantic visual variants backed by theme-generated button state rules. */
+enum ButtonVariant implements Hashable {
+	/** The main action of a view, in the accent color: one per group of buttons. */
+	Primary;
+
+	/** A quiet item in a list of places, such as a sidebar entry or a title bar control; `selected` marks the current one. */
+	Navigation;
+
+	/** Any other action: the default. */
+	Secondary;
 }

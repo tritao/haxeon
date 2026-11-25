@@ -6,6 +6,8 @@ import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
+import haxeon.ui.animation.Animation;
+import haxeon.ui.animation.AnimationScheduler;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.HitTestBehavior;
 import haxeon.ui.core.Key;
@@ -372,4 +374,178 @@ private class TooltipPointerState {
 	public var x:Float = 0;
 	public var y:Float = 0;
 	public function new() {}
+}
+
+/** Preferred side of a tooltip, independent of hover timing. */
+enum TooltipPlacement {
+	Below;
+	Above;
+	Right;
+}
+
+class TooltipHoverDelay implements DelayedAnimation implements Disposable {
+	final scheduler:AnimationScheduler;
+	final changed:Bool->Void;
+	var remaining:Float = 0;
+	var pending:Bool = false;
+	var disposed:Bool = false;
+
+	public var durationSeconds:Float;
+
+	public function new(scheduler:AnimationScheduler, changed:Bool->Void, delaySeconds:Float = 0.8) {
+		this.durationSeconds = delaySeconds;
+		this.scheduler = scheduler;
+		this.changed = changed;
+	}
+
+	public function start():Void {
+		if (disposed)
+			return;
+		pending = true;
+		remaining = durationSeconds;
+		changed(false);
+		scheduler.track(this);
+	}
+
+	public function cancel():Void {
+		scheduler.remove(this);
+		pending = false;
+		remaining = 0;
+		changed(false);
+	}
+
+	public function advance(deltaSeconds:Float):Bool {
+		if (!pending || disposed)
+			return false;
+		remaining -= deltaSeconds;
+		if (remaining > 0)
+			return true;
+		pending = false;
+		changed(true);
+		return false;
+	}
+
+	public function delaySeconds():Float
+		return pending ? Math.max(0, remaining) : 0;
+
+	public function dispose():Void {
+		scheduler.remove(this);
+		disposed = true;
+		pending = false;
+	}
+}
+
+/** Shared hover timing lets neighboring labels switch without restarting the delay. */
+class TooltipHoverGroup implements Animation implements Disposable {
+	final scheduler:AnimationScheduler;
+	final changed:Null<String>->Void;
+	var hovered:Null<String>;
+	var visible:Null<String>;
+	var remaining:Float = 0;
+	public var delaySeconds:Float;
+
+	public function new(scheduler:AnimationScheduler, changed:Null<String>->Void, delaySeconds:Float) {
+		this.scheduler = scheduler;
+		this.changed = changed;
+		this.delaySeconds = delaySeconds;
+	}
+
+	public function enter(key:String):Void {
+		hovered = key;
+		if (visible != null || delaySeconds <= 0) {
+			scheduler.remove(this);
+			show(key);
+		} else {
+			remaining = delaySeconds;
+			scheduler.track(this);
+		}
+	}
+
+	public function leave(key:String):Void {
+		if (hovered != key) return;
+		hovered = null;
+		if (visible == null) scheduler.remove(this);
+		else {
+			remaining = 0.4;
+			scheduler.track(this);
+		}
+	}
+
+	public function cancel():Void {
+		hovered = null;
+		scheduler.remove(this);
+		show(null);
+	}
+
+	function show(key:Null<String>):Void {
+		visible = key;
+		changed(key);
+	}
+
+	public function advance(deltaSeconds:Float):Bool {
+		remaining -= deltaSeconds;
+		if (remaining > 0) return true;
+		show(hovered);
+		return false;
+	}
+
+	public function dispose():Void scheduler.remove(this);
+}
+
+/** Lift tooltip surfaces out of clipped stacking contexts before layout. */
+class TooltipOverlayHost implements View {
+	final content:View;
+	public function new(content:View) this.content = content;
+	public function build(context:BuildContext):RenderNode {
+		var lifted = context.lazyState(context.id("lifted-tooltips"),
+			function() return new Array<{
+				tip:RenderNode,
+				anchor:RenderNode
+			}>()).value;
+		// Retained anchors must recover their tooltip before being reused.
+		for (entry in lifted) entry.anchor.add(entry.tip.detach());
+		lifted.resize(0);
+		var root = content.build(context);
+		var tooltips:Array<RenderNode> = [];
+		root.walk(function(node) {
+			if (node.styleType == "tooltip") tooltips.push(node);
+		});
+		for (tip in tooltips) {
+			lifted.push({tip: tip, anchor: tip.parent});
+			root.add(tip.detach());
+		}
+		// A self-updating widget (Tabs) rebuilds without the view, so what it made has tooltips still in their anchors while the
+		// ones lifted by the build before stay in the overlay: both would carry one ID. Lift what a patch made in the place of
+		// the tooltip it replaces.
+		// A render scope that runs again alone does the same. When the content is that scope, its new root took the
+		// overlay's place (and the lifted tooltips, which its boundary keeps as the caller's).
+		context.onPatched = function(patched) {
+			var overlay = context.currentRoot(root);
+			var made:Array<RenderNode> = [];
+			patched.walk(function(node) {
+				if (node.styleType == "tooltip" && node.parent != overlay) made.push(node);
+			});
+			for (tip in made) {
+				var anchor = tip.parent;
+				if (anchor == null) continue;
+				var position = -1;
+				for (index in 0...lifted.length) if (lifted[index].tip.id.value == tip.id.value) {
+					position = index;
+					break;
+				}
+				var entry = {tip: tip, anchor: anchor};
+				if (position < 0) {
+					lifted.push(entry);
+					overlay.add(tip.detach());
+					continue;
+				}
+				var previous = lifted[position].tip;
+				lifted[position] = entry;
+				tip.detach();
+				if (previous.parent == overlay) previous.replaceWith(tip);
+				else overlay.add(tip);
+			}
+		};
+		return root;
+	}
 }

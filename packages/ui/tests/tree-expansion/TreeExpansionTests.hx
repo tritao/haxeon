@@ -9,9 +9,7 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.widgets.collections.TreeRootMetadata;
 import haxeon.ui.widgets.collections.TreeView;
-import haxeon.ui.widgets.collections.TreeViewModel;
 import haxeon.ui.widgets.text.Text;
 
 private class Items implements TreeViewModel {

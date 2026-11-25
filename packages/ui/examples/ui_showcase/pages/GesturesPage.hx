@@ -17,7 +17,6 @@ import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Padding;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.layout.Stack;
-import haxeon.ui.widgets.layout.StackChild;
 
 /** Gesture arbitration and Haxe-owned tween/spring motion demonstrations. */
 class GesturesPage {

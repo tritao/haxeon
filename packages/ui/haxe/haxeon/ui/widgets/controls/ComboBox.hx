@@ -20,6 +20,8 @@ import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.Select;
 /** Typed editable selection control with filtered, keyboard-navigable options. */
 class ComboBox<T> implements View {
 	final key:Key;

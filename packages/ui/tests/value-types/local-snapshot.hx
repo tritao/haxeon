@@ -12,7 +12,7 @@ import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleValue;
 function checkAnimationDeadlines():Int {
 	var scheduler = new haxeon.ui.animation.AnimationScheduler(), visible = false;
-	var delay = new haxeon.ui.widgets.overlays.TooltipHoverDelay(scheduler, value -> visible = value);
+	var delay = new haxeon.ui.widgets.overlays.Tooltip.TooltipHoverDelay(scheduler, value -> visible = value);
 	var revision = scheduler.revision;
 	delay.start();
 	if (scheduler.revision != revision || scheduler.rebuildingCount != 0 || scheduler.needsFrame

@@ -44,6 +44,7 @@ import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 import nativekit.ffi.NativeKitTypes.TextEditAction;
 
+import haxeon.ui.widgets.text.TextEditorState;
 /** Text editor composed from a Haxe box and NativeUI text primitive. */
 class TextField implements View {
 	/** Shared only by internal read-only selection paths. */

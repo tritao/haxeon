@@ -15,7 +15,6 @@ import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.commands.CommandPalette;
 import haxeon.ui.widgets.commands.SearchPicker;
-import haxeon.ui.widgets.commands.SearchPickerModel;
 import haxeon.ui.widgets.text.Text;
 
 private class Results implements SearchPickerModel {
@@ -63,7 +62,8 @@ class SearchPickerTests {
 	static function main():Int {
 		// These defaults must compile and run without an application's settings package.
 		var scheduler = new haxeon.ui.animation.AnimationScheduler(), visible = false;
-		var delay = new haxeon.ui.widgets.overlays.TooltipHoverDelay(scheduler, function(value) visible = value);
+		var delay = new haxeon.ui.widgets.overlays.Tooltip.TooltipHoverDelay(scheduler,
+			function(value) visible = value);
 		var revision = scheduler.revision;
 		delay.start();
 		check(scheduler.revision == revision && scheduler.rebuildingCount == 0 && !scheduler.needsFrame,

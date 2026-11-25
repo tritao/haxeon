@@ -4,7 +4,6 @@ import haxeon.ui.LayoutSizing;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
 
@@ -25,6 +24,7 @@ import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.layout.Spacer;
 
+import haxeon.ui.widgets.collections.VirtualViewport;
 /** Fixed-row virtual grid with optional variable-width columns. */
 class VirtualGrid implements View {
 	public final key:String;

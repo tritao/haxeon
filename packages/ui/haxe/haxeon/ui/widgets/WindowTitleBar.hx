@@ -10,7 +10,6 @@ import haxeon.ui.core.View;
 import haxeon.ui.host.UiHostContext;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.controls.Button;
-import haxeon.ui.widgets.controls.ButtonVariant;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.layout.SizedBox;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;

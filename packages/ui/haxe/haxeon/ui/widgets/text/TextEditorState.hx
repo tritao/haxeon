@@ -1,10 +1,8 @@
 package haxeon.ui.widgets.text;
 
 import haxeon.platform.input.TextEdit;
-
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
-
 import haxeon.editor.TextDocument;
 import haxeon.editor.TextDocument.TextDocumentBuffer;
 import haxeon.editor.TextOffsetMap;
@@ -20,6 +18,7 @@ import haxeon.ui.TextStyle;
 import haxeon.ui.editing.EditHistory;
 import haxeon.ui.semantics.Semantics;
 import nativekit.ffi.NativeKitTypes.TextEditAction;
+import haxeon.editor.CodepointOffset;
 
 /** Persistent editable text, selection and IME composition state for one widget ID. */
 class TextEditorState implements SemanticsValueSource implements Disposable {
@@ -1149,5 +1148,166 @@ private class FieldHistoryEdit {
 		typing = edit.historyKind == TextEditorHistoryKind.Typing;
 		composition = edit.historyKind == TextEditorHistoryKind.Composition;
 		composing = edit.hasComposition;
+	}
+}
+
+/** Anchored selection in absolute document codepoints, retaining direction and caret affinity. */
+class TextSelection {
+	public final anchor:Int;
+	public final focus:Int;
+	public final anchorAffinity:Int;
+	public final focusAffinity:Int;
+
+	public function new(anchor:Int, focus:Int, anchorAffinity:Int = 0, focusAffinity:Int = 0) {
+		if (anchor < 0 || focus < 0) throw "Selection offsets must be non-negative";
+		this.anchor = anchor;
+		this.focus = focus;
+		this.anchorAffinity = anchorAffinity;
+		this.focusAffinity = focusAffinity;
+	}
+}
+
+/** An editing operation that a controlled document owner may consume before widget mutation. */
+enum TextEditIntent {
+	Insert(text:String);
+	Paste(text:String);
+	DeleteBackward;
+	DeleteForward;
+	DeleteWordBackward(macStyle:Bool);
+	DeleteWordForward(macStyle:Bool);
+}
+
+/** Keyboard navigation delegated by a controlled editor with multiple selections. */
+enum TextNavigationIntent {
+	Character(direction:Int, extend:Bool);
+	Word(direction:Int, extend:Bool, macStyle:Bool);
+	Paragraph(direction:Int, extend:Bool, macStyle:Bool);
+	VisualLine(direction:Int, extend:Bool);
+	LineBoundary(end:Bool, extend:Bool);
+	DocumentBoundary(end:Bool, extend:Bool);
+}
+
+/** Editor actions shared by widget input and application command surfaces. */
+enum TextEditorAction {
+	Copy;
+	Cut;
+	Paste;
+	ClearSelection;
+	InsertLineAbove;
+	InsertLineBelow;
+}
+
+/** Source/coalescing policy attached to one edit transaction. */
+enum TextEditorHistoryKind {
+	Generic;
+	Typing;
+	DeleteBackward;
+	DeleteForward;
+	Paste;
+	Autocorrect;
+	Composition;
+}
+
+/** Frame-local text and IME state exposed by an active TextField. */
+class TextEditorDiagnostics {
+	public final key:String;
+	public final label:String;
+	public final focused:Bool;
+	public final selectionStart:Int;
+	public final selectionEnd:Int;
+	public final caretOffset:Int;
+	public final compositionStart:Int;
+	public final compositionEnd:Int;
+	public final compositionText:String;
+	public final caretRect:Null<Rect>;
+	public final platformSupported:Bool;
+	public final platformActive:Bool;
+
+	public function new(key:String, label:String, focused:Bool, selectionStart:Int,
+			selectionEnd:Int, caretOffset:Int, compositionStart:Int, compositionEnd:Int,
+			compositionText:String, caretRect:Null<Rect>, platformSupported:Bool,
+			platformActive:Bool) {
+		this.key = key;
+		this.label = label;
+		this.focused = focused;
+		this.selectionStart = selectionStart;
+		this.selectionEnd = selectionEnd;
+		this.caretOffset = caretOffset;
+		this.compositionStart = compositionStart;
+		this.compositionEnd = compositionEnd;
+		this.compositionText = compositionText == null ? "" : compositionText;
+		this.caretRect = caretRect;
+		this.platformSupported = platformSupported;
+		this.platformActive = platformActive;
+	}
+}
+
+/**
+ * One atomic editor mutation.
+ *
+ * All positions are absolute Unicode code-point offsets in the document. A
+ * platform adapter must convert its native offset representation before
+ * creating this value. A null replacement text is treated as an empty string.
+ */
+class TextEditTransaction {
+	public final replacementStart:CodepointOffset;
+	public final replacementEnd:CodepointOffset;
+	public final replacementText:Null<String>;
+	public final selectionStart:CodepointOffset;
+	public final selectionEnd:CodepointOffset;
+	public final hasComposition:Bool;
+	public final compositionStart:CodepointOffset;
+	public final compositionEnd:CodepointOffset;
+	/** Caret affinity for the resulting selection focus. */
+	public final selectionAffinity:Int;
+	/** Optional generic clause metadata for the resulting composition. */
+	public final compositionAttributes:Null<Array<TextCompositionSpan>>;
+	/** History grouping policy for this transaction. */
+	public final historyKind:TextEditorHistoryKind;
+	/** Text removed by an applied transaction; null for an unannotated request. */
+	public final replacedText:Null<String>;
+
+	public function new(replacementStart:CodepointOffset, replacementEnd:CodepointOffset,
+			replacementText:Null<String>, selectionStart:CodepointOffset,
+			selectionEnd:CodepointOffset, ?hasComposition:Bool = false,
+			?compositionStart:CodepointOffset = -1, ?compositionEnd:CodepointOffset = -1,
+			?selectionAffinity:Int = 0,
+			?compositionAttributes:Array<TextCompositionSpan> = null,
+			?historyKind:TextEditorHistoryKind = TextEditorHistoryKind.Generic,
+			?replacedText:Null<String> = null) {
+		this.replacementStart = replacementStart;
+		this.replacementEnd = replacementEnd;
+		this.replacementText = replacementText;
+		this.selectionStart = selectionStart;
+		this.selectionEnd = selectionEnd;
+		this.hasComposition = hasComposition;
+		this.compositionStart = compositionStart;
+		this.compositionEnd = compositionEnd;
+		this.selectionAffinity = selectionAffinity;
+		this.compositionAttributes = compositionAttributes;
+		this.historyKind = historyKind == null ? TextEditorHistoryKind.Generic : historyKind;
+		this.replacedText = replacedText;
+	}
+}
+
+/**
+ * Generic metadata for one IME composition clause.
+ *
+ * Ranges use absolute Unicode code-point offsets, like TextEditTransaction. The
+ * flags describe semantic state only; themes choose how selected and target
+ * clauses are painted.
+ */
+class TextCompositionSpan {
+	public final start:CodepointOffset;
+	public final end:CodepointOffset;
+	public final selected:Bool;
+	public final target:Bool;
+
+	public function new(start:CodepointOffset, end:CodepointOffset,
+			selected:Bool = false, target:Bool = false) {
+		this.start = start;
+		this.end = end;
+		this.selected = selected;
+		this.target = target;
 	}
 }

@@ -6,7 +6,6 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.overlays.Menu;
-import haxeon.ui.widgets.overlays.MenuItem;
 
 /** Behavioral coverage for opening modality, navigation, activation and dismissal. */
 class MenuInteractionTests {

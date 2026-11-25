@@ -12,7 +12,7 @@ import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.ComboBox;
-import haxeon.ui.widgets.controls.SelectOption;
+import haxeon.ui.widgets.controls.Select;
 
 class ComboBoxTests {
 	static function check(value:Bool, message:String):Void {
@@ -32,7 +32,7 @@ class ComboBoxTests {
 		historyProbe.insert("ab");
 		var beforeSelection = historyProbe.text;
 		haxeon.reactive.ReactiveRuntime.withTracking(new haxeon.ui.core.Dependencies(), function() {
-			historyProbe.setAnchoredSelection(new haxeon.ui.widgets.text.TextSelection(0, 0), true);
+			historyProbe.setAnchoredSelection(new haxeon.ui.widgets.text.TextEditorState.TextSelection(0, 0), true);
 			return 0;
 		});
 		check(historyProbe.selectionFocus == 0 && historyProbe.text == beforeSelection,

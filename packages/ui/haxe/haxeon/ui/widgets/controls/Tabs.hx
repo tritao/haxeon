@@ -3,7 +3,6 @@ package haxeon.ui.widgets.controls;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.core.UiEventPhase;
-
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
@@ -25,10 +24,9 @@ import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.widgets.controls.Button;
-import haxeon.ui.widgets.controls.TabItem;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
+import haxeon.ui.icons.IconName;
 
 /** Scrollable tab strip and selected page composed from Haxe buttons and views. */
 class Tabs implements View {
@@ -546,4 +544,97 @@ private class TabsScrollState {
 	public var left:Float = -1;
 	public var tabWidth:Float = -1;
 	public function new() {}
+}
+
+/** One stable tab key, accessible label, and lazily built page. */
+class TabItem {
+	/** Identifies the tab, as `Tabs.selectedKey` names it: required, and never empty. */
+	public final key:String;
+
+	/** The tab's name, which assistive technology announces, and its header text unless `displayLabel` is given. */
+	public final label:String;
+
+	/** Shorter header text, when the full `label` does not fit. */
+	public final displayLabel:Null<String>;
+
+	/** What the tab shows while selected. */
+	public final content:View;
+
+	/** Whether the tab can be selected. */
+	public final enabled:Bool;
+
+	/** An icon before the header text. */
+	public final icon:Null<IconName>;
+
+	/** A count shown in a badge on the header, such as unread items, when positive; it is announced with the name. */
+	public var badgeCount:Int = 0;
+
+	/** Optional decorative view used in place of the standard icon. */
+	public var iconView:Null<View>;
+	/** Optional close action; the header reserves a hover-revealed close target. */
+	public var onClose:Null<Void->Void>;
+
+	/** A tab named `label` showing `content`. Throws when `key` is empty or there is no content. */
+	public function new(key:String, label:String, content:View, enabled:Bool = true,
+			?icon:IconName, ?displayLabel:String) {
+		if (key == null || key.length == 0 || content == null)
+			throw "Tabs require stable keys and content views";
+		this.key = key;
+		this.label = label == null ? "" : label;
+		this.displayLabel = displayLabel;
+		this.content = content;
+		this.enabled = enabled;
+		this.icon = icon;
+	}
+}
+
+/** Optional behavior and presentation settings for an advanced tab strip. */
+class TabsOptions {
+	/** `Tabs.headerTrailing`: fixed actions beside the scrolling tab strip. */
+	public var headerTrailing:Null<haxeon.ui.core.View>;
+
+	/** `Tabs.style`; the default when null. */
+	public var style:Null<LayoutStyle>;
+
+	/** `Tabs.selectionMode`: `Local` unless set. */
+	public var selectionMode:TabsSelectionMode;
+
+	/** `Tabs.onTabDragStart`. */
+	public var onTabDragStart:Null<String->UiEvent->Void>;
+
+	/** `Tabs.onTabDragMove`. */
+	public var onTabDragMove:Null<String->UiEvent->Void>;
+
+	/** `Tabs.onTabDragEnd`. */
+	public var onTabDragEnd:Null<String->UiEvent->Void>;
+
+	/** `Tabs.onTabDragCancel`. */
+	public var onTabDragCancel:Null<String->UiEvent->Void>;
+
+	/** `Tabs.onTabContextMenu`. */
+	public var onTabContextMenu:Null<String->UiEvent->Void>;
+
+	/** `Tabs.onTabHeaderBuilt`. */
+	public var onTabHeaderBuilt:Null<String->RenderNode->Void>;
+
+	/** Options that change nothing until set. */
+	public function new() {
+		headerTrailing = null;
+		style = null;
+		selectionMode = TabsSelectionMode.Local;
+		onTabDragStart = null;
+		onTabDragMove = null;
+		onTabDragEnd = null;
+		onTabDragCancel = null;
+		onTabHeaderBuilt = null;
+		onTabContextMenu = null;
+	}
+}
+
+/** Ownership of the active tab selection. */
+enum TabsSelectionMode {
+	/** The Tabs widget retains selection between rebuilt views. */
+	Local;
+	/** The caller's selectedKey is authoritative on every build. */
+	Controlled;
 }

@@ -5,7 +5,6 @@ package pages;
 import UiExplorer;
 import haxeon.ui.Insets;
 import haxeon.ui.widgets.KeyedView;
-import haxeon.ui.widgets.controls.TabItem;
 import haxeon.ui.widgets.controls.Tabs;
 import haxeon.ui.widgets.layout.Padding;
 import haxeon.ui.widgets.layout.Row;

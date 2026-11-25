@@ -18,6 +18,7 @@ import haxeon.ui.TextColorRange;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 
+import haxeon.ui.widgets.text.TextEditorState;
 /**
 	Retained layouts for bounded groups of paragraphs in one editor document.
 

@@ -9,7 +9,7 @@ import haxeon.ui.widgets.controls.Select;
 import haxeon.ui.widgets.controls.Slider;
 import haxeon.ui.widgets.controls.Toggle;
 import haxeon.ui.widgets.overlays.Dialog;
-import haxeon.ui.widgets.overlays.MenuItem;
+import haxeon.ui.widgets.overlays.Menu;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
 

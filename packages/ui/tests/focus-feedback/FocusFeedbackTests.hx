@@ -9,7 +9,6 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.overlays.Menu;
-import haxeon.ui.widgets.overlays.MenuItem;
 
 /** Root factory dependencies must survive the focus feedback of a modal menu. */
 class FocusFeedbackTests {

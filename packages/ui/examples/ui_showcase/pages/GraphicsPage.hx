@@ -21,7 +21,6 @@ import haxeon.ui.Transform2D;
 import haxeon.ui.core.CachePolicy;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.CanvasView;
-import haxeon.ui.widgets.ImageFit;
 import haxeon.ui.widgets.ImageView;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.LayeredImageView;

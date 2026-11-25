@@ -11,9 +11,7 @@ import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.AccessibilityRole;
-import haxeon.ui.widgets.collections.TreeRootMetadata;
 import haxeon.ui.widgets.collections.TreeView;
-import haxeon.ui.widgets.collections.TreeViewModel;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
 

@@ -15,8 +15,6 @@ import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.overlays.Tooltip;
-import haxeon.ui.widgets.overlays.TooltipOverlayHost;
-import haxeon.ui.widgets.overlays.TooltipPlacement;
 import haxeon.ui.widgets.text.Text;
 
 /** A box whose root writes its resolved width into a State its build read, so the next frame runs its scope again. */

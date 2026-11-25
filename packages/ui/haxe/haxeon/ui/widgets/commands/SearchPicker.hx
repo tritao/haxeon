@@ -12,6 +12,7 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.UiKey;
+import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.collections.VirtualList;
@@ -20,8 +21,8 @@ import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.overlays.Popup;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.text.Text;
+import haxeon.ui.widgets.text.TextEditorState;
 import haxeon.ui.widgets.text.TextField;
-import haxeon.ui.widgets.text.TextSelection;
 
 /** Search input and virtualized results with input-owned keyboard focus. Retain across builds. */
 class SearchPicker implements View {
@@ -258,4 +259,17 @@ private class SearchPickerRow implements View {
 		});
 		return node;
 	}
+}
+
+/** Application-owned results and selection; the picker owns focus and scrolling. */
+interface SearchPickerModel extends haxeon.ui.widgets.collections.ListView.ListViewItemMetadata {
+	public function query():String;
+	public function selectedIndex():Int;
+	public function count():Int;
+	public function labelAt(index:Int):String;
+	public function enabledAt(index:Int):Bool;
+	public function setQuery(value:String):Void;
+	/** Normalized UiKey/UiModifier values; pageSize is the visible row count. */
+	public function navigate(key:Int, modifiers:UiModifier, pageSize:Int):Void;
+	public function activate(index:Int):Void;
 }

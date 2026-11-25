@@ -1,14 +1,10 @@
 package haxeon.ui.widgets.docking;
 import haxeon.ui.core.KeyHash;
 import haxeon.ui.widgets.KeyedView;
-import haxeon.ui.widgets.controls.TabItem;
-import haxeon.ui.widgets.controls.TabsSelectionMode;
+import haxeon.ui.widgets.controls.Tabs;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.SizedBox;
-import haxeon.ui.widgets.layout.SplitOrientation;
-import haxeon.ui.widgets.layout.SplitSide;
 import haxeon.ui.widgets.layout.SplitView;
-import haxeon.ui.widgets.layout.SplitViewOptions;
 import haxeon.ui.widgets.text.Text;
 
 import haxeon.ui.Color;
@@ -37,7 +33,6 @@ import haxeon.ui.docking.DockPanelDescriptor;
 import haxeon.ui.docking.DockSplitAxis;
 import haxeon.ui.docking.DockWorkspaceModel;
 import haxeon.ui.theme.TextRole;
-import haxeon.ui.widgets.controls.TabsOptions;
 import haxeon.ui.widgets.docking.DockDropTarget;
 import haxeon.ui.widgets.docking.DockTabDropTarget;
 import haxeon.ui.widgets.docking.DockWorkspaceInteraction;

@@ -27,9 +27,10 @@ import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollView;
 
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.Select;
 /** Mutable bridge for active-option visibility across rebuilt render trees. */
 internal class SelectionPopupVisibility {
 	public var ensure:Int->Void;

@@ -1,6 +1,5 @@
 package haxeon.ui.widgets.commands;
 import haxeon.ui.widgets.controls.Button;
-import haxeon.ui.widgets.controls.ButtonVariant;
 
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;

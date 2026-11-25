@@ -1,9 +1,7 @@
 package haxeon.ui.widgets.properties;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
-import haxeon.ui.widgets.controls.ButtonVariant;
 import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
 

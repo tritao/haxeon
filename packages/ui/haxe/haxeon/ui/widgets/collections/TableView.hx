@@ -1,14 +1,8 @@
 package haxeon.ui.widgets.collections;
-import haxeon.ui.LayoutSizing;
-
-import haxeon.ui.widgets.KeyedView;
-import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.layout.Row;
-import haxeon.ui.widgets.scroll.ScrollController;
-import haxeon.ui.widgets.text.Text;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Transform2D;
@@ -24,7 +18,13 @@ import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.scroll.ScrollController;
+import haxeon.ui.widgets.text.Text;
 
+import haxeon.ui.widgets.collections.VirtualViewport;
 /** Virtualized variable-width table with sticky headers, selection, and sorting. */
 class TableView implements View {
 	static inline var minimumColumnWidth:Float = 24.0;
@@ -432,4 +432,32 @@ private class TableSelectionCell implements View {
 			return node;
 		});
 	}
+}
+
+/** Stable metadata describing one resizable table column. */
+class TableColumn {
+	public final key:String;
+	public final label:String;
+	public var width(default, null):Float;
+
+	public function new(key:String, label:String, width:Float) {
+		if (key == null || key.length == 0 || width <= 0.0 || !finite(width))
+			throw "Table columns require a stable key and finite positive width";
+		this.key = key;
+		this.label = label == null ? "" : label;
+		this.width = width;
+	}
+
+	/** Updates the logical width and reports whether it changed. */
+	public function resize(next:Float):Bool {
+		if (next <= 0.0 || !finite(next))
+			throw "Table column width must be finite and positive";
+		if (next == width)
+			return false;
+		width = next;
+		return true;
+	}
+
+	static inline function finite(value:Float):Bool
+		return value == value && value - value == 0.0;
 }

@@ -22,6 +22,7 @@ import haxeon.ui.core.State;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 
+import haxeon.ui.widgets.commands.SearchPicker;
 /** Searchable, virtualized command launcher suitable for editor key palettes. */
 class CommandPalette implements View {
 	public final key:String;

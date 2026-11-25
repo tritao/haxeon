@@ -13,6 +13,7 @@ import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 
+import haxeon.ui.widgets.navigation.NavigationController;
 /**
  * A stack of screens; the top one is shown full size. Pushes slide the new screen in from the right and pops slide the
  * old one out (220 ms). Back is `NavigationController.handleBack`.

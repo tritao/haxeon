@@ -8,6 +8,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.Transform2D;
+import haxeon.ui.animation.AnimationScheduler;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
@@ -575,5 +576,36 @@ private class TouchScrollState {
 		startX = lastX = x;
 		startY = lastY = y;
 		velocity.reset();
+	}
+}
+
+/** Axes whose content may move inside a ScrollView viewport. */
+class ScrollAxis {
+	public static inline var Vertical:Int = 0;
+	public static inline var Horizontal:Int = 1;
+	public static inline var Both:Int = 2;
+}
+
+/** Shared scrollbar visibility policy; Auto reveals on pane hover or scroll activity. */
+class ScrollbarVisibility {
+	public static inline var Auto:Int = 0;
+	public static inline var Always:Int = 1;
+	public static inline var Hidden:Int = 2;
+}
+
+/** Mount-owned binding; replacing or unmounting a viewport retires its animation. */
+class ScrollBinding implements Disposable {
+	var controller:Null<ScrollController>;
+	public function new() {}
+	public function attach(value:ScrollController, scheduler:AnimationScheduler, changed:ScrollController->Void):Void {
+		if (controller != value) {
+			dispose();
+			controller = value;
+		}
+		value.bind(changed, scheduler, this);
+	}
+	public function dispose():Void {
+		if (controller != null) controller.unbind(this);
+		controller = null;
 	}
 }

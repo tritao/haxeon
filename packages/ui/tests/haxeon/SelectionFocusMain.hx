@@ -11,7 +11,6 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.controls.Select;
-import haxeon.ui.widgets.controls.SelectOption;
 
 class SelectionFocusMain {
 	static function resolve(root:RenderNode):Void {

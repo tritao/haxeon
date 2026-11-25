@@ -14,16 +14,12 @@ import haxeon.ui.core.View;
 import haxeon.ui.settings.SettingsCatalog;
 import haxeon.ui.settings.SettingsStore;
 import haxeon.ui.widgets.KeyedView;
-import haxeon.ui.widgets.collections.TreeRootMetadata;
 import haxeon.ui.widgets.collections.TreeView;
-import haxeon.ui.widgets.collections.TreeViewModel;
 import haxeon.ui.widgets.controls.SearchField;
 import haxeon.ui.widgets.controls.Toggle;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
-import haxeon.ui.widgets.layout.SplitSide;
 import haxeon.ui.widgets.layout.SplitView;
-import haxeon.ui.widgets.layout.SplitViewOptions;
 import haxeon.ui.widgets.properties.PropertyInspector;
 import haxeon.ui.widgets.text.Text;
 
@@ -335,7 +331,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 	}
 
 	function compactBody(inspector:View, onCategory:RenderNode->Void):View {
-		var options = [for (category in categories()) new haxeon.ui.widgets.controls.SelectOption(category,
+		var options = [for (category in categories()) new haxeon.ui.widgets.controls.Select.SelectOption(category,
 			[for (part in category.split("/")) SettingsCatalog.labelOf(part)].join(" › ")
 			+ " (" + categoryCount(category) + ")",
 			category)];

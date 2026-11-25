@@ -53,7 +53,6 @@ import haxeon.ui.TextDirection;
 import haxeon.ui.TextStyle;
 import haxeon.ui.TextColorRange;
 import haxeon.ui.widgets.text.TextDecoration;
-import haxeon.ui.widgets.text.TextDecorationKind;
 import haxeon.ui.TextWrap;
 import NativeKitEventDecoderTests;
 import haxeon.ui.core.NativeInputAdapter;
@@ -125,7 +124,6 @@ import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.Button;
-import haxeon.ui.widgets.controls.ButtonVariant;
 import haxeon.ui.widgets.commands.CommandButton;
 import haxeon.ui.widgets.commands.CommandMenu;
 import haxeon.ui.widgets.commands.CommandPalette;
@@ -141,7 +139,6 @@ import haxeon.ui.widgets.LayeredImageView.ImageLayer;
 import haxeon.ui.widgets.NineSliceView;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.collections.ListView;
-import haxeon.ui.widgets.collections.ListViewModel;
 import haxeon.ui.widgets.layout.Padding;
 import haxeon.ui.widgets.controls.ProgressBar;
 import haxeon.ui.widgets.properties.PropertyEditor;
@@ -152,10 +149,8 @@ import haxeon.ui.widgets.overlays.Dialog;
 import haxeon.ui.widgets.docking.DockWorkspace;
 import haxeon.ui.widgets.text.DefaultTextStyle;
 import haxeon.ui.widgets.overlays.Menu;
-import haxeon.ui.widgets.overlays.MenuItem;
 import haxeon.ui.widgets.overlays.Popup;
 import haxeon.ui.widgets.layout.Row;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
 import haxeon.ui.widgets.controls.SearchField;
@@ -163,42 +158,26 @@ import haxeon.ui.widgets.layout.SizedBox;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.widgets.text.TextEditorState;
-import haxeon.ui.widgets.text.TextEditorHistoryKind;
-import haxeon.ui.widgets.text.TextEditorDiagnostics;
 import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.navigation.BottomBar;
 import haxeon.ui.widgets.navigation.NavigationController;
 import haxeon.ui.widgets.navigation.NavigationStack;
 import haxeon.ui.widgets.text.TextField;
-import haxeon.ui.widgets.text.TextSelection;
-import haxeon.ui.widgets.text.TextEditTransaction;
 import haxeon.editor.TextDocument;
 import haxeon.ui.widgets.layout.Spacer;
 import haxeon.ui.widgets.controls.Slider;
 import haxeon.ui.widgets.layout.Stack;
-import haxeon.ui.widgets.layout.StackChild;
 import haxeon.ui.widgets.controls.Spinner;
-import haxeon.ui.widgets.controls.SpinnerPainter;
-import haxeon.ui.widgets.controls.SpinnerPainter.SpinnerClock;
-import haxeon.ui.widgets.controls.SpinnerKind;
-import haxeon.ui.widgets.layout.SplitOrientation;
-import haxeon.ui.widgets.layout.SplitSide;
+import haxeon.ui.widgets.controls.Spinner.SpinnerClock;
 import haxeon.ui.widgets.layout.SplitView;
-import haxeon.ui.widgets.layout.SplitViewOptions;
-import haxeon.ui.widgets.collections.TableColumn;
 import haxeon.ui.widgets.collections.TableView;
 import haxeon.ui.widgets.controls.Toggle;
 import haxeon.ui.widgets.overlays.Tooltip;
 import haxeon.ui.widgets.controls.Toolbar;
 import haxeon.ui.widgets.collections.TreeView;
-import haxeon.ui.widgets.collections.TreeViewModel;
-import haxeon.ui.widgets.collections.TreeRootMetadata;
 import haxeon.ui.widgets.text.Utf8Text;
 import haxeon.ui.widgets.collections.VirtualGrid;
 import haxeon.ui.widgets.collections.VirtualList;
-import haxeon.ui.widgets.collections.VirtualExtentViewport;
-import haxeon.ui.widgets.collections.VirtualExtentIndex;
-import haxeon.ui.widgets.collections.VirtualizationPolicy;
 import haxeon.ui.widgets.collections.VirtualViewport;
 import haxeon.ui.widgets.WindowChrome;
 import haxeon.ui.theme.Theme;
@@ -221,9 +200,7 @@ import haxeon.ui.style.StyleEnvironment;
 import haxeon.ui.gestures.GestureRecognizer;
 import haxeon.ui.widgets.GestureDetector;
 import haxeon.ui.widgets.controls.RadioGroup;
-import haxeon.ui.widgets.controls.RadioOption;
 import haxeon.ui.widgets.controls.Tabs;
-import haxeon.ui.widgets.controls.TabItem;
 import haxeon.ui.animation.AnimationController;
 import haxeon.ui.animation.AnimationScheduler;
 import haxeon.ui.animation.Animation;
@@ -1775,7 +1752,7 @@ class FrameworkSmoke {
 			|| !progressSemantics.states.contains(AccessibilityState.ReadOnly)
 			|| progressSemantics.numericValue != 0.75) return 61;
 		var indeterminateProgress = new ProgressBar("indeterminate-progress-smoke", 0.0, 0.0, 1.0, "Loading");
-		indeterminateProgress.mode = haxeon.ui.widgets.controls.ProgressMode.Indeterminate;
+		indeterminateProgress.mode = haxeon.ui.widgets.controls.ProgressBar.ProgressMode.Indeterminate;
 		var indeterminateRoot = context.submit(indeterminateProgress, new LayoutFrame(256.0, 192.0));
 		var indeterminateSemantics:Semantics = cast indeterminateRoot.semantics;
 		if (indeterminateSemantics == null || !indeterminateSemantics.states.contains(AccessibilityState.Busy)
@@ -2350,7 +2327,7 @@ class FrameworkSmoke {
 			viewportStyle,
 			ScrollAxis.Vertical);
 		// Interaction checks require a visible thumb without advancing the fade animation.
-		scrollView.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Always;
+		scrollView.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Always;
 		var scrollFrame = new LayoutFrame(256.0, 80.0);
 		var scrollRoot = context.submit(scrollView, scrollFrame);
 		var contentGeometry:ResolvedLayoutItem = cast scrollRoot.children[0].resolved;
@@ -3004,8 +2981,8 @@ class FrameworkSmoke {
 		var tabChanges = 0;
 		var retainedHeaderBuilds = 0;
 		var retainedHeaderRevision = "initial";
-		var retainedTabOptions = new haxeon.ui.widgets.controls.TabsOptions();
-		retainedTabOptions.selectionMode = haxeon.ui.widgets.controls.TabsSelectionMode.Controlled;
+		var retainedTabOptions = new haxeon.ui.widgets.controls.Tabs.TabsOptions();
+		retainedTabOptions.selectionMode = haxeon.ui.widgets.controls.Tabs.TabsSelectionMode.Controlled;
 		var retainedTabs = Tabs.withOptions("retained-tabs-smoke",
 			[
 				new TabItem("first", "First", new Text("first page")),
@@ -5870,21 +5847,21 @@ class FrameworkSmoke {
 			"new overflow fades in under a stationary pointer");
 		clock.advance(0.3);
 
-		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto, true);
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Auto, true);
 		visibility.setViewportHovered(false);
 		scrollbarCheck(visibility.opacity == 0, "reduced motion hides immediately on exit");
 		visibility.setViewportHovered(true);
 		scrollbarCheck(visibility.opacity == 1 && clock.activeCount == 0, "reduced motion reveals immediately");
-		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Hidden, false);
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Hidden, false);
 		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 0, "hidden policy overrides hover");
-		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Always, false);
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Always, false);
 		scrollbarCheck(visibility.opacity == 1 && clock.activeCount == 0, "always policy does not animate");
 		visibility.setAvailable(false);
 		scrollbarCheck(visibility.opacity == 0, "no scrollbar without overflow");
 		visibility.setAvailable(true);
 		scrollbarCheck(visibility.opacity == 1, "always policy restores on overflow");
-		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Hidden, false);
-		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto, false);
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Hidden, false);
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Auto, false);
 		scrollbarCheck(clock.activeCount == 1, "auto policy fades in while hovered");
 		visibility.dispose();
 		scrollbarCheck(clock.activeCount == 0, "unmount cancels animation");
@@ -5905,7 +5882,8 @@ class FrameworkSmoke {
 		fine.dispose();
 
 		var oldPolicy = context.buildContext.environment.scrollbarVisibility;
-		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto;
+		context.buildContext.environment.scrollbarVisibility =
+			haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Auto;
 		context.pointerMove(-20, -20);
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(180);
@@ -5990,12 +5968,14 @@ class FrameworkSmoke {
 		scrollbarCheck(scrollbarAlpha(root) > 0 && scrollbarAlpha(root) < restingAlpha,
 			"overflow restoration reveals under a stationary pointer");
 
-		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Hidden;
+		context.buildContext.environment.scrollbarVisibility =
+			haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Hidden;
 		frame.deltaSeconds = 0;
 		root = context.submit(view, frame);
 		scrollbarCheck(root.children.length == 1 && context.animations.activeCount == 0,
 			"hidden policy removes track and animation");
-		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Always;
+		context.buildContext.environment.scrollbarVisibility =
+			haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Always;
 		root = context.submit(view, frame);
 		root = context.submit(view, frame);
 		scrollbarCheck(Math.abs(scrollbarAlpha(root) - restingAlpha) < 0.001, "always policy paints immediately");

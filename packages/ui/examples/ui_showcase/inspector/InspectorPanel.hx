@@ -14,7 +14,6 @@ import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollView;
 import inspector.InspectionOverlay;
 import inspector.WidgetDocsRegistry;

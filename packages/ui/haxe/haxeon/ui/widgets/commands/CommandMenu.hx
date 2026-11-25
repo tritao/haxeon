@@ -1,6 +1,5 @@
 package haxeon.ui.widgets.commands;
 import haxeon.ui.widgets.overlays.Menu;
-import haxeon.ui.widgets.overlays.MenuItem;
 
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.CommandContext;

@@ -12,6 +12,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
+import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRole;
@@ -150,3 +151,11 @@ class BottomBar implements ScopeView {
 		return node;
 	}
 }
+
+/** One destination in a BottomBar; `badge` above zero shows a count. */
+typedef BottomBarItem = {
+	id:String,
+	icon:IconName,
+	label:String,
+	?badge:Int
+};

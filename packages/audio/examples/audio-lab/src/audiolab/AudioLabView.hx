@@ -19,11 +19,9 @@ import haxeon.ui.theme.TextRole;
 import haxeon.ui.widgets.CanvasView;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
-import haxeon.ui.widgets.controls.ButtonVariant;
 import haxeon.ui.widgets.controls.Slider;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollView;
 import haxeon.ui.widgets.text.Text;
 

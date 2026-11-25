@@ -1,9 +1,8 @@
-import haxeon.ui.widgets.ImageFit;
-import haxeon.ui.widgets.controls.ButtonVariant;
-import haxeon.ui.widgets.controls.ProgressMode;
-import haxeon.ui.widgets.controls.SpinnerKind;
-import haxeon.ui.widgets.layout.SplitOrientation;
-import haxeon.ui.widgets.layout.SplitSide;
+import haxeon.ui.widgets.ImageView;
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.ProgressBar;
+import haxeon.ui.widgets.controls.Spinner;
+import haxeon.ui.widgets.layout.SplitView;
 
 struct WidgetCases implements Hashable {
 	public var button:ButtonVariant;

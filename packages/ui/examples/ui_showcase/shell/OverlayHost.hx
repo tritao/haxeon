@@ -4,10 +4,9 @@ import UiExplorer;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.layout.StackChild;
+import haxeon.ui.widgets.layout.Stack;
 import haxeon.ui.widgets.overlays.Dialog;
 import haxeon.ui.widgets.overlays.Menu;
-import haxeon.ui.widgets.overlays.MenuItem;
 import haxeon.ui.widgets.overlays.Popup;
 
 /** Builds global popup, menu and dialog layers above the Explorer shell. */

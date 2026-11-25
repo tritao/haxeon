@@ -5,10 +5,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
-import haxeon.ui.widgets.controls.TabItem;
 import haxeon.ui.widgets.controls.Tabs;
-import haxeon.ui.widgets.controls.TabsOptions;
-import haxeon.ui.widgets.controls.TabsSelectionMode;
 import haxeon.ui.widgets.text.Text;
 
 /** One content-owned tab strip; inactive providers never build. */

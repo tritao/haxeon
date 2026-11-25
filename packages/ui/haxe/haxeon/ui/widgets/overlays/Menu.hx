@@ -3,7 +3,6 @@ package haxeon.ui.widgets.overlays;
 import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
-import haxeon.ui.widgets.controls.ButtonVariant;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.text.MiddleEllipsisText;
 import haxeon.ui.widgets.text.Text;
@@ -13,7 +12,6 @@ import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleProperty;
-
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -264,4 +262,33 @@ private class MenuFocusState {
 	public var pointerSelection:Bool = false;
 
 	public function new() {}
+}
+
+/** Immutable menu command description. */
+class MenuItem {
+	public final key:String;
+	public final label:String;
+	public final onSelect:Void->Void;
+	public final hasSelectHandler:Bool;
+	public final enabled:Bool;
+	public final shortcut:Null<String>;
+	public final separatorBefore:Bool;
+	public final isHeading:Bool;
+
+	public function new(key:String, label:String, ?onSelect:Void->Void, enabled:Bool = true,
+			?shortcut:String, separatorBefore:Bool = false, isHeading:Bool = false) {
+		this.shortcut = shortcut;
+		this.separatorBefore = separatorBefore;
+		this.isHeading = isHeading;
+		if (key == null || key.length == 0)
+			throw "Menu items require stable non-empty keys";
+		this.key = key;
+		this.label = label == null ? "" : label;
+		hasSelectHandler = onSelect != null;
+		this.onSelect = onSelect == null ? function() {} : onSelect;
+		this.enabled = enabled;
+	}
+	/** A non-interactive section label, excluded from menu keyboard navigation. */
+	public static function section(key:String, label:String, separatorBefore:Bool = false):MenuItem
+		return new MenuItem(key, label, null, false, null, separatorBefore, true);
 }

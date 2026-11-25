@@ -21,7 +21,6 @@ import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.Icon;
 import haxeon.ui.widgets.controls.SearchField;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollView;
 
 /** A searchable list of choices for a sheet (single or multi select); items are indented by `depth`. */
@@ -222,3 +221,11 @@ private class RenderNodeView implements haxeon.ui.core.View {
 
 	public function build(context:BuildContext):RenderNode return node;
 }
+
+/** One option in a ChoiceList; `depth` indents nested options. */
+typedef ChoiceItem = {
+	id:String,
+	label:String,
+	?detail:String,
+	?depth:Int
+};

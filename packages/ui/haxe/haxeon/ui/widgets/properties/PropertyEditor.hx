@@ -5,7 +5,6 @@ import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Checkbox;
 import haxeon.ui.widgets.controls.IconButton;
 import haxeon.ui.widgets.controls.Select;
-import haxeon.ui.widgets.controls.SelectOption;
 import haxeon.ui.widgets.controls.Slider;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;

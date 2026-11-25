@@ -14,7 +14,7 @@ import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.debug.UiNodeSnapshot;
 import haxeon.ui.widgets.CanvasView;
-import haxeon.ui.widgets.layout.StackChild;
+import haxeon.ui.widgets.layout.Stack;
 
 /** Pointer selection, focus tracking, and clipped render-node highlighting. */
 class InspectionOverlay {

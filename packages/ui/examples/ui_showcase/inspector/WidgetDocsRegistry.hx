@@ -13,7 +13,6 @@ import haxeon.ui.widgets.controls.Toolbar;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.overlays.Dialog;
 import haxeon.ui.widgets.overlays.Menu;
-import haxeon.ui.widgets.overlays.MenuItem;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
 

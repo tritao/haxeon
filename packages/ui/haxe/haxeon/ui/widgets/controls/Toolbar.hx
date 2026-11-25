@@ -12,6 +12,7 @@ import haxeon.ui.core.CommandRegistry;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 
+import haxeon.ui.widgets.controls.Button;
 /** Shared horizontal command surface for editor and simulation controls. */
 class Toolbar implements View {
 	/** Identifies the toolbar among its siblings: required, and never empty. */

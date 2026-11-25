@@ -8,9 +8,7 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.widgets.KeyedView;
-import haxeon.ui.widgets.collections.TreeRootMetadata;
 import haxeon.ui.widgets.collections.TreeView;
-import haxeon.ui.widgets.collections.TreeViewModel;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.layout.SizedBox;
 

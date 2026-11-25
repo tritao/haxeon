@@ -1,6 +1,7 @@
 package haxeon.ui.widgets.navigation;
 
 import haxeon.ui.animation.AnimationController;
+import haxeon.ui.core.View;
 
 /**
  * The screens of a NavigationStack: the last entry is shown. Changes bump `revision`; the stack rebuilds when the
@@ -93,3 +94,9 @@ class NavigationController {
 			throw "Navigation entries require an id and a builder";
 	}
 }
+
+/** One screen in a NavigationStack: a stable id and a builder for its content. */
+typedef NavigationEntry = {
+	id:String,
+	build:Void->View
+};
