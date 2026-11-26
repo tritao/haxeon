@@ -90,8 +90,8 @@ class IrStageMemo {
 /**
  * The reuse state of the IR stages in a session (docs/design/QUERY_ENGINE.md, the stage driver): what each per-function stage
  * made of each function, as kinds of the session's query database (`IrStageQueries`), and the facts their rewrites read
- * (`IrStageFacts`); and, until they move onto the database too, the inliner's memo and facts (`IrStageMemo`, `IrFacts`), the
- * contribution memos and the whole-program results the stages keep. The copies of the session state share it: a memo holds only
+ * (`IrStageFacts`); the whole-program walks and steps (`IrWalkMemo`) and summaries (`IrContributionSummary`); and, until they move
+ * onto the database too, the inliner's memo and facts (`IrStageMemo`, `IrFacts`) and the contribution memos. The copies of the session state share it: a memo holds only
  * while what it was made from is the same object and what it read has not changed, so what a rolled-back build left is never
  * wrongly reused.
  */
@@ -141,8 +141,6 @@ class IrStageMemos {
 	/** The contribution memos the stages registered (`contribution`), by name, each begun with every build. */
 	final contributions:Map<String, IrContributionMemo<Dynamic>> = [];
 
-	/** The whole-program results the stages keep (`lastResult`), by key. */
-	final results:Map<String, Dynamic> = [];
 
 	public function new(database:compiler.query.QueryDatabase, inputs:compiler.query.ComputedQueryKind<IrFunction>) {
 		this.database = database;
@@ -273,17 +271,6 @@ class IrStageMemos {
 		return cast memo;
 	}
 
-	/**
-	 * The whole-program result the session keeps under `key` from the last build that kept one, or null. It holds what it was worked
-	 * out from, which its stage compares with what the program gives now before it reuses it: no build is trusted to have left it.
-	 */
-	public function lastResult<T>(key:IrContributionKey<T>):Null<T>
-		return results.get(key.name);
-
-	/** Keeps `value` as the result under `key` (`lastResult`). */
-	public function keepResult<T>(key:IrContributionKey<T>, value:T):Void
-		results.set(key.name, value);
-
 	/** What helpers are named by, by the id of the type they are made for (`typeEncoding`), swept with the build. */
 	var typeEncodings:Null<compiler.query.ComputedQueryKind<String>> = null;
 
@@ -333,7 +320,6 @@ class IrStageMemos {
 		for (walk in walks)
 			walk.clear();
 		contributions.clear();
-		results.clear();
 	}
 }
 

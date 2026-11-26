@@ -31,7 +31,7 @@ private typedef ScalarCallPlan = {
 	final arguments:Array<IrValueId>;
 }
 
-/** The candidates `IrScalarArguments` chose, by name, which a session keeps (`IrScalarArguments.CHOICE`). */
+/** The candidates `IrScalarArguments` chose, by name, a session's step (`IrScalarArguments.CHOICE`). */
 private typedef ScalarArgumentChoice = {
 	final candidates:Array<String>;
 	final pinned:Array<String>;
@@ -47,22 +47,13 @@ private typedef ScalarArgumentChoice = {
  */
 @:nullSafety(Strict)
 class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
-	/** The functions each function takes as closures. */
-	@:processWide("a contribution memo's key, only ever read")
-	public static final CLOSURE_NAMES =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<String>>("closure-names");
-
 	/**
-	 * The choice of candidates, kept with what it read (`IrWalkRecord`): of each function that may be a candidate, all of it; of
-	 * each other function, the names of the functions it takes as closures (but for the Wasm ABI, which reads none).
+	 * The choice of candidates, a session's step whose summary of a function is what the choice reads of it (`IrScalarChoiceRead`).
 	 */
-	@:processWide("a kept choice's key, only ever read")
-	static final CHOICE = new compiler.ir.reuse.IrStageMemo
-		.IrContributionKey<compiler.ir.reuse.IrWalkRecord<Array<String>, ScalarArgumentChoice>>("scalar-argument-choice");
+	static inline final CHOICE = "scalar-argument-choice";
 
-	/** What the choice records of a function it reads whole (`CHOICE`): one that changed is chosen again. */
-	@:processWide("a marker compared by identity, never changed")
-	static final READ_WHOLE:Array<String> = [];
+	@:processWide("an empty list, only ever read")
+	static final NO_NAMES:Array<String> = [];
 
 	public static inline final PREFIX = "$scalar-arguments:";
 
@@ -157,54 +148,39 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 
 	/**
 	 * The candidates, chosen over the whole program from the functions the summaries name: those that may take the scalar ABI
-	 * (`SIGNATURE`) and those that take closures (`CLOSES`). In a session the choice is kept (`CHOICE`) while the program's tables
-	 * and those functions give it the same, and the clones are made only when a stage asks for one.
+	 * (`SIGNATURE`) and those that take closures (`CLOSES`). In a session the choice is the session's step `CHOICE`, kept while the
+	 * program's tables and declarations and what it reads of each function are the same, and the clones are made only when a
+	 * stage asks for one.
 	 */
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {
 		originals = functions;
 		var known = stageMemos;
 		if (known == null) {
-			choose(functions, summaries);
+			choose(functions, summaries, null);
 			return;
 		}
-		var memos = known,
-			given = [argumentsOnly ? "arguments only" : ""],
-			last = memos.lastResult(CHOICE),
-			memo = memos.contribution(CLOSURE_NAMES),
-			kept = last == null ? null : last.holds(program, given, [], functions,
-				(fn, closures) -> closures == READ_WHOLE || mayBeCandidate(fn) ? null : sameNames(closures,
-				closureNames(fn)) ? closures : null);
+		var memo:compiler.ir.reuse.IrWalkMemo<IrScalarChoiceRead, ScalarArgumentChoice> = known.step(CHOICE,
+			IrScalarChoiceRead.same),
+			kept = memo.kept(known.database, program, functions, [argumentsOnly ? "arguments only" : ""], [],
+				choiceRead);
 		if (kept != null) {
-			var choice = kept.result;
-			for (name in choice.candidates)
+			for (name in kept.candidates)
 				candidates.set(name, bodyNamed(name));
-			for (name in choice.pinned)
+			for (name in kept.pinned)
 				pinnedCandidates.set(name, bodyNamed(name));
-			for (name in choice.freshOnly)
+			for (name in kept.freshOnly)
 				freshOnly.set(name, true);
-			for (name in choice.terminalOnly)
+			for (name in kept.terminalOnly)
 				terminalOnly.set(name, true);
-			for (name in choice.methodNames)
+			for (name in kept.methodNames)
 				methodNames.set(name, true);
 			if (known.checks)
-				checkChoice(functions, summaries, choice);
-			memos.keepResult(CHOICE, kept);
+				checkChoice(functions, summaries, kept);
 		} else {
-			if (last != null)
-				last.eachSummary((fn, closures) -> {
-					var version = fn.version;
-					if (closures != READ_WHOLE && version != 0 && memo.get(version) == null)
-						memo.keep(version, closures);
-				});
-			choose(functions, summaries);
-			var read:Array<Null<Array<String>>> = [for (index in 0...functions.length) {
-				var fn = functions[index];
-				mayBeCandidate(fn) ? READ_WHOLE : argumentsOnly ? null : summaries[index] & CLOSES != 0
-					? closureNames(fn) : [];
-			}];
-			memos.keepResult(CHOICE,
-				new compiler.ir.reuse.IrWalkRecord(program, given, [], functions.copy(), read, chosen()));
+			memo.begin(known.database);
+			choose(functions, summaries, memo);
+			memo.end(known.database, chosen());
 		}
 		candidatesPrint = printCandidates();
 		for (fn in functions)
@@ -239,7 +215,7 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 	/** `--check-reuse`: choosing again gives the kept choice. */
 	function checkChoice(functions:Array<IrFunction>, summaries:Array<Int>, kept:ScalarArgumentChoice):Void {
 		var fresh = new IrScalarArguments(program, argumentsOnly, scratch, null);
-		fresh.choose(functions, summaries);
+		fresh.choose(functions, summaries, null);
 		var now = fresh.chosen();
 		if (!sameNames(now.candidates, kept.candidates) || !sameNames(now.pinned, kept.pinned)
 			|| !sameNames(now.freshOnly, kept.freshOnly) || !sameNames(now.terminalOnly, kept.terminalOnly)
@@ -254,18 +230,30 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 	function mayBeCandidate(fn:IrFunction):Bool
 		return IrScalarAbiEligibility.permits(fn.kind, false) && signatureHasValue(fn);
 
-	/** The candidates, chosen over the whole program; only functions with a value in their signature are read. */
-	function choose(functions:Array<IrFunction>, summaries:Array<Int>):Void {
+	/**
+	 * What the choice reads of `fn` (`CHOICE`): all of it when it may be a candidate, else the functions it takes as closures (none
+	 * for the Wasm ABI, which reads them of no function).
+	 */
+	function choiceRead(fn:IrFunction):IrScalarChoiceRead
+		return new IrScalarChoiceRead(mayBeCandidate(fn) ? fn : null, argumentsOnly ? NO_NAMES : closureNames(fn));
+
+	/**
+	 * The candidates, chosen over the whole program; only functions with a value in their signature are read. In a session the
+	 * choice reads each function through `memo` (`choiceRead`).
+	 */
+	function choose(functions:Array<IrFunction>, summaries:Array<Int>,
+			memo:Null<compiler.ir.reuse.IrWalkMemo<IrScalarChoiceRead, ScalarArgumentChoice>>):Void {
 		// Typed closure signatures are an ABI decision, including forwarding closures.
 		// Keep their scalar entry points available before IrScalarClosures rewrites
 		// indirect calls; judging those calls against the boxed ABI here creates a
 		// cycle that prevents allocation-free forwarding of value arguments/results.
 		var closureTargets:Map<String, Bool> = [];
-		if (!argumentsOnly)
-			for (index in 0...functions.length)
-				if (summaries[index] & CLOSES != 0)
-					for (name in closureNames(functions[index]))
-						closureTargets.set(name, true);
+		for (index in 0...functions.length) {
+			var names = memo != null ? memo.summary(functions[index]).closures : !argumentsOnly
+				&& summaries[index] & CLOSES != 0 ? closureNames(functions[index]) : NO_NAMES;
+			for (name in names)
+				closureTargets.set(name, true);
+		}
 		// Methods that call out may snapshot only a fresh receiver: a field place can be changed by an alias
 		// while the method runs, and must keep its original receiver ABI.
 		for (position in 0...functions.length) {
@@ -549,19 +537,9 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 		return rewritten;
 	}
 
-	/** The functions `fn` takes as closures, read once per version in a session (`IrStageMemos.closureNames`). */
-	function closureNames(fn:IrFunction):Array<String> {
-		var known = stageMemos, version = known == null ? 0 : fn.version;
-		if (known == null || version == 0)
-			return readClosureNames(fn.encodedBody(scratch.bodyBuilder));
-		var memo = known.contribution(CLOSURE_NAMES), names = memo.get(version);
-		if (names == null) {
-			names = readClosureNames(fn.encodedBody(scratch.bodyBuilder));
-			memo.keep(version, names);
-		} else if (known.checks && names.join(",") != readClosureNames(fn.encodedBody(scratch.bodyBuilder)).join(","))
-			throw new InternalError('--check-reuse: the closures reused for ${fn.name} differ from its body');
-		return names;
-	}
+	/** The functions `fn` takes as closures. */
+	function closureNames(fn:IrFunction):Array<String>
+		return readClosureNames(fn.encodedBody(scratch.bodyBuilder));
 
 	static function readClosureNames(body:IrBody):Array<String> {
 		var names:Array<String> = [];
@@ -1344,4 +1322,22 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 			return resolution.find(name, method);
 		return resolution.uniqueImplementation(name, method);
 	}
+}
+
+/** What the choice of scalar ABI candidates reads of a function (`IrScalarArguments.choiceRead`). */
+@:nullSafety(Strict)
+class IrScalarChoiceRead {
+	/** The function itself when it may be a candidate: the choice reads all of it. */
+	public final whole:Null<IrFunction>;
+
+	/** The functions it takes as closures. */
+	public final closures:Array<String>;
+
+	public function new(whole:Null<IrFunction>, closures:Array<String>) {
+		this.whole = whole;
+		this.closures = closures;
+	}
+
+	public static function same(left:IrScalarChoiceRead, right:IrScalarChoiceRead):Bool
+		return left.whole == right.whole && IrObjectTools.sameNames(left.closures, right.closures);
 }

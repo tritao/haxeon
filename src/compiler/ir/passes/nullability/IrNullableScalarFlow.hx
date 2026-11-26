@@ -33,6 +33,12 @@ import compiler.ir.model.IrFunction;
  * asks for the require and equality helpers it calls. The candidates' specializations and the helpers are made in `finish`
  * (`IrFunctionStages.derived`), so a session reuses them too.
  */
+/** The candidates `IrNullableScalarFlow` chose, by name, and the helpers their analysis called for. */
+private typedef NullableScalarChoice = {
+	final candidates:Array<String>;
+	final helpers:Map<String, IrType>;
+}
+
 @:nullSafety(Strict)
 class IrNullableScalarFlow extends IrFunctionPass {
 	public static inline final PREFIX = "$nullable-scalar:require:";
@@ -42,14 +48,10 @@ class IrNullableScalarFlow extends IrFunctionPass {
 	static inline final STAGE = "nullable-scalar-flow";
 
 	/**
-	 * The candidates the stage chose, by name, and the helpers their analysis called for, kept with the functions that may be a
-	 * candidate (`IrWalkRecord`).
+	 * The candidates the stage chose, by name, and the helpers their analysis called for: a session's step that reads all of each
+	 * function that may be a candidate (its summary of a function is the function).
 	 */
-	@:processWide("a kept choice's key, only ever read")
-	static final CHOICE = new compiler.ir.reuse.IrStageMemo.IrContributionKey<compiler.ir.reuse.IrWalkRecord<Bool, {
-		candidates:Array<String>,
-		helpers:Map<String, IrType>
-	}>>("nullable-scalar-choice");
+	static inline final CHOICE = "nullable-scalar-choice";
 
 	/** The summary of a function with a nullable scalar argument and another result, which may be a candidate. */
 	static inline final MAY_BE_CANDIDATE = 1;
@@ -108,50 +110,65 @@ class IrNullableScalarFlow extends IrFunctionPass {
 
 	/**
 	 * The candidates, from the functions whose summaries say they may be one: those every caller can pass split, read from their
-	 * bodies. In a session the choice is kept (`CHOICE`) while those functions are the same.
+	 * bodies. In a session the choice is the step `CHOICE`, kept while those functions are the same.
 	 */
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		originals = functions;
 		var known = stageMemos,
-			last = known == null ? null : known.lastResult(CHOICE),
+			memo:Null<compiler.ir.reuse.IrWalkMemo<IrFunction, NullableScalarChoice>> = null,
+			kept:Null<NullableScalarChoice> = null;
+		if (known != null) {
+			var step:compiler.ir.reuse.IrWalkMemo<IrFunction, NullableScalarChoice> = known.step(CHOICE, sameFunction);
 			// The choice reads nothing of the program but these functions, so a changed one is chosen again.
-			kept = last == null ? null : last.holds(program, [], [], functions, (_, _) -> null);
+			kept = step.kept(known.database, program, functions, [], [], readWhole);
+			memo = step;
+		}
 		var made = new IrBodyNullableScalars(scratch, candidates, helpers);
 		flow = made;
 		if (kept != null) {
-			var choice = kept.result, chosen = [for (name in choice.candidates) name => true];
+			var chosen = [for (name in kept.candidates) name => true];
 			for (index in 0...functions.length)
 				if (summaries[index] & MAY_BE_CANDIDATE != 0 && chosen.exists(functions[index].name))
 					candidates.set(functions[index].name, functions[index]);
-			for (name => type in choice.helpers)
+			for (name => type in kept.helpers)
 				helpers.set(name, type);
 			if (checks) {
 				var now:Map<String, IrType> = [];
-				if (!sameNames(choose(functions, summaries, new Map(), now), candidates) || !sameNames(now, helpers))
+				if (!sameNames(choose(functions, summaries, new Map(), now, null), candidates)
+					|| !sameNames(now, helpers))
 					throw new InternalError('--check-reuse: the nullable scalar flow reused a choice that differs from choosing now');
 			}
-		} else
-			choose(functions, summaries, candidates, helpers);
-		if (known != null) {
-			if (kept == null)
-				kept = new compiler.ir.reuse.IrWalkRecord(program, [], [], functions.copy(),
-					[for (summary in summaries) summary & MAY_BE_CANDIDATE != 0 ? true : null],
-					{candidates: [for (name in candidates.keys()) name], helpers: helpers.copy()});
-			known.keepResult(CHOICE, kept);
+		} else {
+			if (memo != null && known != null)
+				memo.begin(known.database);
+			choose(functions, summaries, candidates, helpers, memo);
+			if (memo != null && known != null)
+				memo.end(known.database, {candidates: [for (name in candidates.keys()) name], helpers: helpers.copy()});
+		}
+		if (known != null)
 			for (name => fn in candidates)
 				inputs.set(name, fn.version);
-		}
 	}
+
+	static function readWhole(fn:IrFunction):IrFunction
+		return fn;
+
+	static function sameFunction(left:IrFunction, right:IrFunction):Bool
+		return left == right;
 
 	/**
 	 * Chooses into `chosen` the candidates among `functions` (by their summaries), which it returns; the helpers their analysis
-	 * calls for go to `needs`.
+	 * calls for go to `needs`. In a session each candidate is read through `memo`, the choice's step.
 	 */
 	function choose(functions:Array<IrFunction>, summaries:Array<Int>, chosen:Map<String, IrFunction>,
-			needs:Map<String, IrType>):Map<String, IrFunction> {
+			needs:Map<String, IrType>,
+			memo:Null<compiler.ir.reuse.IrWalkMemo<IrFunction, NullableScalarChoice>>):Map<String, IrFunction> {
 		for (index in 0...functions.length)
-			if (summaries[index] & MAY_BE_CANDIDATE != 0)
+			if (summaries[index] & MAY_BE_CANDIDATE != 0) {
 				chosen.set(functions[index].name, functions[index]);
+				if (memo != null)
+					memo.summary(functions[index]);
+			}
 		var analysis = new IrBodyNullableScalars(scratch, chosen, needs), builder = scratch.bodyBuilder, changed = true;
 		while (changed) {
 			changed = false;

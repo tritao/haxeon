@@ -62,7 +62,7 @@ typedef IrClassDependencies = {
 	/** The functions the code generated for this class in place of the native with this symbol calls; throws when one that must exist does not. */
 	final of:(String, String) -> Array<String>;
 
-	/** What `of` reads besides the program's objects and function names, as text (`IrWalkRecord`). */
+	/** What `of` reads besides the program's objects and function names, as text, which a session's walk is given (`IrWalkMemo`). */
 	final inputs:String;
 }
 

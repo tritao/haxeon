@@ -308,7 +308,7 @@ class IrObjectTools {
 
 	/**
 	 * Whether two objects declare the same name, kind, base, interfaces, fields (names and types) and methods (names and the
-	 * functions they name): what the whole-program walks read of an object (`IrWalkRecord`).
+	 * functions they name): what the whole-program walks read of an object (`IrWalkTables`).
 	 */
 	public static function sameShape(left:IrObject, right:IrObject):Bool {
 		if (left == right)
