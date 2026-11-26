@@ -117,6 +117,8 @@ haxeon_use_unix_main_stack(hl)
 add_library(haxeon_runtime_objects OBJECT native/runtime.c)
 set_target_properties(haxeon_runtime_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(haxeon_runtime_objects PRIVATE vendor/hashlink/src)
+# Linked into the VM with libhl (HL_LIBHL_IN_VM), so it references libhl's functions directly, not as DLL imports.
+target_compile_definitions(haxeon_runtime_objects PRIVATE HL_LIBHL_IN_VM)
 # C11, as HashLink compiles its sources (MSVC's <stdatomic.h> requires it); nothing linked here carries libhl's setting.
 set_target_properties(haxeon_runtime_objects PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
 # NativeKit is an optional submodule that bootstrap does not fetch. Only the trace sink in native_trace.c uses it.
