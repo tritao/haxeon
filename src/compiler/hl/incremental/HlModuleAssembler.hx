@@ -949,9 +949,10 @@ class HlModuleAssembler {
 			?dispatched:Map<String, Bool>, ?resumed:Map<String, haxe.io.Bytes>):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0, sources = this.sources ?? new SourceAnchors([]);
 		// Runtime calls the lowering writes a fast path for go through one helper each (`IrSharedRuntimeCalls`); a helper this module
-		// has not published yet is new code, which a patch must carry.
-		var shared = compiler.hl.IrSharedRuntimeCalls.apply(program,
-			loweredCache == null ? null : loweredCache.sharedCalls),
+		// has not published yet is new code, which a patch must carry. A function that is the same object keeps the form the last
+		// build gave it, so the states a live session keeps to take back share it instead of each holding its own.
+		var kept = livePatching ? published : loweredCache;
+		var shared = compiler.hl.IrSharedRuntimeCalls.apply(program, kept == null ? null : kept.sharedCalls),
 			slotted:Map<String, Bool> = [for (name in cache.slots) name => true];
 		program = shared.program;
 		var reload = switch decision {

@@ -143,3 +143,15 @@ through its reuse snapshot (`PipelineSnapshot`) and cached result, which hand it
 published `HlFunction`s stay objects: every build's module is made of them, and the section memo keeps a section while its
 functions are the same objects (`HlSectionWriter.unchanged`); holding them as bytes would mean writing kept sections without
 their functions, which step 4's eviction can take up.
+
+### Step 3: publications share what the current state holds
+
+Each publication kept to take back holds the state its build started from (`PendingPublication.snapshot`), a whole
+`SessionState` the compiler returns to on a refusal or a retraction. Copies share what a build does not change; what they did
+not share, at the last edit (released one part at a time, as above): 24.4 MB over the three acknowledged publications.
+
+- **The rewritten functions.** Half of it was each state's own copy of about 260 functions: those whose runtime calls go through
+  a shared helper (`IrSharedRuntimeCalls`), rewritten afresh by every live build, as only a plain build gave the rewrite its
+  memo. A live build now keeps it with the published functions (`HlModuleAssembler.published`), so a function that is the same
+  object keeps the form the last build gave it, and every state holds the same one: publications 24.4 → 14.1 MB, the UI
+  session 376.33 → 365.95 MB.
