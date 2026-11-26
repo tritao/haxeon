@@ -97,6 +97,13 @@ class QueryKindBase {
 	function forgetComputedAfter(since:Int):Void {}
 
 	/**
+	 * Drops the values a build put from its own state after revision `since` (`ComputedQueryKind`'s `ofState`): the state a rollback
+	 * returns to did not make them, whether or not it undid any result.
+	 */
+	@:allow(compiler.query.QueryDatabase)
+	function forgetStateAfter(since:Int):Void {}
+
+	/**
 	 * Marks the results the build in progress wrote as taken by commit `commit` (`QueryDatabase.commit`). A computed memo is a
 	 * function of its reads whichever build made it, so only results a stage wrote (`RecordedQueryKind`) take part.
 	 */

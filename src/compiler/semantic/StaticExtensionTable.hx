@@ -194,6 +194,37 @@ class StaticExtensionTable {
 		return owners;
 	}
 
+	/**
+	 * What resolving static extensions reads of module `name` (`ast`): its `using`s and its types' `@:using` paths, as written, and
+	 * what a `using` of it finds: each declaration's name, privacy, kind and static functions (`ownerKey`), and its own functions. A
+	 * table made from modules whose keys are the same is the same.
+	 */
+	public static function contributionKey(name:String, ast:AstProgram):String {
+		var parts = [ast.packageName == null ? "" : ast.packageName];
+		if (ast.usings != null)
+			for (used in ast.usings)
+				parts.push("using " + used.path);
+		for (path in metadataPaths(ast))
+			parts.push("@:using " + path);
+		for (declaration in declarationsOf(ast))
+			parts.push((declaration.isPrivate ? "private " : "") + (declaration.isAlias == true ? "typedef " : "")
+				+ Std.string(declaration.kind) + " " + ownerKey(declaration.name, declaration.statics, ast));
+		if (ast.functions.length > 0)
+			parts.push(ownerKey(name, ast.functions, ast));
+		return parts.join("\n");
+	}
+
+	/** `--check-reuse`: what the table holds for `names`, as text, to compare a kept table with one made afresh. */
+	public function digest(names:Array<String>):String {
+		var parts = [for (name in names) name + ":" + keyOfModule(name)];
+		for (path => owners in modules)
+			parts.push(path + "->" + [for (owner in owners) owner.name + "/" + Std.string(owner.kind)].join(","));
+		for (name => owners in types)
+			parts.push(name + "@" + [for (owner in owners) owner.name + "/" + Std.string(owner.kind)].join(","));
+		parts.sort(Reflect.compare);
+		return parts.join("\n") + "|" + aliases.join(",");
+	}
+
 	/** The paths the `@:using` metadata of a module's types name, as written. */
 	public static function metadataPaths(ast:AstProgram):Array<String> {
 		var paths:Array<String> = [];

@@ -80,8 +80,9 @@ class SessionState {
 	public var unitsPending:Array<Int> = [];
 
 	/**
-	 * The names every module's canonicalization resolves against, as `SemanticAssembly` keys them, and the build revision they took
-	 * this value at: a module records the revision, so a build compares one number per module instead of the whole key.
+	 * The names every module's canonicalization resolves against, as `SemanticAssembly` keys them (`ProgramNames.universe`), and the
+	 * build revision they took this value at: a module records the revision, so a build compares one number per module instead of
+	 * the whole key.
 	 */
 	public var aliasUniverse:Null<String> = null;
 
@@ -160,6 +161,14 @@ class SessionState {
 	 * canonicalized again. Every copy shares it.
 	 */
 	public var declarationKeys(default, null):ComputedQueryKind<ModuleDeclarationKeys>;
+
+	/**
+	 * What each module's parse gives the names every module sees (`ModuleNames`), by module id, and those names (`ProgramNames`), at
+	 * key 0: put every build by `SemanticAssembly`, the kept ones while the modules give the same names. Every copy shares them.
+	 */
+	public var moduleNames(default, null):ComputedQueryKind<compiler.semantic.ProgramNames.ModuleNames>;
+
+	public var programNames(default, null):ComputedQueryKind<compiler.semantic.ProgramNames>;
 
 	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
@@ -308,7 +317,12 @@ class SessionState {
 				symbolName));
 			var moduleInputs = inputs;
 			declarationKeys = queries.register(new ComputedQueryKind<ModuleDeclarationKeys>("declaration-keys",
-				(left, right) -> left == right, null, moduleInputs.moduleName));
+				(left, right) -> left == right, null, moduleInputs.moduleName, true));
+			moduleNames =
+				queries.register(new ComputedQueryKind<compiler.semantic.ProgramNames.ModuleNames>("module-names",
+				(left, right) -> left == right, null, moduleInputs.moduleName, true));
+			programNames = queries.register(new ComputedQueryKind<compiler.semantic.ProgramNames>("program-names",
+				(left, right) -> left == right, null, null, true));
 		} else {
 			queries = sharing.queries;
 			declarationFacts = sharing.declarationFacts;
@@ -321,6 +335,8 @@ class SessionState {
 			irCalls = sharing.irCalls;
 			staticReferences = sharing.staticReferences;
 			declarationKeys = sharing.declarationKeys;
+			moduleNames = sharing.moduleNames;
+			programNames = sharing.programNames;
 		}
 		assemblyOrder = sharing == null ? new FrontendCompilation.AssemblyOrder() : sharing.assemblyOrder;
 		stageMemos = sharing == null ? new compiler.ir.reuse.IrStageMemos(queries,

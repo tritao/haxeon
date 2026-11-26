@@ -32,6 +32,13 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	final compute:Null<(QueryDatabase, Int) -> V>;
 	final keyName:Null<Int->String>;
 
+	/**
+	 * Whether the values describe the state a build is made from (a module's declaration keys, the names every module sees), put by
+	 * the stage from that state: a rollback to a commit before a value was put drops it, so the kind holds what the state it returns to
+	 * held (`forgetStateAfter`).
+	 */
+	final ofState:Bool;
+
 	/** By key, its slot plus one; 0 for a key without one. */
 	var slots:Array<Int> = [];
 
@@ -71,11 +78,13 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	 * A kind whose values `compute` makes, reading other queries only through the database, or, without it, that a stage computes
 	 * in its own run. A cycle is an error.
 	 */
-	public function new(name:String, same:(V, V) -> Bool, ?compute:(QueryDatabase, Int) -> V, ?keyName:Int->String) {
+	public function new(name:String, same:(V, V) -> Bool, ?compute:(QueryDatabase, Int) -> V, ?keyName:Int->String,
+			ofState:Bool = false) {
 		super(name);
 		this.same = same;
 		this.compute = compute;
 		this.keyName = keyName;
+		this.ofState = ofState;
 	}
 
 	/** The slot of `key`, or -1 when it has none. */
@@ -393,6 +402,10 @@ class ComputedQueryKind<V> extends QueryKindBase {
 		for (slot in 0...given)
 			if (verifiedAt[slot] != 0 && computedAt[slot] > since)
 				drop(slot);
+
+	override function forgetStateAfter(since:Int):Void
+		if (ofState)
+			forgetComputedAfter(since);
 
 	override public function describe(slot:Int):String {
 		if (slot >= given || keys[slot] < 0)

@@ -113,14 +113,15 @@ class QueryDatabase {
 		if (commit < rollbackFloor)
 			throw new compiler.core.InternalError("query results cannot return to commit " + commit + ", before "
 				+ rollbackFloor);
-		var undone = false;
-		for (kind in kinds)
+		var undone = false, since = commitRevisions[commit];
+		for (kind in kinds) {
 			if (kind.undoAfter(commit))
 				undone = true;
+			kind.forgetStateAfter(since);
+		}
 		if (!undone)
 			return;
 		revision++;
-		var since = commitRevisions[commit];
 		for (kind in kinds)
 			kind.forgetComputedAfter(since);
 	}

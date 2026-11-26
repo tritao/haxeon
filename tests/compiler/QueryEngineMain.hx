@@ -190,12 +190,13 @@ class QueryEngineMain {
 		computedSlots();
 		computedTransactions();
 		putKinds();
+		stateKinds();
 
 		Sys.println("PASS: query engine reuses, cuts off early, verifies reads in order, reports cycles, sweeps, checks reuse, "
 			+ "verifies recorded results through components, records a stage's reads in frames, tells input revisions from build revisions, "
 			+ "commits and rolls back written results, cuts computed values off by equality on demand and in a stage's run, updates "
 			+ "summaries per changed contribution with per-key reads, keeps contributions made of an unchanged input, sweeps the computed memos a build did not use, and drops those "
-			+ "computed over results a rollback undid, and keeps what a stage puts by identity or equality");
+			+ "computed over results a rollback undid, keeps what a stage puts by identity or equality, and drops on a rollback what a build put from its own state");
 	}
 
 	/** Results a stage computes itself change when they or anything they read did, transitively; a component changes as one. */
@@ -798,5 +799,32 @@ class QueryEngineMain {
 		given.clear();
 		expect(throwsInternal(() -> given.get(database, 0)), "a cleared kind has no memos");
 		expect(given.put(database, 0, first) == first, "and takes values again");
+	}
+
+	/**
+	 * Values a build puts from its own state (`ofState`): a rollback to a commit before one was put drops it, whether or not the
+	 * rollback undid a result, so the kind holds what the state it returns to held; a value put before the commit stays.
+	 */
+	static function stateKinds():Void {
+		var database = new QueryDatabase();
+		var state = database.register(new ComputedQueryKind<Box>("state", Box.same, null, null, true));
+		var other = database.register(new ComputedQueryKind<Box>("other", Box.same));
+		database.newRevision();
+		var kept = new Box(1);
+		state.put(database, 0, kept);
+		state.put(database, 1, new Box(5));
+		var taken = database.commit();
+		database.newRevision();
+		state.put(database, 0, new Box(2));
+		state.put(database, 1, new Box(5));
+		other.put(database, 0, new Box(2));
+		database.rollBack(taken);
+		expect(state.kept(0) == null, "a value the undone build put is dropped");
+		expect(state.kept(1) != null && state.kept(1).value == 5, "one it put equal keeps the one put before");
+		expect(other.kept(0) != null, "a kind of values not of the state keeps them when nothing was undone");
+		database.newRevision();
+		state.put(database, 0, kept);
+		database.rollBack(database.commit());
+		expect(state.kept(0) == kept, "a value put before the commit returned to stays");
 	}
 }

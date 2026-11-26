@@ -100,3 +100,33 @@ Measured (edit-cost session on the frozen input, against 182e4bf3d): `setup` of 
 16.6 → 8.9 ms, the table itself 12 → 0.5 ms; allocation of the no-op 67.8 → 66.1 MB and of the body edit 166.2 → 164.5 MB.
 Main-thread instructions did not move (no-op 0.606 → 0.605G, body edit 1.538 → 1.540G): the table's cost was memory, maps of
 15,000 entries filled every build, not instructions.
+
+### Piece 5: the names every module sees
+
+What `SemanticAssembly` built before canonicalizing (the alias setup: source type aliases by spelling, module and package, the
+enums' cases, module-level members and their storage, pattern constants, inferred declarations, `@:discoverMethods` prefixes,
+the alias universe and the static-extension table) is `ProgramNames`, made from each module's `ModuleNames`. A module's
+`ModuleNames` is made once per parse (and entry module) and kept by module id (`SessionState.moduleNames`); `ProgramNames` is
+kept at one key (`SessionState.programNames`) and made again only when a module's names differ from those it was made from,
+compared by content where the object is another one (a body edit parses again, with the same names). What a `using` reads of a
+module is part of its names (`StaticExtensionTable.contributionKey`: its `using`s, its types' `@:using`, and each declaration's
+name, privacy, kind and static functions as written), so the table is kept with the rest.
+
+Changed from the plan: the tables are one summary made whole when a module's names change, not tables updated per
+contribution. A module's names change only with its declarations, and every such change already canonicalizes every module
+again (the alias universe moves); per-key updates would cost more code than the rebuild they save. The alias universe's
+revision stays the per-state one of 8bca2e7f0 (`SessionState.aliasUniverseRevision`), compared once per build against the kept
+universe, so a build that reverts a declaration a rejected build added keeps the revision its modules were canonicalized at.
+The prefixes a subclass inherits are found only when a module is canonicalized again.
+
+These kinds and the declaration keys hold values a build puts from its own state, which the engine's rollback did not touch
+when it undid no result (a build that fails while typing writes none). Such a kind is now made `ofState`: a rollback to a
+commit before a value was put drops it (`QueryKindBase.forgetStateAfter`), so after a build that is not taken or a rejected
+publication each holds what the state returned to held, or nothing (`TyperStateMain`, `QueryEngineMain.stateKinds`).
+
+`--check-reuse` makes the names afresh from every module and compares them with the kept ones (`ProgramNames.difference`).
+
+Measured (edit-cost session, after piece 1): `alias-setup` of the no-op 10.0 → 0.2 ms, `frontend` 18.7 → 12.1 ms (body edit
+22.8 → 14.5 ms); main-thread instructions of the no-op 0.605 → 0.561G (−7.3%) and of the body edit 1.540 → 1.494G (−3.0%);
+allocation of the no-op 66.1 → 62.2 MB and of the body edit 164.5 → 160.1 MB. A cold build's alias setup grows 11 → 25 ms: it
+makes every module's names, the static functions' signatures among them.
