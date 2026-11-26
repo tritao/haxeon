@@ -190,6 +190,8 @@ class LayoutSessionSmoke {
 	/** The actual component root preserves intrinsic and authored size without a structural layout node. */
 	static function componentRootLayout():Void {
 		if (ScopeRootSubmissionMain.run() != 42) throw "A cached submission lost its current component body root";
+		var navigation = NavigationScopesMain.run();
+		if (navigation != 42) throw "Navigation scope motion failed at stage " + navigation;
 		var session = LayoutSession.create();
 		session.verifyTransactions = true;
 		for (mode in 0...3) {

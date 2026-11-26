@@ -1,5 +1,7 @@
 package haxeon.ui.widgets.navigation;
 
+import haxeon.reactive.Signal;
+
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
@@ -7,7 +9,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
-import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.icons.IconName;
@@ -71,7 +72,7 @@ class ChoiceList implements ScopeView {
 
 	public function buildBody(context:BuildContext):RenderNode {
 		var id = context.rootId("choice-list");
-		return context.selfUpdating(id, function() return buildList(context, id), false);
+		return buildList(context, id);
 	}
 
 	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
@@ -90,7 +91,7 @@ class ChoiceList implements ScopeView {
 	}
 
 	function buildList(context:BuildContext, id:WidgetId):RenderNode {
-		var query:State<String> = context.state(context.id("query"), "");
+		var query = context.lazyState(context.id("query"), function() return new Signal<String>("")).value;
 		var needle = query.value.toLowerCase();
 
 		var rootStyle = new LayoutStyle();
@@ -114,8 +115,7 @@ class ChoiceList implements ScopeView {
 		fieldStyle.radiusBottomLeft = 10.0;
 		fieldStyle.radiusBottomRight = 10.0;
 		var search = new SearchField("search", query.value, function(next:String) {
-			query.update(next);
-			context.requestPatch(id);
+			query.value = next;
 		}, fieldStyle, searchPlaceholder);
 		searchWrap.add(context.withScope(new Key("search-field"), function() return search.build(context)));
 		root.add(searchWrap);

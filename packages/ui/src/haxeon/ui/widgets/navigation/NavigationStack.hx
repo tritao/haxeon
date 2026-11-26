@@ -38,19 +38,20 @@ class NavigationStack implements ScopeView {
 	public function scopeKey():String return key;
 
 	public function inputsEqual(previous:ScopeView):Bool {
-		// Screens come from callbacks that may read application state, so the stack is rebuilt with its parent.
+		// Screens come from callbacks that may read application state, so the stack is rebuilt with its parent. Its controller
+		// is observable: a push, a pop or a step of the slide reruns only the stack.
 		return false;
 	}
 
 	public function buildBody(context:BuildContext):RenderNode {
 		var id = context.rootId("navigation-stack");
-		return context.selfUpdating(id, function() return buildStack(context, id), false);
+		return buildStack(context, id);
 	}
 
 	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 
 	function buildStack(context:BuildContext, id:WidgetId):RenderNode {
-		startTransition(context, id);
+		startTransition(context);
 		var rootStyle = style.copy();
 		rootStyle.width = LayoutAxis.grow();
 		rootStyle.height = LayoutAxis.grow();
@@ -78,21 +79,21 @@ class NavigationStack implements ScopeView {
 		return root;
 	}
 
-	/** Starts the slide for a revision the first time the stack sees it. */
-	function startTransition(context:BuildContext, id:WidgetId):Void {
-		if (controller.transitionKind == 0 || controller.startedRevision == controller.revision) return;
-		controller.startedRevision = controller.revision;
-		if (controller.motion != null) controller.motion.stop();
-		var owner = controller;
+	/** Starts the slide for a revision the first time the stack sees it, stopping one still running. */
+	function startTransition(context:BuildContext):Void {
+		var slide = context.lazyState(context.id("slide"), function() return new StackSlide()).value;
+		if (slide.revision == controller.revision) return;
+		slide.revision = controller.revision;
+		if (slide.motion != null) slide.motion.stop();
+		slide.motion = null;
+		if (controller.transitionKind == 0) return;
+		var owner = controller, revision = controller.revision;
 		var motion = new AnimationController(context.animations, function(value:Float) {
-			owner.transitionProgress = value;
-			context.requestPatch(id);
+			if (owner.revision == revision) owner.transitionProgress = value;
 		}, function() {
-			owner.endTransition();
-			context.requestPatch(id);
+			if (owner.revision == revision) owner.endTransition();
 		});
-		owner.motion = motion;
-		owner.transitionProgress = 0.0;
+		slide.motion = motion;
 		motion.play(0.0, 1.0, NavUi.slideSeconds, Easing.EaseOut);
 	}
 
@@ -117,4 +118,12 @@ class NavigationStack implements ScopeView {
 			return node;
 		});
 	}
+}
+
+/** The stack's own slide: the controller revision it started for, and the running animation. */
+private class StackSlide {
+	public var revision = 0;
+	public var motion:Null<AnimationController> = null;
+
+	public function new() {}
 }

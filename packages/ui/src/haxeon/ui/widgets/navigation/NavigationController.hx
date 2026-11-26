@@ -1,6 +1,7 @@
 package haxeon.ui.widgets.navigation;
 
-import haxeon.ui.animation.AnimationController;
+import Observable;
+
 import haxeon.ui.core.View;
 
 /**
@@ -10,7 +11,7 @@ import haxeon.ui.core.View;
  * Back: the kit's build context cannot reach `UiHostContext`, so the application forwards a Back request with
  * `hostContext.onBack = controller.handleBack` (or calls it from its own handler after closing sheets and menus).
  */
-class NavigationController {
+class NavigationController implements Observable {
 	/** The screens, the root first and the shown one last. */
 	public var entries(default, null):Array<NavigationEntry>;
 
@@ -21,12 +22,8 @@ class NavigationController {
 	public var transitionKind(default, null):Int;
 	/** The screen that was on top before the change; it slides out on a pop and stays beneath on a push. */
 	public var transitionFrom(default, null):Null<NavigationEntry>;
-	/** Eased 0..1 progress of the transition in flight. */
+	/** Eased 0..1 progress of the transition in flight, written by the stack's slide. */
 	public var transitionProgress:Float;
-	/** The revision whose transition the stack has already started. */
-	public var startedRevision:Int;
-	/** Running slide, kept so a new change can stop it. */
-	public var motion:Null<AnimationController>;
 
 	/** A stack of one screen, `root`. Throws without a root. */
 	public function new(root:NavigationEntry) {
@@ -37,8 +34,6 @@ class NavigationController {
 		transitionKind = 0;
 		transitionFrom = null;
 		transitionProgress = 1.0;
-		startedRevision = 0;
-		motion = null;
 	}
 
 	/** How many screens there are. */
@@ -75,13 +70,10 @@ class NavigationController {
 		endTransition();
 		entries = [entry];
 		revision++;
-		startedRevision = revision;
 	}
 
 	/** Called by the stack when a slide ends. */
 	public function endTransition():Void {
-		if (motion != null) motion.stop();
-		motion = null;
 		transitionKind = 0;
 		transitionFrom = null;
 		transitionProgress = 1.0;

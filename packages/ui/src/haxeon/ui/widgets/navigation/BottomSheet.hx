@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.navigation;
 
+import haxeon.reactive.Signal;
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -16,11 +17,11 @@ import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.Semantics;
 
-/** Slide and drag state of one sheet, kept across rebuilds. */
+/** Slide and drag state of one sheet, kept across rebuilds; the sheet's scope reruns when a signal changes. */
 private class SheetMotion {
-	public var progress:Float = 0.0;
+	public final progress = new Signal<Float>(0.0);
 	public var started:Bool = false;
-	public var dragY:Float = 0.0;
+	public final dragY = new Signal<Float>(0.0);
 	public var dragStartY:Float = 0.0;
 	public var dragging:Bool = false;
 	public var animation:Null<AnimationController> = null;
@@ -71,7 +72,7 @@ class BottomSheet implements ScopeView {
 	public function buildBody(context:BuildContext):RenderNode {
 		var id = context.rootId("bottom-sheet");
 		var motion = context.lazyState(context.id("sheet-motion"), function() return new SheetMotion()).value;
-		return context.selfUpdating(id, function() return buildSheet(context, id, motion), false);
+		return buildSheet(context, id, motion);
 	}
 
 	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
@@ -84,12 +85,11 @@ class BottomSheet implements ScopeView {
 		if (!motion.started) {
 			motion.started = true;
 			motion.animation = new AnimationController(context.animations, function(value:Float) {
-				motion.progress = value;
-				context.requestPatch(id);
+				motion.progress.value = value;
 			});
 			motion.animation.play(0.0, 1.0, NavUi.slideSeconds, Easing.EaseOut);
 		}
-		var progress = motion.progress;
+		var progress = motion.progress.value;
 		var maxHeight = context.viewportHeight * MaxHeightFraction;
 
 		var rootStyle = style.copy();
@@ -145,10 +145,10 @@ class BottomSheet implements ScopeView {
 		panelStyle.radiusTopRight = 16.0;
 		panelStyle.clipVertical = true;
 		panelStyle.clipHorizontal = true;
-		panelStyle.transform = Transform2D.translation(0.0, (1.0 - progress) * maxHeight + motion.dragY);
+		panelStyle.transform = Transform2D.translation(0.0, (1.0 - progress) * maxHeight + motion.dragY.value);
 		var panel = NavUi.child(context, "panel", "bottom-sheet-panel", panelStyle);
 
-		panel.add(buildHeader(context, id, motion));
+		panel.add(buildHeader(context, motion));
 		if (title.length > 0) {
 			var titleRow = new LayoutStyle();
 			titleRow.width = LayoutAxis.grow();
@@ -168,7 +168,7 @@ class BottomSheet implements ScopeView {
 	}
 
 	/** The grab handle; dragging it down past a threshold dismisses the sheet. */
-	function buildHeader(context:BuildContext, id:WidgetId, motion:SheetMotion):RenderNode {
+	function buildHeader(context:BuildContext, motion:SheetMotion):RenderNode {
 		var headerStyle = new LayoutStyle();
 		headerStyle.width = LayoutAxis.grow();
 		headerStyle.height = LayoutAxis.fixed(24.0);
@@ -186,22 +186,19 @@ class BottomSheet implements ScopeView {
 		});
 		header.on(UiEventKind.PointerMove, function(event:UiEvent) {
 			if (!motion.dragging) return;
-			motion.dragY = Math.max(0.0, event.y - motion.dragStartY);
-			context.requestPatch(id);
+			motion.dragY.value = Math.max(0.0, event.y - motion.dragStartY);
 		});
 		var finish = function(event:UiEvent) {
 			if (!motion.dragging) return;
 			motion.dragging = false;
-			var far = motion.dragY >= DismissDrag;
-			motion.dragY = 0.0;
+			var far = motion.dragY.value >= DismissDrag;
+			motion.dragY.value = 0.0;
 			if (far) dismiss();
-			else context.requestPatch(id);
 		};
 		header.on(UiEventKind.PointerUp, finish);
 		header.on(UiEventKind.PointerCancel, function(event:UiEvent) {
 			motion.dragging = false;
-			motion.dragY = 0.0;
-			context.requestPatch(id);
+			motion.dragY.value = 0.0;
 		});
 		var barStyle = new LayoutStyle();
 		barStyle.width = LayoutAxis.fixed(36.0);
