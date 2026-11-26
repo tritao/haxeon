@@ -2,7 +2,6 @@ package compiler.ir.reuse;
 
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrFunction;
-import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrTypeIds;
 
 /**
