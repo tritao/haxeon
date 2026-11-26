@@ -45,7 +45,7 @@ class IrProgramAssembler {
 	/** What each function needs of the runtime surface (`IrRuntimeNeeds`). */
 	@:processWide("a contribution memo's key, only ever read")
 	public static final RUNTIME_NEEDS =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrRuntimeNeeds>("runtime-needs");
+		new compiler.ir.reuse.IrStageMemos.IrContributionKey<IrRuntimeNeeds>("runtime-needs");
 
 	/** The function a live build adds to initialize an object's added fields on existing instances. */
 	public static inline final LIVE_INITIALIZER:String = "__liveinit";
@@ -645,7 +645,7 @@ class IrProgramAssembler {
 			?exportedFunctions:Array<String>,
 			walkFromEntry = false, pruneFromEntry = false,
 			?canonicalObjects:Array<IrObject>, ?options:compiler.CompileOptions,
-			?meter:compiler.core.IrPassMeter, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):IrProgram {
+			?meter:compiler.core.IrPassMeter, ?stageMemos:compiler.ir.reuse.IrStageMemos):IrProgram {
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
 			for (initializer in staticInitializers)
@@ -1390,7 +1390,7 @@ class IrRuntimeNeeds {
 		this.cNativeKey = cNativeKey;
 
 	public static function of(fn:IrFunction, builder:IrBodyBuilder, cNativeNames:Map<String, Bool>,
-			cNativeKey:String, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrRuntimeNeeds {
+			cNativeKey:String, stageMemos:Null<compiler.ir.reuse.IrStageMemos>):IrRuntimeNeeds {
 		var version = stageMemos == null ? 0 : fn.version;
 		if (stageMemos == null || version == 0)
 			return read(fn.encodedBody(builder), cNativeNames, cNativeKey);

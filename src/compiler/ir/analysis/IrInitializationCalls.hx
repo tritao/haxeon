@@ -16,11 +16,11 @@ import compiler.ir.model.IrOpcode;
 class IrInitializationCalls {
 	/** What each function the walk of what initialization calls reads calls (`IrInitCalls.calls`). */
 	@:processWide("a contribution memo's key, only ever read")
-	public static final CALLS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInitCalls>("init-calls");
+	public static final CALLS = new compiler.ir.reuse.IrStageMemos.IrContributionKey<IrInitCalls>("init-calls");
 
 	/** What each function stores for the walk of what initialization calls (`IrInitCalls.stores`), for the static null checks. */
 	@:processWide("a contribution memo's key, only ever read")
-	public static final STORES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInitCalls>("init-stores");
+	public static final STORES = new compiler.ir.reuse.IrStageMemos.IrContributionKey<IrInitCalls>("init-stores");
 
 	/** The program's functions, in program order, and the one of a name. */
 	final functions:Array<IrFunction>;
@@ -388,16 +388,16 @@ class IrInitCalls {
 
 	/** What `fn` stores: kept by the session for its version with `stageMemos`, else read now from its body. */
 	public static function stores(fn:IrFunction, builder:Null<IrBodyBuilder>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrInitCalls
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>):IrInitCalls
 		return kept(fn, builder, stageMemos, false);
 
 	/** What `fn` calls: kept by the session for its version with `stageMemos`, else read now from its body. */
 	public static function calls(fn:IrFunction, builder:Null<IrBodyBuilder>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrInitCalls
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>):IrInitCalls
 		return kept(fn, builder, stageMemos, true);
 
 	static function kept(fn:IrFunction, builder:Null<IrBodyBuilder>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>, calls:Bool):IrInitCalls {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>, calls:Bool):IrInitCalls {
 		var version = stageMemos == null ? 0 : fn.version;
 		if (stageMemos == null || version == 0)
 			return read(fn, builder, calls);

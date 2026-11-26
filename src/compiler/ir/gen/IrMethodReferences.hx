@@ -62,7 +62,7 @@ class IrMethodReferences {
 	 * made through `helpers` (`IrDerivedHelpers`), reading what it calls.
 	 */
 	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos, ?helpers:IrDerivedHelpers):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemos, ?helpers:IrDerivedHelpers):Void {
 		var requests:Map<String, {receiver:IrType, closure:IrType}> = [];
 		for (request in IrGenericOwnerErasure.requests(functions, stageMemos, STAGE))
 			if (request.kind == IrGenericOwnerErasure.METHOD_REFERENCE) {

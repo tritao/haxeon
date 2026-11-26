@@ -1,7 +1,7 @@
 package compiler.ir.reuse;
 
 import compiler.ir.pipeline.IrFunctionPass.IrFactSource;
-import compiler.ir.reuse.IrStageMemo.IrStageQueries;
+import compiler.ir.reuse.IrStageMemos.IrStageQueries;
 import compiler.query.QueryDatabase;
 import compiler.query.QueryKind.QueryKindBase;
 import compiler.query.QueryKind.QueryRead;

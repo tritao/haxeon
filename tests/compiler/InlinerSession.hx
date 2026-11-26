@@ -5,7 +5,7 @@ import compiler.ir.model.IrSymbol;
 import compiler.ir.passes.inlining.IrInliner;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.ir.pipeline.TargetProfile;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 import compiler.query.ComputedQueryKind;
 import compiler.query.QueryDatabase;
 

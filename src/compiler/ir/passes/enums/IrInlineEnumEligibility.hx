@@ -50,7 +50,7 @@ class IrInlineEnumEligibility {
 	final declarations:Map<String, IrEnum>;
 	final planner:IrInlineEnumLayout;
 	final reflectionReach:IrEnumEscapeReach;
-	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemos>;
 	final enumNodes:Map<String, Int> = [];
 	final objectNodes:Map<String, Int> = [];
 	final interfaceNodes:Map<String, Int> = [];
@@ -68,7 +68,7 @@ class IrInlineEnumEligibility {
 	 * decided again and compared.
 	 */
 	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>,
-			?builder:IrBodyBuilder, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos) {
+			?builder:IrBodyBuilder, ?stageMemos:compiler.ir.reuse.IrStageMemos) {
 		this.planner = planner;
 		this.stageMemos = stageMemos;
 		reflectionReach = new IrEnumEscapeReach(program, _ -> false);

@@ -1082,7 +1082,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 	static inline final ADAPTERS = 0;
 
 	final program:IrProgram;
-	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemos>;
 	var names:Map<String, Bool> = [];
 	final dynamicUnboxes:Map<String, IrType> = [];
 	final tagEqualities:Map<String, Bool> = [];
@@ -1099,7 +1099,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 	/** The reader of the function being transformed; null outside a transform, where the program's tables are read directly. */
 	var reader:Null<IrFactReader> = null;
 
-	public function new(program:IrProgram, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>) {
+	public function new(program:IrProgram, stageMemos:Null<compiler.ir.reuse.IrStageMemos>) {
 		this.program = program;
 		this.stageMemos = stageMemos;
 	}

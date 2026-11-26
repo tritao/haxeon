@@ -11,7 +11,7 @@ import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
 import compiler.ir.reuse.IrStageFacts;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 
 /**
  * Expand bounded value constructors so newly constructed places can remain scalar. On IR bodies (docs/design/IR_CORE_COLUMNS.md,

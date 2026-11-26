@@ -44,11 +44,11 @@ class IrGenericOwnerErasure {
 	 * reading them (`IrContributionSummary`), read again only of a function that changed; else read now, in program order.
 	 */
 	public static function requests(functions:Array<IrFunction>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>,
 			site:String):Array<IrErasureRequest> {
 		if (stageMemos == null)
 			return [for (fn in functions) for (request in readRequests(fn)) request];
-		var summary:compiler.ir.reuse.IrStageMemo.IrContributionSummary<IrErasureRequest> =
+		var summary:compiler.ir.reuse.IrStageMemos.IrContributionSummary<IrErasureRequest> =
 			stageMemos.summary("erasure-requests:" + site);
 		return summary.collect(stageMemos.database, functions, readRequests, requestText, stageMemos.checks,
 			"generic owner requests");
@@ -134,7 +134,7 @@ class IrGenericOwnerErasure {
 	 * (`IrDerivedHelpers`), reading what it dispatches to, so a session's operation whose classes are unchanged is last build's.
 	 */
 	public static function generate(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos, ?helpers:IrDerivedHelpers):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemos, ?helpers:IrDerivedHelpers):Void {
 		var derived = helpers ?? new IrDerivedHelpers(STAGE),
 			byName = [for (object in objects) object.name => object],
 			plans:Map<String, ErasedPlan> = [],

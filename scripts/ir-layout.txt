@@ -65,7 +65,7 @@ IrFactReader                    compiler.ir.reuse
 IrFacts                         compiler.ir.reuse
 IrFunctionMemo                  compiler.ir.reuse
 IrFunctionVersions              compiler.ir.reuse
-IrStageMemo                     compiler.ir.reuse
+IrStageMemos                    compiler.ir.reuse
 
 # Read-only whole-program and per-function analyses, reachability and the prune.
 IrConstructed                   compiler.ir.analysis

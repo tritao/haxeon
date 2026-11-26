@@ -35,12 +35,12 @@ class IrEnumRuntimeSpecializations {
 	 * names at `site` (`IrContributionSummary`), read again only of a function that changed; else read now.
 	 */
 	static function mentionsOf(functions:Array<IrFunction>, site:String,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Array<String> {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>):Array<String> {
 		if (stageMemos == null) {
 			var shared:Array<Bool> = [];
 			return [for (fn in functions) for (name in readMentions(fn, shared)) name];
 		}
-		var summary:compiler.ir.reuse.IrStageMemo.IrContributionSummary<String> =
+		var summary:compiler.ir.reuse.IrStageMemos.IrContributionSummary<String> =
 			stageMemos.summary("enum-mentions:" + site);
 		return summary.collect(stageMemos.database, functions, fn -> readMentions(fn, null), name -> name,
 			stageMemos.checks,
@@ -101,7 +101,7 @@ class IrEnumRuntimeSpecializations {
 	public static function materialize(enums:Array<IrEnum>, functions:Array<IrFunction>, objects:Array<IrObject>,
 			staticFields:Array<IrStaticField>, natives:Array<IrNative>, interfaces:Array<IrInterface>,
 			cNatives:Array<IrCNative>, site:String,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Array<IrEnum> {
+			?stageMemos:compiler.ir.reuse.IrStageMemos):Array<IrEnum> {
 		var declarations:Map<String, IrEnum> = [for (item in enums) item.name => item],
 			required:Map<String, Bool> = [],
 			pending:Array<String> = [];

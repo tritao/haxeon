@@ -34,7 +34,7 @@ import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.pipeline.IrFunctionPass.IrFactSource;
 import compiler.ir.reuse.IrStageFacts;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 import compiler.query.ComputedQueryKind;
 import compiler.query.QueryDatabase;
 import compiler.query.QueryKind.QueryRead;

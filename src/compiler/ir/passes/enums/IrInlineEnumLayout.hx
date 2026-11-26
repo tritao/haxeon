@@ -7,7 +7,7 @@ import compiler.core.InternalError;
 import compiler.ir.model.Ir;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneShape;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 
 /** Overlapping payload lanes for one enum case. The tag is stored separately. */
 typedef IrInlineEnumCaseShape = {

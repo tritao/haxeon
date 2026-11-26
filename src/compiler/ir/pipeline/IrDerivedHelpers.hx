@@ -5,7 +5,7 @@ import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 
 /**
  * The helpers a stage makes from the program's declarations rather than from its functions (the reflection helpers): each is made

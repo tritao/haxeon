@@ -24,11 +24,11 @@ class IrValueArrayScalarLowering extends compiler.ir.pipeline.IrFunctionPass {
 	final suffix:String;
 	final helpers:Map<String, IrBody>;
 	final scratch:IrPassScratch;
-	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemos>;
 	final versions:Map<String, Int> = [];
 
 	function new(suffix:String, helpers:Map<String, IrBody>, scratch:IrPassScratch,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>) {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>) {
 		this.suffix = suffix;
 		this.helpers = helpers;
 		this.scratch = scratch;
@@ -41,7 +41,7 @@ class IrValueArrayScalarLowering extends compiler.ir.pipeline.IrFunctionPass {
 	 * its edited body, edited in place when the stage owns it, else on a copy.
 	 */
 	public static function rewrite(program:IrProgram, element:IrType, expandAll:Bool,
-			scratch:IrPassScratch, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
+			scratch:IrPassScratch, ?stageMemos:compiler.ir.reuse.IrStageMemos):Void {
 		var builder = scratch.bodyBuilder;
 		// The helpers as they are before any expansion: a helper's own body may be expanded below.
 		var helpers:Map<String, IrBody> = [];

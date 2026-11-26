@@ -120,7 +120,7 @@ class IrValueInterfaceBoxes extends IrFunctionPass {
 	 */
 	public static function rewriteDerived(stage:String, functions:Array<IrFunction>, objects:Array<IrObject>,
 			interfaces:Array<IrInterface>, existing:Array<IrFunction>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>,
 			builder:compiler.ir.model.IrBodyBuilder):Array<IrFunction> {
 		var pass = new IrValueInterfaceBoxes(objects, interfaces, existing,
 			new IrDerivedHelpers(stage, stageMemos, builder));

@@ -126,11 +126,11 @@ class IrTypedInterfaceDispatch {
 	 * summary of what each function asks for at `site` (`IrContributionSummary`), read again only of a function that changed;
 	 * else read now, in program order.
 	 */
-	static function requests(functions:Array<IrFunction>, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
+	static function requests(functions:Array<IrFunction>, stageMemos:Null<compiler.ir.reuse.IrStageMemos>,
 			site:String):Array<IrTypedInterfaceRequest> {
 		if (stageMemos == null)
 			return [for (fn in functions) for (request in readRequests(fn)) request];
-		var summary:compiler.ir.reuse.IrStageMemo.IrContributionSummary<IrTypedInterfaceRequest> =
+		var summary:compiler.ir.reuse.IrStageMemos.IrContributionSummary<IrTypedInterfaceRequest> =
 			stageMemos.summary("interface-requests:" + site);
 		return summary.collect(stageMemos.database, functions, readRequests, requestText, stageMemos.checks,
 			"typed interface requests");
@@ -189,7 +189,7 @@ class IrTypedInterfaceDispatch {
 
 	/** The dispatchers `functions` ask for; `site` names the place in the pipeline it runs at (`requests`). */
 	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>,
-			interfaces:Array<IrInterface>, site:String, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
+			interfaces:Array<IrInterface>, site:String, ?stageMemos:compiler.ir.reuse.IrStageMemos):Void {
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		function request(name:String, signature:{arguments:Array<IrType>, result:IrType}):Void {
 			var previous = requests.get(name);

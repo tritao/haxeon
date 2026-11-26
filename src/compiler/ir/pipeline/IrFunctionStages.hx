@@ -7,8 +7,8 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrSymbol;
 import compiler.ir.reuse.IrFactReader;
 import compiler.ir.reuse.IrStageFacts;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
-import compiler.ir.reuse.IrStageMemo.IrStageQueries;
+import compiler.ir.reuse.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos.IrStageQueries;
 
 /**
  * The driver of the per-function stages (`IrFunctionPass`), on the session's query database or, in a compile that keeps no

@@ -4,7 +4,7 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrTypeMap;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 
 import compiler.ir.model.Ir;
 import compiler.semantic.SemanticSignature;

@@ -37,7 +37,7 @@ class IrVerifier {
 	/** By version, the tables each function was checked against for ordinary operations on lane arrays. */
 	@:processWide("a contribution memo's key, only ever read")
 	public static final CHECKED_VALUE_ARRAYS =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<String>("checked-value-arrays");
+		new compiler.ir.reuse.IrStageMemos.IrContributionKey<String>("checked-value-arrays");
 
 	/** After value-array lowering, ordinary array instructions must never address lane storage. */
 	/**
@@ -46,7 +46,7 @@ class IrVerifier {
 	 * `--check-reuse`).
 	 */
 	public static function verifyValueArraysLowered(program:IrProgram,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemos):Void {
 		var valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			valueEnums:Map<String, Bool> = [
 				for (declaration in program.enums)

@@ -76,7 +76,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	final reflectionProgram:Null<IrProgram>;
 	final reflectableObjects:Null<Array<String>>;
 	final unreached:Null<Map<String, Bool>>;
-	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemos>;
 	final requests:Map<String, IrType> = [];
 	final equalities:Map<String, String> = [];
 	final reflectiveEqualities:Map<String, String> = [];
@@ -130,7 +130,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 
 	/** With `unreached` (the functions a plain build's walk did not reach), only the others register what they need and are rewritten; otherwise every function does. */
 	public function new(?reflectionProgram:IrProgram, ?reflectableObjects:Array<String>, ?unreached:Map<String, Bool>,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos) {
+			?stageMemos:compiler.ir.reuse.IrStageMemos) {
 		this.reflectionProgram = reflectionProgram;
 		this.reflectableObjects = reflectableObjects;
 		this.unreached = unreached;
@@ -429,7 +429,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	 * (`IrTypeAwareWalk.referenced`, the session's walk `DROPPED` with `program`, the tables of the functions).
 	 */
 	static function droppedReflectiveHelpers(functions:Array<IrFunction>, roots:Array<String>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>, program:Null<IrProgram>):Map<String, Bool> {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>, program:Null<IrProgram>):Map<String, Bool> {
 		var helpers:Map<String, IrFunction> = [];
 		for (fn in functions) switch fn.kind {
 			case EnumEquality(true): helpers.set(fn.name, fn);

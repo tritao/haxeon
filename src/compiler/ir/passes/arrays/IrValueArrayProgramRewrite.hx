@@ -168,7 +168,7 @@ class IrValueArrayProgramRewrite {
 
 	/** The types naming an array or an iterator each function has. */
 	@:processWide("a contribution memo's key, only ever read")
-	public static final ARRAY_TYPES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<Int>>("array-types");
+	public static final ARRAY_TYPES = new compiler.ir.reuse.IrStageMemos.IrContributionKey<Array<Int>>("array-types");
 
 	/**
 	 * Discover every concrete value array in the assembled program before generating any helpers. A function that changes becomes
@@ -176,7 +176,7 @@ class IrValueArrayProgramRewrite {
 	 * of each function the session has at the same version.
 	 */
 	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget,
-			?scratch:IrPassScratch, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
+			?scratch:IrPassScratch, ?stageMemos:compiler.ir.reuse.IrStageMemos):Void {
 		if (scratch == null)
 			scratch = new IrPassScratch();
 		var builder = scratch.bodyBuilder;
@@ -270,7 +270,7 @@ class IrValueArrayProgramRewrite {
 
 	/** The ids of the types `fn`'s arguments, result, rows and descriptors have that name an array or an iterator. */
 	static function arrayTypesOf(fn:IrFunction, builder:IrBodyBuilder,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Array<Int> {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>):Array<Int> {
 		var version = stageMemos == null ? 0 : fn.version;
 		if (stageMemos == null || version == 0)
 			return readArrayTypes(fn.encodedBody(builder));
@@ -343,7 +343,7 @@ class IrValueArrayProgramRewrite {
 	}
 
 	/** A fact's value naming `print()` in `stageMemos`'s session, computed when asked; 0 without a session. */
-	static function elementFact(stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
+	static function elementFact(stageMemos:Null<compiler.ir.reuse.IrStageMemos>,
 			print:() -> String):() -> Int {
 				if (stageMemos == null)
 					return () -> 0;
@@ -353,7 +353,7 @@ class IrValueArrayProgramRewrite {
 
 	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget,
 			index:ValueArrayFunctionIndex, slotNamespace:Int, scratch:IrPassScratch,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos, ?valueDeclarations:() -> String):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemos, ?valueDeclarations:() -> String):Void {
 		switch element {
 			case EnumTag(name):
 				IrEnumTagStorage.request(program, name);

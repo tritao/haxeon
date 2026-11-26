@@ -23,7 +23,7 @@ import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 	/** What each function's rows do with closures (`IrClosureUses`). */
 	@:processWide("a contribution memo's key, only ever read")
-	public static final USES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrClosureUses>("closure-uses");
+	public static final USES = new compiler.ir.reuse.IrStageMemos.IrContributionKey<IrClosureUses>("closure-uses");
 
 	static inline final STAGE = "scalar-closures";
 
@@ -74,7 +74,7 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 	final useCounts:Array<Int> = [];
 
 	final scratch:IrPassScratch;
-	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemos>;
 
 	/** By type id, the keys of the function types the type names where `changesType` looks, or null when not known yet. */
 	final functionKeys:Array<Null<Array<String>>> = [];
@@ -100,7 +100,7 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 	 * checked casts they need are derived from them in stages of their own.
 	 */
 	public function new(program:IrProgram, scratch:IrPassScratch,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos) {
+			?stageMemos:compiler.ir.reuse.IrStageMemos) {
 		this.program = program;
 		this.stageMemos = stageMemos;
 		this.scratch = scratch;
@@ -1124,7 +1124,7 @@ class IrClosureUses {
 	function new() {}
 
 	public static function of(fn:IrFunction, scratch:IrPassScratch, useCounts:Array<Int>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrClosureUses {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>):IrClosureUses {
 		var version = stageMemos == null ? 0 : fn.version;
 		if (stageMemos == null || version == 0)
 			return read(fn.encodedBody(scratch.bodyBuilder), useCounts);

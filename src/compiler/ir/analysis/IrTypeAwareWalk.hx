@@ -108,7 +108,7 @@ class IrTypeAwareWalk {
 	 */
 	public static function referenced(name:String, program:Null<IrProgram>, functions:Array<IrFunction>,
 			targets:Map<String, IrFunction>, roots:Array<String>, transitive:Bool,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Map<String, Bool> {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>):Map<String, Bool> {
 		var live:Map<String, Bool> = [];
 		if (!targets.keys().hasNext())
 			return live;
@@ -184,7 +184,7 @@ class IrTypeAwareWalk {
 	 */
 	public static function runKept(name:String, program:IrProgram, roots:IrWalkRoots, keepCreatedClassMethods:Bool,
 			classDependencies:Null<IrClassDependencies>,
-			stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):IrWalkResult {
+			stageMemos:compiler.ir.reuse.IrStageMemos):IrWalkResult {
 		// The settings and what the class dependencies read besides the program, then the roots.
 		var given = [
 			keepCreatedClassMethods ? "keep created class methods" : "",

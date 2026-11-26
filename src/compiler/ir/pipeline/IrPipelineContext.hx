@@ -7,7 +7,7 @@ import compiler.ir.model.IrPassScratch;
 import compiler.ir.verify.IrVerifyMemo;
 import compiler.ir.model.Ir.IrObject;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.pipeline.TargetProfile.TargetKind;
 

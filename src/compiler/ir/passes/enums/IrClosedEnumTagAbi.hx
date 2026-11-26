@@ -16,7 +16,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 import compiler.ir.reuse.IrWalkMemo;
 
 /**

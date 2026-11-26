@@ -34,7 +34,7 @@ class IrValuePhiScalarization {
 
 	/** `rewriteBodies` per function (`IrValueObjectRows`): a function with a value phi is rewritten. */
 	public static function pass(program:IrProgram, scratch:IrPassScratch,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):IrValueObjectRows {
+			?stageMemos:compiler.ir.reuse.IrStageMemos):IrValueObjectRows {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var table = IrObjectTable.of(objects),
 			layouts = new IrInlineValueLayout(table),

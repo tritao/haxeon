@@ -48,7 +48,7 @@ class IrArrayFactory {
 	 * last build's lowering, unread. A function that changes becomes its edited body, owned by the next stage.
 	 */
 	public static function lower(program:IrProgram, ?scratch:IrPassScratch,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemos):Void {
 		var builder = scratch == null ? new compiler.ir.model.IrBodyBuilder() : scratch.bodyBuilder;
 		program.functions = compiler.ir.pipeline.IrFunctionStages.run(IrArrayFactoryPass.STAGE,
 			new IrArrayFactoryPass(program, builder), program.functions, stageMemos,

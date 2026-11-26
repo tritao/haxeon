@@ -53,7 +53,7 @@ class IrInlineValueLayout {
 
 	/** A fact's value naming `valueDeclarations(objects)` and `extra` in `stageMemos`'s session, computed when asked; 0 without one. */
 	public static function declarationsFact(objects:Array<IrObject>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>, extra = ""):() -> Int {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemos>, extra = ""):() -> Int {
 				if (stageMemos == null)
 					return () -> 0;
 				var facts = stageMemos.stageFacts;

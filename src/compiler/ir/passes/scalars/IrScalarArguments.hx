@@ -105,7 +105,7 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 
 	/** The candidates' fact (`CANDIDATES`), set once they are chosen. */
 	var candidatesPrint = 0;
-	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemos>;
 	final declarations:() -> Int;
 
 	/** The version each candidate's clone is made from: its input's (`IrFunction.version`) as the stage starts. */
@@ -133,7 +133,7 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 	 * derived from their candidates' versions with the same reads.
 	 */
 	public function new(program:IrProgram, argumentsOnly:Bool, scratch:IrPassScratch,
-			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos) {
+			?stageMemos:compiler.ir.reuse.IrStageMemos) {
 		this.program = program;
 		this.stageMemos = stageMemos;
 		this.argumentsOnly = argumentsOnly;

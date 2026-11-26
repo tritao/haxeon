@@ -76,7 +76,7 @@ class IrWalkRecord<S, R> {
 	 * Gives `memo` back the summaries the walk followed of the functions it read, for a walk done again:
 	 * while the record held, nothing asked the memo for them, so it may have let them go.
 	 */
-	public function giveBack(memo:compiler.ir.reuse.IrStageMemo.IrContributionMemo<S>):Void
+	public function giveBack(memo:compiler.ir.reuse.IrStageMemos.IrContributionMemo<S>):Void
 		for (index in 0...functions.length) {
 			var summary = summaries[index];
 			if (summary == null)

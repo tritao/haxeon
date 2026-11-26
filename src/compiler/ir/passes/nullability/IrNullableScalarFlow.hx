@@ -15,7 +15,7 @@ import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
 import compiler.ir.reuse.IrStageFacts;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;

@@ -24,7 +24,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 
 /**
  * Select one program-wide representation, then lower eligible enum values to their lane packets. On IR bodies

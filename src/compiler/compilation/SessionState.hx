@@ -124,7 +124,7 @@ class SessionState {
 	 * What the IR stages made of each function (`IrStageMemos`), mostly in the session's database; every copy shares it, as a memo
 	 * holds only for the function object it was made from and the facts it read.
 	 */
-	public var stageMemos(default, null):compiler.ir.reuse.IrStageMemo.IrStageMemos;
+	public var stageMemos(default, null):compiler.ir.reuse.IrStageMemos;
 
 	/**
 	 * What each function of `irGeneration` names of classes and enums (`FrontendCompilation.typeMentions`), by the same key: it
@@ -293,7 +293,7 @@ class SessionState {
 			staticReferences = sharing.staticReferences;
 		}
 		assemblyOrder = sharing == null ? new FrontendCompilation.AssemblyOrder() : sharing.assemblyOrder;
-		stageMemos = sharing == null ? new compiler.ir.reuse.IrStageMemo.IrStageMemos(queries,
+		stageMemos = sharing == null ? new compiler.ir.reuse.IrStageMemos(queries,
 			irGeneration) : sharing.stageMemos;
 		this.types = types;
 		this.genericSpecializations = genericSpecializations;

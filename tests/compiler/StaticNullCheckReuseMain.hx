@@ -7,7 +7,7 @@ import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.passes.nullability.IrStaticNullChecks;
 import compiler.ir.pipeline.IrFunctionStages;
-import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrStageMemos;
 import compiler.query.ComputedQueryKind;
 import compiler.query.QueryDatabase;
 
