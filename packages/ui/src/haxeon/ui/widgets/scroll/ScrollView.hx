@@ -76,7 +76,7 @@ class ScrollView implements View {
 		return context.withScope(key, function() {
 			var viewportStyle = style.copy();
 			var id = context.rootId("scroll");
-			var flags = context.interactionStates.get(id);
+			var flags = context.styleStates(id, "scroll-view", key.rawValue, key.rawValue, null, ["scroll-view"]);
 			var computed = context.resolveStyle(new StyleTarget("scroll-view", key.rawValue, key.rawValue, null,
 				["scroll-view"], flags),
 				viewportStyle);

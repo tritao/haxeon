@@ -94,7 +94,7 @@ class Slider implements ScopeView implements Observable {
 	public function buildBody(context:BuildContext):RenderNode return buildControl(context, context.rootId("slider"));
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
-		var flags = context.interactionStates.get(nodeId);
+		var flags = context.styleStates(nodeId, "slider", key, key, null, ["slider"]);
 		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
 		var computed = context.styleResolver.resolve(new StyleTarget("slider", key, key, null, ["slider"], flags),
 			context.inheritedStyle,

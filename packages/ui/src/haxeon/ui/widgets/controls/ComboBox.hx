@@ -214,6 +214,8 @@ class ComboBox<T> implements View {
 			input.semanticRole = AccessibilityRole.ComboBox;
 			input.semanticActions = AccessibilityAction.SetValue | AccessibilityAction.SetSelection | (isOpen
 				? AccessibilityAction.Collapse : AccessibilityAction.Expand);
+			input.semanticStates = AccessibilityState.HasPopup
+				| (isOpen ? AccessibilityState.Expanded : AccessibilityState.empty());
 			input.onSubmit = function(_) {
 				if (openState.value != true) open();
 				else submitActive();
@@ -224,9 +226,6 @@ class ComboBox<T> implements View {
 				inputNode.add(SelectionIndicator.search("input-search",
 					enabled ? context.theme.tokens.textSecondary : context.theme.tokens.textDisabled).build(context));
 			});
-			var inputSemantics:Semantics = cast inputNode.semantics;
-			inputSemantics.states |= AccessibilityState.HasPopup;
-			if (isOpen) inputSemantics.states |= AccessibilityState.Expanded;
 			inputNode.on(UiEventKind.PointerDown, function(event) {
 				if (enabled && event.button == 0) open();
 			});

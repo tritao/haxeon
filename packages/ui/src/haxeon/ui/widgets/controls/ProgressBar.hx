@@ -18,7 +18,6 @@ import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.State;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleTarget;
 
 /**
  * Read-only progress indicator painted from a normalized numeric range. Its fields are observable: setting `value` or
@@ -88,8 +87,8 @@ class ProgressBar implements ScopeView implements Observable {
 	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
-		var computed = context.styleResolver.resolve(new StyleTarget("progress-bar", key, key, null, ["progress-bar"],
-			context.interactionStates.get(nodeId)),
+		var computed = context.styleResolver.resolve(context.styleTarget(nodeId, "progress-bar", key, key, null,
+			["progress-bar"]),
 			context.inheritedStyle,
 			context.theme.styles,
 			context.styleSheet,
@@ -97,7 +96,7 @@ class ProgressBar implements ScopeView implements Observable {
 			context.environment);
 		var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 		node.setStyleIdentity("progress-bar", key, key, null, ["progress-bar"]);
-		node.states = context.interactionStates.get(nodeId);
+		node.states = context.interactionStates.peek(nodeId);
 		node.computedStyle = computed;
 		var indeterminate = mode == ProgressMode.Indeterminate;
 		var semantics = new Semantics(AccessibilityRole.ProgressBar,

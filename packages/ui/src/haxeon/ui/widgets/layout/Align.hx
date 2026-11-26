@@ -7,7 +7,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
-import haxeon.ui.style.StyleTarget;
 
 /** Places a child within its allocated box using NativeUI's axis alignment. */
 class Align implements View {
@@ -38,12 +37,12 @@ class Align implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var id = context.rootId("align");
-			var computed = context.resolveStyle(new StyleTarget("align", key.rawValue, key.rawValue, null,
-				["align"], context.interactionStates.get(id)),
+			var computed = context.resolveStyle(context.styleTarget(id, "align", key.rawValue, key.rawValue, null,
+				["align"]),
 				style);
 			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("align", key.rawValue, key.rawValue, null, ["align"]);
-			node.states = context.interactionStates.get(id);
+			node.states = context.interactionStates.peek(id);
 			node.computedStyle = computed;
 			var content = context.withStyleParent(computed, function() {
 				return context.withScope(new Key("content"), function() return child.build(context));

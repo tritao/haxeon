@@ -11,7 +11,6 @@ import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.Decoration;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.ComputedStyle;
-import haxeon.ui.style.StyleTarget;
 
 /** Accessible image view that preserves four edge insets while stretching its center. */
 class NineSliceView implements View {
@@ -64,8 +63,8 @@ class NineSliceView implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("nine-slice");
-			var computed = context.resolveStyle(new StyleTarget("nine-slice", key, key, null, ["nine-slice"],
-				context.interactionStates.get(nodeId)),
+			var computed = context.resolveStyle(context.styleTarget(nodeId, "nine-slice", key, key, null,
+				["nine-slice"]),
 				style);
 			var resolvedDecorations = computed.getDecorations();
 			var decorationSource = computed.source(StyleProperty.Decorations);
@@ -76,7 +75,7 @@ class NineSliceView implements View {
 					new StyleSource("framework", "nine-slice", -1, "default"));
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("nine-slice", key, key, null, ["nine-slice"]);
-			node.states = context.interactionStates.get(nodeId);
+			node.states = context.interactionStates.peek(nodeId);
 			node.computedStyle = computed;
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Image, label);
 			return node;

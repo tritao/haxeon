@@ -12,7 +12,6 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.StyleTarget;
 
 /** Accessible image view that records its draw in the node's custom display list. */
 class ImageView implements View {
@@ -49,8 +48,8 @@ class ImageView implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("image");
-			var computed = context.styleResolver.resolve(new StyleTarget("image", key, key, null, ["image"],
-				context.interactionStates.get(nodeId)),
+			var computed = context.styleResolver.resolve(context.styleTarget(nodeId, "image", key, key, null,
+				["image"]),
 				context.inheritedStyle,
 				context.theme.styles,
 				context.styleSheet,
@@ -58,7 +57,7 @@ class ImageView implements View {
 				context.environment);
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("image", key, key, null, ["image"]);
-			node.states = context.interactionStates.get(nodeId);
+			node.states = context.interactionStates.peek(nodeId);
 			node.computedStyle = computed;
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Image, label);
 			node.onPaint(function(canvas:Canvas, geometry:ResolvedLayoutItem) {

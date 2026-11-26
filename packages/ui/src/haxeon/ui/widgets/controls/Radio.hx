@@ -75,6 +75,7 @@ class Radio implements ScopeView {
 	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 
 	function buildRadio(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
+		// The indicator and its dot take the row's hover and press, so the body depends on every state.
 		var flags = context.interactionStates.get(nodeId);
 		flags = (selected ? flags.insert(StyleState.Selected) : flags.remove(StyleState.Selected));
 		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
@@ -88,8 +89,6 @@ class Radio implements ScopeView {
 		var node = context.createNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
 		node.setStyleIdentity("radio", key.rawValue, key.rawValue, null, ["radio"]);
 		node.states = flags;
-		// The indicator and its dot take the row's hover and press.
-		node.buildsFromHover = true;
 		node.computedStyle = computed;
 		node.focusable = enabled;
 		node.enabled = enabled;

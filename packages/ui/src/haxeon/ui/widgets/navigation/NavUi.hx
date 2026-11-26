@@ -34,7 +34,7 @@ internal class NavUi {
 	/** A styled box node under the current scope with the given widget type. */
 	public static function box(context:BuildContext, id:WidgetId, type:String, key:String, style:LayoutStyle,
 			?classes:Array<String>):RenderNode {
-		var flags = context.interactionStates.get(id);
+		var flags = context.styleStates(id, type, key, key, classes, [type]);
 		var computed = context.resolveStyle(new StyleTarget(type, key, key, classes, [type], flags), style);
 		var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 		node.setStyleIdentity(type, key, key, classes, [type]);

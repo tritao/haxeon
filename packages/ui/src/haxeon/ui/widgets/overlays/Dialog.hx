@@ -10,7 +10,6 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 
 /** Centered modal composition with trapped keyboard focus and dismissal hooks. */
@@ -57,16 +56,15 @@ class Dialog implements View {
 			rootStyle.positioning = LayoutPositioning.Absolute;
 			rootStyle.overlay = true;
 			var rootId = context.rootId("dialog");
-			var rootComputed = context.resolveStyle(new StyleTarget("dialog",
+			var rootComputed = context.resolveStyle(context.styleTarget(rootId, "dialog",
 				key.rawValue,
 				key.rawValue,
 				null,
-				["dialog"],
-				context.interactionStates.get(rootId)),
+				["dialog"]),
 				rootStyle);
 			var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
 			root.setStyleIdentity("dialog", key.rawValue, key.rawValue, null, ["dialog"]);
-			root.states = context.interactionStates.get(rootId);
+			root.states = context.interactionStates.peek(rootId);
 			root.computedStyle = rootComputed;
 			root.focusTrap = true;
 			root.hitTestSelf = false;
@@ -80,16 +78,15 @@ class Dialog implements View {
 			backdropStyle.height = LayoutAxis.grow();
 			backdropStyle.positioning = LayoutPositioning.Absolute;
 			var backdropId = context.id("backdrop");
-			var backdropComputed = context.resolveStyle(new StyleTarget("dialog-backdrop",
+			var backdropComputed = context.resolveStyle(context.styleTarget(backdropId, "dialog-backdrop",
 				"backdrop",
 				"backdrop",
 				null,
-				["dialog"],
-				context.interactionStates.get(backdropId)),
+				["dialog"]),
 				backdropStyle);
 			var backdrop = context.createNode(backdropId, LayoutVisualKind.Box, backdropComputed.toLayoutStyle());
 			backdrop.setStyleIdentity("dialog-backdrop", "backdrop", "backdrop", null, ["dialog"]);
-			backdrop.states = context.interactionStates.get(backdropId);
+			backdrop.states = context.interactionStates.peek(backdropId);
 			backdrop.computedStyle = backdropComputed;
 			if (dismissOnOutside && hasDismissHandler) backdrop.on(UiEventKind.Click, function(event) {
 				onDismiss();
@@ -106,38 +103,38 @@ class Dialog implements View {
 			centerStyle.childAlignY = LayoutAlignmentY.Center;
 			centerStyle.childDistribution = LayoutDistribution.Center;
 			var centerId = context.id("dialog-center");
-			var centerComputed = context.resolveStyle(new StyleTarget("dialog-center", "center", "center", null,
-				["dialog"], context.interactionStates.get(centerId)),
+			var centerComputed = context.resolveStyle(context.styleTarget(centerId, "dialog-center", "center", "center",
+				null,
+				["dialog"]),
 				centerStyle);
 			var center = context.createNode(centerId, LayoutVisualKind.Box, centerComputed.toLayoutStyle());
 			center.setStyleIdentity("dialog-center", "center", "center", null, ["dialog"]);
-			center.states = context.interactionStates.get(centerId);
+			center.states = context.interactionStates.peek(centerId);
 			center.computedStyle = centerComputed;
 			var panelStyle = new LayoutStyle();
 			panelStyle.width = LayoutAxis.fixed(width);
 			var panelId = context.id("dialog-panel");
-			var panelComputed = context.resolveStyle(new StyleTarget("dialog-panel", "panel", "panel", null, ["dialog"],
-				context.interactionStates.get(panelId)),
+			var panelComputed = context.resolveStyle(context.styleTarget(panelId, "dialog-panel", "panel", "panel",
+				null, ["dialog"]),
 				panelStyle);
 			var panel = context.createNode(panelId, LayoutVisualKind.Box, panelComputed.toLayoutStyle());
 			panel.setStyleIdentity("dialog-panel", "panel", "panel", null, ["dialog"]);
-			panel.states = context.interactionStates.get(panelId);
+			panel.states = context.interactionStates.peek(panelId);
 			panel.computedStyle = panelComputed;
 			if (title.length > 0) {
 				var heading = context.withStyleParent(panelComputed,
 					function() return context.withScope(new Key("title"), function() {
 						var headingId = context.id("heading");
-						var headingComputed = context.resolveStyle(new StyleTarget("dialog-heading",
+						var headingComputed = context.resolveStyle(context.styleTarget(headingId, "dialog-heading",
 							"title",
 							"title",
 							null,
-							["dialog-heading"],
-							context.interactionStates.get(headingId)),
+							["dialog-heading"]),
 							new LayoutStyle());
 						var node = context.createNode(headingId, LayoutVisualKind.Text,
 							headingComputed.toLayoutStyle());
 						node.setStyleIdentity("dialog-heading", "title", "title", null, ["dialog-heading"]);
-						node.states = context.interactionStates.get(headingId);
+						node.states = context.interactionStates.peek(headingId);
 						node.computedStyle = headingComputed;
 						node.layout.text = title;
 						node.layout.textColor = headingComputed.getColor(haxeon.ui.style.StyleProperty.TextColor);

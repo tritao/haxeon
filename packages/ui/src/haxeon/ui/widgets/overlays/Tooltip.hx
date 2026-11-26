@@ -16,7 +16,6 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleTarget;
 
 /** Informational tooltip layered above its anchor. Content never participates in pointer hit testing. */
 class Tooltip implements View {
@@ -132,7 +131,7 @@ class Tooltip implements View {
 			});
 			anchorModifier.on(UiEventKind.Focus, function(event) {
 				pointer.suppressed = false;
-				focused.update(!context.interactionStates.get(event.target).contains(StyleState.Hovered)
+				focused.update(!context.interactionStates.peek(event.target).contains(StyleState.Hovered)
 					&& (showWhen == null || showWhen()));
 			}, UiEventPhase.Capture);
 			anchorModifier.on(UiEventKind.Blur, function(_) {
@@ -146,16 +145,15 @@ class Tooltip implements View {
 			});
 			var root = context.withScope(new Key("layers"), function() {
 				var rootId = context.rootId("stack");
-				var rootComputed = context.resolveStyle(new StyleTarget("tooltip-layer",
+				var rootComputed = context.resolveStyle(context.styleTarget(rootId, "tooltip-layer",
 					key.rawValue,
 					key.rawValue,
 					null,
-					["tooltip-layer"],
-					context.interactionStates.get(rootId)),
+					["tooltip-layer"]),
 					rootStyle);
 				var result = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
 				result.setStyleIdentity("tooltip-layer", key.rawValue, key.rawValue, null, ["tooltip-layer"]);
-				result.states = context.interactionStates.get(rootId);
+				result.states = context.interactionStates.peek(rootId);
 				result.computedStyle = rootComputed;
 				var anchorNode = context.withStyleParent(rootComputed,
 					function() return context.withScope(new Key("anchor"),
@@ -250,7 +248,7 @@ class Tooltip implements View {
 			var headerId:Null<WidgetId> = null;
 			headerModifier.on(UiEventKind.Focus, function(_) {
 				focused.update((headerId == null
-					|| !context.interactionStates.get(headerId).contains(StyleState.Hovered))
+					|| !context.interactionStates.peek(headerId).contains(StyleState.Hovered))
 					&& (showWhen == null || showWhen()));
 			});
 			headerModifier.on(UiEventKind.Blur, function(_) {
@@ -285,12 +283,11 @@ class Tooltip implements View {
 			tipStyle.visible = focused.value || (hoverGroup == null ? state.value : groupVisible);
 			tipStyle.padding = new Insets(PADDING, 7, PADDING, 7);
 			var tipId = context.id("tooltip");
-			var computed = context.resolveStyle(new StyleTarget("tooltip",
+			var computed = context.resolveStyle(context.styleTarget(tipId, "tooltip",
 				key.rawValue,
 				key.rawValue,
 				null,
-				["tooltip"],
-				context.interactionStates.get(tipId)),
+				["tooltip"]),
 				tipStyle);
 			var tip = context.createNode(tipId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			tip.computedStyle = computed;
@@ -369,12 +366,12 @@ private class AnonymousTooltipContent implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var nodeId = context.rootId("tooltip");
-		var computed = context.resolveStyle(new StyleTarget("tooltip", "tooltip", "tooltip", null, ["tooltip"],
-			context.interactionStates.get(nodeId)),
+		var computed = context.resolveStyle(context.styleTarget(nodeId, "tooltip", "tooltip", "tooltip", null,
+			["tooltip"]),
 			style);
 		var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 		node.setStyleIdentity("tooltip", "tooltip", "tooltip", null, ["tooltip"]);
-		node.states = context.interactionStates.get(nodeId);
+		node.states = context.interactionStates.peek(nodeId);
 		node.computedStyle = computed;
 		if (showContent) {
 			var child = context.withStyleParent(computed,

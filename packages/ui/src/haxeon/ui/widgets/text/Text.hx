@@ -10,7 +10,6 @@ import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 
 /** Text view backed by the NativeUI/Skribidi text layout primitive. */
@@ -41,13 +40,12 @@ class Text implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var id = context.rootId("text");
-		var computed = context.resolveStyle(new StyleTarget("text", null, null, null, ["text"],
-			context.interactionStates.get(id)),
+		var computed = context.resolveStyle(context.styleTarget(id, "text", null, null, null, ["text"]),
 			style,
 			color);
 		var node = createNode(context, id, computed.toLayoutStyle());
 		node.setStyleIdentity("text", null, null, null, ["text"]);
-		node.states = context.interactionStates.get(id);
+		node.states = context.interactionStates.peek(id);
 		node.computedStyle = computed;
 		node.layout.text = value;
 		var resolved = context.resolveTextRole(role, textStyle);

@@ -78,6 +78,9 @@ are edits that have no build to reconcile.
   Children are swapped rather than patched field by field because the new build's closures refer to the nodes it made
   (`TextField`'s pointer handlers read `textNode.resolved`), so those must be the ones in the tree; a hand-kept list of node
   properties to copy would also go stale with every new one.
+- A component needs no interaction bookkeeping: its body depends on the states it read, and `BuildContext.styleStates`
+  reads only those some rule for the node's identity selects on. The rest of this item is for widgets that are not
+  components yet.
 - Hover never needs a flag: `BuildContext.hoverRebuilds` says hover alone matters to a node only if a stylesheet rule matches it
   on hover (or it belongs to a self-updating widget, which follows it itself). Otherwise caches ignore it and a node that
   paints from live state (`TreeView` rows) is repainted by the frame (`UiContext`: `patchFramePaintNodes`). A widget that does

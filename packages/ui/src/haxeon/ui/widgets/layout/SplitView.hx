@@ -115,7 +115,8 @@ class SplitView implements View {
 
 			if (dividerExtent > 0.0) {
 				var dividerId = context.id("divider");
-				var dividerStates = context.interactionStates.get(dividerId);
+				var dividerStates = context.styleStates(dividerId, "split-divider", key.rawValue,
+					key.rawValue + ":divider", null, ["split-divider"]);
 				var dividerComputed = context.resolveStyle(new StyleTarget("split-divider",
 					key.rawValue,
 					key.rawValue + ":divider",

@@ -238,47 +238,60 @@ class StyleSelector {
 	}
 }
 
-/** Which rules of a theme sheet and an application sheet match a widget on hover, indexed by widget type. */
-internal class HoverRuleIndex {
+/** Which states the rules of a theme sheet and an application sheet select a widget on, indexed by widget type. */
+internal class StateRuleIndex {
 	/** The style revision the types were collected at. */
 	var revision:Int = -1;
 
-	/** The widget types of the rules that match on hover; any type, when one of them names none. */
-	final types:Map<String, Bool> = new Map();
+	/** Per widget type, the states its rules select on. */
+	final types:Map<String, Int> = new Map();
 
-	var anyType:Bool = false;
+	/** The states rules that name no type select on. */
+	var anyType:Int = 0;
 
 	public function new() {}
 
-	/** Whether a rule of `theme` or `application` matches this identity on hover; `revision` names the sheets' state. */
-	public function matches(theme:StyleSheet, application:StyleSheet, revision:Int, type:String, key:Null<String>,
-			id:Null<String>, classes:Array<String>, tags:Array<String>):Bool {
-		// Most types no hover rule names: answered from the types the current sheets name, without building a target.
+	/**
+	 * The states a rule of `theme` or `application` that matches this identity selects on, whether or not the rule's
+	 * conditions hold now; `revision` names the sheets' state.
+	 */
+	public function states(theme:StyleSheet, application:StyleSheet, revision:Int, type:String, key:Null<String>,
+			id:Null<String>, classes:Array<String>, tags:Array<String>):StyleState {
+		// Most types no stateful rule names: answered from the types the current sheets name, without matching.
 		if (this.revision != revision) {
 			this.revision = revision;
 			types.clear();
-			anyType = false;
+			anyType = 0;
 			collect(theme);
 			collect(application);
 		}
-		if (!anyType && !types.exists(type)) return false;
-		return sheetMatches(theme, type, key, id, classes, tags)
-			|| sheetMatches(application, type, key, id, classes, tags);
+		var named = types.get(type);
+		if (((named == null ? 0 : named) | anyType) == 0) return StyleState.empty();
+		return StyleState.fromRaw(sheetStates(theme, type, key, id, classes, tags)
+			| sheetStates(application, type, key, id, classes, tags));
 	}
 
 	function collect(sheet:StyleSheet):Void {
-		for (rule in sheet.rules) if (rule.selector.stateMask.contains(StyleState.Hovered)) {
+		for (rule in sheet.rules) {
+			var mask = rule.selector.stateMask.rawValue;
+			if (mask == 0) continue;
 			var type = rule.selector.widgetType;
-			if (type == null) anyType = true;
-			else types.set(type, true);
+			if (type == null) anyType |= mask;
+			else {
+				var known = types.get(type);
+				types.set(type, (known == null ? 0 : known) | mask);
+			}
 		}
 	}
 
-	static function sheetMatches(sheet:StyleSheet, type:String, key:Null<String>, id:Null<String>,
-			classes:Array<String>,
-			tags:Array<String>):Bool {
-		for (rule in sheet.rules) if (rule.selector.stateMask.contains(StyleState.Hovered)
-			&& rule.selector.matchesIdentity(type, key, id, classes, tags)) return true;
-		return false;
+	static function sheetStates(sheet:StyleSheet, type:String, key:Null<String>, id:Null<String>,
+			classes:Array<String>, tags:Array<String>):Int {
+		var result = 0;
+		for (rule in sheet.rules) {
+			var mask = rule.selector.stateMask.rawValue;
+			if (mask != 0 && (result | mask) != result
+				&& rule.selector.matchesIdentity(type, key, id, classes, tags)) result |= mask;
+		}
+		return result;
 	}
 }

@@ -65,7 +65,7 @@ class IconButton implements ScopeView {
 	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-		var flags = context.interactionStates.get(id);
+		var flags = context.styleStates(id, "button", key, key, ["icon-button"], ["button", "icon-button"]);
 		flags = !enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled);
 		var computed = context.resolveStyle(new StyleTarget("button", key, key, ["icon-button"], [
 			"button",

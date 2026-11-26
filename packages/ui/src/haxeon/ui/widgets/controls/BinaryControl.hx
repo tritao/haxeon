@@ -95,6 +95,7 @@ class BinaryControl implements ScopeView implements Observable {
 
 	function buildControl(context:BuildContext,
 			nodeId:haxeon.ui.core.WidgetId):RenderNode {
+		// The indicator and its mark take the row's hover and press, so the body depends on every state.
 		var flags = context.interactionStates.get(nodeId);
 		flags = (checked ? flags.insert(StyleState.Checked) : flags.remove(StyleState.Checked));
 		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
@@ -113,8 +114,6 @@ class BinaryControl implements ScopeView implements Observable {
 		var node = context.createNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
 		node.setStyleIdentity(toggle ? "toggle" : "checkbox", key, key, null, [toggle ? "toggle" : "checkbox"]);
 		node.states = flags;
-		// The indicator and its mark take the row's hover and press.
-		node.buildsFromHover = true;
 		node.computedStyle = computed;
 		node.focusable = enabled;
 		node.enabled = enabled;

@@ -11,7 +11,6 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.StyleTarget;
 
 /**
  * Custom Haxe-painted region with ordinary Haxe-routed input handlers.
@@ -91,12 +90,11 @@ class CanvasView implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("canvas");
-			var computed = context.resolveStyle(new StyleTarget("canvas", key, key, null, ["canvas"],
-				context.interactionStates.get(nodeId)),
+			var computed = context.resolveStyle(context.styleTarget(nodeId, "canvas", key, key, null, ["canvas"]),
 				style);
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("canvas", key, key, null, ["canvas"]);
-			node.states = context.interactionStates.get(nodeId);
+			node.states = context.interactionStates.peek(nodeId);
 			node.computedStyle = computed;
 			node.hitTestSelf = hitTestSelf;
 			node.cachePolicy = cachePolicy;

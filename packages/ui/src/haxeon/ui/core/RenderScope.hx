@@ -45,8 +45,6 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 	public var disposed(default, null):Bool = false;
 	public var pending(default, null):Bool = false;
 
-	@:allow(haxeon.ui.core.UiContext) var builtEpoch:Int = 0;
-
 	/**
 	 * The self-updating widgets the body built, whose own patches create state no body run records: a kept body retains
 	 * it through them. Null for a body with none, so a ported body pays nothing.
@@ -162,7 +160,6 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 			root = next;
 			if (previous != null) applySharedModifiers(next);
 			finishDependencies();
-			builtEpoch = context.retainedEditEpoch;
 		} catch (error:Dynamic) {
 			if (previous != null && parent != null && previous.parent != parent) {
 				previous.detach();

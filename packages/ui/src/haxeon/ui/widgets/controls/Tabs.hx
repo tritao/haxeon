@@ -157,7 +157,7 @@ class Tabs implements ScopeView {
 			if (handler != null) handler(next);
 		};
 
-		var rootFlags = context.interactionStates.get(rootId);
+		var rootFlags = context.styleStates(rootId, "tabs", key, key, null, ["tabs"]);
 		var rootComputed = context.styleResolver.resolve(new StyleTarget("tabs", key, key, null, ["tabs"], rootFlags),
 			context.inheritedStyle,
 			context.theme.styles,

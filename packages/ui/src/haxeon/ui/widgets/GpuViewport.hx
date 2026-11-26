@@ -18,7 +18,6 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.StyleTarget;
 
 /**
  * Shared editor viewport node for GPU-produced content.
@@ -175,12 +174,12 @@ class GpuViewport implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("viewport");
-			var computed = context.resolveStyle(new StyleTarget("gpu-viewport", key, key, null, ["gpu-viewport"],
-				context.interactionStates.get(nodeId)),
+			var computed = context.resolveStyle(context.styleTarget(nodeId, "gpu-viewport", key, key, null,
+				["gpu-viewport"]),
 				style);
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("gpu-viewport", key, key, null, ["gpu-viewport"]);
-			node.states = context.interactionStates.get(nodeId);
+			node.states = context.interactionStates.peek(nodeId);
 			node.enabled = enabled;
 			node.hitTestSelf = enabled;
 			node.cachePolicy = CachePolicy.Raster;

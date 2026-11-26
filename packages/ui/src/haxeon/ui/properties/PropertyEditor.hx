@@ -25,7 +25,6 @@ import haxeon.ui.properties.PropertyBinding;
 import haxeon.ui.properties.PropertyDescriptor;
 import haxeon.ui.properties.PropertyEditorRegistry;
 import haxeon.ui.properties.PropertyValue;
-import haxeon.ui.style.StyleTarget;
 
 /** Descriptor-driven inspector that routes edits through the active document. */
 class PropertyEditor implements View implements Observable {
@@ -465,12 +464,11 @@ private class PropertyEditorRowContent implements View {
 			style:LayoutStyle):RenderNode {
 		return context.withScope(RootKey, function() {
 			var rootId = id == null ? context.id("column") : id;
-			var computed = context.resolveStyle(new StyleTarget("column", "row", "row", null, ["column"],
-				context.interactionStates.get(rootId)),
+			var computed = context.resolveStyle(context.styleTarget(rootId, "column", "row", "row", null, ["column"]),
 				style);
 			var node = context.createNode(rootId, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("column", "row", "row", null, ["column"]);
-			node.states = context.interactionStates.get(rootId);
+			node.states = context.interactionStates.peek(rootId);
 			node.computedStyle = computed;
 			for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
 			return node;

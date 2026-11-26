@@ -7,7 +7,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
-import haxeon.ui.style.StyleTarget;
 
 /** Vertical composition over a generic box render node. */
 class Column implements View {
@@ -33,12 +32,12 @@ class Column implements View {
 	/** Build with an ID already claimed by a self-updating owner. */
 	public function buildWithId(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		return context.withScope(key, function() {
-			var computed = context.resolveStyle(new StyleTarget("column", key.rawValue, key.rawValue, null,
-				["column"], context.interactionStates.get(id)),
+			var computed = context.resolveStyle(context.styleTarget(id, "column", key.rawValue, key.rawValue, null,
+				["column"]),
 				style);
 			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("column", key.rawValue, key.rawValue, null, ["column"]);
-			node.states = context.interactionStates.get(id);
+			node.states = context.interactionStates.peek(id);
 			node.computedStyle = computed;
 			for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
 			return node;

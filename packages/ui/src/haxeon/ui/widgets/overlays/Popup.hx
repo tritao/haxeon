@@ -14,7 +14,6 @@ import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.ComputedStyle;
-import haxeon.ui.style.StyleTarget;
 
 /** Parent-sized popup layer with optional modal focus and outside-click dismissal. */
 class Popup implements View {
@@ -105,12 +104,12 @@ class Popup implements View {
 			rootStyle.overlay = true;
 			rootStyle.zIndex = layerZIndex;
 			var rootId = context.rootId("popup-layer");
-			var rootComputed = context.resolveStyle(new StyleTarget("popup",
-				key.rawValue, key.rawValue, null, ["popup"], context.interactionStates.get(rootId)),
+			var rootComputed = context.resolveStyle(context.styleTarget(rootId, "popup",
+				key.rawValue, key.rawValue, null, ["popup"]),
 				rootStyle);
 			var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
 			root.setStyleIdentity("popup", key.rawValue, key.rawValue, null, ["popup"]);
-			root.states = context.interactionStates.get(rootId);
+			root.states = context.interactionStates.peek(rootId);
 			root.computedStyle = rootComputed;
 			root.hitTestSelf = false;
 			root.focusTrap = modal;
@@ -125,19 +124,18 @@ class Popup implements View {
 			var color = backdropColor == null ? context.theme.tokens.overlayBackdrop : cast backdropColor;
 			backdropStyle.background = modal && dimBackdrop ? color : Color.rgba(0.0, 0.0, 0.0, 0.0);
 			var backdropId = context.id("backdrop");
-			var backdropComputed = context.resolveStyle(new StyleTarget("popup-backdrop",
+			var backdropComputed = context.resolveStyle(context.styleTarget(backdropId, "popup-backdrop",
 				"backdrop",
 				"backdrop",
 				null,
-				["popup"],
-				context.interactionStates.get(backdropId)),
+				["popup"]),
 				backdropStyle);
 			if (!modal || !dimBackdrop) backdropComputed.setColor(StyleProperty.Background,
 				Color.rgba(0.0, 0.0, 0.0, 0.0),
 				new StyleSource("local", "popup-backdrop", -1, "local"));
 			var backdrop = context.createNode(backdropId, LayoutVisualKind.Box, backdropComputed.toLayoutStyle());
 			backdrop.setStyleIdentity("popup-backdrop", "backdrop", "backdrop", null, ["popup"]);
-			backdrop.states = context.interactionStates.get(backdropId);
+			backdrop.states = context.interactionStates.peek(backdropId);
 			backdrop.computedStyle = backdropComputed;
 			if (dismissOnOutside && (hasDismissHandler || onOutsideClick != null)) backdrop.on(UiEventKind.Click,
 				function(event) {
@@ -152,12 +150,11 @@ class Popup implements View {
 			panelStyle.positionY = y;
 			panelStyle.zIndex = layerZIndex + 1;
 			var panelId = context.id("popup-content");
-			var panelComputed = context.resolveStyle(new StyleTarget("popup-content",
+			var panelComputed = context.resolveStyle(context.styleTarget(panelId, "popup-content",
 				key.rawValue,
 				key.rawValue,
 				null,
-				["popup"],
-				context.interactionStates.get(panelId)),
+				["popup"]),
 				panelStyle);
 			if (menuSurface) {
 				var source = new StyleSource("local", "popup-content", -1, "local");
@@ -170,7 +167,7 @@ class Popup implements View {
 			}
 			var panel = context.createNode(panelId, LayoutVisualKind.Box, panelComputed.toLayoutStyle());
 			panel.setStyleIdentity("popup-content", key.rawValue, key.rawValue, null, ["popup"]);
-			panel.states = context.interactionStates.get(panelId);
+			panel.states = context.interactionStates.peek(panelId);
 			panel.computedStyle = panelComputed;
 			if (menuSurface) {
 				var surfaceStyle = new LayoutStyle();

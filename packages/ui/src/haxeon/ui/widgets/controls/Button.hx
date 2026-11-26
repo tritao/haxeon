@@ -142,12 +142,12 @@ class Button implements ScopeView {
 	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-		var flags:StyleState = context.interactionStates.get(id);
-		flags = (selected ? flags.insert(StyleState.Selected) : flags.remove(StyleState.Selected));
-		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
 		var resolvedClasses = classes.copy();
 		if (variant == ButtonVariant.Navigation) resolvedClasses.push("navigation");
 		else if (variant == ButtonVariant.Secondary) resolvedClasses.push("secondary");
+		var flags:StyleState = context.styleStates(id, "button", key, key, resolvedClasses, ["button"]);
+		flags = (selected ? flags.insert(StyleState.Selected) : flags.remove(StyleState.Selected));
+		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
 		var target = styleTarget(resolvedClasses, flags);
 		var computed = context.styleResolver.resolve(target,
 			context.inheritedStyle,

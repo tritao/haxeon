@@ -7,7 +7,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
-import haxeon.ui.style.StyleTarget;
 
 /** Constrains a child's allocated width and height. */
 class SizedBox implements View {
@@ -30,16 +29,15 @@ class SizedBox implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var id = context.rootId("sized-box");
-			var computed = context.resolveStyle(new StyleTarget("sized-box",
+			var computed = context.resolveStyle(context.styleTarget(id, "sized-box",
 				key.rawValue,
 				key.rawValue,
 				null,
-				["sized-box"],
-				context.interactionStates.get(id)),
+				["sized-box"]),
 				style);
 			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("sized-box", key.rawValue, key.rawValue, null, ["sized-box"]);
-			node.states = context.interactionStates.get(id);
+			node.states = context.interactionStates.peek(id);
 			node.computedStyle = computed;
 			var content = context.withStyleParent(computed, function() {
 				return context.withScope(new Key("content"), function() return child.build(context));

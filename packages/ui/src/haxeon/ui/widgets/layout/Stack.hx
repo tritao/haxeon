@@ -8,7 +8,6 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.View;
-import haxeon.ui.style.StyleTarget;
 
 /** Parent-relative positioned composition with native rendering and Haxe hit testing. */
 class Stack implements View {
@@ -28,12 +27,12 @@ class Stack implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var id = context.rootId("stack");
-			var computed = context.resolveStyle(new StyleTarget("stack", key.rawValue, key.rawValue, null,
-				["stack"], context.interactionStates.get(id)),
+			var computed = context.resolveStyle(context.styleTarget(id, "stack", key.rawValue, key.rawValue, null,
+				["stack"]),
 				style);
 			var root = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			root.setStyleIdentity("stack", key.rawValue, key.rawValue, null, ["stack"]);
-			root.states = context.interactionStates.get(id);
+			root.states = context.interactionStates.peek(id);
 			root.computedStyle = computed;
 			for (layer in layers) {
 				var child = context.withStyleParent(computed,

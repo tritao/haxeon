@@ -516,7 +516,9 @@ class UiContext implements Disposable {
 			&& buildContext.bindingRequestRevision != submittedBindingRequestRevision
 			&& interactionStates.revision == submittedInteractionRevision
 			&& buildContext.styleRevision == submittedStyleRevision;
-		var patchOnly = !reuse && (localPatchPending || bindingOnly) && (!reconcileNewFocus || cacheKey != null);
+		// A reference build (updateInPlace off) rebuilds the whole view on every submit, so it never patches.
+		var patchOnly = buildContext.updateInPlace && !reuse && (localPatchPending || bindingOnly)
+			&& (!reconcileNewFocus || cacheKey != null);
 		if (!patchOnly
 			&& !reuse && reconcileNewFocus && cacheKey != null
 			&& buildFeedbackPass == 0) patchOnly = planInteractionPatches(cacheKey,
@@ -806,7 +808,8 @@ class UiContext implements Disposable {
 		// This pass is now committed, including fresh nodes. A focus pass must compare against these instances, not
 		// fingerprints of the previous frame's different nodes with the same IDs.
 		if (verifyRetentionEvery > 0) recordFingerprints(next);
-		if ((interactionStates.revision != routedInteractionRevision && routedInteractionNeedsBuild())
+		if ((interactionStates.revision != routedInteractionRevision
+			&& (buildContext.hasPendingRenderScopes() || routedInteractionNeedsBuild()))
 			|| (reconcileNewFocus
 			&& focusChanged && (nextFocus != null || (previousFocus != null && nodesById.exists(previousFocus.value)))))
 			{
@@ -1275,7 +1278,7 @@ class UiContext implements Disposable {
 		for (change in changes) {
 			var node:RenderNode = cast currentNodesById.get(change.id);
 			var hoverOnly = change.hoverOnly();
-			if (queueNativeInteraction(node, hoverOnly)) continue;
+			if (queueNativeInteraction(node)) continue;
 			var owner = buildContext.updatingOwner(node);
 			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
 				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
@@ -1290,7 +1293,10 @@ class UiContext implements Disposable {
 			var node = currentNodesById.get(change.id);
 			if (node == null) continue;
 			var hoverOnly = change.hoverOnly();
-			if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) rebuild = true;
+			// A component that read the change is pending already (hasPendingRenderScopes).
+			if (buildContext.interactionRenderScope(node) != null) {
+				if (node.hasPaintHandler()) customPaint.invalidate(node.id.value);
+			} else if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) rebuild = true;
 			else if (node.hasPaintHandler()) {
 				// Layout is already submitted; only the custom list depends on this paint-only routed change.
 				customPaint.invalidate(node.id.value);
@@ -1299,47 +1305,15 @@ class UiContext implements Disposable {
 		return rebuild;
 	}
 
-	/** On a full rebuild, retained caches no longer notice pointer changes of self-updating widgets, so they are rebuilt here. */
-	static function findInteractionNode(root:RenderNode, id:Int):Null<RenderNode> {
-		if (root.id.value == id) return root;
-		for (child in root.children) {
-			var found = findInteractionNode(child, id);
-			if (found != null) return found;
-		}
-		return null;
-	}
-
 	function settleStructure(next:RenderNode):RenderNode {
-		var passes = 0;
-		while (true) {
-			buildContext.flushRenderScopes(next, true);
-			next = buildContext.currentRoot(next);
-			buildContext.applyPatches(next, submittedTopology);
-			buildContext.flushRenderScopes(next, true);
-			next = buildContext.currentRoot(next);
-			if (!queueIncomingRenderScopes(next)) {
-				buildContext.flushRenderScopes(next);
-				if (verifyRetentionEvery > 0 || buildContext.checkComponentRoots) buildContext.verifyComponentRoots();
-				return next;
-			}
-			if (++passes >= 8) throw "Interaction scope updates did not settle";
-		}
+		buildContext.flushRenderScopes(next, true);
+		next = buildContext.currentRoot(next);
+		buildContext.applyPatches(next, submittedTopology);
+		buildContext.flushRenderScopes(next, true);
+		next = buildContext.currentRoot(next);
+		buildContext.flushRenderScopes(next);
+		if (verifyRetentionEvery > 0 || buildContext.checkComponentRoots) buildContext.verifyComponentRoots();
 		return next;
-	}
-
-	/** A retained incoming body can already carry routed flags without having read them. */
-	function queueIncomingRenderScopes(incomingRoot:RenderNode):Bool {
-		var queued = false;
-		for (change in interactionStates.changes()) {
-			var node = findInteractionNode(incomingRoot, change.id);
-			if (node == null) continue;
-			var owner = buildContext.interactionRenderScope(node);
-			if (owner == null || owner.builtEpoch == buildContext.retainedEditEpoch) continue;
-			var hoverOnly = change.hoverOnly();
-			queueNativeInteraction(node, hoverOnly);
-			if (owner.pending) queued = true;
-		}
-		return queued;
 	}
 
 	function queueInteractionPatches():Void {
@@ -1348,7 +1322,7 @@ class UiContext implements Disposable {
 			var node = currentNodesById.get(change.id);
 			if (node == null) continue;
 			var hoverOnly = change.hoverOnly();
-			if (queueNativeInteraction(node, hoverOnly)) continue;
+			if (queueNativeInteraction(node)) continue;
 			var owner = buildContext.updatingOwner(node);
 			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
 				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
@@ -1357,11 +1331,13 @@ class UiContext implements Disposable {
 		}
 	}
 
-	function queueNativeInteraction(node:RenderNode, hoverOnly:Bool):Bool {
-		var owner = buildContext.interactionRenderScope(node);
-		if (owner == null) return false;
-		if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) owner.markDirty();
-		else if (node.hasPaintHandler() && patchFramePaintNodes.indexOf(node) < 0) patchFramePaintNodes.push(node);
+	/**
+	 * A component's body depends on the states it read, so a change already woke it; what is left is custom paint, which
+	 * reads the node's states as it paints.
+	 */
+	function queueNativeInteraction(node:RenderNode):Bool {
+		if (buildContext.interactionRenderScope(node) == null) return false;
+		if (node.hasPaintHandler() && patchFramePaintNodes.indexOf(node) < 0) patchFramePaintNodes.push(node);
 		return true;
 	}
 

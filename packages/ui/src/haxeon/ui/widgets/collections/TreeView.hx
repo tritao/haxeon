@@ -551,7 +551,7 @@ class TreeView implements View {
 			root.add(viewport);
 			if (canDragItem != null && canDropItem != null && onItemDrop != null) drag.attach(root, this, context);
 			else drag.clear();
-			root.states = context.interactionStates.get(root.id);
+			root.states = context.interactionStates.peek(root.id);
 			guideVisibility.root = root;
 			// State hydration is complete, but synchronization callbacks may write State. Run after the tracked build,
 			// when layout has supplied the geometry needed by scrollIntoView.
@@ -1107,7 +1107,7 @@ private class TreeViewRow implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var id = context.rootId("tree-item");
-			var flags = context.interactionStates.get(id);
+			var flags = context.interactionStates.peek(id);
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			style.height = LayoutAxis.fixed(entry.extent);
@@ -1123,7 +1123,7 @@ private class TreeViewRow implements View {
 			var normalHover = context.theme.tokens.surfaceHover;
 			var selectedColor = context.theme.tokens.selection;
 			node.onPaint(function(canvas, geometry) {
-				var hovered = (context.interactionStates.get(id)).contains(StyleState.Hovered);
+				var hovered = (context.interactionStates.peek(id)).contains(StyleState.Hovered);
 				if (selected
 					|| hovered) canvas.fillRectIfPositive(new haxeon.ui.Rect(0.0, 0.0, geometry.width, geometry.height),
 					selected ? selectedColor : normalHover);

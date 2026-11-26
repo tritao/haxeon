@@ -512,7 +512,12 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    Interaction routing recognizes the nearest native scope and invalidates that scope directly for changes its body
    renders. It does not route those changes through an enclosing legacy panel. An early experiment tracking every
    interaction read added signals and dependency edges for text/layout nodes and regressed the pilot census; it was
-   removed. Per-node interaction signals and derived styles remain part of the later widget migration.
+   removed. Per-node interaction signals have since landed in a narrower form: `InteractionStateStore` keeps one
+   observable source per widget, with a field each for hovered, pressed, focused and the authored states, and a build
+   depends on the fields it read. Style reads go through `BuildContext.styleStates`, which depends only on the states some
+   rule for that identity selects on (`StateRuleIndex`), so text and layout nodes that no stateful rule names read
+   nothing and get no source. A component scope is woken by those subscriptions; interaction routing no longer marks
+   it. Derived style values remain part of the later widget migration.
    Bound text keeps its last submitted text on its own native leaf node. Text changes classify content, geometry and
    semantics directly, instead of cloning an entire render/layout/style node for comparison. The measured native-scope
    telemetry case spent six additional snapshots on live text (144 objects / 6,512 bytes overall). The leaf's submitted
@@ -553,8 +558,8 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    inside the scope. Enabled state and the activation callback are constructor inputs in final fields, including
    PropertyEditor's reset action. This is the same structural primitive as panels use, with no widget-specific
    updater or adapter. The terminal body remains an internal native render primitive; interaction changes rerun
-   its enclosing scope using the foundation's existing interaction routing. Per-node interaction signals remain
-   the later stage-5 interaction migration, rather than introducing a second binding mechanism for this control.
+   its enclosing scope through the states its body read (per-node interaction signals, above), rather than a second
+   binding mechanism for this control.
    BIM's undo/redo children are final descriptions behind `EqualChild`, with editor identity and action as their
    declared inputs. Their callbacks are made only when those inputs change. The input value implements equality
    explicitly using class identity, so replacing an editor with the same visible key also replaces its actions.

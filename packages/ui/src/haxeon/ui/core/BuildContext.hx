@@ -12,6 +12,7 @@ import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleEnvironment;
 import haxeon.ui.style.StyleResolver;
 import haxeon.ui.style.StyleSheet;
+import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.theme.Theme;
@@ -261,25 +262,41 @@ class BuildContext implements Disposable {
 		localTextColor);
 
 	/**
-	 * Whether a change of this node's hover, alone, can change what its widget built. A widget reads hover to resolve its style, so
+	 * Whether a change of this node's hover, alone, can change what its widget built, for widgets that are not components
+	 * yet: a component's body depends on the states it read (styleStates). A widget reads hover to resolve its style, so
 	 * unless a stylesheet rule matches the node on hover it builds the same; one that does more with hover updates itself
 	 * (selfUpdating). Custom paint that reads hover as it paints is repainted by the frame instead (UiContext).
 	 */
 	public function hoverRebuilds(node:RenderNode):Bool {
 		var owner = updatingOwner(node);
 		var entry = owner == null ? null : updatingBuild(owner);
-		return !updateInPlace || node.buildsFromHover || (entry != null && entry.buildsFromHover)
-			|| hasHoverStyle(node);
+		return !updateInPlace || (entry != null && entry.buildsFromHover) || hasHoverStyle(node);
 	}
 
 	/** Conservative guard for retained hover. Conditional rules are included even when inactive. */
 	public function hasHoverStyle(node:RenderNode):Bool {
 		var type = node.styleType;
-		return type != null && hoverRules.matches(theme.styles, styleSheet, styleRevision, type, node.styleKey,
-			node.styleId, node.styleClasses, node.styleTags);
+		return type != null && stateRules.states(theme.styles, styleSheet, styleRevision, type, node.styleKey,
+			node.styleId, node.styleClasses, node.styleTags).contains(StyleState.Hovered);
 	}
 
-	final hoverRules = new HoverRuleIndex();
+	/**
+	 * The widget `id`'s states, to style it with this identity. A build that calls this depends only on the states some rule
+	 * for the identity selects on, since no other change can restyle it; the rest are returned to be recorded on the node.
+	 */
+	public function styleStates(id:WidgetId, type:String, ?key:String, ?styleId:String, ?classes:Array<String>,
+			?tags:Array<String>):StyleState {
+		return interactionStates.read(id, stateRules.states(theme.styles, styleSheet, styleRevision, type, key, styleId,
+			StyleTarget.shared(classes), StyleTarget.shared(tags)));
+	}
+
+	/** A style target for the widget `id` with this identity and its styleStates. */
+	public function styleTarget(id:WidgetId, type:String, ?key:String, ?styleId:String, ?classes:Array<String>,
+			?tags:Array<String>):StyleTarget {
+		return new StyleTarget(type, key, styleId, classes, tags, styleStates(id, type, key, styleId, classes, tags));
+	}
+
+	final stateRules = new StateRuleIndex();
 
 	/** Revision fingerprint used to classify style work before the next submission. */
 	public var styleRevision(get, never):Int;
@@ -881,7 +898,7 @@ class BuildContext implements Disposable {
 	/** Nodes of the submitted tree changed directly since it was submitted, with how each looked before; see willEditRetained. */
 	final retainedEdits:Array<RenderNode> = [];
 
-	@:allow(haxeon.ui.core.RenderScope) @:allow(haxeon.ui.core.UiContext) var retainedEditEpoch:Int = 0;
+	var retainedEditEpoch:Int = 0;
 	final retainedEditCaches:Map<Int, RetainedEditCache> = new Map();
 	final retainedEditCacheIds:Array<Int> = [];
 

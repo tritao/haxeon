@@ -11,7 +11,6 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.StyleTarget;
 
 /**
  * A reusable path-backed custom view. Hit testing intentionally uses the
@@ -149,12 +148,11 @@ class Shape implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("shape");
-			var computed = context.resolveStyle(new StyleTarget("shape", key, key, null, ["shape"],
-				context.interactionStates.get(nodeId)),
+			var computed = context.resolveStyle(context.styleTarget(nodeId, "shape", key, key, null, ["shape"]),
 				style);
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("shape", key, key, null, ["shape"]);
-			node.states = context.interactionStates.get(nodeId);
+			node.states = context.interactionStates.peek(nodeId);
 			node.computedStyle = computed;
 			node.hitTestSelf = hitTestSelf;
 			node.cachePolicy = cachePolicy;

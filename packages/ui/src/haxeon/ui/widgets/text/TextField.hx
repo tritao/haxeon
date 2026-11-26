@@ -147,6 +147,8 @@ class TextField implements View {
 	public var semanticRole:AccessibilityRole;
 	/** Semantic action capabilities override used by composite editable controls. */
 	public var semanticActions:AccessibilityAction;
+	/** Semantic states a composite editable control adds, such as a combo box's popup. */
+	public var semanticStates:AccessibilityState;
 
 	/**
 	 * A field editing `value`, or `document` when given, which several editors may share; `onEdit` then receives each
@@ -193,6 +195,7 @@ class TextField implements View {
 		onDiagnostics = null;
 		semanticRole = AccessibilityRole.TextField;
 		semanticActions = AccessibilityAction.SetValue | AccessibilityAction.SetSelection;
+		semanticStates = AccessibilityState.empty();
 	}
 
 	/** Creates a field backed by a shared document and edit transaction stream. */
@@ -260,7 +263,7 @@ class TextField implements View {
 		editor.updateStyle(resolved.textStyle, paragraph);
 		editor.configurePresentation(colorRangeProvider, decorationProvider, presentationRevision);
 
-		var flags = context.interactionStates.get(id);
+		var flags = context.styleStates(id, "text-field", key, key, classes, ["text-field"]);
 		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
 		var computed = context.styleResolver.resolve(new StyleTarget("text-field", key, key, classes, ["text-field"],
 			flags),
@@ -281,6 +284,7 @@ class TextField implements View {
 		var semantics = new Semantics(semanticRole, label == null ? key : label);
 		semantics.setValueSource(editor, editor.documentLength());
 		semantics.actions = readOnly ? semanticActions.remove(AccessibilityAction.SetValue) : semanticActions;
+		semantics.states |= semanticStates;
 		if (readOnly) semantics.states |= AccessibilityState.ReadOnly;
 		semantics.textStart = 0;
 		semantics.selectionStart = editor.selectionStart;

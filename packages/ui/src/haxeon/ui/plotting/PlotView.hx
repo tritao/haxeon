@@ -14,7 +14,6 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 import haxeon.ui.plotting.PlotModel;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.StyleTarget;
 
 /** Retained Canvas plot for telemetry, graphs, and simulation diagnostics. */
 class PlotView implements View {
@@ -83,12 +82,11 @@ class PlotView implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("plot");
-			var computed = context.resolveStyle(new StyleTarget("plot", key, key, null, ["plot"],
-				context.interactionStates.get(nodeId)),
+			var computed = context.resolveStyle(context.styleTarget(nodeId, "plot", key, key, null, ["plot"]),
 				style);
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("plot", key, key, null, ["plot"]);
-			node.states = context.interactionStates.get(nodeId);
+			node.states = context.interactionStates.peek(nodeId);
 			node.enabled = enabled;
 			node.hitTestSelf = enabled;
 			node.cachePolicy = CachePolicy.Raster;

@@ -7,7 +7,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
-import haxeon.ui.style.StyleTarget;
 
 /** Horizontal composition over a generic box render node. */
 class Row implements View {
@@ -28,12 +27,12 @@ class Row implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var id = context.rootId("row");
-			var computed = context.resolveStyle(new StyleTarget("row", key.rawValue, key.rawValue, null, ["row"],
-				context.interactionStates.get(id)),
+			var computed = context.resolveStyle(context.styleTarget(id, "row", key.rawValue, key.rawValue, null,
+				["row"]),
 				style);
 			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("row", key.rawValue, key.rawValue, null, ["row"]);
-			node.states = context.interactionStates.get(id);
+			node.states = context.interactionStates.peek(id);
 			node.computedStyle = computed;
 			for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
 			return node;

@@ -20,7 +20,6 @@ import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.Decoration;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.ComputedStyle;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.widgets.scroll.ScrollView;
 
@@ -173,16 +172,15 @@ internal class SelectionPopup {
 		dropdownStyle.childGap = 2.0;
 		dropdownStyle.radiusTopLeft = dropdownStyle.radiusTopRight = 5.0;
 		dropdownStyle.radiusBottomLeft = dropdownStyle.radiusBottomRight = 5.0;
-		var dropdownComputed = context.resolveStyle(new StyleTarget("selection-popup",
+		var dropdownComputed = context.resolveStyle(context.styleTarget(dropdownId, "selection-popup",
 			"options",
 			"options",
 			null,
-			["selection-popup"],
-			context.interactionStates.get(dropdownId)),
+			["selection-popup"]),
 			dropdownStyle);
 		var dropdown = context.createNode(dropdownId, LayoutVisualKind.Custom, dropdownComputed.toLayoutStyle());
 		dropdown.setStyleIdentity("selection-popup", "options", "options", null, ["selection-popup"]);
-		dropdown.states = context.interactionStates.get(dropdownId);
+		dropdown.states = context.interactionStates.peek(dropdownId);
 		dropdown.computedStyle = dropdownComputed;
 		var popupDecorations = dropdownComputed.getDecorations();
 		var popupDecorationSource = dropdownComputed.source(StyleProperty.Decorations);
