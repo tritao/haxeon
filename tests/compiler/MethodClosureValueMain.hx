@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
-import compiler.hl.HlWriter;
 import compiler.tools.CompilerDriver;
 
 class MethodClosureValueMain {
@@ -58,7 +57,7 @@ class MethodClosureValueMain {
 					temp = "out";
 				var path = temp + "/method-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
 				var bytes = target == "hl"
-					? HlWriter.encode(result.artifact.hashLink().module).flatten()
+					? result.artifact.hashLink().hashLinkBytes().flatten()
 					: new WasmBackend().compile(result.ir, {
 						target: target == "wasm32" ? Wasm32 : WasmGc,
 						debugNames: true,

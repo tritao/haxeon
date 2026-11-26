@@ -39,8 +39,8 @@ gc-root-index                    ci          -- tests/integration/test-gc-root-i
 gc-flush-scan                    ci          -- bash tests/integration/test-gc-flush-scan.sh
 string-map-hash                  ci          -- bash tests/integration/test-string-map-hash.sh
 code-link                        ci          -- bash tests/integration/test-code-link.sh
-# A plain build with --module-sections: the VM's link of a program's and of the compiler's own sections equals the compiler's static
-# link (HlStaticLink), and both run as their dense builds do.
+# A plain build writes module sections: the VM's link of a program's and of the compiler's own sections equals the compiler's
+# static link (HlStaticLink), and both run.
 module-sections                  ci          -- bash tests/integration/test-module-sections.sh
 # A tool outside the tree links the compiler sources through common.hxml.
 external-tool-build              wave,ci     -- bash tests/integration/test-external-tool-build.sh
@@ -123,9 +123,6 @@ driver-checked                   wave        -- scripts/test-driver.sh {jobs} --
 driver-release                   wave        -- scripts/test-driver.sh {jobs} --suite programs --release
 # Compiles each program's live build again in a compile server of its own, which must write the same bytes.
 driver-isolated                  wave        -- scripts/test-driver.sh {jobs} --suite programs --check-isolation
-# Writes each program's plain builds as module sections (docs/design/MODULE_SECTIONS.md), which the VM links when it loads them;
-# --check-reuse also links each one ahead of time (HlStaticLink).
-driver-sections                  wave        -- scripts/test-driver.sh {jobs} --suite programs --module-sections --check-reuse
 
 formatter-integration            ci          -- tests/integration/test-haxeon-formatter.sh
 native-publish-integration       ci          -- bash tests/integration/test-native-publish.sh

@@ -22,8 +22,8 @@ typedef HlArtifact = {
 	final patchBytes:Null<Bytes>;
 
 	/**
-	 * The module as HLB 9 module sections (`HlSectionWriter`), or null when the build writes `module` as one dense HLB 8 module.
-	 * The function indices are then the ones the loader's link gives.
+	 * A plain build's module as HLB 9 module sections (`HlSectionWriter`), whose function indices are the ones the loader's link
+	 * gives; null for a live build, which writes `module` as one dense HLB 8 module.
 	 */
 	final sections:Null<haxeon.io.SegmentedBytes>;
 }
@@ -63,7 +63,7 @@ class BackendArtifacts {
 			case HashLinkCBuild(_): throw new InternalError("The build emitted C, not a Wasm module");
 		};
 
-	/** The bytes of a HashLink build's module: its sections, or `module` encoded densely with `cache`. */
+	/** The bytes of a HashLink build's module: its sections, or a live build's `module` encoded densely with `cache`. */
 	public static function hashLinkBytes(build:HlArtifact, ?cache:compiler.hl.HlWriterCache,
 			checkReuse:Bool = false):haxeon.io.SegmentedBytes {
 		var sections = build.sections;

@@ -19,7 +19,6 @@ typedef CompileOptionsInit = {
 	final ?checkIrBody:Bool;
 	final ?phaseCollections:Bool;
 	final ?inlineAllocation:Bool;
-	final ?moduleSections:Bool;
 	final ?nullSafety:Array<NullSafetyRule>;
 	final ?sourcePackages:Array<SourcePackage>;
 	final ?scriptModule:String;
@@ -110,13 +109,6 @@ class CompileOptions {
 	public final inlineAllocation:Bool;
 
 	/**
-	 * Write a plain HashLink build as HLB 9, one section per module that the VM links when it loads the file
-	 * (docs/design/MODULE_SECTIONS.md), instead of one dense HLB 8 module. A live build stays dense. Off by default until the
-	 * readers of modules all read sections.
-	 */
-	public final moduleSections:Bool;
-
-	/**
 	 * The null-safety rules of the compile (`--null-safety=MODE[:PATH[:shallow]]`): what Haxe's `--macro nullSafety(...)` states,
 	 * and what a project's `nullSafety` setting becomes. Empty by default, so only `@:nullSafety` metadata turns the checker on.
 	 * They change what a compile reports, so `key` keeps them.
@@ -149,7 +141,6 @@ class CompileOptions {
 		verifyIr = checkIrBody || init == null || init.verifyIr != false;
 		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
 		inlineAllocation = init != null && init.inlineAllocation == true;
-		moduleSections = init != null && init.moduleSections == true;
 		nullSafety = init == null || init.nullSafety == null ? [] : init.nullSafety;
 		sourcePackages = init == null || init.sourcePackages == null ? [] : init.sourcePackages;
 	}
@@ -182,7 +173,6 @@ class CompileOptions {
 			checkIrBody: checkIrBody,
 			phaseCollections: phaseCollections,
 			inlineAllocation: inlineAllocation,
-			moduleSections: moduleSections,
 			nullSafety: nullSafety,
 			sourcePackages: sourcePackages,
 			scriptModule: scriptModule
@@ -221,8 +211,6 @@ class CompileOptions {
 			flags.push(NO_PHASE_COLLECTIONS);
 		if (inlineAllocation)
 			flags.push(INLINE_ALLOCATION);
-		if (moduleSections)
-			flags.push(MODULE_SECTIONS);
 		if (scriptModule != null)
 			flags.push(SCRIPT_MODULE + scriptModule);
 		for (rule in nullSafety)
@@ -241,9 +229,6 @@ class CompileOptions {
 
 	/** Allocates objects inline in a `--target=hlc` build (`inlineAllocation`). */
 	public static inline final INLINE_ALLOCATION = "--inline-allocation";
-
-	/** Writes a plain HashLink build as module sections (`moduleSections`). */
-	public static inline final MODULE_SECTIONS = "--module-sections";
 
 	/** One null-safety rule (`nullSafety`). */
 	public static inline final NULL_SAFETY = "--null-safety=";
@@ -287,7 +272,7 @@ class CompileOptions {
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
-				INLINE_ALLOCATION, MODULE_SECTIONS: true;
+				INLINE_ALLOCATION: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, NULL_SAFETY)
 				|| StringTools.startsWith(argument, SOURCE_PACKAGE) || StringTools.startsWith(argument, PACKAGE_FRIEND)
 				|| StringTools.startsWith(argument, SCRIPT_MODULE);
@@ -311,7 +296,6 @@ class CompileOptions {
 			phaseCollections: arguments.indexOf(PHASE_COLLECTIONS) >= 0 ? true : arguments.indexOf(NO_PHASE_COLLECTIONS)
 				>= 0 ? false : null,
 			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0,
-			moduleSections: arguments.indexOf(MODULE_SECTIONS) >= 0,
 			nullSafety: nullSafetyFrom(arguments),
 			sourcePackages: sourcePackagesFrom(arguments),
 			scriptModule: scriptModuleFrom(arguments)

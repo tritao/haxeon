@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -39,14 +38,14 @@ class NullableAbstractWarmMain {
 		warm.compile("Main");
 		warm.update("Wrap.hx", edited);
 		warm.addStandardLibrarySourceRoot("stdlib");
-		var a = HlWriter.encode(warm.compile("Main").artifact.hashLink().module).flatten(),
-			b = HlWriter.encode(make(edited).compile("Main").artifact.hashLink().module).flatten();
+		var a = warm.compile("Main").artifact.hashLink().hashLinkBytes().flatten(),
+			b = make(edited).compile("Main").artifact.hashLink().hashLinkBytes().flatten();
 		if (a.compare(b) != 0)
 			throw "warm/cold differ after changing abstract representation";
 		warm.update("Wrap.hx", initial);
 		warm.addStandardLibrarySourceRoot("stdlib");
-		var c = HlWriter.encode(warm.compile("Main").artifact.hashLink().module).flatten(),
-			d = HlWriter.encode(make(initial).compile("Main").artifact.hashLink().module).flatten();
+		var c = warm.compile("Main").artifact.hashLink().hashLinkBytes().flatten(),
+			d = make(initial).compile("Main").artifact.hashLink().hashLinkBytes().flatten();
 		if (c.compare(d) != 0)
 			throw "warm/cold differ after restoring abstract representation";
 		var path = Path.join([temp, "nullable-abstract-warm-" + Std.random(1000000000) + ".hl"]);

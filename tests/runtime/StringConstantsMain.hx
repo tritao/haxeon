@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.types.Type.CompilerType;
 import sys.io.File;
 
@@ -32,6 +31,6 @@ class StringConstantsMain {
 		if (liveResult.artifact.hashLink().module.constants.length
 			!= fixedResult.artifact.hashLink().module.constants.length)
 			throw 'A live module should hold the same ${fixedResult.artifact.hashLink().module.constants.length} literal constants, got ${liveResult.artifact.hashLink().module.constants.length}';
-		File.saveBytes(Sys.args()[0], HlWriter.encode(fixedResult.artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], fixedResult.artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

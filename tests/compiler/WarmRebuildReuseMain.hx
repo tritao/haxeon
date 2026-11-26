@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.semantic.DeclarationFacts.FactAspect;
 
@@ -144,12 +143,11 @@ class WarmRebuildReuseMain {
 			files.remove("Area.hx");
 			files.set("Main.hx", StringTools.replace(mainSource, " + Area.of(Circle(2))", " + 12"));
 		});
-		edit(failures,
-			"after a new constant in a function early in the layout, which shifts the constant tables of the functions after it",
+		// A cold build numbers the new constant before the constants of the functions after it; a warm one extends its tables.
+		edit(failures, "after a new constant in a function early in the layout",
 			files -> files.set("Box.hx",
 			StringTools.replace(boxSource, "public function get():T return value;",
-			"public function get():T { spare = spare + 123456789; return value; }")),
-			true);
+			"public function get():T { spare = spare + 123456789; return value; }")));
 		edit(failures,
 			"after a new function early in the layout, which shifts the function indices of the functions after it",
 			files -> {
@@ -254,15 +252,15 @@ class WarmRebuildReuseMain {
 			if (!expectReuse && StringTools.startsWith(reuse, "ir"))
 				throw 'the build reused "$reuse" after an edit';
 			if (shifts && warm.metrics.movedFunctions == 0)
-				throw "the edit shifts the tables but no linked function was given other indices";
+				throw "the edit moves the function layout but no kept function was given other indices";
 			if (!expectReuse && warm.metrics.linkedFunctions == 0)
 				throw "no function was linked from the last build's lowering after an edit";
 			var warmTypes = anonymousTypes(compiler),
 				freshTypes = anonymousTypes(freshCompiler);
 			if (warmTypes != freshTypes)
 				throw 'the warm typed program lists other anonymous types than a fresh one\nwarm:  $warmTypes\nfresh: $freshTypes';
-			var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
-				freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+			var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
+				freshBytes = fresh.artifact.hashLink().hashLinkBytes().flatten();
 			if (warmBytes.compare(freshBytes) != 0)
 				throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
 			if (expectReuse && !check && warm.artifact.hashLink().module != first.artifact.hashLink().module)
@@ -347,9 +345,9 @@ class WarmRebuildReuseMain {
 							&& warm.changedFunctions.indexOf(ids.get(name)) >= 0)
 							throw 'the patch carries $name';
 				} else {
-					var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
+					var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
 						freshBytes =
-							HlWriter.encode(newCompiler(files).compile("Main").artifact.hashLink().module).flatten();
+							newCompiler(files).compile("Main").artifact.hashLink().hashLinkBytes().flatten();
 					if (warmBytes.compare(freshBytes) != 0)
 						throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
 				}
@@ -384,8 +382,8 @@ class WarmRebuildReuseMain {
 				fresh = newCompiler(files).compile("Main");
 			if (facts.unitRecord(unit) == validated)
 				throw "a build kept what a validation that was not taken recorded";
-			var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
-				freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+			var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
+				freshBytes = fresh.artifact.hashLink().hashLinkBytes().flatten();
 			if (warmBytes.compare(freshBytes) != 0)
 				throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
 		} catch (error:Dynamic) {
@@ -472,9 +470,9 @@ class WarmRebuildReuseMain {
 								throw 'the patch does not carry $name, whose line changed';
 					}
 					if (!live) {
-						var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
+						var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
 							freshBytes =
-								HlWriter.encode(newCompiler(files).compile("Main").artifact.hashLink().module)
+								newCompiler(files).compile("Main").artifact.hashLink().hashLinkBytes()
 								.flatten();
 						if (warmBytes.compare(freshBytes) != 0)
 							throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
@@ -515,8 +513,8 @@ class WarmRebuildReuseMain {
 				var warmClasses = specializedClasses(compiler), freshClasses = specializedClasses(freshCompiler);
 				if (warmClasses != freshClasses)
 					throw 'the warm typed program has other specializations than a fresh one\nwarm:  $warmClasses\nfresh: $freshClasses';
-				var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
-					freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+				var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
+					freshBytes = fresh.artifact.hashLink().hashLinkBytes().flatten();
 				if (warmBytes.compare(freshBytes) != 0)
 					throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
 			} catch (error:Dynamic) {
@@ -642,8 +640,8 @@ class WarmRebuildReuseMain {
 					var warm = rebuild(compiler, files,
 						files -> for (path => text in scenario.edit) files.set(path, text)),
 						fresh = newCompiler(files).compile("Main");
-					var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
-						freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+					var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
+						freshBytes = fresh.artifact.hashLink().hashLinkBytes().flatten();
 					if (warmBytes.compare(freshBytes) != 0)
 						throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
 				} catch (error:Dynamic) {

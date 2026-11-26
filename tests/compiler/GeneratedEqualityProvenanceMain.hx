@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 
 class GeneratedEqualityProvenanceMain {
@@ -65,8 +64,8 @@ class GeneratedEqualityProvenanceMain {
 						if (generatedOps == 0)
 							throw "Nullable primitive equality helpers were not exercised";
 					}
-					var warm = HlWriter.encode(warmResult.artifact.hashLink().module).flatten(),
-						cold = HlWriter.encode(create(edited).compile("Main").artifact.hashLink().module).flatten();
+					var warm = warmResult.artifact.hashLink().hashLinkBytes().flatten(),
+						cold = create(edited).compile("Main").artifact.hashLink().hashLinkBytes().flatten();
 					if (warm.compare(cold) != 0)
 						throw 'Shared helper provenance differs after editing $path (prefix=$prefix): $valueType';
 				}

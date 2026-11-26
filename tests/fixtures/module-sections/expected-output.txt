@@ -1,0 +1,4 @@
+app/Main.hx:51: caught negative -1 after 1
+app/Main.hx:53: sections 121 [square,circle,square] 10 2 -2,6 1 Move(1,2)
+app/Main.hx:54: {next : null, value : 7}
+app/Main.hx:55: first 4

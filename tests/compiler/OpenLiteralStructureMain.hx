@@ -3,7 +3,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 
 /**
@@ -105,8 +104,8 @@ class OpenLiteralStructureMain {
 			c.update("Main.hx", lines.join("\n"));
 			c.compile("Main");
 		}];
-		var forward = HlWriter.encode(modules[0].artifact.hashLink().module).flatten(),
-			backward = HlWriter.encode(modules[1].artifact.hashLink().module).flatten();
+		var forward = modules[0].artifact.hashLink().hashLinkBytes().flatten(),
+			backward = modules[1].artifact.hashLink().hashLinkBytes().flatten();
 		if (forward.compare(backward) != 0)
 			throw '$label: the reverse typing order gives other bytes';
 		var exit = GeneratedProgramRunner.exitCode(modules[0]);

@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 
 class SourceRevisionDeterminismMain {
@@ -36,8 +35,8 @@ class SourceRevisionDeterminismMain {
 				var incremental = create(source);
 				incremental.compile("Main");
 				incremental.update("Main.hx", edited);
-				var warm = HlWriter.encode(incremental.compile("Main").artifact.hashLink().module).flatten();
-				var cold = HlWriter.encode(create(edited).compile("Main").artifact.hashLink().module).flatten();
+				var warm = incremental.compile("Main").artifact.hashLink().hashLinkBytes().flatten();
+				var cold = create(edited).compile("Main").artifact.hashLink().hashLinkBytes().flatten();
 				if (warm.compare(cold) != 0)
 					throw 'Source metadata differs after editing case ${cases.indexOf(source)}: $edited';
 			}
@@ -69,8 +68,8 @@ class SourceRevisionDeterminismMain {
 				var result = incremental.compile("Main");
 				if (result.retyped.indexOf("Explicit.call") >= 0)
 					throw "Unrelated caller was invalidated";
-				var warm = HlWriter.encode(result.artifact.hashLink().module).flatten();
-				var cold = HlWriter.encode(program(edited).compile("Main").artifact.hashLink().module).flatten();
+				var warm = result.artifact.hashLink().hashLinkBytes().flatten();
+				var cold = program(edited).compile("Main").artifact.hashLink().hashLinkBytes().flatten();
 				if (warm.compare(cold) != 0)
 					throw "Cross-module default source metadata differs: " + caller;
 			}

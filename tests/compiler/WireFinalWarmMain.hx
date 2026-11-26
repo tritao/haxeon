@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -39,8 +38,8 @@ class WireFinalWarmMain {
 			warm.compile("Main");
 			warm.update("WireRecord.hx", edited);
 			warm.addStandardLibrarySourceRoot("stdlib");
-			var warmBytes = HlWriter.encode(warm.compile("Main").artifact.hashLink().module).flatten();
-			var coldBytes = HlWriter.encode(make(edited).compile("Main").artifact.hashLink().module).flatten();
+			var warmBytes = warm.compile("Main").artifact.hashLink().hashLinkBytes().flatten();
+			var coldBytes = make(edited).compile("Main").artifact.hashLink().hashLinkBytes().flatten();
 			if (warmBytes.compare(coldBytes) != 0)
 				throw "Warm and cold wire modules differ";
 			File.saveBytes(warmPath, warmBytes);

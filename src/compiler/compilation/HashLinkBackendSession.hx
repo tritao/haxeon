@@ -242,7 +242,6 @@ class HashLinkBackendSession implements BackendSession {
 		candidateAssembler.checkReuse = context.options.checkReuse;
 		candidateAssembler.irVerified = !context.livePatching;
 		candidateAssembler.livePatching = context.livePatching;
-		candidateAssembler.moduleSections = context.options.moduleSections && !context.livePatching;
 		candidateAssembler.keepsLowered = context.options.keepSession;
 		if (loweredCache != null) {
 			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
@@ -266,8 +265,8 @@ class HashLinkBackendSession implements BackendSession {
 		if (candidateAssembler.developmentMetadata)
 			attachSourceSnapshots(context, assembly.module);
 		notePlacedFiles(assembly.module);
-		// The module with functions linked from the last build must be the module lowering every function gives; a sectioned
-		// one is compared as sections, once written, since its dense tables are numbered as this build asked for their entries.
+		// A build with functions kept from the last one must write the sections lowering every function gives: they are compared
+		// once written, since the dense tables are numbered as each build asked for their entries.
 		var freshModule:Null<HlCode> = null;
 		if (loweredCache != null && candidateAssembler.reusedFunctions > 0 && context.options.checkReuse) {
 			var fresh = new HlModuleAssembler();
@@ -275,7 +274,6 @@ class HashLinkBackendSession implements BackendSession {
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.sources = candidateAssembler.sources;
 			fresh.irVerified = candidateAssembler.irVerified;
-			fresh.moduleSections = candidateAssembler.moduleSections;
 			fresh.loweredCache = new HlLoweredCache();
 			var freshAssembly = fresh.assemble(assemblyIr, regenerated, decision,
 				nextAbi == null ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi),
@@ -283,9 +281,6 @@ class HashLinkBackendSession implements BackendSession {
 			if (fresh.developmentMetadata)
 				attachSourceSnapshots(context, freshAssembly.module);
 			freshModule = freshAssembly.module;
-			var difference = fresh.moduleSections ? null : moduleDifference(assembly.module, freshAssembly.module);
-			if (difference != null)
-				throw new InternalError('--check-reuse: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)');
 		}
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSnapshots = AllocationMeter.sample();
@@ -311,8 +306,8 @@ class HashLinkBackendSession implements BackendSession {
 			functionIndices = assembly.functionIndices,
 			sections:Null<haxeon.io.SegmentedBytes> = null,
 			sectionsEncoded:Null<String> = null;
-		if (context.options.moduleSections && !context.livePatching) {
-			// The loader numbers a module of sections itself, and a function's stable id is its index there.
+		if (!context.livePatching) {
+			// A plain build is written as module sections, which the loader links and numbers itself, and a function's stable id is its index there.
 			var modules = [for (name => state in context.state.modules) name => state.source.contentHash()],
 				kept = candidateAssembler.loweredCache,
 				written = compiler.hl.HlSectionWriter.write(assembly.module, modules, context.state.declarationOwners,

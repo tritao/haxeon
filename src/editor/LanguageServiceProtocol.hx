@@ -9,7 +9,6 @@ import compiler.core.CancellationToken;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
-import compiler.hl.HlWriter;
 import compiler.service.LanguageService;
 import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.LanguageService.SymbolLocation;
@@ -93,7 +92,7 @@ class LanguageServiceProtocol {
 						changedFunctions: build.changedFunctions,
 						requiresReload: build.requiresReload,
 						patchAvailable: patch != null,
-						moduleBase64: Base64.encode(HlWriter.encode(hashLink.module).flatten()),
+						moduleBase64: Base64.encode(BackendArtifacts.hashLinkBytes(hashLink).flatten()),
 						patchBase64: patch == null ? null : Base64.encode(patch),
 						runtimeIdentityBase64: Base64.encode(hashLink.runtimeIdentity),
 						metrics: build.metrics

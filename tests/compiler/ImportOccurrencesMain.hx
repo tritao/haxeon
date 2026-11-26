@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
 
 /** Each written import retains its own alias when a module is retyped. */
 class ImportOccurrencesMain {
@@ -25,8 +24,8 @@ class ImportOccurrencesMain {
 		warm.compile("Main");
 		warm.update("Main.hx", both);
 		var added = warm.compile("Main"), cold = compiler(both).compile("Main");
-		if (HlWriter.encode(added.artifact.hashLink().module).flatten()
-			.compare(HlWriter.encode(cold.artifact.hashLink().module).flatten()) != 0)
+		if (added.artifact.hashLink().hashLinkBytes().flatten()
+			.compare(cold.artifact.hashLink().hashLinkBytes().flatten()) != 0)
 			throw "Adding the unaliased import differs between warm and cold builds";
 		warm.update("Main.hx", missing);
 		try {
@@ -37,8 +36,8 @@ class ImportOccurrencesMain {
 		}
 		warm.update("Main.hx", both);
 		var restored = warm.compile("Main");
-		if (HlWriter.encode(restored.artifact.hashLink().module).flatten()
-			.compare(HlWriter.encode(cold.artifact.hashLink().module).flatten()) != 0)
+		if (restored.artifact.hashLink().hashLinkBytes().flatten()
+			.compare(cold.artifact.hashLink().hashLinkBytes().flatten()) != 0)
 			throw "Restoring the import differs from a cold build";
 		Sys.println("PASS: aliased and unaliased imports remain distinct across warm edits");
 	}

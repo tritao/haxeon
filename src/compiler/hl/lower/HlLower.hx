@@ -634,6 +634,8 @@ class HlLower {
 								found.fn.type) : found.fn.type);
 							relocatedMoves.push(moves);
 							reusedFunctions++;
+							if (moves)
+								movedFunctions++;
 							continue;
 						}
 					} else {

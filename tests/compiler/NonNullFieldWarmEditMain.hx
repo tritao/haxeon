@@ -3,7 +3,6 @@ import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlCode;
 import compiler.hl.HlFunction.HlInstruction;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 
 /**
@@ -44,14 +43,16 @@ class NonNullFieldWarmEditMain {
 				"node.count = node.count + 1; node.label = null;"));
 			compiler.update("Writer.hx", files.get("Writer.hx"));
 			compiler.addSourceRoot("stdlib");
-			var warm = compiler.compile("Main").artifact.hashLink().module,
-				fresh = newCompiler(files).compile("Main").artifact.hashLink().module;
+			var warmBuild = compiler.compile("Main").artifact.hashLink(),
+				freshBuild = newCompiler(files).compile("Main").artifact.hashLink(),
+				warm = warmBuild.module,
+				fresh = freshBuild.module;
 			var label = check ? " (checked)" : "";
 			if (nullChecks(fresh) <= nullChecks(first))
 				throw 'the edit made no read of the field checked$label: ${nullChecks(first)} null checks before, ${nullChecks(fresh)} after';
 			if (nullChecks(warm) != nullChecks(fresh))
 				throw 'the warm build kept the reader lowered with the field never null$label: ${nullChecks(warm)} null checks, a fresh build has ${nullChecks(fresh)}';
-			var warmBytes = HlWriter.encode(warm).flatten(), freshBytes = HlWriter.encode(fresh).flatten();
+			var warmBytes = warmBuild.hashLinkBytes().flatten(), freshBytes = freshBuild.hashLinkBytes().flatten();
 			if (warmBytes.compare(freshBytes) != 0)
 				throw 'the warm module differs from a fresh one$label (${warmBytes.length} and ${freshBytes.length} bytes)';
 		}

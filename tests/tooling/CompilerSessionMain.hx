@@ -61,8 +61,8 @@ class CompilerSessionMain {
 				modeSession);
 		expect(reused.metrics.retypedFunctions == 0, "a reused session types nothing again");
 		expect(freshStart.metrics.retypedFunctions > 0, "a fresh session types everything again");
-		expect(HlWriter.encode(reused.artifact.hashLink().module).flatten()
-			.compare(HlWriter.encode(freshStart.artifact.hashLink().module).flatten()) == 0,
+		expect(reused.artifact.hashLink().hashLinkBytes().flatten()
+			.compare(freshStart.artifact.hashLink().hashLinkBytes().flatten()) == 0,
 			"a fresh session builds the same module");
 		var rejectedMode = false;
 		try CompilerArguments.parse(modeArgs.concat(["--session=sometimes"])) catch (_:Dynamic)
@@ -160,7 +160,7 @@ class CompilerSessionMain {
 		expect(edited.metrics.declarationMs == 0.0 && edited.metrics.shapeConnectionMs == 0.0
 			&& edited.metrics.signatureTypingMs == 0.0,
 			"an explicitly typed class-method body edit must reuse validated declarations");
-		expect(File.getBytes(output).compare(HlWriter.encode(edited.artifact.hashLink().module).flatten()) == 0,
+		expect(File.getBytes(output).compare(edited.artifact.hashLink().hashLinkBytes().flatten()) == 0,
 			"cached HashLink function encoding must match canonical serialization");
 		// With inlining, Main.main contains Value.get, so it must be rebuilt when Value.get changes.
 		var mainReused = functionByName(initial, "Main.main") == functionByName(edited, "Main.main");

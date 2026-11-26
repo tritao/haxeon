@@ -3,7 +3,6 @@ package compiler.service;
 import compiler.Compiler;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.InternalError;
-import compiler.hl.HlWriter;
 import haxe.io.Bytes;
 
 /** Ephemeral wrapper module and generated function used for one REPL expression. */
@@ -25,6 +24,10 @@ class Repl {
 			stableId = result.functionIds.get("main");
 		if (stableId == null)
 			throw new InternalError("REPL compilation did not produce a stable entry function");
-		return {bytes: HlWriter.encode(result.module).flatten(), identity: result.runtimeIdentity, stableId: stableId};
+		return {
+			bytes: BackendArtifacts.hashLinkBytes(result).flatten(),
+			identity: result.runtimeIdentity,
+			stableId: stableId
+		};
 	}
 }

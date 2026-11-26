@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 
 /**
@@ -32,8 +31,8 @@ class ManyValueArrayElementsMain {
 		compiler.compile("Main");
 		compiler.update("Main.hx", source(3));
 		var warm = compiler.compile("Main"), fresh = newCompiler(source(3), false).compile("Main");
-		var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
-			freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+		var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
+			freshBytes = fresh.artifact.hashLink().hashLinkBytes().flatten();
 		if (warmBytes.compare(freshBytes) != 0)
 			throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
 		Sys.println('PASS: a session build with $ELEMENTS value array element types builds warm as a fresh one');

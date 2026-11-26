@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 
 /**
@@ -91,8 +90,8 @@ class WarmStageFactsMain {
 					var warm = compiler.compile("Main"), fresh = newCompiler(files, release, false).compile("Main");
 					if (StringTools.startsWith(warm.metrics.reuse, "ir"))
 						throw 'the build reused "${warm.metrics.reuse}" after an edit';
-					var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
-						freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+					var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
+						freshBytes = fresh.artifact.hashLink().hashLinkBytes().flatten();
 					if (warmBytes.compare(freshBytes) != 0)
 						throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
 				} catch (error:Dynamic) {

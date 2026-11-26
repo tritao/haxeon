@@ -191,12 +191,6 @@ class HlModuleAssembler {
 	 */
 	public var keepsLowered = true;
 
-	/**
-	 * A plain build written as module sections: its functions are kept as the builds that lowered them made them
-	 * (`HlCode.relocations`), so it keeps no tables for the next build's numbering.
-	 */
-	public var moduleSections = false;
-
 	/** The IR given to `assemble` was verified already (a plain build verifies its final IR before any backend). */
 	public var irVerified = false;
 
@@ -234,7 +228,6 @@ class HlModuleAssembler {
 		result.publishedGlobals = publishedGlobals;
 		result.published = published.copy();
 		result.livePatching = livePatching;
-		result.moduleSections = moduleSections;
 		result.keepsLowered = keepsLowered;
 		result.runtimeNatives = runtimeNatives.copy();
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
@@ -1025,8 +1018,7 @@ class HlModuleAssembler {
 			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false,
 			livePatching || keepsLowered ? liveCache : null, irVerified,
 			livePatching,
-			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources,
-			moduleSections && !livePatching),
+			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources, !livePatching),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;

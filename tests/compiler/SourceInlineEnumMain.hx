@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
-import compiler.hl.HlWriter;
 import compiler.tools.CompilerDriver;
 
 class SourceInlineEnumMain {
@@ -89,7 +88,7 @@ class SourceInlineEnumMain {
 					temp = "out";
 				var path = temp + "/first-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
 				var bytes = target == "hl"
-					? HlWriter.encode(result.artifact.hashLink().module).flatten()
+					? result.artifact.hashLink().hashLinkBytes().flatten()
 					: new WasmBackend().compile(result.ir, {
 						target: target == "wasm32" ? Wasm32 : WasmGc,
 						debugNames: true,
@@ -130,7 +129,7 @@ class SourceInlineEnumMain {
 		var path = root + "/native-map-enum-" + target + "-" + inlining + "-" + Std.random(0x7fffffff)
 			+ (target == "hl" ? ".hl" : ".wasm");
 		if (target == "hl") {
-			sys.io.File.saveBytes(path, HlWriter.encode(compiled.artifact.hashLink().module).flatten());
+			sys.io.File.saveBytes(path, compiled.artifact.hashLink().hashLinkBytes().flatten());
 			var vm = TestHashLink.directory(),
 				process = new sys.io.Process(vm == null ? TestHashLink.vm() : vm + "/hl", [path]),
 				error = process.stderr.readAll().toString(),

@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 
@@ -37,8 +36,8 @@ class ValueConstructorWarmMain {
 		c.addSourceRoot('stdlib');
 		var result = c.compile('Main');
 		var fresh = compiler(after, false).compile('Main');
-		if (HlWriter.encode(result.artifact.hashLink().module).flatten()
-			.compare(HlWriter.encode(fresh.artifact.hashLink().module).flatten()) != 0)
+		if (result.artifact.hashLink().hashLinkBytes().flatten()
+			.compare(fresh.artifact.hashLink().hashLinkBytes().flatten()) != 0)
 			throw 'warm module differs';
 		if (StringTools.startsWith(result.metrics.reuse, 'ir'))
 			throw 'reused IR after constructor edit';
@@ -60,7 +59,7 @@ class ValueConstructorWarmMain {
 		checking = true;
 		var live = compiler(six, true);
 		var initial = live.compile('Main');
-		var module = runtime.Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+		var module = runtime.Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 			initial.artifact.hashLink().runtimeIdentity);
 		var id = initial.artifact.hashLink().functionIds.get('Main.main');
 		if (id == null)

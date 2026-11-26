@@ -58,8 +58,8 @@ class UnusedModuleInvarianceMain {
 			if (!left.exists(name))
 				throw 'The function "$name" appears only when an unused module is present';
 		// The HashLink module: a plain build writes the natives, classes and globals the reached program uses, so it is the same bytes.
-		var bytesWithout = compiler.hl.HlWriter.encode(without.artifact.hashLink().module).flatten(),
-			bytesWith = compiler.hl.HlWriter.encode(with.artifact.hashLink().module).flatten();
+		var bytesWithout = without.artifact.hashLink().hashLinkBytes().flatten(),
+			bytesWith = with.artifact.hashLink().hashLinkBytes().flatten();
 		if (bytesWithout.compare(bytesWith) != 0) {
 			var at = 0, limit = Std.int(Math.min(bytesWithout.length, bytesWith.length));
 			while (at < limit && bytesWithout.get(at) == bytesWith.get(at))

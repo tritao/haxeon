@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 
 /**
@@ -69,8 +68,8 @@ class PurityWarmEditMain {
 			change(files);
 			for (path => text in files)
 				compiler.update(path, text);
-			var warm = HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten(),
-				fresh = HlWriter.encode(newCompiler(files, false).compile("Main").artifact.hashLink().module).flatten();
+			var warm = compiler.compile("Main").artifact.hashLink().hashLinkBytes().flatten(),
+				fresh = newCompiler(files, false).compile("Main").artifact.hashLink().hashLinkBytes().flatten();
 			if (warm.compare(fresh) != 0)
 				throw 'the warm module differs from a fresh one (${warm.length} and ${fresh.length} bytes)';
 		} catch (error:Dynamic) {

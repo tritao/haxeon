@@ -3,7 +3,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
@@ -114,8 +113,8 @@ class GenericElaborationMain {
 	}
 
 	static function sameBytes(label:String, elaborated:CompileResult, plain:CompileResult):Void {
-		var left = HlWriter.encode(elaborated.artifact.hashLink().module).flatten(),
-			right = HlWriter.encode(plain.artifact.hashLink().module).flatten();
+		var left = elaborated.artifact.hashLink().hashLinkBytes().flatten(),
+			right = plain.artifact.hashLink().hashLinkBytes().flatten();
 		if (left.compare(right) != 0)
 			throw '$label: the elaborated build gives other bytes';
 	}

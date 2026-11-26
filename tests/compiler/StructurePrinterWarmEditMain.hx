@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrSymbol;
 import compiler.ir.pipeline.IrProgramAssembler;
@@ -34,8 +33,8 @@ class StructurePrinterWarmEditMain {
 			var remade = printer(compiler, "distance");
 			if (remade == measured || remade.name != measured.name)
 				throw 'the printer of a structure whose field the edit stores as another type is not made again (check: $check)';
-			var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
-				freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+			var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
+				freshBytes = fresh.artifact.hashLink().hashLinkBytes().flatten();
 			if (warmBytes.compare(freshBytes) != 0)
 				throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes, check: $check)';
 		}

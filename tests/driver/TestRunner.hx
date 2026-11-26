@@ -90,9 +90,6 @@ class TestRunner {
 	/** `--release`: the plain builds are release builds (`--build-mode=release`), whose code generation differs from development's. */
 	public var release = false;
 
-	/** `--module-sections`: the plain builds write HLB 9 module sections, which the VM links when it loads them. */
-	public var moduleSections = false;
-
 	/**
 	 * The command that starts a compile server (the rendezvous path is appended): the server prebuilt to HashLink bytecode
 	 * (`HAXEON_COMPILER_SERVER_HL`, which `haxeon dev test-driver` provides), else `haxe --run compiler.tools.CompilerServer`.
@@ -166,8 +163,6 @@ class TestRunner {
 				arguments.push("--build-mode=release");
 				arguments.push("--verify-ir");
 			}
-			if (moduleSections)
-				arguments.push("--module-sections");
 		}
 		if (run.unpruned)
 			arguments.push("--no-early-prune");

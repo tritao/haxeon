@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler.CompileResult;
-import compiler.hl.HlWriter;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -12,7 +11,7 @@ class GeneratedProgramRunner {
 			FileSystem.createDirectory(directory);
 		var path = directory + "/effects-" + StringTools.replace(Std.string(Sys.time()), ".",
 			"-") + "-" + Std.random(0x7fffffff) + ".hl";
-		File.saveBytes(path, HlWriter.encode(compiled.artifact.hashLink().module).flatten());
+		File.saveBytes(path, compiled.artifact.hashLink().hashLinkBytes().flatten());
 		var status:Int;
 		try {
 			status = Sys.command(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [path]);
