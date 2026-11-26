@@ -20,7 +20,9 @@ The current subset includes:
 - An enum declares methods and static members as a class does (a Haxeon extension, so stock Haxe rejects it): instance
   methods take the value as `this`, named or implicit (`switch this`, `components()`), static methods and `static var` or
   `final` fields belong to the enum (`Kind.parse("pair")`, `Kind.ALL`), and members are private unless written `public` or
-  `internal`. A member cannot share a name with a case.
+  `internal`. A member cannot share a name with a case. A method may declare type parameters of its own
+  (`function map<U>(f:T->U):Slot<U>`), inferred at each call from its arguments and expected result as a generic class
+  method's are.
 - An enum declares per-case constants (a Haxeon extension): `final components:Int;`, optionally with a default
   (`final vector:Bool = true;`), which each case sets as a struct literal after its payload (`Pair {components: 2};`,
   `Circle(radius:Float) {sides: 0};`). Every case sets every constant that has no default, once, to a compile-time

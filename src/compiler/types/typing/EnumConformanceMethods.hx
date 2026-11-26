@@ -31,16 +31,32 @@ class EnumConformanceMethods {
 
 	public static inline final PREFIX = "$enum-custom:";
 
-	public static function name(type:CompilerType, method:String):String
-		return PREFIX + method + ":" + TextDigest.sha256(compiler.semantic.SemanticSignature.type(type)).substr(0,
-			32);
+	/** The helper for `method` of the enum `type`, with the method's own `typeArguments` when it is generic. */
+	public static function name(type:CompilerType, method:String, ?typeArguments:Array<CompilerType>):String {
+		var signature = compiler.semantic.SemanticSignature.type(type);
+		if (typeArguments != null && typeArguments.length > 0)
+			signature += "<"
+				+ [for (argument in typeArguments) compiler.semantic.SemanticSignature.type(argument)].join(",")
+				+ ">";
+		return PREFIX + method + ":" + TextDigest.sha256(signature).substr(0, 32);
+	}
 
-	/** Requests `method` of the enum `type`, and returns the type it is keyed by (see `ValueEqualityGenerator.request`). */
+	/**
+	 * Requests `method` of the enum `type`, with the method's own closed `typeArguments`, and returns the type it is keyed
+	 * by (see `ValueEqualityGenerator.request`).
+	 */
 	public static function request(session:TypingSession, type:CompilerType, method:String, origin:String,
-			span:SourceSpan):CompilerType {
+			span:SourceSpan, ?typeArguments:Array<CompilerType>):CompilerType {
 		type = session.monomorphs.closeReached(type);
-		var key = name(type, method);
-		session.requestHelper(EnumMethodHelper(key, {type: type, method: method, origin: origin, span: span}));
+		var arguments = typeArguments == null ? [] : typeArguments,
+			key = name(type, method, arguments);
+		session.requestHelper(EnumMethodHelper(key, {
+			type: type,
+			method: method,
+			typeArguments: arguments,
+			origin: origin,
+			span: span
+		}));
 		return type;
 	}
 
@@ -57,7 +73,8 @@ class EnumConformanceMethods {
 				generated.set(key, session.typeHelper(key, () -> {
 					var implementation = method(session, requested.type, requested.method);
 					if (implementation == null) throw new InternalError('Missing enum method implementation "$key"');
-					typeMethod(session, typer, requested.type, implementation, requested.origin);
+					typeMethod(session, typer, requested.type, implementation, requested.origin,
+						requested.typeArguments);
 				}));
 			}
 		}
@@ -67,7 +84,7 @@ class EnumConformanceMethods {
 	}
 
 	public static function typeMethod(session:TypingSession, typer:BodyTyper, type:CompilerType, method:AstFunction,
-			origin:String):TypedFunction {
+			origin:String, ?typeArguments:Array<CompilerType>):TypedFunction {
 		return switch type {
 			case TInstance(NominalKind.Enum, owner, arguments):
 				// Typed from the enum's method as the program has it.
@@ -78,8 +95,15 @@ class EnumConformanceMethods {
 				for (index in 0...declaration.typeParameters.length)
 					substitutions.set(declaration.typeParameters[index], index < arguments.length ? arguments[index]
 						: TTypeParameter(owner, declaration.typeParameters[index]));
+				// A generic method is typed once per type arguments, as the enum is per its own.
+				var parameters = BodyTyper.functionTypeParameters(method),
+					given = typeArguments == null ? [] : typeArguments;
+				if (given.length != parameters.length)
+					throw new InternalError('Enum method "$owner.${method.name}" requested without its type arguments');
+				for (index in 0...parameters.length)
+					substitutions.set(parameters[index], given[index]);
 				// A static method has no value to take: it is typed like a class's static.
-				var typed = typer.typeFunction(method, owner, true, substitutions, name(type, method.name),
+				var typed = typer.typeFunction(method, owner, true, substitutions, name(type, method.name, given),
 					method.isStatic ? null : type);
 				{
 					name:typed.name, role:ProviderFunction(type,

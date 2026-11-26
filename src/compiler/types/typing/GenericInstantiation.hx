@@ -37,47 +37,9 @@ class GenericInstantiation {
 	public function specialize(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan,
 			scope:Scope, owner:Null<String>,
 			isStatic:Bool, ?presetSubstitutions:Map<String, CompilerType>, ?receiver:TypedExpression):TypedExpression {
-		var required = fn.arguments.length;
-		while (required > 0 && compiler.syntax.AstPredicates.isOptionalArgument(fn.arguments[required - 1]))
-			required--;
-		if (arguments.length < required || arguments.length > fn.arguments.length) {
-			var expected = required == fn.arguments.length ? '$required' : '$required to ${fn.arguments.length}';
-			fail(DiagnosticCode.CALL_FORM, 'Function "$baseName" expects $expected arguments, got ${arguments.length}',
-				span);
-		}
 		var substitutions:Map<String, CompilerType> = presetSubstitutions == null
-			? [] : [for (parameter => type in presetSubstitutions) parameter => type],
-			parameters = functionTypeParameters(fn);
-		for (i in 0...arguments.length)
-			inferArgumentTypeParameters(fn, i, fn.arguments[i], arguments[i].type, parameters, substitutions,
-				arguments[i].span);
-		for (parameter in parameters)
-			if (!substitutions.exists(parameter))
-				fail(DiagnosticCode.TYPE_CONSTRAINT, 'Cannot infer generic type parameter "$parameter" for "$baseName"',
-					span);
-		settleNullArguments(substitutions);
-		settleTypeArguments(baseName, fn, arguments, substitutions, span);
-		// The specialization is a unit of its own, named after its type arguments: a literal's structure among them closes here.
-		for (parameter in [for (parameter in substitutions.keys()) parameter])
-			substitutions.set(parameter, session.monomorphs.closeReached(requiredMapValue(substitutions, parameter)));
-		validateConstraints(fn, substitutions, span);
-		var semanticExpected = bodyTyper.argumentTypesOf(fn, substitutions);
-		for (index in arguments.length...fn.arguments.length) {
-			var parameter = fn.arguments[index],
-				defaultValue = parameter.defaultValue,
-				expected = semanticExpected[index];
-			if (CallResolver.isPosInfosParameter(parameter))
-				arguments.push(bodyTyper.coerce(bodyTyper.typeExpression(bodyTyper.posInfosExpression(span), scope,
-					expected), expected,
-					'position argument ${index + 1} to "$baseName"'));
-			else if (defaultValue == null)
-				arguments.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
-					'default argument ${index + 1} to "$baseName"'));
-			else
-				arguments.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(parameter, expected, baseName),
-					expected,
-					'default argument ${index + 1} to "$baseName"'));
-		}
+			? [] : [for (parameter => type in presetSubstitutions) parameter => type];
+		var semanticExpected = instantiate(baseName, fn, arguments, span, scope, substitutions);
 		// An iterable parameter is structural, but a generic body can keep its concrete
 		// collection representation. Include it in the specialization identity so
 		// arrays retain indexed loops and classes retain direct method dispatch.
@@ -188,6 +150,55 @@ class GenericInstantiation {
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
 		session.invalidateCallEffects(baseName, scope);
 		return session.representation.boundaryCast(call, result);
+	}
+
+	/**
+	 * Completes a generic call's type arguments: `substitutions` holds those known already (a receiver's, an expected
+	 * result's) and receives the ones `arguments` give, which are then closed and checked against their constraints. The
+	 * omitted arguments' defaults are appended to `arguments`. Returns the arguments' types under the substitutions.
+	 */
+	public function instantiate(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan,
+			scope:Scope, substitutions:Map<String, CompilerType>):Array<CompilerType> {
+		var required = fn.arguments.length;
+		while (required > 0 && compiler.syntax.AstPredicates.isOptionalArgument(fn.arguments[required - 1]))
+			required--;
+		if (arguments.length < required || arguments.length > fn.arguments.length) {
+			var expected = required == fn.arguments.length ? '$required' : '$required to ${fn.arguments.length}';
+			fail(DiagnosticCode.CALL_FORM, 'Function "$baseName" expects $expected arguments, got ${arguments.length}',
+				span);
+		}
+		var parameters = functionTypeParameters(fn);
+		for (i in 0...arguments.length)
+			inferArgumentTypeParameters(fn, i, fn.arguments[i], arguments[i].type, parameters, substitutions,
+				arguments[i].span);
+		for (parameter in parameters)
+			if (!substitutions.exists(parameter))
+				fail(DiagnosticCode.TYPE_CONSTRAINT, 'Cannot infer generic type parameter "$parameter" for "$baseName"',
+					span);
+		settleNullArguments(substitutions);
+		settleTypeArguments(baseName, fn, arguments, substitutions, span);
+		// The specialization is a unit of its own, named after its type arguments: a literal's structure among them closes here.
+		for (parameter in [for (parameter in substitutions.keys()) parameter])
+			substitutions.set(parameter, session.monomorphs.closeReached(requiredMapValue(substitutions, parameter)));
+		validateConstraints(fn, substitutions, span);
+		var semanticExpected = bodyTyper.argumentTypesOf(fn, substitutions);
+		for (index in arguments.length...fn.arguments.length) {
+			var parameter = fn.arguments[index],
+				defaultValue = parameter.defaultValue,
+				expected = semanticExpected[index];
+			if (CallResolver.isPosInfosParameter(parameter))
+				arguments.push(bodyTyper.coerce(bodyTyper.typeExpression(bodyTyper.posInfosExpression(span), scope,
+					expected), expected,
+					'position argument ${index + 1} to "$baseName"'));
+			else if (defaultValue == null)
+				arguments.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
+					'default argument ${index + 1} to "$baseName"'));
+			else
+				arguments.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(parameter, expected, baseName),
+					expected,
+					'default argument ${index + 1} to "$baseName"'));
+		}
+		return semanticExpected;
 	}
 
 	public function validateConstraints(fn:AstFunction, substitutions:Map<String, CompilerType>, span:SourceSpan):Void {

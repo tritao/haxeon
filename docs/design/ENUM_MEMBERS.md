@@ -38,6 +38,9 @@ enum EffectParameterType {
 - Visibility is the class rules: `public`, `private`, `internal`; unwritten is private.
 - Instance methods are statically dispatched, as conformance methods are today, so a call costs what a call to a
   static function taking the value does. An interface view keeps its existing boxed dispatch.
+- A method may declare type parameters of its own (`function map<U>(f:T->U):Slot<U>`), inferred at each call as a
+  generic class method's are. Its body is typed once per enum and method type arguments, as a method of a generic
+  enum already is per the enum's.
 - A member cannot share a name with a case. Static fields follow class static initialization, including the
   order-independent `static var x = []` rule.
 - No instance fields: a value's data is its payload, and a case's data is its constants (below).

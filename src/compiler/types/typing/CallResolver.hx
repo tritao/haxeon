@@ -1110,12 +1110,8 @@ class CallResolver {
 				default:
 					throw new InternalError("Enum method without an enum receiver");
 			}
-			var typed = typeDeclaredCallArguments(arguments, enumMethod, scope, name, span, substitutions);
-			var result = session.declarations.types.resultType(enumMethod, substitutions);
-			var keyed = EnumConformanceMethods.request(session, receiver.type, name, session.currentContext.name, span);
-			session.invalidateUnknownCall(scope);
-			return new TypedExpression(TCall(EnumConformanceMethods.name(keyed, name),
-				[receiver].concat(typed)), result, span);
+			return typeEnumMethodCall(receiver.type, enumMethod, receiver, arguments, substitutions, name, span, scope,
+				expectedType);
 		}
 		var className = switch receiver.type {
 			case TInstance(Class, value, _), TInstance(Interface, value, _):
@@ -1864,7 +1860,7 @@ class CallResolver {
 		// So is an enum's own instance method, where `this` is the value; its static method needs no receiver.
 		var enumMethod = declaredEnumMethod(owner, name);
 		if (enumMethod != null && enumMethod.isStatic)
-			return typeEnumStaticCall(owner, enumMethod, arguments, span, scope);
+			return typeEnumStaticCall(owner, enumMethod, arguments, span, scope, expectedType);
 		if (enumMethod != null && scope.receiverType() != null)
 			return typeMethodCall(typeExpressionValue(Variable("this", span), scope), name, arguments, span, scope,
 				expectedType);
@@ -2083,7 +2079,7 @@ class CallResolver {
 			var enumOwner = enumTypeNamed(name.substring(0, lastDot)),
 				enumMethod = enumOwner == null ? null : declaredEnumMethod(enumOwner, name.substring(lastDot + 1));
 			if (enumMethod != null && enumMethod.isStatic)
-				return typeEnumStaticCall(enumOwner, enumMethod, arguments, span, scope);
+				return typeEnumStaticCall(enumOwner, enumMethod, arguments, span, scope, expectedType);
 		}
 		var method = session.signatures.get(name);
 		if (method != null && method.isStatic) {
@@ -2121,15 +2117,50 @@ class CallResolver {
 
 	/** A call of the enum `owner`'s static `method`: a helper function over the arguments alone. */
 	function typeEnumStaticCall(owner:String, method:AstFunction, arguments:Array<AstExpression>, span:SourceSpan,
-			scope:Scope):TypedExpression {
+			scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		MemberAccess.enumMethod(session, owner, method, span);
-		var type = TInstance(NominalKind.Enum, owner, []),
-			substitutions:Map<String, CompilerType> = [],
-			typed = typeDeclaredCallArguments(arguments, method, scope, owner + "." + method.name, span, substitutions),
-			result = session.declarations.types.resultType(method, substitutions),
-			keyed = EnumConformanceMethods.request(session, type, method.name, session.currentContext.name, span);
+		return typeEnumMethodCall(TInstance(NominalKind.Enum, owner, []), method, null, arguments, [],
+			owner + "." + method.name, span, scope, expectedType);
+	}
+
+	/**
+	 * A call of `method`, which the enum `type` declares, under the enum's `substitutions`: a helper function that takes
+	 * `receiver` first when the method is an instance one. A method with type parameters of its own infers them from its
+	 * arguments and expected result, as a generic class method does, and its helper is typed once per those arguments.
+	 */
+	function typeEnumMethodCall(type:CompilerType, method:AstFunction, receiver:Null<TypedExpression>,
+			arguments:Array<AstExpression>, substitutions:Map<String, CompilerType>, displayName:String,
+			span:SourceSpan,
+			scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		var parameters = BodyTyper.functionTypeParameters(method),
+			typeArguments:Array<CompilerType> = [],
+			typed:Array<TypedExpression>;
+		if (parameters.length == 0)
+			typed = typeDeclaredCallArguments(arguments, method, scope, displayName, span, substitutions);
+		else {
+			substitutions = copyMap(substitutions);
+			// A Void expectation is a statement whose result is discarded, not a result of type Void.
+			if (expectedType != null && !sameType(expectedType, TVoid))
+				genericInstantiation.inferTypeParameters(method.result, expectedType, parameters, substitutions, span);
+			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, substitutions),
+				written = prepared.arguments.length;
+			substitutions = prepared.substitutions;
+			var expected = genericInstantiation.instantiate(displayName, method, prepared.arguments, span, scope,
+				substitutions);
+			// The omitted arguments' defaults come coerced already.
+			typed = [
+				for (index in 0...prepared.arguments.length)
+					index < written ? bodyTyper.coerceArgument(prepared.arguments[index], expected[index], displayName,
+					index + 1) : prepared.arguments[index]
+			];
+			typeArguments = [for (parameter in parameters) requiredMapValue(substitutions, parameter)];
+		}
+		var result = session.declarations.types.resultType(method, substitutions),
+			keyed = EnumConformanceMethods.request(session, type, method.name, session.currentContext.name, span,
+				typeArguments);
 		session.invalidateUnknownCall(scope);
-		return new TypedExpression(TCall(EnumConformanceMethods.name(keyed, method.name), typed), result, span);
+		return new TypedExpression(TCall(EnumConformanceMethods.name(keyed, method.name, typeArguments),
+			receiver == null ? typed : [receiver].concat(typed)), result, span);
 	}
 
 	function typeEnumConstructor(name:String, arguments:Array<AstExpression>, expectedType:Null<CompilerType>,

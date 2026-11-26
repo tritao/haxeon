@@ -18,6 +18,10 @@ typedef EqualityRequest = {
 typedef EnumMethodRequest = {
 	final type:CompilerType;
 	final method:String;
+
+	/** The method's own type arguments, in its type parameters' order; empty when it declares none. */
+	final typeArguments:Array<CompilerType>;
+
 	final origin:String;
 	final span:SourceSpan;
 }

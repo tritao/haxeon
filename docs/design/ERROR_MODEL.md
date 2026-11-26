@@ -100,7 +100,7 @@ hold: stock Haxe parses neither enum methods nor `try` without `catch`. Its fail
 
 | Stage | Contents | Status |
 |---|---|---|
-| 1 | Enum methods with type parameters of their own (`map<U>`), which the `Result` methods need | |
+| 1 | Enum methods with type parameters of their own (`map<U>`), which the `Result` methods need | Implemented |
 | 2 | `Result<T, E>` in the root package, with its methods | |
 | 3 | `MustUse`, `E1033` and `_ = expr;` | |
 | 4 | `Void` as the unit type | |
