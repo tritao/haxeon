@@ -41,12 +41,19 @@ import compiler.types.analysis.Scope;
 import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
 
 /**
- * The signatures of unannotated functions an earlier build typed (`ModuleState.inferredSignatures`), which a warm build gives the
- * functions it does not type again (`DeclarationTypeTable.seedFunctions`); with `check` (`--check-reuse`), each is typed again on its
- * first read and compared.
+ * What a warm build takes of the declarations from the session: each module's declaration keys, and the signatures of unannotated
+ * functions an earlier build typed (`ModuleState.inferredSignatures`), which it gives the functions it does not type again
+ * (`DeclarationTypeTable.seedFunctions`). With `check` (`--check-reuse`), the keys are compared with keys made from the whole
+ * program, and each seeded signature is typed again on its first read and compared.
  */
-typedef PreviousSignatures = {
-	final signatures:Map<String, compiler.types.DeclarationTypes.InferredSignature>;
+typedef KeptDeclarations = {
+	/** The declaration keys the session keeps for each module of the program (`SessionState.declarationKeys`). */
+	final moduleKeys:Array<DeclarationKeys.ModuleDeclarationKeys>;
+
+	/** The signature an earlier build gave the unannotated function of a key, which a function this build does not type keeps. */
+	final signature:String->Null<compiler.types.DeclarationTypes.InferredSignature>;
+
+	/** `--check-reuse`: what is kept is compared with what this build makes afresh. */
 	final check:Bool;
 }
 
@@ -88,11 +95,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
 			entryPoint:Null<String>,
 			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts,
-			?retained:RetainedFromPrevious, ?previousSignatures:PreviousSignatures,
+			?retained:RetainedFromPrevious, ?kept:KeptDeclarations,
 			?entrySpan:SourceSpan):MeasuredTypedProgram {
 		try {
 			var typed = typeProgramPhases(semantic, selected, requireMain, entryPoint, cachedMetadata, facts, retained,
-				previousSignatures, entrySpan);
+				kept, entrySpan);
 			session.failIfRecovered([]);
 			return typed;
 		} catch (error:CompileError) {
@@ -105,16 +112,17 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 
 	function typeProgramPhases(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
 			entryPoint:Null<String>, cachedMetadata:Null<TypedProgram>, facts:Null<compiler.semantic.ProgramFacts>,
-			retained:Null<RetainedFromPrevious>, previousSignatures:Null<PreviousSignatures>,
+			retained:Null<RetainedFromPrevious>, kept:Null<KeptDeclarations>,
 			entrySpan:Null<SourceSpan>):MeasuredTypedProgram {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		selectedBodies = selected;
 		session.keptHelpers = retained == null ? null : retained.helpers;
-		session.bindSemantic(semantic, bodyTyper.defaultValueType, this);
-		if (previousSignatures != null && selected != null)
-			requiredTypes().seedFunctions(previousSignatures.signatures, selected, previousSignatures.check);
+		session.bindSemantic(semantic, bodyTyper.defaultValueType, this, kept == null ? null : kept.moduleKeys,
+			kept != null && kept.check);
+		if (kept != null && selected != null)
+			requiredTypes().seedFunctions(kept.signature, selected, kept.check);
 		var refreshing:Map<String, Bool> = [];
 		if (cachedMetadata != null) {
 			bindCachedNativeLayouts(cachedMetadata.classes);

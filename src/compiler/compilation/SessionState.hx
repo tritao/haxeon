@@ -23,6 +23,7 @@ import compiler.syntax.TokenTable;
 import compiler.types.TypeRegistry;
 import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.typing.DeclarationKeys.ModuleDeclarationKeys;
 import haxe.io.Bytes;
 
 /** The modules an entry reached in its last build, with what each depended on then. */
@@ -152,6 +153,13 @@ class SessionState {
 
 	/** What each function of `irGeneration` references for the static initialization order, as `irTypeMentions`. */
 	public var staticReferences(default, null):ComputedQueryKind<IrStaticReferences>;
+
+	/**
+	 * The declaration keys of each module's canonical declarations (`ModuleDeclarationKeys`), by module id (`BuildInputs.moduleId`):
+	 * put every build, the kept one while the module keeps its canonical declarations, so a build makes keys only for the modules
+	 * canonicalized again. Every copy shares it.
+	 */
+	public var declarationKeys(default, null):ComputedQueryKind<ModuleDeclarationKeys>;
 
 	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
@@ -298,6 +306,9 @@ class SessionState {
 			staticReferences = queries.register(new ComputedQueryKind<IrStaticReferences>("static-references",
 				IrStaticReferences.same, (database, key) -> IrStaticReferences.of(generation.get(database, key)),
 				symbolName));
+			var moduleInputs = inputs;
+			declarationKeys = queries.register(new ComputedQueryKind<ModuleDeclarationKeys>("declaration-keys",
+				(left, right) -> left == right, null, moduleInputs.moduleName));
 		} else {
 			queries = sharing.queries;
 			declarationFacts = sharing.declarationFacts;
@@ -309,6 +320,7 @@ class SessionState {
 			irTypeMentions = sharing.irTypeMentions;
 			irCalls = sharing.irCalls;
 			staticReferences = sharing.staticReferences;
+			declarationKeys = sharing.declarationKeys;
 		}
 		assemblyOrder = sharing == null ? new FrontendCompilation.AssemblyOrder() : sharing.assemblyOrder;
 		stageMemos = sharing == null ? new compiler.ir.reuse.IrStageMemos(queries,

@@ -538,10 +538,9 @@ class FrontendCompilation {
 				semanticAssembly.facts, build.lowerToIr || context.requireEntry,
 				retainedFromPrevious(context, names, selected, semanticAssembly.invalidated, build.lowerToIr,
 				[for (classDecl in canonicalProgram.classes) classDecl.name => true],
-				previousSemantic), context.options.reverseTypingOrder, {
-					signatures: previousSignatures(context, names),
-					check: context.options.checkReuse
-				}, context.options.elaborateGenerics, semanticAssembly.entrySpan, context.options.nullSafety);
+				previousSemantic), context.options.reverseTypingOrder,
+				keptDeclarations(context, names, semanticAssembly.owners),
+				context.options.elaborateGenerics, semanticAssembly.entrySpan, context.options.nullSafety);
 			build.allocationAfterProgramTyping = AllocationMeter.sample();
 			build.typingDoneAt = now();
 			var typedNew = typedResult.program;
@@ -1080,19 +1079,33 @@ class FrontendCompilation {
 	}
 
 	/**
-	 * The signatures of the unannotated functions of the build's modules that earlier builds typed (`ModuleState.inferredSignatures`):
-	 * the typer gives them to the functions it does not type again.
+	 * What the typer takes of the build's declarations from the session: the declaration keys of each module, put in the session's
+	 * database, the kept ones for a module that keeps its canonical declarations (`SessionState.declarationKeys`); and the signatures
+	 * of the unannotated functions earlier builds typed (`ModuleState.inferredSignatures`), read from the module that owns each, which
+	 * the typer gives the functions it does not type again.
 	 */
-	static function previousSignatures(context:CompilationContext,
-			names:Array<String>):Map<String, compiler.types.DeclarationTypes.InferredSignature> {
-		var result:Map<String, compiler.types.DeclarationTypes.InferredSignature> = [];
+	static function keptDeclarations(context:CompilationContext, names:Array<String>,
+			owners:Map<String, String>):compiler.types.typing.ProgramTyper.KeptDeclarations {
+		var state = context.state, kind = state.declarationKeys, moduleKeys = [];
 		for (name in names) {
-			var state = context.state.modules.get(name);
-			if (state != null)
-				for (key => signature in state.inferredSignatures)
-					result.set(key, signature);
+			var module = state.modules.get(name);
+			if (module == null)
+				continue;
+			var id = state.inputs.moduleId(name), kept = kind.kept(id);
+			if (kept == null
+				|| !kept.madeFrom(module.canonicalClasses, module.canonicalAbstracts, module.canonicalEnums,
+				module.canonicalInterfaces, module.canonicalProgramFunctions))
+				kept = new compiler.types.typing.DeclarationKeys.ModuleDeclarationKeys(module.canonicalClasses,
+					module.canonicalAbstracts, module.canonicalEnums, module.canonicalInterfaces,
+					module.canonicalProgramFunctions);
+			moduleKeys.push(kind.put(state.queries, id, kept));
 		}
-		return result;
+		var modules = state.modules;
+		function signature(key:String):Null<compiler.types.DeclarationTypes.InferredSignature> {
+			var owner = owners.get(key), module = owner == null ? null : modules.get(owner);
+			return module == null ? null : module.inferredSignatures.get(key);
+		}
+		return {moduleKeys: moduleKeys, signature: signature, check: context.options.checkReuse};
 	}
 
 	/**

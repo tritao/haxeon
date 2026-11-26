@@ -15,7 +15,7 @@ import compiler.types.DeclarationTypes;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
-import haxe.ds.ObjectMap;
+import compiler.types.typing.DeclarationKeys.ModuleDeclarationKeys;
 
 /** A field's initializer typed in its own unit (`InitializerUnit`), as `DeclarationTypeTable.fieldInitializer` gives it to its slot. */
 typedef FieldInitializerUnit = {
@@ -143,7 +143,12 @@ private enum FieldState {
  */
 class DeclarationTypeTable implements DeclarationTypes {
 	final declared:DeclaredTypes;
-	final keys = new ObjectMap<AstFunction, String>();
+
+	/**
+	 * The key of each declaration's function, and of those whose signature the source leaves, in part, to their bodies (a result or
+	 * an argument without a type): the only signatures typed here, and the only signature reads that are recorded.
+	 */
+	final keys:DeclarationKeys;
 	final session:Null<TypingSession>;
 	final typing:Null<DeclarationTyping>;
 	final program:compiler.syntax.Ast.AstProgram;
@@ -170,15 +175,14 @@ class DeclarationTypeTable implements DeclarationTypes {
 	 */
 	final defaultValueType:Null<AstExpression->Null<CompilerType>>;
 
-	/**
-	 * The keys of the functions whose signature the source leaves, in part, to their bodies (a result or an argument without a
-	 * type), by function: the only signatures typed here, and the only signature reads that are recorded. A map of its own keeps the lookup on
-	 * every signature read small.
-	 */
-	final inferredKeys = new ObjectMap<AstFunction, String>();
+	/** The unannotated functions being typed, by key, for the span of a cycle diagnostic. */
+	final forcedFunctions:Map<String, AstFunction> = [];
 
-	/** The function each inferred key names, for its span in a cycle diagnostic. */
-	final inferredFunctions:Map<String, AstFunction> = [];
+	/** The signature an earlier build gave an unannotated function this build does not type again (`seedFunctions`). */
+	var previousSignature:Null<String->Null<InferredSignature>> = null;
+
+	/** The functions this build types again, which are never seeded. */
+	var selected:Null<Map<String, Bool>> = null;
 
 	/** The functions whose signature an earlier build gave (`seedFunctions`), until `--check-reuse` has typed them again. */
 	final seeded:Map<String, Bool> = [];
@@ -186,47 +190,23 @@ class DeclarationTypeTable implements DeclarationTypes {
 	/** Whether a seeded signature is checked against its body typed again, on its first read (`--check-reuse`). */
 	var checkingSeeds = false;
 
+	/**
+	 * A table of `semantic`'s declarations. Their keys come from `moduleKeys`, the keys the session keeps for each module's canonical
+	 * declarations, and are made here only for the functions the semantic program made; with `check` (`--check-reuse`) they are
+	 * compared with keys made from the whole program.
+	 */
 	public function new(declared:DeclaredTypes, semantic:SemanticProgram,
 			defaultValueType:Null<AstExpression->Null<CompilerType>>, ?session:TypingSession,
-			?typing:DeclarationTyping) {
+			?typing:DeclarationTyping, ?moduleKeys:Array<ModuleDeclarationKeys>, check:Bool = false) {
 		this.declared = declared;
 		this.defaultValueType = defaultValueType;
 		this.session = session;
 		this.typing = typing;
 		this.program = semantic.program;
 		this.classes = semantic.declarations.classes;
-		for (name => fn in semantic.signatures)
-			keys.set(fn, name);
-		// The signature table holds an abstract's methods with the owner's type parameters added, and no enum methods.
-		for (decl in semantic.program.abstracts)
-			for (method in decl.methods)
-				keys.set(method, decl.name + "." + method.name);
-		for (decl in semantic.program.enums)
-			if (decl.methods != null)
-				for (method in decl.methods)
-					keys.set(method, decl.name + "." + method.name);
-		// A class's methods as its declaration holds them: a reader that found one there reads its signature through here.
-		for (decl in semantic.program.classes)
-			for (method in decl.methods)
-				if (!keys.exists(method))
-					keys.set(method, decl.name + "." + method.name);
-		// What the source leaves to a body: of a module function, a class's method or an abstract's, as the signature table holds
-		// it (which a reused semantic program gives the new bodies) and as the program declares it. An interface's method has no
-		// body to give it.
-		var interfaces = [for (decl in semantic.program.interfaces) decl.name => true];
-		for (name => fn in semantic.signatures) {
-			var info = semantic.methodInfo.get(name);
-			if (info == null || !interfaces.exists(info.owner))
-				markInferred(fn, name);
-		}
-		for (fn in semantic.program.functions)
-			markInferred(fn, fn.name);
-		for (decl in semantic.program.classes)
-			for (method in decl.methods)
-				markInferred(method, decl.name + "." + method.name);
-		for (decl in semantic.program.abstracts)
-			for (method in decl.methods)
-				markInferred(method, decl.name + "." + method.name);
+		keys = new DeclarationKeys(semantic, moduleKeys == null ? [] : moduleKeys);
+		if (check)
+			keys.check(semantic);
 	}
 
 	/**
@@ -236,41 +216,26 @@ class DeclarationTypeTable implements DeclarationTypes {
 	inline function readSignatureOf(fn:AstFunction):Void {
 		var typingSession = session;
 		if (typingSession != null) {
-			var key = keys.get(fn);
+			var key = keys.key(fn);
 			if (key != null)
 				typingSession.readSignature(key);
 		}
 	}
 
-	/** Marks `fn` inferred when its source leaves a part of its signature (its result or an argument's type) to its body. */
-	function markInferred(fn:AstFunction, key:String):Void
-		if (AstFunctions.leavesSignatureToInference(fn)) {
-			inferredKeys.set(fn, key);
-			if (!inferredFunctions.exists(key))
-				inferredFunctions.set(key, fn);
-		}
-
 	/**
 	 * Makes `copy`, a function rewritten from the declaration `original` with the same arguments and result (an abstract's
 	 * constructor as a construction inlines it), read the original's signature.
 	 */
-	public function alias(copy:AstFunction, original:AstFunction):Void {
-		var key = keys.get(original);
-		if (key == null)
-			return;
-		keys.set(copy, key);
-		var inferred = inferredKeys.get(original);
-		if (inferred != null)
-			inferredKeys.set(copy, inferred);
-	}
+	public function alias(copy:AstFunction, original:AstFunction):Void
+		keys.alias(copy, original);
 
 	/** The stable key of the declaration `fn` is, or null for a function no declaration holds (a closure, a specialization). */
 	public function functionKey(fn:AstFunction):Null<String>
-		return keys.get(fn);
+		return keys.key(fn);
 
 	/** Whether `fn`'s signature is left, in part, to its body: then this table types it (`functionUnit`). */
 	public function isInferred(fn:AstFunction):Bool
-		return inferredKeys.exists(fn);
+		return keys.inferredKey(fn) != null;
 
 	/** The stable key of `owner`'s field `field`. */
 	public static function fieldKey(owner:String, field:AstField):String
@@ -341,23 +306,31 @@ class DeclarationTypeTable implements DeclarationTypes {
 
 	/**
 	 * Gives the unannotated functions this build does not type again the signatures an earlier build gave them
-	 * (`ModuleState.inferredSignatures`): each is unchanged and, by the invalidation rule, so is every type its body read
-	 * (docs/design/LAZY_DECLARATION_TYPING.md, "Warm builds: reused declarations"). An entry for a key that is no inferred function
-	 * of this program (since annotated or removed) is not used. With `check` (`--check-reuse`), the first read of a seeded signature
-	 * types the body again and fails, naming the function, when the signature differs.
+	 * (`ModuleState.inferredSignatures`, which `previous` reads by key), each when it is first read: each is unchanged and, by the
+	 * invalidation rule, so is every type its body read (docs/design/LAZY_DECLARATION_TYPING.md, "Warm builds: reused
+	 * declarations"). With `check` (`--check-reuse`), the first read of a seeded signature types the body again and fails, naming the
+	 * function, when the signature differs.
 	 */
-	public function seedFunctions(previous:Map<String, InferredSignature>, selected:Map<String, Bool>,
+	public function seedFunctions(previous:String->Null<InferredSignature>, selected:Map<String, Bool>,
 			check:Bool):Void {
+		previousSignature = previous;
+		this.selected = selected;
 		checkingSeeds = check;
-		for (key => signature in previous) {
-			var fn = inferredFunctions.get(key);
-			if (fn == null || selected.exists(key) || functions.exists(key))
-				continue;
-			if (!hasShapeOf(fn, signature))
-				throw new InternalError('Function "$key" is seeded with a signature of another shape: its source changed, but it was not selected');
-			functions.set(key, Known(signature));
-			seeded.set(key, true);
-		}
+	}
+
+	/** Seeds the unannotated function `fn` (key `key`) with the signature an earlier build gave it, if any; whether it did. */
+	function seed(fn:AstFunction, key:String):Bool {
+		var previous = previousSignature, selected = this.selected;
+		if (previous == null || selected == null || selected.exists(key))
+			return false;
+		var signature = previous(key);
+		if (signature == null)
+			return false;
+		if (!hasShapeOf(fn, signature))
+			throw new InternalError('Function "$key" is seeded with a signature of another shape: its source changed, but it was not selected');
+		functions.set(key, Known(signature));
+		seeded.set(key, true);
+		return true;
 	}
 
 	/** Whether `signature` has an entry exactly where `fn` leaves its signature to its body. */
@@ -487,7 +460,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 	 */
 	public function argumentTypes(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType> {
 		readSignatureOf(fn);
-		var key = inferredKeys.get(fn);
+		var key = keys.inferredKey(fn);
 		if (key == null)
 			return [
 				for (argument in fn.arguments)
@@ -514,7 +487,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 	 * the body failed.
 	 */
 	public function inferredArgumentType(fn:AstFunction, index:Int):Null<CompilerType> {
-		var key = inferredKeys.get(fn);
+		var key = keys.inferredKey(fn);
 		if (key == null)
 			return null;
 		if (session != null)
@@ -525,7 +498,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 
 	public function resultType(fn:AstFunction, ?substitutions:Map<String, CompilerType>):CompilerType {
 		readSignatureOf(fn);
-		var key = inferredKeys.get(fn);
+		var key = keys.inferredKey(fn);
 		if (key == null)
 			return declared.resultType(fn, substitutions);
 		if (session != null)
@@ -562,7 +535,8 @@ class DeclarationTypeTable implements DeclarationTypes {
 					provisional;
 				}
 			case null:
-				forceFunction(fn, key);
+				if (!seed(fn, key))
+					forceFunction(fn, key);
 				functionSignature(fn, key);
 		};
 
@@ -596,7 +570,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 	 * typing failed (its error is recorded).
 	 */
 	public function functionUnit(fn:AstFunction):Null<FunctionUnit> {
-		var key = inferredKeys.get(fn);
+		var key = keys.inferredKey(fn);
 		if (key == null)
 			throw new InternalError('Function "${fn.name}" leaves nothing of its signature to its body');
 		if (!functions.exists(key))
@@ -616,6 +590,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 		var typing = requiredTyping(), typingSession = requiredSession();
 		functions.set(key, InProgress(null));
 		forcing.push(key);
+		forcedFunctions.set(key, fn);
 		var mark = typingSession.checkpoint(),
 			begun = typingSession.beginDeclarationUnit(),
 			inference = new FunctionInference(signature -> functions.set(key, InProgress(signature)));
@@ -662,7 +637,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 				first = index;
 		var chain = members.slice(first).concat(members.slice(0, first)),
 			others = [for (index in 1...chain.length) '"${chain[index]}"'],
-			function_ = inferredFunctions.get(chain[0]);
+			function_ = forcedFunctions.get(chain[0]);
 		throw new DeclarationCycle(key, new Diagnostic(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 			'${function_ == null ? "Field" : "Function"} "${chain[0]}" needs a type annotation: its type depends on ${others.join(" and ")}, which '
 			+ (others.length == 1 ? "depends" : "depend") + ' on it; annotate one of them',

@@ -68,3 +68,35 @@ estimate from the phase times above, to be measured per piece.
 
 - Piece 4 lands with engine slices 6 and 7, which hold the same object tables.
 - Piece 1 keys by module parse: a module's re-parse replaces all its `AstFunction` nodes, so a finer key would gain nothing.
+
+## As built
+
+### Piece 1: declaration keys by module
+
+Each module's canonical declarations (`ModuleState.canonicalClasses`, `canonicalAbstracts`, `canonicalEnums`,
+`canonicalInterfaces`, `canonicalProgramFunctions`) give a `ModuleDeclarationKeys`: the key of each function they hold and of
+those whose signature the source leaves to the body, with `leavesSignatureToInference` called once per function. It is kept in
+the session's database (`SessionState.declarationKeys`, a computed kind by module id, put every build by
+`FrontendCompilation.keptDeclarations`): a module whose canonical arrays are the ones its keys were made from puts the same object
+again, so only a module canonicalized again pays. The key is the canonicalization rather than the parse: a module canonicalized
+again (its alias revision moved) has new function objects even when its parse is kept.
+
+The table (`DeclarationKeys`, owned by `DeclarationTypeTable`) finds a function's keys through the file its span names, then in
+a small map of its own for the functions the semantic program made itself: an abstract's methods with the owner's type
+parameters, implicit constructors, interface accessors, a function given its new body (`replaceBodies`), and the typer's
+aliases. Those are found by walking the program's declarations and skipping each one whose methods array is a module's own: a
+class `replaceBodies` refreshed is another object, but keeps the methods array it did not change, so 603 classes cost one
+comparison each and about 75 functions get keys of their own.
+
+Two things went with it. Seeding is by read: a function this build does not type gets the signature an earlier build gave it
+when it is first read, from the module that owns its key (`DeclarationTypeTable.seed`), instead of every signature of every
+module being merged and seeded up front; and a cycle diagnostic takes the function from the forced functions, not from a
+program-wide map by key.
+
+`--check-reuse` makes the keys afresh from the whole program, as the table did before, and compares every function's
+(`DeclarationKeys.check`).
+
+Measured (edit-cost session on the frozen input, against 182e4bf3d): `setup` of the no-op 16.3 → 7.7 ms and of the body edit
+16.6 → 8.9 ms, the table itself 12 → 0.5 ms; allocation of the no-op 67.8 → 66.1 MB and of the body edit 166.2 → 164.5 MB.
+Main-thread instructions did not move (no-op 0.606 → 0.605G, body edit 1.538 → 1.540G): the table's cost was memory, maps of
+15,000 entries filled every build, not instructions.

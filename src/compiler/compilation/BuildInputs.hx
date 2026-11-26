@@ -103,7 +103,8 @@ class BuildInputs {
 		database.set(ffi, 0, ffiSources.join("\n"));
 	}
 
-	function moduleName(id:Int):String
+	/** The name of the module whose id is `id` (`moduleId`). */
+	public function moduleName(id:Int):String
 		return moduleNames[id];
 
 	static function digestSource(file:SourceFile, digest:Digest):Void
