@@ -13,6 +13,11 @@ Since HLP version 7 (the current version is 11, `HlPatchFormat.VERSION`) it also
 validates content-addressed source snapshots before copying them into the staged
 code owner; their lifetime therefore matches active or
 retired patch JIT code that can reference them in debugger stacks.
+An HLP 12 patch, made of module sections, is first linked against the link state the
+loader kept for the module (`hl_module_link_patch`, docs/design/MODULE_SECTIONS.md,
+"As built in slice 4a"). That fills the same tables HLP 11 carries, so the checks
+above run on it unchanged except the prefix hashes, which keys replace. What the
+linker staged in the link state is committed with the patch or dropped with it.
 It then creates combined symbol tables, initializes reserved non-moving type
 slots, builds private function metadata, and JIT-compiles a private code image.
 Any failure frees staged storage and clears reserved type slots while leaving the

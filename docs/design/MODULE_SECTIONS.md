@@ -1,12 +1,14 @@
 # Module sections and load-time linking (design note)
 
-Status: designed 2026-11-25; the open questions are decided (section 9). Slices 1, 2 and 3 have landed (section 8): the fork's
-loader links sections, every plain HashLink build writes them (slice 2b made them the default and removed the dense plain path,
-"As built in slice 2b"), every reader of modules reads them, and a warm build keeps every section whose encoding would read the
-same and its functions as they were lowered, with no link or replay (section 3, "As built in slice 3a", "As built in slice
-3b"). Live builds stay on HLB 8 until slice 4. The user's decision: per-module sections and load-time linking replace "stable
-output indices" ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3, [QUERY_ENGINE.md](QUERY_ENGINE.md) row B). Plain
-output needs the fork's VM: stock HashLink does not read HLB 9, which the user accepted.
+Status: designed 2026-11-25; the open questions are decided (section 9). Slices 1, 2 and 3 have landed (section 8): the
+fork's loader links sections, every plain HashLink build writes them (slice 2b made them the default and removed the dense
+plain path, "As built in slice 2b"), every reader of modules reads them, and a warm build keeps every section whose encoding
+would read the same and its functions as they were lowered, with no link or replay (section 3, "As built in slice 3a", "As
+built in slice 3b"). Slice 4 is planned in four parts (section 8, "Slice 4 plan"); 4a has landed: the fork links patches made
+of sections ("As built in slice 4a"). Live builds stay on HLB 8 until 4b. The user's decision: per-module sections and
+load-time linking replace "stable output indices" ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3,
+[QUERY_ENGINE.md](QUERY_ENGINE.md) row B). Plain output needs the fork's VM: stock HashLink does not read HLB 9, which the
+user accepted.
 
 **Problem.** HashLink's function, type, global, string and constant tables are dense and numbered in first-use order, so a
 cold build's index depends on everything lowered before it. A warm build that adds an entry renumbers, relinks and
@@ -455,6 +457,59 @@ and nothing stays for compatibility once its replacement has landed.
 | 4d | **Deletions** (section 3, "Kept for slice 4"), each checked with a grep that includes `tests/`: the dense whole-module `HlWriter` encoding and `HlWriterCache`, HLP 11 (`HlPatchWriter`'s hashes, symbols and relocations, `HlPatchReader`), the published prefix of `HlSymbolTable` where nothing else uses it, `HlFunctionCache` slots and stable ids, the persistence codecs the section digests replace, `HlRuntimeIdentity`'s id maps; in the fork, HLP 11 and HLI 2 and 3 | the suites of 4b |
 
 In 4a a patch that adds a native is refused by the patch linker, as the planner already plans a reload for it.
+
+**What 4b touches**, found while building 4a:
+
+- `HlSectionWriter` writes only a relocatable module (`HlCode.relocations`). A live module's functions keep the indices of
+  the append-only live tables, which never renumber within a module identity, so its relocations are the identity: each
+  function's index and type as they are, no moves, and one `chain` per module identity (a fresh layout starts another). The
+  section memo then keeps every unchanged section without collecting it, as a plain warm build does.
+- `HashLinkBackendSession.assemble`: the live branch takes the sections path (today `sections` stays null for live and
+  `BackendArtifacts.hashLinkBytes` falls back to the dense `HlWriter` with the session's `HlWriterCache`). The patch is the
+  sections whose bytes differ from the acknowledged build's (the section cache's digests per path), replacing
+  `HlPatchWriter.encode(...)` and its prefix counts.
+- Keys for what HLP 11 numbers: renames from `HlModuleAssembler.moveChangedSignatures` and `renameLambdas` (the home module is
+  `HlSectionWriter.declaringModule` of the name); guards from `assembly.guards` by name; migrations from the `__liveinit`
+  functions and their classes by name. Reserved-slot fills need nothing: the section's class names the slot.
+- The `.hli` becomes HLI 4 (`HlRuntimeIdentity.encode`), and every consumer of stable ids from the compiler goes through
+  names: `src/tools/LiveHost.hx` and `src/runtime/Runtime.hx` (a `function_id` native in `native/runtime/module_runtime.c`),
+  `.live.json`'s function ids (`CompilerDriver.identitiesJson`), Android HXR (`native/android/cpp/haxeon_jni.c`,
+  `src/tools/AndroidWatch.hx`), and `CompilerDriver`'s `functionIds.get("main")`.
+- A function's runtime index is the loader's (`HlSectionOutput.linkedIndices`), not the live layout's: the `.functions`
+  sidecar and the debugger tests that read slots take the linked numbering, as plain builds already do.
+
+### As built in slice 4a
+
+- **The link state** (`hl_code.link_state`, link.c). `hl_code_read_patchable` keeps it; `hl_code_read` and plain `hl` do
+  not, so a plain program pays nothing. It holds the key entries with their texts copied, the open-addressed literal,
+  debug-file, structural-type and constant tables over the module's arrays, the bytes blob, and per slot a 64-bit digest of the
+  function's linked code (type, registers, opcodes with mapped operands; not its lines). The module frees it.
+- **HLP 12** (`hl_patch_read`): the module id and revisions, then the replaced sections (path, byte size, a section in the
+  HLB 9 encoding), the removed section paths, renames (module, from, to), guards (module, member, description) and migrations
+  (the class's key, then the function's). Removed sections need nothing at run time: their keys keep their slots.
+- **The patch linker** (`hl_module_link_patch`) runs the loader's three passes over the patch's sections against the link
+  state, with every addition staged after the module's tables: a key the module has keeps its slot (functions, globals,
+  owned types), a new function key takes the next slot and the stable id the loader mints for it (the slot), a new global
+  is a null slot after the module's, a literal, structural type or constant the module lacks takes the next index, and a new
+  debug file follows the module's. A redefined class must equal the running one after mapping, except that a reserved slot
+  (an unnamed Dynamic field) may be named and typed, which becomes an object-field fill. A function whose code has its slot's
+  digest is left out of the patch. The result fills the same `hl_patch` HLP 11 is read into, so validation, staging, the
+  guard scan, migrations and the commit are unchanged; prefix hashes are not checked for it. Spans come from the section's
+  opcode-span sub-section and, for any opcode it leaves out, from the line table; snapshots from its snapshot sub-section.
+- **Commit and rollback** (`hl_link_patch_end`). The tentative entries are dropped when the patch fails (from the
+  refusal, the guard scan or `hl_patch_free`), and the renames undone; when it applies, new keys and renamed members are
+  copied into the state, structural types that name strings are hashed again from the committed types, constants move to
+  `more_constants` and the digests of the compiled slots are replaced.
+- **Refusals** name the section and the key: a missing import, a function key of another type (a changed signature must
+  rename the old slot), a class redefined otherwise than by reserved slots, an added enum, a new native, a new bytes literal,
+  a constant of a new type, a type reserve exhausted.
+- **Runtime** (hlruntime.c): `hl_runtime_module_load` reads with the link state and takes HLI 4 (`HLI`, 4, module id,
+  revision, the initializer's name), with the stable ids the loader gave; `hl_runtime_module_function_id` finds a function's id
+  by name; `hl_runtime_module_apply_hlp` links an HLP 12 patch before it resolves stable ids, and reports a refusal's message.
+- **Tests**: `tests/native/code_link.c` (the `code-link` suite) loads a two-section module patchable and applies a body
+  edit (one function compiled), an unchanged section (none), an added function in a new debug file, an added class, a
+  reserved-slot field, a rename with its caller, a guard by key, and each refusal, every refusal leaving the module and the
+  link state as they were; and the same through the runtime with an HLI 4 identity.
 
 ## 9. Decided
 

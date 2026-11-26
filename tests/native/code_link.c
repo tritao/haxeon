@@ -7,7 +7,9 @@
 	The HLB 9 section linker (vendor/hashlink/src/link.c, docs/design/MODULE_SECTIONS.md). The compiler does not write
 	sectioned files yet, so these tests build them here, with a writer for both encodings: a program split into sections
 	links into the tables a dense HLB 8 file of the same program reads into, and runs. Every load error is checked to name
-	the section and the key involved.
+	the section and the key involved. Patches made of sections (HLP 12) link against the state a patchable load keeps
+	(`hl_module_link_patch`); they are checked to apply, to compile only what changed, and to leave the module as it was when
+	refused.
 
 	`code_link --write FILE` writes the program as an HLB 9 file. `code_link --bench RUNS [dense.hl]` links a synthetic image
 	sized like the compiler server and reports the time, with the dense read of the given file for comparison.
@@ -1431,6 +1433,340 @@ static void time_loads( const char *what, buf b, int runs ) {
 	printf("bench: %s: first load %.1f ms, best of %d %.1f ms\n", what, first * 1000, runs, best * 1000);
 }
 
+// ---- patches of sections (HLP 12)
+
+/*
+	A module of two sections, app.Main and lib.Point, loaded to take patches. Main.main returns Point.value(); each patch
+	replaces lib.Point (and app.Main where it must) with another Point.value, and the module then returns what the new code
+	returns. Point.other never changes, so its code is never compiled again.
+*/
+static const unsigned char patch_module_id[16] = { 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
+
+enum {
+	POINT_BASE, POINT_BODY, POINT_ADDED, POINT_CLASS, POINT_FIELD, POINT_RENAMED, POINT_GUARDED,
+	POINT_MISSING_IMPORT, POINT_NATIVE, POINT_SIGNATURE, POINT_ENUM, POINT_LAYOUT
+};
+
+static unit *patch_main_section( void ) {
+	unit *u = unit_new("app.Main", true);
+	int i32 = t_prim(u, HI32);
+	int tvalue = t_fun(u, 0, no_args, i32);
+	int value = import_fn(u, "lib.Point", "Point.value", tvalue);
+	int file = debug_file(u, "app/Main.hx");
+	int regs[] = { i32 };
+	unit_fn *f = fn_begin(u, "Main.main", tvalue, 1, regs);
+	op(u, f, file, 3, OCall0, 2, 0, value);
+	op(u, f, file, 4, ORet, 1, 0);
+	return u;
+}
+
+static unit *patch_point_section( int variant ) {
+	unit *u = unit_new("lib.Point", true);
+	int i32 = t_prim(u, HI32), dyn = t_prim(u, HDYN), f64 = t_prim(u, HF64);
+	obj_def point = { OWNED, "Point", HOBJ, "lib.Point", -1, 0, 2, { "x", "" }, { i32, dyn } };
+	obj_def extra = { OWNED, "Extra", HOBJ, "lib.Extra", -1, 0, 1, { "v" }, { i32 } };
+	int tpoint, tvalue, file, ttake, textra = -1;
+	if( variant == POINT_FIELD ) { point.field_names[1] = "y"; point.field_types[1] = i32; }
+	if( variant == POINT_LAYOUT ) point.field_types[0] = f64;
+	tpoint = t_obj(u, &point);
+	tvalue = t_fun(u, 0, no_args, i32);
+	ttake = t_fun(u, 1, &i32, i32);
+	if( variant == POINT_CLASS ) textra = t_obj(u, &extra);
+	if( variant == POINT_ENUM ) {
+		const char *names[] = { "A" };
+		int params[] = { -1 };
+		t_enum(u, OWNED, "Kind", "lib.Kind", 1, names, params);
+	}
+	file = debug_file(u, "lib/Point.hx");
+	{
+		// A rename keeps the old body in the old slot under the retired key; the new Point.value comes last, in a new slot.
+		int regs[] = { i32, variant == POINT_CLASS ? textra : tpoint };
+		unit_fn *f = fn_begin(u, variant == POINT_RENAMED ? "Point.value~retired" : "Point.value", tvalue, 2, regs);
+		switch( variant ) {
+		case POINT_BODY:
+			op(u, f, file, 10, OInt, 2, 0, lit_int(u, 2));
+			break;
+		case POINT_GUARDED:
+			op(u, f, file, 10, OInt, 2, 0, lit_int(u, 3));
+			break;
+		case POINT_ADDED:
+			// Point.helper is the third owned function, in a debug file the module does not have.
+			op(u, f, file, 10, OCall0, 2, 0, 2);
+			break;
+		case POINT_CLASS:
+			op(u, f, file, 10, ONew, 1, 1);
+			op(u, f, file, 11, OInt, 2, 0, lit_int(u, 7));
+			op(u, f, file, 12, OSetField, 3, 1, 0, 0);
+			op(u, f, file, 13, OField, 3, 0, 1, 0);
+			break;
+		case POINT_FIELD:
+			op(u, f, file, 10, ONew, 1, 1);
+			op(u, f, file, 11, OInt, 2, 0, lit_int(u, 9));
+			op(u, f, file, 12, OSetField, 3, 1, 1, 0);
+			op(u, f, file, 13, OField, 3, 0, 1, 1);
+			break;
+		case POINT_MISSING_IMPORT:
+			op(u, f, file, 10, OInt, 2, 0, lit_int(u, 2));
+			op(u, f, file, 11, OCall0, 2, 0, import_fn(u, "lib.Missing", "nothing", tvalue));
+			break;
+		case POINT_NATIVE:
+			op(u, f, file, 10, OCall1, 3, 0, native(u, "builtin", "code_link_round", t_fun(u, 1, &f64, i32)), 0);
+			break;
+		default:
+			op(u, f, file, 10, OInt, 2, 0, lit_int(u, 1));
+			break;
+		}
+		op(u, f, file, 14, ORet, 1, 0);
+	}
+	{
+		int regs[] = { i32 };
+		unit_fn *f = fn_begin(u, "Point.other", variant == POINT_SIGNATURE ? ttake : tvalue, 1, regs);
+		op(u, f, file, 20, OInt, 2, 0, lit_int(u, 1));
+		op(u, f, file, 21, ORet, 1, 0);
+	}
+	if( variant == POINT_ADDED ) {
+		int regs[] = { i32 };
+		unit_fn *f = fn_begin(u, "Point.helper", tvalue, 1, regs);
+		int helper_file = debug_file(u, "lib/Helper.hx");
+		op(u, f, helper_file, 5, OInt, 2, 0, lit_int(u, 5));
+		op(u, f, helper_file, 6, ORet, 1, 0);
+	}
+	if( variant == POINT_RENAMED ) {
+		int regs[] = { i32 };
+		unit_fn *f = fn_begin(u, "Point.value", tvalue, 1, regs);
+		op(u, f, file, 30, OInt, 2, 0, lit_int(u, 11));
+		op(u, f, file, 31, ORet, 1, 0);
+	}
+	return u;
+}
+
+typedef struct {
+	const char *module, *from, *to;
+} test_rename;
+
+/* An HLP 12 patch from `base` to `revision` that replaces the sections of `units`. */
+static buf patch_image( int base, int revision, unit **units, int n, const test_rename *renames, int nrenames, const char *guard ) {
+	buf out = { 0 };
+	b_raw(&out, "HLP", 3);
+	b_byte(&out, 12);
+	b_raw(&out, patch_module_id, 16);
+	b_index(&out, base);
+	b_index(&out, revision);
+	b_index(&out, n);
+	for(int i=0;i<n;i++) {
+		buf section = { 0 };
+		section_bytes(units[i], &section, i % 2 == 1);
+		b_text(&out, units[i]->path);
+		b_i32(&out, section.len);
+		b_buf(&out, &section);
+		free(section.d);
+	}
+	b_index(&out, 0);
+	b_index(&out, nrenames);
+	for(int i=0;i<nrenames;i++) { b_text(&out, renames[i].module); b_text(&out, renames[i].from); b_text(&out, renames[i].to); }
+	b_index(&out, guard ? 1 : 0);
+	if( guard ) { b_text(&out, "lib.Point"); b_text(&out, guard); b_text(&out, "a removed function"); }
+	b_index(&out, 0);
+	return out;
+}
+
+static hl_module *patch_load( void ) {
+	unit *units[] = { patch_main_section(), patch_point_section(POINT_BASE) };
+	buf b = image(units, 2, true, "app.Main", "Main.main", false);
+	char *error = NULL;
+	hl_code *code = hl_code_read_patchable(b.d, b.len, &error);
+	hl_module *m;
+	free(b.d);
+	check(code != NULL && code->link_state != NULL, "a patchable load keeps the link state: %s", error ? error : "");
+	if( code == NULL ) return NULL;
+	m = hl_module_alloc(code);
+	check(m != NULL && hl_module_init(m, HL_MODULE_PATCHABLE), "the patchable module initializes");
+	if( m == NULL ) return NULL;
+	hl_code_free_function_data(code);
+	m->revision = 0;
+	return m;
+}
+
+static int patch_call( hl_module *m, int slot ) {
+	vclosure cl;
+	vdynamic *ret;
+	bool exc = false;
+	cl.t = m->ctx.functions_types[slot];
+	cl.fun = m->functions_ptrs[slot];
+	cl.hasValue = 0;
+	ret = hl_dyn_call_safe(&cl, NULL, 0, &exc);
+	return exc || ret == NULL ? -1 : ret->v.i;
+}
+
+/* Applies a patch of `units`; NULL when it applied, else the message. */
+static const char *patch_apply( hl_module *m, int base, int revision, unit **units, int n, const test_rename *renames, int nrenames, const char *guard ) {
+	buf b = patch_image(base, revision, units, n, renames, nrenames, guard);
+	const char *error = NULL;
+	hl_patch *patch = hl_patch_read(b.d, b.len, &error);
+	static char message[1024];
+	hl_patch_migration_report report;
+	free(b.d);
+	if( patch == NULL ) return error ? error : "unreadable";
+	if( !hl_module_apply_patch(m, patch, &report, &error) ) {
+		snprintf(message, sizeof(message), "%s", error ? error : "refused");
+		hl_patch_free(patch);
+		return message;
+	}
+	hl_patch_free(patch);
+	return NULL;
+}
+
+static int slot_named( hl_module *m, const char *name ) {
+	hl_code *c = m->code;
+	for(int i=0;i<c->nfunctions + c->npatchfunctions;i++)
+		if( c->function_names[i] && strcmp(c->function_names[i], name) == 0 ) return c->function_stable_ids[i];
+	return -1;
+}
+
+static void test_patch_edits( void ) {
+	hl_module *m = patch_load();
+	unit *point;
+	const char *error;
+	int jit, files;
+	if( m == NULL ) return;
+	check(patch_call(m, 0) == 1, "the base module returns 1");
+	point = patch_point_section(POINT_BODY);
+	jit = m->patch_jit_count;
+	error = patch_apply(m, 0, 1, &point, 1, NULL, 0, NULL);
+	check(error == NULL, "a body edit patches: %s", error ? error : "");
+	check(patch_call(m, 0) == 2 && m->revision == 1, "the patched module returns 2 (got %d)", patch_call(m, 0));
+	check(m->patch_jit_count - jit == 1, "only the edited function is compiled again (%d)", m->patch_jit_count - jit);
+	// The same section again changes no code.
+	point = patch_point_section(POINT_BODY);
+	jit = m->patch_jit_count;
+	error = patch_apply(m, 1, 2, &point, 1, NULL, 0, NULL);
+	check(error == NULL && m->patch_jit_count == jit && m->revision == 2, "an unchanged section compiles nothing: %s", error ? error : "");
+	// An added function takes the next slot, in a debug file the module did not have.
+	point = patch_point_section(POINT_ADDED);
+	files = m->code->ndebugfiles;
+	error = patch_apply(m, 2, 3, &point, 1, NULL, 0, NULL);
+	check(error == NULL, "an added function patches: %s", error ? error : "");
+	check(patch_call(m, 0) == 5, "the module calls the added function (got %d)", patch_call(m, 0));
+	check(slot_named(m, "Point.helper") == 3 && m->code->npatchfunctions == 1, "the added function's stable id is its slot (%d)", slot_named(m, "Point.helper"));
+	check(m->code->ndebugfiles == files + 1 && strcmp(m->code->debugfiles[files], "lib/Helper.hx") == 0, "the patch adds its debug file");
+	// A class the module does not have.
+	point = patch_point_section(POINT_CLASS);
+	error = patch_apply(m, 3, 4, &point, 1, NULL, 0, NULL);
+	check(error == NULL, "an added class patches: %s", error ? error : "");
+	check(patch_call(m, 0) == 7, "the module makes the added class (got %d)", patch_call(m, 0));
+	// A reserved slot of Point named and typed.
+	point = patch_point_section(POINT_FIELD);
+	error = patch_apply(m, 4, 5, &point, 1, NULL, 0, NULL);
+	check(error == NULL, "a field in a reserved slot patches: %s", error ? error : "");
+	check(patch_call(m, 0) == 9, "the module reads the added field (got %d)", patch_call(m, 0));
+	{
+		hl_type *t = NULL;
+		for(int i=0;i<m->code->ntypes;i++)
+			if( m->code->types[i].kind == HOBJ && same_ustr(m->code->types[i].obj->name, USTR("lib.Point")) ) t = m->code->types + i;
+		check(t != NULL && t->obj->fields[1].name[0] == 'y', "the reserved slot is named");
+	}
+	if( failures == 0 ) printf("ok: patches of sections: a body edit, an unchanged section, an added function, class and field\n");
+}
+
+static void test_patch_rename( void ) {
+	hl_module *m = patch_load();
+	unit *units[2];
+	test_rename rename = { "lib.Point", "Point.value", "Point.value~retired" };
+	const char *error;
+	int jit;
+	if( m == NULL ) return;
+	units[0] = patch_main_section();
+	units[1] = patch_point_section(POINT_RENAMED);
+	jit = m->patch_jit_count;
+	error = patch_apply(m, 0, 1, units, 2, &rename, 1, NULL);
+	check(error == NULL, "a renamed slot patches: %s", error ? error : "");
+	check(patch_call(m, 0) == 11, "the caller reaches the new function (got %d)", patch_call(m, 0));
+	check(slot_named(m, "Point.value") == 3, "the new function takes a new slot (%d)", slot_named(m, "Point.value"));
+	check(patch_call(m, 1) == 1, "the retired slot keeps its code");
+	// The retired function's code is the running one's: only the caller and the new function are compiled.
+	check(m->patch_jit_count - jit == 2, "a rename compiles the caller and the new function (%d)", m->patch_jit_count - jit);
+	if( failures == 0 ) printf("ok: patches of sections: a renamed slot keeps its code\n");
+}
+
+static void test_patch_refusals( void ) {
+	hl_module *m = patch_load();
+	struct { int variant; const char *parts[3]; } cases[] = {
+		{ POINT_MISSING_IMPORT, { "lib.Missing.nothing", "lib.Point", NULL } },
+		{ POINT_NATIVE, { "builtin@code_link_round", "reload", NULL } },
+		{ POINT_SIGNATURE, { "Point.other", "another type", NULL } },
+		{ POINT_ENUM, { "adds enum", "lib.Point.Kind", NULL } },
+		{ POINT_LAYOUT, { "redefines type", "lib.Point.Point", NULL } },
+	};
+	const char *error;
+	unit *point;
+	if( m == NULL ) return;
+	for(int i=0;i<(int)(sizeof(cases)/sizeof(cases[0]));i++) {
+		bool all;
+		point = patch_point_section(cases[i].variant);
+		error = patch_apply(m, 0, 1, &point, 1, NULL, 0, NULL);
+		all = error != NULL;
+		for(int k=0;all && cases[i].parts[k];k++) all = strstr(error, cases[i].parts[k]) != NULL;
+		check(all, "patch refusal %d names the key: %s", i, error ? error : "(applied)");
+		if( all ) printf("ok: refused: %s\n", error);
+		check(m->revision == 0 && patch_call(m, 0) == 1, "a refused patch leaves the module as it was");
+	}
+	// What the refused patches staged is gone: the int 2 they staged is the next patch's own.
+	point = patch_point_section(POINT_BODY);
+	error = patch_apply(m, 0, 1, &point, 1, NULL, 0, NULL);
+	check(error == NULL && patch_call(m, 0) == 2, "a patch after refused ones applies: %s", error ? error : "");
+	// A guard by key, with no stored closure, does not stop the patch.
+	point = patch_point_section(POINT_GUARDED);
+	error = patch_apply(m, 1, 2, &point, 1, NULL, 0, "Point.other");
+	check(error == NULL, "a guard by key resolves: %s", error ? error : "");
+	point = patch_point_section(POINT_BODY);
+	error = patch_apply(m, 2, 3, &point, 1, NULL, 0, "Point.gone");
+	check(error != NULL && strstr(error, "Point.gone") != NULL, "a guard of a key the module lacks is refused: %s", error ? error : "(applied)");
+	if( failures == 0 ) printf("ok: patches of sections: refusals name the key, and leave the module and its link state as they were\n");
+}
+
+/* The runtime's loader with an HLI 4 identity: stable ids are slots, found by name, and patches apply through it. */
+static void test_patch_runtime( void ) {
+	unit *units[] = { patch_main_section(), patch_point_section(POINT_BASE) };
+	buf b = image(units, 2, true, "app.Main", "Main.main", false), identity = { 0 }, patch;
+	hl_runtime_module *runtime = NULL;
+	hl_runtime_status status;
+	unit *point;
+	int result = -1, main_id, value_id;
+	vdynamic *exception = NULL;
+	b_raw(&identity, "HLI", 3);
+	b_byte(&identity, 4);
+	b_raw(&identity, patch_module_id, 16);
+	b_i32(&identity, 0);
+	b_i32(&identity, 0);
+	status = hl_runtime_module_load(b.d, b.len, identity.d, identity.len, &runtime);
+	check(status == HL_RUNTIME_OK, "an HLI 4 module loads (%d)", status);
+	if( status != HL_RUNTIME_OK ) return;
+	main_id = hl_runtime_module_function_id(runtime, "Main.main");
+	value_id = hl_runtime_module_function_id(runtime, "Point.value");
+	check(main_id == 0 && value_id == 1 && hl_runtime_module_function_id(runtime, "nothing") == -1, "functions are found by name");
+	status = hl_runtime_module_call_i32(runtime, main_id, &result, &exception);
+	check(status == HL_RUNTIME_OK && result == 1, "the runtime calls by stable id");
+	point = patch_point_section(POINT_ADDED);
+	patch = patch_image(0, 1, &point, 1, NULL, 0, NULL);
+	status = hl_runtime_module_apply_hlp(runtime, patch.d, patch.len);
+	check(status == HL_RUNTIME_OK, "the runtime applies a patch of sections (%d)", status);
+	status = hl_runtime_module_call_i32(runtime, main_id, &result, &exception);
+	check(status == HL_RUNTIME_OK && result == 5, "the patched module returns 5 (got %d)", result);
+	check(hl_runtime_module_function_id(runtime, "Point.helper") == 3, "an added function is found by name");
+	status = hl_runtime_module_call_i32(runtime, 3, &result, &exception);
+	check(status == HL_RUNTIME_OK && result == 5, "the runtime calls an added function by its minted id");
+	free(patch.d);
+	point = patch_point_section(POINT_MISSING_IMPORT);
+	patch = patch_image(1, 2, &point, 1, NULL, 0, NULL);
+	status = hl_runtime_module_apply_hlp(runtime, patch.d, patch.len);
+	check(status == HL_RUNTIME_INCOMPATIBLE && hl_runtime_module_patch_message(runtime) != NULL, "a refused patch says why (%d)", status);
+	free(patch.d);
+	free(b.d);
+	free(identity.d);
+	if( failures == 0 ) printf("ok: patches of sections through the runtime, with an HLI 4 identity\n");
+}
+
+
 /* `--bench RUNS [dense.hl]`: RUNS links of the synthetic image, then as many reads of the dense file. */
 static int bench( int argc, char **argv ) {
 	int runs = argc > 2 ? atoi(argv[2]) : 10;
@@ -1469,6 +1805,10 @@ int main( int argc, char **argv ) {
 	test_unification();
 	test_errors();
 	test_corruption();
+	test_patch_edits();
+	test_patch_rename();
+	test_patch_refusals();
+	test_patch_runtime();
 	if( failures ) {
 		fprintf(stderr, "%d failures\n", failures);
 		return 1;
