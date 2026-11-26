@@ -10,8 +10,6 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
-    preset = os.environ.get('HAXEON_CMAKE_PRESET', 'release')
-    hldump = Path(os.environ.get('HLDUMP', ROOT / 'out/cmake' / preset / 'hashlink/bin/hldump'))
     with tempfile.TemporaryDirectory(prefix='haxeon-build-mode-') as directory:
         root = Path(directory)
         (root / 'src').mkdir()
@@ -27,7 +25,7 @@ def main():
         output = root / 'main.hl'
         env = {**os.environ, 'HAXEON_COMPILER_SERVER': '0', 'XDG_CACHE_HOME': str(root / 'cache'), 'HAXEON_NATIVE_CACHE': str(root / 'native-cache')}
         def build(mode):
-            # Ask for release bytecode explicitly so hldump can inspect its metadata.
+            # Ask for release bytecode explicitly so hl-stat can read its sections' metadata.
             subprocess.run([str(ROOT / 'scripts/haxeon'), 'build'] +
                            ([] if mode is None else ['--build-mode', mode]) +
                            (['--compiler-only'] if mode == 'release' else []) + ['--project', str(root / 'haxeon.json'), '--output', str(output)],
@@ -35,7 +33,7 @@ def main():
             caches = list((root / 'native-cache').rglob('CMakeCache.txt'))
             assert caches, 'Native CMake probe did not configure'
             assert all('CMAKE_BUILD_TYPE:STRING=Release' in cache.read_text() for cache in caches), mode
-            dump = subprocess.check_output([str(hldump), '--debug', str(output)], text=True)
+            dump = subprocess.check_output([str(ROOT / 'scripts/haxeon'), 'dev', 'hl-stat', str(output), '--sections'], cwd=ROOT, text=True)
             run = subprocess.run([str(ROOT / 'scripts/hl'), str(output)], cwd=ROOT, env=env, capture_output=True)
             assert run.returncode == 42, (mode, run.returncode, run.stderr)
             return output.read_bytes(), dump
@@ -45,8 +43,9 @@ def main():
         assert development == explicit_development
         release_again, _ = build('release')
         assert release == release_again
-        assert 'section kind=1 ' in release_dump and 'section kind=2 ' not in release_dump and 'section kind=3 ' not in release_dump
-        assert all(f'section kind={kind} ' in development_dump for kind in (1, 2, 3))
+        metadata = ('function identities', 'opcode source spans', 'source snapshots')
+        assert metadata[0] in release_dump and not any(kind in release_dump for kind in metadata[1:]), release_dump
+        assert all(kind in development_dump for kind in metadata), development_dump
         assert len(release) < len(development)
     print('PASS: project build modes select development metadata and retain executable names')
 
