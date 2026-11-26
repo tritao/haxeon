@@ -26,11 +26,10 @@ private typedef ModuleField = {
 
 /**
  * What one module's parse gives the names every module sees (`ProgramNames`): the type names it declares, its enums' cases, its
- * module-level members, its inferred declarations, its classes' `@:discoverMethods` prefixes and what its `using`s and the static
- * functions it offers are. Made once per parse of the module (and entry module), kept in the session's database
- * (`SessionState.moduleNames`); a parse of the same declarations gives the same names (`same`).
+ * module-level members, its inferred declarations, its classes' `@:discoverMethods` prefixes and its `using`s. Made from the
+ * parse whenever needed (`ModuleNames.parts`); only a digest of it is kept.
  */
-class ModuleNames {
+class ModuleNameParts {
 	public final aliases:Array<SourceAlias> = [];
 	public final enumCases:Array<{type:String, cases:Array<String>}> = [];
 
@@ -49,17 +48,7 @@ class ModuleNames {
 	/** The module's `using`s and its types' `@:using` paths (`StaticExtensionTable.usingsKey`). */
 	final usings:String;
 
-	/** What a `using` of the module reads of it (`StaticExtensionTable.offeredKey`), made the first time it is compared. */
-	var offered:Null<String> = null;
-
-	final moduleName:String;
-	final ast:AstProgram;
-	final entryModule:String;
-
 	public function new(moduleName:String, ast:AstProgram, entryModule:String) {
-		this.moduleName = moduleName;
-		this.ast = ast;
-		this.entryModule = entryModule;
 		var packageName = ast.packageName;
 		for (declaration in ast.aliases)
 			addAlias(moduleName, declaration.name, packageName);
@@ -127,59 +116,32 @@ class ModuleNames {
 		usings = StaticExtensionTable.usingsKey(ast);
 	}
 
-	/** Whether this was made from the parse `ast` for a program whose entry is `entryModule`. */
-	public function madeFrom(ast:AstProgram, entryModule:String):Bool
-		return this.ast == ast && this.entryModule == entryModule;
-
-	/** What a `using` of the module reads of it. */
-	public function offeredKey():String {
-		var known = offered;
-		if (known == null) {
-			known = StaticExtensionTable.offeredKey(moduleName, ast);
-			offered = known;
+	/** Feeds these names to `digest`, in order. */
+	public function feed(digest:compiler.query.Digest):Void {
+		digest.string(usings);
+		for (list in [inferred, inlineStatics, members]) {
+			digest.int(list.length);
+			for (name in list)
+				digest.string(name);
 		}
-		return known;
-	}
-
-	/**
-	 * Whether two modules give the same names, whatever parses they come from; what a `using` of them reads is compared apart
-	 * (`offeredKey`), only for a module one resolves to.
-	 */
-	public static function same(left:ModuleNames, right:ModuleNames):Bool {
-		if (left == right)
-			return true;
-		if (left.usings != right.usings || !sameStrings(left.inferred, right.inferred)
-			|| !sameStrings(left.inlineStatics, right.inlineStatics) || !sameStrings(left.members, right.members)
-			|| left.aliases.length != right.aliases.length || left.enumCases.length != right.enumCases.length
-			|| left.fields.length != right.fields.length || left.discovery.length != right.discovery.length)
-			return false;
-		for (index in 0...left.aliases.length)
-			if (left.aliases[index].sourceName != right.aliases[index].sourceName
-				|| left.aliases[index].declarationName != right.aliases[index].declarationName)
-				return false;
-		for (index in 0...left.enumCases.length)
-			if (left.enumCases[index].type != right.enumCases[index].type
-				|| !sameStrings(left.enumCases[index].cases, right.enumCases[index].cases))
-				return false;
-		for (index in 0...left.fields.length) {
-			var a = left.fields[index], b = right.fields[index];
-			if (a.path != b.path || a.storage != b.storage || a.isInline != b.isInline || a.typeStatic != b.typeStatic)
-				return false;
+		digest.int(aliases.length);
+		for (alias in aliases)
+			digest.string(alias.sourceName).string(alias.declarationName);
+		digest.int(enumCases.length);
+		for (entry in enumCases) {
+			digest.string(entry.type).int(entry.cases.length);
+			for (name in entry.cases)
+				digest.string(name);
 		}
-		for (index in 0...left.discovery.length)
-			if (left.discovery[index].type != right.discovery[index].type
-				|| !sameStrings(left.discovery[index].prefixes, right.discovery[index].prefixes))
-				return false;
-		return true;
-	}
-
-	static function sameStrings(left:Array<String>, right:Array<String>):Bool {
-		if (left.length != right.length)
-			return false;
-		for (index in 0...left.length)
-			if (left[index] != right[index])
-				return false;
-		return true;
+		digest.int(fields.length);
+		for (field in fields)
+			digest.string(field.path).string(field.storage).bool(field.isInline).bool(field.typeStatic);
+		digest.int(discovery.length);
+		for (entry in discovery) {
+			digest.string(entry.type).int(entry.prefixes.length);
+			for (prefix in entry.prefixes)
+				digest.string(prefix);
+		}
 	}
 
 	function addAlias(moduleName:String, declarationName:String, packageName:Null<String>):Void {
@@ -268,6 +230,62 @@ class ModuleNames {
 }
 
 /**
+ * What one module's parse gives the names every module sees, as a digest of its parts (`ModuleNameParts`), which are made again from
+ * the parse when the names are made. Made once per parse of the module (and entry module) and kept in the session's database
+ * (`SessionState.moduleNames`); a parse of the same declarations gives the same digest (`same`). What a `using` of the module reads
+ * of it is digested apart, the first time it is compared (`sameOffered`).
+ */
+class ModuleNames {
+	final moduleName:String;
+	final ast:AstProgram;
+	final entryModule:String;
+
+	final first:Int;
+	final second:Int;
+
+	var offeredFirst = 0;
+	var offeredSecond = 0;
+	var offeredKnown = false;
+
+	public function new(moduleName:String, ast:AstProgram, entryModule:String) {
+		this.moduleName = moduleName;
+		this.ast = ast;
+		this.entryModule = entryModule;
+		var digest = new compiler.query.Digest();
+		parts().feed(digest);
+		first = digest.first;
+		second = digest.second;
+	}
+
+	/** The names, made from the parse. */
+	public function parts():ModuleNameParts
+		return new ModuleNameParts(moduleName, ast, entryModule);
+
+	/** Whether this was made from the parse `ast` for a program whose entry is `entryModule`. */
+	public function madeFrom(ast:AstProgram, entryModule:String):Bool
+		return this.ast == ast && this.entryModule == entryModule;
+
+	/** Whether two modules give the same names, whatever parses they come from. */
+	public static function same(left:ModuleNames, right:ModuleNames):Bool
+		return left == right || left.first == right.first && left.second == right.second;
+
+	/** Whether a `using` reads the same of the two modules: their declarations and static functions as written. */
+	public static function sameOffered(left:ModuleNames, right:ModuleNames):Bool {
+		left.digestOffered();
+		right.digestOffered();
+		return left.offeredFirst == right.offeredFirst && left.offeredSecond == right.offeredSecond;
+	}
+
+	function digestOffered():Void
+		if (!offeredKnown) {
+			var digest = new compiler.query.Digest().string(StaticExtensionTable.offeredKey(moduleName, ast));
+			offeredFirst = digest.first;
+			offeredSecond = digest.second;
+			offeredKnown = true;
+		}
+}
+
+/**
  * The names every module of a program sees, made from each module's `ModuleNames` in the program's order: the type names by
  * source spelling, by module and by package, the enums' cases, the module-level members, the pattern constants, the inferred
  * declarations, the `@:discoverMethods` prefixes and the static extensions. Kept in the session's database
@@ -339,8 +357,9 @@ class ProgramNames {
 		moduleTypeStatics = [];
 		moduleMembers = [];
 		discoveryPrefixes = [];
+		var parts = [for (contribution in contributions) contribution.parts()];
 		for (index in 0...moduleOrder.length)
-			contributions[index].addTo(this, moduleOrder[index]);
+			parts[index].addTo(this, moduleOrder[index]);
 		var names = [
 			for (sourceName => declarationName in sourceTypeAliases)
 				sourceName + "=" + declarationName
@@ -350,8 +369,8 @@ class ProgramNames {
 				names.push(typeName + "#" + caseName);
 				patternConstants.set(typeName + "." + caseName, true);
 			}
-		for (contribution in contributions)
-			contribution.addUniverse(names);
+		for (part in parts)
+			part.addUniverse(names);
 		names.sort(Reflect.compare);
 		universe = names.join(";");
 		staticExtensions = StaticExtensionTable.build(states, moduleOrder);
@@ -370,7 +389,7 @@ class ProgramNames {
 			if (name != this.moduleOrder[index])
 				return false;
 			if (now != before
-				&& (!ModuleNames.same(now, before) || resolved.exists(name) && now.offeredKey() != before.offeredKey()))
+				&& (!ModuleNames.same(now, before) || resolved.exists(name) && !ModuleNames.sameOffered(now, before)))
 				return false;
 		}
 		return true;

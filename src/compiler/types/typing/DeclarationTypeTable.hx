@@ -318,6 +318,15 @@ class DeclarationTypeTable implements DeclarationTypes {
 		checkingSeeds = check;
 	}
 
+	/**
+	 * Ends the seeding `seedFunctions` began, once the program is typed: what gives the signatures (the build's module owners) is
+	 * not kept with the table, which the semantic program keeps.
+	 */
+	public function endSeeding():Void {
+		previousSignature = null;
+		selected = null;
+	}
+
 	/** Seeds the unannotated function `fn` (key `key`) with the signature an earlier build gave it, if any; whether it did. */
 	function seed(fn:AstFunction, key:String):Bool {
 		var previous = previousSignature, selected = this.selected;

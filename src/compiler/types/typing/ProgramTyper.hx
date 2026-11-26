@@ -580,11 +580,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var finalizationDoneAt = Sys.time() * 1000.0;
 		var typedRuntimeDependencies = assembler.runtimeDependencies();
 		var allocationAfterFinalize = AllocationMeter.sample();
+		var inferredSignatures = requiredTypes().typedSignatures();
+		requiredTypes().endSeeding();
 		return {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
 			typedUnits: session.programOutput.records.typedUnits,
-			inferredSignatures: requiredTypes().typedSignatures(),
+			inferredSignatures: inferredSignatures,
 			keyPathUses: session.programOutput.records.keyPathUsesByUnit(),
 			metrics: {
 				allocationPhases: [
