@@ -1,8 +1,6 @@
 package haxeon.ui.settings;
 
 import haxeon.ui.properties.PropertyDescriptor;
-import haxeon.ui.properties.PropertyDescriptorOptions;
-import haxeon.ui.properties.PropertyInspectorSection;
 import haxeon.ui.properties.PropertyValue;
 
 /**

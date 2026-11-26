@@ -1,6 +1,7 @@
 package haxeon.ui.plotting;
 
 import Observable;
+import haxeon.ui.Color;
 
 /** Shared plotting model with explicit or data-derived ranges. */
 class PlotModel implements Observable {
@@ -120,4 +121,105 @@ class PlotModel implements Observable {
 
 	static inline function finite(value:Float):Bool
 		return value == value && value - value == 0.0;
+}
+
+/** Application-owned samples and presentation for one plot line. */
+class PlotSeries implements Observable {
+	public final id:String;
+	public final label:String;
+	public final color:Color;
+	public final lineWidth:Float;
+	public var visible(default, null):Bool;
+	var values:Array<PlotPoint>;
+
+	public function new(id:String, label:String, color:Color, ?lineWidth:Float = 1.5) {
+		if (id == null || id.length == 0 || label == null || label.length == 0 || !finite(lineWidth)
+			|| lineWidth <= 0.0)
+			throw "Plot series require stable labels, a color, and positive line width";
+		this.id = id;
+		this.label = label;
+		this.color = color;
+		this.lineWidth = lineWidth;
+		visible = true;
+		values = [];
+	}
+
+	public function points():Array<PlotPoint>
+		return values.copy();
+
+	public var pointCount(get, never):Int;
+	inline function get_pointCount():Int
+		return values.length;
+
+	public function pointAt(index:Int):PlotPoint {
+		if (index < 0 || index >= values.length)
+			throw "Plot point index is out of range";
+		return values[index];
+	}
+
+	public function setVisible(value:Bool):Bool {
+		if (visible == value)
+			return false;
+		visible = value;
+		return true;
+	}
+
+	public function setPoints(points:Array<PlotPoint>):Void {
+		var next:Array<PlotPoint> = [];
+		if (points != null)
+			for (point in points) {
+				if (point == null)
+					throw "Plot series cannot contain null points";
+				next.push(point);
+			}
+		values = next;
+	}
+
+	public function add(point:PlotPoint):Void {
+		if (point == null)
+			throw "Plot series cannot contain null points";
+		var next = values.copy();
+		next.push(point);
+		values = next;
+	}
+
+	public function clear():Void {
+		if (values.length == 0)
+			return;
+		values = [];
+	}
+
+	static inline function finite(value:Float):Bool
+		return value == value && value - value == 0.0;
+}
+
+/** One immutable sample in a telemetry/debug plot series. */
+class PlotPoint {
+	public final x:Float;
+	public final y:Float;
+
+	public function new(x:Float, y:Float) {
+		if (!finite(x) || !finite(y))
+			throw "Plot points must be finite";
+		this.x = x;
+		this.y = y;
+	}
+
+	static inline function finite(value:Float):Bool
+		return value == value && value - value == 0.0;
+}
+
+/** Finite data range used to map plot samples into a viewport. */
+class PlotRange {
+	public final minimumX:Float;
+	public final maximumX:Float;
+	public final minimumY:Float;
+	public final maximumY:Float;
+
+	public function new(minimumX:Float, maximumX:Float, minimumY:Float, maximumY:Float) {
+		this.minimumX = minimumX;
+		this.maximumX = maximumX;
+		this.minimumY = minimumY;
+		this.maximumY = maximumY;
+	}
 }

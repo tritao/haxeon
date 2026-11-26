@@ -1,4 +1,4 @@
-package haxeon.ui.widgets.settings;
+package haxeon.ui.settings;
 
 import Observable;
 import haxeon.ui.core.UiEventPhase;
@@ -9,6 +9,8 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
+import haxeon.ui.properties.PropertyDescriptor;
+import haxeon.ui.properties.PropertyInspector;
 import haxeon.ui.settings.SettingsCatalog;
 import haxeon.ui.settings.SettingsStore;
 import haxeon.ui.widgets.KeyedView;
@@ -18,7 +20,6 @@ import haxeon.ui.widgets.controls.Toggle;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.layout.SplitView;
-import haxeon.ui.widgets.properties.PropertyInspector;
 import haxeon.ui.widgets.text.Text;
 
 /**
@@ -175,7 +176,8 @@ class SettingsPanel implements View implements Observable implements Disposable 
 			var sections = [];
 			for (category in searching ? categories() : [selectedCategory]) {
 				for (section in catalog.sections(category, filter, showAdvanced, modifiedOnly)) {
-					sections.push(searching ? new haxeon.ui.properties.PropertyInspectorSection(section.id,
+					sections.push(searching
+						? new PropertyInspectorSection(section.id,
 						[for (part in category.split("/")) SettingsCatalog.labelOf(part)].join(" › ") + " — "
 						+ section.label,
 						section.descriptors) : section);

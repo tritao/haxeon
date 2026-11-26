@@ -54,34 +54,17 @@ import haxeon.ui.core.CommandContext;
 import haxeon.ui.core.CommandParameters;
 import haxeon.ui.core.CommandRegistry;
 import haxeon.ui.core.CommandResult;
-import haxeon.ui.docking.DockDropZone;
-import haxeon.ui.widgets.docking.DockDropTarget;
 import haxeon.ui.docking.DockNode;
-import haxeon.ui.docking.DockNodeTools;
-import haxeon.ui.docking.DockPanelDescriptor;
-import haxeon.ui.docking.DockWorkspaceStorage;
-import haxeon.ui.docking.DockWorkspaceCommands;
-import haxeon.ui.widgets.docking.DockPanelContent;
-import haxeon.ui.docking.DockSplitAxis;
-import haxeon.ui.docking.DockWorkspacePersistence;
+import haxeon.ui.docking.DockWorkspaceSnapshot;
 import haxeon.ui.docking.DockWorkspaceModel;
-import haxeon.ui.widgets.docking.DockWorkspaceInteraction;
+import haxeon.ui.docking.DockWorkspaceInteraction;
 import haxeon.ui.editing.EditorDocument;
 import haxeon.ui.editing.EditHistory;
 import haxeon.ui.properties.PropertyDescriptor;
-import haxeon.ui.properties.PropertyDescriptorOptions;
 import haxeon.ui.properties.PropertyBinding;
-import haxeon.ui.properties.PropertyEditResult;
-import haxeon.ui.properties.PropertyEditorExtension;
 import haxeon.ui.properties.PropertyEditorRegistry;
-import haxeon.ui.properties.PropertyInspectorSection;
-import haxeon.ui.properties.PropertyOption;
-import haxeon.ui.properties.PropertyType;
 import haxeon.ui.properties.PropertyValue;
-import haxeon.ui.properties.PropertyValueTools;
 import haxeon.ui.plotting.PlotModel;
-import haxeon.ui.plotting.PlotPoint;
-import haxeon.ui.plotting.PlotSeries;
 import haxeon.ui.core.ViewportCamera;
 import haxeon.ui.core.ViewportContent;
 import haxeon.ui.core.EventDispatcher;
@@ -125,12 +108,12 @@ import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.collections.ListView;
 import haxeon.ui.widgets.layout.Padding;
 import haxeon.ui.widgets.controls.ProgressBar;
-import haxeon.ui.widgets.properties.PropertyEditor;
-import haxeon.ui.widgets.properties.PropertyInspector;
+import haxeon.ui.properties.PropertyEditor;
+import haxeon.ui.properties.PropertyInspector;
 import haxeon.ui.widgets.GpuViewport;
-import haxeon.ui.widgets.plotting.PlotView;
+import haxeon.ui.plotting.PlotView;
 import haxeon.ui.widgets.overlays.Dialog;
-import haxeon.ui.widgets.docking.DockWorkspace;
+import haxeon.ui.docking.DockWorkspace;
 import haxeon.ui.widgets.text.DefaultTextStyle;
 import haxeon.ui.widgets.overlays.Menu;
 import haxeon.ui.widgets.overlays.Popup;
@@ -6041,19 +6024,19 @@ class FrameworkSmoke {
 	}
 
 	static function sidebarValid(context:UiContext):Bool {
-		var model = new haxeon.ui.widgets.sidebar.SidebarModel();
+		var model = new haxeon.ui.sidebar.SidebarModel();
 		var files = 0, search = 0;
 		model.register("search", function() {
 			search++;
 			return new Text("Search content");
-		}, new haxeon.ui.widgets.sidebar.SidebarModeOptions("Search", 10, true));
+		}, new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Search", 10, true));
 		model.register("files", function() {
 			files++;
 			return new Text("Files content");
-		}, new haxeon.ui.widgets.sidebar.SidebarModeOptions("Files", 0, true));
+		}, new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Files", 0, true));
 		model.select("files");
 		if (files != 0 || search != 0 || model.modes[0].id != "files") return false;
-		var view = new haxeon.ui.widgets.sidebar.SidebarHost("sidebar-regression", model, function(id) {
+		var view = new haxeon.ui.sidebar.SidebarHost("sidebar-regression", model, function(id) {
 			model.select(id);
 		});
 		context.submit(view, new LayoutFrame(240, 240));
@@ -6065,14 +6048,14 @@ class FrameworkSmoke {
 		model.setVisible(false);
 		context.submit(view, new LayoutFrame(320, 240));
 		if (files != 1 || search != 1) return false;
-		var state = model.encode(), restored = new haxeon.ui.widgets.sidebar.SidebarModel();
+		var state = model.encode(), restored = new haxeon.ui.sidebar.SidebarModel();
 		if (!restored.restore(state)) return false;
 		restored.register("files",
 			function() return new Text("Files"),
-			new haxeon.ui.widgets.sidebar.SidebarModeOptions("Files"));
+			new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Files"));
 		restored.register("search",
 			function() return new Text("Search"),
-			new haxeon.ui.widgets.sidebar.SidebarModeOptions("Search"));
+			new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Search"));
 		var searchMode = restored.find("search");
 		if (searchMode == null || restored.activeId != "search" || restored.visible
 			|| restored.width != 320) return false;
@@ -6122,7 +6105,7 @@ class FrameworkSmoke {
 		if (!restored.unregister("search") || !restored.restore("1|future|1|future,360,1")) return false;
 		restored.register("future",
 			function() return new Text("Future"),
-			new haxeon.ui.widgets.sidebar.SidebarModeOptions("Future"));
+			new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Future"));
 		var future = restored.selected();
 		if (future == null || future.id != "future" || restored.width != 360) return false;
 		trace("PASS: sidebar lazy providers, shared width, deferred registration and atomic persistence");
@@ -6131,15 +6114,15 @@ class FrameworkSmoke {
 
 	/** Users reorder destinations; the order survives persistence, late registration and hiding. */
 	static function sidebarOrder():Void {
-		function make(names:Array<String>):haxeon.ui.widgets.sidebar.SidebarModel {
-			var model = new haxeon.ui.widgets.sidebar.SidebarModel();
+		function make(names:Array<String>):haxeon.ui.sidebar.SidebarModel {
+			var model = new haxeon.ui.sidebar.SidebarModel();
 			var order = 0;
 			for (name in names) model.register(name,
 				function() return new Text(name),
-				new haxeon.ui.widgets.sidebar.SidebarModeOptions(name, order++));
+				new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions(name, order++));
 			return model;
 		}
-		function ids(model:haxeon.ui.widgets.sidebar.SidebarModel):String return [for (mode in model.modes) mode.id]
+		function ids(model:haxeon.ui.sidebar.SidebarModel):String return [for (mode in model.modes) mode.id]
 			.join(",");
 		function require(value:Bool, message:String):Void if (!value) throw "sidebar order: " + message;
 		var model = make(["files", "search", "scm", "agents"]);
@@ -6157,12 +6140,12 @@ class FrameworkSmoke {
 		require(StringTools.startsWith(saved, "3|") && StringTools.endsWith(saved, "|agents,search,scm,files"),
 			"order not encoded: " + saved);
 		// Restoring before registration applies the order as destinations arrive; new ones keep their default slot.
-		var restored = new haxeon.ui.widgets.sidebar.SidebarModel();
+		var restored = new haxeon.ui.sidebar.SidebarModel();
 		require(restored.restore(saved), "saved order rejected");
 		var order = 0;
 		for (name in ["files", "search", "extra", "scm", "agents"]) restored.register(name,
 			function() return new Text(name),
-			new haxeon.ui.widgets.sidebar.SidebarModeOptions(name, order++));
+			new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions(name, order++));
 		require(ids(restored) == "agents,search,extra,scm,files",
 			"late registration ignored the saved order: " + ids(restored));
 		require(StringTools.endsWith(restored.encode(), "|agents,search,scm,files"),
@@ -6206,8 +6189,8 @@ class FrameworkSmoke {
 			"invalid order accepted: " + invalid);
 		// Presets supply the default order; the user's order overrides them until reset.
 		var preset = make(["files", "search", "scm", "agents"]);
-		preset.setDefaultOrder(function(a:haxeon.ui.widgets.sidebar.SidebarMode,
-				b:haxeon.ui.widgets.sidebar.SidebarMode):Int {
+		preset.setDefaultOrder(function(a:haxeon.ui.sidebar.SidebarModel.SidebarMode,
+				b:haxeon.ui.sidebar.SidebarModel.SidebarMode):Int {
 					var left = a.id == "agents" ? 0 : 1, right = b.id == "agents" ? 0 : 1;
 					return left == right ? a.order - b.order : left - right;
 				});
@@ -6312,22 +6295,22 @@ class FrameworkSmoke {
 			false,
 			true,
 			null,
-			haxeon.ui.docking.DockPanelHeaderMode.Content,
-			new haxeon.ui.docking.DockPanelGrouping("surfaces", false)));
+			haxeon.ui.docking.DockNode.DockPanelHeaderMode.Content,
+			new haxeon.ui.docking.DockNode.DockPanelGrouping("surfaces", false)));
 		groupedDock.register(new DockPanelDescriptor("tool-a",
 			"Tool A",
 			true,
 			true,
 			null,
-			haxeon.ui.docking.DockPanelHeaderMode.Dock,
-			new haxeon.ui.docking.DockPanelGrouping("tools")));
+			haxeon.ui.docking.DockNode.DockPanelHeaderMode.Dock,
+			new haxeon.ui.docking.DockNode.DockPanelGrouping("tools")));
 		groupedDock.register(new DockPanelDescriptor("tool-b",
 			"Tool B",
 			true,
 			true,
 			null,
-			haxeon.ui.docking.DockPanelHeaderMode.Dock,
-			new haxeon.ui.docking.DockPanelGrouping("tools")));
+			haxeon.ui.docking.DockNode.DockPanelHeaderMode.Dock,
+			new haxeon.ui.docking.DockNode.DockPanelGrouping("tools")));
 		groupedDock.setDefaultLayout(DockNode.Panel("surface"));
 		if (groupedDock.canDock("tool-a", "surface", DockDropZone.Center) || groupedDock.dock("tool-a",
 			"surface",
@@ -6356,7 +6339,7 @@ class FrameworkSmoke {
 			false,
 			true,
 			null,
-			haxeon.ui.docking.DockPanelHeaderMode.Content));
+			haxeon.ui.docking.DockNode.DockPanelHeaderMode.Content));
 		contentHeaderDock.register(new DockPanelDescriptor("tool-header", "Tool header"));
 		contentHeaderDock.setDefaultLayout(DockNode.Panel("content-header"));
 		var contentHeaderWorkspace = new DockWorkspace("content-header-workspace", contentHeaderDock);

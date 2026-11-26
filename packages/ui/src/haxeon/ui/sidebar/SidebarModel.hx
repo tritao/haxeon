@@ -1,4 +1,4 @@
-package haxeon.ui.widgets.sidebar;
+package haxeon.ui.sidebar;
 
 import haxeon.ui.core.View;
 
@@ -264,5 +264,51 @@ class SidebarModel {
 			if (!(c >= 97 && c <= 122 || c >= 65 && c <= 90 || c >= 48 && c <= 57 || c == 45 || c == 95)) return false;
 		}
 		return true;
+	}
+}
+
+/** A stable mode with a provider evaluated only while its page is mounted. */
+class SidebarMode {
+	/** Identifies the destination. */
+	public final id:String;
+
+	/** Builds its content, only while it is shown. */
+	public final provider:Void->View;
+
+	/** Its name in the strip. */
+	public final label:String;
+
+	/** Its place in the default order: lower first. */
+	public final order:Int;
+	internal final sequence:Int;
+
+	/** Whether it is listed; change it with `SidebarModel.setModeVisible`. */
+	public var visible:Bool;
+	internal function new(id:String, provider:Void->View, options:SidebarModeOptions, sequence:Int) {
+		this.sequence = sequence;
+		this.id = id;
+		this.provider = provider;
+		label = options.label;
+		order = options.order;
+		visible = options.visible;
+	}
+}
+
+/** Registration metadata; sizing belongs to the sidebar container. */
+class SidebarModeOptions {
+	/** The destination's name in the strip: required. */
+	public final label:String;
+
+	/** Its place in the default order: lower first. */
+	public final order:Int;
+
+	/** Whether it starts listed. */
+	public final visible:Bool;
+
+	/** Options for a destination named `label`. */
+	public function new(label:String, order:Int = 0, visible:Bool = true) {
+		this.label = label;
+		this.order = order;
+		this.visible = visible;
 	}
 }

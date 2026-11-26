@@ -1,4 +1,4 @@
-package haxeon.ui.widgets.sidebar;
+package haxeon.ui.sidebar;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
@@ -8,6 +8,7 @@ import haxeon.ui.core.View;
 import haxeon.ui.widgets.controls.Tabs;
 import haxeon.ui.widgets.text.Text;
 
+import haxeon.ui.sidebar.SidebarModel;
 /** One content-owned tab strip; inactive providers never build. */
 class SidebarHost implements View {
 	final key:String;

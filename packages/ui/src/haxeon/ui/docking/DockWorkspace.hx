@@ -1,4 +1,5 @@
-package haxeon.ui.widgets.docking;
+package haxeon.ui.docking;
+
 import haxeon.ui.core.KeyHash;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Tabs;
@@ -6,7 +7,6 @@ import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.SizedBox;
 import haxeon.ui.widgets.layout.SplitView;
 import haxeon.ui.widgets.text.Text;
-
 import haxeon.ui.Color;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
@@ -24,15 +24,10 @@ import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.State;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.View;
-import haxeon.ui.docking.DockDropZone;
 import haxeon.ui.docking.DockNode;
-import haxeon.ui.docking.DockPanelDescriptor;
-import haxeon.ui.docking.DockSplitAxis;
 import haxeon.ui.docking.DockWorkspaceModel;
 import haxeon.ui.theme.TextRole;
-import haxeon.ui.widgets.docking.DockDropTarget;
-import haxeon.ui.widgets.docking.DockTabDropTarget;
-import haxeon.ui.widgets.docking.DockWorkspaceInteraction;
+import haxeon.ui.docking.DockWorkspaceInteraction;
 
 /** Renders a DockWorkspaceModel using split panes, tab groups, and lazy panels. */
 class DockWorkspace implements View {
@@ -203,7 +198,7 @@ class DockWorkspace implements View {
 		}
 		var selectedId = activePanelId == null && visiblePanels.length > 0 ? visiblePanels[0].id : activePanelId;
 		if (visiblePanels.length == 1
-			&& visiblePanels[0].headerMode == haxeon.ui.docking.DockPanelHeaderMode.Content)
+			&& visiblePanels[0].headerMode == DockPanelHeaderMode.Content)
 			return panelView(visiblePanels[0].id,
 				availableWidth,
 				panelCache);
@@ -283,7 +278,7 @@ class DockWorkspace implements View {
 	}
 
 	function matchesExpandedGroup(node:DockNode):Bool {
-		var ids = haxeon.ui.docking.DockNodeTools.panelIds(node);
+		var ids = DockNodeTools.panelIds(node);
 		if (ids.length == 0 || expandedGroup == null) return false;
 		for (id in ids) if (expandedGroup.indexOf(id) < 0) return false;
 		return true;
@@ -297,7 +292,8 @@ class DockWorkspace implements View {
 	}
 
 	function hasPresentedPanel(node:DockNode):Bool {
-		for (id in haxeon.ui.docking.DockNodeTools.panelIds(node)) if (hiddenPanels.indexOf(id) < 0) return true;
+		for (id in DockNodeTools.panelIds(node)) if (hiddenPanels.indexOf(id) < 0)
+			return true;
 		return false;
 	}
 
@@ -990,5 +986,54 @@ private class DockTextWidthCache {
 		bucket.push(new DockTextWidthEntry(key, width));
 		entryCount++;
 		return width;
+	}
+}
+
+/** Builds a panel's view. */
+typedef DockPanelBuilder = BuildContext->View;
+
+/** Builds a panel's view for the width of its pane. */
+typedef WidthAwareDockPanelBuilder = BuildContext->Float->View;
+/** Lazy view factory kept separate from the view-independent dock model. */
+class DockPanelContent {
+	/** The panel in the dock model whose view this builds. */
+	public final panelId:String;
+	/** Builds the panel when it has no `buildWithWidth`. */
+	public final build:Null<DockPanelBuilder>;
+	/** Builder for panels that adapt to their dock pane width; used in place of `build` when given. */
+	public final buildWithWidth:Null<WidthAwareDockPanelBuilder>;
+	/**
+	 * Retain the panel by the observable fields and signals its build reads (and the widget state it uses),
+	 * with no key: a read cannot be left out of a key that does not exist. See `observing`.
+	 */
+	public var observed:Bool = false;
+
+	/** A panel retained by what its build observes; the preferred way to make a panel retained. */
+	public static function observing(panelId:String, build:DockPanelBuilder,
+			?buildWithWidth:WidthAwareDockPanelBuilder):DockPanelContent {
+		var content = new DockPanelContent(panelId, build, buildWithWidth);
+		content.observed = true;
+		return content;
+	}
+
+	/** Like `observing`, for a panel that is always built at its pane width. */
+	public static function observingWithWidth(panelId:String,
+			buildWithWidth:WidthAwareDockPanelBuilder):DockPanelContent {
+		var content = new DockPanelContent(panelId, null, buildWithWidth);
+		content.observed = true;
+		return content;
+	}
+
+	/**
+	 * Content for the panel `panelId`, built by `build` or `buildWithWidth`. Throws when `panelId` is empty or there
+	 * is no builder.
+	 */
+	public function new(panelId:String, build:Null<DockPanelBuilder>,
+			?buildWithWidth:WidthAwareDockPanelBuilder) {
+		if (panelId == null || panelId.length == 0 || (build == null && buildWithWidth == null))
+			throw "Dock panel content requires a stable panel ID and builder";
+		this.panelId = panelId;
+		this.build = build;
+		this.buildWithWidth = buildWithWidth;
 	}
 }

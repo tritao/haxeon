@@ -1,4 +1,4 @@
-package haxeon.ui.widgets.plotting;
+package haxeon.ui.plotting;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;

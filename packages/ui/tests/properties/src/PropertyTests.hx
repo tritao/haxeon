@@ -1,7 +1,7 @@
 import haxeon.ui.core.*;
 import haxeon.ui.editing.EditorDocument;
 import haxeon.ui.properties.*;
-import haxeon.ui.widgets.properties.PropertyEditor;
+import haxeon.ui.properties.PropertyEditor;
 
 class PropertyTests {
 	static function check(value:Bool, message:String):Void {

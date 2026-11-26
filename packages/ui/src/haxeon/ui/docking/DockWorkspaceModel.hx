@@ -1,7 +1,12 @@
 package haxeon.ui.docking;
 
 import Observable;
+import haxeon.ui.core.Command;
+import haxeon.ui.core.CommandRegistry;
+import haxeon.ui.core.CommandResult;
+import haxeon.ui.docking.DockNode;
 
+import haxeon.ui.docking.DockWorkspaceSnapshot;
 /**
  * Mutable dock layout and panel metadata. Observable fields invalidate views;
  * listeners remain for persistence and other non-view side effects.
@@ -315,5 +320,31 @@ class DockWorkspaceModel implements Observable {
 		var result:Map<String, DockPanelDescriptor> = new Map();
 		for (key in source.keys()) result.set(key, source.get(key));
 		return result;
+	}
+}
+
+/** Registers command adapters for a workspace model. */
+class DockWorkspaceCommands {
+	public static function install(model:DockWorkspaceModel, registry:CommandRegistry,
+			prefix:String = "dock", scope:String = CommandRegistry.GlobalScope):Void {
+		if (model == null || registry == null || prefix == null || prefix.length == 0)
+			throw "Dock commands require a workspace, registry, and stable prefix";
+		registry.register(Command.contextual(prefix + ".close", "Close panel", function(context) {
+			var panelId = context.parameters.getString("panel");
+			if (panelId == null)
+				panelId = model.activePanelId;
+			return panelId != null && model.close(panelId)
+				? CommandResult.executed() : CommandResult.rejected("The active panel cannot be closed");
+		}, null, function(context) {
+			var panelId = context.parameters.getString("panel");
+			if (panelId == null)
+				panelId = model.activePanelId;
+			var panel = panelId == null ? null : model.get(panelId);
+			return panel != null && panel.closable && model.isOpen(panelId);
+		}), scope);
+		registry.register(Command.contextual(prefix + ".reset", "Reset workspace", function(_) {
+			model.reset();
+			return CommandResult.executed();
+		}), scope);
 	}
 }

@@ -1,9 +1,10 @@
 package haxeon.ui.properties;
 import haxeon.ui.editing.EditHistory;
-import haxeon.ui.properties.PropertyDescriptorOptions.PropertyCommitter;
+import haxeon.ui.properties.PropertyDescriptor.PropertyCommitter;
 
 import haxeon.ui.core.CommandContext;
 
+import haxeon.ui.properties.PropertyDescriptor;
 /**
  * Framework-owned bridge between a descriptor and an editor document.
  *

@@ -1,4 +1,4 @@
-package haxeon.ui.widgets.properties;
+package haxeon.ui.properties;
 
 import Observable;
 import haxeon.ui.widgets.KeyedView;
@@ -11,22 +11,20 @@ import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
 
-import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.CommandContext;
 import haxeon.ui.core.Key;
-import haxeon.ui.properties.PropertyDescriptor;
-import haxeon.ui.properties.PropertyBinding;
-import haxeon.ui.properties.PropertyEditResult;
-import haxeon.ui.properties.PropertyEditorRegistry;
-import haxeon.ui.properties.PropertyType;
-import haxeon.ui.properties.PropertyValue;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.WidgetId;
 import haxeon.ui.core.View;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.icons.IconName;
+import haxeon.ui.properties.PropertyBinding;
+import haxeon.ui.properties.PropertyDescriptor;
+import haxeon.ui.properties.PropertyEditorRegistry;
+import haxeon.ui.properties.PropertyValue;
 import haxeon.ui.style.StyleTarget;
 
 /** Descriptor-driven inspector that routes edits through the active document. */
@@ -52,7 +50,7 @@ class PropertyEditor implements View implements Observable {
 	}
 
 	/** Used only by privately built text views, which read rather than expose or mutate it. */
-	@:allow(haxeon.ui.widgets.properties.PropertyEditorRowContent) function labelStyle():LayoutStyle {
+	@:allow(haxeon.ui.properties.PropertyEditorRowContent) function labelStyle():LayoutStyle {
 		var cached = options.cachedLabelStyle;
 		if (cached == null
 			|| options.cachedLabelStacked != options.stackedRows || options.cachedLabelWidth != options.labelWidth) {
@@ -81,14 +79,14 @@ class PropertyEditor implements View implements Observable {
 
 	/** Counts the edits started and finished, so a host can tell when the editor's state changed. */
 	@:unobservable public var revision(default, null):Int;
-	@:allow(haxeon.ui.widgets.properties.PropertyEditorRow) final rowIds:Map<String, WidgetId> = new Map();
+	@:allow(haxeon.ui.properties.PropertyEditorRow) final rowIds:Map<String, WidgetId> = new Map();
 	// The rows' content, a private class of this module, reads the options, the pending edits and the editors it lays out.
-	@:allow(haxeon.ui.widgets.properties)
+	@:allow(haxeon.ui.properties)
 	final options:PropertyEditorOptions;
 	final drafts:Map<String, String>;
 	final errors:Map<String, String>;
-	@:allow(haxeon.ui.widgets.properties)
-	final pending:Map<String, haxeon.ui.properties.PropertyPendingEdit> = new Map();
+	@:allow(haxeon.ui.properties)
+	final pending:Map<String, PropertyPendingEdit> = new Map();
 
 	/** An editor of `descriptors`, one row each. Throws when `key` is empty. */
 	public function new(key:String,
@@ -212,7 +210,7 @@ class PropertyEditor implements View implements Observable {
 	}
 
 	/** A detached inspector may reuse this editor only if no draft, error, or edit has occurred. */
-	@:allow(haxeon.ui.widgets.properties.PropertyInspector) function isPristine():Bool return revision == 0
+	@:allow(haxeon.ui.properties.PropertyInspector) function isPristine():Bool return revision == 0
 		&& !drafts.keys().hasNext() && !errors.keys().hasNext() && !pending.keys().hasNext();
 
 	function draftOrValue(descriptor:PropertyDescriptor, value:PropertyValue):String return drafts.exists(descriptor.id)
@@ -241,7 +239,7 @@ class PropertyEditor implements View implements Observable {
 	/** The current validation or edit error of the property `id`, or null. */
 	public function errorFor(id:String):Null<String> return errors.get(id);
 
-	@:allow(haxeon.ui.widgets.properties)
+	@:allow(haxeon.ui.properties)
 	function editorView(context:BuildContext, descriptor:PropertyDescriptor, value:PropertyValue):View {
 		var editorKey = "editor:" + descriptor.id;
 		var writable = options.enabled && !descriptor.readOnly && !pending.exists(descriptor.id);

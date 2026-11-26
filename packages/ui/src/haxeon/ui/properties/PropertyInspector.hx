@@ -1,4 +1,4 @@
-package haxeon.ui.widgets.properties;
+package haxeon.ui.properties;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
@@ -14,7 +14,6 @@ import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.properties.PropertyDescriptor;
 import haxeon.ui.properties.PropertyEditorRegistry;
-import haxeon.ui.properties.PropertyInspectorSection;
 import haxeon.ui.properties.PropertyValue;
 import haxeon.ui.semantics.Semantics;
 

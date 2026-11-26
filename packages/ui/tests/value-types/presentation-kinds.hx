@@ -1,4 +1,4 @@
-import haxeon.ui.docking.DockPanelHeaderMode;
+import haxeon.ui.docking.DockNode;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.theme.TextRole;
 

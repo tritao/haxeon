@@ -1,6 +1,8 @@
 package haxeon.ui.properties;
 
+import Observable;
 import haxeon.ui.core.CommandContext;
+import haxeon.ui.properties.PropertyValue;
 
 /** Stable property schema plus model read/write/validation hooks. */
 class PropertyDescriptor {
@@ -143,5 +145,130 @@ class PropertyDescriptor {
 				throw "Property option keys must be unique";
 			keys.set(item.key, true);
 		}
+	}
+}
+
+/** Model reads track their own Observable sources; invocation context belongs to edits. */
+typedef PropertyReader = Void->PropertyValue;
+typedef PropertyWriter = CommandContext->PropertyValue->Void;
+typedef PropertyCommitter = CommandContext->PropertyValue->Null<String>->PropertyEditResult;
+
+typedef PropertyValidator = CommandContext->PropertyValue->Null<String>;
+
+/** Optional presentation and validation policy for one editable property. */
+class PropertyDescriptorOptions {
+	/** Optional external transaction owner. Bypasses UI document history after validation.
+	 * Completion and observers must run on the UI thread. */
+	public var structure:Null<PropertyStructure>;
+	public var commit:Null<PropertyCommitter>;
+	public var category:String;
+	public var description:Null<String>;
+	public var restartRequired:Bool = false;
+	public var modified:Null<Void->Bool>;
+	public var reset:Null<Void->Void>;
+	public var readOnly:Bool;
+	/** Whether edits enter the owning editor document's undo history. */
+	public var recordHistory:Bool;
+	public var minimum:Null<Float>;
+	public var maximum:Null<Float>;
+	public var step:Null<Float>;
+	public var unit:Null<String>;
+	public var defaultValue:Null<PropertyValue>;
+	public var options:Array<PropertyOption>;
+	public var validator:Null<PropertyValidator>;
+
+	public function new() {
+		structure = null;
+		commit = null;
+		category = "";
+		readOnly = false;
+		recordHistory = true;
+		minimum = null;
+		maximum = null;
+		step = null;
+		unit = null;
+		defaultValue = null;
+		options = [];
+		validator = null;
+	}
+}
+
+/** Result of validating and applying one property binding edit. */
+enum PropertyEditResult {
+	/** The owning model committed the value. */
+	Applied;
+	/** Submitted to an external transaction owner; completion has not happened. */
+	Pending(edit:PropertyPendingEdit);
+	/** The requested value was already present, so no history entry was made. */
+	Unchanged;
+	/** The edit was rejected before it changed the application model. */
+	Rejected(message:String);
+}
+
+/** Queries the case of a property edit result without comparing its payload. */
+class PropertyEditResultTools {
+	public static function isApplied(result:PropertyEditResult):Bool
+		return switch result {
+			case Applied: true;
+			default: false;
+		};
+}
+
+/** One-shot completion delivered by the application on its UI thread.
+ * A queued operation is not an applied edit. The owner resolves this after
+ * its transaction commits or fails, including cancellation on disposal.
+ */
+class PropertyPendingEdit {
+	public var result(default, null):Null<PropertyEditResult> = null;
+	final listeners:Array<PropertyEditResult->Void> = [];
+	public function new() {}
+	public function onComplete(listener:PropertyEditResult->Void):Void {
+		if (result == null) listeners.push(listener);
+		else listener(result);
+	}
+	public function resolve(next:PropertyEditResult):Void {
+		if (next == null) throw "A terminal property result is required";
+		switch next {
+			case Pending(_): throw "Completion cannot be pending";
+			default:
+		}
+		if (result != null) throw "Property edit already completed";
+		result = next;
+		var callbacks = listeners.copy();
+		listeners.resize(0);
+		for (callback in callbacks) callback(next);
+	}
+}
+
+/** Stable grouping of descriptors rendered by a shared property inspector. */
+class PropertyInspectorSection implements Observable {
+	public final id:String;
+	public final label:String;
+	public final descriptors:Array<PropertyDescriptor>;
+	public var expanded(default, null):Bool;
+
+	public function new(id:String, label:String, descriptors:Array<PropertyDescriptor>,
+			expanded:Bool = true) {
+		if (id == null || id.length == 0 || label == null || label.length == 0 || descriptors == null
+			|| descriptors.length == 0)
+			throw "Inspector sections require an ID, label, and descriptors";
+		this.id = id;
+		this.label = label;
+		this.descriptors = descriptors.copy();
+		var ids:Map<String, Bool> = new Map();
+		for (descriptor in this.descriptors) {
+			if (descriptor == null || ids.exists(descriptor.id))
+				throw "Inspector section descriptor IDs must be unique";
+			ids.set(descriptor.id, true);
+		}
+		this.expanded = expanded;
+	}
+
+	/** Changes the section state and reports whether it changed. */
+	public function setExpanded(value:Bool):Bool {
+		if (expanded == value)
+			return false;
+		expanded = value;
+		return true;
 	}
 }

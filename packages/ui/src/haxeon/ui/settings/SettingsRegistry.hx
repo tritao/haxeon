@@ -1,9 +1,8 @@
 package haxeon.ui.settings;
 
-import haxeon.ui.properties.PropertyType;
 import haxeon.ui.properties.PropertyValue;
-import haxeon.ui.properties.PropertyValueTools;
 
+import haxeon.ui.settings.SettingDefinition;
 /**
  * Every setting the application knows about, in definition order.
  *

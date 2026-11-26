@@ -11,6 +11,8 @@ import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
 
+import haxeon.ui.properties.PropertyEditorRegistry;
+import haxeon.ui.properties.PropertyValue;
 /** JSON-compatible structured editor. Nested lists expose individual items; each action
  * stages a detached value. Apply submits the entire value as one transaction.
  * Domain validation, model mutation and undo history remain application-owned.
@@ -475,5 +477,29 @@ private class StructuredPropertyDrafts {
 		current = haxe.Json.parse(base);
 		dirty = false;
 		drafts.clear();
+	}
+}
+
+/** Staged list controls share recursive structured-value editing. */
+class ListPropertyEditor extends StructuredPropertyEditor {
+	public static inline var TYPE = "ui.list";
+	public function new(id:String = TYPE, vector:Bool = false) {
+		super(id, vector);
+	}
+}
+
+/** A staged named-field object editor sharing the list transaction/draft owner. */
+class RecordPropertyEditor extends StructuredPropertyEditor {
+	public static inline var TYPE = "ui.record";
+	public function new() {
+		super(TYPE, false, true);
+	}
+}
+
+/** Fixed component controls for numeric vectors; dimensions remain schema-owned. */
+class NumericVectorPropertyEditor extends ListPropertyEditor {
+	public static inline var TYPE = "ui.numeric-vector";
+	public function new() {
+		super(TYPE, true);
 	}
 }

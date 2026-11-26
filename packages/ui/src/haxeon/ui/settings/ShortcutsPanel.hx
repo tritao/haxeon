@@ -1,4 +1,4 @@
-package haxeon.ui.widgets.settings;
+package haxeon.ui.settings;
 
 import haxeon.ui.core.UiModifier;
 

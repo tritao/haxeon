@@ -4,12 +4,11 @@ import Observable;
 
 import haxe.Json;
 import haxe.io.Path;
-import haxeon.ui.properties.PropertyType;
 import haxeon.ui.properties.PropertyValue;
-import haxeon.ui.properties.PropertyValueTools;
 import sys.FileSystem;
 import sys.io.File;
 
+import haxeon.ui.settings.SettingDefinition;
 /**
  * Current setting values over the registry's defaults, saved as JSON.
  *

@@ -3,6 +3,7 @@ package haxeon.ui.settings;
 import haxeon.ui.core.CommandRegistry;
 import haxeon.ui.core.Shortcut;
 
+import haxeon.ui.settings.SettingDefinition;
 /**
  * The user's shortcut choices, kept in a command registry and saved in a
  * settings store's "shortcuts" state as {"command.id": ["ctrl+s", ...]}.
