@@ -52,7 +52,7 @@ class ModuleDeclarationKeys {
 		this.enums = enums;
 		this.interfaces = interfaces;
 		this.functions = functions;
-		var file = firstFile(classes, abstracts, enums, interfaces, functions);
+		var file = mostNamedFile();
 		this.file = file;
 		walk((fn, owner, inferable, index) -> {
 			var leaves = inferable && AstFunctions.leavesSignatureToInference(fn);
@@ -148,19 +148,26 @@ class ModuleDeclarationKeys {
 		return false;
 	}
 
-	static function firstFile(classes:Array<AstClass>, abstracts:Array<AstAbstract>, enums:Array<AstEnum>,
-			interfaces:Array<AstInterface>, functions:Array<AstFunction>):Null<SourceFile> {
-		for (decl in classes)
-			return decl.span.file;
-		for (decl in abstracts)
-			return decl.span.file;
-		for (decl in enums)
-			return decl.span.file;
-		for (decl in interfaces)
-			return decl.span.file;
-		for (fn in functions)
-			return fn.span.file;
-		return null;
+	/**
+	 * The file most of the module's functions' spans name: the module's source, whatever a generated declaration among them names
+	 * (the class of a module's variables, `ModuleFields`).
+	 */
+	function mostNamedFile():Null<SourceFile> {
+		var files:Array<SourceFile> = [], counts:Array<Int> = [];
+		walk((fn, _, _, _) -> {
+			var at = files.indexOf(fn.span.file);
+			if (at < 0) {
+				files.push(fn.span.file);
+				counts.push(1);
+			} else
+				counts[at]++;
+			return false;
+		});
+		var best = -1;
+		for (index in 0...files.length)
+			if (best < 0 || counts[index] > counts[best])
+				best = index;
+		return best < 0 ? null : files[best];
 	}
 }
 
