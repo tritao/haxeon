@@ -379,9 +379,9 @@ private class FieldDecoration implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var node = field.build(context);
-		node.on(UiEventKind.PointerDown, function(_) onPress());
-		return node;
+		var modifier = new RootModifier();
+		modifier.on(UiEventKind.PointerDown, function(_) onPress());
+		return context.build(field, modifier);
 	}
 }
 
@@ -1007,28 +1007,29 @@ private class UpdatingResources implements View {
 			+ " decorated slider/progress steps keep caller additions and match rebuilt geometry, semantics and paint");
 	}
 
-	/** A text field patches itself while typing: its node stays, with what its caller attached, and matches a full rebuild. */
+	/** Typing reruns only the text field: the panel around it stays, the caller's additions stay, and it matches a full rebuild. */
 	static function textField(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts);
 		var field = new TextField("name", "abc");
-		var presses = 0;
+		var presses = 0, panelBuilds = 0;
 		var decorated = new FieldDecoration(field, function() presses++);
-		var view:View = new TrackedScope("field-panel", function() return decorated);
+		var view:View = new TrackedScope("field-panel", function() {
+			panelBuilds++;
+			return decorated;
+		});
 		var frame = new LayoutFrame(240.0, 60.0);
 		var build = function() return view;
 		var submit = function() return ui.submitCached(build, frame, "field");
 		var root = submit();
 		check(ui.focusWidget(root.id), "The field did not take focus");
 		root = submit();
-		var node = root;
 		for (letter in ["d", "e", "f"]) {
+			var builds = panelBuilds;
 			ui.text(UiEventKind.TextInput, letter);
 			root = submit();
-			check(root == node, "Typing replaced the field's node");
-			check(ui.verifyRetention(build, frame) == null, "The patched field differs from a fresh build");
-			// The verification built everything afresh, so the next frame starts from a new node.
+			check(panelBuilds == builds, "Typing rebuilt the panel around the field");
+			check(ui.verifyRetention(build, frame) == null, "The updated field differs from a fresh build");
 			root = submit();
-			node = root;
 		}
 		var typed:Null<RenderNode> = null;
 		root.walk(function(child) {
@@ -1040,7 +1041,7 @@ private class UpdatingResources implements View {
 		ui.pointerUp(bounds.x + 2, bounds.y + 2, 0);
 		check(presses == 1, "The caller's listener ran " + presses + " times, expected 1");
 		ui.dispose();
-		Sys.println("PASS field: typing patches the field in place, keeping what its caller attached");
+		Sys.println("PASS field: typing reruns only the field, keeping what its caller attached");
 	}
 
 	static function buildFeedbackFocus(fonts:FontCollection):Void {

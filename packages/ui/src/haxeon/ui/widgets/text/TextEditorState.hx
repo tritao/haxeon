@@ -19,6 +19,28 @@ import haxeon.editor.CodepointOffset;
 import haxeon.ui.core.TextInputBridge;
 /** Persistent editable text, selection and IME composition state for one widget ID. */
 class TextEditorState implements SemanticsValueSource implements Disposable {
+	/** Bumped by `changed` whenever the editor's state changes, so the field showing it builds again. */
+	public final version:haxeon.reactive.Signal<Int> = new haxeon.reactive.Signal(0);
+
+	/** The last value a field's caller gave, which `adoptExternal` compares against. */
+	var adoptedValue:Null<String> = null;
+
+	var changes:Int = 0;
+
+	/** Tells the field showing this editor that its state changed. */
+	public function changed():Void version.value = ++changes;
+
+	/**
+	 * Takes the caller's `value` when it differs from the last one it gave, like `syncExternal`; the same value again
+	 * keeps what the user typed since. Returns whether the text changed.
+	 */
+	public function adoptExternal(value:String, ?deferHistoryClear:Bool = false):Bool {
+		var next = value == null ? "" : value;
+		if (next == adoptedValue) return false;
+		adoptedValue = next;
+		return syncExternal(next, deferHistoryClear);
+	}
+
 	static inline var caretBlinkHalfPeriod:Float = 0.5;
 	// Real width arrives during measurement. Avoid a one-pixel provisional
 	// layout that creates a visual line per character across large documents.

@@ -903,7 +903,6 @@ class FrameworkSmoke {
 		if (!tabHierarchyValid(fonts)) return 302;
 		if (context.buildContext.fonts != fonts) return 30;
 		if (!commandHistoryValid(context)) return 230;
-		if (!selfUpdatingLifetimeValid(context)) throw "self-updating widget lifetime regression";
 		if (!transientWidgetLifetimeValid(context)) throw "transient widget lifetime regression";
 		if (!externalScrollbarValid(context)) throw "external scrollbar placement or input regression";
 		if (!scrollbarVisibilityValid(context)) throw "scrollbar visibility regression";
@@ -1256,16 +1255,16 @@ class FrameworkSmoke {
 		if (sharedEditor.text != "external update"
 			|| sharedEditor.selectionEnd > sharedDocument.codepointCount) return 295;
 		var controlledDocument = new TextDocument("a🙂bc");
-		var controlledSelection = new TextSelection(4, 1);
+		var controlledSelection = new haxeon.reactive.Signal(new TextSelection(4, 1));
 		var editDelivered = false;
 		var callbackOrdered = true;
 		var controlledField = TextField.withDocument("controlled-selection", controlledDocument, function(_) {
 			editDelivered = true;
 		});
-		controlledField.selectionProvider = function() return controlledSelection;
+		controlledField.selectionProvider = function() return controlledSelection.value;
 		controlledField.onSelectionChange = function(next) {
 			if (controlledDocument.text == "ax" && !editDelivered) callbackOrdered = false;
-			controlledSelection = next;
+			controlledSelection.value = next;
 		};
 		var controlledRoot = context.submit(controlledField, new LayoutFrame(256.0, 192.0));
 		var controlledState:State<TextEditorState> = context.buildContext.existingState(controlledRoot.id);
@@ -1274,19 +1273,20 @@ class FrameworkSmoke {
 		context.focusWidget(controlledRoot.id);
 		context.text(UiEventKind.TextInput, "x");
 		if (controlledDocument.text != "ax" || !callbackOrdered
-			|| !editDelivered || controlledSelection.anchor != 2 || controlledSelection.focus != 2) return 341;
+			|| !editDelivered || controlledSelection.value.anchor != 2
+			|| controlledSelection.value.focus != 2) return 341;
 		context.submit(controlledField, new LayoutFrame(256.0, 192.0));
 		if (controlledEditor.selectionFocus != 2) return 342;
-		controlledSelection = new TextSelection(0, 0);
+		controlledSelection.value = new TextSelection(0, 0);
 		context.submit(controlledField, new LayoutFrame(256.0, 192.0));
 		context.key(UiEventKind.KeyDown, UiKey.Right, UiModifier.Shift);
-		if (controlledSelection.anchor != 0 || controlledSelection.focus != 1) return 343;
+		if (controlledSelection.value.anchor != 0 || controlledSelection.value.focus != 1) return 343;
 		editDelivered = false;
 		controlledField.onEditIntent = function(intent, layout) {
 			switch intent {
 				case Insert(text):
 					controlledDocument.replace(0, controlledDocument.codepointCount, text + "!");
-					controlledSelection = new TextSelection(controlledDocument.codepointCount,
+					controlledSelection.value = new TextSelection(controlledDocument.codepointCount,
 						controlledDocument.codepointCount);
 					return true;
 				case _:
@@ -1297,7 +1297,7 @@ class FrameworkSmoke {
 		context.text(UiEventKind.TextInput, "🙂");
 		if (controlledDocument.text != "🙂!" || editDelivered || controlledEditor.selectionFocus != 2) return 344;
 		context.key(UiEventKind.KeyDown, UiKey.Backspace);
-		if (controlledDocument.text != "🙂" || !editDelivered || controlledSelection.focus != 1) return 345;
+		if (controlledDocument.text != "🙂" || !editDelivered || controlledSelection.value.focus != 1) return 345;
 		var sharedArea = TextArea.withDocument("shared-document-area", new TextDocument("multiline"));
 		if (!sharedArea.multiline) return 296;
 		fieldRoot = context.submit(field, new LayoutFrame(256.0, 192.0));
@@ -1312,14 +1312,15 @@ class FrameworkSmoke {
 		if (fieldRoot.children[0].children.length != 3 || fieldRoot.children[0].children[0].layout.visualKind
 			!= LayoutVisualKind.Custom || fieldRoot.children[0].children[0].layout.style.zIndex != 0) return 231;
 		context.text(UiEventKind.TextInput, "á🙂");
-		if (field.value != "á🙂" || editedValue != "á🙂" || fieldEditor.selectionEnd != 3) return 42;
+		if (fieldEditor.text != "á🙂" || editedValue != "á🙂" || fieldEditor.selectionEnd != 3) return 42;
 		fieldRoot = context.submit(field, new LayoutFrame(256.0, 192.0));
 		context.key(UiEventKind.KeyDown, UiKey.Left);
 		context.key(UiEventKind.KeyDown, UiKey.Backspace);
-		if (field.value != "🙂" || fieldEditor.selectionEnd != 0) return 43;
+		if (fieldEditor.text != "🙂" || fieldEditor.selectionEnd != 0) return 43;
 		var compositionEdit = new PlatformTextEdit(TextEditAction.Compose, "x", 1, 1, 2, 2, 1, 2);
 		context.text(UiEventKind.TextEdit, null, compositionEdit);
-		if (field.value != "🙂x" || fieldEditor.compositionStart != 1 || fieldEditor.compositionEnd != 2) return 44;
+		if (fieldEditor.text != "🙂x" || fieldEditor.compositionStart != 1
+			|| fieldEditor.compositionEnd != 2) return 44;
 		fieldRoot = context.submit(field, new LayoutFrame(256.0, 192.0));
 		if (fieldDiagnostics == null
 			|| !fieldDiagnostics.focused || fieldDiagnostics.compositionStart != 1
@@ -1327,7 +1328,7 @@ class FrameworkSmoke {
 			|| fieldDiagnostics.compositionText != "x" || fieldDiagnostics.caretRect == null) return 213;
 		var commitEdit = new PlatformTextEdit(TextEditAction.Commit, "x", 1, 2, 2, 2, -1, -1);
 		context.text(UiEventKind.TextEdit, null, commitEdit);
-		if (fieldEditor.compositionStart != -1 || field.value != "🙂x") return 45;
+		if (fieldEditor.compositionStart != -1 || fieldEditor.text != "🙂x") return 45;
 		var cancelEdit = new PlatformTextEdit(TextEditAction.SetComposition, null, 0, 0, 2, 2, 1, 2);
 		if (!fieldEditor.applyTextEdit(cancelEdit) || fieldEditor.compositionStart != 1
 			|| fieldEditor.compositionRects().length == 0
@@ -1342,7 +1343,7 @@ class FrameworkSmoke {
 		if (!context.accessibilityAction(fieldRoot.id.value, AccessibilityRequestAction.SetSelection,
 			null, 0, 1, 2) || fieldEditor.selectionStart != 0 || fieldEditor.selectionEnd != 1) return 46;
 		if (!context.accessibilityAction(fieldRoot.id.value,
-			AccessibilityRequestAction.SetValue, "done", -1, -1, 1) || field.value != "done") return 47;
+			AccessibilityRequestAction.SetValue, "done", -1, -1, 1) || fieldEditor.text != "done") return 47;
 		fieldRoot = context.submit(field, new LayoutFrame(256.0, 192.0));
 		fieldEditor = cast fieldState.value;
 		if (fieldEditor.layout.selectionRects(new TextPosition(0, 0), new TextPosition(4, 0)).length == 0) return 48;
@@ -1577,7 +1578,7 @@ class FrameworkSmoke {
 		if (!areaSemantics.states.contains(AccessibilityState.Multiline)
 			|| areaGeometry.height < 100.0 || !context.focusWidget(areaRoot.id)) return 62;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
-		if (area.value != "line\n" || areaChanged != "line\n") return 63;
+		if (areaChanged != "line\n") return 63;
 		var alignStyle = new LayoutStyle();
 		alignStyle.width = LayoutAxis.fixed(160.0);
 		alignStyle.height = LayoutAxis.fixed(80.0);
@@ -5686,32 +5687,6 @@ class FrameworkSmoke {
 		var afterKeys = context.buildContext.diagnosticKeyCounts();
 		return after.values == before.values && after.resources == before.resources
 			&& after.paths == before.paths && afterKeys.ids == beforeKeys.ids && afterKeys.paths == beforeKeys.paths;
-	}
-
-	static function selfUpdatingLifetimeValid(context:UiContext):Bool {
-		var field = new TextField("builder-lifetime", "document");
-		// The field updates its own root in place, so it sits inside the scope's column rather than being its root.
-		var view = new TrackedScope("builder-retained",
-			function() return new Column("builder-column", [new KeyedView("field", field)]));
-		var frame = new LayoutFrame(240, 80);
-		var root = context.submit(view, frame);
-		var id = root.children[0].id;
-		// Retained trees must keep patching without rebuilding their widget.
-		context.submit(view, frame);
-		if (!context.buildContext.requestPatch(id)) return false;
-		context.submit(view, frame);
-		context.submit(new Text("unmounted builder"), frame);
-		if (context.buildContext.requestPatch(id)) return false;
-		// A fresh mount with the same key restores a live builder.
-		root = context.submit(view, frame);
-		if (!root.children[0].id.equals(id) || !context.buildContext.requestPatch(id)) return false;
-		context.submit(new Text("unmounted again"), frame);
-		var released = !context.buildContext.requestPatch(id);
-		// A patch asked for just before an unmount is applied in that frame, which touches the widget's state once more, so its
-		// keys are dropped when the mounted nodes next change; change them before the next lifetime test counts keys.
-		var settle:Array<KeyedView> = [new KeyedView("settled", new Text("settled"))];
-		context.submit(new Column("settle", settle), frame);
-		return released;
 	}
 
 	static function externalScrollbarValid(context:UiContext):Bool {

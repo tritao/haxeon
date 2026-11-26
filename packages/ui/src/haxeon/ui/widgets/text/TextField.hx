@@ -22,6 +22,7 @@ import haxeon.ui.Transform2D;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.State;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.UiEvent;
@@ -38,7 +39,12 @@ import nativekit.ffi.NativeKitTypes.TextEditAction;
 
 import haxeon.ui.widgets.text.TextEditorState;
 /** Text editor composed from a Haxe box and NativeUI text primitive. */
-class TextField implements View {
+/**
+ * A component: its inputs are its configuration, compared as `inputsEqual` says, and its body also depends on its
+ * editor state, which wakes it on every change (`TextEditorState.version`). Callbacks run through the newest
+ * description; providers it calls while building are inputs, compared by identity.
+ */
+class TextField implements ScopeView {
 	/** Shared only by internal read-only selection paths. */
 	static final NoAdditionalSelections:Array<TextSelection> = [];
 
@@ -82,8 +88,12 @@ class TextField implements View {
 	public var decorationProvider:Null<(Int, Int) -> Array<TextDecoration>>;
 	/** Increment when state captured by presentation providers changes. */
 	public var presentationRevision:Int = 0;
-	/** Optional controlled selection, queried on rebuild after shared-document synchronization. */
-	public var selectionProvider:Null<Void->TextSelection>;
+	/**
+	 * Optional controlled selection, read when the field builds (after shared-document synchronization) and after a
+	 * delegated edit; null from it imposes none. The field follows a change only through a rebuild, so a provider whose
+	 * selection changes on its own reads reactive state, which the field then depends on.
+	 */
+	public var selectionProvider:Null<Void->Null<TextSelection>>;
 	/** Reports widget selection after edit callbacks have synchronized a caller-owned document. */
 	public var onSelectionChange:Null<TextSelection->Void>;
 	/** Explicit navigation/edit request for owners that manage an outer viewport. */
@@ -149,6 +159,8 @@ class TextField implements View {
 	public var semanticActions:AccessibilityAction;
 	/** Semantic states a composite editable control adds, such as a combo box's popup. */
 	public var semanticStates:AccessibilityState;
+	/** Views the field builds over its content with its style as their parent, such as a combo box's frame and icon. */
+	public var overlays:Array<View>;
 
 	/**
 	 * A field editing `value`, or `document` when given, which several editors may share; `onEdit` then receives each
@@ -196,6 +208,7 @@ class TextField implements View {
 		semanticRole = AccessibilityRole.TextField;
 		semanticActions = AccessibilityAction.SetValue | AccessibilityAction.SetSelection;
 		semanticStates = AccessibilityState.empty();
+		overlays = [];
 	}
 
 	/** Creates a field backed by a shared document and edit transaction stream. */
@@ -224,16 +237,54 @@ class TextField implements View {
 	/** Use lexical identifier boundaries for code selection and word commands. */
 	public var codeWordBoundaries:Bool = false;
 
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(new Key(key), function() {
-			var id = context.rootId("field");
-			// Read document-backed state in the tracked field build so its Observable history drives the local patch.
-			// The field rebuilds only itself when its own state changes (typing, selection, caret), so the panel around it stays cached.
-			return context.selfUpdating(id, function() return buildField(context, id));
-		});
+	public function scopeKey():String return key;
+
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, TextField)) return false;
+		var other:TextField = cast previous;
+		if (key != other.key || value != other.value || renderWhitespace != other.renderWhitespace
+			|| !haxeon.Equality.equals(whitespaceColor, other.whitespaceColor) || label != other.label
+			|| placeholder != other.placeholder || ellipsizeWhenUnfocused != other.ellipsizeWhenUnfocused
+			|| multiline != other.multiline || imeAction != other.imeAction || haxeon.Diff.mask(style, other.style) != 0
+			|| textStyle != other.textStyle || !haxeon.Equality.equals(textColor, other.textColor)
+			|| presentationRevision != other.presentationRevision
+			|| historyManagedExternally != other.historyManagedExternally
+			|| enabled != other.enabled || readOnly != other.readOnly || followTail != other.followTail
+			|| document != other.document || semanticRole != other.semanticRole
+			|| semanticActions != other.semanticActions
+			|| semanticStates != other.semanticStates || tabWidth != other.tabWidth || wrap != other.wrap
+			|| codeWordBoundaries != other.codeWordBoundaries || classes.length != other.classes.length
+			|| overlays.length != other.overlays.length) return false;
+		for (index in 0...classes.length) if (classes[index] != other.classes[index]) return false;
+		for (index in 0...overlays.length) if (overlays[index] != other.overlays[index]) return false;
+		// Called while building: inputs, by identity.
+		if (colorRangeProvider != other.colorRangeProvider || decorationProvider != other.decorationProvider
+			|| selectionProvider != other.selectionProvider
+			|| additionalSelectionProvider != other.additionalSelectionProvider) return false;
+		// Called on events through the newest description: only whether there is one matters.
+		return (onChange == null) == (other.onChange == null) && (onEdit == null) == (other.onEdit == null)
+			&& (onSubmit == null) == (other.onSubmit == null)
+			&& (onSelectionChange == null) == (other.onSelectionChange == null)
+			&& (onCaretRevealRequest == null) == (other.onCaretRevealRequest == null)
+			&& (onSelectionDragScroll == null) == (other.onSelectionDragScroll == null)
+			&& (onEditIntent == null) == (other.onEditIntent == null)
+			&& (onEditorAction == null) == (other.onEditorAction == null)
+			&& (onNavigationIntent == null) == (other.onNavigationIntent == null)
+			&& (selectionTextProvider == null) == (other.selectionTextProvider == null)
+			&& (pageHeightProvider == null) == (other.pageHeightProvider == null)
+			&& (onTextPointerDown == null) == (other.onTextPointerDown == null)
+			&& (onTextPointerMove == null) == (other.onTextPointerMove == null)
+			&& (onDiagnostics == null) == (other.onDiagnostics == null)
+			&& (onCaretRect == null) == (other.onCaretRect == null)
+			&& (onLayoutResolved == null) == (other.onLayoutResolved == null);
 	}
 
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+
+	public function buildBody(context:BuildContext):RenderNode return buildField(context, context.rootId("field"));
+
 	function buildField(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
+		var latest = context.latestOf(this);
 		var resolved = context.resolveTextRole(TextRole.Body, TextStyleOverride.fromTextStyle(textStyle));
 		var resolvedTextColor = textColor == null ? resolved.textColor : textColor;
 		// Typography is immutable; replace the complete paragraph value for this field.
@@ -242,16 +293,21 @@ class TextField implements View {
 		paragraph = paragraph.withWrap(wrap == null ? (multiline ? TextWrap.WordCharacter : TextWrap.None) : wrap);
 		var stored:State<TextEditorState> = acquireState(context, id, value, resolved.textStyle, paragraph, document);
 		var editor:TextEditorState = stored.value;
-		// The editor is an identity-bearing mutable resource; its event requests the owning field's local rebuild.
-		var refresh = function() context.requestPatch(id);
+		// The editor is a mutable resource: the body depends on its version, which every change below bumps.
+		editor.version.value;
+		var refresh = function() editor.changed();
 		editor.layout.codeWordBoundaries = codeWordBoundaries;
 		editor.configureTail(followTail && readOnly);
-		var documentChanged = document != null ? editor.syncDocument(document, true) : editor.syncExternal(value, true);
+		// A caller's value is adopted when it gives a new description; the body running again for its own state keeps
+		// what the user typed.
+		var documentChanged = document != null ? editor.syncDocument(document,
+			true) : editor.adoptExternal(value, true);
 		if (documentChanged) {
 			editor.resetCaretBlink(Sys.time());
 			if (editor.tailFollowing) editor.scrollToEnd();
 		}
-		if (selectionProvider != null) editor.setAnchoredSelection(selectionProvider(), true);
+		var imposed = selectionProvider == null ? null : selectionProvider();
+		if (imposed != null) editor.setAnchoredSelection(imposed, true);
 		var additionalSelections = additionalSelectionProvider
 			== null ? NoAdditionalSelections : additionalSelectionProvider();
 		var hasAdditionalCaret = false;
@@ -470,38 +526,43 @@ class TextField implements View {
 			editorContent.add(paintNode);
 		}
 		node.add(editorContent);
+		if (overlays.length > 0) context.withStyleParent(computed, function() {
+			for (overlay in overlays) node.add(overlay.build(context));
+		});
 
 		var refreshState = function(revealCaret:Bool = true) {
 			if (revealCaret) {
 				editor.requestCaretReveal();
-				if (onCaretRevealRequest != null) onCaretRevealRequest();
+				var reveal = latest().onCaretRevealRequest;
+				if (reveal != null) reveal();
 			} else editor.preserveViewport();
-			if (document == null || onChange != null) value = editor.layoutText();
 			semantics.setValueSource(editor, editor.documentLength());
 			semantics.selectionStart = editor.selectionStart;
 			semantics.selectionEnd = editor.selectionEnd;
 			refresh();
 		};
 		var updateState = function(revealCaret:Bool = true) {
-			publishSelection(editor);
+			latest().publishSelection(editor);
 			refreshState(revealCaret);
 		};
 		var delegateEdit = function(intent:TextEditIntent):Bool {
-			var handler = onEditIntent;
+			var handler = latest().onEditIntent;
 			if (handler == null || !handler(intent, editor.layout)) return false;
 			if (document != null) editor.syncDocument(document);
-			else editor.syncExternal(value);
-			if (selectionProvider != null) editor.setAnchoredSelection(selectionProvider());
+			else editor.syncExternal(latest().value);
+			var provider = latest().selectionProvider;
+			var imposed = provider == null ? null : provider();
+			if (imposed != null) editor.setAnchoredSelection(imposed);
 			editor.resetCaretBlink(Sys.time());
 			updateState();
 			return true;
 		};
 		var publishTextChange = function(previousRevision:Int) {
-			if (document == null || onChange != null) value = editor.layoutText();
-			if (editor.documentRevision() != previousRevision
-				&& editor.lastEditTransaction != null && onEdit != null) onEdit(editor.lastEditTransaction);
-			if (editor.documentRevision() != previousRevision && onChange != null) onChange(value);
-			publishSelection(editor);
+			var field = latest(), edited = field.onEdit, changed = field.onChange;
+			if (editor.documentRevision() != previousRevision && editor.lastEditTransaction != null && edited != null)
+				edited(editor.lastEditTransaction);
+			if (editor.documentRevision() != previousRevision && changed != null) changed(editor.layoutText());
+			latest().publishSelection(editor);
 			refreshState();
 		};
 
@@ -523,11 +584,12 @@ class TextField implements View {
 		textNode.onResolved(function(geometry) {
 			editor.updateLayout(geometry.width);
 			drag.layoutResolved();
-			if (onLayoutResolved != null) onLayoutResolved(editor.layout, geometry);
+			var resolvedHandler = latest().onLayoutResolved;
+			if (resolvedHandler != null) resolvedHandler(editor.layout, geometry);
 			if (multiline && !readOnly
 				&& editorContent.resolved != null
 				&& editor.resolveCaretReveal(editorContent.resolved.height)) refresh();
-			syncCursor(editor, context, id, geometry);
+			latest().syncCursor(editor, context, id, geometry);
 		});
 		node.on(UiEventKind.Focus, function(_) {
 			if (!enabled) return;
@@ -536,8 +598,8 @@ class TextField implements View {
 			semantics.states |= AccessibilityState.Focused;
 			refresh();
 			context.textInput.activate(id);
-			if (textNode.resolved != null) syncCursor(editor, context, id, cast textNode.resolved);
-			else publishDiagnostics(editor, context, null);
+			if (textNode.resolved != null) latest().syncCursor(editor, context, id, cast textNode.resolved);
+			else latest().publishDiagnostics(editor, context, null);
 		});
 		var blur = function(event:UiEvent) {
 			if (!editor.focused && !editor.draggingSelection) return;
@@ -548,7 +610,7 @@ class TextField implements View {
 			semantics.states = semantics.states.remove(AccessibilityState.Focused);
 			refresh();
 			context.textInput.deactivate(id);
-			publishDiagnostics(editor, context, null);
+			latest().publishDiagnostics(editor, context, null);
 		};
 		node.on(UiEventKind.Blur, blur);
 		node.on(UiEventKind.FocusLost, blur);
@@ -569,12 +631,13 @@ class TextField implements View {
 			}
 		};
 		drag.configure(context.animations, editor, function() return textNode.resolved, extendDrag, function(delta) {
-			var changed = onSelectionDragScroll == null ? editor.scrollBy(delta) : onSelectionDragScroll(delta);
+			var dragScroll = latest().onSelectionDragScroll;
+			var changed = dragScroll == null ? editor.scrollBy(delta) : dragScroll(delta);
 			if (changed) refresh();
 			return changed;
 		});
 		node.on(UiEventKind.PointerDown, function(event) {
-			var pointerAction = onTextPointerDown;
+			var pointerAction = latest().onTextPointerDown;
 			if (enabled && pointerAction != null && textNode.resolved != null) {
 				var geometry:ResolvedLayoutItem = cast textNode.resolved;
 				var point = geometry.viewportToLayout(event.x, event.y);
@@ -603,7 +666,7 @@ class TextField implements View {
 			event.preventDefault();
 		});
 		node.on(UiEventKind.PointerMove, function(event) {
-			var pointerMove = onTextPointerMove;
+			var pointerMove = latest().onTextPointerMove;
 			if (enabled && pointerMove != null && textNode.resolved != null) {
 				var geometry:ResolvedLayoutItem = cast textNode.resolved;
 				var point = geometry.viewportToLayout(event.x, event.y);
@@ -635,6 +698,7 @@ class TextField implements View {
 				|| event.key == UiKey.Right || event.key == UiKey.Up || event.key == UiKey.Down)) return;
 			var extend = event.modifiers.contains(UiModifier.Shift);
 			var command = (event.modifiers.contains(UiModifier.Control) || event.modifiers.contains(UiModifier.Super));
+			var editorAction = latest().onEditorAction;
 			var action:Null<TextEditorAction> = event.key == UiKey.Escape ? ClearSelection : command
 				&& event.key == UiKey.C ? Copy : command && event.key == UiKey.X ? Cut : extend && !command && event.key
 				== UiKey.Delete ? Cut : command
@@ -642,9 +706,11 @@ class TextField implements View {
 				&& event.key == UiKey.Insert ? Copy : extend && event.key == UiKey.Insert ? Paste : command
 				&& event.key == UiKey.Enter ? (extend ? InsertLineAbove : InsertLineBelow) : null;
 			if (action != null && (!readOnly
-				|| action == Copy || action == ClearSelection) && onEditorAction != null && onEditorAction(action)) {
+				|| action == Copy || action == ClearSelection) && editorAction != null && editorAction(action)) {
 				if (document != null) editor.syncDocument(document);
-				if (selectionProvider != null) editor.setAnchoredSelection(selectionProvider());
+				var provider = latest().selectionProvider;
+				var imposed = provider == null ? null : provider();
+				if (imposed != null) editor.setAnchoredSelection(imposed);
 				refreshState(false);
 				event.preventDefault();
 				return;
@@ -671,7 +737,7 @@ class TextField implements View {
 			event.modifiers.contains(UiModifier.Control);
 			#end
 			// The handler is read once: the calls below (pageStep, the modifier checks) may replace it.
-			var navigationIntent = onNavigationIntent;
+			var navigationIntent = latest().onNavigationIntent;
 			if (additionalSelections.length > 0 && navigationIntent != null) {
 				var navigation:Null<TextNavigationIntent> = switch (event.key) {
 					case UiKey.Left:
@@ -691,9 +757,9 @@ class TextField implements View {
 						wordNavigation ? Paragraph(1, extend, macWordNavigation) : multiline ? VisualLine(1,
 							extend) : null;
 					case UiKey.PageUp:
-						multiline ? VisualLine(pageStep(editor, editorContent, -1), extend) : null;
+						multiline ? VisualLine(latest().pageStep(editor, editorContent, -1), extend) : null;
 					case UiKey.PageDown:
-						multiline ? VisualLine(pageStep(editor, editorContent, 1), extend) : null;
+						multiline ? VisualLine(latest().pageStep(editor, editorContent, 1), extend) : null;
 					case UiKey.Home:
 						LineBoundary(false, extend);
 					case UiKey.End:
@@ -737,9 +803,9 @@ class TextField implements View {
 			// Select-all is exactly Ctrl+A (Cmd+A on macOS); Shift/Alt variants belong to the application keymap.
 			if (command && event.key == UiKey.A && (!event.modifiers.contains(UiModifier.Shift)
 				&& !event.modifiers.contains(UiModifier.Alt))) changed = editor.selectAll();
-			else if (command && event.key == UiKey.C) copyCurrentSelection(context, editor);
+			else if (command && event.key == UiKey.C) latest().copyCurrentSelection(context, editor);
 			else if (command && event.key == UiKey.X) {
-				copyCurrentSelection(context, editor);
+				latest().copyCurrentSelection(context, editor);
 				if (!readOnly && delegateEdit(Insert(""))) {
 					event.preventDefault();
 					return;
@@ -783,10 +849,12 @@ class TextField implements View {
 				extend,
 				macWordNavigation);
 			else if (multiline
-				&& event.key == UiKey.PageUp) changed = editor.moveCaretVertically(pageStep(editor, editorContent, -1),
+				&& event.key == UiKey.PageUp) changed = editor.moveCaretVertically(latest().pageStep(editor,
+				editorContent, -1),
 				extend);
 			else if (multiline
-				&& event.key == UiKey.PageDown) changed = editor.moveCaretVertically(pageStep(editor, editorContent, 1),
+				&& event.key == UiKey.PageDown) changed = editor.moveCaretVertically(latest().pageStep(editor,
+				editorContent, 1),
 				extend);
 			else if (multiline && event.key == UiKey.Up) changed = editor.moveCaretVertically(-1, extend);
 			else if (multiline && event.key == UiKey.Down) changed = editor.moveCaretVertically(1, extend);
@@ -824,7 +892,10 @@ class TextField implements View {
 						changed = editor.insert("\n");
 						textEdited = true;
 					}
-				} else if (onSubmit != null) onSubmit(editor.layoutText());
+				} else {
+					var submit = latest().onSubmit;
+					if (submit != null) submit(editor.layoutText());
+				}
 			} else handled = false;
 			if (changed) {
 				if (textEdited) publishTextChange(previousRevision);

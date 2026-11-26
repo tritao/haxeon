@@ -220,22 +220,22 @@ class ComboBox<T> implements View {
 				if (openState.value != true) open();
 				else submitActive();
 			};
-			inputNode = context.withScope(new Key("input"), function() return input.build(context));
-			context.withStyleParent(inputNode.computedStyle, function() {
-				inputNode.add(SelectionIndicator.fieldFrame("input-frame").build(context));
-				inputNode.add(SelectionIndicator.search("input-search",
-					enabled ? context.theme.tokens.textSecondary : context.theme.tokens.textDisabled).build(context));
-			});
-			inputNode.on(UiEventKind.PointerDown, function(event) {
+			input.overlays = [
+				SelectionIndicator.fieldFrame("input-frame"),
+				SelectionIndicator.search("input-search",
+					enabled ? context.theme.tokens.textSecondary : context.theme.tokens.textDisabled)
+			];
+			var inputModifier = new RootModifier();
+			inputModifier.on(UiEventKind.PointerDown, function(event) {
 				if (enabled && event.button == 0) open();
 			});
-			inputNode.on(UiEventKind.Activate, function(event) {
+			inputModifier.on(UiEventKind.Activate, function(event) {
 				if (!enabled) return;
 				if (openState.value != true) open();
 				else submitActive();
 				event.preventDefault();
 			});
-			inputNode.on(UiEventKind.AccessibilitySetValue, function(event) {
+			inputModifier.on(UiEventKind.AccessibilitySetValue, function(event) {
 				if (!enabled || event.text == null) return;
 				for (index in 0...options.length) if (options[index].enabled
 					&& (options[index].key == event.text || options[index].label == event.text)) {
@@ -244,7 +244,7 @@ class ComboBox<T> implements View {
 					return;
 				}
 			});
-			inputNode.on(UiEventKind.KeyDown, function(event) {
+			inputModifier.on(UiEventKind.KeyDown, function(event) {
 				if (!enabled) return;
 				if (event.key == UiKey.Escape && openState.value == true) {
 					close();
@@ -275,6 +275,18 @@ class ComboBox<T> implements View {
 			rowStyle.direction = LayoutDirection.LeftToRight;
 			var triggerRow = context.createNode(context.rootId("trigger-row"), LayoutVisualKind.Box, rowStyle);
 			triggerRow.hitTestSelf = false;
+			inputModifier.onResolved(function(geometry) {
+				if (finite(geometry.x) && finite(geometry.y)
+					&& finite(geometry.width) && finite(geometry.height) && geometry.width >= 0.0
+					&& geometry.height >= 0.0) {
+					rememberFloat(triggerXState, geometry.x);
+					rememberFloat(triggerYState, geometry.y);
+					rememberFloat(triggerWidthState, geometry.width);
+					rememberFloat(triggerHeightState, geometry.height);
+					if (anchorKnownState.value != true) anchorKnownState.update(true);
+				}
+			});
+			inputNode = context.withScope(new Key("input"), function() return context.build(input, inputModifier));
 			triggerRow.add(inputNode);
 			var anchorStyle = new LayoutStyle();
 			anchorStyle.width = LayoutAxis.percent(0);
@@ -315,17 +327,6 @@ class ComboBox<T> implements View {
 			arrowAnchor.add(arrowNode);
 			triggerRow.add(arrowAnchor);
 			root.add(triggerRow);
-			inputNode.onResolved(function(geometry) {
-				if (finite(geometry.x) && finite(geometry.y)
-					&& finite(geometry.width) && finite(geometry.height) && geometry.width >= 0.0
-					&& geometry.height >= 0.0) {
-					rememberFloat(triggerXState, geometry.x);
-					rememberFloat(triggerYState, geometry.y);
-					rememberFloat(triggerWidthState, geometry.width);
-					rememberFloat(triggerHeightState, geometry.height);
-					if (anchorKnownState.value != true) anchorKnownState.update(true);
-				}
-			});
 
 			root.focusTrap = isOpen;
 			if (isOpen && filteredIndices.length > 0) {
