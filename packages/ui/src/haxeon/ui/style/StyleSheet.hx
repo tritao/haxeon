@@ -239,7 +239,7 @@ class StyleSelector {
 }
 
 /** Which rules of a theme sheet and an application sheet match a widget on hover, indexed by widget type. */
-class HoverRuleIndex {
+internal class HoverRuleIndex {
 	/** The style revision the types were collected at. */
 	var revision:Int = -1;
 
