@@ -81,7 +81,7 @@ class PropertyTests {
 						default:
 					}
 				});
-			check(PropertyEditResultTools.isApplied(new PropertyBinding(sync, commands).apply(PropertyValue.Int(7))),
+			check(new PropertyBinding(sync, commands).apply(PropertyValue.Int(7)).isApplied(),
 				"Synchronous editing still applies");
 			check(document.history.undoCount == 1 && document.undo() && value == 4 && document.redo() && value == 7,
 				"Synchronous undo and redo remain intact");

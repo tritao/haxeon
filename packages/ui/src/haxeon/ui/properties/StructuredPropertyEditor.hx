@@ -22,12 +22,18 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 	public var chooseItems:Null<(Array<String> -> Void) -> Void>;
 	/** Keep drafts when an inspector is rebuilt or changes category. */
 	public var retainDrafts:Bool = false;
+
+	/** Called when a staged draft changes. */
 	public var onDraftChanged:Null<Void->Void>;
 	final retainedDrafts:Map<String, StructuredPropertyDrafts> = new Map();
+
+	/** Whether any staged edit has not been applied. */
 	public function hasDrafts():Bool {
 		for (draft in retainedDrafts) if (draft.dirty) return true;
 		return false;
 	}
+
+	/** Drops every staged edit. */
 	public function discardDrafts():Void {
 		retainedDrafts.clear();
 		if (onDraftChanged != null) onDraftChanged();
@@ -35,7 +41,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 	final id:String;
 	final vector:Bool;
 	final record:Bool;
-	public function new(id:String, vector:Bool = false, record:Bool = false) {
+	internal function new(id:String, vector:Bool = false, record:Bool = false) {
 		this.id = id;
 		this.vector = vector;
 		this.record = record;
@@ -482,23 +488,32 @@ private class StructuredPropertyDrafts {
 
 /** Staged list controls share recursive structured-value editing. */
 class ListPropertyEditor extends StructuredPropertyEditor {
+	/** The custom property type id it edits. */
 	public static inline var TYPE = "ui.list";
-	public function new(id:String = TYPE, vector:Bool = false) {
-		super(id, vector);
+
+	/** A list editor for `TYPE` values. */
+	public function new() {
+		super(TYPE);
 	}
 }
 
 /** A staged named-field object editor sharing the list transaction/draft owner. */
 class RecordPropertyEditor extends StructuredPropertyEditor {
+	/** The custom property type id it edits. */
 	public static inline var TYPE = "ui.record";
+
+	/** A record editor for `TYPE` values. */
 	public function new() {
 		super(TYPE, false, true);
 	}
 }
 
 /** Fixed component controls for numeric vectors; dimensions remain schema-owned. */
-class NumericVectorPropertyEditor extends ListPropertyEditor {
+class NumericVectorPropertyEditor extends StructuredPropertyEditor {
+	/** The custom property type id it edits. */
 	public static inline var TYPE = "ui.numeric-vector";
+
+	/** A vector editor for `TYPE` values. */
 	public function new() {
 		super(TYPE, true);
 	}

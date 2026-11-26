@@ -5319,7 +5319,7 @@ class FrameworkSmoke {
 		var inspector = new PropertyEditor("inspector", [massProperty, modeProperty, mixedProperty]);
 		var inspectorRoot = uiContext.submit(inspector, new LayoutFrame(480.0, 320.0));
 		if (inspectorRoot == null || inspectorRoot.children.length < 4
-			|| !PropertyValueTools.same(PropertyValue.Float(2.0),
+			|| !PropertyValue.same(PropertyValue.Float(2.0),
 			PropertyValue.Float(2.0))) return false;
 		var sectionChanges = 0;
 		var composedInspector = new PropertyInspector("composed-inspector",
@@ -6597,20 +6597,19 @@ class FrameworkSmoke {
 				0.72,
 				DockNode.Tabs(transientTabs, "start"),
 				DockNode.Panel("start")),
-			filteredRoot = DockNodeTools.copyExcluding(transientRoot,
-				["start"]),
+			filteredRoot = transientRoot.copyExcluding(["start"]),
 			expectedFiltered = DockNode.Tabs([
 				"one",
 				"two"
 			],
 				"one");
-		if (!DockNodeTools.same(filteredRoot, expectedFiltered)) return failDock();
+		if (!filteredRoot.same(expectedFiltered)) return failDock();
 		var filteredSnapshot = new haxeon.ui.docking.DockWorkspaceSnapshot(transientRoot,
 			"start",
 			haxeon.ui.docking.DockWorkspaceSnapshot.CurrentVersion,
 			["start"]);
 		transientTabs[1] = "changed";
-		if (!DockNodeTools.same(filteredSnapshot.root, expectedFiltered)) return failDock();
+		if (!filteredSnapshot.root.same(expectedFiltered)) return failDock();
 		var fallback = new DockWorkspaceModel();
 		fallback.register(new DockPanelDescriptor("fallback", "Fallback", false));
 		fallback.setDefaultLayout(DockNode.Panel("fallback"));

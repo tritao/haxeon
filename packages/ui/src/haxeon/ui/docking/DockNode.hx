@@ -5,97 +5,29 @@ import haxeon.ui.icons.IconName;
 
 /** Persistent, view-independent description of one editor workspace region. */
 enum DockNode {
+	/** No panels. */
 	Empty;
+	/** One panel on its own. */
 	Panel(panelId:String);
+	/** Panels sharing a tab strip, with one active. */
 	Tabs(panelIds:Array<String>, activePanelId:String);
+	/** Two regions side by side or stacked; `ratio` is the first one's share. */
 	Split(axis:DockSplitAxis, ratio:Float, first:DockNode, second:DockNode);
-}
 
-/** Target region used when docking one panel relative to another. */
-enum DockDropZone {
-	Center;
-	/** Inserts the dragged panel before the target tab in the same group. */
-	TabBefore;
-	/** Inserts the dragged panel after the target tab in the same group. */
-	TabAfter;
-	Left;
-	Right;
-	Top;
-	Bottom;
-}
-
-/** Axis used by a dock split. */
-enum DockSplitAxis {
-	Horizontal;
-	Vertical;
-}
-
-/** Panels share dock tabs only within the same group; standalone panels split. */
-class DockPanelGrouping {
-	public final group:String;
-	public final shareTabs:Bool;
-
-	public function new(group:String, shareTabs:Bool = true) {
-		if (group == null || group.length == 0) throw "Dock grouping requires a name";
-		this.group = group;
-		this.shareTabs = shareTabs;
-	}
-}
-
-/** Header ownership for a panel occupying a dock group by itself. */
-enum DockPanelHeaderMode implements Hashable {
-	Dock;
-	/** Panel content provides its own header; multi-panel groups retain dock tabs. */
-	Content;
-}
-
-/** View-independent metadata for one registered dock panel. */
-class DockPanelDescriptor implements Observable {
-	public final id:String;
-	public final title:String;
-	public var badgeCount(default, null):Int = 0;
-	@:allow(haxeon.ui.docking.DockWorkspaceModel)
-	function setBadgeCount(value:Int):Void badgeCount = value;
-	public final closable:Bool;
-	public final enabled:Bool;
-	public final icon:Null<IconName>;
-	public final headerMode:DockPanelHeaderMode;
-	public final grouping:Null<DockPanelGrouping>;
-
-	public function new(id:String, title:String, closable:Bool = true, enabled:Bool = true,
-			?icon:IconName, headerMode:DockPanelHeaderMode = DockPanelHeaderMode.Dock,
-			?grouping:DockPanelGrouping) {
-		if (id == null || id.length == 0 || title == null || title.length == 0)
-			throw "Dock panels require a stable ID and title";
-		this.id = id;
-		this.title = title;
-		this.closable = closable;
-		this.enabled = enabled;
-		this.icon = icon;
-		this.headerMode = headerMode;
-		this.grouping = grouping;
-	}
-}
-
-/** Pure transformations and validation for dock layout trees. */
-class DockNodeTools {
-	public static function clone(node:DockNode):DockNode {
-		if (node == null)
-			return DockNode.Empty;
-		return switch (node) {
+	/** A deep copy of this layout. */
+	public function clone():DockNode {
+		return switch (this) {
 			case Empty: Empty;
 			case Panel(id): Panel(id);
 			case Tabs(ids, active): Tabs(ids == null ? [] : ids.copy(), active);
 			case Split(axis, ratio, first, second):
-				Split(axis, ratio, clone(first), clone(second));
+				Split(axis, ratio, first.clone(), second.clone());
 		};
 	}
 
 	/** Copies a layout while omitting selected panels, normalizing each node in the same traversal. */
-	public static function copyExcluding(node:DockNode, excluded:Array<String>):DockNode {
-		if (node == null)
-			return DockNode.Empty;
-		return switch node {
+	public function copyExcluding(excluded:Array<String>):DockNode {
+		return switch this {
 			case Empty: Empty;
 			case Panel(id): id == null || id.length == 0 || containsId(excluded, id) ? Empty : Panel(id);
 			case Tabs(ids, active):
@@ -111,7 +43,7 @@ class DockNodeTools {
 				else
 					Tabs(filtered, containsId(filtered, active) ? active : filtered[0]);
 			case Split(axis, ratio, first, second):
-				var copiedFirst = copyExcluding(first, excluded), copiedSecond = copyExcluding(second, excluded);
+				var copiedFirst = first.copyExcluding(excluded), copiedSecond = second.copyExcluding(excluded);
 				switch [copiedFirst, copiedSecond] {
 					case [Empty, Empty]: Empty;
 					case [Empty, other]: other;
@@ -122,10 +54,8 @@ class DockNodeTools {
 	}
 
 	/** Removes redundant empty/single-child containers and clamps ratios. */
-	public static function normalize(node:DockNode):DockNode {
-		if (node == null)
-			return DockNode.Empty;
-		return switch (node) {
+	public function normalize():DockNode {
+		return switch (this) {
 			case Empty: Empty;
 			case Panel(id): id == null || id.length == 0 ? Empty : Panel(id);
 			case Tabs(ids, active):
@@ -143,8 +73,8 @@ class DockNodeTools {
 					Tabs(filtered, selected);
 				}
 			case Split(axis, ratio, first, second):
-				var normalizedFirst = normalize(first);
-				var normalizedSecond = normalize(second);
+				var normalizedFirst = first.normalize();
+				var normalizedSecond = second.normalize();
 				switch ([normalizedFirst, normalizedSecond]) {
 					case [Empty, Empty]: Empty;
 					case [Empty, other]: other;
@@ -159,10 +89,8 @@ class DockNodeTools {
 	 * normalizes the remaining tree. This is intended for persisted layouts;
 	 * strict programmatic layouts should continue to use validate().
 	 */
-	public static function keepKnown(node:DockNode, known:Map<String, Bool>):DockNode {
-		if (node == null)
-			return DockNode.Empty;
-		return normalize(switch (node) {
+	public function keepKnown(known:Map<String, Bool>):DockNode {
+		var kept:DockNode = switch (this) {
 			case Empty: Empty;
 			case Panel(id): known != null && known.exists(id) ? Panel(id) : Empty;
 			case Tabs(ids, active):
@@ -173,44 +101,47 @@ class DockNodeTools {
 							kept.push(id);
 				Tabs(kept, containsId(kept, active) ? active : (kept.length == 0 ? null : kept[0]));
 			case Split(axis, ratio, first, second):
-				Split(axis, ratio, keepKnown(first, known), keepKnown(second, known));
-		});
+				Split(axis, ratio, first.keepKnown(known), second.keepKnown(known));
+		};
+		return kept.normalize();
 	}
 
-	public static function contains(node:DockNode, panelId:String):Bool {
-		if (node == null || panelId == null)
+	/** Whether this layout holds panel `panelId`. */
+	public function contains(panelId:String):Bool {
+		if (panelId == null)
 			return false;
-		return switch (node) {
+		return switch (this) {
 			case Empty: false;
 			case Panel(id): id == panelId;
 			case Tabs(ids, _): containsId(ids, panelId);
-			case Split(_, _, first, second): contains(first, panelId) || contains(second, panelId);
+			case Split(_, _, first, second): first.contains(panelId) || second.contains(panelId);
 		};
 	}
 
-	public static function firstPanel(node:DockNode):Null<String> {
-		if (node == null)
-			return null;
-		return switch (node) {
+	/** The first panel in reading order, or null for an empty layout. */
+	public function firstPanel():Null<String> {
+		return switch (this) {
 			case Empty: null;
 			case Panel(id): id;
 			case Tabs(ids, _): ids == null || ids.length == 0 ? null : ids[0];
 			case Split(_, _, first, second):
-				var leading = firstPanel(first);
-				leading == null ? firstPanel(second) : leading;
+				var leading = first.firstPanel();
+				leading == null ? second.firstPanel() : leading;
 		};
 	}
 
-	public static function panelIds(node:DockNode):Array<String> {
+	/** Every panel it holds, in reading order. */
+	public function panelIds():Array<String> {
 		var result:Array<String> = [];
-		appendPanelIds(node, result);
+		appendPanelIds(this, result);
 		return result;
 	}
 
-	public static function same(first:DockNode, second:DockNode):Bool {
-		if (first == null || second == null)
-			return first == null && second == null;
-		return switch ([first, second]) {
+	/** Whether `other` is the same layout, with the same ratios and active tabs. */
+	public function same(other:DockNode):Bool {
+		if (other == null)
+			return false;
+		return switch ([this, other]) {
 			case [Empty, Empty]: true;
 			case [Panel(firstId), Panel(secondId)]: firstId == secondId;
 			case [Tabs(firstIds, firstActive), Tabs(secondIds, secondActive)]:
@@ -219,16 +150,17 @@ class DockNodeTools {
 				Split(firstAxis, firstRatio, firstLeft, firstRight),
 				Split(secondAxis, secondRatio, secondLeft, secondRight)
 			]:
-				firstAxis == secondAxis && firstRatio == secondRatio && same(firstLeft, secondLeft)
-					&& same(firstRight, secondRight);
+				firstAxis == secondAxis && firstRatio == secondRatio && firstLeft.same(secondLeft)
+					&& firstRight.same(secondRight);
 			default: false;
 		};
 	}
 
-	public static function activate(node:DockNode, panelId:String):DockNode {
-		if (node == null || panelId == null)
+	/** This layout with panel `panelId` as the active tab of its group. */
+	public function activate(panelId:String):DockNode {
+		if (panelId == null)
 			return DockNode.Empty;
-		return isActive(node, panelId) ? node : activatePath(node, panelId);
+		return isActive(this, panelId) ? this : activatePath(this, panelId);
 	}
 
 	static function activatePath(node:DockNode, panelId:String):DockNode {
@@ -236,8 +168,8 @@ class DockNodeTools {
 			case Empty | Panel(_): node;
 			case Tabs(ids, _): containsId(ids, panelId) ? Tabs(ids.copy(), panelId) : node;
 			case Split(axis, ratio, first, second):
-				if (contains(first, panelId)) Split(axis, ratio, activatePath(first, panelId), second);
-				else if (contains(second, panelId)) Split(axis, ratio, first, activatePath(second, panelId));
+				if (first.contains(panelId)) Split(axis, ratio, activatePath(first, panelId), second);
+				else if (second.contains(panelId)) Split(axis, ratio, first, activatePath(second, panelId));
 				else node;
 		};
 	}
@@ -251,10 +183,11 @@ class DockNodeTools {
 		};
 	}
 
-	public static function remove(node:DockNode, panelId:String):DockNode {
-		if (node == null || panelId == null)
+	/** This layout without panel `panelId`, normalized. */
+	public function remove(panelId:String):DockNode {
+		if (panelId == null)
 			return DockNode.Empty;
-		return normalize(switch (node) {
+		var removed:DockNode = switch (this) {
 			case Empty: Empty;
 			case Panel(id): id == panelId ? Empty : Panel(id);
 			case Tabs(ids, active):
@@ -265,43 +198,41 @@ class DockNodeTools {
 							remaining.push(id);
 				Tabs(remaining, active == panelId && remaining.length > 0 ? remaining[0] : active);
 			case Split(axis, ratio, first, second):
-				Split(axis, ratio, remove(first, panelId), remove(second, panelId));
-		});
+				Split(axis, ratio, first.remove(panelId), second.remove(panelId));
+		};
+		return removed.normalize();
 	}
 
 	/** Moves or inserts a panel relative to the target panel. */
-	public static function dock(node:DockNode, panelId:String, targetPanelId:String,
-			zone:DockDropZone):DockNode {
-		if (node == null || panelId == null || targetPanelId == null || panelId == targetPanelId
-			|| !contains(node, targetPanelId))
-			return normalize(node);
-		var without = contains(node, panelId) ? remove(node, panelId) : clone(node);
-		return normalize(insert(without, panelId, targetPanelId, zone));
+	public function dock(panelId:String, targetPanelId:String, zone:DockDropZone):DockNode {
+		if (panelId == null || targetPanelId == null || panelId == targetPanelId || !contains(targetPanelId))
+			return normalize();
+		var without = contains(panelId) ? remove(panelId) : clone();
+		return insert(without, panelId, targetPanelId, zone).normalize();
 	}
 
 	/** Updates a split addressed by a child-index path from the root. */
-	public static function setSplitRatio(node:DockNode, path:Array<Int>, ratio:Float,
-			depth:Int = 0):DockNode {
-		if (node == null || path == null || depth < 0)
-			return normalize(node);
+	public function setSplitRatio(path:Array<Int>, ratio:Float, depth:Int = 0):DockNode {
+		if (path == null || depth < 0)
+			return normalize();
 		if (depth == path.length)
-			return switch (node) {
+			return switch (this) {
 				case Split(axis, _, first, second): Split(axis, clampRatio(ratio), first, second);
-				default: node;
+				default: this;
 			};
-		return switch (node) {
+		return switch (this) {
 			case Split(axis, current, first, second):
 				var branch = path[depth];
-				branch == 0 ? Split(axis, current, setSplitRatio(first, path, ratio, depth + 1), second) : branch == 1
-					? Split(axis, current, first, setSplitRatio(second, path, ratio, depth + 1)) : node;
-			default: node;
+				branch == 0 ? Split(axis, current, first.setSplitRatio(path, ratio, depth + 1), second) : branch == 1
+					? Split(axis, current, first, second.setSplitRatio(path, ratio, depth + 1)) : this;
+			default: this;
 		};
 	}
 
 	/** Validates IDs, uniqueness, active tabs, and split ratios. */
-	public static function validate(node:DockNode, known:Map<String, Bool>):Null<String> {
+	public function validate(known:Map<String, Bool>):Null<String> {
 		var seen:Map<String, Bool> = new Map();
-		return validateNode(node, known, seen);
+		return validateNode(this, known, seen);
 	}
 
 	static function validateNode(node:DockNode, known:Map<String, Bool>,
@@ -379,9 +310,9 @@ class DockNodeTools {
 							splitAround(group, panelId, zone);
 					};
 			case Split(axis, ratio, first, second):
-				if (contains(first, targetPanelId))
+				if (first.contains(targetPanelId))
 					Split(axis, ratio, insert(first, panelId, targetPanelId, zone), second);
-				else if (contains(second, targetPanelId))
+				else if (second.contains(targetPanelId))
 					Split(axis, ratio, first, insert(second, panelId, targetPanelId, zone));
 				else
 					Split(axis, ratio, first, second);
@@ -466,4 +397,103 @@ class DockNodeTools {
 
 	static inline function finite(value:Float):Bool
 		return value == value && value - value == 0.0;
+}
+
+/** Target region used when docking one panel relative to another. */
+enum DockDropZone {
+	/** Into the target's tab group. */
+	Center;
+	/** Inserts the dragged panel before the target tab in the same group. */
+	TabBefore;
+	/** Inserts the dragged panel after the target tab in the same group. */
+	TabAfter;
+
+	/** Beside the target, on its left. */
+	Left;
+
+	/** Beside the target, on its right. */
+	Right;
+
+	/** Above the target. */
+	Top;
+
+	/** Below the target. */
+	Bottom;
+}
+
+/** Axis used by a dock split. */
+enum DockSplitAxis {
+	/** Regions side by side. */
+	Horizontal;
+
+	/** Regions stacked. */
+	Vertical;
+}
+
+/** Panels share dock tabs only within the same group; standalone panels split. */
+class DockPanelGrouping {
+	/** The group's name. */
+	public final group:String;
+
+	/** Whether the group's panels may share a tab strip. */
+	public final shareTabs:Bool;
+
+	/** Membership of `group`. */
+	public function new(group:String, shareTabs:Bool = true) {
+		if (group == null || group.length == 0) throw "Dock grouping requires a name";
+		this.group = group;
+		this.shareTabs = shareTabs;
+	}
+}
+
+/** Header ownership for a panel occupying a dock group by itself. */
+enum DockPanelHeaderMode implements Hashable {
+	/** The dock draws the panel's tab header. */
+	Dock;
+	/** Panel content provides its own header; multi-panel groups retain dock tabs. */
+	Content;
+}
+
+/** View-independent metadata for one registered dock panel. */
+class DockPanelDescriptor implements Observable {
+	/** A stable identifier, used in layouts. */
+	public final id:String;
+
+	/** Its tab title. */
+	public final title:String;
+
+	/** The count shown on its tab; zero shows none. */
+	public var badgeCount(default, null):Int = 0;
+	@:allow(haxeon.ui.docking.DockWorkspaceModel)
+	function setBadgeCount(value:Int):Void badgeCount = value;
+
+	/** Whether the user can close it. */
+	public final closable:Bool;
+
+	/** Whether it can be activated. */
+	public final enabled:Bool;
+
+	/** Its tab icon, or null. */
+	public final icon:Null<IconName>;
+
+	/** Who draws its header when it is alone in its group. */
+	public final headerMode:DockPanelHeaderMode;
+
+	/** Which panels it may share tabs with; null shares with other ungrouped panels. */
+	public final grouping:Null<DockPanelGrouping>;
+
+	/** A panel `id` titled `title`. Throws when either is empty. */
+	public function new(id:String, title:String, closable:Bool = true, enabled:Bool = true,
+			?icon:IconName, headerMode:DockPanelHeaderMode = DockPanelHeaderMode.Dock,
+			?grouping:DockPanelGrouping) {
+		if (id == null || id.length == 0 || title == null || title.length == 0)
+			throw "Dock panels require a stable ID and title";
+		this.id = id;
+		this.title = title;
+		this.closable = closable;
+		this.enabled = enabled;
+		this.icon = icon;
+		this.headerMode = headerMode;
+		this.grouping = grouping;
+	}
 }

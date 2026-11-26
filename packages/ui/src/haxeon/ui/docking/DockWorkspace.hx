@@ -276,7 +276,7 @@ class DockWorkspace implements View {
 	}
 
 	function matchesExpandedGroup(node:DockNode):Bool {
-		var ids = DockNodeTools.panelIds(node);
+		var ids = node.panelIds();
 		if (ids.length == 0 || expandedGroup == null) return false;
 		for (id in ids) if (expandedGroup.indexOf(id) < 0) return false;
 		return true;
@@ -290,7 +290,7 @@ class DockWorkspace implements View {
 	}
 
 	function hasPresentedPanel(node:DockNode):Bool {
-		for (id in DockNodeTools.panelIds(node)) if (hiddenPanels.indexOf(id) < 0)
+		for (id in node.panelIds()) if (hiddenPanels.indexOf(id) < 0)
 			return true;
 		return false;
 	}

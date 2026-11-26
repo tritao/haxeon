@@ -15,22 +15,27 @@ class SettingsRegistry {
 	final byPath:Map<String, SettingDefinition>;
 	final ordered:Array<SettingDefinition>;
 
+	/** An empty registry. */
 	public function new() {
 		byPath = new Map();
 		ordered = [];
 	}
 
+	/**
+	 * Defines the setting at `path` and returns its definition, or the existing one when the same path was defined
+	 * with the same type and default. Throws for any other redefinition, or a path that is a prefix of another.
+	 */
 	public function define(path:String, type:PropertyType, defaultValue:PropertyValue,
 			?settings:SettingOptions):SettingDefinition
 		return add(new SettingDefinition(path, type, defaultValue, settings));
 
-	public function add(definition:SettingDefinition):SettingDefinition {
+	internal function add(definition:SettingDefinition):SettingDefinition {
 		if (definition == null)
 			throw "Setting definition cannot be null";
 		var existing = byPath.get(definition.path);
 		if (existing != null) {
 			if (!sameType(existing.type, definition.type)
-				|| !PropertyValueTools.same(existing.defaultValue, definition.defaultValue))
+				|| !PropertyValue.same(existing.defaultValue, definition.defaultValue))
 				throw 'Setting "${definition.path}" is already defined with a different type or default';
 			return existing;
 		}
@@ -43,9 +48,11 @@ class SettingsRegistry {
 		return definition;
 	}
 
+	/** The definition at `path`, or null. */
 	public function get(path:String):Null<SettingDefinition>
 		return byPath.get(path);
 
+	/** Whether a setting is defined at `path`. */
 	public function exists(path:String):Bool
 		return byPath.exists(path);
 

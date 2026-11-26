@@ -11,19 +11,29 @@ import haxeon.ui.docking.DockWorkspaceSnapshot;
  * listeners remain for persistence and other non-view side effects.
  */
 class DockWorkspaceModel implements Observable {
-	public var panels:Map<String, DockPanelDescriptor>;
+	/** The registered panels, by id. */
+	public var panels(default, null):Map<String, DockPanelDescriptor>;
+
+	/** The current layout. */
 	public var root(default, null):DockNode;
+
+	/** The layout `reset` returns to. */
 	public var defaultRoot(default, null):DockNode;
+
+	/** The focused panel, or null. */
 	public var activePanelId(default, null):Null<String>;
 	final listeners:Array<Void->Void>;
+
+	/** How many change listeners are registered. */
 	public var listenerCount(get, never):Int;
 	inline function get_listenerCount():Int return listeners.length;
 
+	/** A workspace whose default and current layout is `defaultRoot`, or empty. */
 	public function new(?defaultRoot:DockNode) {
 		panels = new Map();
-		root = DockNodeTools.normalize(defaultRoot == null ? DockNode.Empty : defaultRoot);
-		this.defaultRoot = DockNodeTools.clone(root);
-		activePanelId = DockNodeTools.firstPanel(root);
+		root = (defaultRoot == null ? DockNode.Empty : defaultRoot).normalize();
+		this.defaultRoot = root.clone();
+		activePanelId = root.firstPanel();
 		listeners = [];
 	}
 
@@ -37,6 +47,7 @@ class DockWorkspaceModel implements Observable {
 		};
 	}
 
+	/** Registers `panel`. Throws when its id is taken. */
 	public function register(panel:DockPanelDescriptor):Void {
 		if (panel == null)
 			throw "Dock workspace cannot register a null panel";
@@ -45,10 +56,11 @@ class DockWorkspaceModel implements Observable {
 		var next = copyPanels(panels);
 		next.set(panel.id, panel);
 		panels = next;
-		if (DockNodeTools.contains(root, panel.id) && activePanelId == null)
+		if (root.contains(panel.id) && activePanelId == null)
 			activePanelId = panel.id;
 	}
 
+	/** Sets the count shown on a panel's tab. Returns false for an unknown panel, a negative count or no change. */
 	public function setPanelBadge(panelId:String, count:Int):Bool {
 		var panel = get(panelId);
 		if (panel == null || count < 0 || panel.badgeCount == count) return false;
@@ -56,14 +68,17 @@ class DockWorkspaceModel implements Observable {
 		return true;
 	}
 
+	/** Panel `panelId`, or null. */
 	public function get(panelId:String):Null<DockPanelDescriptor>
 		return panelId == null ? null : panels.get(panelId);
 
+	/** Whether panel `panelId` is in the layout. */
 	public function isOpen(panelId:String):Bool
-		return DockNodeTools.contains(root, panelId);
+		return root.contains(panelId);
 
+	/** The open panels, in reading order. */
 	public function panelIds():Array<String>
-		return DockNodeTools.panelIds(root);
+		return root.panelIds();
 
 	/** Installs a validated default layout and makes it the active layout. */
 	public function setDefaultLayout(layout:DockNode):Void {
@@ -72,6 +87,7 @@ class DockWorkspaceModel implements Observable {
 		setRoot(layout);
 	}
 
+	/** Installs `layout`. Throws when it is invalid. */
 	public function setRoot(layout:DockNode):Void {
 		validateLayout(layout);
 		root = normalizeGroups(layout);
@@ -79,28 +95,31 @@ class DockWorkspaceModel implements Observable {
 		touch();
 	}
 
+	/** Returns to the default layout. */
 	public function reset():Void
 		setRoot(defaultRoot);
 
+	/** Focuses an open panel, selecting its tab. Returns false when it is not open. */
 	public function activate(panelId:String):Bool {
 		if (!isOpen(panelId))
 			return false;
 		var changed = activePanelId != panelId;
 		// Model roots are normalized when installed. Activation changes one tab header and preserves every other branch.
-		root = DockNodeTools.activate(root, panelId);
+		root = root.activate(panelId);
 		activePanelId = panelId;
 		if (changed)
 			touch();
 		return true;
 	}
 
+	/** Closes a closable open panel. Returns false otherwise. */
 	public function close(panelId:String):Bool {
 		var panel = get(panelId);
 		if (panel == null || !panel.closable || !isOpen(panelId))
 			return false;
-		root = DockNodeTools.remove(root, panelId);
+		root = root.remove(panelId);
 		if (activePanelId == panelId)
-			activePanelId = DockNodeTools.firstPanel(root);
+			activePanelId = root.firstPanel();
 		touch();
 		return true;
 	}
@@ -111,7 +130,7 @@ class DockWorkspaceModel implements Observable {
 			return false;
 		if (isOpen(panelId))
 			return activate(panelId);
-		var target = targetPanelId != null && isOpen(targetPanelId) ? targetPanelId : DockNodeTools.firstPanel(root);
+		var target = targetPanelId != null && isOpen(targetPanelId) ? targetPanelId : root.firstPanel();
 		if (target == null) {
 			root = DockNode.Panel(panelId);
 			activePanelId = panelId;
@@ -126,6 +145,7 @@ class DockWorkspaceModel implements Observable {
 		return dock(panelId, target, DockDropZone.Center);
 	}
 
+	/** Whether the two panels' groupings let them share a tab strip. */
 	public function canShareTabs(firstId:String, secondId:String):Bool {
 		var first = get(firstId), second = get(secondId);
 		if (first == null || second == null) return false;
@@ -134,6 +154,7 @@ class DockWorkspaceModel implements Observable {
 		return a.shareTabs && b.shareTabs && a.group == b.group;
 	}
 
+	/** Whether panel `panelId` may go at `zone` of open panel `targetPanelId`. */
 	public function canDock(panelId:String, targetPanelId:String, zone:DockDropZone):Bool {
 		if (get(panelId) == null || get(targetPanelId) == null || zone == null || panelId == targetPanelId
 			|| !isOpen(targetPanelId)) return false;
@@ -145,7 +166,7 @@ class DockWorkspaceModel implements Observable {
 
 	/** Repairs older layouts against current grouping rules without losing panels. */
 	function normalizeGroups(node:DockNode):DockNode {
-		return groupedLayout(DockNodeTools.normalize(node));
+		return groupedLayout(node.normalize());
 	}
 
 	function groupedLayout(node:DockNode):DockNode {
@@ -176,11 +197,12 @@ class DockWorkspaceModel implements Observable {
 		};
 	}
 
+	/** Moves panel `panelId` to `zone` of `targetPanelId` and focuses it. Returns false when that is not allowed. */
 	public function dock(panelId:String, targetPanelId:String, zone:DockDropZone):Bool {
 		if (!canDock(panelId, targetPanelId, zone))
 			return false;
-		var next = DockNodeTools.dock(root, panelId, targetPanelId, zone);
-		if (DockNodeTools.validate(next, panelMap()) != null)
+		var next = root.dock(panelId, targetPanelId, zone);
+		if (next.validate(panelMap()) != null)
 			return false;
 		root = next;
 		activePanelId = panelId;
@@ -188,9 +210,10 @@ class DockWorkspaceModel implements Observable {
 		return true;
 	}
 
+	/** Sets the ratio of the split at `path`, child indices from the root. Returns false when nothing changed. */
 	public function setSplitRatio(path:Array<Int>, ratio:Float):Bool {
-		var next = DockNodeTools.setSplitRatio(root, path, ratio);
-		if (DockNodeTools.same(root, next))
+		var next = root.setSplitRatio(path, ratio);
+		if (root.same(next))
 			return false;
 		root = next;
 		touch();
@@ -210,7 +233,7 @@ class DockWorkspaceModel implements Observable {
 			path:Array<Int>):Bool {
 		return switch node {
 			case Split(axis, ratio, first, second):
-				var inFirst = DockNodeTools.contains(first, id), inSecond = DockNodeTools.contains(second, id);
+				var inFirst = first.contains(id), inSecond = second.contains(id);
 				if (!inFirst && !inSecond) false;
 				else {
 					var branch = inFirst ? 0 : 1;
@@ -232,6 +255,7 @@ class DockWorkspaceModel implements Observable {
 		};
 	}
 
+	/** The layout and focused panel, for saving. */
 	public function snapshot():DockWorkspaceSnapshot
 		return new DockWorkspaceSnapshot(root, activePanelId);
 
@@ -245,14 +269,15 @@ class DockWorkspaceModel implements Observable {
 		return snapshot != null && restorePersisted(snapshot);
 	}
 
+	/** Installs a saved layout exactly. Returns false when it does not fit the registered panels. */
 	public function restore(snapshot:DockWorkspaceSnapshot):Bool {
 		if (snapshot == null || snapshot.version != DockWorkspaceSnapshot.CurrentVersion)
 			return false;
-		if (DockNodeTools.validate(snapshot.root, panelMap()) != null)
+		if (snapshot.root.validate(panelMap()) != null)
 			return false;
 		root = normalizeGroups(snapshot.root);
 		activePanelId = snapshot.activePanelId != null
-			&& isOpen(snapshot.activePanelId) ? snapshot.activePanelId : DockNodeTools.firstPanel(root);
+			&& isOpen(snapshot.activePanelId) ? snapshot.activePanelId : root.firstPanel();
 		touch();
 		return true;
 	}
@@ -266,41 +291,42 @@ class DockWorkspaceModel implements Observable {
 	public function restorePersisted(snapshot:DockWorkspaceSnapshot):Bool {
 		if (snapshot == null || snapshot.version != DockWorkspaceSnapshot.CurrentVersion)
 			return false;
-		var persistedIds = DockNodeTools.panelIds(snapshot.root);
-		var compatible = DockNodeTools.keepKnown(snapshot.root, panelMap());
-		if (persistedIds.length > 0 && DockNodeTools.firstPanel(compatible) == null)
+		var persistedIds = snapshot.root.panelIds();
+		var compatible = snapshot.root.keepKnown(panelMap());
+		if (persistedIds.length > 0 && compatible.firstPanel() == null)
 			return false;
-		if (DockNodeTools.validate(compatible, panelMap()) != null)
+		if (compatible.validate(panelMap()) != null)
 			return false;
 		root = normalizeGroups(compatible);
 		activePanelId = snapshot.activePanelId != null
-			&& isOpen(snapshot.activePanelId) ? snapshot.activePanelId : DockNodeTools.firstPanel(root);
+			&& isOpen(snapshot.activePanelId) ? snapshot.activePanelId : root.firstPanel();
 		touch();
 		return true;
 	}
 
+	/** Removes panel `panelId` from the workspace and its layouts. Returns false for an unknown panel. */
 	public function unregister(panelId:String):Bool {
 		if (!panels.exists(panelId))
 			return false;
 		var next = copyPanels(panels);
 		next.remove(panelId);
 		panels = next;
-		root = DockNodeTools.remove(root, panelId);
-		defaultRoot = DockNodeTools.remove(defaultRoot, panelId);
+		root = root.remove(panelId);
+		defaultRoot = defaultRoot.remove(panelId);
 		if (activePanelId == panelId)
-			activePanelId = DockNodeTools.firstPanel(root);
+			activePanelId = root.firstPanel();
 		touch();
 		return true;
 	}
 
 	function validateLayout(layout:DockNode):Void {
-		var error = DockNodeTools.validate(layout, panelMap());
+		var error = layout.validate(panelMap());
 		if (error != null)
 			throw error;
 	}
 
 	function chooseActive(preferred:Null<String>):Null<String>
-		return preferred != null && isOpen(preferred) ? preferred : DockNodeTools.firstPanel(root);
+		return preferred != null && isOpen(preferred) ? preferred : root.firstPanel();
 
 	function panelMap():Map<String, Bool> {
 		var result:Map<String, Bool> = new Map();
@@ -324,6 +350,9 @@ class DockWorkspaceModel implements Observable {
 
 /** Registers command adapters for a workspace model. */
 class DockWorkspaceCommands {
+	/**
+	 * Registers the workspace's commands, such as closing the active panel and resetting the layout, under `prefix`.
+	 */
 	public static function install(model:DockWorkspaceModel, registry:CommandRegistry,
 			prefix:String = "dock", scope:String = CommandRegistry.GlobalScope):Void {
 		if (model == null || registry == null || prefix == null || prefix.length == 0)

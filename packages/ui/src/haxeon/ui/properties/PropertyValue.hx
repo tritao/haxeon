@@ -2,19 +2,30 @@ package haxeon.ui.properties;
 
 /** Value snapshot exchanged between property descriptors and editors. */
 enum PropertyValue {
+	/** No value can be shown, such as when nothing is selected. */
 	Unavailable;
+
+	/** The selected objects hold different values. */
 	Mixed;
+
+	/** A boolean. */
 	Bool(value:Bool);
+
+	/** An integer. */
 	Int(value:Int);
+
+	/** A number. */
 	Float(value:Float);
+
+	/** A string. */
 	Text(value:String);
+
+	/** An option key. */
 	Enum(value:String);
 	/** Application-owned value payload tagged with its registered type ID. */
 	Custom(typeId:String, value:Dynamic);
-}
 
-/** Formatting and equality helpers shared by property controls. */
-class PropertyValueTools {
+	/** Whether two values are equal; two nulls are. */
 	public static function same(first:Null<PropertyValue>, second:Null<PropertyValue>):Bool {
 		if (first == null || second == null)
 			return first == null && second == null;
@@ -29,6 +40,7 @@ class PropertyValueTools {
 		};
 	}
 
+	/** `value` as read-only text, with `mixedText` for Mixed. */
 	public static function display(value:Null<PropertyValue>, mixedText:String = "—"):String {
 		if (value == null)
 			return "";
@@ -43,6 +55,7 @@ class PropertyValueTools {
 		};
 	}
 
+	/** `value` as text a field can edit. */
 	public static function editableText(value:Null<PropertyValue>):String {
 		if (value == null)
 			return "";
@@ -57,6 +70,7 @@ class PropertyValueTools {
 		};
 	}
 
+	/** Text parsed as a value of `type`, or null when it does not parse. Custom types parse through their registry. */
 	public static function parse(type:PropertyType, text:String):Null<PropertyValue> {
 		var value = text == null ? "" : StringTools.trim(text);
 		var integerValue = Std.parseInt(value);
@@ -94,12 +108,22 @@ class PropertyValueTools {
 	}
 }
 
+
 /** Editor control family used to render and validate a property. */
 enum PropertyType implements Equatable {
+	/** A checkbox. */
 	Bool;
+
+	/** An integer field. */
 	Int;
+
+	/** A number field. */
 	Float;
+
+	/** A text field. */
 	Text;
+
+	/** A choice among options. */
 	Enum;
 	/** Application-defined property type resolved by PropertyEditorRegistry. */
 	Custom(typeId:String);
@@ -108,34 +132,56 @@ enum PropertyType implements Equatable {
 /** Optional recursive structure for custom list controls. Domain validation stays
  * application-owned. Vectors have fixed components; lists own item actions. */
 enum PropertyStructure {
+	/** A single value of `type`. */
 	Value(type:PropertyType);
+
+	/** Named fields. */
 	Record(fields:Array<PropertyRecordField>);
+
+	/** A fixed number of numeric components. */
 	Vector(components:Int);
+
+	/** Items of `items` shape, between the length limits when given. */
 	List(items:Null<PropertyStructure>, minimumLength:Null<Int>, maximumLength:Null<Int>, itemLabel:String);
 }
 
 /** Presentation metadata for a named field. Absent fields are added explicitly;
  * defaults and placeholder values are copied before staging. */
 class PropertyRecordField {
+	/** The field's name. */
 	public final name:String;
+
+	/** Its shape. */
 	public final structure:PropertyStructure;
+
+	/** Whether a record may leave it out. */
 	public final optional:Bool;
 	final initialJson:String;
+
+	/** A field `name`, starting new records at a copy of `initial`. */
 	public function new(name:String, structure:PropertyStructure, optional:Bool = false, initial:Dynamic = null) {
 		this.name = name;
 		this.structure = structure;
 		this.optional = optional;
 		initialJson = haxe.Json.stringify(initial);
 	}
+
+	/** A fresh copy of the value new records start with. */
 	public function initialValue():Dynamic return haxe.Json.parse(initialJson);
 }
 
 /** Stable option metadata used by enum property editors. */
 class PropertyOption {
+	/** The value stored when it is chosen. */
 	public final key:String;
+
+	/** Its text in the menu. */
 	public final label:String;
+
+	/** Whether it can be chosen. */
 	public var enabled:Bool;
 
+	/** An option `key` shown as `label`. Throws for an empty key. */
 	public function new(key:String, label:String, enabled:Bool = true) {
 		if (key == null || key.length == 0)
 			throw "Property options require a stable key";

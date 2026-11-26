@@ -13,10 +13,14 @@ import haxeon.ui.properties.PropertyValue;
  * section come first, under the category's own label.
  */
 class SettingsCatalog {
+	/** The store whose settings it organizes. */
 	public final store:SettingsStore;
+
+	/** The only settings to show, or null for all. */
 	public var onlyPaths:Null<Array<String>>;
 	final descriptors:Map<String, PropertyDescriptor>;
 
+	/** A catalog of `store`'s settings. */
 	public function new(store:SettingsStore) {
 		if (store == null)
 			throw "Settings catalogs require a store";
@@ -24,6 +28,7 @@ class SettingsCatalog {
 		descriptors = new Map();
 	}
 
+	/** The category `definition` is filed under: its first two path segments, or the first when there are only two. */
 	public static function categoryOf(definition:SettingDefinition):String {
 		var segments = definition.segments;
 		return segments.length <= 2 ? segments[0] : segments[0] + "/" + segments[1];
@@ -50,6 +55,10 @@ class SettingsCatalog {
 		descriptors.set(path, descriptor);
 	}
 
+	/**
+	 * Whether `definition` shows for the search `filter`: every word must appear in its label, path or tooltip.
+	 * Internal settings never show, and advanced ones only with `showAdvanced` or a filter.
+	 */
 	public static function visible(definition:SettingDefinition, filter:String, showAdvanced:Bool):Bool {
 		if (definition.internal)
 			return false;

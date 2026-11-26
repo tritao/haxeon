@@ -10,22 +10,52 @@ import haxeon.ui.properties.PropertyValue;
  * under its first two segments and groups rows by the segments in between.
  */
 class SettingDefinition {
+	/** Where it lives, as slash-separated lowercase segments. */
 	public final path:String;
+
+	/** The path's segments. */
 	public final segments:Array<String>;
+
+	/** Its row label. */
 	public final label:String;
+
+	/** Help shown on hover, or null. */
 	public final tooltip:Null<String>;
+
+	/** The type of value it holds. */
 	public final type:PropertyType;
+
+	/** Its value until the user changes it. */
 	public final defaultValue:PropertyValue;
+
+	/** The lowest number it accepts, or null. */
 	public final minimum:Null<Float>;
+
+	/** The highest number it accepts, or null. */
 	public final maximum:Null<Float>;
+
+	/** The increment its editor steps by, or null. */
 	public final step:Null<Float>;
+
+	/** The unit shown after its value, or null. */
 	public final unit:Null<String>;
+
+	/** The choices of an Enum setting. */
 	public final options:Array<PropertyOption>;
+
+	/** Hidden unless the dialog shows advanced settings. */
 	public final advanced:Bool;
+
+	/** Takes effect only after the application restarts. */
 	public final restartRequired:Bool;
+
+	/** Saved but never shown in the settings dialog. */
 	public final internal:Bool;
+
+	/** Keeps a value the user set even when it equals the default, for settings whose absence means automatic. */
 	public final preserveExplicitDefault:Bool;
 
+	/** A setting at `path`. Throws for a malformed path, a custom type, or a default that does not fit. */
 	public function new(path:String, type:PropertyType, defaultValue:PropertyValue, ?settings:SettingOptions) {
 		var config = settings == null ? new SettingOptions() : settings;
 		if (!validPath(path))
@@ -128,6 +158,7 @@ class SettingDefinition {
 		};
 	}
 
+	/** The Enum choice `key`, or null. */
 	public function option(key:String):Null<PropertyOption> {
 		for (item in options)
 			if (item.key == key)
@@ -208,10 +239,20 @@ class SettingDefinition {
 class SettingOptions {
 	/** Row label; derived from the last path segment when null. */
 	public var label:Null<String>;
+
+	/** Help shown on hover. */
 	public var tooltip:Null<String>;
+
+	/** The lowest number it accepts. */
 	public var minimum:Null<Float>;
+
+	/** The highest number it accepts. */
 	public var maximum:Null<Float>;
+
+	/** The increment its editor steps by. */
 	public var step:Null<Float>;
+
+	/** The unit shown after its value. */
 	public var unit:Null<String>;
 	/** Choices for an Enum setting. */
 	public var options:Array<PropertyOption>;
@@ -224,6 +265,7 @@ class SettingOptions {
 	/** Keep explicitly chosen defaults when absence means automatic/inherited behavior. */
 	public var preserveExplicitDefault:Bool = false;
 
+	/** No options: a visible setting with no limits. */
 	public function new() {
 		label = null;
 		tooltip = null;
@@ -244,7 +286,7 @@ class SettingOptions {
  * Kept apart from files that import PropertyValue, whose Bool/Int/Float
  * constructors would shadow the standard types in Std.isOfType.
  */
-class SettingsJsonValue {
+internal class SettingsJsonValue {
 	public static function isBool(value:Dynamic):Bool
 		return value != null && Std.isOfType(value, Bool);
 

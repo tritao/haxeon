@@ -12,11 +12,16 @@ import haxeon.ui.settings.SettingDefinition;
  * saved. Bindings for commands this build does not register are kept.
  */
 class ShortcutBindings {
+	/** The store state key the bindings are saved under. */
 	public static inline var STATE_KEY:String = "shortcuts";
 
+	/** The commands whose shortcuts it manages. */
 	public final commands:CommandRegistry;
+
+	/** Where it saves them. */
 	public final store:SettingsStore;
 
+	/** Bindings over `commands`, applying those saved in `store`. */
 	public function new(commands:CommandRegistry, store:SettingsStore) {
 		if (commands == null || store == null)
 			throw "Shortcut bindings require a command registry and a settings store";
@@ -60,6 +65,7 @@ class ShortcutBindings {
 		save();
 	}
 
+	/** Restores every command's registered shortcuts. */
 	public function resetAll():Void {
 		for (id in commands.customShortcutIds())
 			commands.resetShortcuts(id);

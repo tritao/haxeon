@@ -211,7 +211,7 @@ class SettingsTests {
 			"custom types are not settings");
 
 		var scale = new SettingDefinition("a/scale", PropertyType.Float, PropertyValue.Int(1));
-		check(PropertyValueTools.same(scale.defaultValue, PropertyValue.Float(1.0)),
+		check(PropertyValue.same(scale.defaultValue, PropertyValue.Float(1.0)),
 			"an Int default of a Float setting becomes a Float");
 		check(scale.validate(PropertyValue.Float(Math.NaN)) != null, "NaN is refused");
 	}
@@ -497,7 +497,7 @@ class SettingsTests {
 			"out of range is rejected");
 		check(store.getInt("interface/editor/fonts/main_font_size") == 20, "a rejected edit leaves the store alone");
 		store.reset("interface/editor/fonts/main_font_size");
-		check(PropertyValueTools.same(binding.read(), PropertyValue.Int(14)), "the row reads what the store holds");
+		check(PropertyValue.same(binding.read(), PropertyValue.Int(14)), "the row reads what the store holds");
 	}
 
 	static function sameResult(first:PropertyEditResult, second:PropertyEditResult):Bool

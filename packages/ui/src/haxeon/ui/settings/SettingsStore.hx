@@ -24,8 +24,10 @@ import haxeon.ui.settings.SettingDefinition;
  * the settings dialog and never validated.
  */
 class SettingsStore implements Observable {
+	/** The version of the saved file's format. */
 	public static inline var FORMAT_VERSION:Int = 1;
 
+	/** The settings it holds values for. */
 	public final registry:SettingsRegistry;
 	/** Where values are saved; null keeps them in memory only. */
 	public final file:Null<String>;
@@ -42,6 +44,7 @@ class SettingsStore implements Observable {
 	var batchDepth:Int;
 	var dirty:Bool;
 
+	/** A store over `registry`, loading `file` when given. */
 	public function new(registry:SettingsRegistry, ?file:String) {
 		if (registry == null)
 			throw "Settings stores require a registry";
@@ -60,6 +63,7 @@ class SettingsStore implements Observable {
 		for (definition in registry.all()) if (definition.restartRequired) get(definition.path);
 	}
 
+	/** The setting's value, or its default. Throws for an undefined path. */
 	public function get(path:String):PropertyValue {
 		var definition = require(path);
 		adopt(definition);
@@ -80,23 +84,26 @@ class SettingsStore implements Observable {
 		for (definition in registry.all()) {
 			if (!definition.restartRequired || definition.internal) continue;
 			var current = get(definition.path);
-			if (!PropertyValueTools.same(current, restartBaseline.get(definition.path))) result.push(definition);
+			if (!PropertyValue.same(current, restartBaseline.get(definition.path))) result.push(definition);
 		}
 		return result;
 	}
 
+	/** A Bool setting's value. Throws when the setting is not a Bool. */
 	public function getBool(path:String):Bool
 		return switch (get(path)) {
 			case Bool(value): value;
 			default: throw 'Setting "$path" is not a Bool';
 		};
 
+	/** An Int setting's value. Throws when the setting is not an Int. */
 	public function getInt(path:String):Int
 		return switch (get(path)) {
 			case Int(value): value;
 			default: throw 'Setting "$path" is not an Int';
 		};
 
+	/** A Float setting's value. Throws when the setting is not a Float. */
 	public function getFloat(path:String):Float
 		return switch (get(path)) {
 			case Float(value): value;
@@ -119,10 +126,10 @@ class SettingsStore implements Observable {
 		adopt(definition);
 		var normalized = definition.normalize(value);
 		var previous = get(path);
-		if (PropertyValueTools.same(previous, normalized)
+		if (PropertyValue.same(previous, normalized)
 			&& (!definition.preserveExplicitDefault || overrides.exists(path)))
 			return null;
-		if (!definition.preserveExplicitDefault && PropertyValueTools.same(definition.defaultValue, normalized))
+		if (!definition.preserveExplicitDefault && PropertyValue.same(definition.defaultValue, normalized))
 			overrides.remove(path);
 		else
 			overrides.set(path, normalized);
@@ -130,6 +137,7 @@ class SettingsStore implements Observable {
 		return null;
 	}
 
+	/** Returns the setting to its default. */
 	public function reset(path:String):Void {
 		var definition = require(path);
 		if (definition.restartRequired) get(path);
@@ -145,6 +153,7 @@ class SettingsStore implements Observable {
 				reset(definition.path);
 		});
 
+	/** Whether the setting holds its default. */
 	public function isDefault(path:String):Bool {
 		adopt(require(path));
 		return !overrides.exists(path);
@@ -260,7 +269,7 @@ class SettingsStore implements Observable {
 		unknown.remove(definition.path);
 		if (decoded != null && definition.validate(decoded) == null
 			&& (definition.preserveExplicitDefault
-			|| !PropertyValueTools.same(definition.defaultValue, definition.normalize(decoded))))
+			|| !PropertyValue.same(definition.defaultValue, definition.normalize(decoded))))
 			overrides.set(definition.path, definition.normalize(decoded));
 	}
 

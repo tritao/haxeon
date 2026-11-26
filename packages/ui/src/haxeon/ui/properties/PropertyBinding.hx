@@ -13,10 +13,16 @@ import haxeon.ui.properties.PropertyDescriptor;
  * widgets only decide when to call apply().
  */
 class PropertyBinding {
+	/** The property it edits. */
 	public final descriptor:PropertyDescriptor;
+
+	/** The command context edits run in. */
 	public final context:CommandContext;
+
+	/** The registry for custom types. */
 	public final registry:PropertyEditorRegistry;
 
+	/** A binding editing `descriptor` in `context`. */
 	public function new(descriptor:PropertyDescriptor, context:CommandContext,
 			?registry:PropertyEditorRegistry) {
 		if (descriptor == null)
@@ -26,6 +32,7 @@ class PropertyBinding {
 		this.registry = registry == null ? new PropertyEditorRegistry() : registry;
 	}
 
+	/** The model's current value. */
 	public function read():PropertyValue
 		return descriptor.readValue();
 

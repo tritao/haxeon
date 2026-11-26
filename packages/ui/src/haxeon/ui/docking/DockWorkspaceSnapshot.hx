@@ -5,29 +5,40 @@ import haxeon.ui.docking.DockNode;
 
 /** Versioned value snapshot suitable for project or user layout persistence. */
 class DockWorkspaceSnapshot {
+	/** The format version this build writes and reads. */
 	public static inline var CurrentVersion:Int = 1;
+
+	/** The format version. */
 	public final version:Int;
+
+	/** The saved layout. */
 	public final root:DockNode;
+
+	/** The focused panel, or null. */
 	public final activePanelId:Null<String>;
 
+	/**
+	 * A snapshot of a copy of `root`, without `excludedPanels`. Throws for a null root or a version that is not
+	 * positive.
+	 */
 	public function new(root:DockNode, activePanelId:Null<String>,
 			version:Int = CurrentVersion, ?excludedPanels:Array<String>) {
 		if (root == null || version <= 0)
 			throw "Dock workspace snapshots require a root and positive version";
 		this.version = version;
 		// Filter transient panels as part of the defensive copy when requested.
-		this.root = excludedPanels == null ? DockNodeTools.clone(root) : DockNodeTools.copyExcluding(root,
-			excludedPanels);
+		this.root = excludedPanels == null ? root.clone() : root.copyExcluding(excludedPanels);
 		this.activePanelId = activePanelId;
 	}
 }
 
 /** Stable JSON representation for versioned dock workspace snapshots. */
 class DockWorkspaceSnapshotCodec {
+	/** The snapshot as JSON. Throws when its layout is invalid. */
 	public static function encode(snapshot:DockWorkspaceSnapshot):String {
 		if (snapshot == null)
 			throw "Cannot encode a null dock workspace snapshot";
-		var error = DockNodeTools.validate(snapshot.root, null);
+		var error = snapshot.root.validate(null);
 		if (error != null)
 			throw error;
 		return Json.stringify({
@@ -47,7 +58,7 @@ class DockWorkspaceSnapshotCodec {
 			if (version != DockWorkspaceSnapshot.CurrentVersion)
 				return null;
 			var root = decodeNode(Reflect.field(raw, "root"));
-			if (root == null || DockNodeTools.validate(root, null) != null)
+			if (root == null || root.validate(null) != null)
 				return null;
 			var activeValue:Dynamic = Reflect.field(raw, "activePanelId");
 			var activePanelId:Null<String> = activeValue == null ? null : castString(activeValue);
@@ -135,18 +146,23 @@ class DockWorkspaceSnapshotCodec {
 
 /** Application-owned storage boundary for persisted workspace snapshots. */
 interface DockWorkspacePersistence {
+	/** The value saved under `key`, or null. */
 	function load(key:String):Null<String>;
+
+	/** Saves `value` under `key`. */
 	function save(key:String, value:String):Void;
 }
 
 /** Adapts a workspace model to an application-owned persistence service. */
 class DockWorkspaceStorage {
+	/** Saves `model`'s layout under `key`. */
 	public static function save(model:DockWorkspaceModel, storage:DockWorkspacePersistence,
 			key:String):Void {
 		validate(model, storage, key);
 		storage.save(key, model.snapshotJson());
 	}
 
+	/** Restores `model`'s layout from `key`. Returns false when nothing valid is saved. */
 	public static function restore(model:DockWorkspaceModel, storage:DockWorkspacePersistence,
 			key:String):Bool {
 		validate(model, storage, key);
