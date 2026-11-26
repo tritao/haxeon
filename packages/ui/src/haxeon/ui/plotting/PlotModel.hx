@@ -6,11 +6,20 @@ import haxeon.ui.Color;
 /** Shared plotting model with explicit or data-derived ranges. */
 class PlotModel implements Observable {
 	var values:Array<PlotSeries>;
+
+	/** The fixed lowest x, or null to take it from the data. */
 	public var minimumX(default, null):Null<Float>;
+
+	/** The fixed highest x, or null to take it from the data. */
 	public var maximumX(default, null):Null<Float>;
+
+	/** The fixed lowest y, or null to take it from the data. */
 	public var minimumY(default, null):Null<Float>;
+
+	/** The fixed highest y, or null to take it from the data. */
 	public var maximumY(default, null):Null<Float>;
 
+	/** A model with no series and every bound taken from the data. */
 	public function new() {
 		values = [];
 		minimumX = null;
@@ -19,6 +28,7 @@ class PlotModel implements Observable {
 		maximumY = null;
 	}
 
+	/** Adds `series`. Throws when its id is taken. */
 	public function addSeries(series:PlotSeries):Void {
 		if (series == null || seriesById(series.id) != null)
 			throw "Plot series IDs must be unique and non-null";
@@ -27,6 +37,7 @@ class PlotModel implements Observable {
 		values = next;
 	}
 
+	/** Removes series `id`. Returns false when there is none. */
 	public function removeSeries(id:String):Bool {
 		var series = seriesById(id);
 		if (series == null)
@@ -37,9 +48,11 @@ class PlotModel implements Observable {
 		return true;
 	}
 
+	/** A copy of the series, in the order they were added. */
 	public function series():Array<PlotSeries>
 		return values.copy();
 
+	/** Series `id`, or null. */
 	public function seriesById(id:String):Null<PlotSeries> {
 		for (series in values)
 			if (series.id == id)
@@ -67,6 +80,7 @@ class PlotModel implements Observable {
 		this.maximumY = maximumY;
 	}
 
+	/** Takes every bound from the data again. */
 	public function clearRange():Void
 		setRange(null, null, null, null);
 
@@ -79,6 +93,10 @@ class PlotModel implements Observable {
 		}
 	}
 
+	/**
+	 * The range to draw: the fixed bounds, the rest from the visible series' points, widened by half a unit around a
+	 * single value. Null when there is nothing to derive a bound from.
+	 */
 	public function range():Null<PlotRange> {
 		var lowX:Null<Float> = minimumX;
 		var highX:Null<Float> = maximumX;
@@ -125,13 +143,23 @@ class PlotModel implements Observable {
 
 /** Application-owned samples and presentation for one plot line. */
 class PlotSeries implements Observable {
+	/** A stable identifier within its model. */
 	public final id:String;
+
+	/** Its name in legends. */
 	public final label:String;
+
+	/** Its line colour. */
 	public final color:Color;
+
+	/** Its line width, in pixels. */
 	public final lineWidth:Float;
+
+	/** Whether it is drawn and counts toward derived ranges. */
 	public var visible(default, null):Bool;
 	var values:Array<PlotPoint>;
 
+	/** An empty, visible series. Throws for an empty id or label, or a width that is not positive. */
 	public function new(id:String, label:String, color:Color, ?lineWidth:Float = 1.5) {
 		if (id == null || id.length == 0 || label == null || label.length == 0 || !finite(lineWidth)
 			|| lineWidth <= 0.0)
@@ -144,19 +172,23 @@ class PlotSeries implements Observable {
 		values = [];
 	}
 
+	/** A copy of its points. */
 	public function points():Array<PlotPoint>
 		return values.copy();
 
+	/** How many points it has. */
 	public var pointCount(get, never):Int;
 	inline function get_pointCount():Int
 		return values.length;
 
+	/** Point `index`. Throws when there is no such point. */
 	public function pointAt(index:Int):PlotPoint {
 		if (index < 0 || index >= values.length)
 			throw "Plot point index is out of range";
 		return values[index];
 	}
 
+	/** Shows or hides it. Returns false when that changes nothing. */
 	public function setVisible(value:Bool):Bool {
 		if (visible == value)
 			return false;
@@ -164,6 +196,7 @@ class PlotSeries implements Observable {
 		return true;
 	}
 
+	/** Replaces its points with a copy of `points`. */
 	public function setPoints(points:Array<PlotPoint>):Void {
 		var next:Array<PlotPoint> = [];
 		if (points != null)
@@ -175,6 +208,7 @@ class PlotSeries implements Observable {
 		values = next;
 	}
 
+	/** Appends `point`. */
 	public function add(point:PlotPoint):Void {
 		if (point == null)
 			throw "Plot series cannot contain null points";
@@ -183,6 +217,7 @@ class PlotSeries implements Observable {
 		values = next;
 	}
 
+	/** Removes every point. */
 	public function clear():Void {
 		if (values.length == 0)
 			return;
@@ -195,9 +230,13 @@ class PlotSeries implements Observable {
 
 /** One immutable sample in a telemetry/debug plot series. */
 class PlotPoint {
+	/** Its x. */
 	public final x:Float;
+
+	/** Its y. */
 	public final y:Float;
 
+	/** The point (`x`, `y`). Throws when either is not finite. */
 	public function new(x:Float, y:Float) {
 		if (!finite(x) || !finite(y))
 			throw "Plot points must be finite";
@@ -211,11 +250,19 @@ class PlotPoint {
 
 /** Finite data range used to map plot samples into a viewport. */
 class PlotRange {
+	/** The lowest x. */
 	public final minimumX:Float;
+
+	/** The highest x. */
 	public final maximumX:Float;
+
+	/** The lowest y. */
 	public final minimumY:Float;
+
+	/** The highest y. */
 	public final maximumY:Float;
 
+	/** The range from (`minimumX`, `minimumY`) to (`maximumX`, `maximumY`). */
 	public function new(minimumX:Float, maximumX:Float, minimumY:Float, maximumY:Float) {
 		this.minimumX = minimumX;
 		this.maximumX = maximumX;

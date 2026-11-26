@@ -28,6 +28,7 @@ import haxeon.ui.widgets.text.TextField;
 
 /** Interactive Storybook-style surface backed by ordinary UIKit views. */
 class ComponentLab implements Observable {
+	/** The stories it can show, in order. */
 	public final stories:Array<ComponentStory>;
 	var selectedId:String;
 	var textValue:String = "Editable text";
@@ -38,12 +39,14 @@ class ComponentLab implements Observable {
 	var multilineValue:String = "A multiline editor\nwith deterministic content.";
 	var previewWidth:Float = 0.0;
 
+	/** A lab over `registry`'s stories, or the built-in ones, showing `initialStory` or the first. */
 	public function new(?initialStory:String, ?registry:ComponentStoryRegistry) {
 		stories = registry == null ? makeStories() : registry.all();
 		if (stories.length == 0) throw "Component Lab requires at least one story";
 		selectedId = initialStory == null || find(initialStory) == null ? stories[0].id : initialStory;
 	}
 
+	/** The lab: a story list, the selected story and its controls. */
 	public function view(ui:UiContext):View {
 		var selected = find(selectedId);
 		if (selected == null) selected = stories[0];
@@ -109,6 +112,7 @@ class ComponentLab implements Observable {
 			rootStyle);
 	}
 
+	/** The selection and control values, for live-session diagnostics. */
 	public function diagnosticState():Dynamic return {
 		selectedStory: selectedId,
 		storyIds: [for (story in stories) story.id],

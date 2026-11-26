@@ -12,6 +12,8 @@ class TrackedScope implements ScopeView {
 	final key:String;
 	final body:Void->View;
 	final style:Null<LayoutStyle>;
+
+	/** A scope keyed `key` that runs `body` again on its own when what it read changes. */
 	public function new(key:String, body:Void->View, ?style:LayoutStyle) {
 		if (key == null || key.length == 0 || body == null) throw "A re-running scope needs a key and body";
 		this.key = key;

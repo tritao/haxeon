@@ -13,6 +13,8 @@ import haxeon.ui.widgets.text.Text;
 class BoundText implements View {
 	final key:String;
 	final read:Void->String;
+
+	/** A text node keyed `key` whose text is `read()`, updated in place when what `read` depends on changes. */
 	public function new(key:String, read:Void->String) {
 		if (key == null || key.length == 0 || read == null) throw "A text binding needs a key and getter";
 		this.key = key;

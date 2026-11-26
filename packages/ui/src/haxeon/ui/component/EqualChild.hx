@@ -15,6 +15,7 @@ class EqualChild < T:Equatable > implements View {
 	final input:T;
 	final make:T->BuildContext->View;
 
+	/** A child keyed `key` built by `make(input)`, kept while `input` stays equal and nothing it read changed. */
 	public function new(key:String, input:T, make:T->BuildContext->View) {
 		if (key == null || key.length == 0 || make == null) throw "An equal child needs a key and builder";
 		this.key = key;
