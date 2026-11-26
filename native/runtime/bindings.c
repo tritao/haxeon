@@ -766,6 +766,7 @@ DEFINE_PRIM(_BOOL,__host_prepare_private_directory,_STRING);
 DEFINE_PRIM(_BOOL,__host_check_private_directory,_STRING);
 DEFINE_PRIM(_BOOL,__host_check_private_file,_STRING);
 DEFINE_PRIM(_STRING,__host_secure_random_token,_NO_ARG);
+DEFINE_PRIM(_VOID,__host_detach_session,_NO_ARG);
 DEFINE_PRIM(_I32,__host_choose_loopback_port,_NO_ARG);
 DEFINE_PRIM(_ABSTRACT(realtime_file_lock),__host_file_lock_acquire,_STRING);
 DEFINE_PRIM(_VOID,__host_file_lock_release,_ABSTRACT(realtime_file_lock));

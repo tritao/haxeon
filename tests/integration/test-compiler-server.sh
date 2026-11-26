@@ -29,9 +29,19 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
     env['HAXEON_COMPILER_SESSION_DIR'] = str(states)
     def source(value):
         main.write_text('class Main { public static function main():Int { return ' + value + '; } }\n')
-    def build(success=True, extra=(), environment=env):
-        p = subprocess.run([str(repo / 'scripts/haxeon'), 'build', '--verbosity=normal', '--project', str(manifest), *extra], env=environment,
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=120)
+    def build(success=True, extra=(), environment=env, own_group=False):
+        process = subprocess.Popen([str(repo / 'scripts/haxeon'), 'build', '--verbosity=normal', '--project', str(manifest), *extra],
+                                   env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                   process_group=0 if own_group else None)
+        output, _ = process.communicate(timeout=120)
+        p = subprocess.CompletedProcess(process.args, process.returncode, output)
+        if own_group:
+            # As a tool that runs the build in a group of its own stops that group when the build ends: the worker the build
+            # started has left it, so it keeps running.
+            try:
+                os.killpg(process.pid, 9)
+            except ProcessLookupError:
+                pass
         assert (p.returncode == 0) == success, p.stdout
         if success:
             binary = root / 'build/host/main.hl'
@@ -54,7 +64,7 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         states.mkdir(mode=0o755)
         states.chmod(0o755)
         source('7')
-        build()
+        build(own_group=True)
         run(7)
         assert states.stat().st_mode & 0o777 == 0o700, oct(states.stat().st_mode)
         assert len(list(states.glob('*.json'))) == 1

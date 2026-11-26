@@ -323,6 +323,15 @@ HL_PRIM bool HL_NAME(__host_check_private_file)(vstring *path) {
 	return realtime_host_private_path(path, false);
 }
 
+/* Leaves the caller's session and process group on POSIX, so stopping the program that started this process (a build a
+   tool runs in its own group, which it kills when the build ends) does not stop it too. A group's leader cannot start a
+   session, and needs none: no other group holds it. Windows starts a detached child in a group of its own. */
+HL_PRIM void HL_NAME(__host_detach_session)(void) {
+#ifndef HL_WIN
+	(void)setsid();
+#endif
+}
+
 HL_PRIM vstring *HL_NAME(__host_secure_random_token)(void) {
 	unsigned char bytes[32];
 #ifdef HL_WIN

@@ -124,23 +124,21 @@ class CompilerClient {
 								.join(":"),
 							launch = program.concat([statePath]).map(SysTools.quoteUnixArg).join(" ");
 						// The shell redirects its own three streams first, so neither the worker nor the subshell that
-						// `&` makes of the command list (which outlives the build on macOS, where nothing detaches the
-						// worker) can keep the caller's pipes open after the build exits.
-						var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
-							status = Sys.command("sh", [
-								"-c",
-								"exec < /dev/null > " + SysTools.quoteUnixArg(logPath) + " 2>&1; umask 077; cd "
-									+ SysTools.quoteUnixArg(home)
-									+ " && export "
-									+ libraryVariable
-									+ "="
-									+ SysTools.quoteUnixArg(libraryPath) // The shell ignores SIGHUP for the worker instead of nohup: macOS strips DYLD_* from what a system
-									// binary such as nohup starts, and the worker would start without the runtime's library path.
-									+ " && trap '' HUP && "
-									+ detach
-									+ launch
-									+ " &"
-							]);
+						// `&` makes of the command list can keep the caller's pipes open after the build exits. The worker
+						// leaves the build's session itself (CompilerServer.serve).
+						var status = Sys.command("sh", [
+							"-c",
+							"exec < /dev/null > " + SysTools.quoteUnixArg(logPath) + " 2>&1; umask 077; cd "
+								+ SysTools.quoteUnixArg(home)
+								+ " && export "
+								+ libraryVariable
+								+ "="
+								+ SysTools.quoteUnixArg(libraryPath) // The shell ignores SIGHUP for the worker instead of nohup: macOS strips DYLD_* from what a system
+								// binary such as nohup starts, and the worker would start without the runtime's library path.
+								+ " && trap '' HUP && "
+								+ launch
+								+ " &"
+						]);
 						if (status != 0)
 							throw new InternalError("Could not start compiler worker");
 					}

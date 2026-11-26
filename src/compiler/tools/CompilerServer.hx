@@ -29,10 +29,15 @@ class CompilerServer {
 	}
 
 	#if hl
+	@:hlNative("haxeon_runtime", "__host_detach_session")
+	static function detachSession():Void {}
+
 	@:hlNative("haxeon_runtime", "__host_secure_random_token")
 	static function windowsSecureToken():String
 		return null;
 	#else
+	static function detachSession():Void {}
+
 	static function windowsSecureToken():String
 		throw new InternalError("A secure random token requires the Haxeon runtime");
 	#end
@@ -46,6 +51,8 @@ class CompilerServer {
 
 	/** Serves requests until idle, publishing how to reach it at `statePath` (the rendezvous `CompilerClient` reads). */
 	public static function serve(statePath:String):Void {
+		// The worker outlives the build that started it, so whatever stops that build's process group must not stop it.
+		detachSession();
 		ProcessMemory.compileServer();
 		var token = secureToken();
 		var listener = new Socket(), session = new CompilerSession();
