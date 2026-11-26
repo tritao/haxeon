@@ -91,8 +91,11 @@ and no edge between declarations is kept by hand.
   adapter, a `Flags` or raw-value enum member, a copy from `Dynamic` to a structure) is a unit as well, recording what
   making it read, and the code asking for it reads its unit (`TypingSession.requestHelper`): a helper is made only from
   requests, so an edit to a declaration it is made from (an enum constructor added under a `Type.enumEq`) types its requesters
-  again, which ask for it again. A wire codec serves every root reaching its type, so its requester reads the wire shapes
-  the codecs are made from itself.
+  again, which ask for it again. A helper asked for again from the same origin is the last build's while none of its reads
+  changed, when typing it made nothing but its function and the helpers it asked for (`UnitReads.standalone`,
+  `TypingSession.keptHelper`): those it calls stay with it through the prune, and a function typed to the object its module
+  holds keeps its IR. A wire codec serves every root reaching its type, so its requester reads the wire shapes the codecs
+  are made from itself.
 - **Soundness.** A missing read keeps a stale body: `--check-reuse` and the edit replay (`tests/integration/test-edit-replay.py`)
   are the checks. A failed build may move a print, never a unit's record; prints only move forward, so the units typed
   before it are typed again.
