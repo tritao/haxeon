@@ -1,26 +1,73 @@
 # Compile-server memory: keep what decides, recompute the rest
 
-Status: proposed.
+Status: proposed; measured again (below) and steps 1 to 3 built ("As built", at the end).
 
 ## Where the live data is
 
-The live UI session (perf-guard `--only=live --live-owners`, the census at the last edit's `write-done`) holds 461 MB of live
-blocks. By first retention path:
+When this note was proposed, the live UI session (perf-guard `--only=live --live-owners`) held 461 MB of live blocks at the last
+edit's `write-done`; live pruning (MODULE_SECTIONS.md, "As built in slice 4c") took that to 369 MB. The census is now taken at
+`request-done` (step 1), once the build's result and its response are gone: 359.9 MB. The build itself held only 9 MB the
+session does not keep, as the final IR its result carries is the inline cache's too (`IrInlineCache.published`).
+
+By first retention path at the last edit's `request-done`. The paths are breadth-first, so a block several owners hold is charged
+to the one nearest the roots:
 
 | Path | MB | What it is |
 |---|---|---|
-| the build's `IrProgram` (stack) | 77 | every function's final IR: `IrBody` and what it owns is 89 MB over 18k bodies, one per function |
-| `SessionState.modules` | 69 | per module: typed functions 24, token tables 18, ASTs, declaration state |
-| `SessionState.queries` (`QueryDatabase`) | 55 | the engine's memos and columns |
-| `CompilerPublication` | 46 | acknowledged publications 35, the pending one 12 |
-| `SessionState.semanticProgram` | 35 | declarations, signatures, the declaration index |
-| `CompilerSession.encodedModule` | 34 | the last module's `HlCode` object graph, kept after it is written |
-| `SessionState.stageMemos` | 27 | IR stage memos and summaries |
-| `SessionState.irGeneration` | 23 | IR generation's memo per function |
-| `SessionState.backend` | 18 | lowered functions (`HlFunction` 24 MB by owner) and the assembler |
+| `SessionState.modules` | 68.8 | typed functions 23.6, token tables 17.8, ASTs 11.9, declaration state |
+| `SessionState.inlineCache` | 48.2 | the final IR (`IrInlineCache.published`), which the lowered functions and the assembler also name |
+| `SessionState.queries` | 39.3 | IR memos by kind 22.1, the walk memo 15.4 |
+| `SessionState.irGeneration` | 36.0 | IR generation's memo per function |
+| `SessionState.semanticProgram` | 34.9 | signatures 17.6, the declaration index 9.8, lifecycle 2.7 |
+| `CompilerPublication` | 24.4 | the acknowledged publications' snapshots and ABIs |
+| `CompilerSession.encodedModule` | 23.8 | the written module's `HlCode`: functions 15.5, relocations 5.2 |
+| `SessionState.stageMemos` | 20.4 | stage facts 10.6, contributions 3.7, inline queries 3.7 |
+| `SessionState.backend` | 12.7 | the assembler (published functions, section memo, symbol tables) |
+| `SessionState.declarationFacts` | 10.6 | |
+| `Compiler.ffi` | 6.2 | the FFI interface models (`HxiInterface`, documentation 2.0) |
+| `SessionState.purity` | 4.5 | |
+| the rest | 30 | the last typed program, types, the published ABI, type mentions, the function map, globals |
 
-The census is taken at `write-done`, inside the build, so it also counts what only the build holds: the stack path is
-first-reached, and most of its IR is the same IR the memos keep.
+First paths overstate what an owner keeps alone. Released one at a time at the last edit's `request-done`, with a census after
+each (a local diagnostic, not committed), what each kept alone:
+
+| Released | MB alone | |
+|---|---|---|
+| `CompilerSession.encodedModule` | 0.0 | its `HlCode` is the cached compile result's too |
+| `Compiler.cachedCompileResult` (then) | 1.0 | the module's own tables; its functions, relocations and IR are the assembler's and the inline cache's |
+| the publications' assemblers' function caches (`HlFunctionCache`) | 11.9 | |
+| their section memos, published entries and maps | 2.3 | |
+| their type registries | 1.4 | |
+| their objects, inline caches, reachability, owners, backend rest | 1.3 | |
+| their typed and semantic programs and published ABIs | 1.9 | |
+| their modules | 2.5 | the edited module's old states and each snapshot's module map |
+| the publications' ABIs | 3.0 | |
+| the rest of the publications | 0.1 | |
+
+So step 2 as written frees about 1 MB, not 34: the module's object graph is the published functions the next build reuses.
+Step 3's share is 24.4 MB, of which the function caches are half.
+
+### By source package
+
+The UI session's live data split by the package of the source each part comes from. The census has no source, so this is an
+attribution by proxy: per module, its tokens, typed functions and IR instructions, and per function of the final IR, its
+instructions (a local diagnostic over `SessionState.modules` and the final program). The frontend's module state (tokens, ASTs,
+declaration state) is split by tokens, typed functions by IR instructions, declarations (semantic program, facts, purity,
+types, ABI) by typed functions, the per-function IR and backend state (inline cache, IR generation, stage memos, query memos,
+backend, module) by final-IR instructions, publications by final functions, and the FFI models go to NativeKit.
+
+| Package | Modules | Source | Tokens | Typed functions | Final functions | MB (approx.) | Of 359.9 MB |
+|---|---|---|---|---|---|---|---|
+| haxeon-ui (`packages/ui`) | 210 | 2.0 MB | 244 k | 3,032 | 2,408 | 176 | 49% |
+| NativeKit bindings (`NativeKit.hx` and the other generated binding modules) | 14 | 2.35 MB | 245 k | 2,330 | 660 | 59 | 16% |
+| standard library | 80 | 0.23 MB | 34 k | 641 | 748 | 42 | 12% |
+| generated functions with no module (structure printers, runtime helpers) | — | — | — | — | 1,103 | 38 | 11% |
+| platform, editor, gpu packages | 91 | 0.29 MB | 31 k | 399 | 379 | 22 | 6% |
+| the app (user code) | 1 | 4 KB | 0.7 k | 23 | 22 | 1 | 0.2% |
+
+About 21 MB (the function map, globals, the session's own records) is not attributed. NativeKit's bindings are as many tokens
+as all of haxeon-ui and reach few functions: their 59 MB are frontend state (tokens, ASTs, declarations) for code the program
+mostly does not run, which step 4's token-table and syntax eviction and a lighter binding form address.
 
 ## How comparable systems handle this
 
@@ -70,3 +117,14 @@ edit as fast (`perf-guard --only=incremental`, `--only=live` edit times).
 - Step 4's policy: drop after every build (simplest, a body edit then recomputes the few functions the inliner reads from
   callers), or an LRU bound (keeps recent ones, a knob to tune). Measure the first; add the bound only if edits slow down.
 - Whether step 1 changes the gate's baseline enough to re-record it (likely yes, with the reason).
+
+## As built
+
+### Step 1: the census measures what is kept between edits
+
+The compile server marks `request-done` once a compile's response is out and its result released, before the collection
+between requests (`CompilerServer`), and perf-guard's live census is taken there (`measure_live_growth`), so the gated live data
+is what the session keeps from one edit to the next. The incremental part's census stays at `write-done`: its builds are read
+from the server's log as each response arrives, before the server has settled. The baselines moved with the measure, not with
+the compiler: the UI session 386.40 → 377.38 MB and the small project 9.33 → 9.12 MB (perf-guard's bytes; 359.9 and 8.7 MB in
+the census's MiB).

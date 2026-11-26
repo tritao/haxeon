@@ -1182,8 +1182,10 @@ def measure_live_app(app, work, env, mode, owners=False):
 
 
 def measure_live_growth(app, work, env, mode, owners=False):
-    """The server's live data over LIVE_GROWTH_EDITS body edits, in a session of its own: every build there ends with a heap
-    census (`write-done`, which collects first; pages only unless `owners`), which would weigh on the timed session's walls.
+    """The server's live data over LIVE_GROWTH_EDITS body edits, in a session of its own: every build there is followed by a
+    heap census (`request-done`, once the build's result and response are gone, which collects first; pages only unless
+    `owners`), which would weigh on the timed session's walls. It counts what the session keeps from one edit to the next, not
+    what a build holds while it runs.
     The census counts the live blocks, not the pages they leave mapped, so it does not move with the collector's fragmentation
     or the machine. A live session must keep about what a plain one keeps: the history of a revision it can no longer patch
     from is garbage. The session resumes the history the timed session recorded, so its edits write texts that session did not:
@@ -1198,7 +1200,7 @@ def measure_live_growth(app, work, env, mode, owners=False):
             os.remove(os.path.join(session, name))
     project = live_project(work, app)
     app.prepare(project)
-    census = dict(env, HAXEON_PEAK_CENSUS="write-done")
+    census = dict(env, HAXEON_PEAK_CENSUS="request-done")
     if not owners:
         census["HL_GC_CENSUS_PAGES_ONLY"] = "1"
     watch = LiveWatch(app, project, work, census)
@@ -1218,14 +1220,14 @@ def measure_live_growth(app, work, env, mode, owners=False):
                 logs[name] = source.read().splitlines()
     builds = 1 + LIVE_GROWTH_EDITS
     found = [lines for lines in logs.values()
-             if sum(1 for line in lines if line.startswith("census write-done total ")) == builds]
+             if sum(1 for line in lines if line.startswith("census request-done total ")) == builds]
     if len(found) != 1:
         raise SystemExit(f"perf-guard: no single server of the live {app.name} session logged a census for each of its "
                          f"{builds} builds; logs in {session}")
     live, mapped = [], []
     for line in found[0]:
-        # `census write-done total mapped M MB resident R MB live L MB ...`
-        if line.startswith("census write-done total "):
+        # `census request-done total mapped M MB resident R MB live L MB ...`
+        if line.startswith("census request-done total "):
             words = line.split()
             live.append(round(float(words[words.index("live") + 1]) * 1048576))
             mapped.append(float(words[words.index("mapped") + 1]))
@@ -1237,8 +1239,8 @@ def measure_live_growth(app, work, env, mode, owners=False):
           + " ".join(f"{value:.0f}" for value in mapped[1:]) + " MB (not compared)")
     if owners:
         # The owner lines that follow the last census's total.
-        last = max(index for index, line in enumerate(found[0]) if line.startswith("census write-done total "))
-        top = [line.split(None, 3)[3] for line in found[0][last:] if line.startswith("census write-done owner ")][:LIVE_OWNERS]
+        last = max(index for index, line in enumerate(found[0]) if line.startswith("census request-done total "))
+        top = [line.split(None, 3)[3] for line in found[0][last:] if line.startswith("census request-done owner ")][:LIVE_OWNERS]
         print(f"perf-guard: live {mode} {app.name:5} live data by owner after the last edit (MB, blocks, owner):\n  "
               + "\n  ".join(top))
     return {f"{mode}_{app.name}_server_live_bytes": settled[-1],

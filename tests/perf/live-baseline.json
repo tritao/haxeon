@@ -1,6 +1,5 @@
 {
-	"about": "scripts/perf-guard.py, live part: haxeon run --watch, patching, on tests/perf/live-project (small) and on the app template over haxeon-ui (ui), made and built from the template and packages at ui_input_revision (the same for every checkout; move it only with a re-baseline of the ui metrics), from the save of an edit to the running app's patch-applied event, with the CLI and server built ahead of time (haxeon-aot, aot_). Measured on Linux x86-64. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
-	"ui_input_revision": "22043f180a46f51bbb08f46c5907adbe3eab4d03",
+	"about": "scripts/perf-guard.py, live part: haxeon run --watch, patching, on tests/perf/live-project (small) and on the app template over haxeon-ui (ui), from the save of an edit to the running app's patch-applied event, with the CLI and server built ahead of time (haxeon-aot, aot_). Measured on Linux x86-64. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
 	"metrics": {
 		"aot_small_body_edit_ms": {
 			"value": 113,
@@ -43,9 +42,9 @@
 			"why": "The edited function, its callers and the adapter: deterministic."
 		},
 		"aot_small_server_live_bytes": {
-			"value": 9332326,
+			"value": 9122611,
 			"tolerance_abs": 262144,
-			"why": "The server's live data after the growth session's last edit: what a live session keeps. From the heap census that ends each build (`write-done`, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The slack is two and a half of those steps."
+			"why": "The server's live data after the growth session's last edit: what a live session keeps from one edit to the next. From the heap census after each build's request (`request-done`, once the build's result and response are gone, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The slack is two and a half of those steps."
 		},
 		"aot_small_server_live_growth_bytes": {
 			"value": 0,
@@ -53,10 +52,9 @@
 			"why": "Live data growth over the growth session's edits after those that fill the session, from the same census. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack is two and a half of the census's 0.1 MB steps."
 		},
 		"aot_ui_server_live_bytes": {
-			"value": 387134259,
+			"value": 377382502,
 			"tolerance": 0.001,
-			"why": "The server's live data after the growth session's last edit: what a live session keeps. From the heap census that ends each build (`write-done`, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The publications kept to take back share the string and global tables with the current state, each seeing its own prefix. The slack is about five of the census's steps.",
-			"raise_reason": "Measured on the frozen ui input at ui_input_revision, the revision the last value was taken at, so the same program: the checkout's own packages measure 0.6 MB more in this checkout than in the one that took the value (its longer path), and the frozen input's longer paths one census step more."
+			"why": "The server's live data after the growth session's last edit: what a live session keeps from one edit to the next. From the heap census after each build's request (`request-done`, once the build's result and response are gone, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The publications kept to take back share the string and global tables with the current state, each seeing its own prefix. The slack is about five of the census's steps."
 		},
 		"aot_ui_server_live_growth_bytes": {
 			"value": 0,

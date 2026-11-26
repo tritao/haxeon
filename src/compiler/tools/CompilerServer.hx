@@ -3,6 +3,7 @@ package compiler.tools;
 import compiler.core.CancellationToken;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
+import compiler.core.PeakProbe;
 import compiler.tools.CompilerServerProtocol;
 import sys.FileSystem;
 import sys.io.File;
@@ -169,8 +170,11 @@ class CompilerServer {
 				if (!answered)
 					client.close();
 				// Only after a compile: a collection after pings would land on the next edit's path.
-				if (compiled)
+				if (compiled) {
+					// What the session keeps from one edit to the next: the build's result and its response are gone.
+					PeakProbe.mark("request-done");
 					ProcessMemory.betweenRequests();
+				}
 				if (activity)
 					idleDeadline = Sys.time() + idleSeconds;
 			}
