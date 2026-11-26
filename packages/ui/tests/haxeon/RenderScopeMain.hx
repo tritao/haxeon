@@ -6,6 +6,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.theme.Theme;
@@ -30,9 +31,10 @@ class RenderScopeMain {
 			result.layout.text = Std.string(value + 10);
 			return result;
 		});
-		var root = component.build(context), scope = context.renderScopeAt(root);
+		var modifier = new RootModifier();
+		modifier.add(decoration);
+		var root = context.build(component, modifier), scope = context.renderScopeAt(root);
 		if (scope == null) return 15;
-		root.add(decoration);
 		var old = root;
 		scope.refresh();
 		if (runs != 1
@@ -107,14 +109,16 @@ class RenderScopeMain {
 			style.zIndex = 2;
 			return build.createNode(build.rootId("body"), LayoutVisualKind.Box, style);
 		});
-		var elementRoot = elementComponent.build(context), elementScope = context.renderScopeAt(elementRoot);
+		var placement = new RootModifier();
+		placement.zIndex = 9;
+		var elementRoot = context.build(elementComponent, placement), elementScope = context.renderScopeAt(elementRoot);
 		if (elementScope == null) return 17;
 		var element = elementRoot;
 		if (elementRoot.layout.style.width.value != 80 || elementRoot.layout.style.height.value != 24
 			|| elementRoot.layout.style.positioning != LayoutPositioning.Absolute
 			|| elementRoot.layout.style.positionX != 7 || !elementRoot.hitTestSelf
-			|| elementRoot.children.length != 0 || element.layout.style.padding.left != 4) return 12;
-		elementRoot.layout.style.zIndex = 9;
+			|| elementRoot.children.length != 0 || element.layout.style.padding.left != 4
+			|| elementRoot.layout.style.zIndex != 9) return 12;
 		publish(context, elementRoot);
 		width.value = 100;
 		elementScope.refresh();

@@ -127,18 +127,20 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 			if (existing == null || existing.disposed || existing.sameSlot(this)) next.setScopeOwner(this);
 			if (previous == null) boundary = new ScopeRootBoundary(next);
 			else if (next != previous) {
-				// Several scopes can forward the same physical body root. Advance each ancestor's
-				// declared boundary before moving decorations, so none adopts caller-owned overlays.
+				// Several scopes can forward the same physical body root: each records the new body as its own.
 				var ancestor = parentScope;
 				while (ancestor != null && ancestor.root == previous) {
-					ancestor.boundary.rebase(boundary, next);
+					ancestor.boundary.reset(next);
 					ancestor.root = next;
 					ancestor = ancestor.parentScope;
 				}
-				boundary.transfer(previous, next);
+				boundary.reset(next);
 				if (previous.parent != null) previous.parent.replaceChild(previous, next);
 				else if (parent != null) parent.insertChild(slot, next);
-			} else if (parent != null && next.parent == null) parent.insertChild(slot, next);
+			} else {
+				boundary.reset(next);
+				if (parent != null && next.parent == null) parent.insertChild(slot, next);
+			}
 			root = next;
 			if (previous != null) applySharedModifiers(next);
 			finishDependencies();

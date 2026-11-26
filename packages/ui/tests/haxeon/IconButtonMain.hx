@@ -3,6 +3,7 @@ import haxeon.ui.LayoutNode;
 import haxeon.ui.component.EqualChild;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
@@ -11,7 +12,7 @@ import haxeon.ui.style.StyleState;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.controls.IconButton;
 
-/** Native control ownership preserves caller children across interaction reruns. */
+/** A caller's modifier stays on a native control's root across interaction reruns. */
 class IconButtonMain {
 	static var historyBuilds = 0;
 	static var historyButton:Null<IconButton>;
@@ -26,18 +27,19 @@ class IconButtonMain {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
 		context.beginFrame();
-		var root = new IconButton("search", IconName.Search, "Search").build(context);
+		var modifier = new RootModifier();
+		var overlay = new RenderNode(context.id("caller-overlay"), LayoutVisualKind.Box);
+		modifier.add(overlay);
+		modifier.zIndex = 3;
+		var root = context.build(new IconButton("search", IconName.Search, "Search"), modifier);
 		store.endFrame();
-		if (root.children.length != 1) return 1;
+		if (root.children.length != 2 || root.children[1] != overlay || root.layout.style.zIndex != 3) return 1;
 		var button = root;
 		if (button.semantics == null || button.semantics.role != AccessibilityRole.Button
 			|| button.semantics.label != "Search" || !button.semantics.actions.contains(AccessibilityAction.Activate)
 			|| !button.focusable || !button.enabled || context.canPatch(button)) return 2;
 		var scopeOwner = context.interactionRenderScope(button);
 		if (scopeOwner == null || scopeOwner.root != root) return 3;
-		var overlay = new RenderNode(context.id("caller-overlay"), LayoutVisualKind.Box);
-		root.add(overlay);
-		root.layout.style.zIndex = 3;
 		context.interactionStates.set(button.id, StyleState.Pressed);
 		scopeOwner.markDirty();
 		context.flushRenderScopes(root);

@@ -8,6 +8,7 @@ import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RetainedVariants;
 import haxeon.ui.core.RetainedView;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
@@ -35,8 +36,15 @@ class ButtonMain {
 		var semantics = new Semantics(AccessibilityRole.ComboBox, "Choose", "First");
 		semantics.actions = AccessibilityAction.Expand | AccessibilityAction.SetValue;
 		var decoration = new ButtonDecoration(), focuses = 0, blurs = 0;
+		// What the caller adds goes through a modifier: listeners, a placement and an extra child.
+		var modifier = new RootModifier();
+		modifier.on(UiEventKind.Focus, function(_) focuses++, UiEventPhase.Capture);
+		modifier.on(UiEventKind.Blur, function(_) blurs++, UiEventPhase.Capture);
+		modifier.zIndex = 9;
 		context.beginFrame();
-		var root = new Button("First",
+		var extra = context.createNode(context.rootId("caller-extra"), LayoutVisualKind.Box);
+		modifier.add(extra);
+		var root = context.build(new Button("First",
 			null,
 			null,
 			"choose",
@@ -53,27 +61,22 @@ class ButtonMain {
 			null,
 			null,
 			null,
-			semantics).build(context);
+			semantics), modifier);
 		store.endFrame();
 		var control = root;
 		if (root.layout.style.width.value != 120 || root.layout.style.height.value != 32
 			|| root.layout.style.positioning != LayoutPositioning.Absolute || !root.hitTestSelf
-			|| root.children.length != 2
+			|| root.children.length != 3 || root.layout.style.zIndex != 9
 			|| !control.focusable || control.semantics != semantics || decoration.builds != 1) return 1;
 		var events = new EventDispatcher(new FocusManager(), context.interactionStates);
 		events.setRoot(root);
-		root.on(UiEventKind.Focus, function(_) focuses++, UiEventPhase.Capture);
-		root.on(UiEventKind.Blur, function(_) blurs++, UiEventPhase.Capture);
 		events.focusEvent(control.id, UiEventKind.Focus);
 		events.focusEvent(control.id, UiEventKind.Blur);
 		if (focuses != 1 || blurs != 1) return 6;
 		var owner = context.interactionRenderScope(control);
 		if (owner == null || owner.root != root || context.canPatch(control)) return 2;
-		var extra = context.createNode(context.rootId("caller-extra"), LayoutVisualKind.Box);
-		root.add(extra);
 		if (context.interactionRenderScope(extra) != null || owner.owns(extra)
 			|| !owner.owns(root.children[0])) return 13;
-		root.layout.style.zIndex = 9;
 		context.interactionStates.set(control.id, StyleState.Hovered);
 		owner.markDirty();
 		context.flushRenderScopes(root);
@@ -172,10 +175,10 @@ private class ButtonDecoration implements View {
 private class ButtonWithCallerExtra implements View {
 	public function new() {}
 	public function build(context:BuildContext):RenderNode {
-		var root = new Button("Variant", null, null, "variant-button").build(context);
 		var extra = context.createNode(context.rootId("outside-body"), LayoutVisualKind.Box);
 		extra.states = StyleState.empty();
-		root.add(extra);
-		return root;
+		var modifier = new RootModifier();
+		modifier.add(extra);
+		return context.build(new Button("Variant", null, null, "variant-button"), modifier);
 	}
 }
