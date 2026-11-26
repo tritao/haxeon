@@ -444,7 +444,9 @@ class CompilerDriver {
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
 		return "compiler phases (reused: " + metrics.reuse + ", linked functions: " + metrics.linkedFunctions
-			+ ", of which re-indexed: " + metrics.movedFunctions + ") (ms): snapshot="
+			+ ", of which re-indexed: " + metrics.movedFunctions
+			+ (metrics.sectionsEncoded == null ? "" : ", sections encoded: " + metrics.sectionsEncoded)
+			+ ") (ms): snapshot="
 			+ milliseconds(metrics.transactionSnapshotMs) + " candidate="
 			+ milliseconds(metrics.candidateSetupMs) + " frontend=" + milliseconds(metrics.frontendMs)
 			+ " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse=" + milliseconds(metrics.graphParseMs)

@@ -6,6 +6,7 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlWriter.HlSectionIndices;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.pipeline.StaticInitializationOrder;
+import compiler.semantic.DeclarationOwners;
 import haxe.io.Bytes;
 import haxeon.io.ByteSink;
 import haxeon.io.SegmentedBytes;
@@ -19,24 +20,39 @@ typedef HlSectionOutput = {
 	 * declaration order, then natives in order of first declaration. -1 for a native no section declares, as nothing calls it.
 	 */
 	final linkedIndices:Array<Int>;
+
+	/** What the next build keeps its sections from. */
+	final cache:HlSectionCache;
+
+	/**
+	 * How many sections the module has, how many of them this build encoded (it kept the others), and how many of those came
+	 * out other than they were.
+	 */
+	final sections:Int;
+
+	final encoded:Int;
+	final changed:Int;
 }
 
 /**
  * Writes a dense module (`HlCode`) as HLB 9: one section per module with module-local tables, which names what it uses from
  * other sections by key, and which the VM links when it loads the file (docs/design/MODULE_SECTIONS.md, section 1).
  *
- * Every entry has a home section, the module whose declaration it comes from, or the shared section:
- * - A function's home is the module of the file its code mostly comes from (the anchor most of its positions count from), so
- *   a lambda, a specialization or a dispatcher goes with the declaration it serves. A function with no position from a module
- *   file (printers, runtime helpers, the boot functions) goes to the shared section.
- * - An object type with methods goes with its first method; an enum tag with its enum; any other class, enum or interface
- *   with the first function, in module order, whose registers hold it, else to the shared section. String, the runtime
- *   headers and the anonymous structures are shared definitions, which every section that uses them defines.
- * - A class value or enum constant global goes with its type; another global with the first function that reads or writes
- *   it. A literal constant is no one's: each section has the ones it uses.
+ * Every entry has a home section, the module that declares what it is named after, or the shared section (`declaringModule`):
+ * - A function goes with the declaration its name is qualified by: a method, a lambda, a specialization or a dispatcher with
+ *   the type or module function it serves. A function named after no declaration (structure printers, runtime helpers, the boot
+ *   functions) goes to the shared section.
+ * - A class, enum or interface goes with its declaration, an enum tag with its enum. String, the runtime headers and the
+ *   anonymous structures are shared definitions, which every section that uses them defines.
+ * - A class value or enum constant global goes with its type, a static with its declaration. A literal constant is no one's:
+ *   each section has the ones it uses.
+ * - A source snapshot goes with the module of its file.
+ * So homes depend on declarations alone, never on what code uses what, and an edit changes only the sections whose content it
+ * changes.
  *
  * A section names its function by its name, its types and globals by their symbol names, so a section's bytes depend only on
- * what it owns and on the keys of what it uses.
+ * what it owns and on the keys of what it uses. A section whose encoding would read the same as last build's is kept as it was
+ * (`HlSectionCache`).
  */
 class HlSectionWriter {
 	public static inline final VERSION = 9;
@@ -61,23 +77,71 @@ class HlSectionWriter {
 	static inline final CONSTANT = -1;
 
 	/**
-	 * Writes `code` as HLB 9. `modules` gives the module of each source file by its path (`SourceFile.path`); text in no module
-	 * file belongs to the shared section. `compression` is the LZ4 level of the sections (HlLz4), or null to store them as they
-	 * are; without the HashLink natives they are stored as they are. `checkReuse` links the result as the loader does
-	 * (`HlStaticLink`).
+	 * Writes `code` as HLB 9. `modules` gives the content hash of each module's file by the module's path, and `declarations`
+	 * the module that declares each type: together they decide every home. `compression` is the LZ4 level of the sections
+	 * (HlLz4), or null to store them as they are; without the HashLink natives they are stored as they are. A section of
+	 * `previous` (the last build's) whose encoding would read the same is kept. `checkReuse` encodes the kept sections again to
+	 * check they are the same, and links the result as the loader does (`HlStaticLink`).
 	 */
-	public static function write(code:HlCode, modules:Map<String, String>, ?compression:Int,
-			checkReuse:Bool = false):HlSectionOutput {
-		HlValidator.validate(code, null, checkReuse);
-		var writer = new HlSectionWriter(code, modules, compression);
-		var output = writer.encode();
+	public static function write(code:HlCode, modules:Map<String, Int>, declarations:DeclarationOwners,
+			?compression:Int, checkReuse:Bool = false, ?previous:HlSectionCache):HlSectionOutput {
+		var writer = new HlSectionWriter(code, compression),
+			cache = HlSectionCache.following(previous, writer.format(), modules, declarations);
+		HlValidator.validate(code, cache.validation, checkReuse);
+		cache.validation.retainFunctions(code.functions);
+		var output = writer.encode(cache, modules, declarations, checkReuse);
 		if (checkReuse)
 			HlStaticLink.link(output.bytes.flatten());
 		return output;
 	}
 
+	/**
+	 * The module that declares what `name` (a function's, type's or global's) is named after, or null for none. A generated
+	 * name spells the declaration it serves among its parts: `$lambda:pkg.Type.method:...`, `$generic:pkg.Type.method[...]<...>`,
+	 * `$dispatch:pkg.Type.method`, `pkg.Mod$fields.x`; the first part, up to its type arguments, that names a declared type or a
+	 * module (its longest dotted prefix that does) decides. A structure printer serves no declaration: printers go together
+	 * to the shared section (docs/design/MODULE_SECTIONS.md, section 9).
+	 */
+	public static function declaringModule(name:String, declarations:DeclarationOwners,
+			modules:Map<String, Int>):Null<String> {
+		if (StringTools.startsWith(name, STRUCTURE_PRINTER))
+			return null;
+		var end = 0;
+		while (end < name.length && !endsDeclaration(name.charCodeAt(end)))
+			end++;
+		var start = 0;
+		while (start < end) {
+			var stop = name.indexOf(":", start);
+			if (stop < 0 || stop > end)
+				stop = end;
+			var from = start;
+			while (from < stop && name.charCodeAt(from) == "$".code)
+				from++;
+			var cut = name.indexOf("$", from);
+			var to = cut < 0 || cut > stop ? stop : cut;
+			while (to > from) {
+				var candidate = name.substring(from, to), module = declarations.get(candidate);
+				if (module != null)
+					return module;
+				if (modules.exists(candidate))
+					return candidate;
+				to = name.lastIndexOf(".", to - 1);
+				if (to < from)
+					break;
+			}
+			start = stop + 1;
+		}
+		return null;
+	}
+
+	static inline final STRUCTURE_PRINTER = "$anon:";
+
+	/** Where the declaration part of a generated name ends: its type arguments, its layout, a lambda's place. */
+	static inline function endsDeclaration(code:Int):Bool
+		return code == "[".code || code == "<".code || code == "{".code || code == "(".code || code == "#".code
+			|| code == "@".code;
+
 	final code:HlCode;
-	final modules:Map<String, String>;
 	final compression:Null<Int>;
 	final hasDebug:Bool;
 	final spans:Bool;
@@ -124,9 +188,8 @@ class HlSectionWriter {
 	final local = new HlSectionIndices();
 	var tables:HlSectionTables = new HlSectionTables();
 
-	function new(code:HlCode, modules:Map<String, String>, compression:Null<Int>) {
+	function new(code:HlCode, compression:Null<Int>) {
 		this.code = code;
-		this.modules = modules;
 		this.compression = compression;
 		var debug = false;
 		for (fn in code.functions)
@@ -144,6 +207,10 @@ class HlSectionWriter {
 			setAt(functionPositions, code.functions[position].functionIndex, position);
 		for (position in 0...code.natives.length)
 			setAt(nativePositions, code.natives[position].functionIndex, position);
+		while (nativePositions.length < functionPositions.length)
+			nativePositions.push(-1);
+		while (functionPositions.length < nativePositions.length)
+			functionPositions.push(-1);
 		for (index in 0...code.globals.length)
 			constantOfGlobal.push(-1);
 		for (index in 0...code.constants.length)
@@ -170,6 +237,10 @@ class HlSectionWriter {
 		fill(local.functions, functionPositions.length);
 	}
 
+	/** What sections are encoded with besides their content: a section of another format is never kept. */
+	function format():String
+		return (hasDebug ? "debug" : "plain") + (spans ? "+spans" : "") + ":" + compression;
+
 	static function fill(values:Array<Int>, length:Int):Void {
 		values.resize(length);
 		for (index in 0...length)
@@ -184,89 +255,47 @@ class HlSectionWriter {
 
 	// ---- homes
 
-	/** The module of the source file at `path`, or null for text no module file holds (generated code). */
-	inline function modulePath(path:String):Null<String>
-		return modules.get(path);
-
-	function assignHomes():Void {
-		var sources = code.sources, moduleOf:Array<Null<String>> = [], named:Map<String, Bool> = [];
-		var anchors:Array<Int> = [], counts:Array<Int> = [];
-		for (fn in code.functions) {
-			anchors.resize(0);
-			counts.resize(0);
-			var last = -1, at = -1;
-			for (location in fn.debugLocations) {
-				if (location.anchor != last) {
-					last = location.anchor;
-					at = anchors.indexOf(last);
-					if (at < 0) {
-						at = anchors.length;
-						anchors.push(last);
-						counts.push(0);
-					}
-				}
-				counts[at]++;
+	function assignHomes(cache:HlSectionCache, modules:Map<String, Int>, declarations:DeclarationOwners):Void {
+		var ids:Map<String, Int> = [], named:Array<String> = [];
+		function sectionOf(name:String):Int {
+			var module = cache.homeOf(name, declarations, modules), id = ids.get(module);
+			if (id == null) {
+				id = named.length;
+				ids.set(module, id);
+				named.push(module);
 			}
-			var best = -1;
-			for (index in 0...anchors.length)
-				if (best < 0 || counts[index] > counts[best])
-					best = index;
-			var module = best < 0 ? null : modulePath(sources.path(anchors[best]));
-			moduleOf.push(module);
-			if (module != null)
-				named.set(module, true);
+			return id;
 		}
-		var modules = [for (module in named.keys()) module];
-		modules.sort(StaticInitializationOrder.compareModules);
-		var ids:Map<String, Int> = [];
-		for (index in 0...modules.length)
-			ids.set(modules[index], index);
-		var shared = modules.length;
-		paths = modules.concat([SHARED_SECTION]);
-		functionHomes = [for (module in moduleOf) module == null ? shared : ids.get(module)];
-
-		// Types: by their methods, their enum, or the first function whose registers hold them.
-		var types = code.types,
-			firstUse:Array<Int> = [for (_ in 0...types.length) -1],
-			globalUse:Array<Int> = [for (_ in 0...code.globals.length) -1];
-		for (position in 0...code.functions.length) {
-			var fn = code.functions[position], home = functionHomes[position];
-			for (register in fn.registers)
-				if (firstUse[register] < 0)
-					firstUse[register] = home;
-			for (instruction in fn.opcodes)
-				switch instruction {
-					case LoadType(_, type):
-						if (firstUse[type] < 0)
-							firstUse[type] = home;
-					case GlobalGet(_, global) | GlobalSet(global, _):
-						if (globalUse[global] < 0)
-							globalUse[global] = home;
-					default:
-				}
+		function sharedSection():Int {
+			var id = ids.get(SHARED_SECTION);
+			if (id == null) {
+				id = named.length;
+				ids.set(SHARED_SECTION, id);
+				named.push(SHARED_SECTION);
+			}
+			return id;
 		}
-		typeHomes = [for (_ in 0...types.length) STRUCTURAL];
-		for (index in 0...types.length)
-			typeHomes[index] = switch types[index] {
-				case Object(name, _, _, _, methods, _) | Structure(name, _, _, methods, _):
-					if (HlSymbolTable.isSharedDefinition(code.strings[name])) SHARED_DEFINITION;
-					else if (methods.length > 0)
-						methodHome(methods[0].functionIndex, shared);
-					else firstUse[index] >= 0 ? firstUse[index] : shared;
-				case Enum(_, _, _) | Virtual(_, _): firstUse[index] >= 0 ? firstUse[index] : shared;
+		functionHomes = [for (position in 0...code.functions.length) sectionOf(code.functionNames[position])];
+		var types = code.types;
+		typeHomes = [for (index in 0...types.length)
+			switch types[index] {
+				case Object(name, _, _, _, _, _) | Structure(name, _, _, _, _):
+					HlSymbolTable.isSharedDefinition(code.strings[name])
+						? SHARED_DEFINITION : sectionOf(code.strings[name]);
+				case Enum(name, _, _) | Virtual(name, _): sectionOf(code.strings[name]);
 				default: STRUCTURAL;
-			};
+			}];
 		for (index in 0...types.length)
 			switch types[index] {
-				case EnumTag(boxed, _): typeHomes[index] = typeHomes[boxed] >= 0 ? typeHomes[boxed] : shared;
+				case EnumTag(boxed, _): typeHomes[index] = typeHomes[boxed] >= 0 ? typeHomes[boxed] : sharedSection();
 				default:
 			}
 
-		// Globals: a type's value or enum constants go with it; a literal constant is no one's.
+		// Globals: a type's value or enum constants go with it, a static with its declaration; a literal constant is no one's.
 		globalHomes = [for (global in 0...code.globals.length) constantOfGlobal[global] >= 0 ? CONSTANT : -2];
 		function owner(global:Int, type:Int):Void {
 			if (global >= 0 && globalHomes[global] == -2)
-				globalHomes[global] = typeHomes[type] >= 0 ? typeHomes[type] : shared;
+				globalHomes[global] = typeHomes[type] >= 0 ? typeHomes[type] : sharedSection();
 		}
 		for (index in 0...types.length)
 			switch types[index] {
@@ -279,55 +308,26 @@ class HlSectionWriter {
 			}
 		for (global in 0...globalHomes.length)
 			if (globalHomes[global] == -2)
-				globalHomes[global] = globalUse[global] >= 0 ? globalUse[global] : shared;
+				globalHomes[global] = sectionOf(globalKey(global));
 
-		if (spans)
-			placeSnapshots(ids, shared);
-		dropEmptySections();
-	}
-
-	function methodHome(functionIndex:Int, shared:Int):Int {
-		var position = functionIndex < functionPositions.length ? functionPositions[functionIndex] : -1;
-		return position < 0 ? shared : functionHomes[position];
-	}
-
-	/** A source snapshot goes with its file's module when that has a section, else with the first section whose code shows it. */
-	function placeSnapshots(ids:Map<String, Int>, shared:Int):Void {
-		var sources = code.sources;
-		for (position in 0...code.functions.length) {
-			var last = -1;
-			for (location in code.functions[position].debugLocations)
-				if (location.anchor != last && !location.generatedText) {
-					last = location.anchor;
-					var hash = sources.hash(last);
-					if (hash == 0 || snapshotHomes.exists(hash))
-						continue;
-					var module = modulePath(sources.path(last)), home = module == null ? null : ids.get(module);
-					snapshotHomes.set(hash, home ?? functionHomes[position]);
-				}
+		// A snapshot is of a module's file (`HashLinkBackendSession.attachSourceSnapshots`).
+		if (spans && code.sourceSnapshots.length > 0) {
+			var byHash:Map<Int, String> = [];
+			for (module => hash in modules)
+				if (!byHash.exists(hash) || StaticInitializationOrder.compareModules(module, byHash.get(hash)) < 0)
+					byHash.set(hash, module);
+			for (snapshot in code.sourceSnapshots) {
+				var module = byHash.get(snapshot.sourceHash);
+				snapshotHomes.set(snapshot.sourceHash, module == null ? sharedSection() : sectionOf(module));
+			}
 		}
-	}
 
-	/** Keeps the sections that own anything, renumbered in file order. */
-	function dropEmptySections():Void {
-		var used = [for (_ in paths) false];
-		for (home in functionHomes)
-			used[home] = true;
-		for (home in typeHomes)
-			if (home >= 0)
-				used[home] = true;
-		for (home in globalHomes)
-			if (home >= 0)
-				used[home] = true;
-		for (home in snapshotHomes)
-			used[home] = true;
-		var renumbered = [], kept = [];
-		for (index in 0...paths.length) {
-			renumbered.push(used[index] ? kept.length : -1);
-			if (used[index])
-				kept.push(paths[index]);
-		}
-		paths = kept;
+		// The sections in file order: modules in path order, the shared section last.
+		var order = cache.orderOf(named);
+		var renumbered = [for (_ in named) -1];
+		for (index in 0...order.length)
+			renumbered[ids.get(order[index])] = index;
+		paths = order;
 		functionHomes = [for (home in functionHomes) renumbered[home]];
 		typeHomes = [for (home in typeHomes) home >= 0 ? renumbered[home] : home];
 		globalHomes = [for (home in globalHomes) home >= 0 ? renumbered[home] : home];
@@ -356,6 +356,9 @@ class HlSectionWriter {
 			throw new InternalError('HashLink global $global has no key');
 		return "$class:" + typeKey(valueOfGlobal[global]);
 	}
+
+	function hasGlobalKey(global:Int):Bool
+		return global < code.globalNames.length && code.globalNames[global] != null || valueOfGlobal[global] >= 0;
 
 	static function kindOf(type:HlTypeDef):Int
 		return switch type {
@@ -479,13 +482,15 @@ class HlSectionWriter {
 				known = tables.natives.length;
 				tables.nativeKeys.set(key, known);
 				tables.natives.push(nativePositions[functionIndex]);
+				tables.nativeOrder.push(key);
 				useType(native.type);
 			}
+			tables.nativeFunctions.push(functionIndex);
 			nativeSlots[functionIndex] = known;
 			return;
 		}
 		useType(code.functions[position].type);
-		tables.functionImports.push(position);
+		tables.functionImports.push(functionIndex);
 	}
 
 	function useInstruction(instruction:HlInstruction):Void
@@ -600,10 +605,134 @@ class HlSectionWriter {
 			useDefinition(tables.definitions[next++]);
 	}
 
+	// ---- what a section's encoding reads
+
+	/**
+	 * Records into `reads`, or checks against them, everything the encoding of section `id` reads of the module beyond the
+	 * tables of `t` (the dense entries it names, which `collect` made): its functions and their names, the places of the anchors
+	 * their lines count from, then each entry it names, with what the entry is, its key and its home where the encoding writes
+	 * them, and the snapshots it carries. Whatever reads the same encodes the same: `collect` reads nothing else, and the
+	 * encoding nothing but these and `t`. Returns whether the module still reads the same (always, when recording).
+	 */
+	function readInputs(reads:HlSectionReads, id:Int, owned:Array<Int>, ownedTypes:Array<Int>, ownedGlobals:Array<Int>,
+			t:HlSectionTables, snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):Bool {
+		var sources = code.sources,
+			functions = code.functions,
+			types = code.types,
+			strings = code.strings,
+			globals = code.globals;
+		reads.int(owned.length);
+		for (position in owned) {
+			var fn = functions[position];
+			reads.object(fn);
+			reads.string(code.functionNames[position]);
+			if (hasDebug)
+				for (anchor in fn.anchors()) {
+					reads.int(sources.line(anchor));
+					reads.int(sources.offset(anchor));
+					reads.int(sources.hash(anchor));
+				}
+			if (!reads.same)
+				return false;
+		}
+		reads.int(ownedTypes.length);
+		for (type in ownedTypes)
+			reads.int(type);
+		reads.int(ownedGlobals.length);
+		for (global in ownedGlobals)
+			reads.int(global);
+		reads.int(snapshots.length);
+		for (snapshot in snapshots)
+			reads.int(snapshot.sourceHash);
+		if (!reads.same)
+			return false;
+		for (index in t.ints)
+			if (index < code.ints.length)
+				reads.int(code.ints[index]);
+			else
+				return false;
+		for (index in t.floats)
+			if (index < code.floats.length)
+				reads.float(code.floats[index]);
+			else
+				return false;
+		for (index in t.strings)
+			if (index < strings.length)
+				reads.string(strings[index]);
+			else
+				return false;
+		for (index in t.types) {
+			if (index >= types.length)
+				return false;
+			var home = typeHomes[index];
+			reads.type(types[index]);
+			reads.int(home == STRUCTURAL ? ROLE_STRUCTURAL : home == SHARED_DEFINITION ? ROLE_SHARED : home == id
+				? ROLE_OWNED : -1);
+			if (!reads.same)
+				return false;
+		}
+		for (index in t.typeImports) {
+			if (index >= types.length)
+				return false;
+			var home = typeHomes[index];
+			if (home < 0 || home == id)
+				return false;
+			reads.int(kindOf(types[index]));
+			reads.string(typeKey(index));
+			reads.string(paths[home]);
+		}
+		for (global in t.globals) {
+			if (global >= globals.length || constantOfGlobal[global] >= 0 || globalHomes[global] != id
+				|| !hasGlobalKey(global))
+				return false;
+			reads.int(globals[global]);
+			reads.string(globalKey(global));
+		}
+		for (global in t.globalImports) {
+			if (global >= globals.length || constantOfGlobal[global] >= 0 || globalHomes[global] == id
+				|| !hasGlobalKey(global))
+				return false;
+			reads.int(globals[global]);
+			reads.string(globalKey(global));
+			reads.string(paths[globalHomes[global]]);
+		}
+		for (constant in t.constants) {
+			if (constant >= code.constants.length)
+				return false;
+			var entry = code.constants[constant];
+			reads.int(entry.global);
+			reads.int(globals[entry.global]);
+			reads.int(entry.fields.length);
+			for (value in entry.fields)
+				reads.int(value);
+		}
+		if (!reads.same)
+			return false;
+		for (functionIndex in t.functionImports) {
+			var position = functionIndex < functionPositions.length ? functionPositions[functionIndex] : -1;
+			if (position < 0 || functionHomes[position] == id)
+				return false;
+			reads.int(functions[position].type);
+			reads.string(code.functionNames[position]);
+			reads.string(paths[functionHomes[position]]);
+		}
+		for (functionIndex in t.nativeFunctions) {
+			var position = functionIndex < nativePositions.length ? nativePositions[functionIndex] : -1;
+			if (position < 0)
+				return false;
+			var native = code.natives[position];
+			reads.string(strings[native.library]);
+			reads.string(strings[native.name]);
+			reads.int(native.type);
+		}
+		return reads.same;
+	}
+
 	// ---- encoding
 
-	function encode():HlSectionOutput {
-		assignHomes();
+	function encode(cache:HlSectionCache, modules:Map<String, Int>, declarations:DeclarationOwners,
+			checkReuse:Bool):HlSectionOutput {
+		assignHomes(cache, modules, declarations);
 		var ownedFunctions = [for (_ in paths)[]],
 			ownedGlobals = [for (_ in paths)[]],
 			ownedTypes = [for (_ in paths)[]];
@@ -621,24 +750,33 @@ class HlSectionWriter {
 			if (home != null)
 				snapshots[home].push(snapshot);
 		}
-		var stored:Array<Bytes> = [],
+		var entries:Map<String, HlSectionEntry> = [],
+			written:Array<HlSectionEntry> = [],
 			linked = [for (_ in 0...functionPositions.length) -1],
 			linkedNatives:Map<String, Int> = [],
-			natives:Array<Int> = [],
-			nextFunction = 0;
+			nativeCount = 0,
+			nextFunction = 0,
+			encoded = 0,
+			changed = 0;
 		for (id in 0...paths.length) {
-			collect(id, ownedFunctions[id], ownedGlobals[id], ownedTypes[id]);
-			for (position in tables.functions)
-				linked[code.functions[position].functionIndex] = nextFunction++;
-			for (position in tables.natives) {
-				var native = code.natives[position],
-					key = code.strings[native.library] + "\n" + code.strings[native.name];
-				if (!linkedNatives.exists(key)) {
-					linkedNatives.set(key, natives.length);
-					natives.push(position);
-				}
+			var owned = ownedFunctions[id],
+				kept = cache.entries.get(paths[id]),
+				reused = keptSection(id, owned, ownedTypes[id], ownedGlobals[id], snapshots[id], kept, checkReuse);
+			var entry:HlSectionEntry = reused != null ? reused : encodeSection(id, owned, ownedTypes[id],
+				ownedGlobals[id],
+				snapshots[id], kept);
+			if (reused == null) {
+				encoded++;
+				if (kept == null || entry.bytes != kept.bytes)
+					changed++;
 			}
-			stored.push(sectionBytes(snapshots[id]));
+			entries.set(paths[id], entry);
+			written.push(entry);
+			for (position in owned)
+				linked[code.functions[position].functionIndex] = nextFunction++;
+			for (key in entry.tables.nativeOrder)
+				if (!linkedNatives.exists(key))
+					linkedNatives.set(key, nativeCount++);
 		}
 		for (position in 0...code.natives.length) {
 			var native = code.natives[position],
@@ -656,29 +794,58 @@ class HlSectionWriter {
 		head.writeUnsignedIndex(paths.length);
 		var offset = 0;
 		for (id in 0...paths.length) {
+			var section = written[id];
 			head.writeSizedString(paths[id]);
 			head.output.writeInt32(offset);
-			head.output.writeInt32(stored[id].length);
-			digest(head.output, stored[id]);
-			offset += stored[id].length;
+			head.output.writeInt32(section.bytes.length);
+			head.output.writeInt32(section.digestLow);
+			head.output.writeInt32(section.digestHigh);
+			offset += section.bytes.length;
 		}
 		head.writeSizedString(paths[functionHomes[entry]]);
 		head.writeSizedString(functionKey(entry));
-		for (bytes in stored)
-			head.writeShared(bytes);
-		return {bytes: head.output.finish(), linkedIndices: linked};
+		for (section in written)
+			head.writeShared(section.bytes);
+		return {
+			bytes: head.output.finish(),
+			linkedIndices: linked,
+			cache: cache.next(entries),
+			sections: paths.length,
+			encoded: encoded,
+			changed: changed
+		};
 	}
 
-	/** The section's reuse key: two 32-bit FNV-1a hashes of its bytes, with different bases. */
-	static function digest(output:ByteSink, bytes:Bytes):Void {
-		var low = 0x811C9DC5, high = 0x01000193 ^ bytes.length;
-		for (index in 0...bytes.length) {
-			var byte = bytes.get(index);
-			low = (low ^ byte) * 0x01000193;
-			high = (high ^ byte) * 0x01000197;
+	/**
+	 * Section `id` as `kept` has it, when its encoding would read the same, or null when it must be encoded. With `checkReuse`
+	 * a kept section is encoded again, and must come out the same.
+	 */
+	function keptSection(id:Int, owned:Array<Int>, ownedTypes:Array<Int>, ownedGlobals:Array<Int>,
+			snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>, kept:Null<HlSectionEntry>,
+			checkReuse:Bool):Null<HlSectionEntry> {
+		if (kept == null)
+			return null;
+		kept.reads.check();
+		if (!readInputs(kept.reads, id, owned, ownedTypes, ownedGlobals, kept.tables, snapshots)
+			|| !kept.reads.complete())
+			return null;
+		if (checkReuse) {
+			collect(id, owned, ownedGlobals, ownedTypes);
+			if (sectionBytes(snapshots).compare(kept.bytes) != 0)
+				throw new InternalError('--check-reuse: section ${paths[id]} kept from the last build differs from one encoded afresh');
 		}
-		output.writeInt32(low);
-		output.writeInt32(high);
+		return kept;
+	}
+
+	/** Section `id` encoded, with what its encoding read; the bytes of `kept` when they come out the same. */
+	function encodeSection(id:Int, owned:Array<Int>, ownedTypes:Array<Int>, ownedGlobals:Array<Int>,
+			snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>, kept:Null<HlSectionEntry>):HlSectionEntry {
+		collect(id, owned, ownedGlobals, ownedTypes);
+		var bytes = sectionBytes(snapshots), reads = new HlSectionReads();
+		readInputs(reads, id, owned, ownedTypes, ownedGlobals, tables, snapshots);
+		// Encoded to the same bytes: the section is the one kept, so whatever holds it sees no change.
+		return kept != null && bytes.compare(kept.bytes) == 0 ? new HlSectionEntry(tables, reads, kept.bytes,
+			kept.digestLow, kept.digestHigh) : HlSectionEntry.of(tables, reads, bytes);
 	}
 
 	/** The section's index of each entry it names: in every index space the imports come first. */
@@ -697,15 +864,12 @@ class HlSectionWriter {
 			local.globals[code.constants[tables.constants[position]].global] = globalImports + owned + position;
 		var functionImports = tables.functionImports.length, natives = tables.natives.length;
 		for (position in 0...tables.functionImports.length)
-			local.functions[code.functions[tables.functionImports[position]].functionIndex] = position;
+			local.functions[tables.functionImports[position]] = position;
 		for (position in 0...tables.functions.length)
 			local.functions[code.functions[tables.functions[position]].functionIndex] = functionImports + natives
 				+ position;
-		for (position in 0...code.natives.length) {
-			var native = code.natives[position];
-			if (functionStamps[native.functionIndex] == epoch)
-				local.functions[native.functionIndex] = functionImports + nativeSlots[native.functionIndex];
-		}
+		for (functionIndex in tables.nativeFunctions)
+			local.functions[functionIndex] = functionImports + nativeSlots[functionIndex];
 	}
 
 	function sectionBytes(snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):Bytes {
@@ -717,7 +881,8 @@ class HlSectionWriter {
 		w.local = local;
 		// The names are known once the heads are: the heads are written aside first, then the counts and the pool before them.
 		var heads = new HlWriter();
-		for (position in t.functionImports) {
+		for (functionIndex in t.functionImports) {
+			var position = functionPositions[functionIndex];
 			heads.writeUnsignedIndex(t.name(paths[functionHomes[position]]));
 			heads.writeUnsignedIndex(t.name(functionKey(position)));
 			heads.writeUnsignedIndex(local.types[code.functions[position].type]);
@@ -878,9 +1043,13 @@ class HlSectionWriter {
 	}
 }
 
-/** The tables of the section being written, each by index in the dense module's table, in the section's order. */
+/**
+ * The tables of the section being written, each by index in the dense module's table, in the section's order. Kept with the
+ * section's bytes, they are the dense entries whose reads decide whether the next build keeps it (`HlSectionWriter.readInputs`).
+ */
 private class HlSectionTables {
 	public final names:Array<String> = [];
+	/** Function indices. */
 	public final functionImports:Array<Int> = [];
 	public final globalImports:Array<Int> = [];
 	public final typeImports:Array<Int> = [];
@@ -889,6 +1058,12 @@ private class HlSectionTables {
 	public final natives:Array<Int> = [];
 
 	public final nativeKeys:Map<String, Int> = [];
+
+	/** The keys of `natives`, in order. */
+	public final nativeOrder:Array<String> = [];
+
+	/** The function index of each native the section calls, in order of first use: several can share one of `natives`. */
+	public final nativeFunctions:Array<Int> = [];
 	public final types:Array<Int> = [];
 
 	/** The types the section defines, owned or shared, whose definitions are still to be walked. */
@@ -926,5 +1101,256 @@ private class HlSectionTables {
 		if (!fileIndices.exists(path)) {
 			fileIndices.set(path, files.length);
 			files.push(path);
+		}
+}
+
+/**
+ * What the sections of the last build were made from, for the next build to keep each section whose encoding would read the
+ * same (`HlSectionWriter`). A section is one result, its bytes, kept while its reads (`HlSectionReads`) read the same and made
+ * again otherwise, and kept as the same bytes when they come out equal: the query engine's `ModuleSection` query
+ * (docs/design/QUERY_ENGINE.md, slice 7), whose reads are these. A build reads one and makes the next (`next`), so a failed
+ * build leaves it as it was.
+ */
+@:allow(compiler.hl.HlSectionWriter)
+class HlSectionCache {
+	/** The sections, by path. */
+	final entries:Map<String, HlSectionEntry>;
+
+	/** The marks of the functions and snapshots validated (`HlValidator`), which hold while they are the same objects. */
+	final validation:HlWriterCache;
+
+	/** What the sections were encoded with besides their content (`HlSectionWriter.format`). */
+	final format:String;
+
+	/**
+	 * The home module of each name (`HlSectionWriter.declaringModule`), while the declarations and modules are the ones in
+	 * `declared` and `declaredModules`. A home is a function of the name and those alone, so the memo is shared by the builds
+	 * that have them.
+	 */
+	final homes:Map<String, String>;
+
+	final declared:Map<String, String>;
+	final declaredModules:Map<String, Bool>;
+	final declaredCount:Int;
+	final moduleCount:Int;
+
+	/** The last file order of the sections (`orderOf`), with the set of them. */
+	var order:Array<String> = [];
+
+	var ordered:Map<String, Bool> = [];
+
+	function new(entries, validation, format, homes, declared, declaredModules, declaredCount, moduleCount) {
+		this.entries = entries;
+		this.validation = validation;
+		this.format = format;
+		this.homes = homes;
+		this.declared = declared;
+		this.declaredModules = declaredModules;
+		this.declaredCount = declaredCount;
+		this.moduleCount = moduleCount;
+	}
+
+	/**
+	 * The cache a build writes with after `previous`: its sections when they were encoded alike, its homes when the declarations
+	 * are the same.
+	 */
+	static function following(previous:Null<HlSectionCache>, format:String, modules:Map<String, Int>,
+			declarations:DeclarationOwners):HlSectionCache {
+		var entries:Map<String, HlSectionEntry> = previous == null || previous.format != format ? [] : previous.entries,
+			validation = previous == null ? new HlWriterCache() : previous.validation;
+		if (previous != null && previous.declares(modules, declarations)) {
+			var result = new HlSectionCache(entries, validation, format, previous.homes, previous.declared,
+				previous.declaredModules, previous.declaredCount, previous.moduleCount);
+			result.order = previous.order;
+			result.ordered = previous.ordered;
+			return result;
+		}
+		var declared:Map<String, String> = [],
+			declaredModules:Map<String, Bool> = [],
+			declaredCount = 0,
+			moduleCount = 0;
+		for (name => module in declarations) {
+			declared.set(name, module);
+			declaredCount++;
+		}
+		for (module in modules.keys()) {
+			declaredModules.set(module, true);
+			moduleCount++;
+		}
+		return new HlSectionCache(entries, validation, format, [], declared, declaredModules, declaredCount,
+			moduleCount);
+	}
+
+	/** Whether the declarations and modules are the ones the homes were worked out for. */
+	function declares(modules:Map<String, Int>, declarations:DeclarationOwners):Bool {
+		var count = 0;
+		for (name => module in declarations) {
+			if (declared.get(name) != module)
+				return false;
+			count++;
+		}
+		if (count != declaredCount)
+			return false;
+		count = 0;
+		for (module in modules.keys()) {
+			if (!declaredModules.exists(module))
+				return false;
+			count++;
+		}
+		return count == moduleCount;
+	}
+
+	/** The section `name` belongs to: the module that declares what it is named after, or the shared section. */
+	function homeOf(name:String, declarations:DeclarationOwners, modules:Map<String, Int>):String {
+		var known = homes.get(name);
+		if (known == null) {
+			known = HlSectionWriter.declaringModule(name, declarations, modules) ?? HlSectionWriter.SHARED_SECTION;
+			homes.set(name, known);
+		}
+		return known;
+	}
+
+	/** The sections `named` in file order: modules in path order (`StaticInitializationOrder.compareModules`), shared last. */
+	function orderOf(named:Array<String>):Array<String> {
+		var same = named.length == order.length;
+		if (same)
+			for (name in named)
+				if (!ordered.exists(name)) {
+					same = false;
+					break;
+				}
+		if (same)
+			return order;
+		var modules = [for (name in named) if (name != HlSectionWriter.SHARED_SECTION) name];
+		modules.sort(StaticInitializationOrder.compareModules);
+		if (modules.length < named.length)
+			modules.push(HlSectionWriter.SHARED_SECTION);
+		order = modules;
+		ordered = [for (name in modules) name => true];
+		return order;
+	}
+
+	/** The cache after this one, with the sections of the build just written. */
+	function next(written:Map<String, HlSectionEntry>):HlSectionCache {
+		var result = new HlSectionCache(written, validation, format, homes, declared, declaredModules, declaredCount,
+			moduleCount);
+		result.order = order;
+		result.ordered = ordered;
+		return result;
+	}
+}
+
+/** One section as written: its bytes and digest, with the tables and reads it was encoded from (`HlSectionWriter.readInputs`). */
+private class HlSectionEntry {
+	public final tables:HlSectionTables;
+	public final reads:HlSectionReads;
+	public final bytes:Bytes;
+
+	/** The section's reuse key: two 32-bit FNV-1a hashes of its bytes, with different bases. */
+	public final digestLow:Int;
+
+	public final digestHigh:Int;
+
+	public function new(tables:HlSectionTables, reads:HlSectionReads, bytes:Bytes, digestLow:Int, digestHigh:Int) {
+		this.tables = tables;
+		this.reads = reads;
+		this.bytes = bytes;
+		this.digestLow = digestLow;
+		this.digestHigh = digestHigh;
+	}
+
+	public static function of(tables:HlSectionTables, reads:HlSectionReads, bytes:Bytes):HlSectionEntry {
+		var low = 0x811C9DC5, high = 0x01000193 ^ bytes.length;
+		for (index in 0...bytes.length) {
+			var byte = bytes.get(index);
+			low = (low ^ byte) * 0x01000193;
+			high = (high ^ byte) * 0x01000197;
+		}
+		return new HlSectionEntry(tables, reads, bytes, low, high);
+	}
+}
+
+/**
+ * The values a section's encoding read (`HlSectionWriter.readInputs`), recorded in order; then checked against what a later
+ * build reads in the same order, which reads the same while `same` holds and `complete` says every value was read again.
+ */
+private class HlSectionReads {
+	final ints:Array<Int> = [];
+	final floats:Array<Float> = [];
+	final strings:Array<String> = [];
+	final types:Array<HlTypeDef> = [];
+	final objects:Array<HlFunction> = [];
+	var checking = false;
+	var intAt = 0;
+	var floatAt = 0;
+	var stringAt = 0;
+	var typeAt = 0;
+	var objectAt = 0;
+
+	public var same(default, null) = true;
+
+	public function new() {}
+
+	/** Starts checking the recorded values, from the first. */
+	public function check():Void {
+		checking = true;
+		same = true;
+		intAt = floatAt = stringAt = typeAt = objectAt = 0;
+	}
+
+	public function complete():Bool
+		return same && intAt == ints.length && floatAt == floats.length && stringAt == strings.length
+			&& typeAt == types.length && objectAt == objects.length;
+
+	public function int(value:Int):Void
+		if (!checking)
+			ints.push(value);
+		else {
+			if (intAt >= ints.length || ints[intAt] != value)
+				same = false;
+			intAt++;
+		}
+
+	/** Floats by their bits, as the module pools them. */
+	public function float(value:Float):Void
+		if (!checking)
+			floats.push(value);
+		else {
+			if (floatAt >= floats.length || !sameBits(floats[floatAt], value))
+				same = false;
+			floatAt++;
+		}
+
+	static function sameBits(left:Float, right:Float):Bool
+		return HlSymbolTable.sameFloat(left, right)
+			|| Math.isNaN(left) && Math.isNaN(right)
+			&& haxe.io.FPHelper.doubleToI64(left) == haxe.io.FPHelper.doubleToI64(right);
+
+	public function string(value:String):Void
+		if (!checking)
+			strings.push(value);
+		else {
+			if (stringAt >= strings.length || strings[stringAt] != value)
+				same = false;
+			stringAt++;
+		}
+
+	public function type(value:HlTypeDef):Void
+		if (!checking)
+			types.push(value);
+		else {
+			if (typeAt >= types.length || !HlSymbolTable.sameType(types[typeAt], value))
+				same = false;
+			typeAt++;
+		}
+
+	/** A function by identity: the same object is the same code. */
+	public function object(value:HlFunction):Void
+		if (!checking)
+			objects.push(value);
+		else {
+			if (objectAt >= objects.length || objects[objectAt] != value)
+				same = false;
+			objectAt++;
 		}
 }

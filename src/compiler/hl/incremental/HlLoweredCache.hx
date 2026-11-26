@@ -38,6 +38,9 @@ class HlLoweredCache {
 	/** The tables the entries were linked into, with what made them, for the next build to keep (`HlLinkRecord`). */
 	public var tables:Null<HlLinkRecord> = null;
 
+	/** The module sections the last plain build wrote, for the next to keep the ones it writes alike (`HlSectionWriter`). */
+	public var sections:Null<compiler.hl.HlSectionWriter.HlSectionCache> = null;
+
 	/** What the entries were lowered for besides their IR (see `HashLinkBackendSession.loweringEnvironment`). */
 	public var environment = "";
 
@@ -60,6 +63,7 @@ class HlLoweredCache {
 		result.sharedCalls = sharedCalls.copy();
 		result.environment = environment;
 		result.tables = tables;
+		result.sections = sections;
 		return result;
 	}
 

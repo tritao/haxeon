@@ -40,6 +40,13 @@ typedef BackendAssemblyResult = {
 	final linkedFunctions:Int;
 
 	final movedFunctions:Int;
+
+	/**
+	 * For a module written as sections: how many of them the build encoded, of how many, and how many came out changed
+	 * (`HlSectionWriter`).
+	 */
+	@:optional final sectionsEncoded:Null<String>;
+
 	final timings:BackendTimings;
 	final abiPlanningDoneAt:Float;
 	final backendAssemblyDoneAt:Float;

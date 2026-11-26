@@ -284,7 +284,8 @@ class HlSymbolTable {
 		return true;
 	}
 
-	static function sameType(left:HlTypeDef, right:HlTypeDef):Bool
+	/** Whether two type definitions are the same, with the same indices. */
+	public static function sameType(left:HlTypeDef, right:HlTypeDef):Bool
 		return switch [left, right] {
 			case [Simple(a), Simple(b)]: a == b;
 			case [EnumTag(a, aGlobals), EnumTag(b, bGlobals)]: a == b && sameInts(aGlobals, bGlobals);
@@ -327,7 +328,7 @@ class HlSymbolTable {
 		};
 
 	/** The table pools floats by their bits: a NaN is never taken for another, nor 0 for -0. */
-	static function sameFloat(left:Float, right:Float):Bool
+	public static function sameFloat(left:Float, right:Float):Bool
 		return left == right && (left != 0 || 1 / left == 1 / right);
 
 	static function sameInts(left:Array<Int>, right:Array<Int>):Bool {

@@ -2,7 +2,8 @@
 
 Status: designed 2026-11-25; the open questions are decided (section 9). Slice 1, the loader, has landed, and slice 2a: the
 compiler writes sections behind `--module-sections`, links them ahead of time, and every reader of modules reads them
-(section 8). The user's decision: per-module sections and load-time linking replace "stable output indices"
+(section 8). Slice 3a has landed too: homes by declaration, and a warm build keeps every section whose encoding would read the
+same (section 3, "As built in slice 3a"). The option stays off until slice 2b flips it. The user's decision: per-module sections and load-time linking replace "stable output indices"
 ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3, [QUERY_ENGINE.md](QUERY_ENGINE.md) row B).
 
 **Problem.** HashLink's function, type, global, string and constant tables are dense and numbered in first-use order, so a
@@ -145,17 +146,9 @@ NUL-terminated strings, then each length).
 - **Sections.** One per module of the build that owns anything, named by the module's path (`ModuleState.name`, never the
   file's path, which can be absolute), in `compareModules` order, then the shared section `$shared`, which no module path
   can be. Sections are LZ4-compressed (fast level) where the natives are; the Haxe interpreter stores them as they are.
-- **Homes** are taken from the dense module the lowering makes, so slice 2 needs nothing new from the IR:
-  - a function's is the module of the file most of its positions count from (the anchor of most of its opcodes), so a
-    lambda, a specialization or a dispatcher goes with the declaration whose code it is; a function with no position in a
-    module file (printers, runtime helpers, `__init`, `__entry`) goes to `$shared`;
-  - an object type with methods goes with its first method, an enum tag with its enum, any other class, enum or
-    interface with the first function, in module order, whose registers hold it, else to `$shared`. String, the runtime
-    headers and the anonymous structures (`HlSymbolTable.isSharedDefinition`) are shared definitions;
-  - a class value or enum constant global goes with its type, another global with the first function that reads or
-    writes it, else to `$shared`; literal constants are no one's.
-  Homes by declaration, from the IR (section 3, "Ownership"), replace the first-user rules in slice 3, where they decide
-  what an edit re-encodes.
+- **Homes** were taken from the dense module the lowering makes: a function went with the module of the file most of its
+  positions count from, a type with its first method or the first function whose registers hold it, a global with its
+  first user. Slice 3a replaced these first-user rules with homes by declaration (section 3, "As built in slice 3a").
 - **Keys.** Functions by their names (`HlCode.functionNames`); objects, structs and enums by their names, interfaces by
   their nominal identity, an enum tag as `enum-tag:` and its enum's name; globals by their symbol names
   (`HlCode.globalNames`), a class value as `$class:` and its type's name.
@@ -223,7 +216,8 @@ None of these can come from a correct compiler. The compiler-side linker (see 5)
 
 ## 3. Compiler side
 
-- **Ownership.** Each `IrFunction` gets its home module from the declaration it is generated from:
+- **Ownership.** Each `IrFunction` gets its home module from the declaration it is generated from (as built: from its name,
+  below):
   - methods, lambdas, `$dispatch:`, `$generic` and similar functions go to the module of the declaration they serve;
   - unowned generated functions (`$anon` printers: 512 of 7,860; shared runtime helpers) go to one shared section.
 - **Lowering.** Lowering becomes relocatable. `HlLower` interns into a per-function reference table of keys; the request
@@ -244,6 +238,48 @@ None of these can come from a correct compiler. The compiler-side linker (see 5)
     separate whole-program table is needed.
   - Initializer parts are bounded parts today, which can mix classes. Making them per class and moving them to their
     owning modules keeps a static-initializer edit inside its module. Until then such an edit re-encodes the shared section.
+
+### As built in slice 3a
+
+- **Homes by declaration** (`HlSectionWriter.declaringModule`). A name is its declaration's identity, so a home is found
+  from the name alone, against the frontend's index of declared types (`DeclarationOwners`) and the build's module paths:
+  the first `:`-separated part of the name, before its type arguments, layout or a lambda's place (`[<{(#@`), whose
+  longest dotted prefix names a declared type or a module decides. `pkg.Type.method`, `$lambda:pkg.Type.method:...`,
+  `$generic:pkg.Type.method[...]<...>`, `$generic:$owner:pkg.Map[...]<...>.get`, `$dispatch:pkg.Type.method`,
+  `$nullable-scalar:arguments:pkg.Type.method`, `$lambda-env:...` and `$cell:...` types and `pkg.Mod$fields.x` all go with
+  the module of what they serve. Nothing else is read, so no edit moves an entry from one section to another unless it
+  moves a declaration. Types: a class, enum or interface by its name, an enum tag with its enum; globals: a class value or
+  enum constant cache with its type, a static by its name; a source snapshot with the module of its file. `$anon:` printers
+  (decision 2), runtime helpers (`__array_push_ref$shared:...`), boot functions and the `$dynamic-structure:` and
+  `$enum-*` helpers named by digest or number serve no declaration and go to `$shared`. The IR carries no home field: the
+  name already is one, and the IR stages stay as they are.
+  - On the compiler's release self-compile: 584 sections; `$shared` holds 1,155 of 11,844 functions (700 printers, 349
+    runtime helpers, the 20 initializer parts, the rest generated helpers named by digest) and 702 globals (the printers'
+    class values), and no nominal type.
+- **The section memo** (`HlSectionCache`, kept with the lowered functions in `HlLoweredCache.sections`, so it follows the
+  candidate build). Per section path it keeps the bytes, their digest, the dense tables the encoding named and what the
+  encoding read (`HlSectionReads`): its functions by identity with their names and the places of their anchors, its owned
+  types and globals, its snapshots, and for each entry it names what that entry is in the dense module, its key and its
+  home. A warm build reads those again from the new module (`HlSectionWriter.readInputs`, a pass over the section's tables,
+  not its code) and keeps the section when they read the same; otherwise it encodes it, and keeps the old bytes when they
+  come out equal, which is the early cutoff. Homes are memoized by name while the declarations and module paths are the
+  same (a check of a few thousand entries a build), and validation marks follow the function objects as the dense writer's
+  do. `--check-reuse` encodes every kept section again and requires the same bytes.
+  - Slice 7 takes it over as is: a section is one computed result keyed by module, its value the bytes, its reads the
+    values above (a computed kind per stage, not per section), and the file the root that reuses section by section.
+- **Signature edits.** A plain build relinks every function whose dense indices moved (`HlLink`), into new function
+  objects, so the memo encodes their sections again although most come out the same: on the self-compile's signature
+  edit 503 of 522 sections are encoded and 14 change. Lowering into section-local keys (Lowering, above; the rest of
+  slice 3) keeps those functions the same objects, and the memo then keeps their sections.
+- **Measured** (the compile server on the frozen self-compile input, main-thread instructions, release, perf-guard's
+  edits), `--module-sections` against dense HLB 8: the body edit 2.209 G against 2.291 G (slice 2a: 4.257 G), one section
+  of 522 encoded; the no-op 0.784 G against 0.798 G (the backend does not run); the signature edit 19.06 G against
+  18.35 G (slice 2a: 19.29 G). The output is 4.36 MB against 5.09 MB.
+- **Loader.** Keys and strings are hashed eight bytes a step and once per key, and structural types are read in one pass:
+  a link of the compiler's release module (5.26 MB against 6.20 MB dense) takes 324 M instructions instead of 357 M,
+  against 202 M to read the dense module, and starting the compiler (load, link, JIT) 4.519 G against 4.404 G dense
+  (+2.6%, was +3.4%). What is left is the opcode reading with its remap (+24 M), LZ4 (22 M), the key and string tables and
+  structural interning.
 
 ## 4. Live patching
 
@@ -339,7 +375,7 @@ and perf-guard, including startup.
 | A | Positions relative to their declaration (in progress elsewhere) | — | — | — |
 | 1 | Fork: `link.c` and the HLB 9 reader beside the dense one. C tests on hand-built two-section modules cover every failure mode, plus `hldump`. Landed: `tests/native/code_link.c` (the `code-link` suite) | +1,500 C (+1,400 C tests) | fork tests; existing suites untouched (the compiler still writes HLB 8) | — |
 | 2 | Compiler: home modules, `HlSectionWriter`, `HlStaticLink`. Plain builds write HLB 9; live builds stay on HLB 8. AOT, `hl-stat` and the binary-size report link statically. **Split.** 2a landed: the writer, the static link, the readers (`HlModuleReader`, hl-stat, the size report, the debugger) and the check that the VM's link equals the static link (`code_link --compare`, the `module-sections` suite, the `driver-sections` suite), with sections behind the typed option `--module-sections`. 2b: plain builds write sections by default, the self-compile oracle and the checked-in bootstrap take their new base | +1,100 / −150 | the self-compile takes its new base. New validation: the VM's link equals `HlStaticLink`'s. The ci debug-metadata suite | 1, A |
-| 3 | Plain warm builds without link and replay. One memo per module section, then folded into engine slice 7 | −1,000 / +150 | `--check-reuse` | 2 |
+| 3 | Plain warm builds without link and replay. One memo per module section, then folded into engine slice 7. **Split.** 3a landed: homes by declaration and the section memo (section 3, "As built in slice 3a"). 3b: lowering into section-local keys, without link and replay, which keeps the sections of relinked functions on a signature edit | −1,000 / +150 | `--check-reuse` | 2 |
 | 4 | Live patching on sections: HLP 12, the patch linker, loader stable ids, slots and codecs removed, HXR | −2,100 / +500 compiler, −450 / +450 fork | the ci hot-reload suite, the patch mains, `NominalInterfacePatchMain`, an Android watch run; with live pruning ([LIVE_PRUNING.md](LIVE_PRUNING.md) slice 3) | 3 |
 | 5 | Per-class initializer parts in their owning modules. The compiler no longer writes HLB 8 for live builds | −50 / +100 | edit replay on a static-initializer edit | 4 |
 

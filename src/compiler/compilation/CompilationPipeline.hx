@@ -205,7 +205,8 @@ class CompilationPipeline {
 				patchBytes: patchSize,
 				reuse: reusedFrom == null ? "none (" + frontend.reuseMiss + ")" : backendReused ? "ir+module" : "ir",
 				linkedFunctions: backend.linkedFunctions,
-				movedFunctions: backend.movedFunctions
+				movedFunctions: backend.movedFunctions,
+				sectionsEncoded: backend.sectionsEncoded
 			}
 		};
 	}

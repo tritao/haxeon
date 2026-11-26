@@ -160,6 +160,9 @@ typedef CompileMetrics = {
 
 	/** How many of those were given other indices than they were lowered with. */
 	final movedFunctions:Int;
+
+	/** For a module written as sections: how many of them the build encoded, of how many, and how many came out changed. */
+	@:optional final sectionsEncoded:Null<String>;
 }
 
 /** Non-mutating validation outcome for a prospective source update. */

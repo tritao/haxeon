@@ -297,12 +297,17 @@ class HashLinkBackendSession implements BackendSession {
 		assembler = candidateAssembler;
 		var stableIds = candidateAssembler.cache.stableIds,
 			functionIndices = assembly.functionIndices,
-			sections:Null<haxeon.io.SegmentedBytes> = null;
+			sections:Null<haxeon.io.SegmentedBytes> = null,
+			sectionsEncoded:Null<String> = null;
 		if (context.options.moduleSections && !context.livePatching) {
 			// The loader numbers a module of sections itself, and a function's stable id is its index there.
-			var modules = [for (name => state in context.state.modules) state.source.path => name],
-				written = compiler.hl.HlSectionWriter.write(assembly.module, modules, compiler.hl.HlLz4.FAST,
-					context.options.checkReuse);
+			var modules = [for (name => state in context.state.modules) name => state.source.contentHash()],
+				kept = candidateAssembler.loweredCache,
+				written = compiler.hl.HlSectionWriter.write(assembly.module, modules, context.state.declarationOwners,
+					compiler.hl.HlLz4.FAST, context.options.checkReuse, kept == null ? null : kept.sections);
+			if (kept != null)
+				kept.sections = written.cache;
+			sectionsEncoded = written.encoded + " of " + written.sections + " (" + written.changed + " changed)";
 			sections = written.bytes;
 			functionIndices = [];
 			for (name => index in assembly.functionIndices) {
@@ -335,6 +340,7 @@ class HashLinkBackendSession implements BackendSession {
 			moduleNatives: assembly.module.natives.length,
 			linkedFunctions: candidateAssembler.reusedFunctions,
 			movedFunctions: candidateAssembler.movedFunctions,
+			sectionsEncoded: sectionsEncoded,
 			timings: {
 				cachePreparationMs: assembly.cachePreparationMs,
 				loweringMs: assembly.loweringMs,

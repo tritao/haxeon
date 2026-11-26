@@ -16,6 +16,10 @@ class DeclarationOwners {
 	public inline function exists(name:String):Bool
 		return owners.exists(name);
 
+	/** Each declared name with the module that owns it. */
+	public inline function keyValueIterator():KeyValueIterator<String, String>
+		return owners.keyValueIterator();
+
 	/** Record `module` as the owner of `name` unless another module already owns it. */
 	public function claim(name:String, module:String):Void {
 		if (owners.exists(name))
