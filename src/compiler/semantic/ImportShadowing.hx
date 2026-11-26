@@ -28,7 +28,7 @@ class ImportShadowing {
 			if (name.indexOf(".") >= 0 || named.exists(name))
 				continue;
 			var own = packageTypes.get(name);
-			if (own != null && own != imported)
+			if (own != null && own != imported && !AmbiguousName.isMarker(imported))
 				result.set(name, AmbiguousName.marker(name, own, imported));
 		}
 		return result;

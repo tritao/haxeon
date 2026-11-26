@@ -1982,6 +1982,21 @@ class TestMain {
 			+ 'k.make(); return 0; }', 'Static method "Kind.make" is called on the enum, not a value');
 		expectCompileError('enum Kind { A; public final function f():Int return 1; } function main():Int return 0;',
 			'Method "Kind.f" cannot be final');
+		// A name goes to the most specific import that gives it, wherever it is: a named or aliased import, then a whole
+		// module's types, then a package wildcard's. Two at the same rank make the name ambiguous where it is used.
+		for (entry in [
+			['import a.A;\nimport b.B;', ""],
+			['import b.B;\nimport a.A;', ""],
+			['import b.B.X;\nimport a.A;', "b"],
+			['import a.A;\nimport b.B.X;', "b"],
+			['import b.B.X;\nimport a.A.X;', ""],
+			['import a.A.X as X;\nimport b.B;', "a"],
+			['import b.B;\nimport a.A.X as X;', "a"],
+			['import a.*;\nimport b.B;', "b"],
+			['import b.B;\nimport a.*;', "b"]
+		])
+			importedNameCase(entry[0], entry[1]);
+		Sys.println("PASS: the most specific import gives a name, whatever the order, and a tie is reported where used");
 		Sys.println("PASS: enum members are checked as a class's are");
 		// Per-case constants are set by every case, once, to a compile-time constant of their type, and never assigned.
 		var constantErrors = [
@@ -2535,6 +2550,38 @@ class TestMain {
 	}
 
 	/** With `modules`, `source` is module Main of a build with the standard library, whose own modules are in reach. */
+	/**
+	 * Compiles `imports` over two modules that both declare `X`, and requires that `X` is the one in package `winner`, or with
+	 * an empty `winner` that using `X` reports it as ambiguous.
+	 */
+	static function importedNameCase(imports:String, winner:String):Void {
+		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
+		compiler.addStandardLibrarySourceRoot("stdlib");
+		compiler.update("a/A.hx", "package a; class A {} class X { public static function fromA():Int return 1; }");
+		compiler.update("b/B.hx", "package b; class B {} class X { public static function fromB():Int return 2; }");
+		if (winner == "") {
+			compiler.update("Main.hx", '$imports\nfunction main():Int return X.fromA();');
+			try {
+				compiler.compile("Main");
+				throw '$imports: X is not reported as ambiguous';
+			} catch (error:CompileError) {
+				var expected = 'Type name "X" is ambiguous: imports bring in both ';
+				if ((error.diagnostic.code:String) != "E1029"
+					|| !StringTools.startsWith(error.diagnostic.message, expected))
+					throw '$imports: expected the ambiguity, got ${error.diagnostic.format()}';
+			}
+			return;
+		}
+		var other = winner == "a" ? "fromB" : "fromA";
+		compiler.update("Main.hx", '$imports\nfunction main():Int return X.from${winner.toUpperCase()}();');
+		compiler.compile("Main");
+		compiler.update("Main.hx", '$imports\nfunction main():Int return X.$other();');
+		try {
+			compiler.compile("Main");
+			throw '$imports: X is not the one in package $winner';
+		} catch (error:CompileError) {}
+	}
+
 	static function expectCompileError(source:String, expected:String, modules = false):Void {
 		try {
 			if (modules) {

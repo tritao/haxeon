@@ -11,7 +11,9 @@ import haxeon.ui.semantics.Semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics.AccessibilityState;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
-import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.AccessibilityNode;
+import nativekit.ffi.NativeKitTypes.AccessibilityUpdate;
+import nativekit.ffi.NativeKitTypes.AccessibilityUpdateFlags;
 
 /** Projects Haxe semantics and resolved geometry into NativeKit's virtual tree. */
 class AccessibilityBridge implements Disposable {

@@ -1,25 +1,30 @@
 package haxeon.ui.host;
 
-import haxeon.platform.AppLaunch;
-import haxeon.platform.BindingError;
-import haxeon.platform.Runtime;
-import haxeon.platform.RuntimeOptions;
 import haxe.io.Bytes;
 import haxeon.gpu.SurfaceOptions;
 import haxeon.platform.App;
+import haxeon.platform.AppLaunch;
+import haxeon.platform.BindingError;
 import haxeon.platform.FrameTick;
 import haxeon.platform.NativeKitError;
+import haxeon.platform.Runtime;
+import haxeon.platform.RuntimeOptions;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
 import haxeon.platform.WindowOptions;
 import haxeon.platform.event.EventSubscription;
 import haxeon.ui.FontCollection;
-import haxeon.ui.host.UiHostRuntime.UiHostLifecycle;
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
-import haxeon.ui.host.UiHostOptions;
 import haxeon.ui.host.UiHostContext;
+import haxeon.ui.host.UiHostOptions;
+import haxeon.ui.host.UiHostRuntime.UiHostLifecycle;
 import haxeon.ui.host.UiHostRuntime;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes.EventKind;
+import nativekit.ffi.NativeKitTypes.ResourceFlags;
+import nativekit.ffi.NativeKitTypes.ResourceValue;
+import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.SurfaceFrameMode;
+import nativekit.ffi.NativeKitTypes.WindowFlags;
 
 /** Runs a UI application on the current platform. */
 class UiHost {

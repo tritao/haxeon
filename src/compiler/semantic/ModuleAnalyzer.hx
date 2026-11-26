@@ -379,30 +379,53 @@ class ModuleAnalyzer {
 		}
 	}
 
+	/**
+	 * The names a module's imports bring in. A bare name goes to the most specific import that gives it: one naming the type
+	 * (or aliasing it, `as`), then a whole module's types, then a package wildcard's. Position does not matter, so sorting
+	 * imports never changes what a name means. Two imports at the same rank that give one name different types make it
+	 * ambiguous: it resolves to a marker that is reported where the name is used (`AmbiguousName`), as Haxe instead lets the
+	 * later import silently win.
+	 */
 	public function importAliases(imports:Array<compiler.syntax.Ast.AstImport>):Map<String, String> {
-		var aliases:Map<String, String> = [];
+		var aliases:Map<String, String> = [], ranks:Map<String, Int> = [];
 		for (entry in imports) {
 			var path = entry.path;
 			var modulePath = importModulePath(path);
 			if (isWildcardImport(path)) {
 				for (sourceModule in importedSourceModules(path))
-					addModuleAliases(sourceModule, aliases, true, QualifiedName.last(sourceModule), true);
+					addModuleAliases(sourceModule, aliases, ranks, true, QualifiedName.last(sourceModule), true,
+						WildcardRank);
 				continue;
 			}
 			var alias = entry.alias == null ? QualifiedName.last(path) : entry.alias,
 				importedName = importedDeclarationName(path);
-			aliases.set(alias, importedName);
+			bindImported(aliases, ranks, alias, importedName, NamedRank);
 			aliases.set(path, importedName);
-			// `import pack.Module;` brings in each type of the module by name, as in Haxe. `import pack.Module as M;` is a
-			// namespace: its types are reached only as `M.Type`, so they cannot shadow anything.
+			// `import pack.Module;` brings in each type of the module by name. `import pack.Module as M;` is a namespace: its
+			// types are reached only as `M.Type`, so they cannot shadow anything.
 			if (modules.exists(modulePath))
-				addModuleAliases(modulePath, aliases, false, alias, alias == QualifiedName.last(path));
+				addModuleAliases(modulePath, aliases, ranks, false, alias, alias == QualifiedName.last(path),
+					ModuleRank);
 		}
-		// Explicit aliases keep their existing precedence over imported bare names.
-		for (entry in imports)
-			if (entry.alias != null)
-				aliases.set(entry.alias, importedDeclarationName(entry.path));
 		return aliases;
+	}
+
+	static inline final NamedRank = 3;
+	static inline final ModuleRank = 2;
+	static inline final WildcardRank = 1;
+
+	/** Gives the bare name `name` to `target` at `rank`: over a lower rank, and as an ambiguity beside an equal one. */
+	static function bindImported(aliases:Map<String, String>, ranks:Map<String, Int>, name:String, target:String,
+			rank:Int):Void {
+		var current = ranks.get(name);
+		if (current == null || rank > current) {
+			aliases.set(name, target);
+			ranks.set(name, rank);
+		} else if (rank == current) {
+			var existing = aliases.get(name);
+			if (existing != target && !compiler.core.AmbiguousName.isMarker(existing))
+				aliases.set(name, compiler.core.AmbiguousName.importsMarker(name, existing, target));
+		}
 	}
 
 	/** True for the Haxe package/module wildcard form, such as `foo.bar.*`. */
@@ -413,32 +436,32 @@ class ModuleAnalyzer {
 	public static inline function importModulePath(path:String):String
 		return isWildcardImport(path) ? path.substring(0, path.length - 2) : path;
 
-	function addModuleAliases(moduleName:String, aliases:Map<String, String>, includeFunctions:Bool, moduleAlias:String,
-			bare:Bool):Void {
+	function addModuleAliases(moduleName:String, aliases:Map<String, String>, ranks:Map<String, Int>,
+			includeFunctions:Bool, moduleAlias:String, bare:Bool, rank:Int):Void {
 		var ast = moduleAst(moduleName);
 		if (ast == null)
 			return;
 		for (declaration in ast.aliases)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
+			addDeclarationAlias(moduleName, declaration.name, aliases, ranks, moduleAlias, bare, rank);
 		for (declaration in ast.enums)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
+			addDeclarationAlias(moduleName, declaration.name, aliases, ranks, moduleAlias, bare, rank);
 		for (declaration in ast.abstracts)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
+			addDeclarationAlias(moduleName, declaration.name, aliases, ranks, moduleAlias, bare, rank);
 		for (declaration in ast.interfaces)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
+			addDeclarationAlias(moduleName, declaration.name, aliases, ranks, moduleAlias, bare, rank);
 		for (declaration in ast.classes)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
+			addDeclarationAlias(moduleName, declaration.name, aliases, ranks, moduleAlias, bare, rank);
 		if (includeFunctions)
 			for (declaration in ast.functions)
-				addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
+				addDeclarationAlias(moduleName, declaration.name, aliases, ranks, moduleAlias, bare, rank);
 	}
 
 	function addDeclarationAlias(moduleName:String, declarationName:String, aliases:Map<String, String>,
-			moduleAlias:String, bare:Bool):Void {
+			ranks:Map<String, Int>, moduleAlias:String, bare:Bool, rank:Int):Void {
 		var sourceName = ModuleCanonicalizer.sourceDeclarationPath(moduleName, declarationName),
 			importedName = importedDeclarationName(sourceName);
-		if (bare && !aliases.exists(declarationName))
-			aliases.set(declarationName, importedName);
+		if (bare)
+			bindImported(aliases, ranks, declarationName, importedName, rank);
 		aliases.set(sourceName, importedName);
 		aliases.set(moduleAlias + "." + declarationName, importedName);
 	}

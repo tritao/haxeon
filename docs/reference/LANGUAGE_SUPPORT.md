@@ -144,9 +144,12 @@ The current subset includes:
   so is a local initialized with one and never reassigned.
   A null operand equals only another null.
   A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
-- Imports as in Haxe, with two stricter rules. A type that an import of a whole module or package brings in only as a side
+- Imports as in Haxe, with three stricter rules. A type that an import of a whole module or package brings in only as a side
   effect cannot silently replace a type the current package declares: using that name is `E1029`, reported at the use, and
-  naming the import (`import pack.Module.Type;`) or the module's own declaration settles it. `import pack.Module as M;` is a
+  naming the import (`import pack.Module.Type;`) or the module's own declaration settles it. When imports give one bare
+  name to different types, the most specific wins whatever their order: an import naming the type or aliasing it (`as`),
+  then a whole module's types, then a package wildcard's; two at the same rank make the name `E1029` where it is used.
+  Haxe lets the later import win, so sorting imports could change a name's meaning. `import pack.Module as M;` is a
   namespace: the module's types are `M.Type` and none come in by their bare names (stock Haxe rejects this form).
 - `private` as in Haxe: a member written without `public` is private to its class and its subclasses (an interface's
   members, an extern class's and those of a class with `@:publicFields` are public), and `@:allow`, `@:access` and
