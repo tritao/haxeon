@@ -92,7 +92,7 @@ class IrTypeAwareWalk {
 	public static function run(program:IrProgram, roots:IrWalkRoots, ?dynamicSites:Map<String, Array<String>>,
 			requireProviders = false,
 			keepCreatedClassMethods = false, ?classDependencies:IrClassDependencies,
-			?memo:compiler.ir.reuse.IrWalkMemo<IrWalkResult>):IrWalkResult {
+			?memo:compiler.ir.reuse.IrWalkMemo<IrWalkSummary, IrWalkResult>):IrWalkResult {
 		var walk = new IrTypeAwareWalkState(program, roots, dynamicSites == null ? defaultDynamicSites() : dynamicSites,
 			requireProviders,
 			keepCreatedClassMethods, classDependencies, memo);
@@ -112,12 +112,12 @@ class IrTypeAwareWalk {
 		var live:Map<String, Bool> = [];
 		if (!targets.keys().hasNext())
 			return live;
-		var memo:Null<compiler.ir.reuse.IrWalkMemo<Map<String, Bool>>> = null;
+		var memo:Null<compiler.ir.reuse.IrWalkMemo<IrWalkSummary, Map<String, Bool>>> = null;
 		if (program != null && stageMemos != null) {
-			var session:compiler.ir.reuse.IrWalkMemo<Map<String, Bool>> = stageMemos.walk(name),
+			var session:compiler.ir.reuse.IrWalkMemo<IrWalkSummary, Map<String, Bool>> = stageMemos.walk(name),
 				kept = session.kept(stageMemos.database, program, functions,
 					[transitive ? "transitive" : ""].concat(roots),
-					[], true);
+					[], IrWalkSummary.read);
 			if (kept != null) {
 				if (stageMemos.checks
 					&& !sameNames(referenced(name, null, functions, targets, roots, transitive, null), kept))
@@ -190,9 +190,9 @@ class IrTypeAwareWalk {
 			keepCreatedClassMethods ? "keep created class methods" : "",
 			classDependencies == null ? "" : classDependencies.symbols.join(" ") + "\n" + classDependencies.inputs
 		].concat(roots.functions),
-			memo:compiler.ir.reuse.IrWalkMemo<IrWalkResult> = stageMemos.walk(name),
+			memo:compiler.ir.reuse.IrWalkMemo<IrWalkSummary, IrWalkResult> = stageMemos.walk(name),
 			kept = memo.kept(stageMemos.database, program, program.functions, given,
-				[for (type in roots.types) IrTypeIds.id(type)], true);
+				[for (type in roots.types) IrTypeIds.id(type)], IrWalkSummary.read);
 		if (kept != null) {
 			if (stageMemos.checks
 				&& !sameResult(run(program, roots, null, false, keepCreatedClassMethods, classDependencies), kept))
@@ -334,7 +334,7 @@ private class IrTypeAwareWalkState {
 	final requireProviders:Bool;
 	final keepCreatedClassMethods:Bool;
 	final classDependencies:Null<IrClassDependencies>;
-	final memo:Null<compiler.ir.reuse.IrWalkMemo<IrWalkResult>>;
+	final memo:Null<compiler.ir.reuse.IrWalkMemo<IrWalkSummary, IrWalkResult>>;
 	final dependencySymbolsDone:Map<String, Bool> = [];
 	final index:IrProgramIndex;
 	final byName:Map<String, IrFunction> = [];
@@ -370,7 +370,8 @@ private class IrTypeAwareWalkState {
 
 	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>,
 			requireProviders:Bool, keepCreatedClassMethods:Bool,
-			classDependencies:Null<IrClassDependencies>, memo:Null<compiler.ir.reuse.IrWalkMemo<IrWalkResult>>) {
+			classDependencies:Null<IrClassDependencies>,
+			memo:Null<compiler.ir.reuse.IrWalkMemo<IrWalkSummary, IrWalkResult>>) {
 		this.classDependencies = classDependencies;
 		this.memo = memo;
 		this.program = program;

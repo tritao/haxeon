@@ -4,9 +4,7 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrTypeMap;
-import compiler.ir.reuse.IrStageMemo.IrContributionKey;
 import compiler.ir.reuse.IrStageMemo.IrStageMemos;
-import compiler.ir.reuse.IrWalkRecord;
 
 import compiler.ir.model.Ir;
 import compiler.semantic.SemanticSignature;
@@ -43,44 +41,59 @@ class IrEnumEscapeReach {
 	final mapLog:Array<Int> = [];
 
 	/**
-	 * What each function gives the reach, by type id: the closures it makes, as pairs of the closure's type and its receiver's,
-	 * and the map stores, as triples of the map's type, the key's and the value's.
+	 * `scans`, when given, tells the functions whose closures and map stores to read: the others have none.
 	 */
-	@:processWide("a contribution memo's key, only ever read")
-	public static final STORES = new IrContributionKey<Array<Array<Int>>>("escape-stores");
-
-	/**
-	 * `scans`, when given, tells the functions whose closures and map stores to read: the others have none. With `stageMemos`, what
-	 * each function gives is read once per version (`STORES`).
-	 */
-	public function new(program:IrProgram, ?scans:IrFunction->Bool, ?stageMemos:IrStageMemos) {
+	public function new(program:IrProgram, ?scans:IrFunction->Bool) {
 		this.program = program;
-		for (fn in program.functions) {
-			if (scans != null && !scans(fn))
-				continue;
-			var version = stageMemos == null ? 0 : fn.version, stores:Null<Array<Array<Int>>> = null;
-			if (stageMemos != null && version != 0) {
-				var memo = stageMemos.contribution(STORES);
-				stores = memo.get(version);
-				if (stores == null) {
-					stores = storesOf(fn);
-					memo.keep(version, stores);
-				} else if (stageMemos.checks && !sameStores(stores, storesOf(fn)))
-					throw new compiler.core
-						.InternalError('--check-reuse: the escape stores reused for ${fn.name} differ from its instructions');
-			} else
-				stores = storesOf(fn);
-			for (type in stores[0])
-				closureLog.push(type);
-			for (type in stores[1])
-				mapLog.push(type);
-		}
+		for (fn in program.functions)
+			if (scans == null || scans(fn))
+				give(storesOf(fn));
+	}
+
+	/** Gives the reach what a function gives it (`storesOf`). */
+	function give(stores:Array<Array<Int>>):Void {
+		for (type in stores[0])
+			closureLog.push(type);
+		for (type in stores[1])
+			mapLog.push(type);
 	}
 
 	static function sameStores(left:Array<Array<Int>>, right:Array<Array<Int>>):Bool
 		return IrTypeIds.sameList(left[0], right[0]) && IrTypeIds.sameList(left[1], right[1]);
 
-	/** What `fn` gives the reach (`STORES`); a function read past the encode point is its body, one before it its objects. */
+	/**
+	 * The enums `roots` reach in `program`, given the closures and map stores of every function. In a session it is the session's
+	 * step `name` (`IrWalkMemo`), whose summary of a function is what it gives (`storesOf`): last build's result while the program
+	 * and the roots give it the same; else walked again. With `--check-reuse` a kept result is walked again and compared.
+	 */
+	public static function collectStores(name:String, program:IrProgram, roots:Array<IrType>,
+			stageMemos:Null<IrStageMemos>):Map<String, Bool> {
+		var reach = new IrEnumEscapeReach(program, _ -> false);
+		if (stageMemos == null) {
+			for (fn in program.functions)
+				reach.give(storesOf(fn));
+			return reach.collect(roots, _ -> false);
+		}
+		var lists = [roots],
+			memo:compiler.ir.reuse.IrWalkMemo<Array<Array<Int>>, Map<String, Bool>> = stageMemos.step(name, sameStores),
+			kept = memo.kept(stageMemos.database, program, program.functions, reach.givenOf(lists),
+				reach.givenTypesOf(lists),
+				storesOf);
+		if (kept != null) {
+			if (stageMemos.checks && !sameResults([collectStores(name, program, roots, null)], [kept]))
+				throw new compiler.core
+					.InternalError('--check-reuse: the escape reach $name reused results that differ from walking it now');
+			return kept.copy();
+		}
+		memo.begin(stageMemos.database);
+		for (fn in program.functions)
+			reach.give(memo.summary(fn));
+		var result = reach.collect(roots, _ -> false);
+		memo.end(stageMemos.database, result.copy());
+		return result;
+	}
+
+	/** What `fn` gives the reach; a function read past the encode point is its body, one before it its objects. */
 	static function storesOf(fn:IrFunction):Array<Array<Int>> {
 		var closures:Array<Int> = [], maps:Array<Int> = [], body = fn.body;
 		if (body != null)
@@ -236,70 +249,32 @@ class IrEnumEscapeReach {
 	public function collect(roots:Array<IrType>, supportsCallableEscape:IrType->Bool):Map<String, Bool>
 		return walker(supportsCallableEscape)(roots);
 
-	/** `collect` in a session that keeps the result as `key` (`collectEach`). */
-	public function collectKept(key:IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>, roots:Array<IrType>,
-			supportsCallableEscape:IrType->Bool, stageMemos:Null<IrStageMemos>):Map<String, Bool>
-		return collectEach(key, [roots], supportsCallableEscape, stageMemos)[0];
+	/** `collect` as the session's walk `name` (`collectEach`). */
+	public function collectWalked(name:String, roots:Array<IrType>, supportsCallableEscape:IrType->Bool,
+			stageMemos:Null<IrStageMemos>):Map<String, Bool>
+		return collectEach(name, [roots], supportsCallableEscape, stageMemos)[0];
 
 	/**
-	 * The enums one walk reaches after each list of `lists` (`walker`), each a map of its own. In a session that keeps the results
-	 * as `key` (`IrWalkRecord`), last build's while this reach reads what last build's did, the lists are the same and
-	 * `supportsCallableEscape` answers what it answered then; else walked and kept. With `--check-reuse` kept results are walked
-	 * again and compared.
+	 * The enums one walk reaches after each list of `lists` (`walker`), each a map of its own. In a session the walk is the session's
+	 * walk `name` (`IrWalkMemo`): last build's results while this reach reads what last build's did, the lists are the same and
+	 * `supportsCallableEscape` answers what it answered then; else walked again. With `--check-reuse` kept results are walked again
+	 * and compared.
 	 *
 	 * Besides the program's tables, a reach reads the signature of the function each object method names, the closures and map
-	 * stores it was given in order, and the lists. It follows no function's edges, so its record keeps no summaries.
+	 * stores it was given in order, and the lists. It follows no function's edges.
 	 */
-	public function collectEach(key:IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>, lists:Array<Array<IrType>>,
-			supportsCallableEscape:IrType->Bool, stageMemos:Null<IrStageMemos>):Array<Map<String, Bool>> {
+	public function collectEach(name:String, lists:Array<Array<IrType>>, supportsCallableEscape:IrType->Bool,
+			stageMemos:Null<IrStageMemos>):Array<Map<String, Bool>> {
 		if (stageMemos == null)
 			return walkEach(lists, supportsCallableEscape);
-		var given = givenOf(lists), givenTypes = givenTypesOf(lists), methodFunctions = methodFunctionsOf();
-		var memos = stageMemos,
-			last = memos.lastResult(key),
-			kept = last == null ? null : last.holds(program, given, givenTypes, methodFunctions, (_, _) -> null);
-		if (kept != null && sameAnswers(kept.result, supportsCallableEscape)) {
-			if (stageMemos.checks && !sameResults(walkEach(lists, supportsCallableEscape), kept.result.results))
-				throw new compiler.core
-					.InternalError('--check-reuse: the escape reach ${key.name} reused results that differ from walking it now');
-			memos.keepResult(key, kept);
-			return [for (result in kept.result.results) result.copy()];
-		}
-		var asked:Array<IrType> = [], answers:Array<Bool> = [];
-		var results = walkEach(lists, type -> {
-			var answer = supportsCallableEscape(type);
-			asked.push(type);
-			answers.push(answer);
-			answer;
-		});
-		memos.keepResult(key,
-			new IrWalkRecord(program, given, givenTypes, methodFunctions, [for (_ in methodFunctions) null],
-			{
-				results: [for (result in results) result.copy()],
-				asked: asked,
-				answers: answers
-			}));
-		return results;
-	}
-
-	/**
-	 * `collect` as the session's walk `name` (`IrWalkMemo`): last build's result while this reach reads what last build's did, the
-	 * roots are the same and `supportsCallableEscape` answers what it answered then; else walked again. With `--check-reuse` a kept
-	 * result is walked again and compared.
-	 */
-	public function collectWalked(name:String, roots:Array<IrType>, supportsCallableEscape:IrType->Bool,
-			stageMemos:Null<IrStageMemos>):Map<String, Bool> {
-		if (stageMemos == null)
-			return collect(roots, supportsCallableEscape);
-		var lists = [roots],
-			memo:compiler.ir.reuse.IrWalkMemo<IrEscapeResults> = stageMemos.walk(name),
+		var memo:compiler.ir.reuse.IrWalkMemo<IrTypeAwareWalk.IrWalkSummary, IrEscapeResults> = stageMemos.walk(name),
 			kept = memo.kept(stageMemos.database, program, methodFunctionsOf(), givenOf(lists), givenTypesOf(lists),
-				false);
+				null);
 		if (kept != null && sameAnswers(kept, supportsCallableEscape)) {
 			if (stageMemos.checks && !sameResults(walkEach(lists, supportsCallableEscape), kept.results))
 				throw new compiler.core
 					.InternalError('--check-reuse: the escape reach $name reused results that differ from walking it now');
-			return kept.results[0].copy();
+			return [for (result in kept.results) result.copy()];
 		}
 		memo.begin(stageMemos.database);
 		var asked:Array<IrType> = [], answers:Array<Bool> = [];
@@ -311,7 +286,7 @@ class IrEnumEscapeReach {
 		});
 		memo.end(stageMemos.database,
 			{results: [for (result in results) result.copy()], asked: asked, answers: answers});
-		return results[0];
+		return results;
 	}
 
 	/** What a kept reach is given besides the program: how many closures, map stores and roots of each list, as names... */

@@ -2,8 +2,6 @@ package compiler.ir.passes.enums;
 
 import compiler.core.InternalError;
 import compiler.ir.analysis.IrEnumEscapeReach;
-import compiler.ir.analysis.IrEnumEscapeReach.IrEscapeResults;
-import compiler.ir.reuse.IrWalkRecord;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
@@ -19,31 +17,24 @@ import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
 import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.ir.reuse.IrWalkMemo;
 
 /**
  * Project an unobserved nominal tag to its integer ABI, including ordinary integer arrays. On IR bodies
  * (docs/design/IR_CORE_COLUMNS.md, migration), in release builds, per function (`IrFunctionPass`).
  *
  * The whole-program step chooses the closed tags: the payload-free enums no escape reaches (`IrEnumEscapeReach`), from what each
- * function lets escape (`IrTagEscapeRecord`, kept by the function's version in a session). The rewrite of a function reads, for
+ * function lets escape (`IrTagEscapeRecord`), a step of the session's database in a session (`CHOICE`). The rewrite of a function reads, for
  * each tag its types name, whether it is closed (`CLOSED`); a function that changes becomes its edited body, owned by the next
  * stage. The program's tables are projected after the functions (`projected`).
  */
 @:nullSafety(Strict)
 class IrClosedEnumTagAbi extends IrFunctionPass {
-	/** What each function lets escape, for the closed enum tag ABI's choice (`IrTagEscapeRecord`). */
-	@:processWide("a contribution memo's key, only ever read")
-	public static final ESCAPES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrTagEscapeRecord>("tag-escapes");
+	/** The escape reach of the closed tags' choice, a session's walk (`IrEnumEscapeReach.collectWalked`). */
+	static inline final REACH = "closed-tag-reach";
 
-	/** The escape reach of the closed tags' choice, which a session keeps (`IrEnumEscapeReach.collectKept`). */
-	@:processWide("a kept reach's key, only ever read")
-	public static final REACH =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("closed-tag-reach");
-
-	/** The closed tags, kept with what each function lets escape (`IrTagEscapeRecord`). */
-	@:processWide("a kept choice's key, only ever read")
-	static final CHOICE = new compiler.ir.reuse.IrStageMemo
-		.IrContributionKey<IrWalkRecord<IrTagEscapeRecord, Map<String, Bool>>>("closed-tag-choice");
+	/** The closed tags, a session's step whose summary of a function is what it lets escape (`IrTagEscapeRecord`). */
+	static inline final CHOICE = "closed-tag-choice";
 
 	/** The fact of an enum tag: 1 when it is closed. */
 	static inline final CLOSED = 0;
@@ -185,13 +176,13 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 		return 0;
 
 	/**
-	 * Chooses the closed tags: the payload-free enums that nothing lets escape. In a session the choice is kept with what each
-	 * function lets escape (`CHOICE`), so a build whose functions let the same escape takes it.
+	 * Chooses the closed tags: the payload-free enums that nothing lets escape. In a session the choice is the session's step
+	 * `CHOICE`, kept while the program's tables and declarations and what each function lets escape are the same.
 	 */
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var known = stageMemos;
 		if (known == null) {
-			closed = choose(functions, names);
+			closed = choose(functions, names, null);
 			return;
 		}
 		var given = [
@@ -199,35 +190,18 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 			IrObjectReflection.usedByProgram(program) ? "reflection" : "",
 			(reflectableObjects ?? []).join(",")
 		],
-			last = known.lastResult(CHOICE),
-			memo = known.contribution(ESCAPES),
-			// What a function's kind lets escape is not in its record: one of such a kind that changed is chosen again.
-			kept = last == null ? null : last.holds(program, given, [], functions, (fn, record) -> {
-				if (rootsOfKind(fn))
-					return null;
-				var now = IrTagEscapeRecord.of(fn, builder, known);
-				return now.same(record) ? now : null;
-			});
+			memo:IrWalkMemo<IrTagEscapeRecord, Map<String, Bool>> = known.step(CHOICE, IrTagEscapeRecord.same),
+			kept = memo.kept(known.database, program, functions, given, [], fn -> IrTagEscapeRecord.of(fn, builder));
 		if (kept != null) {
-			closed = kept.result.copy();
-			if (known.checks && !sameNames(choose(functions, names), closed))
+			closed = kept.copy();
+			if (known.checks && !sameNames(choose(functions, names, null), closed))
 				throw new InternalError('--check-reuse: the closed enum tag ABI reused a choice that differs from choosing now');
-		} else {
-			if (last != null)
-				last.giveBack(memo);
-			closed = choose(functions, names);
-			kept = new IrWalkRecord(program, given, [], functions.copy(),
-				[for (fn in functions) IrTagEscapeRecord.of(fn, builder, known)], closed.copy());
+			return;
 		}
-		known.keepResult(CHOICE, kept);
+		memo.begin(known.database);
+		closed = choose(functions, names, memo);
+		memo.end(known.database, closed.copy());
 	}
-
-	/** Whether `fn`'s kind lets types escape (`choose`). */
-	static function rootsOfKind(fn:IrFunction):Bool
-		return switch fn.kind {
-			case ClosureAdapter(_, _), ClosureCast(_), ClosureVarargs(_), EnumTagAdapter(_, _): true;
-			default: false;
-		};
 
 	static function sameNames(left:Map<String, Bool>, right:Map<String, Bool>):Bool {
 		for (name in left.keys())
@@ -239,8 +213,9 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 		return true;
 	}
 
-	/** The closed tags of the program of `functions`. */
-	function choose(functions:Array<IrFunction>, names:IrFunctionIndex):Map<String, Bool> {
+	/** The closed tags of the program of `functions`, reading what each lets escape through `memo` in a session. */
+	function choose(functions:Array<IrFunction>, names:IrFunctionIndex,
+			memo:Null<IrWalkMemo<IrTagEscapeRecord, Map<String, Bool>>>):Map<String, Bool> {
 		var closed = [for (e in program.enums) if (IrEnumTagStorage.eligible(e)) e.name => true];
 		if (!closed.keys().hasNext())
 			return closed;
@@ -272,22 +247,14 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 		// The closures and map stores the reach follows are the records', so it reads no function itself.
 		var reach = new IrEnumEscapeReach(program, _ -> false);
 		for (fn in functions) {
-			switch fn.kind {
-				case ClosureAdapter(source, target):
-					escape(source);
-					escape(target);
-				case ClosureCast(target), ClosureVarargs(target):
-					escape(target);
-				case EnumTagAdapter(type, _):
-					escape(type);
-				default:
-			}
+			var record = memo != null ? memo.summary(fn) : IrTagEscapeRecord.of(fn, builder);
+			for (id in record.kindTypes)
+				escape(IrTypeIds.type(id));
 			if (fn.retention == Expose || fn.name == program.entryPoint) {
 				for (a in fn.arguments)
 					escape(a.type);
 				escape(fn.result);
 			}
-			var record = IrTagEscapeRecord.of(fn, builder, stageMemos);
 			for (id in record.escaped)
 				escapeId(id);
 			var callees = record.callees, arguments = record.arguments;
@@ -329,7 +296,7 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 					|| StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
 					escape(Obj(object.name));
 		}
-		for (name in reach.collectKept(REACH, roots, _ -> false, stageMemos).keys())
+		for (name in reach.collectWalked(REACH, roots, _ -> false, memo == null ? null : stageMemos).keys())
 			closed.remove(name);
 		return closed;
 	}
@@ -470,8 +437,9 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
  * What one function lets escape, for the closed tag ABI's choice (`IrClosedEnumTagAbi.prepare`), by type ids: the types its
  * instructions hand to `Dyn`, a type value, a throw or a cast; each call's callee with the position and type of each argument (an
  * argument escapes when the callee is a native, or takes `Dyn` there); the closures it makes with their receivers, and the map
- * stores, which the escape reach follows. Only types that can lead to an enum are kept. It depends on the body alone, so a
- * session keeps it by the function's version (`IrStageMemos.tagEscapes`).
+ * stores, which the escape reach follows; and the types its kind lets escape (an adapter's or a cast's). Only types that can lead
+ * to an enum are kept. It depends on the function alone, so a session's choice reads it again only of a function that is not the
+ * object it was (`IrWalkMemo`).
  */
 @:nullSafety(Strict)
 class IrTagEscapeRecord {
@@ -492,26 +460,39 @@ class IrTagEscapeRecord {
 	/** Triples of a map's type, the key's and the value's. */
 	public final mapStores:Array<Int> = [];
 
+	/** The types the function's kind lets escape, as `IrClosedEnumTagAbi.choose` roots them. */
+	public final kindTypes:Array<Int> = [];
+
 	function new() {}
 
-	public static function of(fn:IrFunction, builder:IrBodyBuilder,
-			stageMemos:Null<IrStageMemos>):IrTagEscapeRecord {
-		var version = stageMemos == null ? 0 : fn.version;
-		if (stageMemos == null || version == 0)
-			return read(fn.encodedBody(builder));
-		var memo = stageMemos.contribution(IrClosedEnumTagAbi.ESCAPES), known = memo.get(version);
-		if (known == null) {
-			known = read(fn.encodedBody(builder));
-			memo.keep(version, known);
-		} else if (stageMemos.checks && !known.same(read(fn.encodedBody(builder))))
-			throw new InternalError('--check-reuse: the tag escapes reused for ${fn.name} differ from its body');
-		return known;
+	/** What `fn` lets escape, read from its body and its kind. */
+	public static function of(fn:IrFunction, builder:IrBodyBuilder):IrTagEscapeRecord {
+		var record = read(fn.encodedBody(builder));
+		switch fn.kind {
+			case ClosureAdapter(source, target):
+				record = ofKind(record, [IrTypeIds.id(source), IrTypeIds.id(target)]);
+			case ClosureCast(target), ClosureVarargs(target):
+				record = ofKind(record, [IrTypeIds.id(target)]);
+			case EnumTagAdapter(type, _):
+				record = ofKind(record, [IrTypeIds.id(type)]);
+			default:
+		}
+		return record;
 	}
 
-	public function same(other:IrTagEscapeRecord):Bool
-		return escaped.join(",") == other.escaped.join(",") && callees.join(",") == other.callees.join(",")
-			&& arguments.join(",") == other.arguments.join(",") && closures.join(",") == other.closures.join(",")
-			&& mapStores.join(",") == other.mapStores.join(",");
+	static function ofKind(record:IrTagEscapeRecord, types:Array<Int>):IrTagEscapeRecord {
+		var own = record == NONE ? new IrTagEscapeRecord() : record;
+		for (type in types)
+			own.kindTypes.push(type);
+		return own;
+	}
+
+	public static function same(left:IrTagEscapeRecord, right:IrTagEscapeRecord):Bool
+		return left == right
+			|| IrTypeIds.sameList(left.escaped, right.escaped) && IrObjectTools.sameNames(left.callees, right.callees)
+			&& IrTypeIds.sameList(left.arguments, right.arguments) && IrTypeIds.sameList(left.closures, right.closures)
+			&& IrTypeIds.sameList(left.mapStores, right.mapStores)
+			&& IrTypeIds.sameList(left.kindTypes, right.kindTypes);
 
 	/** Whether the record has the argument at `index`, of type id `type`, of a call of `name`. */
 	function hasArgument(name:String, index:Int, type:Int):Bool {

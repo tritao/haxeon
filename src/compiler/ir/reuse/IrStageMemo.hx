@@ -129,10 +129,11 @@ class IrStageMemos {
 	 */
 	var helpers:Null<compiler.query.ComputedQueryKind<IrFunction>> = null;
 
-	/** The whole-program walks the steps registered (`walk`), by name. */
-	final walks:Map<String, IrWalkMemo<Dynamic>> = [];
+	/** The whole-program walks and steps registered (`walk`, `step`), by name. */
+	final walks:Map<String, IrWalkMemo<Dynamic, Dynamic>> = [];
 
-	final walkList:Array<IrWalkMemo<Dynamic>> = [];
+	/** The walks that follow edges (`walk`), which share the summary of a function they are given as the same object. */
+	final edgeWalks:Array<IrWalkMemo<compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary, Dynamic>> = [];
 
 	/** The contribution summaries the steps registered (`summary`), by name. */
 	final summaries:Map<String, IrContributionSummary<Dynamic>> = [];
@@ -223,15 +224,32 @@ class IrStageMemos {
 	public inline function nextVersion():Int
 		return IrFunction.newVersion();
 
-	/** The session's walk `name` (`IrWalkMemo`), registered the first time a step asks for it. */
-	public function walk<R>(name:String):IrWalkMemo<R> {
+	/**
+	 * The session's walk `name` (`IrWalkMemo`), which follows edges (`IrWalkSummary`) or reads no summary, registered the first time
+	 * a step asks for it.
+	 */
+	public function walk<R>(name:String):IrWalkMemo<compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary, R> {
 		var known = walks.get(name);
-		if (known == null) {
-			known = database.register(new IrWalkMemo<Dynamic>(name, walkList));
-			walks.set(name, known);
-			walkList.push(known);
-		}
-		return cast known;
+		if (known != null)
+			return cast known;
+		var made = database.register(new IrWalkMemo<compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary, Dynamic>(name,
+			compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary.same, edgeWalks));
+		edgeWalks.push(made);
+		walks.set(name, cast made);
+		return cast made;
+	}
+
+	/**
+	 * The session's whole-program step `name` (`IrWalkMemo`), which reads a summary `S` of each function of its own, compared by
+	 * `same`; registered the first time the step asks for it.
+	 */
+	public function step<S, R>(name:String, same:(S, S) -> Bool):IrWalkMemo<S, R> {
+		var known = walks.get(name);
+		if (known != null)
+			return cast known;
+		var made = database.register(new IrWalkMemo<S, Dynamic>(name, same, null));
+		walks.set(name, cast made);
+		return cast made;
 	}
 
 	/** The session's contribution summary `name` (`IrContributionSummary`), registered the first time a step asks for it. */

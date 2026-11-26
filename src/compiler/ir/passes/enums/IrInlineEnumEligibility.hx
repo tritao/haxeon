@@ -1,8 +1,6 @@
 package compiler.ir.passes.enums;
 
 import compiler.ir.analysis.IrEnumEscapeReach;
-import compiler.ir.analysis.IrEnumEscapeReach.IrEscapeResults;
-import compiler.ir.reuse.IrWalkRecord;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
@@ -24,17 +22,11 @@ private typedef EnumUseNode = {
 @:nullSafety(Strict)
 class IrInlineEnumEligibility {
 	/** What each function lets escape or keeps in value form (`IrInlineEnumUses`). */
-	/** The escape reach of the reflected layouts, which a session keeps (`IrEnumEscapeReach.collectKept`). */
-	@:processWide("a kept reach's key, only ever read")
-	public static final REFLECTED =
-		new compiler.ir.reuse.IrStageMemo
-		.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("inline-enum-reflected-reach");
+	/** The escape reach of the reflected layouts, a session's walk (`IrEnumEscapeReach.collectWalked`). */
+	static inline final REFLECTED = "inline-enum-reflected-reach";
 
-	/** The escape reach of the escape reasons, which a session keeps (`IrEnumEscapeReach.collectEach`). */
-	@:processWide("a kept reach's key, only ever read")
-	public static final ESCAPES =
-		new compiler.ir.reuse.IrStageMemo
-		.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("inline-enum-escape-reach");
+	/** The escape reach of the escape reasons, a session's walk (`IrEnumEscapeReach.collectEach`). */
+	static inline final ESCAPES = "inline-enum-escape-reach";
 
 	@:processWide("a contribution memo's key, only ever read")
 	public static final USES =
@@ -452,7 +444,7 @@ class IrInlineEnumEligibility {
 
 	function reflectedUnsupportedEnums(reflected:Map<String, Bool>):Map<String, Bool> {
 		var roots:Array<IrType> = [for (name in reflected.keys()) Obj(name)];
-		return reflectionReach.collectKept(REFLECTED, roots, supportsCallableEscape, stageMemos);
+		return reflectionReach.collectWalked(REFLECTED, roots, supportsCallableEscape, stageMemos);
 	}
 
 	function block(name:String, reason:String):Void {

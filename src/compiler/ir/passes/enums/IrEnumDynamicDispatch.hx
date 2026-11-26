@@ -26,7 +26,7 @@ private typedef EnumDynamicRequest = {
 
 /**
  * Dispatch Dynamic enum operations by the concrete runtime enum descriptor. Per function (`IrFunctionPass`): a function's summary
- * says which Dynamic enum operations it has (`BOXES`, `CALLS_EQUAL`, `CALLS_REFLECT`, `CLOSES`, `CASTS`), and the rewrite of one
+ * says which Dynamic enum operations it has (`BOXES`, `CALLS_EQUAL`, `CALLS_REFLECT`, `CASTS`), and the rewrite of one
  * with an operation to replace reads whether it is reached (`UNREACHED`), whether any enum registers (`REGISTERED`) and whether
  * a helper it calls kept its content name (`RENAMED`), and asks for the unboxes and type tests it calls. The helpers are named
  * by the enum type.
@@ -37,7 +37,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	@:processWide("a shared empty map, only ever read")
 	static final noTypeValues:Map<Int, IrType> = [];
 
-	/** The escape reach of the reflection decision, a session's walk (`IrEnumEscapeReach.collectWalked`). */
+	/** The escape reach of the reflection decision, a session's step (`IrEnumEscapeReach.collectStores`). */
 	static inline final OBSERVED = "enum-dispatch-reach";
 
 	/** The reflective equality helpers something reaches, a session's walk (`IrTypeAwareWalk.referenced`). */
@@ -54,9 +54,6 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	static inline final BOXES = 1;
 	static inline final CALLS_EQUAL = 2;
 	static inline final CALLS_REFLECT = 4;
-
-	/** A closure or a map store, which the escape reach of the reflection decision reads (`IrEnumEscapeReach`). */
-	static inline final CLOSES = 8;
 
 	/** A cast from Dynamic to an enum, or a type test, which the rewrite may turn into a helper call. */
 	static inline final CASTS = 16;
@@ -162,15 +159,11 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 							flags |= CALLS_EQUAL;
 						else if (callTarget.name == REFLECT)
 							flags |= CALLS_REFLECT;
-						else if (arguments.length >= 3 && IrEnumEscapeReach.mapSetter(callTarget.name))
-							flags |= CLOSES;
 						else if ((callTarget.name == "__std_is_of_type" || callTarget.name == "__std_is_exact_type")
 							&& arguments.length == 2)
 							flags |= CASTS;
 					case SafeCast(output, input) if (IrVerifier.sameType(input.type, Dyn) && isEnum(output.type)):
 						flags |= CASTS;
-					case InstanceClosure(_, _, _):
-						flags |= CLOSES;
 					default:
 				}
 		return flags;
@@ -183,7 +176,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	}
 
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, index:IrFunctionIndex):Void {
-		var boxes:Map<String, Bool> = [], views:Map<String, Bool> = [], closing:Map<String, Bool> = [];
+		var boxes:Map<String, Bool> = [], views:Map<String, Bool> = [];
 		functionNames = index;
 		for (position in 0...functions.length) {
 			var fn = functions[position], flags = summaries[position];
@@ -192,8 +185,6 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 					(reflective ? reflectiveEqualities : equalities).set(key(fn.arguments[0].type), fn.name);
 				default:
 			}
-			if (flags & CLOSES != 0)
-				closing.set(fn.name, true);
 			if (flags & (BOXES | CALLS_EQUAL | CALLS_REFLECT) == 0 || !reached(fn))
 				continue;
 			if (flags & CALLS_EQUAL != 0)
@@ -238,10 +229,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 				for (argument in native.arguments) IrEnumEscapeReach.addNativeRoot(roots, argument);
 				IrEnumEscapeReach.addNativeRoot(roots, native.result);
 			}
-			var observed = new IrEnumEscapeReach(program, fn -> closing.exists(fn.name),
-				stageMemos).collectWalked(OBSERVED,
-				roots,
-				_ -> false, stageMemos);
+			var observed = IrEnumEscapeReach.collectStores(OBSERVED, program, roots, stageMemos);
 			for (fn in functions) switch fn.kind {
 				case EnumEquality(_) if (fn.arguments.length == 2):
 					switch fn.arguments[0].type {
