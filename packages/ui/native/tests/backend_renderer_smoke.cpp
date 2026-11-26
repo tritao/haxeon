@@ -1349,8 +1349,19 @@ int main() {
                                       stats.render_submission_cancellations == 0 &&
                                       stats.render_submission_failures == 0 &&
                                       stats.gpu_frames == 1,
-                                  "both queued surfaces independently render and present"))
+                                  "both queued surfaces independently render and present")) {
+                std::fprintf(stderr,
+                             "backend renderer smoke: scheduler stats submissions=%llu "
+                             "executions=%llu replacements=%llu cancellations=%llu failures=%llu "
+                             "gpu_frames=%llu\n",
+                             static_cast<unsigned long long>(stats.render_submissions),
+                             static_cast<unsigned long long>(stats.render_submission_executions),
+                             static_cast<unsigned long long>(stats.render_submission_replacements),
+                             static_cast<unsigned long long>(stats.render_submission_cancellations),
+                             static_cast<unsigned long long>(stats.render_submission_failures),
+                             static_cast<unsigned long long>(stats.gpu_frames));
                 result = 30;
+            }
         }
         const nkui_frame_info scheduler_frame{sizeof(scheduler_frame),
                                               static_cast<float>(scheduler_width[0]),
