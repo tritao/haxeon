@@ -644,6 +644,8 @@ bool render_sealed_submission(RenderSubmission &submission, bool target_bound = 
     record_render_submission_stat(submission.renderer,
                                   &nkui_renderer_stats::render_submission_executions);
     bool success = false;
+    /* The stage a failed submission stopped at; the plan's execution reports its own failures. */
+    const char *failed_stage = "binding the frame target";
     const bool context_backend = submission.frame_target.api == NK_GRAPHICS_OPENGL ||
                                  submission.frame_target.api == NK_GRAPHICS_OPENGL_ES;
     const bool bound =
@@ -664,7 +666,9 @@ bool render_sealed_submission(RenderSubmission &submission, bool target_bound = 
             std::lock_guard<std::mutex> lock(renderers_mutex);
             renderer_execution_lock.lock();
             auto *slot = resolve(submission.renderer);
+            failed_stage = "resolving the renderer";
             if (slot) {
+                failed_stage = "creating the backend";
                 {
                     std::lock_guard<std::mutex> cpu_lock(renderer_cpu_mutex);
                     discard_stale_renderer(*slot, submission.frame_target);
@@ -678,9 +682,12 @@ bool render_sealed_submission(RenderSubmission &submission, bool target_bound = 
                 }
                 if (slot->renderer) {
                     new_backend = !slot->renderer->valid();
+                    failed_stage = "initializing the backend";
                     success = !new_backend || slot->renderer->initialize();
-                    if (success)
+                    if (success) {
+                        failed_stage = "registering custom effects";
                         success = register_custom_effects(*slot);
+                    }
                     if (success)
                         renderer_impl = slot->renderer.get();
                     /* The backend is created here, after the toggle was recorded, and again after device loss. */
@@ -692,6 +699,7 @@ bool render_sealed_submission(RenderSubmission &submission, bool target_bound = 
 
         render_cost.mark(1);
         if (renderer_impl && success) {
+            failed_stage = "uploading glyph atlases";
             if (submission.session_owner) {
                 std::scoped_lock upload_lock(resources_mutex, submission.session_owner->mutex);
                 for (auto *engine : submission.text_engines)
@@ -705,6 +713,7 @@ bool render_sealed_submission(RenderSubmission &submission, bool target_bound = 
             }
             render_cost.mark(2);
             if (success) {
+                failed_stage = nullptr;
                 nkui::RenderExecutionError execution_error{};
                 success = nkui::execute_render_plan(
                     *renderer_impl, *submission.plan,
@@ -754,9 +763,14 @@ bool render_sealed_submission(RenderSubmission &submission, bool target_bound = 
     record_render_submission_value(submission.renderer,
                                    &nkui_renderer_stats::render_submission_execution_ns,
                                    elapsed_ns(execution_started_at_ns, execution_finished_at_ns));
-    if (!success)
+    if (!success) {
+        if (failed_stage)
+            std::fprintf(stderr, "nativekit ui: render submission failed %s (renderer=%s, gpu=%s)\n",
+                         failed_stage, renderer_impl ? renderer_impl->lastError() : "none",
+                         nkgpu_last_error());
         record_render_submission_stat(submission.renderer,
                                       &nkui_renderer_stats::render_submission_failures);
+    }
     return success;
 }
 
@@ -799,8 +813,11 @@ bool submit_standalone_frame(std::unique_ptr<RenderSubmission> submission) {
         const auto &submission = *static_cast<const RenderSubmission *>(data);
         if (result != NK_OK) {
             record_render_submission_stat(submission.renderer, &nkui_renderer_stats::render_submission_cancellations);
-            if (result != NK_ERROR_CANCELLED && !submission.render_failed)
+            if (result != NK_ERROR_CANCELLED && !submission.render_failed) {
+                std::fprintf(stderr, "nativekit ui: presenting a rendered frame failed: %d\n",
+                             static_cast<int>(result));
                 record_render_submission_stat(submission.renderer, &nkui_renderer_stats::render_submission_failures);
+            }
         }
         record_render_submission_value(submission.renderer,
             &nkui_renderer_stats::render_submission_acquire_to_present_ns,
