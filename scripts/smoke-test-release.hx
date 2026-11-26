@@ -37,6 +37,9 @@ final PLATFORM = switch Sys.systemName() {
 final WINDOWS = PLATFORM == "windows";
 final SUFFIX = WINDOWS ? ".exe" : "";
 
+/** The longest any one command may run, in seconds: a cold app build takes a few minutes, a hung one forever. */
+final COMMAND_LIMIT = 900;
+
 /** This run's scratch directory, removed at the end and on a failure. */
 var work = "";
 
@@ -232,7 +235,7 @@ function appRound(root:String, haxeon:String, projects:String):Void {
 	must("haxeon build of a program with a native package", haxeon, ["build"], native);
 	// The native package's up-to-date check (CMake and Ninja) prints even under --quiet; the program's line is the last.
 	var output = stdout("haxeon run of a program with a native package", haxeon, ["run", "--quiet"], native);
-	if (lastLine(output) != "native program ok")
+	if (lastLines(output, 1) != "native program ok")
 		fail('the program with a native package printed: $output');
 	var nativeCache = Path.join([Sys.getEnv("HOME"), ".haxeon", "cache", "native"]);
 	if (!FileSystem.isDirectory(nativeCache))
@@ -247,7 +250,7 @@ function appRound(root:String, haxeon:String, projects:String):Void {
 		+ '\troot.close();\n\treturn 0;\n}\n');
 	must("haxeon build of a program with a NativeKit module's package", haxeon, ["build"], module);
 	output = stdout("haxeon run of a program with a NativeKit module's package", haxeon, ["run", "--quiet"], module);
-	if (lastLine(output) != "module program ok true")
+	if (lastLines(output, 1) != "module program ok true")
 		fail('the program with filesystem printed: $output');
 	var trees = 0;
 	for (entry in FileSystem.readDirectory(nativeCache)) {
@@ -307,8 +310,17 @@ function checkCompiler(root:String, aot:Bool):Void {
 				for (line in execute("ps", ["-ax", "-o", "command="], work).out.split("\n"))
 					if (line.indexOf("haxeon") >= 0 || line.indexOf(" serve") >= 0) line
 			];
+			// What the release's client left in its session directory: none means it never started a server.
+			var sessions = Path.join([Sys.getEnv("XDG_CACHE_HOME"), "haxeon", "compiler"]), left = [];
+			if (FileSystem.exists(sessions))
+				for (name in FileSystem.readDirectory(sessions)) {
+					left.push(name);
+					if (Path.extension(name) == "log")
+						left.push(lastLines(content(Path.join([sessions, name])), 20));
+				}
 			fail('no compile server of the expected compiler (AOT: $aot) is running: expected "$worker", running:\n'
-				+ running.join("\n"));
+				+ running.join("\n") + '\nsession directory $sessions:\n'
+				+ (left.length == 0 ? "(none)" : left.join("\n")));
 		}
 	}
 }
@@ -463,12 +475,23 @@ class Watch {
 typedef Finished = {status:Int, out:String, err:String};
 
 /** Runs `command` in `cwd` to completion with no shell, as `$(...)` does: its two pipes captured apart. */
-function execute(command:String, arguments:Array<String>, cwd:String):Finished {
+/**
+ * Runs `command` to its end, with its output collected and, with `echo`, passed through as it comes. A command still
+ * running after COMMAND_LIMIT is stopped and fails the test: a program waiting on input, or on a dialog nobody can see,
+ * fails with its command line instead of holding the job until it times out.
+ */
+function execute(command:String, arguments:Array<String>, cwd:String, echo:Bool = false):Finished {
 	var process = ChildProcess.spawn(command, arguments, cwd),
 		out = new BytesOutput(),
 		err = new BytesOutput(),
 		buffer = Bytes.alloc(65536),
-		open = [true, true];
+		open = [true, true],
+		deadline = Sys.time() + COMMAND_LIMIT;
+	function stopped():Void {
+		process.close();
+		fail('${[command].concat(arguments).join(" ")} did not finish within $COMMAND_LIMIT s; its output ended with:\n'
+			+ lastLines(out.getBytes().toString() + err.getBytes().toString(), 20));
+	}
 	while (open[0] || open[1]) {
 		var moved = false;
 		for (index in 0...2) {
@@ -478,15 +501,21 @@ function execute(command:String, arguments:Array<String>, cwd:String):Finished {
 				buffer.length);
 			if (count > 0) {
 				(index == 0 ? out : err).writeBytes(buffer, 0, count);
+				if (echo)
+					(index == 0 ? Sys.stdout() : Sys.stderr()).writeBytes(buffer, 0, count);
 				moved = true;
 			} else if (count == -1)
 				open[index] = false;
 		}
+		if (Sys.time() > deadline)
+			stopped();
 		if (!moved && (open[0] || open[1]))
 			Sys.sleep(0.002);
 	}
 	var status = process.pollExit();
 	while (status < 0) {
+		if (Sys.time() > deadline)
+			stopped();
 		Sys.sleep(0.002);
 		status = process.pollExit();
 	}
@@ -496,7 +525,7 @@ function execute(command:String, arguments:Array<String>, cwd:String):Finished {
 
 /** Runs `command` with its output passing through, and fails with `what` unless it exits 0. */
 function must(what:String, command:String, arguments:Array<String>, cwd:String):Void
-	if (Script.run(command, arguments, {cwd: cwd}) != 0)
+	if (execute(command, arguments, cwd, true).status != 0)
 		fail(what);
 
 /** As `must`, for a command line given as one array (a headless prefix and the program). */
@@ -539,9 +568,9 @@ function walk(directory:String, visit:String->Void):Void {
 function content(file:String):String
 	return FileSystem.exists(file) ? File.getContent(file) : "";
 
-function lastLine(text:String):String {
+function lastLines(text:String, count:Int):String {
 	var lines = StringTools.replace(text, "\r\n", "\n").split("\n");
-	return lines[lines.length - 1];
+	return lines.slice(Std.int(Math.max(0, lines.length - count))).join("\n");
 }
 
 function trimEnd(text:String):String {
