@@ -4,8 +4,8 @@ import compiler.query.QueryErrors.QueryCycle;
 import compiler.query.QueryErrors.QueryReuseMismatch;
 
 /**
- * A recorded read: a kind's index and a key in one Int, so that a memo's reads are one array of Ints. A kind registered first has
- * index 0, so its reads are its keys.
+ * A recorded read: a kind's index and a key in one Int (of a computed kind, the key's slot, `ComputedQueryKind.slotOf`), so that a
+ * memo's reads are one array of Ints. A kind registered first has index 0, so its reads are its keys.
  */
 class QueryRead {
 	public static inline final KEY_BITS = 24;
@@ -46,9 +46,9 @@ class QueryKindBase {
 	var recordedBy:Array<Int> = [];
 
 	/**
-	 * For a kind that keeps its memos in columns (`ComputedQueryKind`), by key: the revision its memo was last verified at (0 for
-	 * none) and the revision it last changed at. A verification reads a key verified in its revision here without a call (most
-	 * reads are of such keys); other kinds leave them empty.
+	 * For a kind that keeps its memos in columns (`ComputedQueryKind`, `IrStageFacts`), by the key a read of it records (`readOf`):
+	 * the revision its memo was last verified at (0 for none) and the revision it last changed at. A verification reads a key
+	 * verified in its revision here without a call (most reads are of such keys); other kinds leave them empty.
 	 */
 	var verifiedAt:Array<Int> = [];
 
@@ -79,6 +79,10 @@ class QueryKindBase {
 	public inline function changeIfVerified(key:Int, revision:Int):Int
 		return settled ? (key < changes.length ? changes[key] : 0) : (key < verifiedAt.length
 			&& verifiedAt[key] == revision ? changes[key] : -1);
+
+	/** The key a read of `key` records, which `changeIfVerified` and `changedAt` take; -1 when `key` has no memo. */
+	public function readOf(key:Int):Int
+		return key;
 
 	/** The revision at which `key`'s value last changed, bringing it up to date first. */
 	public function changedAt(database:QueryDatabase, key:Int):Int

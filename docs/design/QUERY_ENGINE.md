@@ -832,6 +832,65 @@ fresh ones with and without `--check-reuse`, the edit replay and the test driver
 
 Left for slice 4: the fixpoints' candidacy reads and the contribution memos above, should a later profile make them worth it.
 
+### Columns by slot
+
+The engine's per-key columns cost what the kinds hold, not the key space (slices 3 and 4 had added about 18 MB to the live data of
+a UI app's compile server, columns of about 40 stage kinds as long as the numbers of function names, many of them sparse).
+
+- **A slot per key.** A `ComputedQueryKind` gives a key a slot the first time it is asked for (`slotFor`) and gives it back when
+  its memo is dropped: its columns (the value, the revisions it was verified, changed and computed at, where its reads start, its
+  key) are by slot, and only the slot is by key. A read of the kind records the slot, so a verification reads a key verified in
+  the revision inline as before; a memo that read a key whose slot went to another key reads that key's change, made after it was
+  verified, and does not hold. The stage driver looks a function's slot up once per stage and runs on it (`current`, `hold`,
+  `value`, `begin`, `end` take slots); a stage reserves its functions' slots before it asks for them, so the columns are as long
+  as the functions it runs on. `IrStageQueries`' columns are by the same slots, and those most stages leave empty (summaries,
+  visits, requests) stay empty until a slot has one.
+- **Fewer columns.** The busy marks are gone: a key being computed or verified is one with a frame on the database's stack (a
+  verification that needs a call enters one, as `QueryKind`'s does). A memo's reads are one run in the pool after their count,
+  and a memo that read nothing points at the empty run. A walk keeps one mark per function for the reads it records, and tells
+  the functions the program lost from the old and new orders, not from a stamp per function.
+- **Shared kinds in maps.** The kinds of the few functions each stage derives, adds or settles (`ir-derived`, `ir-added`,
+  `ir-settled`) key a stage's functions by a map (`IrStageQueries.sharedKey`), not by an array as long as the names.
+- **One empty contribution.** A function that names nothing contributes the summary's one empty array.
+
+Not done, with the reasons:
+
+- **The stage kinds keep a slot map, not a shared one.** Their functions are most of the program's, so a map shared by the
+  stages would save its 4 bytes per name per stage, at the cost of every stage's columns as long as the union of what they hold
+  and slots that no stage can give back alone.
+- **Revisions stay Ints.** A session's revisions are not bounded: a narrower column would wrap within a long session. The
+  column that tells rollbacks what was computed after a commit stays too: without it, a rollback would drop every memo
+  verified since, which is every stage memo of the build a rejected publication undid.
+
+Measured, a heap census of the UI app's live session (perf-guard's growth session, at the last build's write, one machine,
+against origin/main): live data 468.8 → 458.0 MB (−10.8 MB), by owner:
+
+| Owner | Before | After |
+|---|---|---|
+| `ComputedQueryKind<IrFunction>` | 11.5 MB | 9.1 MB |
+| `IrStageQueries` | 6.6 MB | 2.8 MB |
+| `IrWalkMemo` | 4.9 MB | 3.6 MB |
+| `QuerySummary` | 3.4 MB | 1.3 MB |
+| the other computed kinds (initializer inputs, static references, calls, type mentions) | 2.0 MB | 1.0 MB |
+
+What is left is about 32 bytes per function and stage kind (the value, four revisions or positions, the key and the input
+version) and the walks' columns by function. On the compiler's own sources (perf-guard): the server's live data 802.6 → 790.0 MB,
+the no-op rebuild 0.786G → 0.784G instructions, the body edit 2.146G → 2.122G (−1.1%), the signature edit 18.00G → 17.95G; the cold
+self-compile allocates 2,659 → 2,604 MB. A cold small-project build allocates 70.95 → 69.32 MB on the VM and 44.53 → 42.62 MB ahead
+of time (the columns are reserved once, not grown by half again). The stage benchmark, instructions per function and stage of a
+warm build:
+
+| Case | Before | After |
+|---|---|---|
+| held, no facts | 360 | 354 |
+| held, 1 fact | 393 | 385 |
+| held, 3 facts | 394 | 385 |
+| cutoff | 2,949 | 2,970 |
+
+The cutoff case costs 0.7% more, not traced further (a frame scan in place of the busy column was most of it before it was
+inlined). The self-compile is
+byte-identical, warm builds equal fresh ones with and without `--check-reuse`, the edit replay and the test driver pass.
+
 ## Prior art
 
 - salsa (rust-analyzer): revisions, red-green verification, early cutoff, durability.

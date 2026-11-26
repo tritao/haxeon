@@ -77,15 +77,16 @@ class IrFunctionStages {
 			kind = stage.functions,
 			checks = memos.checks,
 			partKeys = part == null ? null : stage.part(part),
-			keys:Array<Int> = [];
+			slots:Array<Int> = [];
 		var facts = memos.stageFacts, space = facts.run(database, partName(name, part), pass);
-		keys.resize(count);
+		slots.resize(count);
+		kind.reserve(count, partKeys == null ? IrSymbol.functionKeysGiven() : 0);
 		for (index in 0...count) {
 			var fn = functions[index],
-				key = partKeys == null ? fn.symbol.functionKey() : stage.partKey(partKeys,
-					fn.symbol.functionKey());
-			keys[index] = key;
-			summaries[index] = stage.summary(key, fn, pass, checks, name);
+				slot = kind.slotFor(partKeys == null ? fn.symbol.functionKey() : stage.partKey(partKeys,
+					fn.symbol.functionKey()));
+			slots[index] = slot;
+			summaries[index] = stage.summary(slot, fn, pass, checks, name);
 		}
 		pass.prepare(functions, summaries, new IrFunctionIndex(name, functions));
 		// A held key whose memo was verified in the stage's last run and read no fact that changed since is taken without verifying
@@ -98,29 +99,30 @@ class IrFunctionStages {
 			run = facts.runOf(space);
 		output.resize(count);
 		for (index in 0...count) {
-			var fn = functions[index], key = keys[index], same = stage.madeFrom(key, fn.version);
-			if (same && previous != 0 && kind.verifiedIn(key) == previous && stage.unchanged(key, run))
-				kind.hold(database, key);
-			else if (!same || !kind.current(database, key))
+			var fn = functions[index], slot = slots[index], same = stage.madeFrom(slot, fn.version);
+			if (same && previous != 0 && kind.verifiedIn(slot) == previous && stage.unchanged(slot, run))
+				kind.hold(database, slot);
+			else if (!same || !kind.current(database, slot))
 				same = false;
 			if (same) {
-				output[index] = kind.value(key);
-				stage.replay(key, pass);
+				output[index] = kind.value(slot);
+				stage.replay(slot, pass);
 				if (checks)
-					check(name, pass, reader, stage, key, fn, summaries[index], database);
+					check(name, pass, reader, stage, slot, fn, summaries[index], database);
 				continue;
 			}
-			kind.begin(database, key);
+			kind.begin(database, slot);
 			reader.begin(false);
 			var made = pass.transform(fn, summaries[index], reader);
 			if (made != fn && bodies && made.body != null)
 				made.freezeBody(builder);
 			// Only what the stage makes again of the same input is compared with what it made before: of another input it is all
 			// but never the same.
-			output[index] = stage.madeFrom(key, fn.version) ? kind.end(database, key, made) : kind.endChanged(database,
-				key, made);
-			stage.made(key, fn.version, summaries[index], reader.requests());
-			stage.readersOf(key, facts);
+			output[index] = stage.madeFrom(slot, fn.version)
+				? kind.end(database, slot, made)
+				: kind.endChanged(database, slot, made);
+			stage.made(slot, fn.version, summaries[index], reader.requests());
+			stage.readersOf(slot, facts);
 		}
 		var result = pass.finish(output);
 		// What `finish` added before the encode point (the helpers the rewrites asked for) is last build's when made the same. What
@@ -132,8 +134,8 @@ class IrFunctionStages {
 				if (fn.version > since && (index >= count || output[index] != fn) && !stage.keeps(partKeys, fn)) {
 					if (added == null)
 						added = memos.stage(ADDED, false);
-					result[index] = added.functions.put(database, added.partKey(added.part(partName(name, part)),
-						fn.symbol.functionKey()), fn);
+					var key = added.sharedKey(partName(name, part), fn.symbol.functionKey());
+					result[index] = added.functions.put(database, key, fn);
 				}
 			}
 		}
@@ -172,23 +174,23 @@ class IrFunctionStages {
 			queries = memos.stage(bodies ? DERIVED_BODIES : DERIVED, bodies),
 			kind = queries.functions,
 			reader = new IrFactReader(pass, memos.stageFacts, database),
-			key = queries.partKey(queries.part(partName(stage, part)), IrSymbol.of(name).functionKey());
-		var same = queries.madeFrom(key, input);
-		if (same && kind.current(database, key)) {
-			var kept = kind.value(key);
-			queries.replay(key, pass);
+			slot = kind.slotFor(queries.sharedKey(partName(stage, part), IrSymbol.of(name).functionKey()));
+		var same = queries.madeFrom(slot, input);
+		if (same && kind.current(database, slot)) {
+			var kept = kind.value(slot);
+			queries.replay(slot, pass);
 			if (memos.checks) {
-				kind.begin(database, key);
+				kind.begin(database, slot);
 				reader.begin(true);
 				var now = make(reader);
-				kind.cancel(database, key);
+				kind.cancel(database, slot);
 				if (!IrFunctionStateEquality.same(now, kept)
-					|| !IrFunctionPass.IrStageRequest.same(reader.requests(), queries.asked(key)))
+					|| !IrFunctionPass.IrStageRequest.same(reader.requests(), queries.asked(slot)))
 					throw new InternalError('--check-reuse: stage $stage reused $name, which differs from what it makes now');
 			}
 			return kept;
 		}
-		kind.begin(database, key);
+		kind.begin(database, slot);
 		reader.begin(false);
 		var made = make(reader);
 		// What the memo keeps is frozen, so the stages after this one edit copies.
@@ -196,8 +198,8 @@ class IrFunctionStages {
 			made.encodedBody(builder);
 			made.freezeBody(builder);
 		}
-		var kept = same ? kind.end(database, key, made) : kind.endChanged(database, key, made);
-		queries.made(key, input, 0, reader.requests());
+		var kept = same ? kind.end(database, slot, made) : kind.endChanged(database, slot, made);
+		queries.made(slot, input, 0, reader.requests());
 		return kept;
 	}
 
@@ -205,17 +207,17 @@ class IrFunctionStages {
 	static inline function partName(stage:String, part:Null<String>):String
 		return part == null ? stage : stage + ":" + part;
 
-	/** `--check-reuse`: the memo of `key`, reused for `fn`, is what the stage makes of it now. */
-	static function check(name:String, pass:IrFunctionPass, reader:IrFactReader, stage:IrStageQueries, key:Int,
+	/** `--check-reuse`: the memo in `slot`, reused for `fn`, is what the stage makes of it now. */
+	static function check(name:String, pass:IrFunctionPass, reader:IrFactReader, stage:IrStageQueries, slot:Int,
 			fn:IrFunction, summary:Int, database:compiler.query.QueryDatabase):Void {
 		var kind = stage.functions;
-		kind.begin(database, key);
+		kind.begin(database, slot);
 		reader.begin(true);
 		var made = pass.transform(fn, summary, reader);
-		kind.cancel(database, key);
-		if (!IrFunctionStateEquality.same(made, kind.value(key)))
+		kind.cancel(database, slot);
+		if (!IrFunctionStateEquality.same(made, kind.value(slot)))
 			throw new InternalError('--check-reuse: stage $name reused what it made of ${fn.name}, which differs from what it makes now');
-		if (!IrFunctionPass.IrStageRequest.same(reader.requests(), stage.asked(key)))
+		if (!IrFunctionPass.IrStageRequest.same(reader.requests(), stage.asked(slot)))
 			throw new InternalError('--check-reuse: stage $name reused the helper requests of ${fn.name}, which differ from what it asks for now');
 	}
 }

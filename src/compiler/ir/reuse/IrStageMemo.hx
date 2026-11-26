@@ -196,11 +196,11 @@ class IrStageMemos {
 	 * after it find the object they made their memos from. `functions` is changed in place.
 	 */
 	public function settle(name:String, functions:Array<IrFunction>, since:Int):Void {
-		var settled = stage(SETTLED, false), kind = settled.functions, keys = settled.part(name);
+		var settled = stage(SETTLED, false), kind = settled.functions;
 		for (index in 0...functions.length) {
 			var fn = functions[index];
 			if (fn.version > since) {
-				var kept = kind.put(database, settled.partKey(keys, fn.symbol.functionKey()), fn);
+				var kept = kind.put(database, settled.sharedKey(name, fn.symbol.functionKey()), fn);
 				if (kept != fn)
 					functions[index] = kept;
 			}
@@ -347,30 +347,32 @@ class IrStageMemos {
 }
 
 /**
- * What one per-function stage made of each function, by its name's number (`IrSymbol.functionKey`, `IrFunctionStages.run`): the memo of the rewrite,
- * a kind of the session's database whose reads are the facts it read (`IrStageFacts`); the version of the function it was made
- * from (`IrFunction.version`), so a memo holds only while the stage is given that same object; the stage's summary of it; and the
- * helpers the rewrite asked for.
+ * What one per-function stage made of each function, by its name's number (`IrSymbol.functionKey`, `IrFunctionStages.run`): the
+ * memo of the rewrite, a kind of the session's database whose reads are the facts it read (`IrStageFacts`); the version of the
+ * function it was made from (`IrFunction.version`), so a memo holds only while the stage is given that same object; the stage's
+ * summary of it; and the helpers the rewrite asked for. Like the kind's own, the columns are by the kind's slot of the key
+ * (`ComputedQueryKind.slotOf`) and as long as its, and those most stages leave empty (the summaries, the visits, the requests) are
+ * empty until a slot has one.
  */
 @:nullSafety(Strict)
 class IrStageQueries {
 	public final functions:compiler.query.ComputedQueryKind<IrFunction>;
 
-	/** By key, the version of the function the memo was made from, `FROM_NAME` for a helper made from its name; 0 for none. */
+	/** By slot, the version of the function the memo was made from, `FROM_NAME` for a helper made from its name; 0 for none. */
 	var inputs:Array<Int> = [];
 
-	/** By key, the stage's summary of the function the memo was made from. */
+	/** By slot, the stage's summary of the function the memo was made from, when it is not 0. */
 	var summaries:Array<Int> = [];
 
-	/** By key, whether the rewrite asked for helpers, which `requests` holds; as long as the last key that did. */
+	/** By slot, whether the rewrite asked for helpers, which `requests` holds. */
 	var asks:Array<Int> = [];
 
 	var requests:Map<Int, Array<IrStageRequest>> = [];
 
 	/**
-	 * By key, the run of the stage that found a fact its memo read changed (`IrStageFacts.markReaders`), or `ALWAYS` for a memo that
-	 * read more than facts: such a key is verified when the stage runs; any other whose memo was verified in the stage's last run
-	 * is taken as it is (`unchanged`), so a held key costs no verification of each fact it read.
+	 * By slot, the run of the stage that found a fact its memo read changed (`IrStageFacts.markReaders`), or `ALWAYS` for a memo
+	 * that read more than facts: such a key is verified when the stage runs; any other whose memo was verified in the stage's last
+	 * run is taken as it is (`unchanged`), so a held key costs no verification of each fact it read.
 	 */
 	var visit:Array<Int> = [];
 
@@ -379,9 +381,12 @@ class IrStageQueries {
 	/**
 	 * A stage that runs once per part of the program (once per value array element type, `IrValueArrayProgramRewrite`) keys each
 	 * function of each part apart, so that one kind holds every part and the count of parts has no limit: by part, the key of each
-	 * function by its name's number, plus one (`partKey`); and by key, the name's number.
+	 * function by its name's number, plus one (`partKey`); and by key, the name's number. A kind the stages share, of the few
+	 * functions each derives or adds (`sharedKey`), keeps a part's keys in a map, not in an array as long as the names.
 	 */
 	final parts:Map<String, Array<Int>> = [];
+
+	final sharedParts:Map<String, Map<Int, Int>> = [];
 
 	var functionsByKey:Array<Int> = [];
 
@@ -411,6 +416,20 @@ class IrStageQueries {
 		return key;
 	}
 
+	/** The key of the function whose name's number is `named` in part `name` of a kind the stages share. */
+	public function sharedKey(name:String, named:Int):Int {
+		var keys = sharedParts.get(name);
+		if (keys == null)
+			sharedParts.set(name, keys = []);
+		var known = keys.get(named);
+		if (known != null)
+			return known;
+		var key = functionsByKey.length;
+		functionsByKey.push(named);
+		keys.set(named, key);
+		return key;
+	}
+
 	/** Whether `fn` is what the stage's memo holds for its name in the part whose keys are `keys` (`part`), or with no part. */
 	public function keeps(keys:Null<Array<Int>>, fn:IrFunction):Bool {
 		var named = fn.symbol.functionKey(), key = keys == null ? named : named < keys.length ? keys[named] - 1 : -1;
@@ -420,18 +439,18 @@ class IrStageQueries {
 	/** The input of a function made from nothing but its name, such as a helper its name describes (`made`). */
 	public static inline final FROM_NAME = -1;
 
-	/** Whether `key`'s memo was made from the input of version `input`: it holds while nothing it read changed (`current`). */
-	public inline function madeFrom(key:Int, input:Int):Bool
-		return key < inputs.length && inputs[key] == input && input != 0;
+	/** Whether the memo in `slot` was made from the input of version `input`: it holds while nothing it read changed (`current`). */
+	public inline function madeFrom(slot:Int, input:Int):Bool
+		return slot < inputs.length && inputs[slot] == input && input != 0;
 
 	/**
-	 * The stage's summary of `fn`, whose key is `key`: the one kept when the memo was made from `fn`, else `summarize`'s, which
+	 * The stage's summary of `fn`, whose slot is `slot`: the one kept when the memo was made from `fn`, else `summarize`'s, which
 	 * `made` keeps. With `checks` a kept one is compared with `summarize`'s.
 	 */
-	public function summary(key:Int, fn:IrFunction, pass:compiler.ir.pipeline.IrFunctionPass, checks:Bool,
+	public function summary(slot:Int, fn:IrFunction, pass:compiler.ir.pipeline.IrFunctionPass, checks:Bool,
 			stage:String):Int {
-		if (madeFrom(key, fn.version)) {
-			var kept = summaries[key];
+		if (madeFrom(slot, fn.version)) {
+			var kept = slot < summaries.length ? summaries[slot] : 0;
 			if (checks && pass.summarize(fn) != kept)
 				throw new compiler.core
 					.InternalError('--check-reuse: stage $stage reused the summary of ${fn.name}, which differs from what it summarizes now');
@@ -440,64 +459,74 @@ class IrStageQueries {
 		return pass.summarize(fn);
 	}
 
-	/** Records that `key`'s memo was made from the input of version `input`, summarized as `summary`, asking for `asked`. */
-	public function made(key:Int, input:Int, summary:Int, asked:Null<Array<IrStageRequest>>):Void {
-		if (key >= inputs.length) {
-			var length = key + 1 + (key >> 1);
-			compiler.query.QueryKind.QueryRead.extend(inputs, length);
-			compiler.query.QueryKind.QueryRead.extend(summaries, length);
-			compiler.query.QueryKind.QueryRead.extend(visit, length);
-		}
-		inputs[key] = input;
-		summaries[key] = summary;
+	/** Records that the memo in `slot` was made from the input of version `input`, summarized as `summary`, asking for `asked`. */
+	public function made(slot:Int, input:Int, summary:Int, asked:Null<Array<IrStageRequest>>):Void {
+		if (slot >= inputs.length)
+			compiler.query.QueryKind.QueryRead.extend(inputs, functions.capacity());
+		inputs[slot] = input;
+		if (summary != 0) {
+			if (slot >= summaries.length)
+				compiler.query.QueryKind.QueryRead.extend(summaries, functions.capacity());
+			summaries[slot] = summary;
+		} else if (slot < summaries.length)
+			summaries[slot] = 0;
 		if (asked != null) {
-			if (key >= asks.length)
-				compiler.query.QueryKind.QueryRead.extend(asks, key + 1 + (key >> 1));
-			asks[key] = 1;
-			requests.set(key, asked);
-		} else if (key < asks.length && asks[key] != 0) {
-			asks[key] = 0;
-			requests.remove(key);
+			if (slot >= asks.length)
+				compiler.query.QueryKind.QueryRead.extend(asks, functions.capacity());
+			asks[slot] = 1;
+			requests.set(slot, asked);
+		} else if (slot < asks.length && asks[slot] != 0) {
+			asks[slot] = 0;
+			requests.remove(slot);
 		}
 	}
 
-	/** Marks `key` as one whose memo read a fact that changed in `run` (`IrStageFacts.markReaders`). */
-	public inline function changed(key:Int, run:Int):Void
-		if (key < visit.length && visit[key] != ALWAYS)
-			visit[key] = run;
+	/** Marks the memo in `slot` as one that read a fact that changed in `run` (`IrStageFacts.markReaders`). */
+	public inline function changed(slot:Int, run:Int):Void
+		if (slot >= visit.length || visit[slot] != ALWAYS)
+			mark(slot, run);
 
-	/** Whether no fact `key`'s memo read changed in `run`, and it read nothing else. */
-	public inline function unchanged(key:Int, run:Int):Bool
-		return key < visit.length && visit[key] != run && visit[key] != ALWAYS;
+	/** Whether no fact the memo in `slot` read changed in `run`, and it read nothing else. */
+	public inline function unchanged(slot:Int, run:Int):Bool
+		return slot >= visit.length || visit[slot] != run && visit[slot] != ALWAYS;
 
-	/** Records, of `key`'s memo just computed (`made`), that it read each fact it read (`IrStageFacts.addReader`). */
-	public function readersOf(key:Int, facts:IrStageFacts):Void {
+	function mark(slot:Int, run:Int):Void {
+		if (slot >= visit.length)
+			compiler.query.QueryKind.QueryRead.extend(visit, functions.capacity());
+		visit[slot] = run;
+	}
+
+	/** Records, of the memo in `slot` just computed (`made`), that it read each fact it read (`IrStageFacts.addReader`). */
+	public function readersOf(slot:Int, facts:IrStageFacts):Void {
 		var kind = functions, only = true, index = facts.index;
-		for (position in 0...kind.readsMade(key)) {
-			var read = kind.readMade(key, position);
+		for (position in 0...kind.readsMade(slot)) {
+			var read = kind.readMade(slot, position);
 			if (compiler.query.QueryKind.QueryRead.kind(read) == index)
-				facts.addReader(compiler.query.QueryKind.QueryRead.key(read), key);
+				facts.addReader(compiler.query.QueryKind.QueryRead.key(read), slot);
 			else
 				only = false;
 		}
-		visit[key] = only ? 0 : ALWAYS;
+		if (!only)
+			mark(slot, ALWAYS);
+		else if (slot < visit.length)
+			visit[slot] = 0;
 	}
 
-	/** Asks `pass` again for the helpers `key`'s memo asked for, in order. */
-	public inline function replay(key:Int, pass:compiler.ir.pipeline.IrFunctionPass):Void
-		if (key < asks.length && asks[key] != 0)
-			replayAt(key, pass);
+	/** Asks `pass` again for the helpers the memo in `slot` asked for, in order. */
+	public inline function replay(slot:Int, pass:compiler.ir.pipeline.IrFunctionPass):Void
+		if (slot < asks.length && asks[slot] != 0)
+			replayAt(slot, pass);
 
-	function replayAt(key:Int, pass:compiler.ir.pipeline.IrFunctionPass):Void {
-		var asked = requests.get(key);
+	function replayAt(slot:Int, pass:compiler.ir.pipeline.IrFunctionPass):Void {
+		var asked = requests.get(slot);
 		if (asked != null)
 			for (request in asked)
 				pass.request(request.kind, request.type, request.name);
 	}
 
-	/** The helpers `key`'s memo asked for, or null. */
-	public function asked(key:Int):Null<Array<IrStageRequest>>
-		return key < asks.length && asks[key] != 0 ? requests.get(key) : null;
+	/** The helpers the memo in `slot` asked for, or null. */
+	public function asked(slot:Int):Null<Array<IrStageRequest>>
+		return slot < asks.length && asks[slot] != 0 ? requests.get(slot) : null;
 
 	/** Lets go of every memo (`IrStageMemos.clear`). */
 	public function clear():Void {
@@ -508,6 +537,7 @@ class IrStageQueries {
 		asks = [];
 		requests = [];
 		parts.clear();
+		sharedParts.clear();
 		functionsByKey = [];
 	}
 }
@@ -527,6 +557,9 @@ class IrContributionSummary<T> {
 	final ids:Map<String, Int> = [];
 
 	final items:Array<T> = [];
+
+	/** The contribution of every function that names nothing, most of them: one array, not one each. */
+	final none:Array<Int> = [];
 
 	public function new(keys:compiler.query.QuerySummary)
 		this.keys = keys;
@@ -556,7 +589,7 @@ class IrContributionSummary<T> {
 	}
 
 	function keysOf(named:Array<T>, text:T->String):Array<Int>
-		return [for (item in named) {
+		return named.length == 0 ? none : [for (item in named) {
 			var identity = text(item), known = ids.get(identity);
 			if (known == null) {
 				known = items.length;

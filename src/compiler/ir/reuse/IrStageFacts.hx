@@ -52,10 +52,10 @@ class IrStageFacts extends QueryKindBase {
 	final spaceFacts:Array<Array<Int>> = [];
 
 	/**
-	 * By fact, the keys of its stage's kind whose memos read it (`addReader`): a list of edges from `readerHead` (the edge plus one,
+	 * By fact, the slots of its stage's kind whose memos read it (`addReader`): a list of edges from `readerHead` (the edge plus one,
 	 * 0 for none) through `edgeNext`. A run that finds the fact changed marks them (`markReaders`) and drops the list, which the
 	 * keys computed again give again; a reader computed again while the fact held adds its edge again, so the lists are compacted,
-	 * without repeats and without keys whose memo is gone, once they outgrow what they held after the last compaction.
+	 * without repeats and without slots whose memo is gone, once they outgrow what they held after the last compaction.
 	 */
 	final readerHead:Array<Int> = [];
 
@@ -197,12 +197,12 @@ class IrStageFacts extends QueryKindBase {
 	public inline function runOf(space:Int):Int
 		return runs[space];
 
-	/** Records that the memo of `key` in the kind of the stage whose space has fact `id` read it (`markReaders`). */
-	public function addReader(id:Int, key:Int):Void {
+	/** Records that the memo in `slot` of the kind of the stage whose space has fact `id` read it (`markReaders`). */
+	public function addReader(id:Int, slot:Int):Void {
 		var head = readerHead[id];
-		if (head != 0 && edgeReader[head - 1] == key)
+		if (head != 0 && edgeReader[head - 1] == slot)
 			return;
-		edgeReader.push(key);
+		edgeReader.push(slot);
 		edgeNext.push(head - 1);
 		readerHead[id] = edgeReader.length;
 	}
@@ -238,12 +238,12 @@ class IrStageFacts extends QueryKindBase {
 		for (id in 0...readerHead.length) {
 			var edge = readerHead[id] - 1, head = 0, space = spaceOf[id], stage = space < 0 ? null : readerKinds[space];
 			while (edge >= 0) {
-				var key = edgeReader[edge];
-				if (key >= seen.length)
-					QueryRead.extend(seen, key + 1 + (key >> 1));
-				if (seen[key] != id + 1 && stage != null && stage.functions.verifiedIn(key) != 0) {
-					seen[key] = id + 1;
-					readers.push(key);
+				var slot = edgeReader[edge];
+				if (slot >= seen.length)
+					QueryRead.extend(seen, slot + 1 + (slot >> 1));
+				if (seen[slot] != id + 1 && stage != null && stage.functions.verifiedIn(slot) != 0) {
+					seen[slot] = id + 1;
+					readers.push(slot);
 					next.push(head - 1);
 					head = readers.length;
 				}

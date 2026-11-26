@@ -25,7 +25,7 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 	var given:Array<String> = [];
 	var givenTypes:Array<Int> = [];
 
-	/** The keys of the functions in their order, and by key the function settled last and its summary. */
+	/** The keys of the functions in their order, and by key the function settled last and its summary (none for a walk without). */
 	var order:Array<Int> = [];
 
 	var functions:Array<Null<IrFunction>> = [];
@@ -36,11 +36,6 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 
 	/** What reads a function's summary in the build under way (`settle`), for `--check-reuse`. */
 	var reader:Null<IrFunction->S> = null;
-
-	/** By key, the last settle that found the function: a function the program lost is let go. */
-	var seen:Array<Int> = [];
-
-	var settles = 0;
 
 	/** The memo: the result, the keys its walk read (key 0 first), and the revision it was last verified at. */
 	var result:Null<R> = null;
@@ -53,12 +48,10 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 	var checking = false;
 
 	/**
-	 * By key, the walk that last read the function's keys and which it read (1 its summary, 2 its signature), so a walk records
-	 * each read once.
+	 * By key, the walk that last read the function's keys, shifted left by two, and which it read (1 its summary, 2 its signature),
+	 * so a walk records each read once.
 	 */
-	var readWalk:Array<Int> = [];
-
-	var readIn:Array<Int> = [];
+	var readMarks:Array<Int> = [];
 
 	var walks = 0;
 
@@ -84,7 +77,6 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 			givenTypes:Array<Int>, read:Null<IrFunction->S>):Void {
 		// A memo verified in this revision is told apart from what changes now by a revision of its own.
 		var revision = verified == database.revision ? database.advance() : database.revision,
-			stamp = ++settles,
 			known = tables,
 			whole = false;
 		reader = read;
@@ -105,15 +97,14 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 			if (!whole && order[index] != key)
 				whole = true;
 			if (key >= kept.length) {
-				var length = key + 1 + (key >> 1);
+				// As long as the names numbered, with a little room: half again would leave a third of each column empty.
+				var named = compiler.ir.model.IrSymbol.functionKeysGiven(), length = named + (named >> 4);
 				kept.resize(length);
-				summaries.resize(length);
-				QueryRead.extend(seen, length);
-				QueryRead.extend(readIn, length);
-				QueryRead.extend(readWalk, length);
+				QueryRead.extend(readMarks, length);
 				QueryRead.extend(changes, 2 * length + 1);
 			}
-			seen[key] = stamp;
+			if (read != null && key >= summaries.length)
+				summaries.resize(kept.length);
 			var last = kept[key];
 			if (last == fn)
 				continue;
@@ -133,14 +124,25 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 		if (!whole)
 			return;
 		changes[0] = revision;
-		for (key in order)
-			if (seen[key] != stamp) {
-				kept[key] = null;
-				summaries[key] = null;
-				changes[2 * key + 1] = revision;
-				changes[2 * key + 2] = revision;
-			}
-		this.order = [for (fn in functions) fn.symbol.functionKey()];
+		var now = [for (fn in functions) fn.symbol.functionKey()];
+		// A function the program lost, in the old order and not in the new one, is let go.
+		if (order.length > 0) {
+			var lost:Array<Int> = [];
+			QueryRead.extend(lost, kept.length);
+			for (key in order)
+				lost[key] = 1;
+			for (key in now)
+				lost[key] = 0;
+			for (key in order)
+				if (lost[key] != 0) {
+					kept[key] = null;
+					if (key < summaries.length)
+						summaries[key] = null;
+					changes[2 * key + 1] = revision;
+					changes[2 * key + 2] = revision;
+				}
+		}
+		this.order = now;
 	}
 
 	/**
@@ -192,17 +194,17 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 
 	/** The summary this walk settled for `fn`, whose key is `key`, when it settled that object, else null. */
 	public function settledSummary(key:Int, fn:IrFunction):Null<S>
-		return key < functions.length && functions[key] == fn ? summaries[key] : null;
+		return key < summaries.length && functions[key] == fn ? summaries[key] : null;
 
 	/** The summary of `fn`, one of the functions settled, recorded as a read of the walk under way. */
 	public function summary(fn:IrFunction):S {
-		var key = settledKey(fn, "summary"), known = summaries[key], read = reader;
+		var key = settledKey(fn, "summary"), known = key < summaries.length ? summaries[key] : null, read = reader;
 		if (known == null)
 			throw new InternalError('the walk $kindName reads the summary of ${fn.name}, which it settled without one');
 		if (checking && read != null && !same(known, read(fn)))
 			throw new InternalError('--check-reuse: the walk $kindName reused a summary of ${fn.name} that differs from its instructions');
-		if (recording && readIn[key] & 1 == 0) {
-			readIn[key] |= 1;
+		if (recording && readMarks[key] & 1 == 0) {
+			readMarks[key] |= 1;
 			reads.push(2 * key + 1);
 		}
 		return known;
@@ -211,8 +213,8 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 	/** Records that the walk under way reads the types of the arguments and result of `fn`, one of the functions settled. */
 	public function signature(fn:IrFunction):Void {
 		var key = settledKey(fn, "signature");
-		if (recording && readIn[key] & 2 == 0) {
-			readIn[key] |= 2;
+		if (recording && readMarks[key] & 2 == 0) {
+			readMarks[key] |= 2;
 			reads.push(2 * key + 2);
 		}
 	}
@@ -222,10 +224,8 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 		var key = fn.symbol.functionKey();
 		if (key >= functions.length || functions[key] != fn)
 			throw new InternalError('the walk $kindName reads the $what of ${fn.name}, which it did not settle');
-		if (recording && readWalk[key] != walks) {
-			readWalk[key] = walks;
-			readIn[key] = 0;
-		}
+		if (recording && readMarks[key] >> 2 != walks)
+			readMarks[key] = walks << 2;
 		return key;
 	}
 
@@ -243,9 +243,7 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 		order = [];
 		functions = [];
 		summaries = [];
-		seen = [];
-		readIn = [];
-		readWalk = [];
+		readMarks = [];
 		result = null;
 		reader = null;
 		reads.resize(0);

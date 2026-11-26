@@ -187,6 +187,7 @@ class QueryEngineMain {
 		summaries();
 		heldContributions();
 		computedSweep();
+		computedSlots();
 		computedTransactions();
 		putKinds();
 
@@ -440,16 +441,18 @@ class QueryEngineMain {
 			return new Box(first.get(db, key).value + 1);
 		}
 		function stage(kind:ComputedQueryKind<Box>, count:Int, transform:(QueryDatabase, Int) -> Box):Array<Box>
-			return [for (key in 0...count)
-				if (kind.current(database, key)) {
+			return [for (key in 0...count) {
+				var slot = kind.slotFor(key);
+				if (kind.current(database, slot)) {
 					if (database.checkReuse) {
-						kind.begin(database, key);
-						kind.check(database, key, transform(database, key));
+						kind.begin(database, slot);
+						kind.check(database, slot, transform(database, key));
 					}
-					kind.value(key);
+					kind.value(slot);
 				} else {
-				kind.begin(database, key);
-				kind.end(database, key, transform(database, key));
+					kind.begin(database, slot);
+					kind.end(database, slot, transform(database, key));
+				}
 			}];
 		function build(values:Array<Int>):Array<Box> {
 			database.newRevision();
@@ -472,18 +475,21 @@ class QueryEngineMain {
 
 		database.newRevision();
 		database.set(functions, 0, 9);
-		expect(!second.current(database, 0), "a read its stage has not brought up to date counts as changed");
-		expect(second.current(database, 1), "a read its stage would keep holds");
+		expect(!second.current(database, second.slotOf(0)),
+			"a read its stage has not brought up to date counts as changed");
+		expect(second.current(database, second.slotOf(1)), "a read its stage would keep holds");
+		expect(!second.current(database, second.slotOf(7)), "a key without a memo does not hold");
 		expect(throwsInternal(() -> first.get(database, 0)), "reading what its stage has not computed is an error");
-		expect(throwsInternal(() -> first.end(database, 0, new Box(9))), "ending what was not begun is an error");
-		first.begin(database, 0);
+		var slot = first.slotOf(0);
+		expect(throwsInternal(() -> first.end(database, slot, new Box(9))), "ending what was not begun is an error");
+		first.begin(database, slot);
 		var cycle = false;
 		try
-			first.begin(database, 0)
+			first.begin(database, slot)
 		catch (_:QueryCycle)
 			cycle = true;
 		expect(cycle, "beginning a key being computed is a cycle");
-		first.end(database, 0, new Box(9));
+		first.end(database, slot, new Box(9));
 		expect(first.get(database, 0).value == 9, "a computed key is read back");
 
 		var checked = new QueryDatabase(true);
@@ -539,7 +545,7 @@ class QueryEngineMain {
 			whole.get(database, 0);
 		}
 		function present():String
-			return [for (key in 0...4) reader.value(key).value].join("");
+			return [for (key in 0...4) reader.value(reader.slotOf(key)).value].join("");
 		build([1, 2, 1]);
 		expect(summary.replaced == 3 && present() == "1100" && keyRuns.join("") == "1111" && wholeRuns == 1,
 			"a first run");
@@ -605,26 +611,28 @@ class QueryEngineMain {
 					summary.contribute(database, key, [inputs.get(database, key).value]);
 				}
 			summary.close(database);
-			for (key in 0...values.length)
-				if (!rewrites.current(database, key)) {
-					rewrites.begin(database, key);
+			for (key in 0...values.length) {
+				var slot = rewrites.slotFor(key);
+				if (!rewrites.current(database, slot)) {
+					rewrites.begin(database, slot);
 					var value = inputs.get(database, key).value;
 					rewritten++;
-					rewrites.end(database, key, new Box(summary.has(database, value + 1) ? 1 : 0));
+					rewrites.end(database, slot, new Box(summary.has(database, value + 1) ? 1 : 0));
 				}
+			}
 		}
 		build([1, 2, 5]);
 		expect(made == 3 && rewritten == 3, "a first run makes every contribution");
 		build([1, 2, 5]);
 		expect(made == 3 && rewritten == 3, "an input put again equal keeps its contribution, and its rewrite holds");
 		build([1, 3, 5]);
-		expect(made == 4 && rewritten == 5 && rewrites.value(0).value == 0,
+		expect(made == 4 && rewritten == 5 && rewrites.value(rewrites.slotOf(0)).value == 0,
 			"a changed input makes its contribution again; the rewrites reading a key it no longer names run again");
 		build([1, 3]);
 		expect(made == 4 && summary.has(database, 3) && !summary.has(database, 5),
 			"a contributor neither kept nor given is retracted");
 		build([1, 3, 2]);
-		expect(made == 5 && rewritten == 7 && rewrites.value(0).value == 1,
+		expect(made == 5 && rewritten == 7 && rewrites.value(rewrites.slotOf(0)).value == 1,
 			"one given again after it was retracted is made");
 
 		summary.open(database);
@@ -634,7 +642,7 @@ class QueryEngineMain {
 		summary.close(database);
 		database.newRevision();
 		summary.open(database);
-		expect(throwsInternal(() -> rewrites.current(database, 1)),
+		expect(throwsInternal(() -> rewrites.current(database, rewrites.slotOf(1))),
 			"a rewrite verified while its summary is open reads it through a call, which finds it open");
 		summary.close(database);
 		expect(throwsInternal(() -> summary.holds(database, 0, inputs)),
@@ -677,6 +685,38 @@ class QueryEngineMain {
 		expect(database.sweep() == 0, "a kind that gained no memo since its last sweep is left alone");
 		used.get(database, 1);
 		expect(database.computations == computations + 1, "so what it holds still holds");
+	}
+
+	/**
+	 * A computed kind's columns are by slot: a key dropped by a sweep gives its slot to the next new key, and a memo that read the
+	 * dropped key reads the new one's change, made after it was verified, so it does not hold.
+	 */
+	static function computedSlots():Void {
+		var database = new QueryDatabase();
+		var source = database.register(QueryKind.input("source", digestInt, sameInt));
+		var middle = database.register(new ComputedQueryKind<Box>("middle", Box.same,
+			(db, key) -> new Box(db.get(source, key))));
+		var runs = 0;
+		var reader = database.register(new ComputedQueryKind<Box>("reader", Box.same, function(db, key) {
+			runs++;
+			return new Box(middle.get(db, 1).value * 10);
+		}));
+		database.newRevision();
+		for (key in 0...6)
+			database.set(source, key, key);
+		middle.get(database, 0);
+		expect(reader.get(database, 0).value == 10 && runs == 1, "a first build computes the reader");
+		var dropped = middle.slotOf(1);
+		database.newRevision();
+		middle.get(database, 0);
+		expect(database.sweep() == 1 && middle.slotOf(1) < 0, "the key the build did not use is dropped with its slot");
+		database.newRevision();
+		middle.get(database, 5);
+		expect(middle.slotOf(5) == dropped, "a new key takes the slot given back");
+		expect(reader.get(database, 0).value == 10 && runs == 2,
+			"a memo that read the dropped key does not hold over the key its slot went to");
+		expect(middle.slotOf(1) >= 0 && middle.slotOf(1) != dropped && middle.get(database, 5).value == 5,
+			"the dropped key is computed again in a slot of its own");
 	}
 
 	/**

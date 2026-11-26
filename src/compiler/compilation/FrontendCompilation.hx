@@ -808,19 +808,19 @@ class FrontendCompilation {
 		var state = build.context.state,
 			queries = state.queries,
 			generation = state.irGeneration,
-			key = IrSymbol.of(IrProgramAssembler.anonymousStringName(anonymous.name)).id,
+			slot = generation.slotFor(IrSymbol.of(IrProgramAssembler.anonymousStringName(anonymous.name)).id),
 			object = IrSymbol.of(anonymous.name).id;
-		if (generation.current(queries, key)) {
+		if (generation.current(queries, slot)) {
 			if (queries.checkReuse) {
-				generation.begin(queries, key);
+				generation.begin(queries, slot);
 				state.irObjects.get(queries, object);
-				generation.check(queries, key, IrProgramAssembler.anonymousString(generator, anonymous));
+				generation.check(queries, slot, IrProgramAssembler.anonymousString(generator, anonymous));
 			}
-			return generation.value(key);
+			return generation.value(slot);
 		}
-		generation.begin(queries, key);
+		generation.begin(queries, slot);
 		state.irObjects.get(queries, object);
-		return generation.end(queries, key, IrProgramAssembler.anonymousString(generator, anonymous));
+		return generation.end(queries, slot, IrProgramAssembler.anonymousString(generator, anonymous));
 	}
 
 	/** What `fn` references for the static initialization order, kept by the session while `fn` is the same. */
@@ -845,19 +845,22 @@ class FrontendCompilation {
 	 */
 	static function bootFunction(state:SessionState, name:String, from:Array<compiler.types.TypedAst.TypedField>,
 			make:() -> IrFunction):IrFunction {
-		var queries = state.queries, generation = state.irGeneration, key = IrSymbol.of(name).id;
+		var queries = state.queries,
+			generation = state.irGeneration,
+			key = IrSymbol.of(name).id,
+			slot = generation.slotFor(key);
 		state.initializerInputs.put(queries, key, from);
-		if (generation.current(queries, key)) {
+		if (generation.current(queries, slot)) {
 			if (queries.checkReuse) {
-				generation.begin(queries, key);
+				generation.begin(queries, slot);
 				state.initializerInputs.get(queries, key);
-				generation.check(queries, key, make());
+				generation.check(queries, slot, make());
 			}
-			return generation.value(key);
+			return generation.value(slot);
 		}
-		generation.begin(queries, key);
+		generation.begin(queries, slot);
 		state.initializerInputs.get(queries, key);
-		return generation.end(queries, key, make());
+		return generation.end(queries, slot, make());
 	}
 
 	/**
@@ -1584,7 +1587,7 @@ class FrontendCompilation {
 				for (method in object.methods)
 					if (method.name == "__string"
 						&& method.functionName.name == IrProgramAssembler.anonymousStringName(object.name)) {
-						var printer = method.functionName.id;
+						var printer = generation.slotOf(method.functionName.id);
 						if (!generation.current(queries, printer))
 							throw new InternalError('Anonymous structure "${object.name}" has no generated __string');
 						build.cached.push(generation.value(printer));

@@ -104,9 +104,12 @@ class QuerySummary extends QueryKindBase {
 		var at = givenAt[contributor];
 		if (at == 0)
 			return false;
-		var change = input.changeIfVerified(contributor, database.revision);
+		var read = input.readOf(contributor);
+		if (read < 0)
+			return false;
+		var change = input.changeIfVerified(read, database.revision);
 		if (change < 0)
-			change = input.changedAt(database, contributor);
+			change = input.changedAt(database, read);
 		if (change > at)
 			return false;
 		markGiven(contributor);

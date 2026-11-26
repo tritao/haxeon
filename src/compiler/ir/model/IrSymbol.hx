@@ -111,6 +111,14 @@ class IrSymbol {
 		return symbol;
 	}
 
+	/** How many names of functions are numbered (`functionKey`): every number given so far is below it. */
+	public static function functionKeysGiven():Int {
+		lock.acquire();
+		var count = functionKeys;
+		lock.release();
+		return count;
+	}
+
 	/** The symbol whose `functionKey` is `key`. */
 	public static function ofFunctionKey(key:Int):IrSymbol
 		return byFunctionKey[key];

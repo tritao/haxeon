@@ -260,6 +260,15 @@ class QueryDatabase {
 		return top >= 0 && frames[top] == kind && frames[top + 1] == key && frames[top + 2] >= 0;
 	}
 
+	/** Whether (`kind`, `key`) is being computed or verified: a frame on the stack is its. */
+	@:allow(compiler.query)
+	inline function onStack(kind:Int, key:Int):Bool {
+		var frames = this.frames, top = frames.length - FRAME;
+		while (top >= 0 && (frames[top] != kind || frames[top + 1] != key))
+			top -= FRAME;
+		return top >= 0;
+	}
+
 	/** The queries from the first time (`kind`, `key`) is on the stack to the top, then (`kind`, `key`) again. */
 	@:allow(compiler.query)
 	function activePath(kind:Int, key:Int):Array<String> {

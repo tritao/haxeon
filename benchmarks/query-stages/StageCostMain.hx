@@ -134,12 +134,12 @@ class StageCostMain {
 				output = [];
 				output.resize(count);
 				for (index in 0...count) {
-					var key = keys[index];
-					if (kind.current(database, key)) {
-						output[index] = kind.value(key);
+					var key = keys[index], slot = kind.slotFor(key);
+					if (kind.current(database, slot)) {
+						output[index] = kind.value(slot);
 						continue;
 					}
-					kind.begin(database, key);
+					kind.begin(database, slot);
 					var fn = previous.get(database, key), sum = 0;
 					if (cutoff)
 						summary.has(database, flipKey);
@@ -147,7 +147,7 @@ class StageCostMain {
 						for (read in 0...reads)
 							if (summary.has(database, (index + read) % FACT_KEYS))
 								sum++;
-					output[index] = kind.end(database, key, cutoff ? fn.withBlocks(fn.blocks) : fn);
+					output[index] = kind.end(database, slot, cutoff ? fn.withBlocks(fn.blocks) : fn);
 				}
 				list = output;
 			}
@@ -181,21 +181,23 @@ class StageCostMain {
 					summary.contribute(database, keys[index], made[index]);
 				summary.close(database);
 				for (index in 0...count) {
-					var key = keys[index];
-					stage.begin(database, key);
+					var key = keys[index], slot = stage.slotFor(key);
+					stage.begin(database, slot);
 					var fn = generation.get(database, key);
 					if (reads > 0)
 						summary.has(database, index % FACT_KEYS);
-					stage.end(database, key, fn);
+					stage.end(database, slot, fn);
 				}
 				return;
 			}
 			switch access {
 				case "base":
 				case "current" | "current2":
-					for (index in 0...count)
-						if (!stage.current(database, keys[index]) || stage.value(keys[index]) == null)
+					for (index in 0...count) {
+						var slot = stage.slotOf(keys[index]);
+						if (!stage.current(database, slot) || stage.value(slot) == null)
 							throw "not held";
+					}
 				case "contribute":
 					summary.open(database);
 					for (index in 0...count)
@@ -209,9 +211,9 @@ class StageCostMain {
 					summary.close(database);
 				case "recompute":
 					for (index in 0...count) {
-						var key = keys[index];
-						stage.begin(database, key);
-						stage.end(database, key, generation.get(database, key));
+						var key = keys[index], slot = stage.slotOf(key);
+						stage.begin(database, slot);
+						stage.end(database, slot, generation.get(database, key));
 					}
 				case "has":
 					database.beginRecording();
