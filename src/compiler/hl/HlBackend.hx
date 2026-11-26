@@ -23,7 +23,8 @@ class HlBackend implements Backend {
 		// A standalone backend can receive semantic IR, without the frontend's lowering of array allocation.
 		program = compiler.ir.passes.arrays.IrArrayFactory.physical(program);
 		var assembly = HlPlainBuild.assemble(program, options.developmentMetadata != false, options.sources),
-			written = HlSectionWriter.write(assembly.module, [], new compiler.semantic.DeclarationOwners(), HlLz4.FAST);
+			written = HlSectionWriter.write(assembly.module, [], new compiler.semantic.DeclarationOwners(), HlLz4.FAST,
+				false, null, false);
 		// The loader numbers a module of sections itself.
 		var functionIndices:Map<String, Int> = [];
 		for (name => index in assembly.functionIndices)

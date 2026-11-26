@@ -307,16 +307,18 @@ class HashLinkBackendSession implements BackendSession {
 			sections:Null<haxeon.io.SegmentedBytes> = null,
 			sectionsEncoded:Null<String> = null;
 		if (!context.livePatching) {
-			// A plain build is written as module sections, which the loader links and numbers itself, and a function's stable id is its index there.
+			// A plain build is written as module sections, which the loader links and numbers itself, and a function's stable id is
+			// its index there. A compile that keeps no session memoizes no section for a next build.
 			var modules = [for (name => state in context.state.modules) name => state.source.contentHash()],
 				kept = candidateAssembler.loweredCache,
 				written = compiler.hl.HlSectionWriter.write(assembly.module, modules, context.state.declarationOwners,
-					compiler.hl.HlLz4.FAST, context.options.checkReuse, kept == null ? null : kept.sections);
+					compiler.hl.HlLz4.FAST, context.options.checkReuse, kept == null ? null : kept.sections,
+					context.options.keepSession);
 			if (kept != null)
 				kept.sections = written.cache;
 			if (freshModule != null) {
 				var afresh = compiler.hl.HlSectionWriter.write(freshModule, modules, context.state.declarationOwners,
-					compiler.hl.HlLz4.FAST);
+					compiler.hl.HlLz4.FAST, false, null, false);
 				if (!afresh.bytes.equals(written.bytes))
 					throw new InternalError('--check-reuse: the sections of a build with ${candidateAssembler.reusedFunctions} functions kept from the last build differ from the sections of one lowered afresh');
 			}

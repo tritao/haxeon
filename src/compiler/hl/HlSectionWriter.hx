@@ -101,15 +101,16 @@ class HlSectionWriter {
 	 * the module that declares each type: together they decide every home. `compression` is the LZ4 level of the sections
 	 * (HlLz4), or null to store them as they are; without the HashLink natives they are stored as they are. A section of
 	 * `previous` (the last build's) whose encoding would read the same is kept. `checkReuse` encodes the kept sections again to
-	 * check they are the same, and links the result as the loader does (`HlStaticLink`).
+	 * check they are the same, and links the result as the loader does (`HlStaticLink`). Without `memoize`, for a compile no
+	 * later build follows, the sections' reads are not taken and the cache returned keeps none.
 	 */
 	public static function write(code:HlCode, modules:Map<String, Int>, declarations:DeclarationOwners,
-			?compression:Int, checkReuse:Bool = false, ?previous:HlSectionCache):HlSectionOutput {
+			?compression:Int, checkReuse:Bool = false, ?previous:HlSectionCache, memoize:Bool = true):HlSectionOutput {
 		var writer = new HlSectionWriter(code, compression),
 			cache = HlSectionCache.following(previous, writer.format(), modules, declarations);
 		HlValidator.validate(code, cache.validation, checkReuse);
 		cache.validation.retainFunctions(code.functions);
-		var output = writer.encode(cache, modules, declarations, checkReuse);
+		var output = writer.encode(cache, modules, declarations, checkReuse, memoize);
 		if (checkReuse)
 			HlStaticLink.link(output.bytes.flatten());
 		return output;
@@ -843,7 +844,7 @@ class HlSectionWriter {
 	// ---- encoding
 
 	function encode(cache:HlSectionCache, modules:Map<String, Int>, declarations:DeclarationOwners,
-			checkReuse:Bool):HlSectionOutput {
+			checkReuse:Bool, memoize:Bool):HlSectionOutput {
 		assignHomes(cache, modules, declarations);
 		var ownedFunctions = [for (_ in paths)[]],
 			ownedGlobals = [for (_ in paths)[]],
@@ -884,11 +885,13 @@ class HlSectionWriter {
 				collect(id, owned, ownedGlobals[id], ownedTypes[id]);
 				settleIndices();
 				var own = new HlSectionReads(), named = new HlSectionReads();
-				readOwn(own, owned, snapshots[id]);
-				readNamed(named);
+				if (memoize) {
+					readOwn(own, owned, snapshots[id]);
+					readNamed(named);
+				}
 				// What reads the same encodes the same; encoded to the same bytes, it is the section kept all the same, so
 				// whatever holds it sees no change.
-				var bytes = kept != null && own.equals(kept.own, spans)
+				var bytes = memoize && kept != null && own.equals(kept.own, spans)
 					&& named.equals(kept.named, spans) ? kept.bytes : null;
 				if (bytes == null) {
 					bytes = sectionBytes(snapshots[id]);
@@ -909,7 +912,8 @@ class HlSectionWriter {
 					nativeOrder: tables.nativeOrder
 				}, bytes, same ? kept : null);
 			}
-			entries.set(paths[id], entry);
+			if (memoize)
+				entries.set(paths[id], entry);
 			written.push(entry);
 			for (position in owned)
 				linked[relocations.functionIndices[position]] = nextFunction++;
