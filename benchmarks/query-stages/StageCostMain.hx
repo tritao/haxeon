@@ -6,23 +6,22 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
 import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 import compiler.query.ComputedQueryKind;
 import compiler.query.QueryDatabase;
 import compiler.query.QuerySummary;
 
 /**
- * What one per-function stage costs per function on a warm build, today's driver (`IrFunctionStages.run` with `IrLineage`,
- * `IrStageMemo` and `IrFacts`) against the query engine (a computed kind per stage keyed by function symbol, its whole-program
- * step a summary over per-function contributions). See `docs/design/QUERY_ENGINE.md`, "Per-access costs", and `measure.py`,
+ * What one per-function stage costs per function on a warm build, the stage driver (`IrFunctionStages.run`: a computed kind per
+ * stage keyed by function symbol, its facts a kind of their own, `IrStageFacts`) against the bare engine loop (the same kind, its
+ * whole-program step a summary over per-function contributions). See `docs/design/QUERY_ENGINE.md`, "Per-access costs", and `measure.py`,
  * which builds this with the checkout's compiler and counts main-thread instructions.
  *
  *     StageCostMain DRIVER CASE STAGES FUNCTIONS BUILDS
  *
- * DRIVER is `old` or `engine`. CASE:
+ * DRIVER is `driver` or `engine`. CASE:
  *   held       every function held, the stage reads nothing but its input
- *   held1      held, each rewrite read one whole-program fact (old: an `IrFacts` fact; engine: a summary key)
+ *   held1      held, each rewrite read one whole-program fact (driver: an `IrStageFacts` fact; engine: a summary key)
  *   held3      held, three facts each
  *   cutoff     every function rewritten (one fact it read changed) to a function equal to the one kept
  * DRIVER `access` measures one engine access per key instead (CASE: base, put, current, current2, contribute, holds,
@@ -36,7 +35,7 @@ class StageCostMain {
 	static function main() {
 		var args = Sys.args();
 		if (args.length != 5) {
-			Sys.println("usage: StageCostMain old|engine|access CASE STAGES FUNCTIONS BUILDS");
+			Sys.println("usage: StageCostMain driver|engine|access CASE STAGES FUNCTIONS BUILDS");
 			Sys.exit(2);
 		}
 		var driver = args[0],
@@ -59,7 +58,7 @@ class StageCostMain {
 			new IrFunction("bench.F" + index + ".run", builder.arguments, IrType.I32, builder.blocks, Ordinary);
 		}];
 		var run:Int->Void = switch driver {
-			case "old": oldDriver(functions, stages, reads, cutoff);
+			case "driver": stageDriver(functions, stages, reads, cutoff);
 			case "engine": engineDriver(functions, stages, reads, cutoff);
 			case "access": accessDriver(functions, scenario);
 			case _: throw "unknown driver " + driver;
@@ -76,8 +75,8 @@ class StageCostMain {
 		Sys.stdin().readLine();
 	}
 
-	/** Today's driver: the lineage started from the input, then each stage run through its memo. */
-	static function oldDriver(functions:Array<IrFunction>, stages:Int, reads:Int, cutoff:Bool):Int->Void {
+	/** The stage driver: the input put into the session's database, then each stage run through its kind. */
+	static function stageDriver(functions:Array<IrFunction>, stages:Int, reads:Int, cutoff:Bool):Int->Void {
 		var database = new QueryDatabase();
 		var memos = new IrStageMemos(database,
 			database.register(new ComputedQueryKind<IrFunction>("ir-generation", IrFunctionStateEquality.same)));
@@ -86,10 +85,10 @@ class StageCostMain {
 		return function(build:Int) {
 			database.newRevision();
 			var list = functions.copy();
-			var lineage = IrLineage.start(memos, list, false);
+			memos.startBuild(list, false);
 			for (stage in 0...stages) {
 				passes[stage].build = build;
-				list = IrFunctionStages.run(names[stage], passes[stage], list, lineage, false);
+				list = IrFunctionStages.run(names[stage], passes[stage], list, memos);
 			}
 		};
 	}

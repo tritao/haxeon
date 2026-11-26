@@ -125,18 +125,18 @@ class IrTypedInterfaceDispatch {
 
 	/**
 	 * The dispatchers `fn` calls or takes as a method value, as requests of a name and signature, in the order it names them: kept
-	 * by the session for `fn`'s version with `lineage` (`IrStageMemos.interfaceRequests`), else read now.
+	 * by the session for `fn`'s version with `stageMemos` (`IrStageMemos.interfaceRequests`), else read now.
 	 */
 	static function requestsOf(fn:IrFunction,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Array<IrTypedInterfaceRequest> {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0)
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Array<IrTypedInterfaceRequest> {
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0)
 			return readRequests(fn);
-		var memo = lineage.memos.contribution(REQUESTS), known = memo.get(version);
+		var memo = stageMemos.contribution(REQUESTS), known = memo.get(version);
 		if (known == null) {
 			known = readRequests(fn);
 			memo.keep(version, known);
-		} else if (lineage.checks) {
+		} else if (stageMemos.checks) {
 			var now = readRequests(fn), same = now.length == known.length;
 			for (index in 0...now.length)
 				if (same && !sameRequest(now[index], known[index]))
@@ -208,7 +208,7 @@ class IrTypedInterfaceDispatch {
 	}
 
 	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>,
-			interfaces:Array<IrInterface>, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
+			interfaces:Array<IrInterface>, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		function request(name:String, signature:{arguments:Array<IrType>, result:IrType}):Void {
 			var previous = requests.get(name);
@@ -221,11 +221,11 @@ class IrTypedInterfaceDispatch {
 			requests.set(name, signature);
 		}
 		for (fn in functions)
-			for (found in requestsOf(fn, lineage))
+			for (found in requestsOf(fn, stageMemos))
 				request(found.name, {arguments: found.arguments, result: found.result});
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			byInterface:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
-			byFunction = new IrFunctionIndex("typed-interface-dispatch", functions, lineage),
+			byFunction = new IrFunctionIndex("typed-interface-dispatch", functions),
 			functionIndices:Map<String, Int> = [for (index in 0...functions.length) functions[index].name => index];
 		function extendsInterface(actual:String, expected:String, visited:Map<String, Bool>):Bool {
 			if (actual == expected) return true;

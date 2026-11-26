@@ -93,7 +93,7 @@ class SessionState {
 	/**
 	 * The IR of each function the assembly starts from, by its name's symbol (`IrSymbol`), in the session's database: what the
 	 * generator made of each typed function (`FrontendCompilation.publishFunctions`) and the functions the frontend and the
-	 * assembler make (`IrLineage.start`). An IR made again the same keeps last build's object and the revision it changed at, so
+	 * assembler make (`IrStageMemos.startBuild`). An IR made again the same keeps last build's object and the revision it changed at, so
 	 * whatever reads it holds. Every copy shares it: a function's IR is put again every build it is read in, from the modules of
 	 * the state the build started from.
 	 */
@@ -113,8 +113,8 @@ class SessionState {
 		null):ComputedQueryKind<Array<TypedField>>;
 
 	/**
-	 * What the assembly stages before the encode point made of each function (`IrStageMemos`), keyed on the versions of their
-	 * input; every copy shares it, as an entry holds only for the versions and fact prints it recorded.
+	 * What the IR stages made of each function (`IrStageMemos`), mostly in the session's database; every copy shares it, as a memo
+	 * holds only for the function object it was made from and the facts it read.
 	 */
 	public var stageMemos(default, null):compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
@@ -168,7 +168,7 @@ class SessionState {
 		semanticProgram = null;
 		programFacts = null;
 		inlineCache = new IrInlineCache();
-		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(queries, irGeneration);
+		stageMemos.clear();
 		pipelineSnapshot = null;
 		verifyMemo = new IrVerifyMemo();
 		reachabilityCache = [];
@@ -285,7 +285,8 @@ class SessionState {
 			staticReferences = sharing.staticReferences;
 		}
 		assemblyOrder = sharing == null ? new FrontendCompilation.AssemblyOrder() : sharing.assemblyOrder;
-		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(queries, irGeneration);
+		stageMemos = sharing == null ? new compiler.ir.reuse.IrStageMemo.IrStageMemos(queries,
+			irGeneration) : sharing.stageMemos;
 		this.types = types;
 		this.genericSpecializations = genericSpecializations;
 		this.backend = backend;
@@ -312,7 +313,6 @@ class SessionState {
 		result.committed = committed;
 		result.rehydrationBaseline = rehydrationBaseline;
 		result.inlineCache = inlineCache.copy();
-		result.stageMemos = stageMemos;
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.verifyMemo = verifyMemo;
 		result.reachabilityCache = reachabilityCache.copy();

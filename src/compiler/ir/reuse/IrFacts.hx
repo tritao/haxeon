@@ -19,10 +19,10 @@ class IrAnswerSource {
 }
 
 /**
- * A table of facts with prints, the one the reuse of each memo checks what it read against: the session's, which the per-function
- * stage memos read (`IrStageMemo`), and those of HashLink lowering (`HlLoweringView`) and of verification (`IrVerifyMemo`). A
- * fact is what one reader knows about the program besides the function it works on, named by a space (a stage and a kind it
- * defines) and a key ("callee `f` returns the constant true", "`T` is a value object"). Its value is a number the stage computes
+ * A table of facts with prints, the one a memo outside the query engine checks what it read against: the inliner's
+ * (`IrInliner`, through `IrFactRecorder`), HashLink lowering's (`HlLoweringView`) and verification's (`IrVerifyMemo`); the
+ * per-function stages read theirs through the engine (`IrStageFacts`). A fact is what one reader knows about the program besides
+ * the function it works on, named by a space (a stage and a kind it defines) and a key. Its value is a number the stage computes
  * (`IrFactSource.fact`), or an answer compared per kind (`IrAnswerSource`); its print is a number that changes exactly when the
  * value or answer does, never given twice, so a memo entry that recorded a fact at a print still holds while the fact has that
  * print.
@@ -38,6 +38,9 @@ class IrAnswerSource {
 class IrFacts {
 	/** A value never equal to itself: a fact the stage cannot state per key, so every entry that read it is recomputed. */
 	public static inline final UNKNOWN = -0x7fffffff;
+
+	@:processWide("a shared empty list of facts, only ever read")
+	public static final NO_FACTS:Array<Int> = [];
 
 	/** By stage and kind (`space`), the number of each key's fact. */
 	final ids:Array<Map<String, Int>> = [];
@@ -272,4 +275,45 @@ class IrFacts {
 		recorded[id] = reader;
 		return true;
 	}
+}
+
+/**
+ * What one function's inlining reads about the program, recorded with each fact's print for the inliner's memo entry (`IrInliner`),
+ * whose facts are kept in an `IrFacts` table until the inliner moves onto the query engine (docs/design/QUERY_ENGINE.md).
+ */
+@:nullSafety(Strict)
+class IrFactRecorder {
+	final source:IrFactSource;
+	final facts:IrFacts;
+	final spaces:Array<Int> = [];
+	final stage:String;
+	final number:Int;
+	final reads:Array<Int> = [];
+
+	/** Starts recording what `stage`'s rewrite reads, its facts computed by `source` in `facts`. */
+	public function new(stage:String, facts:IrFacts, source:IrFactSource) {
+		this.stage = stage;
+		this.facts = facts;
+		this.source = source;
+		number = facts.newReader();
+	}
+
+	/** The value of the stage's fact of `kind` and `key` (`IrFactSource.fact`). */
+	public function read(kind:Int, key:String):Int {
+		var table = facts;
+		while (spaces.length <= kind)
+			spaces.push(-1);
+		if (spaces[kind] < 0)
+			spaces[kind] = table.space(stage, kind);
+		var id = table.id(spaces[kind], kind, key), print = table.print(id, source);
+		if (table.firstRead(id, number)) {
+			reads.push(id);
+			reads.push(print);
+		}
+		return table.value(id);
+	}
+
+	/** The facts read, pairs of a fact and its print. */
+	public function recorded():Array<Int>
+		return reads.length == 0 ? IrFacts.NO_FACTS : facts.shared(reads);
 }

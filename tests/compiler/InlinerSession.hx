@@ -1,10 +1,10 @@
 import compiler.ir.codec.IrFunctionStateEquality;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
 import compiler.ir.passes.inlining.IrInliner;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.ir.pipeline.TargetProfile;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
 import compiler.ir.reuse.IrStageMemo.IrStageEntry;
 import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 import compiler.query.ComputedQueryKind;
@@ -12,7 +12,7 @@ import compiler.query.QueryDatabase;
 
 /**
  * The inliner as a compile server runs it build after build: one inline cache and one set of stage memos, each program's functions
- * put into the session's input kind first (`IrLineage.start`), so a function made again the same keeps its object, its version and
+ * put into the session's input kind first (`IrStageMemos.startBuild`), so a function made again the same keeps its object, its version and
  * its entry.
  */
 class InlinerSession {
@@ -31,17 +31,15 @@ class InlinerSession {
 
 	/** Inlines `program` as the next build. */
 	public function run(program:IrProgram, ?profile:TargetProfile, ?options:compiler.CompileOptions):Array<String> {
-		var database = memos.database;
-		if (database != null)
-			database.newRevision();
-		var lineage = IrLineage.start(memos, program.functions, false);
-		lineage.enterBodies();
-		return IrInliner.run(program, cache, profile != null ? profile : TargetProfile.wasm, options, null, lineage);
+		memos.database.newRevision();
+		memos.startBuild(program.functions, false);
+		memos.bodies = true;
+		return IrInliner.run(program, cache, profile != null ? profile : TargetProfile.wasm, options, null, memos);
 	}
 
 	/** The stage memo's entry for `name`, as the last build left it. */
 	public function entry(name:String):Null<IrStageEntry>
-		return memos.stage("inliner").last(memos.lineage.slots.named(name));
+		return memos.memo("inliner").last(IrSymbol.of(name).functionKey());
 
 	/** A speculative build's session: a copy of the cache, the memos shared, as a candidate state shares them. */
 	public function copy():InlinerSession

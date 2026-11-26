@@ -24,7 +24,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 /**
  * Select one program-wide representation, then lower eligible enum values to their lane packets. On IR bodies
@@ -65,10 +65,10 @@ class IrInlineEnumLowering {
 	 * it changes or makes is owned by the next stage.
 	 */
 	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>,
-			?reflectableObjects:Array<String>, ?builder:IrBodyBuilder, ?lineage:IrLineage):IrProgram {
+			?reflectableObjects:Array<String>, ?builder:IrBodyBuilder, ?stageMemos:IrStageMemos):IrProgram {
 		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
 			canonicalObjects);
-		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects, builder, lineage);
+		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects, builder, stageMemos);
 		if (!eligibility.allowed.keys().hasNext())
 			return program;
 		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
@@ -219,18 +219,15 @@ class IrInlineEnumLowering {
 				parts.push('interface ${entry.name}');
 			return parts.join("\n");
 		}
-		var lowered = new IrInlineEnumLoweringPass(lowering, builder, lineage, layout, helper);
+		var lowered = new IrInlineEnumLoweringPass(lowering, builder, stageMemos, layout, helper);
 		pass = lowered;
-		result.functions = IrFunctionStages.run(IrInlineEnumLoweringPass.STAGE, lowered, program.functions, lineage,
-			lineage != null && lineage.checks, builder);
+		result.functions = IrFunctionStages.run(IrInlineEnumLoweringPass.STAGE, lowered, program.functions, stageMemos,
+			builder);
 		var made = lowered.helpers();
 		// The functions lowered here call their typed dispatchers already (`lower`); the others did before.
 		var dispatched = result.functions.length;
 		result.functions = result.functions.concat(made);
-		// The dispatch looks the functions up through the lineage, which then has the helpers too.
-		if (lineage != null)
-			lineage.settle(IrInlineEnumLoweringPass.STAGE, result.functions);
-		IrTypedInterfaceDispatch.generate(result.functions, result.objects, result.interfaces, lineage);
+		IrTypedInterfaceDispatch.generate(result.functions, result.objects, result.interfaces, stageMemos);
 		made = made.concat(result.functions.slice(dispatched + made.length));
 		// Lane-array reflection bridges use the logical enum adapter even when this source has no escape.
 		var escapes = IrInlineEnumEscapes.functions(result.enums, table, planner, lowered.derive);
@@ -614,7 +611,7 @@ class IrInlineEnumLoweringPass extends IrFunctionPass {
 
 	final lowering:IrInlineEnumLowering;
 	final builder:Null<IrBodyBuilder>;
-	final lineage:Null<IrLineage>;
+	final stageMemos:Null<IrStageMemos>;
 	final layout:() -> String;
 	final helper:(name:String, enumName:String, constructor:Int, field:Int) -> IrFunction;
 
@@ -632,11 +629,11 @@ class IrInlineEnumLoweringPass extends IrFunctionPass {
 	public final called:Map<String, Bool> = [];
 
 	public function new(lowering:IrInlineEnumLowering, builder:Null<IrBodyBuilder>,
-			lineage:Null<IrLineage>,
+			stageMemos:Null<IrStageMemos>,
 			layout:() -> String, helper:(name:String, enumName:String, constructor:Int, field:Int) -> IrFunction) {
 		this.lowering = lowering;
 		this.builder = builder;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 		this.layout = layout;
 		this.helper = helper;
 	}
@@ -666,9 +663,8 @@ class IrInlineEnumLoweringPass extends IrFunctionPass {
 
 	/** The helper `name`, which `make` makes from the program's layout alone: derived in a session. */
 	public function derive(name:String, make:() -> IrFunction):IrFunction {
-		var known = lineage;
+		var known = stageMemos;
 		return IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, known,
-			known != null && known.checks,
 			builder, reader -> {
 				reader.read(LAYOUT, "");
 				make();
@@ -683,10 +679,10 @@ class IrInlineEnumLoweringPass extends IrFunctionPass {
 	override public function fact(kind:Int, key:String):Int {
 		if (kind == SELECTED)
 			return lowering.isSelected(key) ? 1 : 0;
-		var known = lineage;
+		var known = stageMemos;
 		if (known == null)
 			return 0;
-		return known.memos.facts.intern(kind == LAYOUT ? layout() : lowering.callablePrint(key));
+		return known.stageFacts.intern(kind == LAYOUT ? layout() : lowering.callablePrint(key));
 	}
 
 	static function addEnums(type:IrType, names:Array<String>):Void

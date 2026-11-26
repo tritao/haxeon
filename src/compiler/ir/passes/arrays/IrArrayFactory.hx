@@ -44,15 +44,14 @@ class IrArrayFactory {
 	}
 
 	/**
-	 * Emits the remaining allocation requests of `program`'s functions, on their bodies, per function (`IrArrayFactoryPass`): with `lineage`, a function the session has at the same version is
+	 * Emits the remaining allocation requests of `program`'s functions, on their bodies, per function (`IrArrayFactoryPass`): with `stageMemos`, a function the session has at the same version is
 	 * last build's lowering, unread. A function that changes becomes its edited body, owned by the next stage.
 	 */
 	public static function lower(program:IrProgram, ?scratch:IrPassScratch,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
 		var builder = scratch == null ? new compiler.ir.model.IrBodyBuilder() : scratch.bodyBuilder;
 		program.functions = compiler.ir.pipeline.IrFunctionStages.run(IrArrayFactoryPass.STAGE,
-			new IrArrayFactoryPass(program, builder), program.functions, lineage,
-			lineage != null && lineage.checks,
+			new IrArrayFactoryPass(program, builder), program.functions, stageMemos,
 			builder);
 	}
 
@@ -143,7 +142,7 @@ class IrArrayFactoryPass extends compiler.ir.pipeline.IrFunctionPass {
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {}
 
 	override public function fact(kind:Int, key:String):Int
-		return compiler.ir.reuse.IrFacts.UNKNOWN;
+		return compiler.ir.reuse.IrStageFacts.UNKNOWN;
 
 	override public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		var body = fn.encodedBody(builder);

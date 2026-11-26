@@ -22,8 +22,7 @@ class IrFunctionPass extends IrFactSource {
 		throw unimplemented();
 
 	/**
-	 * The whole-program step, from the functions in program order and their summaries. `names` indexes them: in a session, through
-	 * the program's shared index (`IrLineage.named`).
+	 * The whole-program step, from the functions in program order and their summaries, which `names` indexes by name.
 	 */
 	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void
 		throw unimplemented();
@@ -45,11 +44,14 @@ class IrFunctionPass extends IrFactSource {
 }
 
 /**
- * What a stage's facts are computed from (`IrFacts`): a per-function stage (`IrFunctionPass`), or a stage that drives its own run
- * and reads its facts through an `IrFactReader` all the same (`IrInliner`). A class, not an interface: HashLink calls an
+ * What a stage's facts are computed from (`IrStageFacts`): a per-function stage (`IrFunctionPass`), or a stage that drives its own
+ * run and records its facts all the same (`IrInliner`, through `IrFacts`). A class, not an interface: HashLink calls an
  * interface's methods by name, through a virtual made at each conversion, and a fact is read per function and stage.
  */
 class IrFactSource {
+	/** The space of the run its facts are computed in (`IrStageFacts.run`); -1 before one starts. */
+	public var space = -1;
+
 	/** The value of the stage's fact of `kind` and `key`, as the program stands in this run (after `prepare`, for a pass). */
 	public function fact(kind:Int, key:String):Int
 		throw unimplemented();

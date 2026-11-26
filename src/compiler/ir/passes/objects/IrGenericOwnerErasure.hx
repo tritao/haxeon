@@ -45,19 +45,19 @@ class IrGenericOwnerErasure {
 	static final NO_REQUESTS:Array<IrErasureRequest> = [];
 
 	/**
-	 * What `fn` asks for, in the order it asks: kept by the session for `fn`'s version with `lineage`
+	 * What `fn` asks for, in the order it asks: kept by the session for `fn`'s version with `stageMemos`
 	 * (`IrStageMemos.erasureRequests`), else read now, from the function's body when it is one, without decoding it.
 	 */
 	public static function requestsOf(fn:IrFunction,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Array<IrErasureRequest> {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0)
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Array<IrErasureRequest> {
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0)
 			return readRequests(fn);
-		var memo = lineage.memos.contribution(REQUESTS), known = memo.get(version);
+		var memo = stageMemos.contribution(REQUESTS), known = memo.get(version);
 		if (known == null) {
 			known = readRequests(fn);
 			memo.keep(version, known);
-		} else if (lineage.checks && !sameRequests(readRequests(fn), known))
+		} else if (stageMemos.checks && !sameRequests(readRequests(fn), known))
 			throw new InternalError('--check-reuse: the generic owner requests reused for ${fn.name} differ from its code');
 		return known;
 	}
@@ -152,7 +152,7 @@ class IrGenericOwnerErasure {
 	 * (`IrDerivedHelpers`), reading what it dispatches to, so a session's operation whose classes are unchanged is last build's.
 	 */
 	public static function generate(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage, ?helpers:IrDerivedHelpers):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos, ?helpers:IrDerivedHelpers):Void {
 		var derived = helpers ?? new IrDerivedHelpers(STAGE),
 			byName = [for (object in objects) object.name => object],
 			plans:Map<String, ErasedPlan> = [],
@@ -164,10 +164,10 @@ class IrGenericOwnerErasure {
 			case TESTED: (tested.get(key) ?? []).join("\n");
 			case _: "";
 		};
-		generateTypeTests(facts, functions, objects, lineage, tested, derived);
+		generateTypeTests(facts, functions, objects, stageMemos, tested, derived);
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		for (fn in functions)
-			for (request in requestsOf(fn, lineage))
+			for (request in requestsOf(fn, stageMemos))
 				if (request.kind == ERASED) {
 					var name = request.name,
 						signature = {arguments: request.arguments, result: request.result},
@@ -362,11 +362,11 @@ class IrGenericOwnerErasure {
 
 	/** Regenerate type tests from the current layouts, including layouts added by an incremental edit. */
 	static function generateTypeTests(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, tested:Map<String, Array<String>>,
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>, tested:Map<String, Array<String>>,
 			derived:IrDerivedHelpers):Void {
 		var requests:Map<String, Bool> = [];
 		for (fn in functions)
-			for (request in requestsOf(fn, lineage))
+			for (request in requestsOf(fn, stageMemos))
 				if (request.kind == TYPE_TEST)
 					requests.set(request.name, true);
 		var names = [for (name in requests.keys()) name];

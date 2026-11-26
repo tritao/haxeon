@@ -85,17 +85,16 @@ class IrWalkRecord<S, R> {
 	}
 
 	/**
-	 * Gives `memo` back the summaries the walk followed of the functions that still stand in `lineage`, for a walk done again:
+	 * Gives `memo` back the summaries the walk followed of the functions it read, for a walk done again:
 	 * while the record held, nothing asked the memo for them, so it may have let them go.
 	 */
-	public function giveBack(memo:compiler.ir.reuse.IrStageMemo.IrContributionMemo<S>,
-			lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void
+	public function giveBack(memo:compiler.ir.reuse.IrStageMemo.IrContributionMemo<S>):Void
 		for (index in 0...functions.length) {
 			var summary = summaries[index];
 			if (summary == null)
 				continue;
-			var version = lineage.versionOf(functions[index]);
-			if (version != 0 && memo.get(version) == null)
+			var version = functions[index].version;
+			if (memo.get(version) == null)
 				memo.keep(version, summary);
 		}
 

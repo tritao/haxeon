@@ -14,8 +14,8 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrFacts;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageFacts;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
@@ -63,7 +63,7 @@ class IrNullableScalarFlow extends IrFunctionPass {
 
 	final program:IrProgram;
 	final scratch:IrPassScratch;
-	final lineage:Null<IrLineage>;
+	final stageMemos:Null<IrStageMemos>;
 	final checks:Bool;
 	final candidates:Map<String, IrFunction> = [];
 	final helpers:Map<String, IrType> = [];
@@ -73,10 +73,10 @@ class IrNullableScalarFlow extends IrFunctionPass {
 	/** By candidate, the version of the function its specialization is made from. */
 	final inputs:Map<String, Int> = [];
 
-	public function new(program:IrProgram, scratch:IrPassScratch, lineage:Null<IrLineage>, checks:Bool) {
+	public function new(program:IrProgram, scratch:IrPassScratch, stageMemos:Null<IrStageMemos>, checks:Bool) {
 		this.program = program;
 		this.scratch = scratch;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 		this.checks = checks;
 	}
 
@@ -112,8 +112,8 @@ class IrNullableScalarFlow extends IrFunctionPass {
 	 */
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		originals = functions;
-		var known = lineage,
-			last = known == null ? null : known.memos.lastResult(CHOICE),
+		var known = stageMemos,
+			last = known == null ? null : known.lastResult(CHOICE),
 			// The choice reads nothing of the program but these functions, so a changed one is chosen again.
 			kept = last == null ? null : last.holds(program, [], [], functions, (_, _) -> null);
 		var made = new IrBodyNullableScalars(scratch, candidates, helpers);
@@ -137,9 +137,9 @@ class IrNullableScalarFlow extends IrFunctionPass {
 				kept = new compiler.ir.reuse.IrWalkRecord(program, [], [], functions.copy(),
 					[for (summary in summaries) summary & MAY_BE_CANDIDATE != 0 ? true : null],
 					{candidates: [for (name in candidates.keys()) name], helpers: helpers.copy()});
-			known.memos.keepResult(CHOICE, kept);
-			for (name in candidates.keys())
-				inputs.set(name, known.version(name));
+			known.keepResult(CHOICE, kept);
+			for (name => fn in candidates)
+				inputs.set(name, fn.version);
 		}
 	}
 
@@ -180,7 +180,7 @@ class IrNullableScalarFlow extends IrFunctionPass {
 			return 0;
 		var count = called.arguments.length;
 		if (count > 22)
-			return IrFacts.UNKNOWN;
+			return IrStageFacts.UNKNOWN;
 		var shape = 1 | count << 1;
 		for (index in 0...count)
 			if (inner(called.arguments[index].type) != null)
@@ -207,7 +207,7 @@ class IrNullableScalarFlow extends IrFunctionPass {
 		for (fn in originals)
 			if (candidates.exists(fn.name)) {
 				var input = inputs.get(fn.name) ?? 0;
-				result.push(IrFunctionStages.derived(STAGE, specializationName(fn.name), this, input, lineage, checks,
+				result.push(IrFunctionStages.derived(STAGE, specializationName(fn.name), this, input, stageMemos,
 					builder, reader -> {
 						flow.reader = reader;
 						var made = rewritten(flow, fn, builder, true);
@@ -220,8 +220,8 @@ class IrNullableScalarFlow extends IrFunctionPass {
 		for (name in names) {
 			var type = helpers.get(name);
 			if (type != null)
-				result.push(IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, lineage, checks,
-					builder, _ -> helper(name, type)));
+				result.push(IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, stageMemos, builder,
+					_ -> helper(name, type)));
 		}
 		return result;
 	}

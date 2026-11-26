@@ -15,7 +15,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
@@ -51,25 +51,22 @@ class IrStaticNullChecks extends IrFunctionPass {
 	final objects:Null<Array<IrObject>>;
 	final valueTypes:Map<String, Bool> = [];
 	final builder:Null<IrBodyBuilder>;
-	final lineage:Null<IrLineage>;
-	final checks:Bool;
+	final stageMemos:Null<IrStageMemos>;
 
 	/** By name, the checks asked for: the static and the receiver's value type, or null for any other receiver. */
 	final helpers:Map<String, {name:String, valueType:Null<IrType>}> = [];
 
 	var reached:Map<String, Bool> = [];
 
-	/** A run over functions with `objects`; in a session with `lineage`. */
-	public function new(objects:Null<Array<IrObject>>, ?builder:IrBodyBuilder, ?lineage:IrLineage,
-			checks = false) {
+	/** A run over functions with `objects`; in a session with `stageMemos`. */
+	public function new(objects:Null<Array<IrObject>>, ?builder:IrBodyBuilder, ?stageMemos:IrStageMemos) {
 		this.objects = objects;
 		if (objects != null)
 			for (object in objects)
 				if (object.isValue)
 					valueTypes.set(object.name, true);
 		this.builder = builder;
-		this.lineage = lineage;
-		this.checks = checks;
+		this.stageMemos = stageMemos;
 	}
 
 	/** `functions` with the checks, without a memo: read as their bodies. */
@@ -79,7 +76,7 @@ class IrStaticNullChecks extends IrFunctionPass {
 
 	override public function summarize(fn:IrFunction):Int {
 		var body = fn.encodedBody(builder),
-			flags = IrInitCalls.stores(fn, builder, lineage).relevant ? STORES : 0;
+			flags = IrInitCalls.stores(fn, builder, stageMemos).relevant ? STORES : 0;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -95,9 +92,9 @@ class IrStaticNullChecks extends IrFunctionPass {
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var stores:Array<Null<IrInitCalls>> = [
 			for (index in 0...functions.length)
-				summaries[index] & STORES != 0 ? IrInitCalls.stores(functions[index], builder, lineage) : null
+				summaries[index] & STORES != 0 ? IrInitCalls.stores(functions[index], builder, stageMemos) : null
 		];
-		var calls = new IrInitializationCalls(functions, stores, fn -> IrInitCalls.calls(fn, builder, lineage),
+		var calls = new IrInitializationCalls(functions, stores, fn -> IrInitCalls.calls(fn, builder, stageMemos),
 			names.get, objects);
 		reached = calls.reachable("__init", names.exists);
 	}
@@ -165,8 +162,7 @@ class IrStaticNullChecks extends IrFunctionPass {
 		for (helperName in names) {
 			var helper = helpers.get(helperName);
 			if (helper != null)
-				result.push(IrFunctionStages.derived(STAGE, helperName, this, IrFunctionStages.FROM_NAME, lineage,
-					checks,
+				result.push(IrFunctionStages.derived(STAGE, helperName, this, IrFunctionStages.FROM_NAME, stageMemos,
 					builder, _ -> {
 						var made = check(helperName, helper.name, helper.valueType);
 						made.encodedBody(builder);

@@ -5,7 +5,7 @@ import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 /**
  * The helpers a stage makes from the program's declarations rather than from its functions (the reflection helpers): each is made
@@ -16,37 +16,32 @@ import compiler.ir.reuse.IrStageMemo.IrLineage;
 @:nullSafety(Strict)
 class IrDerivedHelpers extends IrFunctionPass {
 	final stage:String;
-	final lineage:Null<IrLineage>;
-	final checks:Bool;
+	final stageMemos:Null<IrStageMemos>;
 	final builder:Null<IrBodyBuilder>;
 
 	/** The text of the declaration of `kind` (the stage's numbering) and `key`, which the stage sets before it makes a helper. */
 	public var print:(kind:Int, key:String) -> String = (_, _) -> "";
 
-	/** Helpers for `stage`; in a session with `lineage`, frozen past the encode point. */
-	public function new(stage:String, ?lineage:IrLineage, checks = false, ?builder:IrBodyBuilder) {
+	/** Helpers for `stage`; in a session with `stageMemos`, frozen past the encode point. */
+	public function new(stage:String, ?stageMemos:IrStageMemos, ?builder:IrBodyBuilder) {
 		this.stage = stage;
-		this.lineage = lineage;
-		this.checks = checks;
+		this.stageMemos = stageMemos;
 		this.builder = builder;
 		// The declarations are this run's: what a fact printed before is printed again when next asked for.
-		if (lineage != null)
-			lineage.memos.facts.begin();
+		if (stageMemos != null)
+			stageMemos.stageFacts.run(stageMemos.database, stage + HELPERS, this);
 	}
+
+	/** What the space of the helpers' facts is named after the stage: the stage's own pass computes its own facts. */
+	static inline final HELPERS = ":helpers";
 
 	/** The helper `name`, which `make` makes, reading the declarations it is made of through the reader. */
-	public function make(name:String, make:IrFactReader->IrFunction):IrFunction {
-		if (lineage == null) {
-			var reader = new IrFactReader(stage, this, compiler.ir.reuse.IrFacts.unshared());
-			reader.begin(false);
-			return make(reader);
-		}
-		return IrFunctionStages.derived(stage, name, this, IrFunctionStages.FROM_NAME, lineage, checks, builder, make);
-	}
+	public function make(name:String, make:IrFactReader->IrFunction):IrFunction
+		return IrFunctionStages.derived(stage, name, this, IrFunctionStages.FROM_NAME, stageMemos, builder, make);
 
 	override public function fact(kind:Int, key:String):Int {
-		var known = lineage;
-		return known == null ? 0 : known.memos.facts.intern(print(kind, key));
+		var known = stageMemos;
+		return known == null ? 0 : known.stageFacts.intern(print(kind, key));
 	}
 
 	override public function summarize(fn:IrFunction):Int

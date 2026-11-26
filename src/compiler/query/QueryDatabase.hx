@@ -192,8 +192,7 @@ class QueryDatabase {
 		return kinds[index];
 
 	/** Starts a revision within the build, not an input's: what changes from here on changes after what was verified before. */
-	@:allow(compiler.query)
-	function advance():Int
+	public function advance():Int
 		return ++revision;
 
 	@:allow(compiler.query)

@@ -15,8 +15,8 @@ makes from the same sources, and its work is proportional to the edit.
 - **The whole pipeline, when nothing it reads changed:** `PipelineSnapshot` holds everything the IR pipeline read (the typed
   functions' IR, the program tables, the environment). When the snapshot and the lowering environment both equal the last
   build's, the build keeps the last final IR and the last module bytes, and only writes them (`reused: ir+module`).
-- **IR stages on bodies:** each stage moved onto IR bodies keeps what it made of each function, with the facts it read
-  (`IrStageMemo`), and reuses it while the function and the facts are unchanged. The session caching model is in
+- **IR stages on bodies:** each per-function stage keeps what it made of each function in the session's query database, with
+  the facts it read (`IrStageQueries`, `IrStageFacts`), and reuses it while the function and the facts are unchanged. The session caching model is in
   [IR_CORE_COLUMNS.md](IR_CORE_COLUMNS.md#session-caching-model).
 - **Whole-program walks:** every kept walk keeps its result with what it read in one record (`IrWalkRecord`): copies of
   the program's tables, what its caller gave it (roots, settings, root types), the functions whose declarations it read,

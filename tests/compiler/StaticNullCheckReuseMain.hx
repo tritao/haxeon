@@ -1,4 +1,5 @@
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.codec.IrFunctionStateEquality;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
@@ -6,28 +7,32 @@ import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.passes.nullability.IrStaticNullChecks;
 import compiler.ir.pipeline.IrFunctionStages;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
 import compiler.ir.reuse.IrStageMemo.IrStageMemos;
+import compiler.query.ComputedQueryKind;
+import compiler.query.QueryDatabase;
 
 /**
  * The static null-check stage's memo must give an unchanged function the same object every build, and the same result as a run
  * with no memo, while what the rewrite reads (whether initialization reaches the function, whether a receiver is a value) holds.
  */
 class StaticNullCheckReuseMain {
-	static final memos = new IrStageMemos();
+	static final database = new QueryDatabase();
 
-	/** One build of the stage in the session, past the encode point, with `--check-reuse`: a new object takes a new version. */
+	static final memos = new IrStageMemos(database,
+		database.register(new ComputedQueryKind<IrFunction>("ir-generation", IrFunctionStateEquality.same)));
+
+	/** One build of the stage in the session, past the encode point, with `--check-reuse`: a new object is computed again. */
 	static function build(functions:Array<IrFunction>, ?objects:Array<IrObject>):Array<IrFunction> {
 		for (fn in functions) {
 			fn.encodedBody();
 			fn.freezeBody();
 		}
 		var input = functions.copy();
-		var lineage = IrLineage.start(memos, input, true);
-		lineage.enterBodies();
-		return IrFunctionStages.run(IrStaticNullChecks.STAGE,
-			new IrStaticNullChecks(objects, null, lineage, true),
-			input, lineage, true);
+		database.newRevision();
+		memos.startBuild(input, true);
+		memos.bodies = true;
+		return IrFunctionStages.run(IrStaticNullChecks.STAGE, new IrStaticNullChecks(objects, null, memos), input,
+			memos);
 	}
 
 	static function expect(ok:Bool, message:String):Void {
@@ -149,9 +154,7 @@ class StaticNullCheckReuseMain {
 		}
 		expect(checks.join(",") == "__static$nonnull$S.src,__static$nonnull$S.dst",
 			"optional copies check source before destination");
-		// Names that come and go: the lineage frees the slots of names gone for a build, with their memo entries, and gives them
-		// to new names, whose builds must not read what the old names left.
-		var distinct = 0;
+		// Names that come and go: a build must not read what names gone from the program left.
 		for (round in 0...8) {
 			var renamed = [
 				caller("__init", ['readA$round', 'readB$round']),
@@ -159,10 +162,9 @@ class StaticNullCheckReuseMain {
 				reader('readB$round', 'S.b', 2),
 				reader('unreached$round', 'S.a$round', 3)
 			];
-			distinct += 5;
 			sameAsUncached(build(renamed), renamed);
+			database.sweep();
 		}
-		expect(memos.lineage.slots.count < distinct, "the slots of names that are gone are given to new names");
 		sameAsUncached(build(sources), sources);
 		Sys.println("static null-check reuse OK");
 	}

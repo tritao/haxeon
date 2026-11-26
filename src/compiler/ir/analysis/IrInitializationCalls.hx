@@ -386,27 +386,27 @@ class IrInitCalls {
 	@:processWide("an empty summary, only ever read")
 	static final NO_STORES = new IrInitCalls(0, false);
 
-	/** What `fn` stores: kept by the session for its version with `lineage`, else read now from its body. */
+	/** What `fn` stores: kept by the session for its version with `stageMemos`, else read now from its body. */
 	public static function stores(fn:IrFunction, builder:Null<IrBodyBuilder>,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrInitCalls
-		return kept(fn, builder, lineage, false);
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrInitCalls
+		return kept(fn, builder, stageMemos, false);
 
-	/** What `fn` calls: kept by the session for its version with `lineage`, else read now from its body. */
+	/** What `fn` calls: kept by the session for its version with `stageMemos`, else read now from its body. */
 	public static function calls(fn:IrFunction, builder:Null<IrBodyBuilder>,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrInitCalls
-		return kept(fn, builder, lineage, true);
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrInitCalls
+		return kept(fn, builder, stageMemos, true);
 
 	static function kept(fn:IrFunction, builder:Null<IrBodyBuilder>,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, calls:Bool):IrInitCalls {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0)
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>, calls:Bool):IrInitCalls {
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0)
 			return read(fn, builder, calls);
-		var memo = lineage.memos.contribution(calls ? IrInitializationCalls.CALLS : IrInitializationCalls.STORES),
+		var memo = stageMemos.contribution(calls ? IrInitializationCalls.CALLS : IrInitializationCalls.STORES),
 			known = memo.get(version);
 		if (known == null) {
 			known = read(fn, builder, calls);
 			memo.keep(version, known);
-		} else if (lineage.checks && known.toString() != read(fn, builder, calls).toString())
+		} else if (stageMemos.checks && known.toString() != read(fn, builder, calls).toString())
 			throw new compiler.core
 				.InternalError('--check-reuse: the initialization calls reused for ${fn.name} differ from its body');
 		return known;

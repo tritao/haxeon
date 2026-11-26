@@ -36,18 +36,18 @@ class IrEnumRuntimeSpecializations {
 
 	/**
 	 * The specialized enums `fn` names in its signature, values and type values, in the order it names them: kept by the session for
-	 * `fn`'s version with `lineage` (`IrStageMemos.enumMentions`), else read now.
+	 * `fn`'s version with `stageMemos` (`IrStageMemos.enumMentions`), else read now.
 	 */
-	static function mentionsOf(fn:IrFunction, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>,
+	static function mentionsOf(fn:IrFunction, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
 			shared:Array<Bool>):Array<String> {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0)
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0)
 			return readMentions(fn, shared);
-		var memo = lineage.memos.contribution(MENTIONS), known = memo.get(version);
+		var memo = stageMemos.contribution(MENTIONS), known = memo.get(version);
 		if (known == null) {
 			known = readMentions(fn, null);
 			memo.keep(version, known);
-		} else if (lineage.checks && readMentions(fn, null).join(",") != known.join(","))
+		} else if (stageMemos.checks && readMentions(fn, null).join(",") != known.join(","))
 			throw new InternalError('--check-reuse: the enum specializations reused for ${fn.name} differ from its code');
 		return known;
 	}
@@ -105,7 +105,7 @@ class IrEnumRuntimeSpecializations {
 
 	public static function materialize(enums:Array<IrEnum>, functions:Array<IrFunction>, objects:Array<IrObject>,
 			staticFields:Array<IrStaticField>, natives:Array<IrNative>, interfaces:Array<IrInterface>,
-			cNatives:Array<IrCNative>, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Array<IrEnum> {
+			cNatives:Array<IrCNative>, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Array<IrEnum> {
 		var declarations:Map<String, IrEnum> = [for (item in enums) item.name => item],
 			required:Map<String, Bool> = [],
 			pending:Array<String> = [];
@@ -125,7 +125,7 @@ class IrEnumRuntimeSpecializations {
 		}
 		var shared:Array<Bool> = [];
 		for (fn in functions)
-			for (name in mentionsOf(fn, lineage, shared))
+			for (name in mentionsOf(fn, stageMemos, shared))
 				require(name);
 		for (declaration in enums) if (EnumRuntimeType.declaration(declaration.name) == declaration.name)
 			for (constructor in declaration.cases) for (parameter in constructor.params) visit(parameter);

@@ -114,10 +114,10 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 
 	/** The candidates' fact (`CANDIDATES`), set once they are chosen. */
 	var candidatesPrint = 0;
-	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
 	final declarations:() -> Int;
 
-	/** The version each candidate's clone is made from: its input's (`IrLineage.version`) as the stage starts. */
+	/** The version each candidate's clone is made from: its input's (`IrFunction.version`) as the stage starts. */
 	final inputs:Map<String, Int> = [];
 
 	/**
@@ -142,9 +142,9 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 	 * derived from their candidates' versions with the same reads.
 	 */
 	public function new(program:IrProgram, argumentsOnly:Bool, scratch:IrPassScratch,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
+			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos) {
 		this.program = program;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 		this.argumentsOnly = argumentsOnly;
 		this.scratch = scratch;
 		objects = [for (object in program.objects) object.name => object];
@@ -152,7 +152,7 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 		layouts = new IrInlineValueLayout(table);
 		resolution = IrMethodResolution.of(program);
 		byName = [for (fn in program.functions) fn.name => fn];
-		declarations = IrInlineValueLayout.declarationsFact(program.objects, lineage);
+		declarations = IrInlineValueLayout.declarationsFact(program.objects, stageMemos);
 	}
 
 	/**
@@ -163,12 +163,12 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {
 		originals = functions;
-		var known = lineage;
+		var known = stageMemos;
 		if (known == null) {
 			choose(functions, summaries);
 			return;
 		}
-		var memos = known.memos,
+		var memos = known,
 			given = [argumentsOnly ? "arguments only" : ""],
 			last = memos.lastResult(CHOICE),
 			memo = memos.contribution(CLOSURE_NAMES),
@@ -193,7 +193,7 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 		} else {
 			if (last != null)
 				last.eachSummary((fn, closures) -> {
-					var version = known.versionOf(fn);
+					var version = fn.version;
 					if (closures != READ_WHOLE && version != 0 && memo.get(version) == null)
 						memo.keep(version, closures);
 				});
@@ -207,10 +207,9 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 				new compiler.ir.reuse.IrWalkRecord(program, given, [], functions.copy(), read, chosen()));
 		}
 		candidatesPrint = printCandidates();
-		for (name in candidates.keys())
-			inputs.set(name, known.version(name));
-		for (name in pinnedCandidates.keys())
-			inputs.set(name, known.version(name));
+		for (fn in functions)
+			if (candidates.exists(fn.name) || pinnedCandidates.exists(fn.name))
+				inputs.set(fn.name, fn.version);
 	}
 
 	/** The body of the function `name` of the program. */
@@ -418,15 +417,15 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 			case REWRITE:
 				return declarations();
 			case _:
-				var known = lineage, split = key.indexOf("\u0001");
-				return known == null ? 0 : known.memos.facts.intern(resolveMethod(Obj(key.substr(0, split)),
+				var known = stageMemos, split = key.indexOf("\u0001");
+				return known == null ? 0 : known.stageFacts.intern(resolveMethod(Obj(key.substr(0, split)),
 					key.substr(split + 1)) ?? "");
 		}
 	}
 
 	/** The number of the candidates' text in the session's facts (`CANDIDATES`), or 0 without a session. */
 	function printCandidates():Int {
-		var known = lineage;
+		var known = stageMemos;
 		if (known == null)
 			return 0;
 		function sorted(keys:Iterator<String>):String {
@@ -446,7 +445,7 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 				].join(",");
 			}].join(";");
 		}
-		return known.memos.facts.intern([
+		return known.stageFacts.intern([
 			sorted(candidates.keys()), sorted(pinnedCandidates.keys()), sorted(freshOnly.keys()),
 			sorted(terminalOnly.keys()),
 			sorted(methodNames.keys()), signatures(candidates), signatures(pinnedCandidates)
@@ -552,10 +551,10 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 
 	/** The functions `fn` takes as closures, read once per version in a session (`IrStageMemos.closureNames`). */
 	function closureNames(fn:IrFunction):Array<String> {
-		var known = lineage, version = known == null ? 0 : known.versionOf(fn);
+		var known = stageMemos, version = known == null ? 0 : fn.version;
 		if (known == null || version == 0)
 			return readClosureNames(fn.encodedBody(scratch.bodyBuilder));
-		var memo = known.memos.contribution(CLOSURE_NAMES), names = memo.get(version);
+		var memo = known.contribution(CLOSURE_NAMES), names = memo.get(version);
 		if (names == null) {
 			names = readClosureNames(fn.encodedBody(scratch.bodyBuilder));
 			memo.keep(version, names);
@@ -658,12 +657,12 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 	 * version and what the clone read hold, and made only otherwise.
 	 */
 	function publish(name:String, pinned:Bool):IrFunction {
-		var known = lineage, candidate = byName.get(name);
+		var known = stageMemos, candidate = byName.get(name);
 		if (candidate == null)
 			throw new InternalError('Missing scalar ABI candidate "$name"');
 		var source = candidate.encodedBody(scratch.bodyBuilder);
 		return compiler.ir.pipeline.IrFunctionStages.derived("scalar-arguments", cloneName(name, pinned), this,
-			inputs.get(name) ?? 0, known, known != null && known.checks, scratch.bodyBuilder, reader -> {
+			inputs.get(name) ?? 0, known, scratch.bodyBuilder, reader -> {
 				reader.read(CANDIDATES, "");
 				readCandidateCalls(source, reader);
 				reader.read(REWRITE, "");

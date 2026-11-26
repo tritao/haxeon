@@ -16,7 +16,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrFacts;
+import compiler.ir.reuse.IrStageFacts;
 import compiler.ir.verify.IrVerifier;
 
 import compiler.core.InternalError;
@@ -463,20 +463,20 @@ class IrTagEscapesPass extends IrFunctionPass implements IrTagEscapeReads {
 			case ADAPTER: adapterEnums.exists(key) ? 1 : 0;
 			case ADAPTER_NAMES:
 				boxNames.get(key) == "$enum-tag-box:" + key
-					&& unboxNames.get(key) == "$enum-tag-unbox:" + key ? 0 : IrFacts.UNKNOWN;
+					&& unboxNames.get(key) == "$enum-tag-unbox:" + key ? 0 : IrStageFacts.UNKNOWN;
 			case PROVIDER: providerFact(key);
-			default: IrFacts.UNKNOWN;
+			default: IrStageFacts.UNKNOWN;
 		};
 	}
 
-	/** The symbol of the provider a request's key names (`providerKey`), or `IrFacts.UNKNOWN` when it has none that fits. */
+	/** The symbol of the provider a request's key names (`providerKey`), or `IrStageFacts.UNKNOWN` when it has none that fits. */
 	function providerFact(key:String):Int {
 		var parts = [for (part in key.substr(1).split(":")) Std.parseInt(part) ?? -1], argument = parts[2];
 		try {
 			return IrSymbol.of(providers.provider(key.charAt(0) == "B", IrTypeIds.type(parts[0]), parts[1],
 				argument < 0 ? null : IrTypeIds.type(argument), IrTypeIds.type(parts[3]))).id;
 		} catch (error:InternalError) {
-			return IrFacts.UNKNOWN;
+			return IrStageFacts.UNKNOWN;
 		}
 	}
 
@@ -1084,7 +1084,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 	static inline final ADAPTERS = 0;
 
 	final program:IrProgram;
-	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
 	var names:Map<String, Bool> = [];
 	final dynamicUnboxes:Map<String, IrType> = [];
 	final tagEqualities:Map<String, Bool> = [];
@@ -1101,9 +1101,9 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 	/** The reader of the function being transformed; null outside a transform, where the program's tables are read directly. */
 	var reader:Null<IrFactReader> = null;
 
-	public function new(program:IrProgram, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>) {
+	public function new(program:IrProgram, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>) {
 		this.program = program;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 	}
 
 	function eligible(name:String):Bool {
@@ -1323,7 +1323,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 		nativeWrappers.set(name, wrapper);
 	}
 
-	/** Encodes the positions of `Dyn` in `types` for a fact: -1 for none at all, `IrFacts.UNKNOWN` past 30 arguments. */
+	/** Encodes the positions of `Dyn` in `types` for a fact: -1 for none at all, `IrStageFacts.UNKNOWN` past 30 arguments. */
 	public static function dynMask(types:Null<Array<IrType>>):Int {
 		if (types == null)
 			return -1;
@@ -1331,7 +1331,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 		for (index in 0...types.length)
 			if (isDyn(types[index])) {
 				if (index >= 30)
-					return IrFacts.UNKNOWN;
+					return IrStageFacts.UNKNOWN;
 				mask |= 1 << index;
 			}
 		return mask;
@@ -1375,8 +1375,8 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 			case ADAPTER: adapterEnums.exists(key) ? 1 : 0;
 			case ADAPTER_NAMES:
 				boxNames.get(key) == "$enum-tag-box:" + key
-					&& unboxNames.get(key) == "$enum-tag-unbox:" + key ? 0 : IrFacts.UNKNOWN;
-			default: IrFacts.UNKNOWN;
+					&& unboxNames.get(key) == "$enum-tag-unbox:" + key ? 0 : IrStageFacts.UNKNOWN;
+			default: IrStageFacts.UNKNOWN;
 		};
 	}
 
@@ -1485,7 +1485,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 		for (fn in generated) {
 			if (fn.retention != Reachable)
 				root(fn.name);
-			var summary = IrWalkSummary.of(fn, lineage, scratch);
+			var summary = IrWalkSummary.of(fn, stageMemos, scratch);
 			for (name in summary.calls)
 				root(name);
 			for (name in summary.staticClosures)
@@ -1502,7 +1502,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 					root(name);
 		var kept = compiler.ir.analysis.IrTypeAwareWalk.referenced(CALLED_EQUALITIES, program, functions, equalities,
 			roots,
-			false, lineage);
+			false, stageMemos);
 		var result = [for (fn in functions) if (!equalities.exists(fn.name) || kept.exists(fn.name)) fn];
 		// The wrappers are made each build: their escapes are finished here, as a rewritten function's are in its transform.
 		var wrappers = IrInlineEnumRequests.resolve(program, generated);

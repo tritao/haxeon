@@ -24,24 +24,24 @@ class IrValueArrayScalarLowering extends compiler.ir.pipeline.IrFunctionPass {
 	final suffix:String;
 	final helpers:Map<String, IrBody>;
 	final scratch:IrPassScratch;
-	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
 	final versions:Map<String, Int> = [];
 
 	function new(suffix:String, helpers:Map<String, IrBody>, scratch:IrPassScratch,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>) {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>) {
 		this.suffix = suffix;
 		this.helpers = helpers;
 		this.scratch = scratch;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 	}
 
 	/**
-	 * Expands the calls of `element`'s boundary helpers in `program`'s functions; in a session with `lineage`,
+	 * Expands the calls of `element`'s boundary helpers in `program`'s functions; in a session with `stageMemos`,
 	 * reusing what it made of each function whose version and helpers are unchanged. A function that changes becomes
 	 * its edited body, edited in place when the stage owns it, else on a copy.
 	 */
 	public static function rewrite(program:IrProgram, element:IrType, expandAll:Bool,
-			scratch:IrPassScratch, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
+			scratch:IrPassScratch, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
 		var builder = scratch.bodyBuilder;
 		// The helpers as they are before any expansion: a helper's own body may be expanded below.
 		var helpers:Map<String, IrBody> = [];
@@ -59,8 +59,8 @@ class IrValueArrayScalarLowering extends compiler.ir.pipeline.IrFunctionPass {
 			return;
 		program.functions = compiler.ir.pipeline.IrFunctionStages.run("value-array-scalar:"
 			+ compiler.ir.model.IrTypeIdentity.text(element),
-			new IrValueArrayScalarLowering(suffix, helpers, scratch, lineage), program.functions, lineage,
-			lineage != null && lineage.checks, builder);
+			new IrValueArrayScalarLowering(suffix, helpers, scratch, stageMemos), program.functions, stageMemos,
+			builder);
 	}
 
 	/** Whether `name` is named as one of the element's helpers, expanded or not. */
@@ -82,10 +82,10 @@ class IrValueArrayScalarLowering extends compiler.ir.pipeline.IrFunctionPass {
 
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {
-		var known = lineage;
-		if (known != null)
-			for (name in helpers.keys())
-				versions.set(name, known.version(name));
+		if (stageMemos != null)
+			for (fn in functions)
+				if (helpers.exists(fn.name))
+					versions.set(fn.name, fn.version);
 	}
 
 	override public function fact(kind:Int, key:String):Int

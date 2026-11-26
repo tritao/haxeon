@@ -737,10 +737,10 @@ class IrProgramAssembler {
 		var cNativeNames:Map<String, Bool> = [for (native in program.cNatives) native.name => true],
 			needsUnreachable = false;
 		var builder = context.passScratch.bodyBuilder;
-		var lineage = context.lineage, cNativeKey = [for (native in program.cNatives) native.name].join("\n");
+		var stageMemos = context.stageMemos, cNativeKey = [for (native in program.cNatives) native.name].join("\n");
 		for (index in 0...allFunctions.length) {
 			var fn = allFunctions[index],
-				needs = IrRuntimeNeeds.of(fn, builder, cNativeNames, cNativeKey, lineage),
+				needs = IrRuntimeNeeds.of(fn, builder, cNativeNames, cNativeKey, stageMemos),
 				flags = needs.flags;
 			if (flags & IrRuntimeNeeds.INT64_TO_INT != 0)
 				needsInt64ToInt = true;
@@ -789,7 +789,7 @@ class IrProgramAssembler {
 		program.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions,
 			objects == null ? [] : objects,
 			staticFields == null ? [] : staticFields, natives == null ? [] : natives,
-			interfaces == null ? [] : interfaces, cNatives == null ? [] : cNatives, lineage);
+			interfaces == null ? [] : interfaces, cNatives == null ? [] : cNatives, stageMemos);
 		program.staticFields = staticFields == null ? [] : staticFields;
 		program.natives.push({
 			name: "__exit",
@@ -1390,15 +1390,15 @@ class IrRuntimeNeeds {
 		this.cNativeKey = cNativeKey;
 
 	public static function of(fn:IrFunction, builder:IrBodyBuilder, cNativeNames:Map<String, Bool>,
-			cNativeKey:String, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrRuntimeNeeds {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0)
+			cNativeKey:String, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrRuntimeNeeds {
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0)
 			return read(fn.encodedBody(builder), cNativeNames, cNativeKey);
-		var memo = lineage.memos.contribution(IrProgramAssembler.RUNTIME_NEEDS), known = memo.get(version);
+		var memo = stageMemos.contribution(IrProgramAssembler.RUNTIME_NEEDS), known = memo.get(version);
 		if (known == null || known.cNativeKey != cNativeKey) {
 			known = read(fn.encodedBody(builder), cNativeNames, cNativeKey);
 			memo.keep(version, known);
-		} else if (lineage.checks) {
+		} else if (stageMemos.checks) {
 			var now = read(fn.encodedBody(builder), cNativeNames, cNativeKey);
 			if (now.flags != known.flags || now.fastPaths.join(",") != known.fastPaths.join(",")
 				|| now.maps.join(",") != known.maps.join(",") || now.mapHandles.join(",") != known.mapHandles.join(","))

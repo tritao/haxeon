@@ -98,10 +98,10 @@ class IrTypeAwareWalk {
 	public static function run(program:IrProgram, roots:IrWalkRoots, ?dynamicSites:Map<String, Array<String>>,
 			requireProviders = false,
 			keepCreatedClassMethods = false, ?classDependencies:IrClassDependencies,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):IrWalkResult {
+			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):IrWalkResult {
 		var walk = new IrTypeAwareWalkState(program, roots, dynamicSites == null ? defaultDynamicSites() : dynamicSites,
 			requireProviders,
-			keepCreatedClassMethods, classDependencies, lineage);
+			keepCreatedClassMethods, classDependencies, stageMemos);
 		return walk.run();
 	}
 
@@ -114,18 +114,16 @@ class IrTypeAwareWalk {
 	 */
 	public static function referenced(key:IrContributionKey<IrWalkRecord<IrWalkSummary, Map<String, Bool>>>,
 			program:Null<IrProgram>, functions:Array<IrFunction>, targets:Map<String, IrFunction>, roots:Array<String>,
-			transitive:Bool, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Map<String, Bool> {
+			transitive:Bool, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Map<String, Bool> {
 		var live:Map<String, Bool> = [];
 		if (!targets.keys().hasNext())
 			return live;
 		var scratch = IrWalkSummary.scratch(),
-			session = program == null ? null : lineage,
-			last = session == null ? null : session.memos.lastResult(key),
+			session = program == null ? null : stageMemos,
+			last = session == null ? null : session.lastResult(key),
 			given = [transitive ? "transitive" : ""].concat(roots),
 			kept = last == null || session == null || program == null ? null : last.holds(program, given, [], functions,
 				(fn, summary) -> {
-					if (session.versionOf(fn) == 0)
-						return null;
 					var now = IrWalkSummary.of(fn, session, scratch);
 					return IrWalkSummary.same(summary, now) ? now : null;
 				});
@@ -134,11 +132,11 @@ class IrTypeAwareWalk {
 				&& !sameNames(referenced(key, null, functions, targets, roots, transitive, null), kept.result))
 				throw new compiler.core
 					.InternalError('--check-reuse: the walk ${key.name} reused references that differ from walking now');
-			session.memos.keepResult(key, kept);
+			session.keepResult(key, kept);
 			return kept.result.copy();
 		}
 		if (last != null && session != null)
-			last.giveBack(session.memos.contribution(SUMMARIES), session);
+			last.giveBack(session.contribution(SUMMARIES));
 		var pending:Array<String> = [];
 		function mark(name:String):Void {
 			if (targets.exists(name) && !live.exists(name)) {
@@ -149,7 +147,7 @@ class IrTypeAwareWalk {
 		for (name in roots)
 			mark(name);
 		function scan(fn:IrFunction):Void {
-			var summary = IrWalkSummary.of(fn, lineage, scratch);
+			var summary = IrWalkSummary.of(fn, stageMemos, scratch);
 			for (name in summary.calls)
 				mark(name);
 			for (name in summary.staticClosures)
@@ -174,18 +172,15 @@ class IrTypeAwareWalk {
 				scan(target);
 		}
 		if (session != null && program != null) {
-			// Each function the walk scanned is kept by its summary, which a function with no version has none of.
 			var summaries:Array<Null<IrWalkSummary>> = [];
 			for (fn in functions) {
 				if (transitive && targets.exists(fn.name) && !live.exists(fn.name)) {
 					summaries.push(null);
 					continue;
 				}
-				if (session.versionOf(fn) == 0)
-					return live;
 				summaries.push(IrWalkSummary.of(fn, session, scratch));
 			}
-			session.memos.keepResult(key,
+			session.keepResult(key,
 				new IrWalkRecord(program, given, [], functions.copy(), summaries, live.copy()));
 		}
 		return live;
@@ -208,26 +203,24 @@ class IrTypeAwareWalk {
 	 */
 	public static function runKept(key:IrContributionKey<IrWalkRecord<IrWalkSummary, IrWalkResult>>, program:IrProgram,
 			roots:IrWalkRoots, keepCreatedClassMethods:Bool, classDependencies:Null<IrClassDependencies>,
-			lineage:compiler.ir.reuse.IrStageMemo.IrLineage):IrWalkResult {
+			stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):IrWalkResult {
 		// The settings and what the class dependencies read besides the program, then the roots.
 		var given = [
 			keepCreatedClassMethods ? "keep created class methods" : "",
 			classDependencies == null ? "" : classDependencies.symbols.join(" ") + "\n" + classDependencies.inputs
 		].concat(roots.functions),
 			givenTypes = [for (type in roots.types) IrTypeIds.id(type)],
-			memos = lineage.memos,
+			memos = stageMemos,
 			memo = memos.contribution(SUMMARIES),
 			scratch = IrWalkSummary.scratch(),
 			last = memos.lastResult(key),
 			kept = last == null ? null : last.holds(program, given, givenTypes, program.functions, (fn, summary) -> {
-				if (lineage.versionOf(fn) == 0)
-					return null;
-				var now = IrWalkSummary.of(fn, lineage, scratch);
+				var now = IrWalkSummary.of(fn, stageMemos, scratch);
 				return IrWalkSummary.same(summary, now) ? now : null;
 			});
 		if (kept != null) {
-			if (lineage.checks) {
-				var now = run(program, roots, null, false, keepCreatedClassMethods, classDependencies, lineage);
+			if (stageMemos.checks) {
+				var now = run(program, roots, null, false, keepCreatedClassMethods, classDependencies, stageMemos);
 				if (!sameResult(now, kept.result))
 					throw new compiler.core
 						.InternalError('--check-reuse: the walk ${key.name} reused a result that differs from walking the program now');
@@ -236,16 +229,16 @@ class IrTypeAwareWalk {
 			return copyResult(kept.result);
 		}
 		if (last != null)
-			last.giveBack(memo, lineage);
-		var result = run(program, roots, null, false, keepCreatedClassMethods, classDependencies, lineage),
+			last.giveBack(memo);
+		var result = run(program, roots, null, false, keepCreatedClassMethods, classDependencies, stageMemos),
 			summaries:Array<Null<IrWalkSummary>> = [];
-		// A function the walk reached is kept by its summary, which a function with no version has none of.
+		// A function the walk reached is kept by its summary.
 		for (fn in program.functions) {
 			if (!result.reached.exists(fn.name)) {
 				summaries.push(null);
 				continue;
 			}
-			var version = lineage.versionOf(fn), summary = version == 0 ? null : memo.get(version);
+			var summary = memo.get(fn.version);
 			if (summary == null)
 				return copyResult(result);
 			summaries.push(summary);
@@ -383,7 +376,7 @@ private class IrTypeAwareWalkState {
 	final requireProviders:Bool;
 	final keepCreatedClassMethods:Bool;
 	final classDependencies:Null<IrClassDependencies>;
-	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
 	final dependencySymbolsDone:Map<String, Bool> = [];
 	final index:IrProgramIndex;
 	final byName:Map<String, IrFunction> = [];
@@ -419,9 +412,9 @@ private class IrTypeAwareWalkState {
 
 	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>,
 			requireProviders:Bool, keepCreatedClassMethods:Bool,
-			classDependencies:Null<IrClassDependencies>, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>) {
+			classDependencies:Null<IrClassDependencies>, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>) {
 		this.classDependencies = classDependencies;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 		this.program = program;
 		this.roots = roots;
 		this.dynamicSites = dynamicSites;
@@ -521,7 +514,7 @@ private class IrTypeAwareWalkState {
 				case None:
 			}
 			// Roots' signatures were made created in `reach`; elsewhere a type is created by what the code does with it.
-			follow(fn, IrWalkSummary.of(fn, lineage, scratch));
+			follow(fn, IrWalkSummary.of(fn, stageMemos, scratch));
 		}
 	}
 
@@ -751,22 +744,22 @@ class IrWalkSummary {
 		return new IrWalkSummary();
 
 	/**
-	 * The summary of `fn`: kept by the session for its version with `lineage`; else read now into `scratch`, which the next call
+	 * The summary of `fn`: kept by the session for its version with `stageMemos`; else read now into `scratch`, which the next call
 	 * reuses, so a walk without a memo allocates no summary per function.
 	 */
-	public static function of(fn:IrFunction, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>,
+	public static function of(fn:IrFunction, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
 			scratch:IrWalkSummary):IrWalkSummary {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0) {
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0) {
 			scratch.clear();
 			scratch.fill(fn);
 			return scratch;
 		}
-		var memo = lineage.memos.contribution(IrTypeAwareWalk.SUMMARIES), known = memo.get(version);
+		var memo = stageMemos.contribution(IrTypeAwareWalk.SUMMARIES), known = memo.get(version);
 		if (known == null) {
 			known = read(fn);
 			memo.keep(version, known);
-		} else if (lineage.checks && !same(known, read(fn)))
+		} else if (stageMemos.checks && !same(known, read(fn)))
 			throw new compiler.core
 				.InternalError('--check-reuse: the walk summary reused for ${fn.name} differs from its instructions');
 		return known;

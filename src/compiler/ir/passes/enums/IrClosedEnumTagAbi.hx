@@ -18,7 +18,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 /**
  * Project an unobserved nominal tag to its integer ABI, including ordinary integer arrays. On IR bodies
@@ -54,7 +54,7 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 	final program:IrProgram;
 	final reflectableObjects:Null<Array<String>>;
 	final builder:IrBodyBuilder;
-	final lineage:Null<IrLineage>;
+	final stageMemos:Null<IrStageMemos>;
 	var closed:Map<String, Bool> = [];
 
 	/** By type id: 1 when the type changes, 0 when not, -1 when not yet known. */
@@ -70,11 +70,11 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 	public var projected(default, null):Null<IrProgram> = null;
 
 	public function new(program:IrProgram, reflectableObjects:Null<Array<String>>, builder:IrBodyBuilder,
-			lineage:Null<IrLineage>) {
+			stageMemos:Null<IrStageMemos>) {
 		this.program = program;
 		this.reflectableObjects = reflectableObjects;
 		this.builder = builder;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 	}
 
 	/**
@@ -189,7 +189,7 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 	 * function lets escape (`CHOICE`), so a build whose functions let the same escape takes it.
 	 */
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
-		var known = lineage;
+		var known = stageMemos;
 		if (known == null) {
 			closed = choose(functions, names);
 			return;
@@ -199,8 +199,8 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 			IrObjectReflection.usedByProgram(program) ? "reflection" : "",
 			(reflectableObjects ?? []).join(",")
 		],
-			last = known.memos.lastResult(CHOICE),
-			memo = known.memos.contribution(ESCAPES),
+			last = known.lastResult(CHOICE),
+			memo = known.contribution(ESCAPES),
 			// What a function's kind lets escape is not in its record: one of such a kind that changed is chosen again.
 			kept = last == null ? null : last.holds(program, given, [], functions, (fn, record) -> {
 				if (rootsOfKind(fn))
@@ -214,12 +214,12 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 				throw new InternalError('--check-reuse: the closed enum tag ABI reused a choice that differs from choosing now');
 		} else {
 			if (last != null)
-				last.giveBack(memo, known);
+				last.giveBack(memo);
 			closed = choose(functions, names);
 			kept = new IrWalkRecord(program, given, [], functions.copy(),
 				[for (fn in functions) IrTagEscapeRecord.of(fn, builder, known)], closed.copy());
 		}
-		known.memos.keepResult(CHOICE, kept);
+		known.keepResult(CHOICE, kept);
 	}
 
 	/** Whether `fn`'s kind lets types escape (`choose`). */
@@ -287,7 +287,7 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 					escape(a.type);
 				escape(fn.result);
 			}
-			var record = IrTagEscapeRecord.of(fn, builder, lineage);
+			var record = IrTagEscapeRecord.of(fn, builder, stageMemos);
 			for (id in record.escaped)
 				escapeId(id);
 			var callees = record.callees, arguments = record.arguments;
@@ -329,7 +329,7 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 					|| StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
 					escape(Obj(object.name));
 		}
-		for (name in reach.collectKept(REACH, roots, _ -> false, lineage).keys())
+		for (name in reach.collectKept(REACH, roots, _ -> false, stageMemos).keys())
 			closed.remove(name);
 		return closed;
 	}
@@ -495,15 +495,15 @@ class IrTagEscapeRecord {
 	function new() {}
 
 	public static function of(fn:IrFunction, builder:IrBodyBuilder,
-			lineage:Null<IrLineage>):IrTagEscapeRecord {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0)
+			stageMemos:Null<IrStageMemos>):IrTagEscapeRecord {
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0)
 			return read(fn.encodedBody(builder));
-		var memo = lineage.memos.contribution(IrClosedEnumTagAbi.ESCAPES), known = memo.get(version);
+		var memo = stageMemos.contribution(IrClosedEnumTagAbi.ESCAPES), known = memo.get(version);
 		if (known == null) {
 			known = read(fn.encodedBody(builder));
 			memo.keep(version, known);
-		} else if (lineage.checks && !known.same(read(fn.encodedBody(builder))))
+		} else if (stageMemos.checks && !known.same(read(fn.encodedBody(builder))))
 			throw new InternalError('--check-reuse: the tag escapes reused for ${fn.name} differ from its body');
 		return known;
 	}

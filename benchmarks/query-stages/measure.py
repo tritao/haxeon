@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Builds StageCostMain with the checkout's compiler (release, with the checkout's src, stdlib and lib/haxeon-io) and prints
-main-thread instructions per function and stage of a warm build, today's stage driver against the query engine's, per case.
+main-thread instructions per function and stage of a warm build, the stage driver (`IrFunctionStages.run`) against the bare
+engine loop it is built on, per case.
 
     benchmarks/query-stages/measure.py [--stages 25] [--functions 9000] [--builds 4] [--cases held,held1,held3,cutoff]
                                        [--checkout DIR]
@@ -99,10 +100,10 @@ def main():
         hl, program = build(pg, arguments.checkout, out)
         print("built", program, flush=True)
     per = arguments.builds * arguments.functions * arguments.stages
-    print(f"{'case':8} {'old':>8} {'engine':>8}   instructions per function and stage of a warm build")
+    print(f"{'case':8} {'driver':>8} {'engine':>8}   instructions per function and stage of a warm build")
     for case in arguments.cases.split(","):
         row = []
-        for driver in ("old", "engine"):
+        for driver in ("driver", "engine"):
             total = count(pg, hl, program, [driver, case, str(arguments.stages), str(arguments.functions),
                                             str(arguments.builds)])
             row.append(total / per)

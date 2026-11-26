@@ -74,7 +74,7 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 	final useCounts:Array<Int> = [];
 
 	final scratch:IrPassScratch;
-	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
 
 	/** By type id, the keys of the function types the type names where `changesType` looks, or null when not known yet. */
 	final functionKeys:Array<Null<Array<String>>> = [];
@@ -100,9 +100,9 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 	 * checked casts they need are derived from them in stages of their own.
 	 */
 	public function new(program:IrProgram, scratch:IrPassScratch,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
+			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos) {
 		this.program = program;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 		this.scratch = scratch;
 		objects = [for (object in program.objects) object.name => object];
 		for (declaration in program.enums)
@@ -119,7 +119,7 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 
 	/** What the choice reads of a function: what it does with closures (`USES`), and its signature when it is not only reachable (`EXPOSED`). */
 	override public function summarize(fn:IrFunction):Int
-		return (IrClosureUses.of(fn, scratch, useCounts, lineage).events.length > 0 ? USES_CLOSURES : 0)
+		return (IrClosureUses.of(fn, scratch, useCounts, stageMemos).events.length > 0 ? USES_CLOSURES : 0)
 			| (fn.retention != Reachable ? EXPOSED : 0);
 
 	/** The candidate closure types: what each function does with closures (by its summary), decided against the program. */
@@ -144,7 +144,7 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 				excludeSignature(fn);
 			if (summary & USES_CLOSURES == 0)
 				continue;
-			var uses = IrClosureUses.of(fn, scratch, useCounts, lineage), events = uses.events, index = 0;
+			var uses = IrClosureUses.of(fn, scratch, useCounts, stageMemos), events = uses.events, index = 0;
 			while (index < events.length) {
 				var type = IrTypeIds.type(events[index + 1]);
 				switch events[index] {
@@ -179,8 +179,8 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 
 	/** A number for `text` in the session's facts; without a session nothing is checked again, so any number does. */
 	function intern(text:String):Int {
-		var known = lineage;
-		return known == null ? 1 : known.memos.facts.intern(text);
+		var known = stageMemos;
+		return known == null ? 1 : known.stageFacts.intern(text);
 	}
 
 	/**
@@ -393,11 +393,10 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 				name: field.name, type: mapType(field.type)
 			}];
 		// The adapters' interface boxes and checked casts are derived from each adapter's version, so a kept adapter keeps them.
-		var checks = lineage != null && lineage.checks;
 		generated = IrValueInterfaceBoxes.rewriteDerived(BOX_STAGE, generated.concat(generatedMakers), program.objects,
-			program.interfaces, rewritten, lineage, checks, scratch.bodyBuilder);
+			program.interfaces, rewritten, stageMemos, scratch.bodyBuilder);
 		generated = IrCheckedDynamicCasts.rewriteBodies(CAST_STAGE, generated, program.objects, false, rewritten, false,
-			false, scratch.bodyBuilder, lineage, checks);
+			false, scratch.bodyBuilder, stageMemos);
 		var result = rewritten.concat(generated);
 		program.functions = result;
 		var hasTypeTest = false;
@@ -692,10 +691,9 @@ class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 	 * the adapters it calls) is added by its caller, every run.
 	 */
 	function helper(name:String, make:compiler.ir.reuse.IrFactReader->IrFunction):IrFunction {
-		var known = lineage;
+		var known = stageMemos;
 		return compiler.ir.pipeline.IrFunctionStages.derived(STAGE, name, this,
-			compiler.ir.pipeline.IrFunctionStages.FROM_NAME, known, known != null && known.checks,
-			scratch.bodyBuilder, make);
+			compiler.ir.pipeline.IrFunctionStages.FROM_NAME, known, scratch.bodyBuilder, make);
 	}
 
 	static function callableOf(type:IrType):IrType
@@ -1126,15 +1124,15 @@ class IrClosureUses {
 	function new() {}
 
 	public static function of(fn:IrFunction, scratch:IrPassScratch, useCounts:Array<Int>,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrClosureUses {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0)
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrClosureUses {
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0)
 			return read(fn.encodedBody(scratch.bodyBuilder), useCounts);
-		var memo = lineage.memos.contribution(IrScalarClosures.USES), known = memo.get(version);
+		var memo = stageMemos.contribution(IrScalarClosures.USES), known = memo.get(version);
 		if (known == null) {
 			known = read(fn.encodedBody(scratch.bodyBuilder), useCounts);
 			memo.keep(version, known);
-		} else if (lineage.checks) {
+		} else if (stageMemos.checks) {
 			var now = read(fn.encodedBody(scratch.bodyBuilder), useCounts);
 			if (now.events.join(",") != known.events.join(",") || now.names.join(",") != known.names.join(","))
 				throw new InternalError('--check-reuse: the closure uses reused for ${fn.name} differ from its body');

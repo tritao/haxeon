@@ -17,7 +17,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
@@ -73,8 +73,7 @@ class IrOptionalFieldStorage extends IrFunctionPass {
 	final declarations:Array<IrObject>;
 	final objects:Map<String, IrObject>;
 	final layouts:IrInlineValueLayout;
-	final lineage:Null<IrLineage>;
-	final checks:Bool;
+	final stageMemos:Null<IrStageMemos>;
 	var builder:Null<IrBodyBuilder>;
 
 	/** The functions the stage is given, in program order: the value methods are specialized from them. */
@@ -95,11 +94,10 @@ class IrOptionalFieldStorage extends IrFunctionPass {
 	/** The plans by `key`. */
 	final byKey:Map<String, OptionalFieldPlan> = [];
 
-	/** With `lineage`, the session's memo derives the helpers, and `builder` reads the bodies. */
-	public function new(declarations:Array<IrObject>, ?lineage:IrLineage, checks = false, ?builder:IrBodyBuilder) {
+	/** With `stageMemos`, the session's memo derives the helpers, and `builder` reads the bodies. */
+	public function new(declarations:Array<IrObject>, ?stageMemos:IrStageMemos, ?builder:IrBodyBuilder) {
 		this.declarations = declarations;
-		this.lineage = lineage;
-		this.checks = checks;
+		this.stageMemos = stageMemos;
 		this.builder = builder;
 		objects = [for (object in declarations) object.name => object];
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
@@ -215,10 +213,10 @@ class IrOptionalFieldStorage extends IrFunctionPass {
 		originals = functions;
 
 	override public function fact(kind:Int, key:String):Int {
-		var known = lineage;
+		var known = stageMemos;
 		if (known == null)
 			return 0;
-		return known.memos.facts.intern(switch kind {
+		return known.stageFacts.intern(switch kind {
 			case RECEIVER: receiverText(key);
 			case PLAN:
 				var plan = byKey.get(key);
@@ -252,8 +250,8 @@ class IrOptionalFieldStorage extends IrFunctionPass {
 			var plan = entry.plan, planKey = entry.name;
 			// A helper of `plan` named `name`, which `make` builds, rewritten as the program's functions are.
 			function helper(name:String, make:() -> IrFunction):Void
-				all.push(IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, lineage, checks,
-					builder, reader -> {
+				all.push(IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, stageMemos, builder,
+					reader -> {
 						reader.read(PLAN, planKey);
 						rewritten(make(), reader);
 					}));
@@ -282,8 +280,8 @@ class IrOptionalFieldStorage extends IrFunctionPass {
 			var original = inputIndex().get(request.method);
 			if (original == null)
 				throw new InternalError('Missing value method "${request.method}" for optional field');
-			var known = lineage, input = known == null ? 0 : known.versionOf(original), method:IrFunction = original;
-			all.push(IrFunctionStages.derived(STAGE, name, this, input, lineage, checks, builder,
+			var known = stageMemos, input = known == null ? 0 : original.version, method:IrFunction = original;
+			all.push(IrFunctionStages.derived(STAGE, name, this, input, stageMemos, builder,
 				reader -> {
 					reader.read(DECLARATIONS, "");
 					rewritten(specializeMethod(name, request, method), reader);

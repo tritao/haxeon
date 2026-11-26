@@ -23,7 +23,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 private typedef OptionalAlias = {
 	final root:Int;
@@ -107,8 +107,7 @@ class IrOptionalScalarFlow extends IrFunctionPass {
 	/** The functions in program order, for the candidates' scalar forms (`finish`). */
 	var originals:Array<IrFunction> = [];
 
-	final lineage:Null<IrLineage>;
-	final checks:Bool;
+	final stageMemos:Null<IrStageMemos>;
 
 	/** By candidate, the version of the function its scalar form is made from. */
 	final versions:Map<String, Int> = [];
@@ -119,12 +118,11 @@ class IrOptionalScalarFlow extends IrFunctionPass {
 	/** The wrappers and receiver checks the rewrite being made asked for, so each is asked for once. */
 	var askedNow:Map<String, Bool> = [];
 
-	/** With `lineage`, the session's memo derives the scalar forms and helpers (`IrFunctionStages.derived`). */
-	public function new(declarations:Array<IrObject>, ?builder:IrBodyBuilder, ?lineage:IrLineage, checks = false) {
+	/** With `stageMemos`, the session's memo derives the scalar forms and helpers (`IrFunctionStages.derived`). */
+	public function new(declarations:Array<IrObject>, ?builder:IrBodyBuilder, ?stageMemos:IrStageMemos) {
 		this.declarations = declarations;
 		this.builder = builder;
-		this.lineage = lineage;
-		this.checks = checks;
+		this.stageMemos = stageMemos;
 		objects = [for (object in declarations) object.name => object];
 		resolution = IrMethodResolution.over(declarations);
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
@@ -187,10 +185,10 @@ class IrOptionalScalarFlow extends IrFunctionPass {
 					changed = true;
 				}
 		}
-		var known = lineage;
-		if (known != null)
-			for (name in candidates.keys())
-				versions.set(name, known.version(name));
+		if (stageMemos != null)
+			for (fn in functions)
+				if (candidates.exists(fn.name))
+					versions.set(fn.name, fn.version);
 	}
 
 	override public function fact(kind:Int, key:String):Int {
@@ -201,8 +199,8 @@ class IrOptionalScalarFlow extends IrFunctionPass {
 			case VALUE: isValueName(key) ? 1 : 0;
 			case CANDIDATE: candidates.exists(key) ? 1 : 0;
 			case _:
-				var known = lineage;
-				known == null ? 0 : known.memos.facts.intern(switch kind {
+				var known = stageMemos;
+				known == null ? 0 : known.stageFacts.intern(switch kind {
 					case OBJECT: objectText(key);
 					case LAYOUT: [for (slot in slots(key)) slotText(slot)].join("\n");
 					case METHOD:
@@ -277,7 +275,7 @@ class IrOptionalScalarFlow extends IrFunctionPass {
 
 	/** A function derived from `input` (`IrFunctionStages.derived`), made by `make` reading through the reader it is given. */
 	function derive(name:String, input:Int, make:() -> IrFunction):IrFunction
-		return IrFunctionStages.derived(STAGE, name, this, input, lineage, checks, builder,
+		return IrFunctionStages.derived(STAGE, name, this, input, stageMemos, builder,
 			reader -> readingWith(reader, () -> {
 				var made = make();
 				helpers.scan(made.encodedBody(builder), reader);

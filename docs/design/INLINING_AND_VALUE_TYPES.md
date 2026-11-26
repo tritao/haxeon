@@ -83,8 +83,9 @@ targets. `IrProgramAssembler.assemble` already scans all functions and rewrites 
 snapshots, and their fields are `final`. The pass is a pure function from the pristine IR set to fresh `IrFunction`
 objects for the program handed to the backend (memoized by input versions).
 
-**What invalidates a memoized function.** The inliner's entries are stage memo entries (`IrStageMemos.stage("inliner")`), kept
-for the version of the function's source (`IrLineage`) with the facts its inlining read (`IrFacts`, through an `IrFactReader`);
+**What invalidates a memoized function.** The inliner's entries are stage memo entries (`IrStageMemos.memo("inliner")`), kept
+for the version of the function's source (`IrFunction.version`, the object's number) with the facts its inlining read (`IrFacts`,
+through an `IrFactRecorder`);
 an entry is reused while its source has that version and every fact still has the print it read. The facts are: the settings
 every function depends on (entry point, profile, the inlining, load/store and strength-reduction switches); each callee's
 component; whether each callee may be spliced at all, with the parameter types a call binds to; the form a spliced callee has

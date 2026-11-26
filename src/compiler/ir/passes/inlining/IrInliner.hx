@@ -34,10 +34,10 @@ import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.pipeline.IrFunctionPass.IrFactSource;
-import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrFacts.IrFactRecorder;
 import compiler.ir.reuse.IrFacts;
 import compiler.ir.reuse.IrStageMemo.IrContributionMemo;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 import compiler.ir.reuse.IrStageMemo.IrStageEntry;
 import compiler.ir.reuse.IrStageMemo;
 
@@ -91,7 +91,7 @@ class IrObjectFact {
 }
 
 /**
- * Per-session inliner state besides the stage memo (`IrStageMemos.stage`, the inliner's entries): `published` is the inlined form
+ * Per-session inliner state besides the stage memo (`IrStageMemos.memo`, the inliner's entries): `published` is the inlined form
  * each function had after the last successful compile, which is what a patch has to be computed against.
  */
 @:nullSafety(Strict)
@@ -270,10 +270,10 @@ class IrInliner extends IrFactSource {
 	/** By function id, the stage memo's entry when this compile reuses it: its inlined and its cleaned form are the entry's. */
 	final reused:Array<Null<IrStageEntry>> = [];
 
-	/** By function id, the version of its source (`IrLineage.versionOf`), which the memo's entries are kept for; 0 for none. */
+	/** By function id, the version of its source (`IrFunction.version`), which the memo's entries are kept for; 0 for none. */
 	final inputVersions:Array<Int> = [];
 
-	/** By function id, its slot in the session (`IrLineage.slots`), which its memo entry is kept at; only with a memo. */
+	/** By function id, its name's number (`IrSymbol.functionKey`), which its memo entry is kept at; only with a memo. */
 	final slots:Array<Int> = [];
 
 	/**
@@ -363,9 +363,9 @@ class IrInliner extends IrFactSource {
 	final settings:String;
 
 	/**
-	 * The session's memo of the stage (`IrStageMemos`): by function slot, what the stage made of the function of an input version,
+	 * The session's memo of the stage (`IrStageMemos`): by function symbol, what the stage made of the function of an input version,
 	 * the facts that rested on (`IrFacts`), and by output version the inlined form (`IrStageMemos.inlinedForms`). Null in a
-	 * compile without a lineage, which reuses nothing.
+	 * compile that keeps no session, which reuses nothing.
 	 */
 	final memo:Null<IrStageMemo>;
 
@@ -378,7 +378,7 @@ class IrInliner extends IrFactSource {
 	/** The function being inlined, innermost last, with the reader that records what its inlining reads (with a memo). */
 	final frameIds:Array<Int> = [];
 
-	final frameReaders:Array<IrFactReader> = [];
+	final frameReaders:Array<IrFactRecorder> = [];
 	final frameImpure:Array<Bool> = [];
 
 	/** Parallel to `frameIds`: the objects each function being inlined has consulted so far. */
@@ -402,7 +402,7 @@ class IrInliner extends IrFactSource {
 	final componentLabels:Array<Int> = [];
 
 	/**
-	 * The compile keeps a session: what the stage keeps is frozen, and with a lineage it is memoized for the next compile, with
+	 * The compile keeps a session: what the stage keeps is frozen, and with the session's memos it is memoized for the next compile, with
 	 * what each function's inlining read (its facts). A compile that keeps no session has no next compile, so it records none of it.
 	 */
 	final memoizes:Bool;
@@ -416,14 +416,14 @@ class IrInliner extends IrFactSource {
 	final strengthReduction:Bool;
 
 	function new(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, options:compiler.CompileOptions,
-			lineage:Null<IrLineage>) {
+			stageMemos:Null<IrStageMemos>) {
 		this.allowInline = options.inlining;
 		this.loadStoreForwarding = options.loadStoreForwarding;
 		this.strengthReduction = options.strengthReduction;
 		this.checkingMemo = options.checkReuse;
 		this.memoizes = options.keepSession;
-		var memos = memoizes && lineage != null ? lineage.memos : null;
-		memo = memos == null ? null : memos.stage(STAGE);
+		var memos = memoizes ? stageMemos : null;
+		memo = memos == null ? null : memos.memo(STAGE);
 		facts = memos == null ? null : memos.facts;
 		forms = memos == null ? null : memos.contribution(FORMS);
 		calls = memos == null ? null : memos.contribution(CALLS);
@@ -451,9 +451,9 @@ class IrInliner extends IrFactSource {
 			finished.push(false);
 			splices.push(0);
 			reused.push(null);
-			inputVersions.push(lineage != null && memos != null ? lineage.versionOf(fn) : 0);
-			if (lineage != null && memos != null)
-				slots.push(lineage.slots.of(fn));
+			inputVersions.push(memos != null ? fn.version : 0);
+			if (memos != null)
+				slots.push(symbol.functionKey());
 			outputVersions.push(0);
 			readsOf.push(null);
 			sameAsLast.push(null);
@@ -648,15 +648,15 @@ class IrInliner extends IrFactSource {
 	 */
 	/** Inlines `program`'s functions as `options` ask (the defaults, without them: every pass on, no reuse checks). */
 	/**
-	 * Inlines `program`'s functions as `options` ask (the defaults, without them: every pass on, no reuse checks). With `lineage`,
+	 * Inlines `program`'s functions as `options` ask (the defaults, without them: every pass on, no reuse checks). With `stageMemos`,
 	 * in a compile that keeps a session, a function whose source has the version its entry in the stage memo was made from, and
 	 * whose facts still have the prints it read, is not inlined again: its forms are the entry's.
 	 */
 	public static function run(program:IrProgram, cache:IrInlineCache, profile:TargetProfile,
 			?options:compiler.CompileOptions,
-			?instrument:IrInstrumentationScope, ?lineage:IrLineage):Array<String> {
+			?instrument:IrInstrumentationScope, ?stageMemos:IrStageMemos):Array<String> {
 		var settings = options == null ? new compiler.CompileOptions() : options;
-		var inliner = new IrInliner(program, cache, profile, settings, lineage),
+		var inliner = new IrInliner(program, cache, profile, settings, stageMemos),
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [];
 		var published:Map<String, IrFunction> = [],
@@ -850,7 +850,7 @@ class IrInliner extends IrFactSource {
 	}
 
 	/** The reader of the function being inlined, when its reads are recorded. */
-	inline function frameReader():Null<IrFactReader>
+	inline function frameReader():Null<IrFactRecorder>
 		return frameReaders.length > 0 ? frameReaders[frameReaders.length - 1] : null;
 
 	/** The value of the stage's fact of `kind` about `key`, as the program stands in this compile (`IrFacts`). */
@@ -1008,7 +1008,7 @@ class IrInliner extends IrFactSource {
 			var reads = readsOf[id];
 			if (reads == null)
 				return;
-			entry = new IrStageEntry(inputVersions[id], reads, cleaned, outputVersions[id], 0, null);
+			entry = new IrStageEntry(inputVersions[id], reads, cleaned, outputVersions[id]);
 			forms.keep(outputVersions[id], inlined == null ? IrInlinedForm.NONE : new IrInlinedForm(inlined));
 		}
 		memo.keep(slots[id], entry);
@@ -1029,10 +1029,9 @@ class IrInliner extends IrFactSource {
 		frameIds.push(id);
 		frameImpure.push(false);
 		var consultedObjects:Map<String, Bool> = [];
-		var known = facts, reader:Null<IrFactReader> = null;
+		var known = facts, reader:Null<IrFactRecorder> = null;
 		if (known != null) {
-			reader = new IrFactReader(STAGE, null, known, this);
-			reader.begin(false);
+			reader = new IrFactRecorder(STAGE, known, this);
 			reader.read(SETTINGS, "");
 			frameReaders.push(reader);
 		}

@@ -2,7 +2,7 @@ package compiler.ir.passes.objects;
 
 import compiler.ir.model.IrBuilder;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrFacts;
+import compiler.ir.reuse.IrStageFacts;
 import compiler.ir.model.IrFunction;
 import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
@@ -36,7 +36,7 @@ class IrOverrideBridges extends IrFunctionPass {
 
 	/**
 	 * The program-wide fact a rewrite reads: 0 when no slot needs a bridge, so no call changes. With bridges it is not stated per
-	 * call (`IrFacts.UNKNOWN`): every function is rewritten again, and the call adapters are made as the rewrites meet the calls.
+	 * call (`IrStageFacts.UNKNOWN`): every function is rewritten again, and the call adapters are made as the rewrites meet the calls.
 	 */
 	static inline final BRIDGED = 0;
 
@@ -112,7 +112,7 @@ class IrOverrideBridges extends IrFunctionPass {
 	}
 
 	override public function fact(kind:Int, key:String):Int
-		return bridges.length == 0 ? 0 : IrFacts.UNKNOWN;
+		return bridges.length == 0 ? 0 : IrStageFacts.UNKNOWN;
 
 	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (reader.read(BRIDGED, "") == 0)

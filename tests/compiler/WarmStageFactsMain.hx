@@ -6,8 +6,8 @@ import compiler.runtime.CompilerIntrinsics;
 
 /**
  * A warm build after an edit that changes only a fact an IR stage reads about another function or declaration, and not the
- * function that reads it, gives the bytes of a fresh build. A per-function stage memo (`IrStageMemo`) keeps the reader's rewrite
- * while the facts it recorded hold (`IrFacts.hold`), so each edit here leaves `Main`'s source as it is and changes one fact:
+ * function that reads it, gives the bytes of a fresh build. A per-function stage's memo (`IrStageQueries`) keeps the reader's
+ * rewrite while the facts it read are unchanged (`IrStageFacts`), so each edit here leaves `Main`'s source as it is and changes one fact:
  * whether a callee is a nullable scalar candidate (`IrNullableScalarFlow`, the first and the last callee a reader asks about), the
  * form a value constructor expands to (`IrValueConstructors`), and whether an enum can be stored as its tag (`IrEnumTagLowering`).
  * Three edits change what such a fact describes along with the reader's IR or its lowering: a callee's arity (a call fills a new

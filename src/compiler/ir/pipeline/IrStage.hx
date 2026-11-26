@@ -4,7 +4,6 @@ import compiler.ir.analysis.IrEntryPrune;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.analysis.IrEntryPrune.IrPruneWatch;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 /**
  * One named step of an `IrPipeline` stage list: an existing pass (or a group of calls that ran back to back) wrapped as it is, from
@@ -26,22 +25,6 @@ class IrStage extends IrStageHooks {
 	public function when(predicate:(IrProgram, IrPipelineContext) -> Bool):IrStage {
 		enabled = predicate;
 		return this;
-	}
-
-	/** The stage keeps the lineage of the functions itself (`IrFunctionStages`), so the list does not settle after it. */
-	public var memoizes(default, null) = false;
-
-	public function memoized():IrStage {
-		memoizes = true;
-		return this;
-	}
-
-	/** Runs the stage; in a session its changes are settled into the lineage (`IrLineage.settle`). */
-	public function runSettled(program:IrProgram, context:IrPipelineContext):IrProgram {
-		var result = run(program, context), lineage = context.lineage;
-		if (lineage != null && !memoizes)
-			lineage.settle(name, result.functions);
-		return result;
 	}
 }
 
@@ -112,7 +95,7 @@ class IrStageHooks {
 
 	/**
 	 * After a stage that ran: in a compile that keeps no session, a function that has a body keeps only its body, the objects
-	 * the stage made it from or decoded to read it included. A session keeps them while a cache before the encode point reads them.
+	 * the stage made it from or decoded to read it included. A session keeps them while a memo before the encode point reads them.
 	 */
 	public static function release(functions:Array<IrFunction>, context:IrPipelineContext):Void {
 		if (context.options.keepSession)
@@ -151,10 +134,10 @@ class IrAssemblyStage extends IrStageHooks {
 		return this;
 	}
 
-	/** The stage keeps the lineage of the functions itself (`IrFunctionStages`), so the list does not settle after it. */
+	/** The stage keeps memos of its own (`IrFunctionStages`), so the list does not settle after it. */
 	public var memoizes(default, null) = false;
 
-	/** The encode point: the lineage of the functions (`IrLineage`) ends after this stage, as the stages after it edit bodies. */
+	/** The encode point: the stages after this one edit bodies, so what they make is never compared with last build's. */
 	public var encodePoint(default, null) = false;
 
 	public function memoized():IrAssemblyStage {
@@ -167,11 +150,16 @@ class IrAssemblyStage extends IrStageHooks {
 		return this;
 	}
 
-	/** Runs the stage; before the encode point of a session, its changes are settled into the lineage (`IrLineage.settle`). */
+	/**
+	 * Runs the stage; before the encode point of a session, what it made of each function is last build's when made the same
+	 * (`IrStageMemos.settle`).
+	 */
 	public function runSettled(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var result = run(assembly, context), lineage = context.lineage;
-		if (lineage != null && !memoizes)
-			lineage.settle(name, result.functions);
+		var memos = context.stageMemos;
+		if (memos == null || memoizes || memos.bodies)
+			return run(assembly, context);
+		var since = IrFunction.versionsGiven(), result = run(assembly, context);
+		memos.settle(name, result.functions, since);
 		return result;
 	}
 }
@@ -194,11 +182,11 @@ class IrStageList {
 					var meter:compiler.core.IrPassMeter = context.meter,
 						input = IrStageHooks.censusStart(program.functions),
 						before = meter.start();
-					program = stage.runSettled(program, context);
+					program = stage.run(program, context);
 					meter.stop(stage.name, before);
 					IrStageHooks.census(stage.name, input, program.functions, meter);
 				} else
-					program = stage.runSettled(program, context);
+					program = stage.run(program, context);
 				IrStageHooks.release(program.functions, context);
 			}
 		}
@@ -212,6 +200,9 @@ class IrStageList {
 
 /** The stage list of the program under assembly, with the metering and the early prune's check hooks its stages declare. */
 class IrAssemblyStageList {
+	/** The name putting the input into the session's database is metered under (`IrStageMemos.startBuild`). */
+	public static inline final INPUT = "assembly-input";
+
 	public final name:String;
 	public final stages:Array<IrAssemblyStage>;
 
@@ -222,13 +213,12 @@ class IrAssemblyStageList {
 
 	public function run(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var watches = false, memos = context.stageMemos;
-		// A session reuses what the stages before the encode point made of each function (`IrStageMemos`).
-		context.lineage = null;
-		if (memos != null && context.options.keepSession) {
+		// A session reuses what the stages made of each function (`IrStageMemos`).
+		if (memos != null) {
 			var meter = context.meter, before = meter == null ? null : meter.start();
-			context.lineage = IrLineage.start(memos, assembly.functions, context.options.checkReuse);
+			memos.startBuild(assembly.functions, context.options.checkReuse);
 			if (meter != null && before != null)
-				meter.stop(IrLineage.INPUT, before);
+				meter.stop(INPUT, before);
 		}
 		try {
 			for (stage in stages) {
@@ -245,14 +235,12 @@ class IrAssemblyStageList {
 						assembly = stage.runSettled(assembly, context);
 					IrStageHooks.release(assembly.functions, context);
 				}
-				var lineage = context.lineage;
-				if (stage.encodePoint && lineage != null)
-					lineage.enterBodies();
+				if (stage.encodePoint && memos != null)
+					memos.bodies = true;
 				IrStageHooks.after(stage, assembly.functions, context);
 				watches = watches || stage.prunePoint;
 			}
 		} catch (error:haxe.Exception) {
-			context.lineage = null;
 			// A pass that throws ends the run, and the watch with it: the next compile on this thread must not inherit it.
 			if (watches)
 				IrEntryPrune.watching(null);

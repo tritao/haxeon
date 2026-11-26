@@ -35,6 +35,15 @@ class IrSymbol {
 	public final id:Int;
 	public final name:String;
 
+	/** The dense number of this name among the names of functions (`functionKey`); -1 before one is given. */
+	var knownFunctionKey = -1;
+
+	@:processWide("how many names of functions are numbered (`functionKey`), written under the lock")
+	static var functionKeys = 0;
+
+	@:processWide("the names of functions by their number (`functionKey`): the list only grows")
+	static final byFunctionKey:Array<IrSymbol> = [];
+
 	function new(id:Int, name:String) {
 		this.id = id;
 		this.name = name;
@@ -71,6 +80,40 @@ class IrSymbol {
 			throw new InternalError('No IR symbol $id');
 		return chunk[id & (CHUNK_SIZE - 1)];
 	}
+
+	/**
+	 * A dense number for this name as the name of a function, given the first time a table keyed by function asks for it: the
+	 * stages' memos (`IrStageQueries`) are columns by this number, which counts only the names of functions, not every name the
+	 * IR refers to.
+	 */
+	public inline function functionKey():Int
+		return knownFunctionKey >= 0 ? knownFunctionKey : giveFunctionKey();
+
+	function giveFunctionKey():Int {
+		lock.acquire();
+		if (knownFunctionKey < 0) {
+			knownFunctionKey = functionKeys++;
+			byFunctionKey.push(this);
+		}
+		lock.release();
+		return knownFunctionKey;
+	}
+
+	/** The number `functionKey` gave this name, or -1 when none was asked for: no function was keyed by it. */
+	public inline function givenFunctionKey():Int
+		return knownFunctionKey;
+
+	/** The symbol for `name` when the name was seen, else null: unlike `of`, it interns nothing. */
+	public static function known(name:String):Null<IrSymbol> {
+		lock.acquire();
+		var symbol = byName.get(name);
+		lock.release();
+		return symbol;
+	}
+
+	/** The symbol whose `functionKey` is `key`. */
+	public static function ofFunctionKey(key:Int):IrSymbol
+		return byFunctionKey[key];
 
 	public function toString():String
 		return name;

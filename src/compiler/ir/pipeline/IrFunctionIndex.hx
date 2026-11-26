@@ -3,6 +3,7 @@ package compiler.ir.pipeline;
 import compiler.ir.analysis.IrEntryPrune;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
 
 /**
  * A pass's by-name view of the function list. After the early prune (`IrEntryPrune`) a lookup of a name the prune removed is a
@@ -11,24 +12,16 @@ import compiler.ir.model.IrFunction;
  */
 class IrFunctionIndex {
 	final pass:String;
-	final byName:Map<String, IrFunction> = [];
 
-	/**
-	 * In a session before the encode point, the program's shared name index (`IrLineage.named`), for `functions` that are the
-	 * program as the stages stand: names are looked up there, and `byName` holds only what the pass sets.
-	 */
-	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	/** By the number of each function's name (`IrSymbol.functionKey`), the function: no table of names is made per pass. */
+	final byKey:Array<Null<IrFunction>> = [];
 
-	/** The functions to index on the first lookup, when there is no shared index. */
+	/** The functions to index on the first lookup. */
 	var pending:Null<Array<IrFunction>>;
 
-	public function new(pass:String, functions:Array<IrFunction>, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
+	public function new(pass:String, functions:Array<IrFunction>) {
 		this.pass = pass;
-		this.lineage = lineage;
-		if (lineage == null)
-			pending = functions;
-		else if (lineage.checks)
-			lineage.checkIndex(pass, functions);
+		pending = functions;
 	}
 
 	/** Indexes the functions given at construction, when that is still to do. */
@@ -37,16 +30,21 @@ class IrFunctionIndex {
 		if (waiting != null) {
 			pending = null;
 			for (fn in waiting)
-				byName.set(fn.name, fn);
+				put(fn.symbol.functionKey(), fn);
 		}
+	}
+
+	inline function put(key:Int, fn:IrFunction):Void {
+		if (key >= byKey.length)
+			byKey.resize(key + 1 + (key >> 1));
+		byKey[key] = fn;
 	}
 
 	function find(name:String):Null<IrFunction> {
 		flush();
-		var fn = byName.get(name), shared = lineage;
-		if (fn == null && shared != null)
-			fn = shared.named(name);
-		return fn;
+		var symbol = IrSymbol.known(name);
+		var key = symbol == null ? -1 : symbol.givenFunctionKey();
+		return key >= 0 && key < byKey.length ? byKey[key] : null;
 	}
 
 	public function get(name:String):Null<IrFunction> {
@@ -65,6 +63,6 @@ class IrFunctionIndex {
 
 	public function set(name:String, fn:IrFunction):Void {
 		flush();
-		byName.set(name, fn);
+		put(IrSymbol.of(name).functionKey(), fn);
 	}
 }

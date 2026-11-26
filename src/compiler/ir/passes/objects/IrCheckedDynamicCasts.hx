@@ -14,7 +14,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
@@ -24,7 +24,7 @@ import compiler.ir.model.SourceProvenance.Located;
 /**
  * Check Dynamic-to-reference casts before target-specific casts, so failure remains catchable. Per function (`IrFunctionPass`):
  * the rewrite reads, for each cast it meets, what the program declares of the object it casts to (`DECLARATION`), and asks
- * for the cast's helper. With a lineage the helpers are derived from that declaration (`IrFunctionStages.derived`).
+ * for the cast's helper. In a session the helpers are derived from that declaration (`IrFunctionStages.derived`).
  */
 @:nullSafety(Strict)
 class IrCheckedDynamicCasts extends IrFunctionPass {
@@ -42,15 +42,14 @@ class IrCheckedDynamicCasts extends IrFunctionPass {
 	final checkValueObjects:Bool;
 	final checkFunctionCasts:Bool;
 	final stage:String;
-	final lineage:Null<IrLineage>;
-	final checks:Bool;
+	final stageMemos:Null<IrStageMemos>;
 	final builder:Null<IrBodyBuilder>;
 
 	public static inline final STAGE = "checked-dynamic-casts";
 
-	/** With `lineage` (and the `builder` of its bodies), the helpers are derived in the memo of `stage`. */
+	/** With `stageMemos` (and the `builder` of its bodies), the helpers are derived in the memo of `stage`. */
 	public function new(objects:Array<IrObject>, checkObjects:Bool, existingFunctions:Null<Array<IrFunction>>,
-			checkValueObjects:Bool, checkFunctionCasts:Bool, stage = STAGE, ?lineage:IrLineage, checks = false,
+			checkValueObjects:Bool, checkFunctionCasts:Bool, stage = STAGE, ?stageMemos:IrStageMemos,
 			?builder:IrBodyBuilder) {
 		declarations = [for (object in objects) object.name => object];
 		this.existingFunctions = existingFunctions;
@@ -58,8 +57,7 @@ class IrCheckedDynamicCasts extends IrFunctionPass {
 		this.checkValueObjects = checkValueObjects;
 		this.checkFunctionCasts = checkFunctionCasts;
 		this.stage = stage;
-		this.lineage = lineage;
-		this.checks = checks;
+		this.stageMemos = stageMemos;
 		this.builder = builder;
 	}
 
@@ -124,21 +122,21 @@ class IrCheckedDynamicCasts extends IrFunctionPass {
 	/**
 	 * `rewrite` on IR bodies (docs/design/IR_CORE_COLUMNS.md, migration), in the stage `stage`: a checked cast
 	 * becomes a call of its helper in place, in the body itself, or a copy when a cache holds it. The helpers are built as
-	 * functions and encoded. With `lineage` each function's rewrite is derived from its version and the declarations it read
+	 * functions and encoded. With `stageMemos` each function's rewrite is derived from its version and the declarations it read
 	 * (`IrFunctionStages.derived`), and so are the helpers.
 	 */
 	public static function rewriteBodies(stage:String, functions:Array<IrFunction>, objects:Array<IrObject>,
 			checkObjects:Bool, existingFunctions:Null<Array<IrFunction>>, checkValueObjects:Bool,
-			checkFunctionCasts:Bool, builder:IrBodyBuilder, ?lineage:IrLineage, checks = false):Array<IrFunction> {
+			checkFunctionCasts:Bool, builder:IrBodyBuilder, ?stageMemos:IrStageMemos):Array<IrFunction> {
 		var pass = new IrCheckedDynamicCasts(objects, checkObjects, existingFunctions, checkValueObjects,
-			checkFunctionCasts, stage, lineage, checks, builder);
+			checkFunctionCasts, stage, stageMemos, builder);
 		pass.index(functions);
-		if (lineage != null)
-			lineage.memos.facts.begin();
+		if (stageMemos != null)
+			stageMemos.stageFacts.run(stageMemos.database, stage, pass);
 		var rewritten = [
 			for (fn in functions)
-				IrFunctionStages.derived(stage, fn.name, pass, lineage == null ? 0 : lineage.versionOf(fn), lineage,
-				checks, builder, reader -> pass.rewriteBody(fn, reader))
+				IrFunctionStages.derived(stage, fn.name, pass, stageMemos == null ? 0 : fn.version, stageMemos,
+				builder, reader -> pass.rewriteBody(fn, reader))
 		];
 		return rewritten.concat(pass.generated);
 	}
@@ -248,9 +246,7 @@ class IrCheckedDynamicCasts extends IrFunctionPass {
 			return new IrFunction(name, builder.arguments, type, builder.blocks,
 				Provider(TypeKey.of(type), ProviderOperation.CheckedCast));
 		}
-		generated.push(lineage == null ? make(new IrFactReader(stage, this,
-			compiler.ir.reuse.IrFacts.unshared())) : IrFunctionStages.derived(stage, name, this,
-			IrFunctionStages.FROM_NAME, lineage, checks, builder,
+		generated.push(IrFunctionStages.derived(stage, name, this, IrFunctionStages.FROM_NAME, stageMemos, builder,
 			make));
 		return name;
 	}

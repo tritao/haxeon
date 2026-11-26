@@ -17,7 +17,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrFacts;
+import compiler.ir.reuse.IrStageFacts;
 import compiler.ir.verify.IrVerifier;
 import compiler.types.typing.EnumRuntimeType;
 
@@ -75,7 +75,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	static inline final UNREACHED = 0;
 	static inline final REGISTERED = 1;
 
-	/** Of a helper's content name: 0 while the helper has it, `IrFacts.UNKNOWN` when another function took it. */
+	/** Of a helper's content name: 0 while the helper has it, `IrStageFacts.UNKNOWN` when another function took it. */
 	static inline final RENAMED = 2;
 
 	// Helper kinds.
@@ -86,7 +86,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	final reflectionProgram:Null<IrProgram>;
 	final reflectableObjects:Null<Array<String>>;
 	final unreached:Null<Map<String, Bool>>;
-	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
 	final requests:Map<String, IrType> = [];
 	final equalities:Map<String, String> = [];
 	final reflectiveEqualities:Map<String, String> = [];
@@ -142,16 +142,16 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 
 	/** With `unreached` (the functions a plain build's walk did not reach), only the others register what they need and are rewritten; otherwise every function does. */
 	public function new(?reflectionProgram:IrProgram, ?reflectableObjects:Array<String>, ?unreached:Map<String, Bool>,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
+			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos) {
 		this.reflectionProgram = reflectionProgram;
 		this.reflectableObjects = reflectableObjects;
 		this.unreached = unreached;
-		this.lineage = lineage;
-		var kept = lineage == null ? null : lineage.memos.lastResult(ENCODINGS);
+		this.stageMemos = stageMemos;
+		var kept = stageMemos == null ? null : stageMemos.lastResult(ENCODINGS);
 		if (kept == null) {
 			kept = [];
-			if (lineage != null)
-				lineage.memos.keepResult(ENCODINGS, kept);
+			if (stageMemos != null)
+				stageMemos.keepResult(ENCODINGS, kept);
 		}
 		encodings = kept;
 	}
@@ -254,9 +254,10 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 				for (argument in native.arguments) IrEnumEscapeReach.addNativeRoot(roots, argument);
 				IrEnumEscapeReach.addNativeRoot(roots, native.result);
 			}
-			var observed = new IrEnumEscapeReach(program, fn -> closing.exists(fn.name), lineage).collectKept(OBSERVED,
+			var observed = new IrEnumEscapeReach(program, fn -> closing.exists(fn.name),
+				stageMemos).collectKept(OBSERVED,
 				roots,
-				_ -> false, lineage);
+				_ -> false, stageMemos);
 			for (fn in functions) switch fn.kind {
 				case EnumEquality(_) if (fn.arguments.length == 2):
 					switch fn.arguments[0].type {
@@ -271,7 +272,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 			var helper = reflectiveEqualities.get(id);
 			if (helper != null) reflectiveRoots.push(helper);
 		}
-		dropped = droppedReflectiveHelpers(functions, reflectiveRoots, lineage, program);
+		dropped = droppedReflectiveHelpers(functions, reflectiveRoots, stageMemos, program);
 		for (fn in functions) switch fn.kind {
 			case EnumEquality(true) if (fn.arguments.length == 2 && isEnum(fn.arguments[0].type) && reached(fn)
 				&& !dropped.exists(fn.name)): register(fn.arguments[0].type);
@@ -323,8 +324,8 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	 * is all it is made of (`IrStageMemos.helpers`).
 	 */
 	function remembered(name:String):Null<IrFunction> {
-		var session = lineage;
-		return session == null ? null : session.memos.helper(name);
+		var session = stageMemos;
+		return session == null ? null : session.helper(name);
 	}
 
 	override public function fact(kind:Int, key:String):Int
@@ -335,7 +336,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 			case REGISTERED:
 				requested.length > 0 ? 1 : 0;
 			default:
-				occupiedBy(key) ? IrFacts.UNKNOWN : 0;
+				occupiedBy(key) ? IrStageFacts.UNKNOWN : 0;
 		};
 
 	/** Whether a function of the program, not the helper itself, has the helper's content name `name`. */
@@ -429,7 +430,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 			name: name, type: type
 		}];
 		usedUnboxes.sort((a, b) -> Reflect.compare(a.name, b.name));
-		var session = lineage, kept = made.copy();
+		var session = stageMemos, kept = made.copy();
 		for (used in usedUnboxes) {
 			var known = remembered(used.name);
 			if (known == null)
@@ -447,7 +448,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 		if (needsReflect) rewritten.push(dispatcher(REFLECT, requested, reflectiveEqualities));
 		if (session != null)
 			for (helper in kept)
-				session.memos.keepHelper(helper);
+				session.keepHelper(helper);
 		return rewritten;
 	}
 
@@ -456,14 +457,14 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	 * (`IrTypeAwareWalk.referenced`, kept as `DROPPED` in a session with `program`, the tables of the functions).
 	 */
 	static function droppedReflectiveHelpers(functions:Array<IrFunction>, roots:Array<String>,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, program:Null<IrProgram>):Map<String, Bool> {
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>, program:Null<IrProgram>):Map<String, Bool> {
 		var helpers:Map<String, IrFunction> = [];
 		for (fn in functions) switch fn.kind {
 			case EnumEquality(true): helpers.set(fn.name, fn);
 			default:
 		}
 		var live = compiler.ir.analysis.IrTypeAwareWalk.referenced(DROPPED, program, functions, helpers, roots, true,
-			lineage);
+			stageMemos);
 		return [for (name in helpers.keys()) if (!live.exists(name)) name => true];
 	}
 

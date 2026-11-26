@@ -5,7 +5,6 @@ import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.model.Ir;
-import compiler.ir.model.IrFunctionSlots.IrSlotEpoch;
 
 /** Source binding identity, lexical range, and SSA value after mutable stores vanish. */
 typedef IrDebugBinding = {
@@ -99,7 +98,6 @@ enum IrFunctionKind {
  * body replaces this one, which is not read again. A stage given a frozen body edits a copy.
  */
 @:allow(compiler.ir.model.IrBody)
-@:allow(compiler.ir.model.IrFunctionSlots)
 @:nullSafety(Strict)
 class IrFunction {
 	public final name:String;
@@ -134,10 +132,22 @@ class IrFunction {
 		return known;
 	}
 
-	/** Its name's slot in a session's numbering (`IrFunctionSlots.of`), valid while that numbering is at `slotEpoch`. */
-	var slot = -1;
+	/**
+	 * A number no other function object of the process has: what a memo of a whole-program step keeps a function's contribution
+	 * by, since a function is never changed once a stage hands it on (`IrStageMemos`).
+	 */
+	public final version:Int;
 
-	var slotEpoch:Null<IrSlotEpoch> = null;
+	@:processWide("numbers function objects; a number is never given twice and names only the object it was given to")
+	static var lastVersion = 0;
+
+	/** A number no function object has, for a memo that numbers what it made besides functions (`IrInliner`). */
+	public static function newVersion():Int
+		return ++lastVersion;
+
+	/** The last number given (`version`): every function made after this call has a greater one. */
+	public static inline function versionsGiven():Int
+		return lastVersion;
 
 	public static inline final CENSUS_INPUT = 1;
 	public static inline final CENSUS_READ = 2;
@@ -166,6 +176,7 @@ class IrFunction {
 		this.inlineHint = inlineHint;
 		this.retention = retention;
 		this.kind = kind;
+		version = ++lastVersion;
 	}
 
 	/** The function `body` is, which must be frozen: its arguments decoded now, its blocks and bindings when first read. */

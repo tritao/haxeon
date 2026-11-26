@@ -5,7 +5,7 @@ import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrTypeMap;
 import compiler.ir.reuse.IrStageMemo.IrContributionKey;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 import compiler.ir.reuse.IrWalkRecord;
 
 import compiler.ir.model.Ir;
@@ -50,22 +50,22 @@ class IrEnumEscapeReach {
 	public static final STORES = new IrContributionKey<Array<Array<Int>>>("escape-stores");
 
 	/**
-	 * `scans`, when given, tells the functions whose closures and map stores to read: the others have none. With `lineage`, what
+	 * `scans`, when given, tells the functions whose closures and map stores to read: the others have none. With `stageMemos`, what
 	 * each function gives is read once per version (`STORES`).
 	 */
-	public function new(program:IrProgram, ?scans:IrFunction->Bool, ?lineage:IrLineage) {
+	public function new(program:IrProgram, ?scans:IrFunction->Bool, ?stageMemos:IrStageMemos) {
 		this.program = program;
 		for (fn in program.functions) {
 			if (scans != null && !scans(fn))
 				continue;
-			var version = lineage == null ? 0 : lineage.versionOf(fn), stores:Null<Array<Array<Int>>> = null;
-			if (lineage != null && version != 0) {
-				var memo = lineage.memos.contribution(STORES);
+			var version = stageMemos == null ? 0 : fn.version, stores:Null<Array<Array<Int>>> = null;
+			if (stageMemos != null && version != 0) {
+				var memo = stageMemos.contribution(STORES);
 				stores = memo.get(version);
 				if (stores == null) {
 					stores = storesOf(fn);
 					memo.keep(version, stores);
-				} else if (lineage.checks && !sameStores(stores, storesOf(fn)))
+				} else if (stageMemos.checks && !sameStores(stores, storesOf(fn)))
 					throw new compiler.core
 						.InternalError('--check-reuse: the escape stores reused for ${fn.name} differ from its instructions');
 			} else
@@ -238,8 +238,8 @@ class IrEnumEscapeReach {
 
 	/** `collect` in a session that keeps the result as `key` (`collectEach`). */
 	public function collectKept(key:IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>, roots:Array<IrType>,
-			supportsCallableEscape:IrType->Bool, lineage:Null<IrLineage>):Map<String, Bool>
-		return collectEach(key, [roots], supportsCallableEscape, lineage)[0];
+			supportsCallableEscape:IrType->Bool, stageMemos:Null<IrStageMemos>):Map<String, Bool>
+		return collectEach(key, [roots], supportsCallableEscape, stageMemos)[0];
 
 	/**
 	 * The enums one walk reaches after each list of `lists` (`walker`), each a map of its own. In a session that keeps the results
@@ -251,8 +251,8 @@ class IrEnumEscapeReach {
 	 * stores it was given in order, and the lists. It follows no function's edges, so its record keeps no summaries.
 	 */
 	public function collectEach(key:IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>, lists:Array<Array<IrType>>,
-			supportsCallableEscape:IrType->Bool, lineage:Null<IrLineage>):Array<Map<String, Bool>> {
-		if (lineage == null)
+			supportsCallableEscape:IrType->Bool, stageMemos:Null<IrStageMemos>):Array<Map<String, Bool>> {
+		if (stageMemos == null)
 			return walkEach(lists, supportsCallableEscape);
 		var given = ['closures ${closureLog.length}', 'maps ${mapLog.length}'],
 			givenTypes = closureLog.concat(mapLog);
@@ -267,11 +267,11 @@ class IrEnumEscapeReach {
 			for (method in object.methods)
 				methodNames.set(method.functionName.name, true);
 		var methodFunctions = [for (fn in program.functions) if (methodNames.exists(fn.name)) fn];
-		var memos = lineage.memos,
+		var memos = stageMemos,
 			last = memos.lastResult(key),
 			kept = last == null ? null : last.holds(program, given, givenTypes, methodFunctions, (_, _) -> null);
 		if (kept != null && sameAnswers(kept.result, supportsCallableEscape)) {
-			if (lineage.checks && !sameResults(walkEach(lists, supportsCallableEscape), kept.result.results))
+			if (stageMemos.checks && !sameResults(walkEach(lists, supportsCallableEscape), kept.result.results))
 				throw new compiler.core
 					.InternalError('--check-reuse: the escape reach ${key.name} reused results that differ from walking it now');
 			memos.keepResult(key, kept);

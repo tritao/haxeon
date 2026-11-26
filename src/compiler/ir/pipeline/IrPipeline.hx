@@ -246,7 +246,7 @@ class IrPipeline {
 	static function dispatchWalk(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var functions = assembly.functions;
 		var walk = IrEntryPrune.walk(pruneInputOf(assembly, context, functions), context.pruneRoots,
-			IrEntryPrune.DISPATCH_WALK, pruneDependencies(assembly, functions), context.lineage);
+			IrEntryPrune.DISPATCH_WALK, pruneDependencies(assembly, functions), context.stageMemos);
 		assembly.dispatchWalk = walk;
 		assembly.reachedNatives = walk.calledNatives;
 		if (context.pruneFromEntry)
@@ -285,7 +285,7 @@ class IrPipeline {
 
 	static function enumDynamicDispatch(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
 		return new IrEnumDynamicDispatch(assembly.reflectionInput, assembly.reflectableObjects, assembly.unreached,
-			context.lineage);
+			context.stageMemos);
 
 	static function reachabilityReport(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var reflectionInput = assembly.reflectionInput;
@@ -304,9 +304,10 @@ class IrPipeline {
 
 	static function genericOwnerErasure(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		// Method values first: a bound method of an erased generic owner calls an erased operation, which erasure then makes.
-		IrMethodReferences.generate(assembly.functions, assembly.objects, context.lineage,
+		IrMethodReferences.generate(assembly.functions, assembly.objects, context.stageMemos,
 			derivedHelpers(IrMethodReferences.STAGE, context));
-		IrGenericOwnerErasure.generate(assembly.generator.facts, assembly.functions, assembly.objects, context.lineage,
+		IrGenericOwnerErasure.generate(assembly.generator.facts, assembly.functions, assembly.objects,
+			context.stageMemos,
 			derivedHelpers(IrGenericOwnerErasure.STAGE, context));
 		return assembly;
 	}
@@ -328,7 +329,7 @@ class IrPipeline {
 		var functions = assembly.functions;
 		var pruneInput = pruneInputOf(assembly, context, functions);
 		var pruned = IrEntryPrune.run(pruneInput, context.pruneRoots, pruneDependencies(assembly, functions),
-			context.lineage);
+			context.stageMemos);
 		context.pruned = pruned.removed;
 		context.prunedMethods = pruned.removedMethods;
 		assembly.reachedNatives = pruned.calledNatives;
@@ -357,7 +358,8 @@ class IrPipeline {
 		assembly.generatedStart = assembly.functions.length;
 
 	static function typedInterfaceGenerate(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		IrTypedInterfaceDispatch.generate(assembly.functions, assembly.objects, assembly.interfaces, context.lineage);
+		IrTypedInterfaceDispatch.generate(assembly.functions, assembly.objects, assembly.interfaces,
+			context.stageMemos);
 		return assembly;
 	}
 
@@ -375,7 +377,7 @@ class IrPipeline {
 	static function checkedDynamicCasts(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
 		return new IrCheckedDynamicCasts(assembly.objects, assembly.generator.profile.nativeReflectionDispatch, null,
 			false,
-			false, IrCheckedDynamicCasts.STAGE, context.lineage, context.options.checkReuse,
+			false, IrCheckedDynamicCasts.STAGE, context.stageMemos,
 			context.passScratch.bodyBuilder);
 
 	/** An exported function is exposed; one already exposed is kept as it is, so it keeps its identity from build to build. */
@@ -413,7 +415,7 @@ class IrPipeline {
 		enumInput.cNatives = cNatives == null ? [] : cNatives;
 		enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, assembly.functions,
 			enumInput.objects, enumInput.staticFields, enumInput.natives, enumInput.interfaces, enumInput.cNatives,
-			context.lineage);
+			context.stageMemos);
 		assembly.enumInput = enumInput;
 		return assembly;
 	}
@@ -422,7 +424,7 @@ class IrPipeline {
 		var enumInput = assembly.enumInput;
 		if (enumInput == null)
 			throw new InternalError("Enum tag lowering needs the enum specializations' input");
-		return new IrEnumTagLoweringPass(enumInput, context.lineage);
+		return new IrEnumTagLoweringPass(enumInput, context.stageMemos);
 	}
 
 	/** The enum input is the program the tag lowering finished: its tables and, from here, its functions. */
@@ -434,7 +436,7 @@ class IrPipeline {
 
 	static function inlineEnums(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var enumOutput = IrInlineEnumLowering.run(assembly.enumInput, context.laneTarget, context.canonicalObjects,
-			assembly.reflectableObjects, context.passScratch.bodyBuilder, context.lineage);
+			assembly.reflectableObjects, context.passScratch.bodyBuilder, context.stageMemos);
 		assembly.functions = enumOutput.functions;
 		assembly.objects = enumOutput.objects;
 		assembly.interfaces = enumOutput.interfaces;
@@ -445,14 +447,10 @@ class IrPipeline {
 	}
 
 	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
-		return new IrOptionalScalarFlow(assembly.objects, context.passScratch.bodyBuilder,
-			context.lineage,
-			context.options.checkReuse);
+		return new IrOptionalScalarFlow(assembly.objects, context.passScratch.bodyBuilder, context.stageMemos);
 
 	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
-		return new IrStaticNullChecks(assembly.objects, context.passScratch.bodyBuilder,
-			context.lineage,
-			context.options.checkReuse);
+		return new IrStaticNullChecks(assembly.objects, context.passScratch.bodyBuilder, context.stageMemos);
 
 	/** Value objects, interface boxes and anonymous records are reflectable too, besides the classes the typed program lists. */
 	static function reflectableObjects(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
@@ -485,8 +483,7 @@ class IrPipeline {
 
 	/** What `stage` derives its helpers through (`IrDerivedHelpers`), in the session's memo when there is one. */
 	static function derivedHelpers(stage:String, context:IrPipelineContext):IrDerivedHelpers
-		return new IrDerivedHelpers(stage, context.lineage, context.options.checkReuse,
-			context.passScratch.bodyBuilder);
+		return new IrDerivedHelpers(stage, context.stageMemos, context.passScratch.bodyBuilder);
 
 	/** Encodes `functions`: in a session they are a cache's (the encode point's or a stage's), so their bodies are frozen. */
 	static function encodeAll(functions:Array<IrFunction>, context:IrPipelineContext):Void {
@@ -514,15 +511,13 @@ class IrPipeline {
 			assembly.functions = existing.concat(IrCheckedDynamicCasts.rewriteBodies("reflection-casts",
 				functions.slice(start), assembly.objects, assembly.generator.profile.nativeReflectionDispatch, existing,
 				true,
-				true, context.passScratch.bodyBuilder, context.lineage,
-				context.options.checkReuse));
+				true, context.passScratch.bodyBuilder, context.stageMemos));
 		}
 		return assembly;
 	}
 
 	static function optionalFieldStorage(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
-		return new IrOptionalFieldStorage(assembly.objects, context.lineage, context.options.checkReuse,
-			context.passScratch.bodyBuilder);
+		return new IrOptionalFieldStorage(assembly.objects, context.stageMemos, context.passScratch.bodyBuilder);
 
 	/** The objects hold the optional fields' slots in place of the fields. */
 	static function physicalFields(assembly:IrAssembly, pass:IrFunctionPass):Void
@@ -530,7 +525,7 @@ class IrPipeline {
 
 	/**
 	 * The conversion point (docs/design/IR_CORE_COLUMNS.md, migration): every function is encoded, and the stages from here on read
-	 * bodies. In a session the stage memos before it hand on last build's object for a function nothing changed (`IrLineage`),
+	 * bodies. In a session the stage memos before it hand on last build's object for a function nothing changed (`IrStageMemos`),
 	 * which has its frozen body already, so only what this build made is encoded.
 	 */
 	static function encodeBodies(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
@@ -548,7 +543,7 @@ class IrPipeline {
 	static function runtimeSurface(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var program = IrProgramAssembler.finish(assembly, context);
 		assembly.program = program;
-		// From here the stages work on the finished program's functions, which the lineage settles.
+		// From here the stages work on the finished program's functions.
 		assembly.functions = program.functions;
 		return assembly;
 	}
@@ -571,7 +566,7 @@ class IrPipeline {
 
 	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrFunctionPass
 		return new IrClosedEnumTagAbi(program, context.reflectable, context.passScratch.bodyBuilder,
-			context.lineage);
+			context.stageMemos);
 
 	/** The program with the closed tags projected in its tables too. */
 	static function closedEnumTagProgram(program:IrProgram, pass:IrFunctionPass):IrProgram
@@ -580,7 +575,7 @@ class IrPipeline {
 	static function valueArrayRewrite(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var laneTarget = context.laneTarget;
 		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget,
-			context.passScratch, context.lineage);
+			context.passScratch, context.stageMemos);
 		return program;
 	}
 
@@ -589,22 +584,22 @@ class IrPipeline {
 	 * introduce further value joins, so `value-phi-scalarization` runs again after it.
 	 */
 	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrValueConstructors(program, context.passScratch, context.lineage);
+		return new IrValueConstructors(program, context.passScratch, context.stageMemos);
 
 	/** The last value phi scalarization before scalar replacement. */
 	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return IrValuePhiScalarization.pass(program, context.passScratch, context.lineage);
+		return IrValuePhiScalarization.pass(program, context.passScratch, context.stageMemos);
 
 	/** Wasm's scalar argument ABI, with value lanes. */
 	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrScalarArguments(program, true, context.passScratch, context.lineage);
+		return new IrScalarArguments(program, true, context.passScratch, context.stageMemos);
 
 	/** HashLink's scalar argument and result ABI. */
 	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrScalarArguments(program, false, context.passScratch, context.lineage);
+		return new IrScalarArguments(program, false, context.passScratch, context.stageMemos);
 
 	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrScalarClosures(program, context.passScratch, context.lineage);
+		return new IrScalarClosures(program, context.passScratch, context.stageMemos);
 
 	static function scalarReplacementObjects(program:IrProgram, context:IrPipelineContext):IrProgram {
 		context.scalarObjects = IrObjectTable.of([for (object in program.objects) object.name => object]);
@@ -618,11 +613,11 @@ class IrPipeline {
 			scratch = context.passScratch;
 		return new IrValueObjectRows(IrOpcode.ValueInit, scalarObjects, scratch.bodyBuilder,
 			fn -> IrScalarReplacement.rewriteBody(fn, scalarObjects, scratch, hashLink),
-			compiler.ir.passes.values.IrInlineValueLayout.declarationsFact(program.objects, context.lineage));
+			compiler.ir.passes.values.IrInlineValueLayout.declarationsFact(program.objects, context.stageMemos));
 	}
 
 	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrNullableScalarFlow(program, context.passScratch, context.lineage,
+		return new IrNullableScalarFlow(program, context.passScratch, context.stageMemos,
 			context.options.checkReuse);
 
 	/** Also after the retained HashLink assembly's adapters, which can introduce fresh nominal-tag escapes. */
@@ -635,10 +630,10 @@ class IrPipeline {
 		if (cache == null)
 			throw new InternalError("The inliner stage needs the session's inline cache");
 		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.options,
-			context.instrumentScope, context.lineage);
+			context.instrumentScope, context.stageMemos);
 		compiler.ir.tools.IrAllocationReport.report(program, context.sources);
-		// The lineage ends here: no stage after the inliner reads versions.
-		context.lineage = null;
+		// No stage after the inliner keeps memos in the session.
+		context.stageMemos = null;
 		// `--check-reuse`: what the session keeps for the next compile is frozen, so no stage of this one changed it in place.
 		if (context.options.checkReuse && context.options.keepSession) {
 			var unfrozen = cache.unfrozen();

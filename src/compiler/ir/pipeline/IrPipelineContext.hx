@@ -7,7 +7,6 @@ import compiler.ir.model.IrPassScratch;
 import compiler.ir.verify.IrVerifyMemo;
 import compiler.ir.model.Ir.IrObject;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
 import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.pipeline.TargetProfile.TargetKind;
@@ -28,11 +27,8 @@ class IrPipelineContext {
 	public var exportedFunctions:Null<Array<String>> = null;
 	public var canonicalObjects:Null<Array<IrObject>> = null;
 
-	/** The session's per-function memos of the stages before the encode point; null in a compile that keeps none. */
+	/** The session's memos of the stages (`IrStageMemos`); null in a compile that keeps no session. */
 	public var stageMemos:Null<IrStageMemos> = null;
-
-	/** The versions of the functions as the stages before the encode point stand, in a session (`IrLineage`); null elsewhere. */
-	public var lineage:Null<IrLineage> = null;
 
 	/** The roots of the early prune: the entry function, the static initializers and the exported functions. */
 	public var pruneRoots:Array<String> = [];

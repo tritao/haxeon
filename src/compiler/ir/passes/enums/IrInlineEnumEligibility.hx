@@ -50,7 +50,7 @@ class IrInlineEnumEligibility {
 	final declarations:Map<String, IrEnum>;
 	final planner:IrInlineEnumLayout;
 	final reflectionReach:IrEnumEscapeReach;
-	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	final stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>;
 	final enumNodes:Map<String, Int> = [];
 	final objectNodes:Map<String, Int> = [];
 	final interfaceNodes:Map<String, Int> = [];
@@ -66,12 +66,12 @@ class IrInlineEnumEligibility {
 	 * none.
 	 */
 	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>,
-			?builder:IrBodyBuilder, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
+			?builder:IrBodyBuilder, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos) {
 		this.planner = planner;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 		// What each function lets escape or keeps in value form, read once per version in a session (`IrInlineEnumUses`); the
 		// reach follows the closures and map stores the records name.
-		var uses = [for (fn in program.functions) IrInlineEnumUses.of(fn, builder, lineage)];
+		var uses = [for (fn in program.functions) IrInlineEnumUses.of(fn, builder, stageMemos)];
 		reflectionReach = new IrEnumEscapeReach(program, _ -> false);
 		for (record in uses)
 			record.follow(reflectionReach);
@@ -178,7 +178,7 @@ class IrInlineEnumEligibility {
 		// One walk for every reason: an enum is blocked for the first reason, in order, whose roots reach it.
 		var rooted = [for (reason in escapeOrder) if (escapeRoots.get(reason) != null) reason],
 			reachedEach = reflectionReach.collectEach(ESCAPES, [for (reason in rooted) escapeRoots.get(reason) ?? []],
-				supportsCallableEscape, lineage),
+				supportsCallableEscape, stageMemos),
 			reached:Map<String, Bool> = [];
 		for (index in 0...rooted.length)
 			for (name in reachedEach[index].keys())
@@ -452,7 +452,7 @@ class IrInlineEnumEligibility {
 
 	function reflectedUnsupportedEnums(reflected:Map<String, Bool>):Map<String, Bool> {
 		var roots:Array<IrType> = [for (name in reflected.keys()) Obj(name)];
-		return reflectionReach.collectKept(REFLECTED, roots, supportsCallableEscape, lineage);
+		return reflectionReach.collectKept(REFLECTED, roots, supportsCallableEscape, stageMemos);
 	}
 
 	function block(name:String, reason:String):Void {
@@ -579,15 +579,15 @@ class IrInlineEnumUses {
 	function new() {}
 
 	public static function of(fn:IrFunction, builder:Null<IrBodyBuilder>,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrInlineEnumUses {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0)
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrInlineEnumUses {
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0)
 			return read(fn.encodedBody(builder));
-		var memo = lineage.memos.contribution(IrInlineEnumEligibility.USES), known = memo.get(version);
+		var memo = stageMemos.contribution(IrInlineEnumEligibility.USES), known = memo.get(version);
 		if (known == null) {
 			known = read(fn.encodedBody(builder));
 			memo.keep(version, known);
-		} else if (lineage.checks && !known.same(read(fn.encodedBody(builder))))
+		} else if (stageMemos.checks && !known.same(read(fn.encodedBody(builder))))
 			throw new compiler.core
 				.InternalError('--check-reuse: the inline enum uses reused for ${fn.name} differ from its body');
 		return known;

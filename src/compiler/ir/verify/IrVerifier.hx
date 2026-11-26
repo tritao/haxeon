@@ -41,12 +41,12 @@ class IrVerifier {
 
 	/** After value-array lowering, ordinary array instructions must never address lane storage. */
 	/**
-	 * No ordinary array operation reads or writes an array of inline value lanes. With `lineage`, a function the session checked at
+	 * No ordinary array operation reads or writes an array of inline value lanes. With `stageMemos`, a function the session checked at
 	 * the same version against the same value classes, inline enums and reference natives is not read again (not under
 	 * `--check-reuse`).
 	 */
 	public static function verifyValueArraysLowered(program:IrProgram,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
 		var valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			valueEnums:Map<String, Bool> = [
 				for (declaration in program.enums)
@@ -81,12 +81,12 @@ class IrVerifier {
 			names.sort(Reflect.compare);
 			return names.join(",");
 		}
-		var checks = lineage != null && lineage.checks,
-			memo = lineage == null ? null : lineage.memos.contribution(CHECKED_VALUE_ARRAYS),
+		var checks = stageMemos != null && stageMemos.checks,
+			memo = stageMemos == null ? null : stageMemos.contribution(CHECKED_VALUE_ARRAYS),
 			key = memo == null ? "" : sorted(valueObjects.keys()) + ";" + sorted(valueEnums.keys()) + ";"
 				+ sorted(ordinaryRefNatives.keys());
 		for (fn in program.functions) {
-			var version = lineage == null ? 0 : lineage.versionOf(fn);
+			var version = stageMemos == null ? 0 : fn.version;
 			if (memo != null && version != 0) {
 				if (!checks && memo.get(version) == key)
 					continue;

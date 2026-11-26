@@ -51,12 +51,12 @@ class IrInlineValueLayout {
 		return parts.join("\n");
 	}
 
-	/** A fact's value naming `valueDeclarations(objects)` and `extra` in `lineage`'s session, computed when asked; 0 without one. */
+	/** A fact's value naming `valueDeclarations(objects)` and `extra` in `stageMemos`'s session, computed when asked; 0 without one. */
 	public static function declarationsFact(objects:Array<IrObject>,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, extra = ""):() -> Int {
-				if (lineage == null)
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>, extra = ""):() -> Int {
+				if (stageMemos == null)
 					return () -> 0;
-				var facts = lineage.memos.facts;
+				var facts = stageMemos.stageFacts;
 				return () -> facts.intern(valueDeclarations(objects) + extra);
 			}
 

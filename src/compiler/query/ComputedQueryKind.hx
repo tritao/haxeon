@@ -158,14 +158,24 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	 * Ends computing `key` (`begin`) with `value`, and returns the value kept: the memo's, when it is `same` as `value` (early
 	 * cutoff), which keeps the revision it changed at; else `value`, changed now.
 	 */
-	public function end(database:QueryDatabase, key:Int, value:V):V {
+	public inline function end(database:QueryDatabase, key:Int, value:V):V
+		return ended(database, key, value, true);
+
+	/**
+	 * Ends computing `key` (`begin`) with `value`, changed now without comparing it with the memo's: a stage whose input for `key`
+	 * is another function than its memo was made from, whose value is then all but never the same, keeps the comparison's cost.
+	 */
+	public inline function endChanged(database:QueryDatabase, key:Int, value:V):V
+		return ended(database, key, value, false);
+
+	function ended(database:QueryDatabase, key:Int, value:V, compare:Bool):V {
 		var revision = database.revision, verified = verifiedAt[key];
 		finish(database, key, true);
 		database.countComputation();
 		usedAt = revision;
 		verifiedAt[key] = revision;
 		computedAt[key] = revision;
-		if (verified != 0 && (values[key] == value || same(values[key], value)))
+		if (verified != 0 && (values[key] == value || compare && same(values[key], value)))
 			return values[key];
 		if (verified == 0)
 			grown = true;
@@ -227,6 +237,10 @@ class ComputedQueryKind<V> extends QueryKindBase {
 		if (!same(values[key], fresh))
 			throw new QueryReuseMismatch(describe(key));
 	}
+
+	/** Ends computing `key` again (`begin`) without keeping anything: a check that compares the value itself. */
+	public function cancel(database:QueryDatabase, key:Int):Void
+		finish(database, key, false);
 
 	/** Ends the frame `begin` started for `key`, keeping what it read as the memo's reads when `keep`. */
 	function finish(database:QueryDatabase, key:Int, keep:Bool):Void {

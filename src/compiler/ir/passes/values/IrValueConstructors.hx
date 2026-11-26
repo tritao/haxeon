@@ -10,8 +10,8 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrFacts;
-import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageFacts;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 /**
  * Expand bounded value constructors so newly constructed places can remain scalar. On IR bodies (docs/design/IR_CORE_COLUMNS.md,
@@ -32,7 +32,7 @@ class IrValueConstructors extends IrFunctionPass {
 
 	final program:IrProgram;
 	final scratch:IrPassScratch;
-	final lineage:Null<IrLineage>;
+	final stageMemos:Null<IrStageMemos>;
 
 	/** By callee value id, its value in the body a straight-line constructor is copied into. */
 	final calleeValues:Array<Int> = [];
@@ -53,10 +53,10 @@ class IrValueConstructors extends IrFunctionPass {
 			program.functions);
 	}
 
-	public function new(program:IrProgram, scratch:IrPassScratch, lineage:Null<IrLineage>) {
+	public function new(program:IrProgram, scratch:IrPassScratch, stageMemos:Null<IrStageMemos>) {
 		this.program = program;
 		this.scratch = scratch;
-		this.lineage = lineage;
+		this.stageMemos = stageMemos;
 	}
 
 	override public function summarize(fn:IrFunction):Int {
@@ -77,7 +77,8 @@ class IrValueConstructors extends IrFunctionPass {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		// Callees are frozen, or copies: the functions they were made from are edited in place below.
 		var constructors:Map<String, IrBody> = [],
-			straight:Map<String, IrBody> = [];
+			straight:Map<String, IrBody> = [],
+			versions:Map<String, Int> = [];
 		for (fn in functions) {
 			var owner = switch fn.result {
 				case Obj(name): objects.get(name);
@@ -105,6 +106,7 @@ class IrValueConstructors extends IrFunctionPass {
 				}
 			}
 			if (safe && count <= 64) {
+				versions.set(body.name, fn.version);
 				if (body.blockCount() == 1) {
 					var terminator = body.terminatorRow(0);
 					if (terminator >= 0 && body.opcode(terminator) == IrOpcode.Return)
@@ -118,12 +120,12 @@ class IrValueConstructors extends IrFunctionPass {
 		prepared = prepareStraightLine(straight);
 		for (name => body in constructors)
 			branches.set(name, expandStraightLine(body, prepared, true));
-		var known = lineage;
+		var known = stageMemos;
 		if (known != null) {
 			for (name => body in prepared)
-				forms.set(name, body == straight.get(name) ? known.version(name) : IrFacts.UNKNOWN);
+				forms.set(name, body == straight.get(name) ? versions.get(name) ?? 0 : IrStageFacts.UNKNOWN);
 			for (name => body in branches)
-				forms.set(name, body == constructors.get(name) ? known.version(name) : IrFacts.UNKNOWN);
+				forms.set(name, body == constructors.get(name) ? versions.get(name) ?? 0 : IrStageFacts.UNKNOWN);
 		}
 	}
 

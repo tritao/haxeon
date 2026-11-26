@@ -169,11 +169,11 @@ class IrValueArrayProgramRewrite {
 
 	/**
 	 * Discover every concrete value array in the assembled program before generating any helpers. A function that changes becomes
-	 * its edited body, owned by the next stage. With `lineage`, each element's rewrite and the allocation lowering reuse what they made
+	 * its edited body, owned by the next stage. With `stageMemos`, each element's rewrite and the allocation lowering reuse what they made
 	 * of each function the session has at the same version.
 	 */
 	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget,
-			?scratch:IrPassScratch, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
+			?scratch:IrPassScratch, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
 		if (scratch == null)
 			scratch = new IrPassScratch();
 		var builder = scratch.bodyBuilder;
@@ -236,7 +236,7 @@ class IrValueArrayProgramRewrite {
 		// function names of them is read once per version in a session (`arrayTypesOf`).
 		var visited:Array<Bool> = [];
 		for (fn in program.functions)
-			for (id in arrayTypesOf(fn, builder, lineage))
+			for (id in arrayTypesOf(fn, builder, stageMemos))
 				if (id >= visited.length || !visited[id]) {
 					while (visited.length <= id)
 						visited.push(false);
@@ -258,24 +258,24 @@ class IrValueArrayProgramRewrite {
 			return known;
 		}
 		for (entry in keyed)
-			rewriteIndexed(program, entry.element, pointerBits, target, index, slotNamespace++, scratch, lineage,
+			rewriteIndexed(program, entry.element, pointerBits, target, index, slotNamespace++, scratch, stageMemos,
 				valueDeclarations);
-		IrArrayFactory.lower(program, scratch, lineage);
-		IrVerifier.verifyValueArraysLowered(program, lineage);
+		IrArrayFactory.lower(program, scratch, stageMemos);
+		IrVerifier.verifyValueArraysLowered(program, stageMemos);
 		encodeAll(program, index);
 	}
 
 	/** The ids of the types `fn`'s arguments, result, rows and descriptors have that name an array or an iterator. */
 	static function arrayTypesOf(fn:IrFunction, builder:IrBodyBuilder,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Array<Int> {
-		var version = lineage == null ? 0 : lineage.versionOf(fn);
-		if (lineage == null || version == 0)
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Array<Int> {
+		var version = stageMemos == null ? 0 : fn.version;
+		if (stageMemos == null || version == 0)
 			return readArrayTypes(fn.encodedBody(builder));
-		var memo = lineage.memos.contribution(ARRAY_TYPES), known = memo.get(version);
+		var memo = stageMemos.contribution(ARRAY_TYPES), known = memo.get(version);
 		if (known == null) {
 			known = readArrayTypes(fn.encodedBody(builder));
 			memo.keep(version, known);
-		} else if (lineage.checks && known.join(",") != readArrayTypes(fn.encodedBody(builder)).join(","))
+		} else if (stageMemos.checks && known.join(",") != readArrayTypes(fn.encodedBody(builder)).join(","))
 			throw new InternalError('--check-reuse: the array types reused for ${fn.name} differ from its body');
 		return known;
 	}
@@ -339,17 +339,18 @@ class IrValueArrayProgramRewrite {
 		return next;
 	}
 
-	/** A fact's value naming `print()` in `lineage`'s session, computed when asked; 0 without a session. */
-	static function elementFact(lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, print:() -> String):() -> Int {
-		if (lineage == null)
-			return () -> 0;
-		var facts = lineage.memos.facts;
-		return () -> facts.intern(print());
-	}
+	/** A fact's value naming `print()` in `stageMemos`'s session, computed when asked; 0 without a session. */
+	static function elementFact(stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
+			print:() -> String):() -> Int {
+				if (stageMemos == null)
+					return () -> 0;
+				var facts = stageMemos.stageFacts;
+				return () -> facts.intern(print());
+			}
 
 	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget,
 			index:ValueArrayFunctionIndex, slotNamespace:Int, scratch:IrPassScratch,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage, ?valueDeclarations:() -> String):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos, ?valueDeclarations:() -> String):Void {
 		switch element {
 			case EnumTag(name):
 				IrEnumTagStorage.request(program, name);
@@ -440,13 +441,12 @@ class IrValueArrayProgramRewrite {
 			requests = new IrValueArrayRequests(factory.helpers, methods, elements),
 			pass = new ValueArrayElementPass(fn -> index.has(fn, element) || index.needsDynamic(fn), rewriteOne,
 				requests,
-				elementFact(lineage, print)),
-			checks = lineage != null && lineage.checks,
+				elementFact(stageMemos, print)),
+			checks = stageMemos != null && stageMemos.checks,
 			// The versions of the functions a place method may be specialized from, before the rewrite changes them.
-			originalVersions:Map<String, Int> = lineage == null
-				? [] : [for (name in originals.keys()) name => lineage.version(name)],
-			output = compiler.ir.pipeline.IrFunctionStages.run(stage, pass, program.functions, lineage, checks,
-				builder);
+			originalVersions:Map<String, Int> = stageMemos == null
+				? [] : [for (name => fn in originals) name => fn.version],
+			output = compiler.ir.pipeline.IrFunctionStages.run(stage, pass, program.functions, stageMemos, builder);
 		for (position in 0...output.length)
 			if (output[position] != program.functions[position]) {
 				rewritten = output;
@@ -477,13 +477,13 @@ class IrValueArrayProgramRewrite {
 		IrVerifier.verifyResolvedEnumOperations(program.functions.slice(generatedStart));
 		// In a session each helper is derived: last build's while what the element's rewrite reads holds, and for a place method
 		// while the function it specializes has the same version.
-		if (lineage != null)
+		if (stageMemos != null)
 			for (position in generatedStart...program.functions.length) {
 				var fn = program.functions[position], origin = methods.origins.get(fn.name);
 				program.functions[position] = compiler.ir.pipeline.IrFunctionStages.derived(stage, fn.name, pass,
 					origin == null
 					? compiler.ir.pipeline.IrFunctionStages.FROM_NAME : originalVersions.get(origin) ?? 0,
-					lineage, checks, builder, reader -> {
+					stageMemos, builder, reader -> {
 						reader.read(ValueArrayElementPass.ELEMENT, "");
 						fn;
 					});
@@ -493,7 +493,7 @@ class IrValueArrayProgramRewrite {
 			if (slot.nullablePayload)
 				nullableScalars = true;
 		IrValueArrayScalarLowering.rewrite(program, element, target != HashLink || nullableScalars, scratch,
-			lineage);
+			stageMemos);
 		var nativeNames:Map<String, Bool> = [for (native in program.natives) native.name => true];
 		for (native in factory.natives().concat(factory.helpers.natives()).concat(elements.natives()))
 			if (!nativeNames.exists(native.name)) {
