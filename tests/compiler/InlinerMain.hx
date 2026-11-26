@@ -6,7 +6,6 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.passes.inlining.IrInliner;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.ir.passes.scalars.IrScalarArguments;
-import compiler.ir.reuse.IrStageMemo.IrStageEntry;
 import compiler.ir.verify.IrVerifier;
 
 class InlinerMain {
@@ -353,8 +352,7 @@ class InlinerMain {
 			grownObjects = grown.objects.copy(),
 			grownCache = new InlinerSession();
 		grownCache.run(grown);
-		var memosBefore:Map<String, Null<IrStageEntry>> =
-			[for (fn in grown.functions) fn.name => grownCache.entry(fn.name)];
+		var memosBefore:Map<String, Int> = [for (fn in grown.functions) fn.name => grownCache.computedIn(fn.name)];
 		grown.functions = grownPristine.copy();
 		grown.objects = grownObjects.concat([
 			{
@@ -369,7 +367,7 @@ class InlinerMain {
 		expect(grownCache.run(grown).length == 0,
 			"a new class changes no function");
 		for (name => memo in memosBefore)
-			expect(grownCache.entry(name) == memo, 'a new class that $name never looked at must not redo it');
+			expect(grownCache.computedIn(name) == memo, 'a new class that $name never looked at must not redo it');
 		// A stored scalar's width affects forwarding even when the IR register type is unchanged.
 		var narrowProgram = Frontend.compile('struct NarrowValue { public var text:String; public var value:UInt8; '
 			+ 'public function new() { text = "x"; value = 0; } } '
@@ -379,8 +377,8 @@ class InlinerMain {
 			narrowObjects = narrowProgram.objects.copy(),
 			narrowCache = new InlinerSession();
 		narrowCache.run(narrowProgram);
-		var narrowMemo = narrowCache.entry("writeAndRead");
-		expect(narrowMemo != null, "the narrow-field function should be memoized");
+		var narrowMemo = narrowCache.computedIn("writeAndRead");
+		expect(narrowMemo != 0, "the narrow-field function should be memoized");
 		narrowProgram.functions = narrowFunctions.copy();
 		narrowProgram.objects = [for (object in narrowObjects)
 			if (object.name != "NarrowValue") object else {
@@ -399,7 +397,7 @@ class InlinerMain {
 					}]
 			}];
 		narrowCache.run(narrowProgram);
-		expect(narrowCache.entry("writeAndRead") != narrowMemo,
+		expect(narrowCache.computedIn("writeAndRead") != narrowMemo,
 			"a width or signedness change must invalidate forwarding");
 
 		// A new subclass that overrides a method resolved through its base changes the functions that looked at that base, and only those.
@@ -419,18 +417,18 @@ class InlinerMain {
 			"a function that resolved a method through the base is redone when a subclass overrides it");
 		expect(callsIn(programFunction(grown, "viaBase")).indexOf("twice") >= 0,
 			"an overridden method is no longer inlined");
-		expect(grownCache.entry("viaLeaf") == memosBefore.get("viaLeaf"),
+		expect(grownCache.computedIn("viaLeaf") == memosBefore.get("viaLeaf"),
 			"a function that never looked at the base is not redone");
 		expect(overridden.indexOf("viaLeaf") < 0, "a function that never looked at the base is not reported");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
 		var inlinedMain = after.get("main"),
-			cleanedMain = cache.entry("main").output;
+			cleanedMain = cache.cleaned("main");
 		program.functions = originals.copy();
 		expect(cache.run(program).length == 0,
 			"an unchanged program must report no changed functions");
 		expect(programFunction(program, "main") == inlinedMain, "an unchanged caller keeps its inlined identity");
-		expect(cleanedMain != null && cache.entry("main").output == cleanedMain
-			&& cache.copy().entry("main").output == cleanedMain,
+		expect(cleanedMain != null && cache.cleaned("main") == cleanedMain
+			&& cache.copy().cleaned("main") == cleanedMain,
 			"unchanged cleanup is reused and retained when copying the incremental cache");
 		// Editing a callee changes exactly the functions that inlined it.
 		var edited = Frontend.compile(StringTools.replace(source, "function twice(x:Int):Int return x + x;",

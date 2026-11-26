@@ -45,7 +45,7 @@ class IrFunctionPass extends IrFactSource {
 
 /**
  * What a stage's facts are computed from (`IrStageFacts`): a per-function stage (`IrFunctionPass`), or a stage that drives its own
- * run and records its facts all the same (`IrInliner`, through `IrFacts`). A class, not an interface: HashLink calls an
+ * run and reads its facts through the database all the same (`IrInliner`). A class, not an interface: HashLink calls an
  * interface's methods by name, through a virtual made at each conversion, and a fact is read per function and stage.
  */
 class IrFactSource {

@@ -632,13 +632,16 @@ class IrPipeline {
 		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.options,
 			context.instrumentScope, context.stageMemos);
 		compiler.ir.tools.IrAllocationReport.report(program, context.sources);
+		var memos = context.stageMemos;
 		// No stage after the inliner keeps memos in the session.
 		context.stageMemos = null;
 		// `--check-reuse`: what the session keeps for the next compile is frozen, so no stage of this one changed it in place.
 		if (context.options.checkReuse && context.options.keepSession) {
 			var unfrozen = cache.unfrozen();
+			if (unfrozen == null && memos != null)
+				unfrozen = memos.inliner().unfrozen();
 			if (unfrozen != null)
-				throw new InternalError('--check-reuse: the inline cache keeps $unfrozen with a body that is not frozen');
+				throw new InternalError('--check-reuse: the inliner keeps $unfrozen with a body that is not frozen');
 		}
 		return program;
 	}

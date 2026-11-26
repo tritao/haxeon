@@ -3,97 +3,13 @@ package compiler.ir.reuse;
 import compiler.ir.model.IrFunction;
 import compiler.ir.pipeline.IrFunctionPass.IrStageRequest;
 
-/** What the inliner made of one function in a build, and what that rested on (`IrStageMemo`). */
-@:nullSafety(Strict)
-class IrStageEntry {
-	/** The version of the function the stage was given (`IrFunction.version`). */
-	public final input:Int;
-
-	/** The facts the stage read for it, pairs of a fact and its print (`IrFacts`). */
-	public final facts:Array<Int>;
-
-	/** What the stage made of it: the function it was given when the stage left it alone. Never changed once made. */
-	public final output:IrFunction;
-
-	/** The version of `output`: the input's when the stage left it alone. */
-	public final outputVersion:Int;
-
-	/** The last build its memo used it in (`IrStageMemo.keep`): the only field that changes. */
-	public var used = 0;
-
-	public function new(input:Int, facts:Array<Int>, output:IrFunction, outputVersion:Int) {
-		this.input = input;
-		this.facts = facts;
-		this.output = output;
-		this.outputVersion = outputVersion;
-	}
-}
-
-/**
- * The inliner's memo in a session: by the number of a function's name (`IrSymbol.functionKey`), what the stage made of the
- * function when it last ran (`IrStageEntry`). An entry reused is not written again; one the stage did not use in its last run is dropped as the next run
- * starts, so a function the program lost drops out one build later. The stages before the inliner keep theirs in the session's
- * query database (`IrStageQueries`).
- */
-@:nullSafety(Strict)
-class IrStageMemo {
-	final entries:Array<Null<IrStageEntry>> = [];
-
-	var count = 0;
-	var keptLastRun = 0;
-	var kept = 0;
-
-	/** The build this run belongs to (`IrStageMemos.build`), and the one the stage ran in before. */
-	var build = 0;
-
-	var lastRun = 0;
-
-	public function new() {}
-
-	/** Starts `forBuild`, once: what the stage did not use in its last run is dropped. */
-	public function begin(forBuild:Int):Void {
-		if (build == forBuild)
-			return;
-		lastRun = build;
-		build = forBuild;
-		keptLastRun = kept;
-		kept = 0;
-		if (count > keptLastRun)
-			for (key in 0...entries.length) {
-				var entry = entries[key];
-				if (entry != null && entry.used < lastRun) {
-					entries[key] = null;
-					count--;
-				}
-			}
-	}
-
-	/** The entry for the function of `key` from an earlier run, or null. */
-	public inline function last(key:Int):Null<IrStageEntry>
-		return key < entries.length ? entries[key] : null;
-
-	/** Records `entry` as this run's for the function of `key`. Inline: a stage keeps an entry for every function. */
-	public inline function keep(key:Int, entry:IrStageEntry):Void {
-		if (last(key) != entry)
-			replace(key, entry);
-		entry.used = build;
-		kept++;
-	}
-
-	function replace(key:Int, entry:IrStageEntry):Void {
-		if (last(key) == null)
-			count++;
-		entries[key] = entry;
-	}
-}
-
 /**
  * The reuse state of the IR stages in a session (docs/design/QUERY_ENGINE.md, the stage driver): what each per-function stage
  * made of each function, as kinds of the session's query database (`IrStageQueries`), and the facts their rewrites read
- * (`IrStageFacts`); the whole-program walks and steps (`IrWalkMemo`) and summaries (`IrContributionSummary`); and, until they move
- * onto the database too, the inliner's memo and facts (`IrStageMemo`, `IrFacts`) and the contribution memos. The copies of the session state share it: a memo holds only
- * while what it was made from is the same object and what it read has not changed, so what a rolled-back build left is never
- * wrongly reused.
+ * (`IrStageFacts`); the inliner's memo (`IrInlineQueries`); the whole-program walks and steps (`IrWalkMemo`) and summaries
+ * (`IrContributionSummary`); and, until they move onto the database too, the contribution memos. The copies of the session state
+ * share it: a memo holds only while what it was made from is the same object and what it read has not changed, so what a
+ * rolled-back build left is never wrongly reused.
  */
 @:nullSafety(Strict)
 class IrStageMemos {
@@ -102,11 +18,8 @@ class IrStageMemos {
 
 	public final inputs:compiler.query.ComputedQueryKind<IrFunction>;
 
-	/** The facts the per-function stages read, a kind of `database`. */
+	/** The facts the per-function stages and the inliner read, a kind of `database`. */
 	public final stageFacts:IrStageFacts;
-
-	/** The inliner's facts. */
-	public final facts = new IrFacts();
 
 	/** `--check-reuse` in the build under way: what a memo reuses is computed again and compared. */
 	public var checks(default, null) = false;
@@ -121,7 +34,9 @@ class IrStageMemos {
 	public var build(default, null) = 0;
 
 	final queries:Map<String, IrStageQueries> = [];
-	final memos:Map<String, IrStageMemo> = [];
+
+	/** The inliner's memo, registered the first time the stage runs (`inliner`). */
+	var inlineQueries:Null<compiler.ir.passes.inlining.IrInliner.IrInlineQueries> = null;
 
 	/**
 	 * Generated helpers whose name says all they are made of (the enum dispatch's boxes, views and unboxes), by the symbol of the
@@ -157,7 +72,6 @@ class IrStageMemos {
 		build++;
 		bodies = false;
 		this.checks = checks;
-		facts.startBuild();
 		for (memo in contributions)
 			memo.begin(build);
 		for (index in 0...functions.length) {
@@ -207,20 +121,13 @@ class IrStageMemos {
 		}
 	}
 
-	/** The inliner's memo `name`, started for this build. */
-	public function memo(name:String):IrStageMemo {
-		var memo = memos.get(name);
-		if (memo == null) {
-			memo = new IrStageMemo();
-			memos.set(name, memo);
-		}
-		memo.begin(build);
-		return memo;
+	/** The inliner's memo (`IrInlineQueries`), registered the first time the stage asks for it. */
+	public function inliner():compiler.ir.passes.inlining.IrInliner.IrInlineQueries {
+		var known = inlineQueries;
+		if (known == null)
+			inlineQueries = known = new compiler.ir.passes.inlining.IrInliner.IrInlineQueries(database);
+		return known;
 	}
-
-	/** A version no function object has (`IrFunction.newVersion`). */
-	public inline function nextVersion():Int
-		return IrFunction.newVersion();
 
 	/**
 	 * The session's walk `name` (`IrWalkMemo`), which follows edges (`IrWalkSummary`) or reads no summary, registered the first time
@@ -338,7 +245,9 @@ class IrStageMemos {
 			encodings.clear();
 		for (lanes in laneKinds)
 			lanes.clear();
-		memos.clear();
+		var inliner = inlineQueries;
+		if (inliner != null)
+			inliner.clear();
 		summaries.clear();
 		for (walk in walks)
 			walk.clear();

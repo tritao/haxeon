@@ -63,14 +63,14 @@ class InlinerCycleMain {
 		expect(callees(first, "pong").indexOf("ping") >= 0, "pong keeps its call to ping");
 		expect(callees(first, "outer").indexOf("leaf") < 0, "a function outside the cycle still inlines leaf");
 		for (name in ["ping", "pong", "outer"])
-			expect(session.entry(name) != null, '$name has a memo');
-		var memos = [for (name in ["ping", "pong", "outer"]) session.entry(name)];
+			expect(session.computedIn(name) != 0, '$name has a memo');
+		var memos = [for (name in ["ping", "pong", "outer"]) session.computedIn(name)];
 		var second = program();
 		var changed = session.run(second);
 		expect(changed.length == 0, "the same program changes nothing");
 		// A run that checks its reuse recomputes the memos and compares them; this one does not, so it keeps the objects.
 		for (i => name in ["ping", "pong", "outer"])
-			expect(session.entry(name) == memos[i], '$name keeps its memo');
+			expect(session.computedIn(name) == memos[i], '$name keeps its memo');
 		Sys.println("PASS: call cycles are memoized and not inlined into each other");
 	}
 

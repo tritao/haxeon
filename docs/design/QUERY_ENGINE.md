@@ -246,10 +246,10 @@ Everything below keeps results across builds outside the engine. Lines are the f
 
 | Mechanism | Lines | Keyed on; kept until | Read by | Becomes |
 |---|---|---|---|---|
-| `IrStageMemo`, `IrStageMemos`, `IrStageEntry` | 526 (the file, with `IrLineage` and the contribution memos) | stage and function slot; input version, fact reads, output, summary, helper requests; dropped when the stage's last run did not use it | `IrFunctionStages.run`, the ~25 `IrFunctionPass` stages | a computed kind per stage, keyed by function symbol; done for every per-function stage (slice 3), the inliner keeps `IrStageMemo` until slice 5 |
+| `IrStageMemo`, `IrStageMemos`, `IrStageEntry` | 526 (the file, with `IrLineage` and the contribution memos) | stage and function slot; input version, fact reads, output, summary, helper requests; dropped when the stage's last run did not use it | `IrFunctionStages.run`, the ~25 `IrFunctionPass` stages | a computed kind per stage, keyed by function symbol; done for every per-function stage (slice 3) and the inliner (slice 5) |
 | ~~`IrLineage`, `IrFunctionSlots`~~ | (above), 95 | slot → function object and version; a version is never given twice; slots swept when cells exceed twice the functions | every stage (`settle`, `versionOf`), `IrStage` | done (slice 3): a version is the function object's own number (`IrFunction.version`), settling is early cutoff in the stages' kinds |
-| `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests); the passes' facts are done (slice 3: `IrStageFacts`, `IrFactReader` reads it); `IrFacts` stays for the inliner (slice 5), verification (6) and lowering (7) |
-| Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemo.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the requests and enum mentions done (summaries, slice 3), the walk summaries done (`IrWalkMemo`), the enum dispatch's encodings a kind by type id; `lastResult` and the memos the choices and escape reaches read done (slice 4, steps); left: the runtime needs, array types, closure uses, initialization calls and stores (4), the verifier's (6) and the inliner's (5) |
+| `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests); the passes' facts are done (slice 3: `IrStageFacts`, `IrFactReader` reads it), the inliner's (slice 5); `IrFacts` stays for verification (6) and lowering (7) |
+| Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemo.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the requests and enum mentions done (summaries, slice 3), the walk summaries done (`IrWalkMemo`), the enum dispatch's encodings a kind by type id; `lastResult` and the memos the choices and escape reaches read done (slice 4, steps); the inliner's done (slice 5: its call edges a step's summaries, its forms a kind); left: the runtime needs, array types, closure uses, initialization calls and stores (4), the verifier's (6) |
 | `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | a kind per walk (`IrWalkMemo`); done for the walks before the encode point (slice 3) and past it (slice 4, steps); the record stays for `HlPlainBuild` (6) |
 | Reuse code inside passes | ~750 lines naming the above in 49 files; est. 1,000–1,400 with the code around them | — | — | query declarations (est. a third of it); fact reads stay as engine reads |
 | ~~`IrGeneratedFunctions` (structure printers, initializers)~~ | 95 | key and identity of the input objects; swept when untouched | `FrontendCompilation`, `IrProgramAssembler` | done (slice 2): results in the generation kind with their reads |
@@ -257,7 +257,7 @@ Everything below keeps results across builds outside the engine. Lines are the f
 | `IrFunctionMemo` and its users: ~~`irTypeMentions`, `irCalls`, `staticReferences`~~, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo` | 46; 41 (`HlFunctionSummaries`), ~12, ~25 | `IrFunction` identity; one build past last use | frontend, `StaticInitializationOrder`, `RuntimeAbi`, `IrReachability`, `HlLower`, `IrNonNullFields` | contribution queries; the frontend's three are (slice 2) |
 | `IrSourceRehash`, `irSources` | 130 | function → file hashes its locations name | frontend | gone with relative positions (the hash is added at encode), else a derived query |
 | `IrVerifyMemo` | 190 | function name → function and answer facts | `IrVerifier` | computed query per function |
-| `IrInlineCache` and the inliner's memo plumbing | ~170, ~100 | name → original body, instrumented form, published form, object facts, positional prints; maps replaced per run | `IrInliner`, `Compiler` (published) | inlined form per function; a call cycle is one component query; `published` moves to the live state |
+| `IrInlineCache` and the inliner's memo plumbing | ~170, ~100 | name → original body, instrumented form, published form, object facts, positional prints; maps replaced per run | `IrInliner`, `Compiler` (published) | inlined form per function; done (slice 5: a kind of forms, the components a step, the original bodies gone); `published`, the instrumented forms and the positional prints stay, live state |
 | `PipelineSnapshot` | 157 | tables' encoding, functions' identity, environment text; last plain build | `CompilationPipeline`, backends | the root query (final IR, module) verifies; deleted with its check |
 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts | 83, 45, 162 | name and lowering environment; the build's entries; facts never swept | `HlLower` | computed query per function: relocatable code, reading object facts as engine reads |
 | Link and replay: `HlRequestKeys`, `HlRequestAnswers`, `HlSymbolRequest`, `HlLink`, `HlLinkRecord`/`HlKeptTables`, parts of `HlSymbolTable` and `HlLower` | 196, 66, 102, 120, 251, ~150, ~290 | request numbers (grow only); last build's tables with each position's first requests | `HlLower` | module sections ([MODULE_SECTIONS.md](MODULE_SECTIONS.md)) |
@@ -328,7 +328,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 | 2 | **Done** (below): IR generation, generated functions, object tables as results | −450 / +250; built −437 / +527 | `IrFunctionVersions`, `IrGeneratedFunctions`, `canonicalObjectCache` (`objectCache` stays as the object set), the INPUT settling of `IrLineage.start`, frontend `IrFunctionMemo` users | 0.1 / 0.1 / 0.1; built 0.03 / 0.02 / not measured (no-op 0.03) | 1 |
 | 3 | Assembly stages before the encode point; **done** (below, two parts): the stage driver for every per-function stage, facts as a kind, the lineage gone; held keys visited only when their facts changed; the walks, requests and mentions before the encode point on the engine | −2,000 / +500; first part built −~700 / +~650 (below) | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage`; first part: `IrLineage`, `IrFunctionSlots`, the stage memos of the per-function stages, the memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05; first part: body edit −0.7%, no-op 0, signature edit +0.5% | 2 |
 | 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4); two parts built (below) | −400 / +250; built −401 / +508 and −53 / +257 | their whole-program rereads | 0.2 / 1.2 / 0.2; built 0.11 / 0 / not measured and 0.02 / 0.39 / not measured | 3 |
-| 5 | Inliner | −300 / +150 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A | 4 |
+| 5 | Inliner; **done** (below) | −300 / +150; built −739 / +545 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A; built 0.06 / 0.06 / not measured | 4 |
 | 6 | Verification and final-IR summaries | −450 / +100 | `IrVerifyMemo`, `IrFunctionMemo`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, plain-build reach record | 0.1 / 0.3 / 0.05 | 5 |
 | 7 | Lowering, debug metadata and encoding as queries; root query | −850 / +300 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts, `HlDebugMetadataCache`, `HlWriterCache` encodings, `PipelineSnapshot`, Wasm module reuse | small; no-op must stay at 0.29 s | B, 6 |
 
@@ -890,6 +890,88 @@ warm build:
 The cutoff case costs 0.7% more, not traced further (a frame scan in place of the busy column was most of it before it was
 inlined). The self-compile is
 byte-identical, warm builds equal fresh ones with and without `--check-reuse`, the edit replay and the test driver pass.
+
+### Slice 5 as built
+
+The inliner's memo is a kind of the session's database, and its whole-program walk a step of it.
+
+- **Forms.** What the inliner made of a function is a key of `IrInlineQueries.forms`, a `ComputedQueryKind<IrInlinedForm>` keyed
+  by the number of the function's name: the inlined form a caller splices (no body when no caller may), with, as columns by the
+  kind's slot, the version of the function the memo was made from (`IrFunction.version`) and the function's cleaned form. A memo
+  holds while it was made from the same function object and nothing it read changed. A caller that splices a callee reads the
+  callee's key: a callee inlined again to the same form (`IrInlinedForm.same`: neither may be spliced, or both may and their bodies
+  are the same) keeps the form kept and the revision it changed at, so its callers hold (early cutoff). This replaces the entries
+  (`IrStageMemo`, `IrStageEntry`), the output versions and the memo of forms by output version.
+- **What a caller reads of a callee before its form**, its component and whether it may be spliced at all with the parameter types
+  a call binds (`IrInlineCallee`), is a kind of its own (`IrInlineQueries.callees`), put for every function each build. As facts by
+  name, each was worked out again once per build for every memo verified, its name looked up; the screen of what may be spliced,
+  by name and size, is worked out once per source with its calls (`IrCallEdges.candidate`).
+- **Facts.** The rest of what an inlining reads is facts of the stage's space of `IrStageFacts`, read as the per-function stages
+  read theirs: the settings, the objects it consulted, the sources copy elision read of callees, and, for a form that depends on
+  where the walk made it, a fact never the same, so its memo never holds.
+- **Verification order.** The inliner brings the callees whose forms a memo read up to date before it verifies the memo
+  (`IrInliner.holds`): the verification then reads each of their keys inline, verified or computed in the revision, and a callee
+  computed again to the same form holds the caller. The engine never verifies a key of the kind on its own, which would skip the
+  version the memo was made from. A memo that read of a function the program no longer has does not hold, and the columns of a memo
+  the database dropped (swept, or rolled back) are not read: a function that leaves the program for a build and comes back as the
+  same object is inlined again.
+- **Components.** The call graph's strongly connected components are a step of the database (`IrWalkMemo`, `inliner-components`)
+  whose summary of a function is what its source calls (`IrCallEdges`, compared by its calls alone), kept while the program's
+  functions and objects and each function's calls are as they were: where every build walked the call graph and resolved its method
+  calls, an edit that changes no call keeps them. A component is named by the lowest number of a name among its members, so the
+  functions are numbered in program order and no longer sorted by name. Each function's parameter types are interned once for its
+  summary (`IrCallEdges.parameters`). This replaces the memos of call edges and parameters by version.
+- **What the cache kept.** `IrInlineCache.originals` (each source's frozen body, kept while the source was the same object) is gone:
+  the source keeps its own frozen body. The object facts' values moved to `IrInlineQueries`. The cache keeps what the last
+  successful compile published (`published`, `instrumented`) and the frontend's positional prints.
+- **Check mode** inlines every held function again in a frame it then drops, and compares what the memo holds: the form a caller
+  reads and the cleaned form.
+
+`IrFacts` keeps the answer facts of verification and lowering (slices 6 and 7); what served only the inliner went: `IrFactRecorder`,
+prints of values an `IrFactSource` works out, interning and the shared lists of reads.
+
+Design changes from the plan, with the reasons:
+
+- **The plan's saving on the signature edit was already made.** It was estimated when the inliner read 6,111 functions on that edit.
+  Since slices 3 and 4 the stages before it give it the objects they kept, and it inlines again the 955 functions whose sources the
+  edit changed and 3 callers whose callees' forms changed, before this slice as after (counted per build): a signature edit that
+  changes an inlined function already inlined again only its callers. What is left of the inliner on that edit (7% of it) is the
+  inlining, forwarding and cleanup of those functions, which reuse does not remove. The slice's gains are the held path and the walk
+  of the call graph that every build made.
+- **No component query.** The plan made a call cycle one query. Functions of one component never splice each other, so each keeps a
+  memo of its own; the components are one step for the program.
+- **The input is checked by version, not read**, as the stage driver checks it: the inliner's input is the output of stages without
+  a memo, and a kind holding it would be put for every function each build.
+- **A form no caller may splice is kept without its body**, also when the build checks its reuse, so `--check-reuse` compares the
+  cleaned form, which is what such a memo holds of the function. A memo with the source's body as such a form (an inlining that left
+  its source as it was) compared that body as a value: on the signature edit, 552 callers were inlined again for callees whose
+  source changed, none of which they could splice.
+- **`published` stays in the cache**, with the instrumented forms: it is what the next patch is computed against, live state for
+  module sections (slice B) and the root query (7).
+
+Measured, the stage benchmark's inliner case (`benchmarks/query-stages`, instructions per function of a warm build, 9,000 functions,
+three splices each; the stage driver's cases are unchanged):
+
+| Case | Before | After |
+|---|---|---|
+| held | 7,393 | 3,531 |
+| cutoff | 52,627 | 47,938 |
+
+On the compiler's own sources (perf-guard, one machine, against origin/main): the body edit 1.952G → 1.890G instructions (−3.2%;
+the inliner from 6.2% of the edit's compile thread to 3.2%; the walk of the call graph, now kept, was 2.6%), the signature edit 17.34G
+→ 17.28G (−0.4%), the no-op rebuild unchanged (0.755G to 0.767G over runs before, 0.754G to 0.761G after; the inliner does not run
+on it); allocation of the body edit 220.4 → 212.2 MB, of the signature edit 968.3 → 961.2 MB; the server's live data 803.7 → 800.9
+MB. The UI app's live session (census at the last build's write) 482.8 → 479.8 MB, the small project's 12.06 → 11.95 MB. A cold
+small-project build allocates 70.54 → 70.33 MB on the VM and 43.35 → 43.19 MB ahead of time, and costs the same ahead of time
+(1.546G → 1.547G instructions) and 0.2% more on the VM (11.25G → 11.27G, the check 10.84G → 10.86G): the two kinds are two more
+copies of the kind's code to compile at startup. The self-compile is byte-identical, warm builds equal fresh ones with and without
+`--check-reuse`, the edit replay and the test driver pass; the edit replay found the dropped memo's columns above, which a function
+leaving the program and coming back now tests (`InlinerSourceIdentityMain`).
+
+Lines in `src/`: 739 deleted and 545 added, against the estimated −300 / +150; about 400 of each are the inliner's own code moved or
+rewritten around the new memo. The deleted mechanism is about 450 lines (the entries and their memo, `IrFactRecorder` and the rest of
+`IrFacts` that served the inliner, the output versions, the forms', calls' and parameters' memos, the original bodies), the added
+engine code about 250 (`IrInlineQueries`, `IrInlineCallee`, the verification order, the components' step).
 
 ## Prior art
 

@@ -29,14 +29,14 @@ class InlinerSourceIdentityMain {
 	static function main():Void {
 		var session = new InlinerSession(), first = program(1);
 		session.run(first);
-		var entry = session.entry("caller0");
-		if (entry == null)
+		var entry = session.computedIn("caller0");
+		if (entry == 0)
 			throw "The inliner kept no entry for caller0";
 		var again = program(1),
 			before = AllocationMeter.sample();
 		var changed = session.run(again);
 		var bytes = AllocationMeter.sample().bytes - before.bytes;
-		if (session.entry("caller0") != entry || changed.length != 0)
+		if (session.computedIn("caller0") != entry || changed.length != 0)
 			throw "Regenerated identical input must reuse the inlining memo";
 		if (bytes > 8 * 1024 * 1024)
 			throw 'Regenerated input allocated $bytes bytes, expected less than 8 MiB';
@@ -52,6 +52,23 @@ class InlinerSourceIdentityMain {
 		IrInliner.run(cold, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		same(unchanged, cold,
 			"The program before the edit, built again after a speculative copy, differs from a cold run");
+		// A function the program loses for a build comes back as the object it was: its memo, swept with the build that lost it,
+		// leaves its slot to it, and it is inlined again.
+		var whole = program(1), functions = whole.functions.copy();
+		session.run(whole);
+		var lost = new IrProgram("caller0");
+		lost.functions = [for (fn in functions) if (fn.name != "caller7") fn];
+		session.run(lost);
+		var gone = session.memos.inputs.kept(compiler.ir.model.IrSymbol.of("caller7").id);
+		session.memos.database.sweep();
+		if (gone == null || session.computedIn("caller7") != 0)
+			throw "The memo of a function the last build lost was not swept";
+		var back = new IrProgram("caller0");
+		back.functions = [for (fn in functions) fn.name == "caller7" ? gone : fn];
+		session.run(back);
+		var coldBack = program(1);
+		IrInliner.run(coldBack, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
+		same(back, coldBack, "A function that came back differs from a cold inlining run");
 		Sys.println("PASS: regenerated IR reuses inlining while callee edits invalidate its callers");
 	}
 

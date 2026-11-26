@@ -208,6 +208,14 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	public inline function verifiedIn(slot:Int):Int
 		return verifiedAt[slot];
 
+	/** The revision the memo in `slot` was last computed at (`end`, `put`), whether or not its value changed. */
+	public inline function computedIn(slot:Int):Int
+		return computedAt[slot];
+
+	/** The key whose memo is in `slot`, -1 for a slot given back. */
+	public inline function keyOf(slot:Int):Int
+		return keys[slot];
+
 	/**
 	 * Takes the memo in `slot` as verified at the database's revision without reading what it read: for a stage that knows none of
 	 * its reads changed since the memo was last verified (`IrFunctionStages.run`, which visits only the keys whose reads changed).
