@@ -50,9 +50,13 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         p = subprocess.run([str(hashlink / 'hl'), str(root / 'build' / output)], env=env, timeout=20)
         assert p.returncode == expected, (output, p.returncode, expected)
     try:
+        # A session directory that already exists, readable by others, is made private again (chmod 700).
+        states.mkdir(mode=0o755)
+        states.chmod(0o755)
         source('7')
         build()
         run(7)
+        assert states.stat().st_mode & 0o777 == 0o700, oct(states.stat().st_mode)
         assert len(list(states.glob('*.json'))) == 1
         # A worker of another compiler version for this same project can never be reused.
         current = next(states.glob('*.json')).stem

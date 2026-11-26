@@ -193,6 +193,8 @@ static bool realtime_host_security_attributes(SECURITY_ATTRIBUTES *attributes,
 		!AddAccessAllowedAceEx(*acl, ACL_REVISION,
 			OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE, GENERIC_ALL, sid) ||
 		!InitializeSecurityDescriptor(descriptor, SECURITY_DESCRIPTOR_REVISION) ||
+		/* Owned by the user: an elevated administrator's new files are otherwise owned by the Administrators group. */
+		!SetSecurityDescriptorOwner(descriptor, sid, FALSE) ||
 		!SetSecurityDescriptorDacl(descriptor, TRUE, *acl, FALSE) ||
 		!SetSecurityDescriptorControl(descriptor, SE_DACL_PROTECTED, SE_DACL_PROTECTED)) {
 		free(*acl); free(*sid_storage); *acl = NULL; *sid_storage = NULL; return false;
@@ -245,6 +247,30 @@ static bool realtime_host_private_path(vstring *path, bool directory) {
 	CloseHandle(file);
 	return result;
 }
+
+/* Gives an existing file or directory the user-only security a new one gets, as chmod 700 does: one created before, or
+   by a tool that left it inheriting its parent's entries (SYSTEM and Administrators in %LOCALAPPDATA%). A link, or a file
+   with several names, stays refused. The handle needs READ_CONTROL, WRITE_DAC and WRITE_OWNER. */
+static bool realtime_host_make_private(HANDLE file, bool directory) {
+	if (realtime_host_private_handle(file, directory)) return true;
+	BY_HANDLE_FILE_INFORMATION info;
+	if (!GetFileInformationByHandle(file, &info) ||
+		(info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 ||
+		((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) != directory ||
+		(!directory && info.nNumberOfLinks != 1)) return false;
+	SECURITY_ATTRIBUTES attributes = {0};
+	SECURITY_DESCRIPTOR descriptor;
+	ACL *acl = NULL;
+	void *sid_storage = NULL;
+	if (!realtime_host_security_attributes(&attributes, &descriptor, &acl, &sid_storage)) return false;
+	PSID owner = NULL;
+	BOOL defaulted = FALSE;
+	DWORD status = GetSecurityDescriptorOwner(&descriptor, &owner, &defaulted) ? SetSecurityInfo(file, SE_FILE_OBJECT,
+		OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, owner, NULL, acl,
+		NULL) : GetLastError();
+	free(acl); free(sid_storage);
+	return status == ERROR_SUCCESS && realtime_host_private_handle(file, directory);
+}
 #else
 static char *realtime_host_path(vstring *path) { return realtime_utf8_copy(path); }
 
@@ -270,11 +296,20 @@ HL_PRIM bool HL_NAME(__host_prepare_private_directory)(vstring *path) {
 	DWORD error = created ? ERROR_SUCCESS : GetLastError();
 	free(acl); free(sid_storage);
 	if (!created && error != ERROR_ALREADY_EXISTS) return false;
-	return realtime_host_private_path(path, true);
+	HANDLE directory = realtime_host_open_path(path, true, FILE_READ_ATTRIBUTES | READ_CONTROL | WRITE_DAC | WRITE_OWNER);
+	if (directory == INVALID_HANDLE_VALUE) return false;
+	bool result = realtime_host_make_private(directory, true);
+	CloseHandle(directory);
+	return result;
 #else
 	char *owned = realtime_host_path(path);
 	bool created = mkdir(owned, 0700) == 0;
 	int error = errno;
+	/* An existing directory of this user's becomes private again (chmod 700); a link is never followed. */
+	struct stat info;
+	if (!created && error == EEXIST && lstat(owned, &info) == 0 && S_ISDIR(info.st_mode) && info.st_uid == geteuid() &&
+		(info.st_mode & 077) != 0)
+		chmod(owned, info.st_mode & 0700);
 	free(owned);
 	return (created || error == EEXIST) && realtime_host_private_path(path, true);
 #endif
@@ -377,10 +412,19 @@ static void realtime_file_lock_close(void *value) {
 
 HL_PRIM realtime_file_lock *HL_NAME(__host_file_lock_acquire)(vstring *path) {
 #ifdef HL_WIN
-	HANDLE file = CreateFileW((const wchar_t *)realtime_string_data(path), GENERIC_READ | GENERIC_WRITE,
-		FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT, NULL);
-	if (file == INVALID_HANDLE_VALUE) hl_error("Could not open file lock: %d", (int)GetLastError());
-	if (!realtime_host_private_handle(file, false)) { CloseHandle(file); hl_error("Lock path is not a private regular file"); }
+	SECURITY_ATTRIBUTES attributes = {0};
+	SECURITY_DESCRIPTOR descriptor;
+	ACL *acl = NULL;
+	void *sid_storage = NULL;
+	if (!realtime_host_security_attributes(&attributes, &descriptor, &acl, &sid_storage))
+		hl_error("Could not describe a private file lock: %d", (int)GetLastError());
+	HANDLE file = CreateFileW((const wchar_t *)realtime_string_data(path),
+		GENERIC_READ | GENERIC_WRITE | READ_CONTROL | WRITE_DAC | WRITE_OWNER, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		&attributes, OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+	DWORD opened = GetLastError();
+	free(acl); free(sid_storage);
+	if (file == INVALID_HANDLE_VALUE) hl_error("Could not open file lock: %d", (int)opened);
+	if (!realtime_host_make_private(file, false)) { CloseHandle(file); hl_error("Lock path is not a private regular file"); }
 	OVERLAPPED overlapped = {0};
 	if (!LockFileEx(file, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD, &overlapped)) {
 		DWORD error = GetLastError();

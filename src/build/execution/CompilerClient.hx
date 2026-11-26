@@ -277,6 +277,10 @@ class CompilerClient {
 
 	@:hlNative("haxeon_runtime", "__host_file_lock_release")
 	static function releaseSessionLock(lock:hl.Abstract<"realtime_file_lock">):Void {}
+
+	@:hlNative("haxeon_runtime", "__host_prepare_private_directory")
+	static function preparePrivateDirectory(path:String):Bool
+		return false;
 	#end
 
 	/** One OS lock serializes startup and cleanup. Keep its file so callers always lock the same inode. */
@@ -427,25 +431,20 @@ class CompilerClient {
 	}
 
 	/** The session directory, created private to this user. */
+	/**
+	 * The session directory, which only this user can reach: the lock and worker metadata in it are checked to be, so a
+	 * directory inheriting other entries (%LOCALAPPDATA%'s SYSTEM and Administrators on Windows) is made private as
+	 * `chmod 700` does.
+	 */
 	static function preparedSessionDirectory():String {
-		var directory = sessionDirectory(), configured = ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR");
+		var directory = sessionDirectory();
+		Directories.ensure(Path.directory(directory));
+		#if hl
+		if (!preparePrivateDirectory(directory))
+			throw new InternalError('Could not make the compiler session directory $directory private');
+		#else
 		Directories.ensure(directory);
-		if (Sys.systemName() != "Windows") {
-			if (Sys.command("chmod", ["700", directory]) != 0)
-				throw new InternalError("Could not make the compiler session directory private");
-		} else if (configured != null && configured.length > 0) {
-			// The default under %LOCALAPPDATA% is private already; a configured directory may be shared, so keep only
-			// this user's access, as chmod 700 does.
-			var user = ProcessRunner.environmentValue("USERNAME");
-			if (user == null || Sys.command("icacls", [
-				directory,
-				"/inheritance:r",
-				"/grant:r",
-				user + ":(OI)(CI)F",
-				"/q"
-			]) != 0)
-				throw new InternalError("Could not make the compiler session directory private");
-		}
+		#end
 		return FileSystem.fullPath(directory);
 	}
 
