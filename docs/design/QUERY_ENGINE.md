@@ -327,7 +327,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 | 1 | **Done** (below): engine for per-function stages: a computed kind keyed by function symbol with equality cutoff, contributions and summaries with per-key reads, sweep of computed memos | +400 | `QueryKind.computed` | none; verifying the memos must keep the body edit at today's cost (`IrLineage.start` alone is 2.4% of it) | — |
 | 2 | **Done** (below): IR generation, generated functions, object tables as results | −450 / +250; built −437 / +527 | `IrFunctionVersions`, `IrGeneratedFunctions`, `canonicalObjectCache` (`objectCache` stays as the object set), the INPUT settling of `IrLineage.start`, frontend `IrFunctionMemo` users | 0.1 / 0.1 / 0.1; built 0.03 / 0.02 / not measured (no-op 0.03) | 1 |
 | 3 | Assembly stages before the encode point; **done** (below, two parts): the stage driver for every per-function stage, facts as a kind, the lineage gone; held keys visited only when their facts changed; the walks, requests and mentions before the encode point on the engine | −2,000 / +500; first part built −~700 / +~650 (below) | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage`; first part: `IrLineage`, `IrFunctionSlots`, the stage memos of the per-function stages, the memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05; first part: body edit −0.7%, no-op 0, signature edit +0.5% | 2 |
-| 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4); first part built (below) | −400 / +250; first part built −401 / +508 | their whole-program rereads | 0.2 / 1.2 / 0.2; first part 0.11 / 0 / not measured | 3 |
+| 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4); two parts built (below) | −400 / +250; built −401 / +508 and −53 / +257 | their whole-program rereads | 0.2 / 1.2 / 0.2; built 0.11 / 0 / not measured and 0.02 / 0.39 / not measured | 3 |
 | 5 | Inliner | −300 / +150 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A | 4 |
 | 6 | Verification and final-IR summaries | −450 / +100 | `IrVerifyMemo`, `IrFunctionMemo`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, plain-build reach record | 0.1 / 0.3 / 0.05 | 5 |
 | 7 | Lowering, debug metadata and encoding as queries; root query | −850 / +300 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts, `HlDebugMetadataCache`, `HlWriterCache` encodings, `PipelineSnapshot`, Wasm module reuse | small; no-op must stay at 0.29 s | B, 6 |
@@ -776,6 +776,61 @@ verifier's (slice 6) and the inliner's (slice 5), so `IrContributionMemo` stays;
 (`HlPlainBuild`, slice 6, beside module sections); the fixpoints' candidacy reads (an edit deciding again only the changed
 functions and the readers of a candidacy that flips) and a key per declaration, without which a signature edit decides every step
 again.
+
+### Slice 4 as built (second part)
+
+What the walks and steps read of each function's declaration, and the inline enum layouts.
+
+- **A key per signature.** A walk's or step's kind (`IrWalkMemo`) keeps in key 0 what every walk reads of every function, its
+  place, retention and provider row (`IrWalkTables.sameRole`), and gives the function whose name's number is `k` two keys: its
+  summary (`2k + 1`) and its signature, the types of its arguments and result (`2k + 2`, `IrWalkTables.sameSignature`), read where
+  a walk reads them (`IrWalkMemo.signature`): the type-aware walk's roots, the method signatures an escape reach follows, the host
+  signatures and callee arguments the closed tag choice reads, and the method and host signatures the inline enum eligibility
+  reads. An edit of a signature alone decides again only the walks and steps that read it.
+- **The nullable scalar choice reads of every function whether it may be a candidate** (`IrNullableCandidateRead`). It read the
+  functions the stage's summaries named, which their signatures decide; with the signature out of key 0, a function that became a
+  candidate would not have been read.
+- **The inline enum lanes are a kind** (`IrStageMemos.inlineEnumLanes`, one per layout configuration, keyed by the enum's type
+  id): an enum's cases laid out (`IrValueLaneLayout.shape`) with the objects the layout consulted by name
+  (`IrObjectTable.consulted`), taken while the enum has as many cases and each name gives an object of the same shape, or none, as
+  then (`IrInlineEnumLanes.holds`). The planner's cheap part (the case objects, payload copies and nested shapes) is made as
+  before, so what it adds to the program is the same; the lowering's planner after the eligibility takes the lanes the
+  eligibility laid out in the same build. `--check-reuse` lays them out again and compares.
+
+Design changes from the plan, with the reasons:
+
+- **Retention and provider rows stay one key.** The type-aware walk indexes every function's provider row and the reference walks
+  mark every function that is not only reachable, so a key per function for them would be a read of every function by every walk.
+- **The fixpoints' candidacy reads are not split yet.** Once the walks hold and the lanes are kept, what the choices still decide
+  again on the signature edit is small: the inline enum eligibility (it reads every method's signature, the edited constructor's
+  among them) about 0.4% of the edit, the closed tag choice 0.1%, the nullable scalar choice under 0.1%; the scalar ABI choice
+  now holds. Deciding again only a changed function and the readers of a candidacy that flips would save at most that, against
+  a fixpoint per pass whose removal order and side outputs (the nullable flow's helpers) must stay those of a cold build.
+- **The contribution memos stay** (the runtime needs, array types, closure uses, initialization calls and stores, ~40–80 lines
+  each): they are per function version already, so on the signature edit their cost is reading the changed functions, about 0.2%
+  each at most; `IrContributionMemo` also serves the inliner (slice 5) and the verifier (6).
+
+Measured, the signature edit's main thread sampled (perf over the compile server built ahead of time, one machine), inclusive
+shares before and after:
+
+| Step | Before | After |
+|---|---|---|
+| the type-aware walks walked again (dispatch walk, entry prune) | 1.71% | held |
+| inline enum lowering stage | 2.95% | 1.28% |
+| its eligibility (decision and lanes) | 2.52% | 0.80% |
+| its lanes (`IrInlineEnumLayout.shape`) | 1.87% | 0.07% |
+| scalar ABI choice | 0.26% | 0.07% (held) |
+| closed tag choice | 0.32% | 0.35% |
+| nullable scalar choice | 0.10% | 0.10% |
+| summaries of the changed functions read by the walks and steps (`IrWalkMemo.settle`) | 1.51% | 1.63% |
+
+On the compiler's own sources (perf-guard, one machine, against origin/main): the signature edit 18.36G → 17.97G instructions
+(−2.1%), the body edit 2.142G → 2.126G (−0.7%; the lowering's planner takes kept lanes), the no-op rebuild 0.785G → 0.782G;
+allocation of the signature edit 991 → 958 MB; the server's live data 799 → 802 MB (the kept lanes and the walks' second key per
+function). The stage benchmark is unchanged (its driver is not touched). The self-compile is byte-identical, warm builds equal
+fresh ones with and without `--check-reuse`, the edit replay and the test driver pass.
+
+Left for slice 4: the fixpoints' candidacy reads and the contribution memos above, should a later profile make them worth it.
 
 ## Prior art
 
