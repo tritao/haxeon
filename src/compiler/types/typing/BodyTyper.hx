@@ -3201,47 +3201,96 @@ class BodyTyper implements BodyTyping {
 
 	public function enumCaseCovered(type:CompilerType, constructorIndex:Int,
 			cases:Array<TypedSwitchCoverageCase>):Bool {
-		if (!isEnum(type))
+		var argumentTypes = constructorArgumentTypes(type, constructorIndex);
+		if (argumentTypes == null)
 			return false;
-		for (switchCase in cases)
-			if (switchCase.guard == null
-				&& (switchCase.isCatchAll || switchCase.constructorIndex == constructorIndex
-				&& switchCase.predicates.length == 0))
-				return true;
-		// Arms that differ in one argument only, matched there by every value of a finite type: each constructor of an enum,
-		// `true` and `false`, or each declared value of a closed enum abstract.
-		var groups:Map<String, {values:Array<String>, seen:Map<String, Bool>}> = [];
+		var rows:Array<Array<CoverageNode>> = [];
 		for (switchCase in cases) {
-			if (switchCase.constructorIndex != constructorIndex || switchCase.guard != null
-				|| switchCase.predicates.length != 1)
+			if (switchCase.guard != null)
 				continue;
-			var predicate = switchCase.predicates[0],
-				value = predicate.value;
-			if (predicate.arrayLength >= 0 || predicate.arrayIndex >= 0)
-				continue;
-			var nested = predicate.nestedConstructorIndex,
-				literal = value == null ? null : enumLiteral(value),
-				matched = nested != null ? 'enum:$nested' : literal != null ? 'enum:${literal.index}' : value == null
-					? null : constantPatternKey(value),
-				values = finiteValueKeys(predicate.type);
-			if (matched == null || values == null)
-				continue;
-			var nestedPath = [
-				for (access in predicate.nestedPath ?? [])
-					'${access.constructorIndex}.${access.fieldIndex}'
-			].join("/"),
-				key = '${predicate.index}:$nestedPath',
-				group = groups.get(key);
-			if (group == null) {
-				group = {values: values, seen: []};
-				groups.set(key, group);
-			}
-			group.seen.set(matched, true);
-		}
-		for (group in groups)
-			if ([for (value in group.values) if (!group.seen.exists(value)) value].length == 0)
+			if (switchCase.isCatchAll || switchCase.constructorIndex == constructorIndex
+				&& switchCase.predicates.length == 0)
 				return true;
-		return false;
+			if (switchCase.constructorIndex != constructorIndex)
+				continue;
+			var row = [for (_ in argumentTypes) new CoverageNode()];
+			for (predicate in switchCase.predicates)
+				placeCoveragePredicate(row, predicate);
+			rows.push(row);
+		}
+		return patternsCover(rows, argumentTypes);
+	}
+
+	/** The argument types of the enum `type`'s constructor `constructorIndex`, or null when it has none such. */
+	function constructorArgumentTypes(type:CompilerType, constructorIndex:Int):Null<Array<CompilerType>> {
+		var name = enumName(type),
+			declaration = name == null ? null : session.enumDecls.get(name);
+		if (declaration == null || constructorIndex < 0 || constructorIndex >= declaration.cases.length)
+			return null;
+		var instance = enumInstance(type);
+		return [
+			for (parameter in declaration.cases[constructorIndex].params)
+				enumParameterType(declaration.typeParameters, parameter, instance)
+		];
+	}
+
+	/** Records `predicate` in an arm's argument patterns `row`, at its argument and nested path. */
+	function placeCoveragePredicate(row:Array<CoverageNode>, predicate:TypedSwitchPredicate):Void {
+		if (predicate.index < 0 || predicate.index >= row.length)
+			return;
+		var node = row[predicate.index];
+		for (access in predicate.nestedPath ?? []) {
+			if (node.key != 'enum:${access.constructorIndex}' || access.fieldIndex >= node.arguments.length) {
+				node.opaque = true;
+				return;
+			}
+			node = node.arguments[access.fieldIndex];
+		}
+		if (predicate.arrayLength >= 0 || predicate.arrayIndex >= 0 || predicate.objectPath != null) {
+			node.opaque = true;
+			return;
+		}
+		var nested = predicate.nestedConstructorIndex;
+		if (nested != null) {
+			var arguments = constructorArgumentTypes(predicate.type, nested);
+			node.key = 'enum:$nested';
+			node.arguments = arguments == null ? [] : [for (_ in arguments) new CoverageNode()];
+			return;
+		}
+		var value = predicate.value,
+			literal = value == null ? null : enumLiteral(value);
+		node.key = literal != null ? 'enum:${literal.index}' : value == null ? null : constantPatternKey(value);
+		if (node.key == null)
+			node.opaque = true;
+	}
+
+	/** Whether `rows` match every tuple of non-null values of `types`. */
+	function patternsCover(rows:Array<Array<CoverageNode>>, types:Array<CompilerType>):Bool {
+		if (types.length == 0)
+			return rows.length > 0;
+		if (rows.length == 0)
+			return false;
+		var rest = types.slice(1),
+			values = finiteValueKeys(types[0]),
+			open = [for (row in rows) if (row[0].isWildcard()) row.slice(1)];
+		// A position every row leaves open, or one with infinitely many values, is covered by its wildcards alone.
+		if (values == null || open.length == rows.length)
+			return patternsCover(open, rest);
+		for (value in values) {
+			var argumentTypes = value.indexOf("enum:") == 0 ? constructorArgumentTypes(types[0],
+				Std.parseInt(value.substr(5))) ?? [] : [],
+				specialized:Array<Array<CoverageNode>> = [];
+			for (row in rows) {
+				var node = row[0];
+				if (node.isWildcard() || !node.opaque && node.key == value)
+					specialized.push((node.arguments.length == argumentTypes.length ? node.arguments : [
+						for (_ in argumentTypes) new CoverageNode()
+					]).concat(row.slice(1)));
+			}
+			if (!patternsCover(specialized, argumentTypes.concat(rest)))
+				return false;
+		}
+		return true;
 	}
 
 	/**
@@ -3275,6 +3324,13 @@ class BodyTyper implements BodyTyping {
 			case TNullable(inner): switchConstantType(inner);
 			default: EnumAbstractValues.switchable(session, subject) ? subject : null;
 		};
+	/**
+	 * Whether the unguarded `cases` match every value of the enum `type` that its constructor `constructorIndex` makes. It is
+	 * Maranget's usefulness check over the arms' argument patterns, which are rebuilt as trees from their predicates and split
+	 * one position at a time: a position of an enum, Bool or closed enum abstract is covered value by value, any other only by
+	 * a wildcard, and an array or structure pattern covers no value for certain. Null is not among the values; whether one
+	 * must be matched is SwitchNullCoverage's question.
+	 */
 
 	/**
 	 * The declared values of a closed enum abstract, keyed as switch cases are (`int:N`, `string:S`), or null when `type`
@@ -3497,4 +3553,21 @@ class BodyTyper implements BodyTyping {
 
 	static function sameType(left:CompilerType, right:CompilerType):Bool
 		return TypeRelations.equals(left, right);
+}
+
+/** One position of a switch arm's pattern, as `BodyTyper.enumCaseCovered` reads it. */
+private class CoverageNode {
+	/** The value matched there: `enum:N` for a constructor, a constant's key; null for a wildcard or binding. */
+	public var key:Null<String> = null;
+
+	/** A constructor's argument patterns, by field index. */
+	public var arguments:Array<CoverageNode> = [];
+
+	/** A pattern the check does not take apart (an array or structure pattern), which covers no value for certain. */
+	public var opaque = false;
+
+	public function new() {}
+
+	public function isWildcard():Bool
+		return !opaque && key == null;
 }

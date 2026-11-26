@@ -611,6 +611,11 @@ class TestMain {
 			'Structure switch is missing cases: {e: B, at: {e: B}}');
 		expectCompileError('class P { public function new() {} } function main():Int { var p:Null<P> = new P(); return switch p { case null: 1; }; }',
 			'Switch is missing cases: _');
+		// Nested patterns cover a case only when they cover every value below it, at any depth.
+		expectCompileError('enum I { A; B(x:Int); } enum O { W(i:I); P; } function main():Int { var o = P; return switch o { case W(A): 1; case P: 2; }; }',
+			'Enum switch is missing cases: W');
+		expectCompileError('enum I { A; B(x:Int); } enum O { W(i:I); P(v:Int); } enum R<T, E> { G(v:T); F(e:E); } function main():Int { var r:R<Int, O> = G(1); return switch r { case G(_): 1; case F(W(A)): 2; case F(P(_)): 3; }; }',
+			'Enum switch is missing cases: F');
 		// A capture still matches its pattern, so it neither ends the switch nor binds outside it.
 		expectCompileError('enum E { A(value:Int); B; } function main():Int { var e = A(1); return switch e { case all = A(_): 1; }; }',
 			'Enum switch is missing cases: B');

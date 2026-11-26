@@ -44,6 +44,10 @@ The current subset includes:
   abstract is imported (`import pack.Kind`, `import pack.Kind.*`, which also imports an enum's constructors), and where a
   value of the abstract is expected. An abstract elsewhere in the program, its own package's included, does not put its
   values in scope, so a value named `Type` or `Array` there hides nothing.
+- A switch over an enum without a default covers it through patterns nested at any depth: `Err(Unreadable(Empty))`,
+  `Err(Unreadable(BadDigit(_)))` and `Err(OutOfRange(_))` cover `Err`, each payload position split into its values (an
+  enum's constructors, `true` and `false`, a closed enum abstract's values; any other type only by `_`). An array or
+  structure pattern inside a constructor covers no value for certain.
 - A switch over an enum abstract without a default covers every declared value, as one over an enum covers every
   constructor: a missing value is `E1021`, naming it, and a switch that covers them all returns on every path when its
   arms do. A value outside the declared set (a native code newer than its binding, or a cast) throws at the switch.
