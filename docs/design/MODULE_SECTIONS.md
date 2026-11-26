@@ -442,6 +442,20 @@ and perf-guard, including startup.
 
 Slice 3 can land before engine slices 1–6. Slice 7 then turns its per-section memo into the `ModuleSection` query.
 
+### Slice 4 plan
+
+Slice 4 lands in four parts, each green on its own. A part keeps what it replaces working until a later part removes it,
+and nothing stays for compatibility once its replacement has landed.
+
+| Part | What | Checks |
+|---|---|---|
+| 4a | **Fork: patches made of sections.** The loader keeps the link state of a module it loads to patch (`hl_code_read_patchable`): the key tables, the literal, structural-type and constant tables, and a digest of each function's linked code. HLP 12 carries replaced sections in the HLB 9 encoding, removed section paths, renames, and guards and migrations by key. The patch linker (`hl_module_link_patch`) links the sections against the link state into the runtime's patch, so validation, staging, guards, migrations and the commit stay as they are: a known key keeps its slot, a new key takes the next one, a function whose linked code has the running one's digest is not compiled again, and a redefined class may only fill reserved slots. New debug files are appended. The loader mints stable ids (a function's slot, which a rename keeps). HLI 4 is the module id and revision alone; hosts find a function's id by name (`hl_runtime_module_function_id`). The link state is committed with the patch and restored when the patch fails. HLB 8 and HLP 11 still read, so the compiler does not change | `code-link` gains the patch cases: a body edit, added functions and classes, reserved slots, renames, guards, every refusal, and a refused patch followed by one that applies |
+| 4b | **Compiler: live builds on sections.** A live build writes HLB 9 (its functions with identity relocations), and a patch is the sections whose digests differ from the acknowledged build's, with renames, guards and migrations by key (HLP 12). The `.hli` is HLI 4; the live host, the debugger tests and Android HXR address functions by name. `HlRuntimeIdentity.VERSION` moves, so the first build after the change reloads | the ci hot-reload and debug-metadata suites, vscode-debug, the patch mains, `NominalInterfacePatchMain`, the edit replay, an Android watch run |
+| 4c | **Live pruning** ([LIVE_PRUNING.md](LIVE_PRUNING.md) slice 3): layouts from declarations (declared-method stubs in live layouts only), the published set grows within a module identity, `firstReached` is carried, natives a patch adds are appended by `(lib, name)`, the planner's reach-only causes go, and the live `--check-reuse` builds the same tree fresh and compares sections, first-reach coverage and imports | the new live edits in the driver and perf-guard's live part |
+| 4d | **Deletions** (section 3, "Kept for slice 4"), each checked with a grep that includes `tests/`: the dense whole-module `HlWriter` encoding and `HlWriterCache`, HLP 11 (`HlPatchWriter`'s hashes, symbols and relocations, `HlPatchReader`), the published prefix of `HlSymbolTable` where nothing else uses it, `HlFunctionCache` slots and stable ids, the persistence codecs the section digests replace, `HlRuntimeIdentity`'s id maps; in the fork, HLP 11 and HLI 2 and 3 | the suites of 4b |
+
+In 4a a patch that adds a native is refused by the patch linker, as the planner already plans a reload for it.
+
 ## 9. Decided
 
 Decided by the user on 2026-11-25:

@@ -1,10 +1,10 @@
 # Live builds prune like one-shot builds (design note)
 
-Status: designed 2026-11-26, not started. Decided by the user: a live HashLink build keeps what a one-shot build keeps, by
-the same roots and the same walk (reflection, `@:keep`, the reflectable set), so a live session is no more forgiving than a
-normal build. It lands with module sections slice 4 ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), section 4), with the reach
-set as an engine summary ([QUERY_ENGINE.md](QUERY_ENGINE.md), "Whole-program steps") and a live counterpart of
-`--check-reuse`.
+Status: designed 2026-11-26, not started; the open questions are decided (end of the note). Decided by the user: a live
+HashLink build keeps what a one-shot build keeps, by the same roots and the same walk (reflection, `@:keep`, the reflectable
+set), so a live session is no more forgiving than a normal build. It lands with module sections slice 4
+([MODULE_SECTIONS.md](MODULE_SECTIONS.md), section 4), with the reach set as an engine summary
+([QUERY_ENGINE.md](QUERY_ENGINE.md), "Whole-program steps") and a live counterpart of `--check-reuse`.
 
 **Today.** A live build skips the early prune (`FrontendCompilation.runIrPipeline` passes `pruneFromEntry` and
 `walkFromEntry` false when `livePatching`) and the plain backend's prune (`HashLinkBackendSession`, `HlPlainBuild.reachable`).
@@ -182,13 +182,13 @@ ci-tier hot-reload suite and perf-guard's live part (first build, edits and serv
 Slice 3 is one change with slice 4 of module sections, as decided: a dense interim would need the debug-file, native and
 dispatch fixes that sections remove.
 
-## Open questions
+## Decided
 
-- **Plain layouts.** Should plain builds also keep declared method slots with stubs, so one layout rule serves both and the
-  live check compares layouts too? It costs plain module size (stubs for every unreached method of a kept class); not
-  measured.
-- **Retained functions.** The published set grows for a module's lifetime. A reload (new module identity) resets it; is a
-  bound needed for long sessions, or is the reload the bound?
-- **Where `firstReached` is lowered** when its function was generated many edits ago: its held stage memos are current, so
-  only lowering runs; confirm that the lowering environment of a late-lowered function equals a fresh build's (check 1
-  covers it, but a mismatch would show only there).
+Decided by the user on 2026-11-26:
+
+- **Plain layouts.** Plain builds keep trimming unreached methods; only live layouts keep declared-method stubs. A plain
+  module pays no size or startup for the live rule, and the live check compares programs and sections, not layouts.
+- **Retained functions.** No extra bound: a reload (a new module identity) resets the published set and is the bound.
+- **Where `firstReached` is lowered.** A function first reached many edits after it was generated is lowered from its held
+  stage memos. The live `--check-reuse` verifies that its lowering equals a fresh build's: check 1 compares the reached
+  functions' lowering, not only their final IR.
