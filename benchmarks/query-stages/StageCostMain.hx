@@ -26,6 +26,9 @@ import compiler.query.QuerySummary;
  *   cutoff     every function rewritten (one fact it read changed) to a function equal to the one kept
  * DRIVER `access` measures one engine access per key instead (CASE: base, put, current, current2, contribute, holds,
  * recompute, has), each build doing what `base` does and then the access once per key; STAGES is ignored.
+ * DRIVER `inliner` runs the inliner (`IrInliner.run`) as a compile server does, on a program whose callers each splice three
+ * leaves (CASE: `held`, every function given as the object it was; `cutoff`, every function given as an equal copy, so each is
+ * inlined again to the form it had); STAGES is ignored.
  * A cold build and a warm one run first; then it prints `ready`, waits for a line on standard input, runs BUILDS warm builds,
  * prints `done` and waits for another line, so that `measure.py` counts only the warm builds.
  */
@@ -44,7 +47,7 @@ class StageCostMain {
 			count = Std.parseInt(args[3]) ?? 0,
 			builds = Std.parseInt(args[4]) ?? 0;
 		var reads = switch scenario {
-			case _ if (driver == "access"): 0;
+			case _ if (driver == "access" || driver == "inliner"): 0;
 			case "held": 0;
 			case "held1": 1;
 			case "held3": 3;
@@ -61,6 +64,7 @@ class StageCostMain {
 			case "driver": stageDriver(functions, stages, reads, cutoff);
 			case "engine": engineDriver(functions, stages, reads, cutoff);
 			case "access": accessDriver(functions, scenario);
+			case "inliner": inlinerDriver(count, scenario == "cutoff");
 			case _: throw "unknown driver " + driver;
 		}
 		run(0);
@@ -151,6 +155,43 @@ class StageCostMain {
 				}
 				list = output;
 			}
+		};
+	}
+
+	/**
+	 * The inliner on `count` functions, a quarter of them leaves of a few instructions that the others splice, three each: given the
+	 * same objects every build, or with `copies` equal copies of them.
+	 */
+	static function inlinerDriver(count:Int, copies:Bool):Int->Void {
+		var database = new QueryDatabase();
+		var memos = new IrStageMemos(database,
+			database.register(new ComputedQueryKind<IrFunction>("ir-generation", IrFunctionStateEquality.same)));
+		var cache = new compiler.ir.passes.inlining.IrInliner.IrInlineCache();
+		var leaves = count >> 2, functions:Array<IrFunction> = [];
+		for (index in 0...count) {
+			var builder = new IrBuilder(), value = builder.argument("value", IrType.I32);
+			if (index < leaves)
+				for (step in 0...4)
+					value = builder.add(value, builder.constInt(index + step));
+				else
+					for (call in 0...3)
+						value = builder.add(builder.call("bench.L" + ((index * 7 + call * 13) % leaves) + ".run",
+							[value], IrType.I32),
+							builder.constInt(call));
+			builder.returnValue(value);
+			functions.push(new IrFunction((index < leaves ? "bench.L" : "bench.F") + index + ".run", builder.arguments,
+				IrType.I32,
+				builder.blocks, Ordinary));
+		}
+		var entry = "bench.F" + (count - 1) + ".run";
+		return function(build:Int) {
+			database.newRevision();
+			var program = new compiler.ir.model.Ir.IrProgram(entry);
+			program.functions = copies ? [for (fn in functions) fn.withBlocks(fn.blocks)] : functions.copy();
+			memos.startBuild(program.functions, false);
+			memos.bodies = true;
+			compiler.ir.passes.inlining.IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.hashLink,
+				new compiler.CompileOptions({keepSession: true}), null, memos);
 		};
 	}
 

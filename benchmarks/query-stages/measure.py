@@ -89,6 +89,7 @@ def main():
     parser.add_argument("--checkout", default=os.path.dirname(os.path.dirname(HERE)))
     parser.add_argument("--accesses", default="base,current,current2,contribute,holds,recompute,has")
     parser.add_argument("--program", help="a StageCostMain build to run instead of building one")
+    parser.add_argument("--inliner", default="held,cutoff", help="the inliner's cases (`IrInliner.run`), per function")
     arguments = parser.parse_args()
     pg = guard(arguments.checkout)
     if pg.perf_unavailable():
@@ -108,6 +109,11 @@ def main():
                                             str(arguments.builds)])
             row.append(total / per)
         print(f"{case:8} {row[0]:8.0f} {row[1]:8.0f}", flush=True)
+    if arguments.inliner:
+        print(f"{'inliner':8} {'':>8} {'':>8}   instructions per function of a warm build")
+        for case in arguments.inliner.split(","):
+            total = count(pg, hl, program, ["inliner", case, "1", str(arguments.functions), str(arguments.builds)])
+            print(f"{case:8} {total / (arguments.builds * arguments.functions):8.0f}", flush=True)
     if not arguments.accesses:
         return 0
     print(f"{'access':12} {'per key':>8}   instructions per access, beyond base (base: newRevision and a put of the same function, per key)")
