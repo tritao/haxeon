@@ -17,6 +17,10 @@ class ViewportLight {
 	 */
 	public final radius:Float;
 
+	/**
+	 * A light from `direction`, normalized. Throws when it is zero, a colour is not RGB, or `intensity` or `radius` is
+	 * negative.
+	 */
 	public function new(direction:Array<Float>, intensity:Float, color:Array<Float>, radius:Float) {
 		var length = Math.sqrt(direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2]);
 		if (direction.length != 3 || !(length > 0) || color.length != 3 || !(intensity >= 0) || !(radius >= 0))
@@ -39,8 +43,13 @@ class ViewportLight {
  * component viewers) build the same environment from these numbers.
  */
 class ViewportLook {
+	/** The default preset: a bright key light and a light room. */
 	public static inline var Studio:Int = 0;
+
+	/** Even, low-contrast light. */
 	public static inline var Soft:Int = 1;
+
+	/** A strong key and rim over a dark ground. */
 	public static inline var Contrast:Int = 2;
 
 	/** Preset names, indexed by preset, for settings and menus. */
@@ -52,9 +61,11 @@ class ViewportLook {
 	/** Default workplane grid spacing, in metres. */
 	public static inline var GridStep:Float = 0.2;
 
+	/** The background gradient's top colour, linear RGB. */
 	public static function backgroundTop():Array<Float>
 		return [0.894, 0.910, 0.922];
 
+	/** The background gradient's bottom colour, linear RGB. */
 	public static function backgroundBottom():Array<Float>
 		return [0.847, 0.867, 0.882];
 
@@ -83,6 +94,7 @@ class ViewportLook {
 	/** Room light from above and from below: the ambient term, and what surfaces reflect away from the lights. */
 	public final sky:Array<Float>;
 
+	/** The room light from below. */
 	public final ground:Array<Float>;
 
 	/** How strongly surfaces reflect the room, in [0, 1]. */
@@ -94,6 +106,7 @@ class ViewportLook {
 	/** Contact obscurance strength and angular bias, in [0, 1]. */
 	public final occlusionStrength:Float;
 
+	/** How far contact obscurance is offset from surfaces, against self-shadowing. */
 	public final occlusionBias:Float;
 
 	/** Display-only minimum roughness, which broadens highlights on polished CAD faces. */
@@ -116,6 +129,7 @@ class ViewportLook {
 		this.exposure = exposure;
 	}
 
+	/** The look of preset `preset`. Throws for an unknown preset. */
 	public static function preset(preset:Int):ViewportLook {
 		// Key from above-left, which avoids a frontal wash of recess walls; fill from the right; rim from behind.
 		var key = [0.60, -0.60, -0.53], fill = [-0.65, -0.15, -0.74], rim = [-0.45, 0.75, 0.48];

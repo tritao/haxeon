@@ -13,9 +13,16 @@ import haxe.io.Bytes;
  * them with its authoritative boundaries using setGraphemeBoundaries().
  */
 class TextOffsetMap {
+	/** The text it maps. */
 	public var text(default, null):String;
+
+	/** Its length, in code points. */
 	public var codepointCount(default, null):Int;
+
+	/** Its length, in UTF-8 bytes. */
 	public var utf8ByteLength(default, null):Int;
+
+	/** Its length, in UTF-16 code units. */
 	public var utf16Length(default, null):Int;
 	var codepointToUtf8:Array<Int>;
 	var codepointToUtf16:Array<Int>;
@@ -27,6 +34,7 @@ class TextOffsetMap {
 	/** Computed on first use (see graphemes), so a document can be opened without a grapheme pass over its text. */
 	var graphemeBoundaries:Null<Array<Int>>;
 
+	/** A map over `value`, with `boundaries` as its grapheme boundaries when given, or the built-in rules otherwise. */
 	public function new(value:String, ?boundaries:Array<Int>) {
 		text = value == null ? "" : value;
 		utf8Bytes = Bytes.ofString(text);
@@ -92,12 +100,14 @@ class TextOffsetMap {
 		return count;
 	}
 
+	/** The UTF-8 byte offset of `position`. */
 	public function utf8OffsetForCodepoint(position:CodepointOffset):Utf8Offset {
 		var value:Int = position;
 		checkCodepointOffset(value);
 		return codepointToUtf8[value];
 	}
 
+	/** The code point at UTF-8 byte `offset`. */
 	public function codepointOffsetForUtf8(offset:Utf8Offset):CodepointOffset {
 		var value:Int = offset;
 		var low = 0;
@@ -115,12 +125,14 @@ class TextOffsetMap {
 		throw "UTF-8 offset is not on a code-point boundary";
 	}
 
+	/** The UTF-16 offset of `position`. */
 	public function utf16OffsetForCodepoint(position:CodepointOffset):Utf16Offset {
 		var value:Int = position;
 		checkCodepointOffset(value);
 		return codepointToUtf16[value];
 	}
 
+	/** The code point at UTF-16 `offset`. */
 	public function codepointOffsetForUtf16(offset:Utf16Offset):CodepointOffset {
 		var value:Int = offset;
 		var low = 0;
@@ -149,6 +161,7 @@ class TextOffsetMap {
 		return previous;
 	}
 
+	/** The code point a grapheme boundary is at. Throws when `position` is not a boundary. */
 	public function codepointOffsetForGrapheme(position:GraphemePosition):CodepointOffset {
 		var value:Int = position;
 		checkCodepointOffset(value);
@@ -157,6 +170,7 @@ class TextOffsetMap {
 		return value;
 	}
 
+	/** Whether a caret may stand at `position`: no grapheme cluster spans it. */
 	public function isGraphemeBoundary(position:CodepointOffset):Bool {
 		var value:Int = position;
 		checkCodepointOffset(value);
@@ -197,6 +211,7 @@ class TextOffsetMap {
 		return result;
 	}
 
+	/** The text from `start` to `end`. */
 	public function sliceCodepoints(start:CodepointOffset, end:CodepointOffset):String {
 		var first:Int = start;
 		var last:Int = end;
@@ -206,6 +221,7 @@ class TextOffsetMap {
 		return utf8Bytes.sub(byteStart, byteEnd - byteStart).toString();
 	}
 
+	/** Replaces `start` to `end` with `replacement`, recomputing every boundary, and returns the new text. */
 	public function replaceCodepoints(start:CodepointOffset, end:CodepointOffset,
 			replacement:Null<String>):String {
 		var first:Int = start;
@@ -440,12 +456,15 @@ class TextOffsetMap {
 			boundaryEnd - boundaryStart + 1, boundaries);
 	}
 
+	/** How many grapheme boundaries the text has, the start and end included. */
 	public function graphemeBoundaryCount():Int
 		return graphemes().length;
 
+	/** How many grapheme clusters, as a user counts characters. */
 	public function graphemeCount():Int
 		return graphemes().length - 1;
 
+	/** Grapheme boundary number `boundaryNumber`. Throws when there is no such boundary. */
 	public function graphemeBoundaryAt(boundaryNumber:Int):GraphemePosition {
 		var graphemeBoundaries = graphemes();
 		if (boundaryNumber < 0 || boundaryNumber >= graphemeBoundaries.length)

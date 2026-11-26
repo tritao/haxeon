@@ -6,13 +6,23 @@ import haxe.io.Bytes;
 /** Caller-owned editable text whose public revision participates in reactive builds. */
 @:allow(haxeon.ui.widgets.text.TextEditorState)
 class TextDocument implements Observable {
+	/** Counts the changes; a build that reads the document rebuilds when it moves. */
 	public var revision(default, null):Int;
+
+	/** Its length, in code points. */
 	public var codepointCount(get, never):Int;
+
+	/** Its length, in UTF-8 bytes. */
 	public var utf8ByteLength(get, never):Int;
+
+	/** Its length, in UTF-16 code units. */
 	public var utf16Length(get, never):Int;
+
+	/** The whole text. */
 	public var text(get, never):String;
 	@:unobservable var buffer:TextDocumentBuffer;
 
+	/** A document holding `value`. */
 	public function new(value:String) {
 		buffer = new TextDocumentBuffer(value);
 		revision = buffer.revision;
@@ -37,44 +47,65 @@ class TextDocument implements Observable {
 		return buffer.text;
 	}
 
+	/** Replaces code points `start` to `end` with `replacement`. Returns false when that changes nothing. */
 	public function replace(start:Int, end:Int, replacement:String):Bool {
 		if (!buffer.replace(start, end, replacement)) return false;
 		revision = buffer.revision;
 		return true;
 	}
 
+	/**
+	 * The one replacement since revision `previous`, or null when there was more than one, so a reader can update
+	 * incrementally or else start over.
+	 */
 	public function editSince(previous:Int):Null<TextDocumentEdit> {
 		var currentRevision = revision;
 		return buffer.editSince(previous);
 	}
+
+	/** The text from code point `start` to `end`. Throws when the range is outside the text. */
 	public function sliceCodepoints(start:Int, end:Int):String {
 		var currentRevision = revision;
 		return buffer.sliceCodepoints(start, end);
 	}
+
+	/** The UTF-8 byte offset of code point `position`. */
 	public function utf8OffsetForCodepoint(position:Int):Int {
 		var currentRevision = revision;
 		return buffer.utf8OffsetForCodepoint(position);
 	}
+
+	/** The UTF-16 offset of code point `position`. */
 	public function utf16OffsetForCodepoint(position:Int):Int {
 		var currentRevision = revision;
 		return buffer.utf16OffsetForCodepoint(position);
 	}
+
+	/** The code point at UTF-8 byte offset `position`. */
 	public function codepointOffsetForUtf8(position:Int):Int {
 		var currentRevision = revision;
 		return buffer.codepointOffsetForUtf8(position);
 	}
+
+	/** The code point at UTF-16 offset `position`. */
 	public function codepointOffsetForUtf16(position:Int):Int {
 		var currentRevision = revision;
 		return buffer.codepointOffsetForUtf16(position);
 	}
+
+	/** How many paragraphs it has: one more than its line breaks. */
 	public function paragraphCount():Int {
 		var currentRevision = revision;
 		return buffer.paragraphCount();
 	}
+
+	/** The paragraph that code point `position` is in. */
 	public function paragraphIndexAtOffset(position:Int):Int {
 		var currentRevision = revision;
 		return buffer.paragraphIndexAtOffset(position);
 	}
+
+	/** The code points of paragraph `number`, without its line break. Throws when there is no such paragraph. */
 	public function paragraphRangeAtIndex(number:Int):TextRange {
 		var currentRevision = revision;
 		return buffer.paragraphRangeAtIndex(number);
@@ -86,9 +117,17 @@ class TextDocumentBuffer {
 	static inline var targetBytes:Int = 2048;
 	/** Incremented after each non-no-op replacement. */
 	public var revision(default, null):Int;
+
+	/** Its length, in code points. */
 	public var codepointCount(default, null):Int;
+
+	/** Its length, in UTF-8 bytes. */
 	public var utf8ByteLength(default, null):Int;
+
+	/** Its length, in UTF-16 code units. */
 	public var utf16Length(default, null):Int;
+
+	/** The whole text. */
 	public var text(get, never):String;
 
 	var segments:Array<TextOffsetMap>;
@@ -99,6 +138,7 @@ class TextDocumentBuffer {
 	var cachedText:Null<String>;
 	var lastEdit:Null<TextDocumentEdit>;
 
+	/** A buffer holding `value`. */
 	public function new(value:String) {
 		revision = 0;
 		segments = split(value == null ? "" : value);
@@ -110,6 +150,7 @@ class TextDocumentBuffer {
 		reindex();
 	}
 
+	/** The whole text, joined from its segments. */
 	public function get_text():String {
 		if (cachedText == null) {
 			var buffer = new StringBuf();
@@ -120,6 +161,7 @@ class TextDocumentBuffer {
 		return cachedText;
 	}
 
+	/** Replaces code points `start` to `end` with `replacement`. Returns false when that changes nothing. */
 	public function replace(start:Int, end:Int, replacement:String):Bool {
 		checkRange(start, end);
 		var inserted = replacement == null ? "" : replacement;
@@ -163,6 +205,7 @@ class TextDocumentBuffer {
 		return edit != null && edit.revision == revision && previous == revision - 1 ? edit : null;
 	}
 
+	/** The text from code point `start` to `end`. Throws when the range is outside the text. */
 	public function sliceCodepoints(start:Int, end:Int):String {
 		checkRange(start, end);
 		if (start == end)
@@ -179,18 +222,21 @@ class TextDocumentBuffer {
 		return buffer.toString();
 	}
 
+	/** The UTF-8 byte offset of code point `position`. */
 	public function utf8OffsetForCodepoint(position:Int):Int {
 		checkPosition(position);
 		var index = segmentAt(position);
 		return byteStarts[index] + segments[index].utf8OffsetForCodepoint(position - codepointStarts[index]);
 	}
 
+	/** The UTF-16 offset of code point `position`. */
 	public function utf16OffsetForCodepoint(position:Int):Int {
 		checkPosition(position);
 		var index = segmentAt(position);
 		return utf16Starts[index] + segments[index].utf16OffsetForCodepoint(position - codepointStarts[index]);
 	}
 
+	/** The code point at UTF-8 byte offset `position`. */
 	public function codepointOffsetForUtf8(position:Int):Int {
 		if (position < 0 || position > utf8ByteLength)
 			throw "UTF-8 offset is outside the document";
@@ -198,6 +244,7 @@ class TextDocumentBuffer {
 		return codepointStarts[index] + segments[index].codepointOffsetForUtf8(position - byteStarts[index]);
 	}
 
+	/** The code point at UTF-16 offset `position`. */
 	public function codepointOffsetForUtf16(position:Int):Int {
 		if (position < 0 || position > utf16Length)
 			throw "UTF-16 offset is outside the document";
@@ -205,15 +252,18 @@ class TextDocumentBuffer {
 		return codepointStarts[index] + segments[index].codepointOffsetForUtf16(position - utf16Starts[index]);
 	}
 
+	/** How many paragraphs it has: one more than its line breaks. */
 	public function paragraphCount():Int
 		return paragraphStarts[paragraphStarts.length - 1] + segments[segments.length - 1].paragraphCount();
 
+	/** The paragraph that code point `position` is in. */
 	public function paragraphIndexAtOffset(position:Int):Int {
 		checkPosition(position);
 		var index = segmentAt(position);
 		return paragraphStarts[index] + segments[index].paragraphIndexAtOffset(position - codepointStarts[index]);
 	}
 
+	/** The code points of paragraph `number`, without its line break. Throws when there is no such paragraph. */
 	public function paragraphRangeAtIndex(number:Int):TextRange {
 		if (number < 0 || number >= paragraphCount())
 			throw "Paragraph index is outside the document";
@@ -320,12 +370,19 @@ class TextDocumentBuffer {
 class TextDocumentEdit {
 	/** The revision the replacement produced. */
 	public final revision:Int;
+
+	/** Where the replaced range starts, in code points. */
 	public final start:Int;
+
+	/** Where it ended before the replacement. */
 	public final oldEnd:Int;
+
+	/** Where the inserted text ends now. */
 	public final newEnd:Int;
 	/** The document's length before the replacement. */
 	public final previousCodepointCount:Int;
 
+	/** A replacement at `revision`. */
 	public function new(revision:Int, start:Int, oldEnd:Int, newEnd:Int, previousCodepointCount:Int) {
 		this.revision = revision;
 		this.start = start;
