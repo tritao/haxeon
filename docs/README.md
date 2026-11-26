@@ -90,6 +90,7 @@ Compiler (ADR 0003 and its follow-ups):
 - [WARM_REBUILD_REUSE.md](design/WARM_REBUILD_REUSE.md): reusing work across warm builds.
 - [IR_PASS_INVENTORY.md](design/IR_PASS_INVENTORY.md): the IR passes and the proposed pass interface.
 - [REACHABILITY_WALK.md](design/REACHABILITY_WALK.md): the type-aware reachability walk and prune.
+- [LIVE_PRUNING.md](design/LIVE_PRUNING.md): live builds pruned like one-shot builds, with incremental reachability.
 - [ENUM_PASS_PHASE_ORDER.md](design/ENUM_PASS_PHASE_ORDER.md): enum lowering order.
 - [DYNAMIC_SITE_BOUNDARIES.md](design/DYNAMIC_SITE_BOUNDARIES.md): typed dynamic sites.
 - [PROVIDER_INVENTORY.md](design/PROVIDER_INVENTORY.md): which generated functions serve which operation.

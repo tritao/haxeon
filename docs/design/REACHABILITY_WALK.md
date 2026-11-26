@@ -77,7 +77,8 @@ in enum/value conversion selection before their representations change.
 
 **Live and hot-reload builds.** The first version does not prune live builds: a patch can still call any function, and a reachability
 change must not move the module's layout. This matches the backends today. The walk and the invariant still run on live builds in check
-mode (so a missed edge is caught there too) and the prune is skipped; revisit after measuring. This is also why the driver runs every
+mode (so a missed edge is caught there too) and the prune is skipped; revisit after measuring. Measured and decided:
+live builds will prune ([LIVE_PRUNING.md](LIVE_PRUNING.md)). This is also why the driver runs every
 program case pruned and unpruned, plain and live.
 
 ## Prerequisite of the prune: dynamic sites are typed, not named

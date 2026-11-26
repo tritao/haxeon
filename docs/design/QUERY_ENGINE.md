@@ -151,6 +151,7 @@ not given is retracted at `close`. A contribution made of its contributor's inpu
 input has not changed since it was given (`holds`). A reader reads one key's presence (`has`), or the whole set (`keys`), which changes with
 any key; only a key that appears or goes changes. A walk over the program (reachability, `IrWalkRecord` today) is a computed
 memo whose reads are the contributions of the functions it reached and the tables it read, verified like any other.
+The prune's walk is the first such step that plain and live builds share ([LIVE_PRUNING.md](LIVE_PRUNING.md)).
 
 Fixpoint passes (`IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`) record their candidacy reads as
 engine reads. An edit re-decides the changed functions and the readers of any candidacy that flips (ADR 0003 decision 4).

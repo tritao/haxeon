@@ -276,6 +276,8 @@ None of these can come from a correct compiler. The compiler-side linker (see 5)
     The compiler stops minting them (`HlFunctionCache.nextStableId`).
 - **What the fork needs.** The link state kept on `hl_module` for patchable modules, section linking against it,
   rename records and section removal. Staging, guards, migrations and atomic publication stay as they are.
+- **Pruned live builds.** Slice 4 also makes live builds prune as one-shot builds do: sections hold the reached functions,
+  layouts follow declarations, and a patch carries every function first reached ([LIVE_PRUNING.md](LIVE_PRUNING.md)).
 
 ## 5. Consumers of the format
 
@@ -338,7 +340,7 @@ and perf-guard, including startup.
 | 1 | Fork: `link.c` and the HLB 9 reader beside the dense one. C tests on hand-built two-section modules cover every failure mode, plus `hldump`. Landed: `tests/native/code_link.c` (the `code-link` suite) | +1,500 C (+1,400 C tests) | fork tests; existing suites untouched (the compiler still writes HLB 8) | — |
 | 2 | Compiler: home modules, `HlSectionWriter`, `HlStaticLink`. Plain builds write HLB 9; live builds stay on HLB 8. AOT, `hl-stat` and the binary-size report link statically. **Split.** 2a landed: the writer, the static link, the readers (`HlModuleReader`, hl-stat, the size report, the debugger) and the check that the VM's link equals the static link (`code_link --compare`, the `module-sections` suite, the `driver-sections` suite), with sections behind the typed option `--module-sections`. 2b: plain builds write sections by default, the self-compile oracle and the checked-in bootstrap take their new base | +1,100 / −150 | the self-compile takes its new base. New validation: the VM's link equals `HlStaticLink`'s. The ci debug-metadata suite | 1, A |
 | 3 | Plain warm builds without link and replay. One memo per module section, then folded into engine slice 7 | −1,000 / +150 | `--check-reuse` | 2 |
-| 4 | Live patching on sections: HLP 12, the patch linker, loader stable ids, slots and codecs removed, HXR | −2,100 / +500 compiler, −450 / +450 fork | the ci hot-reload suite, the patch mains, `NominalInterfacePatchMain`, an Android watch run | 3 |
+| 4 | Live patching on sections: HLP 12, the patch linker, loader stable ids, slots and codecs removed, HXR | −2,100 / +500 compiler, −450 / +450 fork | the ci hot-reload suite, the patch mains, `NominalInterfacePatchMain`, an Android watch run; with live pruning ([LIVE_PRUNING.md](LIVE_PRUNING.md) slice 3) | 3 |
 | 5 | Per-class initializer parts in their owning modules. The compiler no longer writes HLB 8 for live builds | −50 / +100 | edit replay on a static-initializer edit | 4 |
 
 Slice 3 can land before engine slices 1–6. Slice 7 then turns its per-section memo into the `ModuleSection` query.
