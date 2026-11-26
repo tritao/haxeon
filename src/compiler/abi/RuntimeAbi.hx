@@ -30,9 +30,13 @@ typedef RuntimeAbiDescriptor = {
 
 /** Canonical description of the runtime-visible ABI emitted to HashLink. */
 class RuntimeAbi {
-	/** `signatures` keeps each function's signature text while the function is the same object. */
-	public static function describe(program:IrProgram,
-			?signatures:compiler.ir.reuse.IrFunctionMemo<String>):RuntimeAbiDescriptor {
+	/**
+	 * `signatures` keeps each function's signature text while the function is the same object. `previous`, the description of
+	 * the build before, lends the tables that read the same, so the descriptions a live session keeps of its publications share
+	 * what an edit did not change instead of each holding its own.
+	 */
+	public static function describe(program:IrProgram, ?signatures:compiler.ir.reuse.IrFunctionMemo<String>,
+			?previous:RuntimeAbiDescriptor):RuntimeAbiDescriptor {
 		var functions:Map<String, String> = [],
 			objects:Map<String, String> = [],
 			interfaces:Map<String, String> = [],
@@ -64,16 +68,35 @@ class RuntimeAbi {
 		}
 		for (field in program.staticFields)
 			globals.set(field.name, typeKey(field.type));
+		var positional:Map<String, String> =
+			[for (name => fingerprint in program.positionalFingerprints) name => fingerprint],
+			places:Map<String, String> = [for (name => place in program.positionalPlaces) name => place];
 		return {
-			functions: functions,
-			objects: objects,
-			interfaces: interfaces,
-			enums: enums,
-			globals: globals,
-			positional: [for (name => fingerprint in program.positionalFingerprints) name => fingerprint],
-			places: [for (name => place in program.positionalPlaces) name => place],
-			sources: program.positionalSources
+			functions: sameOr(functions, previous == null ? null : previous.functions),
+			objects: sameOr(objects, previous == null ? null : previous.objects),
+			interfaces: sameOr(interfaces, previous == null ? null : previous.interfaces),
+			enums: sameOr(enums, previous == null ? null : previous.enums),
+			globals: sameOr(globals, previous == null ? null : previous.globals),
+			positional: sameOr(positional, previous == null ? null : previous.positional),
+			places: sameOr(places, previous == null ? null : previous.places),
+			sources: sameOr(program.positionalSources, previous == null ? null : previous.sources)
 		};
+	}
+
+	/** `previous` when it has exactly the entries of `next`, else `next`. */
+	static function sameOr(next:Map<String, String>, previous:Null<Map<String, String>>):Map<String, String> {
+		if (previous == null || previous == next)
+			return next;
+		var count = 0;
+		for (name => value in next) {
+			if (previous.get(name) != value)
+				return next;
+			count++;
+		}
+		for (_ in previous.keys())
+			if (--count < 0)
+				return next;
+		return previous;
 	}
 
 	static function fieldSignature(field:IrObjectField):String {

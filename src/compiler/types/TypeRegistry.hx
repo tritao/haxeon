@@ -100,18 +100,31 @@ class TypeRegistry {
 	var descriptors:Map<String, TypeDescriptor> = [];
 	var nextId:Int = 1;
 
+	/** Whether `ids` and `descriptors` are another registry's too (`copy`), so the first change makes this one's own. */
+	var shared = false;
+
 	public function new(?state:Bytes) {
 		if (state != null)
 			importState(state);
 	}
 
+	/** A registry the copy's changes do not reach; the two share their tables until either changes. */
 	public function copy():TypeRegistry {
 		var result = new TypeRegistry();
-		result.ids = ids.copy();
-		result.descriptors = descriptors.copy();
+		result.ids = ids;
+		result.descriptors = descriptors;
 		result.nextId = nextId;
+		shared = true;
+		result.shared = true;
 		return result;
 	}
+
+	function own():Void
+		if (shared) {
+			ids = ids.copy();
+			descriptors = descriptors.copy();
+			shared = false;
+		}
 
 	public function declareClass(name:String, base:Null<String>, fields:Array<DeclaredField>,
 			methods:Array<DeclaredMethod>,
@@ -127,9 +140,14 @@ class TypeRegistry {
 			typeMethods.push(new TypeMethod(idFor("method:" + name + ":" + method.name), method.name,
 				method.signature));
 		var descriptor = new TypeDescriptor(typeId, name, base, typeFields, typeMethods, isValue),
-			previous = descriptors.get(name);
+			previous = descriptors.get(name),
+			compatibility = classify(previous, descriptor);
+		// A compatible declaration is the registered one: its identities follow from the names, its slots from the order.
+		if (previous != null && compatibility == Compatible)
+			return {descriptor: previous, compatibility: compatibility};
+		own();
 		descriptors.set(name, descriptor);
-		return {descriptor: descriptor, compatibility: classify(previous, descriptor)};
+		return {descriptor: descriptor, compatibility: compatibility};
 	}
 
 	public function get(name:String):Null<TypeDescriptor>
@@ -188,6 +206,7 @@ class TypeRegistry {
 		if (ids.exists(name))
 			return ids.get(name);
 		var result = nextId++;
+		own();
 		ids.set(name, result);
 		return result;
 	}

@@ -112,11 +112,15 @@ From the table: steps 2 and 3 about 50–70 MB, step 4 about 100–120 MB, so th
 and the compiler's own session by a similar share. Estimates; each step is measured with the census gate and must keep every
 edit as fast (`perf-guard --only=incremental`, `--only=live` edit times).
 
+Built, steps 2 and 3 took 15 MB (377.4 → 362.4 MB at `request-done`), not 50–70: the first-path figures they were estimated from
+charge shared blocks to the owner nearest the roots. Step 4's figures above are first paths too, at `write-done`; what each
+intermediate keeps alone is to be measured the same way before it is built.
+
 ## Open questions
 
 - Step 4's policy: drop after every build (simplest, a body edit then recomputes the few functions the inliner reads from
   callers), or an LRU bound (keeps recent ones, a knob to tune). Measure the first; add the bound only if edits slow down.
-- Whether step 1 changes the gate's baseline enough to re-record it (likely yes, with the reason).
+- Whether step 1 changes the gate's baseline enough to re-record it: yes, by 9 MB, re-recorded with the reason.
 
 ## As built
 
@@ -155,3 +159,15 @@ not share, at the last edit (released one part at a time, as above): 24.4 MB ove
   memo. A live build now keeps it with the published functions (`HlModuleAssembler.published`), so a function that is the same
   object keeps the form the last build gave it, and every state holds the same one: publications 24.4 → 14.1 MB, the UI
   session 376.33 → 365.95 MB.
+- **The ABI descriptions and the type registry.** Each build described its runtime ABI afresh, and each state copied the type
+  registry's tables. A description now takes the previous one's table wherever it has the same entries
+  (`RuntimeAbi.describe`, `previous`), so a body edit's description is the last one's but for what moved; and the registry's
+  copies share their tables until one changes, a compatible redeclaration keeping the registered descriptor
+  (`TypeRegistry.copy`, `declareClass`): the UI session 365.95 → 362.39 MB.
+- **What is left** (10.1 MB over the three publications, released one part at a time): the edited modules' old states 2.5
+  (a body edit of the app's one file writes about 40 modules, `Main` and 39 of haxeon-ui and the platform package, not traced
+  yet, and each written module is a copy with its own tables); the typed and semantic programs 1.9; the
+  function cache's tables 1.2, the section memo 1.2 and the published entries' map 1.0, each a map over every function or
+  section that a build copies once it changes one entry; types, objects, reachability, owners and the inline cache's own maps
+  about 2. These are the history a refusal returns to, plus whole-table copies of small changes; a table that keeps each
+  entry's history, as the query database's rollback log does, would make them differences, and is the next cut if they grow.

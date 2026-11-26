@@ -138,8 +138,9 @@ class HashLinkBackendSession implements BackendSession {
 		PeakProbe.mark("backend-start");
 		compiler.ir.analysis.IrReachability.IrReachabilityReport.report("final program", ir);
 		var summaries = this.loweredCache.summaries;
-		var nextAbi = context.describesRuntimeAbi() ? RuntimeAbi.describe(ir, summaries.abiSignatures) : null,
-			previousAbi = context.state.publishedAbi,
+		var previousAbi = context.state.publishedAbi,
+			nextAbi = context.describesRuntimeAbi() ? RuntimeAbi.describe(ir, summaries.abiSignatures,
+				previousAbi) : null,
 			baseAssembler = assembler;
 		var assemblyIr = ir;
 		if (!context.livePatching) {
