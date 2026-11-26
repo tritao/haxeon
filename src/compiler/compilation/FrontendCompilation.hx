@@ -907,7 +907,8 @@ class FrontendCompilation {
 				}
 				generatedNames.set(fn.name, true);
 			}
-			var state = context.state.writableState(module, rollbackModules);
+			var state = context.state.writableState(module, rollbackModules),
+				held = state.typedFunctions.get(fn.name);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			var keyPathRecord = keyPathUses.get(fn.name);
@@ -926,15 +927,18 @@ class FrontendCompilation {
 				retyped.push(fn.name);
 			touchedModules.set(module, true);
 			if (lowerToIr) {
+				var previous = state.pendingIrFunctions.exists(fn.name) ? null : state.irFunctions.get(fn.name);
+				state.irSourceRevisions.set(fn.name, state.revision);
+				// Typed to the very function the module holds (a helper kept as the last build made it): its IR is the one it has.
+				if (held == fn && previous != null)
+					continue;
 				var ir = generator.generateFunction(fn),
 					key = ir.symbol.id,
-					kept = generation.kept(key),
-					previous = state.pendingIrFunctions.exists(fn.name) ? null : state.irFunctions.get(fn.name);
+					kept = generation.kept(key);
 				// A helper is owned by the module of the code that asked for it first, which another build can ask from elsewhere:
 				// the IR it had is the database's, under its name.
 				if (previous == null && generated)
 					previous = kept;
-				state.irSourceRevisions.set(fn.name, state.revision);
 				state.pendingIrFunctions.remove(fn.name);
 				// What the session keeps of the IR it had is its body alone: the new IR is compared as rows, encoded, and keeps that
 				// encoding as its body, which the encode point then takes as it is.
@@ -981,7 +985,8 @@ class FrontendCompilation {
 					specializations.push(fact);
 				}
 			facts.recordUnit(facts.id(compiler.semantic.DeclarationFacts.FactAspect.Unit, unit),
-				new compiler.semantic.DeclarationFacts.UnitReads(facts.revision, read, module, specializations));
+				new compiler.semantic.DeclarationFacts.UnitReads(facts.revision, read, module, specializations,
+				reads.standalone.exists(unit)));
 		}
 	}
 
@@ -1941,7 +1946,9 @@ class FrontendCompilation {
 			return null;
 		// As pruning keeps them (`pruneModule`): not typed again, and neither the function nor its origin invalidated. A
 		// specialization is a unit of its own, kept while what it read is current, however its generic function was invalidated.
-		var units:Map<String, Bool> = [];
+		var units:Map<String, Bool> = [],
+			helpers:Map<String, compiler.types.TypedAst.TypedFunction> = [],
+			facts = context.state.declarationFacts;
 		for (module in modules) {
 			var state = context.state.modules.get(module);
 			if (state != null)
@@ -1949,8 +1956,16 @@ class FrontendCompilation {
 					if (!selected.exists(name) && !invalidated.exists(name)
 						&& (fn.origin == null
 						|| fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
-						|| !invalidated.exists(fn.origin)))
+						|| !invalidated.exists(fn.origin))) {
 						units.set(name, true);
+						if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Helper) {
+							var record =
+								facts.unitRecord(facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit,
+								name));
+							if (record != null && record.standalone)
+								helpers.set(name, fn);
+						}
+					}
 		}
 		// A source declaration removed by this edit is not a generated class, even though it is absent from the new program.
 		if (previousSemantic == null)
@@ -1970,7 +1985,8 @@ class FrontendCompilation {
 				program: previous,
 				classes: result,
 				enums: retainedEnums,
-				units: units
+				units: units,
+				helpers: helpers
 			};
 		// A type-only request has no complete IR graph to inspect.
 		if (!lowerToIr)
@@ -1978,7 +1994,8 @@ class FrontendCompilation {
 				program: previous,
 				classes: known,
 				enums: knownEnums,
-				units: units
+				units: units,
+				helpers: helpers
 			};
 		var functions:Map<String, IrFunction> = [],
 			physicalMethods:Map<String, String> = [],
@@ -2075,7 +2092,8 @@ class FrontendCompilation {
 			program: previous,
 			classes: result,
 			enums: retainedEnums,
-			units: units
+			units: units,
+			helpers: helpers
 		};
 	}
 

@@ -58,6 +58,12 @@ class ValueEqualityGenerator {
 				var requested = session.programOutput.requests.valueEqualities.get(name);
 				if (requested == null)
 					throw new InternalError('Missing value equality request "$name"');
+				var kept = session.keptHelper(name, requested.origin,
+					session.helperSpan(requested.type, requested.span));
+				if (kept != null) {
+					generated.set(name, kept);
+					continue;
+				}
 				// Helpers can originate in a lambda after its typing context has already been popped.
 				var context = session.enterHelperBody(name, requested.origin, "$value-equality");
 				try {

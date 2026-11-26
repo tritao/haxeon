@@ -62,10 +62,18 @@ class UnitReads extends compiler.query.RecordedQueryKind.RecordedResult {
 	 */
 	public final specializations:Null<Array<Int>>;
 
-	public function new(revision:Int, reads:Array<Int>, module:String, ?specializations:Array<Int>) {
+	/**
+	 * Whether typing the unit made nothing besides its function and the helpers it asked for (no lambda, generic owner, enum
+	 * representation, key path or structure): a generated helper so made can be kept as it is while what it read holds.
+	 */
+	public final standalone:Bool;
+
+	public function new(revision:Int, reads:Array<Int>, module:String, ?specializations:Array<Int>,
+			standalone:Bool = false) {
 		super(revision, reads);
 		this.module = module;
 		this.specializations = specializations;
+		this.standalone = standalone;
 	}
 }
 

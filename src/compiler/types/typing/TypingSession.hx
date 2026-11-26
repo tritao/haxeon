@@ -480,8 +480,10 @@ class TypingSession {
 
 	/** Attributes an anonymous type to the unit being typed: the outermost body, which a lambda is part of. */
 	public function recordAnonymousUse(name:String, fields:Array<compiler.types.Type.AnonymousField>):Void {
-		if (bodyContexts.length >= 2)
+		if (bodyContexts.length >= 2) {
+			anonymousUses++;
 			output.recordAnonymousUse(anonymousUnit(), name, fields);
+		}
 	}
 
 	public final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
@@ -986,8 +988,43 @@ class TypingSession {
 	public function enterHelperBody(helper:String, origin:String, ownerless:String):TypingContext {
 		var body = enter(origin, null, parentPath(origin) ?? ownerless, null, false);
 		body.recordsReads = beginHelperReads(helper);
+		body.helper = helper;
+		body.madeAtEntry = madeBesidesRequests();
 		return body;
 	}
+
+	/**
+	 * Helper `helper` as the last build made it, for a request from `origin` placed at `span` (`helperSpan`), or null when it is
+	 * made again. A helper is a unit: the last build's is kept while nothing it read changed (`RetainedFromPrevious.helpers`), it
+	 * is asked for from the same code, its declaration is where it was in the same parse of its file (its place is no fact a
+	 * unit reads), and typing it made nothing but the function and the helpers it asked for (`UnitReads.standalone`), which it
+	 * calls by name and the prune keeps with it.
+	 */
+	public function keptHelper(helper:String, origin:String,
+			span:SourceSpan):Null<compiler.types.TypedAst.TypedFunction> {
+		var kept = keptHelpers == null ? null : keptHelpers.get(helper);
+		return kept != null && kept.origin == origin && samePlace(kept.span, span) ? kept : null;
+	}
+
+	/** Whether two spans are the same place of the same parse, or the same compiler-owned place. */
+	static function samePlace(left:SourceSpan, right:SourceSpan):Bool {
+		if (left.start != right.start || left.end != right.end)
+			return false;
+		var reason = left.generatedReason;
+		return reason == null ? left.file == right.file : reason == right.generatedReason
+			&& left.file.path == right.file.path;
+	}
+
+	/** The helpers the last build made that this one may keep (`keptHelper`). */
+	public var keptHelpers:Null<Map<String, compiler.types.TypedAst.TypedFunction>> = null;
+
+	/** The structures attributed to units so far, which typing a helper can add to (`madeBesidesRequests`). */
+	var anonymousUses = 0;
+
+	/** How much typing has made that the program types or lists besides helper requests: what a standalone helper adds nothing to. */
+	function madeBesidesRequests():Int
+		return programOutput.closureConversion.generatedFunctionCount() + representation.genericOwnerRequestCount()
+			+ enumRepresentations.count() + Lambda.count(keyPaths.definitions) + anonymousUses;
 
 	/** Makes generated helper `helper` with `make`, recording what it reads as the helper's unit (`requestHelper`). */
 	public function typeHelper<T>(helper:String, make:() -> T):T {
@@ -1064,8 +1101,13 @@ class TypingSession {
 		if (currentContext != body)
 			throw new InternalError("Body typing contexts must be left in stack order");
 		bodyContexts.pop();
-		if (body.recordsReads)
-			reads().end();
+		var recorder = reads();
+		if (body.recordsReads && recorder != null) {
+			var helper = body.helper;
+			if (helper != null && madeBesidesRequests() == body.madeAtEntry)
+				recorder.standalone.set(helper, true);
+			recorder.end();
+		}
 		if (StringTools.startsWith(body.name, DEFAULT_ARGUMENT_PREFIX))
 			defaultArgumentDepth--;
 	}

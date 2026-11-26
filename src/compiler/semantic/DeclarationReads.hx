@@ -14,6 +14,12 @@ class DeclarationReads {
 	/** What each unit typed in this session read, by unit. */
 	public final units:Map<String, Array<Int>> = [];
 
+	/**
+	 * The generated helpers typed in this session whose typing made nothing besides their function and the helpers they asked for
+	 * (`TypingSession.keptHelper`).
+	 */
+	public final standalone:Map<String, Bool> = [];
+
 	/** The units recording, outermost first; their frames are the database's top ones. */
 	final recordingUnits:Array<String> = [];
 

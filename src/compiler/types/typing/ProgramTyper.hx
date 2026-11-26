@@ -111,6 +111,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		selectedBodies = selected;
+		session.keptHelpers = retained == null ? null : retained.helpers;
 		session.bindSemantic(semantic, bodyTyper.defaultValueType, this);
 		if (previousSignatures != null && selected != null)
 			requiredTypes().seedFunctions(previousSignatures.signatures, selected, previousSignatures.check);

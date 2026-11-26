@@ -20,4 +20,10 @@ typedef RetainedFromPrevious = {
 	 * (`ProgramTyper.keepAnonymousUnits`).
 	 */
 	final units:Map<String, Bool>;
+
+	/**
+	 * The generated helpers among `units`, by name: one the build asks for again from the same origin is the last build's
+	 * (`TypingSession.keptHelper`), as a unit that read nothing that changed.
+	 */
+	final helpers:Map<String, compiler.types.TypedAst.TypedFunction>;
 }

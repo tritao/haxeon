@@ -10,6 +10,14 @@ class TypingContext {
 	/** Whether this body is a unit's outermost, which records the unit's reads until it is left (`TypingSession.enterBody`). */
 	public var recordsReads = false;
 
+	/**
+	 * The generated helper this body types (`TypingSession.enterHelperBody`), and how much the program had made besides helper
+	 * requests when it began (`TypingSession.madeBesidesRequests`).
+	 */
+	public var helper:Null<String> = null;
+
+	public var madeAtEntry = 0;
+
 	public final functionName:String;
 	/** Source function whose body is being typed; generated bodies keep their declaration identity. */
 	public final sourceFunctionName:String;

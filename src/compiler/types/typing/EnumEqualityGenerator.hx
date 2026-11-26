@@ -60,6 +60,13 @@ class EnumEqualityGenerator {
 				var request = session.programOutput.requests.enumEqualities.get(name);
 				if (request == null)
 					throw new InternalError('Missing enum equality request "$name"');
+				// One that calls the enum's own `equals` makes that method too, which a kept helper would not.
+				var kept = session.keptHelper(name, request.origin, session.helperSpan(request.type, request.span));
+				if (kept != null && (name == session.helperNames.named(REFLECTIVE_PREFIX, request.type)
+					|| EnumConformanceMethods.method(session, request.type, "equals") == null)) {
+					generated.set(name, kept);
+					continue;
+				}
 				var context = session.enterHelperBody(name, request.origin, "$enum-equality");
 				try {
 					var reflective = name == session.helperNames.named(REFLECTIVE_PREFIX, request.type),
