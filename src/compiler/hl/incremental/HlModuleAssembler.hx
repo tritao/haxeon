@@ -24,9 +24,7 @@ import compiler.hl.HlCode;
 import compiler.hl.HlFunction;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
-import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.model.Ir.IrNative;
-import compiler.hl.lower.HlDebugMetadataCache;
 import compiler.core.AllocationMeter.PhaseAllocation;
 
 /** Persisted append-only symbol and function baseline for incremental assembly. */
@@ -74,14 +72,10 @@ typedef HlAssemblyResult = {
 	final unchanged:Bool;
 	final baseRevision:Int;
 	final changedFunctions:Array<Int>;
-	final changedSlots:Array<Int>;
-
-	/** Slots this build gives functions the published module does not have, in slot order, with their names. */
-	final addedFunctions:Array<{slot:Int, name:String}>;
 
 	/**
 	 * Functions this build drops that closures the running program stored may still reach, with what happened to each: the
-	 * patch applies only when no live closure refers to them (`HlPatchWriter`, guards).
+	 * patch applies only when no live closure refers to them (`HlSectionPatch`, guards).
 	 */
 	final guards:Array<{name:String, description:String}>;
 
@@ -105,14 +99,6 @@ typedef HlAssemblyResult = {
 	final objectLayout:Null<HlObjectLayout>;
 
 	final revision:Int;
-	final baseInts:Int;
-	final baseFloats:Int;
-	final baseStrings:Int;
-	final baseTypes:Int;
-
-	/** Globals the running module has, which a patch's new literal globals follow. */
-	final baseGlobals:Int;
-
 	final cachePreparationMs:Float;
 	final loweringMs:Float;
 	final publicationMs:Float;
@@ -188,8 +174,6 @@ class HlModuleAssembler {
 	 */
 	var programNames:Null<Map<String, Bool>> = null;
 
-	final debugMetadata:HlDebugMetadataCache;
-
 	/**
 	 * Reserved slots each object gets when this assembler lays out a fresh module (see `HlLower.reservedSlots`): the
 	 * fields live patches can add to it. Zero without live patching.
@@ -237,13 +221,11 @@ class HlModuleAssembler {
 	/** Methods HashLink's runtime finds by name in the prototype, which a direct call cannot stand in for. */
 	static final runtimeMethods:Array<String> = ["__string", "__compare", "__cast", "__get_field"];
 
-	public function new(?stableIds:Map<String, Int>, ?sharedDebugMetadata:HlDebugMetadataCache) {
+	public function new(?stableIds:Map<String, Int>)
 		cache = new HlFunctionCache(stableIds);
-		debugMetadata = sharedDebugMetadata == null ? new HlDebugMetadataCache() : sharedDebugMetadata;
-	}
 
 	public function copy():HlModuleAssembler {
-		var result = new HlModuleAssembler(null, debugMetadata);
+		var result = new HlModuleAssembler();
 		result.symbols = symbols.fork();
 		result.cache = cache.copy();
 		result.initialized = initialized;
@@ -690,10 +672,17 @@ class HlModuleAssembler {
 				constants.set(constant.global, true);
 		for (global in publishedGlobals...module.globals.length)
 			if (!constants.exists(global)
-				&& !(module.globals[global] >= publishedTypes && HlPatchWriter.isObjectValueGlobal(module, global)))
+				&& !(module.globals[global] >= publishedTypes && isObjectValueGlobal(module, global)))
 				return false;
 		return true;
 	}
+
+	/** Whether `global` is the value slot of the object or struct type it holds (`HlSymbolTable.internObject`). */
+	static function isObjectValueGlobal(code:HlCode, global:Int):Bool
+		return switch code.types[code.globals[global]] {
+			case Object(_, _, value, _, _, _), Structure(_, value, _, _, _): value == global + 1;
+			default: false;
+		};
 
 	static function sameNames(previous:Null<Array<String>>, next:Array<String>):Bool {
 		if (previous == null || previous.length != next.length)
@@ -725,7 +714,7 @@ class HlModuleAssembler {
 	 */
 	function planObjects(program:IrProgram, slots:Map<String, Int>):ObjectPlan {
 		var reasons:Array<AbiChange> = [],
-			layout:HlObjectLayout = {fields: [], previousTypes: [], migrations: []},
+			layout:HlObjectLayout = {fields: [], migrations: []},
 			functions:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
 			byName:Map<String, IrObject> = [for (object in program.objects) object.name => object],
 			valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true], // Runtime natives only reach standard library objects, so the program's own natives name the user's.
@@ -745,15 +734,9 @@ class HlModuleAssembler {
 				default:
 					continue;
 			}
-			var initializer = object.name + "." + IrProgramAssembler.LIVE_INITIALIZER,
-				slot = slots.get(initializer);
-			if (functions.exists(initializer) && slot != null)
-				layout.migrations.push({
-					type: published.index,
-					slot: slot,
-					className: object.name,
-					initializer: initializer
-				});
+			var initializer = object.name + "." + IrProgramAssembler.LIVE_INITIALIZER;
+			if (functions.exists(initializer) && slots.exists(initializer))
+				layout.migrations.push({type: published.index, className: object.name, initializer: initializer});
 		}
 		// Bases first, so a subclass's initializers see the fields of its base initialized.
 		layout.migrations.sort(function(a, b) return baseDepth(a.type) - baseDepth(b.type));
@@ -788,7 +771,6 @@ class HlModuleAssembler {
 			if (field.nativeLayout != null || field.scalarStorage != null)
 				native = true;
 		}
-		var previous = symbols.types[type];
 		for (field in ownFields(type))
 			if (!symbols.isReservedField(field)) {
 				var name = symbols.string(field.name);
@@ -826,14 +808,7 @@ class HlModuleAssembler {
 				reasons.push(ObjectFieldReserveExhausted(object.name));
 				continue;
 			}
-			if (!layout.previousTypes.exists(type))
-				layout.previousTypes.set(type, previous);
-			layout.fields.push({
-				type: type,
-				field: assigned,
-				name: symbols.internString(field.name),
-				fieldType: fieldType
-			});
+			layout.fields.push(object.name + "." + field.name);
 		}
 	}
 
@@ -1054,26 +1029,13 @@ class HlModuleAssembler {
 			} else
 				objectLayout = planned.layout;
 		}
-		var changed:Array<Int> = [], changedSlots:Array<Int> = [];
+		var changed:Array<Int> = [];
 		if (initialized)
-			for (name in regenerated) {
-				if (layout.exists(name) && cache.stableIds.exists(name)) {
-					var index = layout.get(name),
-						stableId = cache.stableIds.get(name);
-					changedSlots.push(index);
-					changed.push(stableId);
-				}
-			}
+			for (name in regenerated)
+				if (layout.exists(name) && cache.stableIds.exists(name))
+					changed.push(cache.stableIds.get(name));
 		changed.sort(function(a, b) return a - b);
-		changedSlots.sort(function(a, b) return a - b);
-		var addedFunctions:Array<{slot:Int, name:String}> = [];
-		if (initialized && !reload)
-			for (index in publishedSlots...cache.slots.length) {
-				var name = cache.slots[index], slot = layout.get(name);
-				if (slot == null)
-					throw new InternalError('Added function $name has no slot');
-				addedFunctions.push({slot: slot, name: name});
-			}
+		var addsFunctions = initialized && !reload && cache.slots.length > publishedSlots;
 		if (livePatching == (loweredCache != null))
 			throw new InternalError('a ${livePatching ? "live" : "plain"} build must use ${livePatching ? "only" : "a"} ${livePatching ? "the published functions" : "lowered cache"}');
 		var liveCache = loweredCache;
@@ -1090,8 +1052,8 @@ class HlModuleAssembler {
 		for (name in afterRenames(present))
 			if (!listedForLowering.exists(name))
 				relowered.push(name);
-		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, relowered,
-			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata,
+		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, relowered, runtimeNatives, fieldReserve,
+			developmentMetadata,
 			livePatching || keepsLowered ? liveCache : null, irVerified,
 			livePatching,
 			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources, liveChain),
@@ -1122,7 +1084,7 @@ class HlModuleAssembler {
 		programNames = [for (fn in program.functions) fn.name => true];
 		var renames = reload ? [] : pendingRenames;
 		pendingRenames = [];
-		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0
+		var unchanged = initialized && !reload && changed.length == 0 && !addsFunctions
 			&& objectLayout == null && baseInts == publishedInts
 			&& baseFloats == publishedFloats && baseStrings == publishedStrings && baseTypes == publishedTypes
 			&& baseGlobals == publishedGlobals;
@@ -1134,8 +1096,6 @@ class HlModuleAssembler {
 			unchanged: unchanged,
 			baseRevision: baseRevision,
 			changedFunctions: changed,
-			changedSlots: changedSlots,
-			addedFunctions: addedFunctions,
 			guards: reload ? [] : guards,
 			renames: renames,
 			functionIndices: layout,
@@ -1144,11 +1104,6 @@ class HlModuleAssembler {
 			objectReasons: objectReasons,
 			objectLayout: reload ? null : objectLayout,
 			revision: revision,
-			baseInts: baseInts,
-			baseFloats: baseFloats,
-			baseStrings: baseStrings,
-			baseTypes: baseTypes,
-			baseGlobals: baseGlobals,
 			cachePreparationMs: cachePreparedAt - startedAt,
 			loweringMs: loweredAt - cachePreparedAt,
 			publicationMs: Sys.time() * 1000.0 - loweredAt,

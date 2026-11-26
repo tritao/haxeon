@@ -23,9 +23,10 @@ then update source modules and compile an entry module. Add source roots for
 libraries used by generated programs; the compiler does not automatically
 inherit the host application's sources.
 
-Load `HlWriter.encode(build.module)` with `build.runtimeIdentity` through
-`Runtime.load`, invoke the stable IDs in `build.functionIds`, and dispose the
-loaded module when finished. Module-level functions use unqualified export
+Load the build's module sections (`BackendArtifacts.hashLinkBytes`) with its
+`runtimeIdentity` through `Runtime.load`, find each function's id by name
+(`Runtime.requireFunctionId`) and call it, and dispose the loaded module when
+finished. Module-level functions use unqualified export
 names; class methods use their qualified names. Live updates require publication
 tracking and acknowledgement/rejection of the compiler's proposed revisions.
 

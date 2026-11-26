@@ -1,7 +1,6 @@
 package compiler.tools;
 
 import compiler.Compiler;
-import compiler.hl.HlWriterCache;
 import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
@@ -48,12 +47,10 @@ class CompilerMemoryCensus {
 				}
 			},
 				{name: "pipeline snapshot (final IR, module)", release: () -> compiler.state.pipelineSnapshot = null},
-				{name: "encoded module bytes and writer cache",
-				release: () -> {
-					session.encodedModule = null;
-					session.writerCache = new HlWriterCache();
-				}
-			},
+				{
+					name: "encoded module bytes",
+					release: () -> session.encodedModule = null
+				},
 				{name: "lowered function cache",
 				release: () -> {
 					var hashLink = compiler.backend.hashLink();

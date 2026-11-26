@@ -16,8 +16,8 @@ class LiveKeptCheckMain {
 		var layout:Map<String, Int> = [];
 		HlLower.lower(program, layout);
 		var symbols = new HlSymbolTable(), cache = new HlLoweredCache();
-		HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, cache, false, true);
-		HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, cache, false, true, null,
+		HlLower.lowerStableMeasured(program, symbols, layout, [], null, 0, true, cache, false, true);
+		HlLower.lowerStableMeasured(program, symbols, layout, [], null, 0, true, cache, false, true, null,
 			true);
 		Sys.println("PASS: kept functions lower to the same code again");
 		var entry = cache.entries.get("value");
@@ -38,7 +38,7 @@ class LiveKeptCheckMain {
 		cache.entries.set("value", new HlLoweredFunction("value", entry.source, wrong, [], [], []));
 		var message:Null<String> = null;
 		try
-			HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, cache, false, true,
+			HlLower.lowerStableMeasured(program, symbols, layout, [], null, 0, true, cache, false, true,
 				null, true)
 		catch (error:Dynamic)
 			message = Std.string(error);

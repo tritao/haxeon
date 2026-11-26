@@ -6,15 +6,14 @@ import compiler.hl.HlCode.HlDebugSection;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlFunction.HlInstruction;
-import haxe.ds.ObjectMap;
 import haxe.io.Bytes as HaxeBytes;
 import haxeon.io.ByteSink;
 import haxeon.io.SegmentedBytes;
 import sys.io.File;
 
-/** The source locations of one function's opcodes, by stable function identity; `locations[i]` belongs to opcode i. */
+/** The source locations of one function's opcodes, by the function's index; `locations[i]` belongs to opcode i. */
 typedef HlOpcodeSourceSpanGroup = {
-	final stableId:Int;
+	final index:Int;
 	final locations:Array<HlDebugLocation>;
 
 	/** The function's instructions, which say which of them are written (`HlWriter.layout`). */
@@ -38,7 +37,6 @@ class HlWriter {
 	public static inline final COMPRESSED = 1;
 
 	final output:ByteSink = new ByteSink();
-	final cache:Null<HlWriterCache>;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
 	var debugFileIndices:Map<String, Int> = [];
@@ -54,11 +52,9 @@ class HlWriter {
 	/** In a module section, the section's index of each table entry the functions name (`HlSectionWriter`); null in a dense module. */
 	var local:Null<HlSectionIndices>;
 
-	public function new(?cache:HlWriterCache) {
-		this.cache = cache;
-	}
+	public function new() {}
 
-	/** Appends bytes that are never changed again (the cached prefix, cached function encodings, section payloads) without copying them. */
+	/** Appends bytes that are never changed again (section payloads, source snapshots) without copying them. */
 	function writeShared(bytes:HaxeBytes):Void
 		output.appendShared(bytes);
 
@@ -67,27 +63,22 @@ class HlWriter {
 		return output.finish().flatten();
 
 	/**
-	 * The module as segments: the cached encodings of unchanged functions are shared, not copied. `checkReuse` adds the validator's
-	 * consistency checks of what it reuses (`CompileOptions.checkReuse`).
+	 * The module as one dense HLB 8 module: what an AOT image holds (`HlcImage`), and what a test writes of a module it lowered by
+	 * itself. A build's module is written as sections (`HlSectionWriter`), which the loader links. The functions' names, when the
+	 * module has them, go in a function identities section, by which the loader names them.
 	 */
-	public static function encode(code:HlCode, ?cache:HlWriterCache, checkReuse:Bool = false):SegmentedBytes {
+	public static function encode(code:HlCode):SegmentedBytes {
 		if (code.relocations != null)
-			throw new compiler.core.InternalError("A sectioned build's module is written as sections");
-		HlValidator.validate(code, cache, checkReuse);
-		var writer = new HlWriter(cache);
+			throw new compiler.core.InternalError("A build's module is written as sections");
+		HlValidator.validate(code);
+		var writer = new HlWriter();
 		writer.writeCode(code);
 		return writer.output.finish();
 	}
 
-	#if !haxeon
-	/** Write a module to an output. */
-	public static function writeTo(code:HlCode, destination:haxe.io.Output, ?cache:HlWriterCache):Void
-		encode(code, cache).writeTo(destination);
-	#end
-
 	/** Validate before opening the destination, preserving an older file on validation failure. */
-	public static function writeFile(code:HlCode, path:String, ?cache:HlWriterCache):Void
-		saveSegments(encode(code, cache), path);
+	public static function writeFile(code:HlCode, path:String):Void
+		saveSegments(encode(code), path);
 
 	/** Writes a module to `path` through a temporary file beside it, so a reader never sees half a module. */
 	public static function saveSegments(module:SegmentedBytes, path:String):Void {
@@ -240,7 +231,7 @@ class HlWriter {
 				+ ',"version":'
 				+ section.version
 				+ ',"payload":'
-				+ storedSection(section, null).payload.length
+				+ storedSection(section).payload.length
 				+ ',"decoded":'
 				+ section.payload.length
 				+ '}'
@@ -291,35 +282,9 @@ class HlWriter {
 
 	function writeCode(code:HlCode):Void {
 		prepareDebugFiles(code);
-		if (cache != null)
-			cache.prepare(debugFiles);
-		var prefix = cache == null ? null : cache.getPrefix(code);
-		if (prefix == null) {
-			var prefixWriter = new HlWriter();
-			prefixWriter.hasDebug = hasDebug;
-			prefixWriter.debugFiles = debugFiles;
-			prefixWriter.debugFileIndices = debugFileIndices;
-			prefixWriter.writePrefix(code);
-			prefix = prefixWriter.bytes();
-			if (cache != null)
-				cache.setPrefix(code, prefix);
-		}
-		writeShared(prefix);
-		for (fn in code.functions) {
-			// Without a cache nothing keeps a function's encoding, so it is written in place.
-			if (cache == null) {
-				writeFunction(fn);
-				continue;
-			}
-			var encoded = cache.get(fn, sources);
-			if (encoded == null) {
-				encoded = encodePreparedFunction(fn);
-				cache.set(fn, encoded, hasDebug ? sources : null);
-			}
-			writeShared(encoded);
-		}
-		if (cache != null)
-			cache.retainFunctions(code.functions);
+		writePrefix(code);
+		for (fn in code.functions)
+			writeFunction(fn);
 		writeConstants(code);
 		writeDebugSections(code);
 	}
@@ -385,11 +350,15 @@ class HlWriter {
 	}
 
 	function writeDebugSections(code:HlCode):Void {
-		writeUnsignedIndex(code.debugSections.length);
-		for (section in code.debugSections) {
+		var named = code.functionNames.length == code.functions.length && code.functions.length > 0,
+			sections = named
+				? [HlDebugSection.of(FUNCTION_IDENTITIES, 1, 0, encodeFunctionIdentities(code), HlLz4.HIGH)]
+				.concat(code.debugSections) : code.debugSections;
+		writeUnsignedIndex(sections.length);
+		for (section in sections) {
 			if (section.kind <= 0 || section.version <= 0 || section.flags < 0)
 				throw new InternalError("Invalid HLB debug section header");
-			var stored = storedSection(section, cache);
+			var stored = storedSection(section);
 			writeUnsignedIndex(section.kind);
 			writeUnsignedIndex(section.version);
 			writeUnsignedIndex(stored.flags);
@@ -398,55 +367,46 @@ class HlWriter {
 		}
 	}
 
-	/**
-	 * A section's header flags and payload as the module stores them: compressed when it asks to be and the natives are there. With a
-	 * cache, a payload the same as last time's is not compressed again.
-	 */
-	static function storedSection(section:HlDebugSection, cache:Null<HlWriterCache>):HlStoredSection {
-		var payload = section.payloadFor(cache), level = section.compression;
+	/** A section's header flags and payload as the module stores them: compressed when it asks to be and the natives are there. */
+	static function storedSection(section:HlDebugSection):HlStoredSection {
+		var payload = section.payload, level = section.compression;
 		if (level == null)
 			return {flags: section.flags, payload: payload};
 		var decoded = payload.flatten();
-		var known = cache == null ? null : cache.compressedSection(section.kind, level, decoded);
-		if (known != null)
-			return {flags: section.flags | COMPRESSED, payload: known};
 		var block = HlLz4.compress(decoded, level);
 		if (block == null)
 			return {flags: section.flags, payload: payload};
 		var writer = new HlWriter();
 		writer.writeUnsignedIndex(decoded.length);
 		writer.writeShared(block);
-		var stored = writer.output.finish();
-		if (cache != null)
-			cache.setCompressedSection(section.kind, level, decoded, stored);
-		return {flags: section.flags | COMPRESSED, payload: stored};
+		return {flags: section.flags | COMPRESSED, payload: writer.output.finish()};
 	}
 
-	public static function encodeFunctionIdentities(identities:Array<compiler.hl.HlCode.HlFunctionIdentity>):HaxeBytes {
-		var writer = new HlWriter();
-		writer.writeUnsignedIndex(identities.length);
-		for (identity in identities) {
-			writer.writeUnsignedIndex(identity.stableId);
-			writer.writeUnsignedIndex(identity.functionIndex);
-			writer.writeSizedString(identity.qualifiedName);
-			writer.writeSizedString(identity.displayName);
-			writer.writeSizedString(identity.sourcePath);
-			writer.writeIndex(identity.start + 1);
-			writer.writeIndex(identity.end + 1);
-			writer.writeUnsignedIndex(identity.line);
-			writer.writeUnsignedIndex(identity.flags);
+	/**
+	 * The function identities of a dense module, by which the loader names its functions: each function's index is its stable id, as
+	 * the loader of sections gives it, and its name the qualified name (`HlCode.functionNames`).
+	 */
+	static function encodeFunctionIdentities(code:HlCode):HaxeBytes {
+		var writer = new HlWriter(), names = code.functionNames;
+		writer.writeUnsignedIndex(code.functions.length);
+		for (position in 0...code.functions.length) {
+			var index = code.functions[position].functionIndex, name = names[position], dot = name.lastIndexOf(".");
+			writer.writeUnsignedIndex(index);
+			writer.writeUnsignedIndex(index);
+			writer.writeSizedString(name);
+			writer.writeSizedString(dot < 0 ? name : name.substr(dot + 1));
+			writer.writeSizedString("");
+			writer.writeIndex(0);
+			writer.writeIndex(0);
+			writer.writeUnsignedIndex(0);
+			writer.writeUnsignedIndex(StringTools.startsWith(name, "__") ? 1 : 0);
 		}
 		return writer.bytes();
 	}
 
-	/** Encode the locations that lowering already keeps grouped by stable function identity: one mapping per opcode. */
-	/**
-	 * With a cache, a group whose `locations` array is the very one encoded last time (an unchanged function) reuses those bytes as long
-	 * as every file it names has the same index and every anchor it names the same place in `sources`; only the changed functions
-	 * are encoded.
-	 */
-	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>, sources:SourceAnchors,
-			?cache:HlWriterCache):SegmentedBytes {
+	/** Encode the locations that lowering already keeps grouped by function: one mapping per opcode. */
+	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>,
+			sources:SourceAnchors):SegmentedBytes {
 		var writer = new HlWriter(),
 			files:Array<String> = [],
 			fileIndices:Map<String, Int> = [],
@@ -454,9 +414,9 @@ class HlWriter {
 		writer.sources = sources;
 		var previousAnchor = -1;
 		for (group in groups) {
-			if (group.stableId < 0 || seenFunctions.exists(group.stableId))
+			if (group.index < 0 || seenFunctions.exists(group.index))
 				throw new InternalError("Invalid HLB opcode source-span function");
-			seenFunctions.set(group.stableId, true);
+			seenFunctions.set(group.index, true);
 			for (location in group.locations) {
 				var validRange = location.start == -1 && location.end == -1 || location.start >= 0
 					&& location.end >= location.start;
@@ -486,32 +446,17 @@ class HlWriter {
 		for (file in files)
 			writer.writeSizedString(file);
 		var ordered = groups.copy();
-		ordered.sort((left, right) -> left.stableId - right.stableId);
+		ordered.sort((left, right) -> left.index - right.index);
 		writer.writeUnsignedIndex(ordered.length);
-		var used:Null<Array<Array<HlDebugLocation>>> = cache == null ? null : [];
-		for (group in ordered) {
-			var cached = cache == null ? null : cache.spanGroup(group.locations, group.stableId, fileIndices, sources);
-			if (cached == null) {
-				var groupWriter = new HlWriter();
-				groupWriter.sources = sources;
-				groupWriter.writeSpanGroup(group, fileIndices);
-				cached = groupWriter.bytes();
-				if (cache != null)
-					cache.setSpanGroup(group.locations, group.stableId, cached, fileIndices, sources);
-			}
-			if (used != null)
-				used.push(group.locations);
-			writer.writeShared(cached);
-		}
-		if (cache != null)
-			cache.retainSpanGroups(used);
+		for (group in ordered)
+			writer.writeSpanGroup(group, fileIndices);
 		return writer.output.finish();
 	}
 
 	function writeSpanGroup(group:HlOpcodeSourceSpanGroup, fileIndices:Map<String, Int>):Void {
 		var positions = scratch().positions;
 		layoutInto(group.opcodes, positions, scratch().labelIndices, scratch().loopHeads);
-		writeUnsignedIndex(group.stableId);
+		writeUnsignedIndex(group.index);
 		writeUnsignedIndex(positions[group.opcodes.length]);
 		var previousAnchor = -1, previousFileIndex = -1, offset = 0, line = 0, hash = 0;
 		for (index in 0...group.locations.length) {
@@ -809,14 +754,8 @@ class HlWriter {
 				internDebugFile("<generated>");
 				continue;
 			}
-			if (cache == null) {
-				for (location in fn.debugLocations)
-					internDebugFile(sources.path(location.anchor));
-				continue;
-			}
-			// An anchor is always in the same file: a function a session writes again names the files its anchors are in.
-			for (anchor in fn.anchors())
-				internDebugFile(sources.path(anchor));
+			for (location in fn.debugLocations)
+				internDebugFile(sources.path(location.anchor));
 		}
 	}
 

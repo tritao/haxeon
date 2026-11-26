@@ -1,10 +1,7 @@
 package compiler.hl.incremental;
 
-import compiler.hl.lower.HlDebugMetadataCache;
-
 /**
- * The lowered functions of the last plain build, by name, for the next one (see `HlLoweredFunction`), with the debugger metadata
- * memoized for them. It belongs to the compiler session like the other caches and follows the candidate build: a failed build
+ * The lowered functions of the last plain build, by name, for the next one (see `HlLoweredFunction`). It belongs to the compiler session like the other caches and follows the candidate build: a failed build
  * leaves the earlier entries in place.
  */
 class HlLoweredCache {
@@ -16,9 +13,6 @@ class HlLoweredCache {
 
 	/** Whether `entries` may be shared with a copy, so that `setEntry` copies it first. */
 	var entriesShared = false;
-
-	/** Identities and opcode spans of functions whose IR and code did not change. */
-	public final debug:HlDebugMetadataCache;
 
 	/** The numbers of the requests the entries made (`HlLoweredFunction.keys`), shared by the copies: they only grow. */
 	public final keys:HlRequestKeys;
@@ -44,19 +38,18 @@ class HlLoweredCache {
 	/** What the entries were lowered for besides their IR (see `HashLinkBackendSession.loweringEnvironment`). */
 	public var environment = "";
 
-	public function new(?debug:HlDebugMetadataCache, ?keys:HlRequestKeys,
+	public function new(?keys:HlRequestKeys,
 			?facts:compiler.hl.lower.HlLoweringView.HlLoweringFacts, ?summaries:HlFunctionSummaries,
 			?nonNullStores:compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo) {
 		this.nonNullStores = nonNullStores == null
 			? new compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo() : nonNullStores;
 		this.summaries = summaries == null ? new HlFunctionSummaries() : summaries;
-		this.debug = debug == null ? new HlDebugMetadataCache() : debug;
 		this.keys = keys == null ? new HlRequestKeys() : keys;
 		this.facts = facts == null ? new compiler.hl.lower.HlLoweringView.HlLoweringFacts() : facts;
 	}
 
 	public function copy():HlLoweredCache {
-		var result = new HlLoweredCache(debug, keys, facts, summaries, nonNullStores);
+		var result = new HlLoweredCache(keys, facts, summaries, nonNullStores);
 		result.entries = entries;
 		entriesShared = true;
 		result.entriesShared = true;

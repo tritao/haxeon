@@ -3,7 +3,6 @@ package compiler.tools;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
-import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.compilation.BackendArtifact.HlArtifact;
 import compiler.core.FileVersion;
 import compiler.core.InternalError;
@@ -13,7 +12,6 @@ import compiler.ffi.FfiRegistry.FfiProjectionSource;
 import compiler.ffi.HxiInterfaceOrder;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
-import compiler.hl.HlWriterCache;
 import compiler.modules.CodeIdentityTable;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
@@ -29,7 +27,6 @@ import sys.io.File;
 class CompilerSession {
 	var compiler:Null<Compiler>;
 	var configuration:Null<String>;
-	var writerCache = new HlWriterCache();
 	var unrecordedPublication:Null<{output:String, marker:String}>;
 	var requestSources:Map<String, String> = [];
 
@@ -64,15 +61,14 @@ class CompilerSession {
 		writtenBaseline = null;
 		unrecordedPublication = null;
 		configuration = null;
-		writerCache = new HlWriterCache();
 		encodedModule = null;
 		functionMap = new IndexText();
 		sourceReads = [];
 	}
 
 	/**
-	 * The bytes of the module last written, with the module they encode. Encoding is a function of the module alone, so a build
-	 * that reuses the module (see `PipelineSnapshot`) writes the same bytes without validating and encoding it again.
+	 * The bytes of the module last written, with the module they encode and their build id, which a build that reuses the module
+	 * (see `PipelineSnapshot`) takes without digesting the bytes again.
 	 */
 	var encodedModule:Null<{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>}>;
 
@@ -82,11 +78,9 @@ class CompilerSession {
 	function encoded(artifact:HlArtifact):{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>} {
 		var known = encodedModule;
 		if (known == null || known.code != artifact.module) {
-			var session = compiler;
 			known = {
 				code: artifact.module,
-				bytes: BackendArtifacts.hashLinkBytes(artifact, writerCache,
-					session != null && session.options.checkReuse),
+				bytes: artifact.sections,
 				buildId: null
 			};
 			encodedModule = known;

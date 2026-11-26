@@ -11,8 +11,6 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlModuleAssembler;
-import compiler.hl.patch.HlPatchReader;
-import compiler.hl.patch.HlPatchWriter;
 import compiler.hl.patch.HlSectionPatch;
 import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
@@ -37,7 +35,6 @@ class HotReloadMain {
 	}
 
 	static function main():Void {
-		PatchOpcodeTests.run();
 		testPatchContract();
 		testDecodedIrLifetime();
 		testBackendStateLifetime();
@@ -532,29 +529,23 @@ class HotReloadMain {
 	static function produceFailedInitializer():Void {
 		var moduleId = haxe.io.Bytes.alloc(16), code = new HlCode();
 		moduleId.set(0, 37);
-		code.strings = ["initialization failed"];
-		code.types = [Simple(HlType.Void), Simple(HlType.Bytes), Function([], 0)];
-		code.functions = [new HlFunction(2, 0, [1], [LoadString(0, 0), Throw(0)])];
+		code.types = [Simple(HlType.Void), Simple(HlType.Dyn), Function([], 0)];
+		code.functions = [new HlFunction(2, 0, [1], [LoadNull(0), Throw(0)])];
 		code.entryPoint = 0;
-		var indices:Map<String, Int> = [], ids:Map<String, Int> = [];
-		indices.set("__init", 0);
-		ids.set("__init", compiler.hl.incremental.HlFunctionCache.INIT_STABLE_ID);
-		var identity = DenseRuntimeIdentity.encode(moduleId, 1, indices, ids),
-			invalidInitializer = identity.sub(0, identity.length);
-		invalidInitializer.setInt32(28, 1);
+		// The identity names the initializer `__init`.
+		var identity = compiler.hl.persistence.HlRuntimeIdentity.encode(moduleId, 1, true);
+		code.functionNames = ["other"];
 		try {
-			Runtime.load(HlWriter.encode(code).flatten(), invalidInitializer);
-			throw "runtime identity accepted an unmapped initializer slot";
+			Runtime.load(HlWriter.encode(code).flatten(), identity);
+			throw "runtime identity accepted an initializer the module does not have";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)
 				throw error;
 		}
-		var legacyIdentity = haxe.io.Bytes.alloc(identity.length - 4);
-		legacyIdentity.blit(0, identity, 0, 28);
-		legacyIdentity.set(3, 2);
-		legacyIdentity.blit(28, identity, 32, identity.length - 32);
+		// A module whose initializer throws does not load: the runtime retires it once the initializer's frames are gone.
+		code.functionNames = ["__init"];
 		try {
-			Runtime.load(HlWriter.encode(code).flatten(), legacyIdentity);
+			Runtime.load(HlWriter.encode(code).flatten(), identity);
 			throw "throwing module initializer unexpectedly loaded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)
@@ -769,12 +760,7 @@ class HotReloadMain {
 		var uninterrupted = uninterruptedAssembler.assemble(edited, ["Main.add", "main"], Patch),
 			restored = restoredAssembler.assemble(edited, ["Main.add", "main"], Patch);
 		if (uninterrupted.revision != restored.revision
-			|| uninterrupted.baseInts != restored.baseInts
-			|| uninterrupted.baseFloats != restored.baseFloats
-			|| uninterrupted.baseStrings != restored.baseStrings
-			|| uninterrupted.baseTypes != restored.baseTypes
 			|| uninterrupted.changedFunctions.join(",") != restored.changedFunctions.join(",")
-			|| uninterrupted.changedSlots.join(",") != restored.changedSlots.join(",")
 			|| encodedFunctions(uninterrupted.module) != encodedFunctions(restored.module)
 			|| Std.string(uninterrupted.module.types) != Std.string(restored.module.types))
 			throw "Restored assembler output disagreed with uninterrupted assembly";
@@ -807,160 +793,67 @@ class HotReloadMain {
 			throw "Compiler failed after decoded IR lifetime stress";
 	}
 
+	/**
+	 * Patches add types into the type table's fixed reserve, so the types loaded code points at never move: the table's capacity
+	 * stays what the load gave it while each patch appends a function type.
+	 */
 	static function testNonMovingTypeArena():Void {
-		var moduleId = haxe.io.Bytes.alloc(16);
-		moduleId.set(0, 91);
-		var code = new HlCode();
-		code.ints = [42];
-		code.types = [Simple(HlType.Void), Simple(HlType.I32), Function([], 1)];
-		code.functions = [new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)])];
-		code.entryPoint = 0;
-		var indices:Map<String, Int> = [],
-			ids:Map<String, Int> = [],
-			bySlot:Map<Int, Int> = [];
-		indices.set("value", 0);
-		ids.set("value", 71000);
-		bySlot.set(0, 71000);
-		var loaded = Runtime.load(HlWriter.encode(code).flatten(),
-			DenseRuntimeIdentity.encode(moduleId, 1, indices, ids));
-		var initialCapacity = Runtime.metadataTypeCapacity(loaded);
-		if (Runtime.metadataTypeCount(loaded) != code.types.length || initialCapacity - code.types.length != 65536)
+		var compiler = new Compiler();
+		function source(arity:Int):String {
+			var parameters = [for (index in 0...arity) 'a$index:Int'].join(", "),
+				arguments = [for (index in 0...arity) '$index'].join(", ");
+			return 'function main():Int { var f = function($parameters):Int { return 42; }; return f($arguments); }';
+		}
+		compiler.update("Main.hx", source(0));
+		var initial = compiler.compile("Main"),
+			loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
+				initial.artifact.hashLink().runtimeIdentity),
+			mainId = Runtime.requireFunctionId(loaded, "main"),
+			capacity = Runtime.metadataTypeCapacity(loaded),
+			types = Runtime.metadataTypeCount(loaded);
+		if (capacity - types != 65536)
 			throw "type arena did not expose its fixed append reserve";
-		var revision = 1;
-		for (i in 0...100) {
-			var baseTypes = code.types.length;
-			code.types.push(Function([1], 1));
-			code.functions = [new HlFunction(2, 0, [1, baseTypes], [LoadInt(0, 0), Return(0)])];
-			var patch = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, baseTypes);
-			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, patch, [71000]));
-			revision++;
-			if (Runtime.callInt(loaded, 71000) != 42)
-				throw 'type arena patch $i damaged the live function';
+		var revision = initial.revision;
+		for (arity in 1...8) {
+			compiler.update("Main.hx", source(arity));
+			var changed = compiler.compile("Main");
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
+				throw 'arity $arity: a new function type must patch, not reload';
+			Runtime.patchSet(loaded,
+				new PatchSet(revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
+			revision = changed.revision;
+			if (Runtime.callInt(loaded, mainId) != 42)
+				throw 'arity $arity: the type arena patch damaged the live function';
 		}
-		var parameterizedBase = code.types.length;
-		code.types.push(Parameterized(HlType.Ref, parameterizedBase + 1));
-		code.types.push(Parameterized(HlType.Null, 1));
-		code.functions = [
-			new HlFunction(2, 0, [1, parameterizedBase, parameterizedBase + 1], [LoadInt(0, 0), Return(0)])
-		];
-		var parameterizedBytes = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0,
-			parameterizedBase);
-		var parameterizedPatch = HlPatchReader.decode(parameterizedBytes);
-		switch parameterizedPatch.types {
-			case [Parameterized(HlType.Ref, reference),
-				Parameterized(HlType.Null, 1)] if (reference == parameterizedBase + 1):
-			default:
-				throw "parameterized patch types did not round-trip";
-		}
-		Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, parameterizedBytes, [71000]));
-		revision++;
-		if (Runtime.metadataTypeCount(loaded) != code.types.length || Runtime.callInt(loaded, 71000) != 42)
-			throw "parameterized type patch damaged the live module";
-		var baseTypes = code.types.length;
-		code.types.push(Parameterized(HlType.Ref, 999999));
-		var invalid = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, baseTypes);
-		try {
-			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, invalid, [71000]));
-			throw "invalid appended type unexpectedly succeeded";
-		} catch (error:RuntimeError) {
-			if (error.status != RuntimeStatus.Incompatible)
-				throw error;
-		}
-		code.types.pop();
-		if (Runtime.metadataTypeCount(loaded) != code.types.length || Runtime.callInt(loaded, 71000) != 42)
-			throw "failed type transaction damaged the live module";
-
-		var retainedTypeCount = code.types.length;
-		for (_ in retainedTypeCount...initialCapacity + 1)
-			code.types.push(Simple(HlType.I32));
-		var exhausted = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0,
-			retainedTypeCount);
-		try {
-			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, exhausted, [71000]));
-			throw "exhausted type arena unexpectedly accepted metadata";
-		} catch (error:RuntimeError) {
-			if (error.status != RuntimeStatus.Incompatible)
-				throw error;
-		}
-		code.types.resize(retainedTypeCount);
-		if (Runtime.metadataTypeCount(loaded) != retainedTypeCount
-			|| Runtime.metadataTypeCapacity(loaded) != initialCapacity
-			|| Runtime.callInt(loaded, 71000) != 42)
-			throw "type arena exhaustion was not transactional";
-
-		code.functions = [new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)])];
-		var recovery = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0,
-			retainedTypeCount);
-		Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, recovery, [71000]));
-		if (Runtime.callInt(loaded, 71000) != 42)
-			throw "valid patch did not recover after type arena exhaustion";
+		if (Runtime.metadataTypeCapacity(loaded) != capacity || Runtime.metadataTypeCount(loaded) <= types)
+			throw "patches did not append their types into the fixed reserve";
 		Runtime.dispose(loaded);
 	}
 
+	/** Patches that add Int, Float and String constants extend the running module's tables, edit after edit. */
 	static function testAppendedFloatAndStringSymbols():Void {
-		var moduleId = haxe.io.Bytes.alloc(16);
-		moduleId.set(0, 77);
-		var code = new HlCode();
-		code.ints = [1];
-		code.types = [
-			Simple(HlType.Void),
-			Simple(HlType.I32),
-			Simple(HlType.F64),
-			Simple(HlType.Bytes),
-			Function([], 1)
-		];
-		code.functions = [new HlFunction(4, 0, [1], [LoadInt(0, 0), Return(0)])];
-		code.entryPoint = 0;
-		var indices:Map<String, Int> = [],
-			ids:Map<String, Int> = [],
-			bySlot:Map<Int, Int> = [];
-		indices.set("value", 0);
-		ids.set("value", 70000);
-		bySlot.set(0, 70000);
-		var loaded = Runtime.load(HlWriter.encode(code).flatten(),
-			DenseRuntimeIdentity.encode(moduleId, 1, indices, ids));
-		code.ints.push(2);
-		code.floats.push(3.5);
-		code.strings.push("new symbol");
-		code.functions = [
-			new HlFunction(4, 0, [2, 3, 1], [LoadFloat(0, 0), LoadString(1, 0), LoadInt(2, 1), Return(2)])
-		];
-		var bytes = HlPatchWriter.encode(code, moduleId, [0], bySlot, 1, 2, 1, 0, 0, 5);
-		Runtime.patchSet(loaded, new PatchSet(1, 2, bytes, [70000]));
-		if (Runtime.callInt(loaded, 70000) != 2)
-			throw "patch using appended float and string symbols returned the wrong value";
-		var revision = 2;
-		for (i in 0...20) {
-			var baseInts = code.ints.length,
-				baseFloats = code.floats.length,
-				baseStrings = code.strings.length;
-			code.ints.push(3 + i);
-			code.floats.push(i + 0.25);
-			code.strings.push('symbol-$i');
-			code.functions = [
-				new HlFunction(4, 0, [2, 3, 1], [
-					LoadFloat(0, code.floats.length - 1),
-					LoadString(1, code.strings.length - 1),
-					LoadInt(2, code.ints.length - 1),
-					Return(2)
-				])
-			];
-			var patch = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, baseInts, baseFloats,
-				baseStrings, 5);
-			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, patch, [70000]));
-			revision++;
-			if (Runtime.callInt(loaded, 70000) != 3 + i)
-				throw 'non-integer symbol stress patch $i returned the wrong value';
+		var compiler = new Compiler();
+		function source(step:Int):String
+			return 'function main():Int { var f:Float = ${step}.25; var s = "symbol-$step"; return (f > $step ? $step : 0) + s.length + ${1000 + step}; }';
+		compiler.update("Main.hx", source(0));
+		var initial = compiler.compile("Main"),
+			loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
+				initial.artifact.hashLink().runtimeIdentity),
+			mainId = Runtime.requireFunctionId(loaded, "main"),
+			revision = initial.revision;
+		for (step in 1...21) {
+			compiler.update("Main.hx", source(step));
+			var changed = compiler.compile("Main");
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
+				throw 'step $step: new constants must patch, not reload';
+			Runtime.patchSet(loaded,
+				new PatchSet(revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
+			revision = changed.revision;
+			if (Runtime.callInt(loaded, mainId) != step + 'symbol-$step'.length + 1000 + step)
+				throw 'step $step: a patch using appended constants returned the wrong value';
 		}
-		if (Runtime.retainedCodeAllocationCount(loaded) != 2)
-			throw "non-integer symbol patch retained extra JIT allocations";
 		Runtime.dispose(loaded);
-	}
-
-	static function skipIndex(bytes:haxe.io.Bytes, position:Int):Int {
-		var first = bytes.get(position++);
-		if ((first & 0x80) == 0)
-			return position;
-		return position + ((first & 0x40) == 0 ? 1 : 3);
 	}
 }

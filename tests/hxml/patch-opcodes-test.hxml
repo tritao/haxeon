@@ -1,4 +1,0 @@
-common.hxml
--cp tests
--cp tests/tooling
--main PatchOpcodeTests

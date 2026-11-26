@@ -1,5 +1,4 @@
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import haxeon.platform.Runtime;
 import haxeon.platform.Window;
@@ -34,7 +33,9 @@ class HxiNativeKitSceneMain {
 		compiler.addFfiInterface("NativeKitScene.hxi", sceneHxi);
 		compiler.addFfiInterface("NativeKitSceneRender.hxi", renderHxi);
 		compiler.update("Main.hx", source());
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
+		File.saveBytes(output,
+			compiler.compilation.BackendArtifact.BackendArtifacts.hashLink(compiler.compile("Main").artifact).sections
+			.flatten());
 	}
 
 	static function source():String

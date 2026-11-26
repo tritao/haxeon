@@ -21,8 +21,7 @@ import compiler.hl.incremental.HlFunctionCache;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.hl.lower.HlLower;
-import compiler.hl.patch.HlPatchReader;
-import compiler.hl.patch.HlPatchWriter;
+import compiler.hl.patch.HlSectionPatch;
 import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
@@ -495,62 +494,38 @@ class TestMain {
 		expectError(duplicateLabel, 'Duplicate label 0 in function 0');
 		Sys.println("PASS: malformed module is rejected before serialization");
 
-		var patchCode = baseControlFlowModule();
-		patchCode.ints = [42];
-		patchCode.types.push(Simple(HlType.Dyn));
-		patchCode.types.push(Function([], 1));
-		patchCode.functions = [
-			new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)]),
-			new HlFunction(4, 1, [1, 3, 3], [
-				LoadInt(0, 0),
-				ToDyn(1, 0),
-				Trap(2, 1, false),
-				EndTrap(2, false),
-				Return(0),
-				Label(1),
-				Throw(2)
-			], [
-				for (line in 10...17)
-					compiler.hl.HlFunction.HlDebugLocation.inFile("patch-debug.hx", line, 1, line, 1, -1, -1, 0)
-			]),
-		];
 		var testModuleId = haxe.io.Bytes.alloc(16),
-			stableBySlot:Map<Int, Int> = [];
-		stableBySlot.set(1, 0x10001);
-		var patchBytes = HlPatchWriter.encode(patchCode, testModuleId, [1], stableBySlot, 7, 8),
-			patch = HlPatchReader.decode(patchBytes);
-		if (patch.baseRevision != 7
-			|| patch.revision != 8
-			|| patch.functions.length != 1
-			|| patch.functions[0].functionIndex != 0x10001)
-			throw "HLP round trip lost revision or function identity";
-		// The catch label is not written: HashLink is given a label only where a loop is entered again (`HlWriter.layout`).
-		if (patch.functions[0].instructions.length != 6
-			|| patch.functions[0].instructions[1].opcode != HlOpcode.ToDyn
-			|| patch.functions[0].instructions[2].opcode != HlOpcode.Trap
-			|| patch.functions[0].instructions[3].opcode != HlOpcode.EndTrap
-			|| patch.functions[0].instructions[5].opcode != HlOpcode.Throw)
-			throw "HLP round trip lost function bytecode";
-		if (patch.debugFiles.length != 1
-			|| patch.debugFiles[0] != "patch-debug.hx"
-			|| patch.functions[0].debug.length != 6
-			|| patch.functions[0].debug[0].line != 10
-			|| patch.functions[0].debug[5].line != 16)
-			throw "HLP round trip lost function debug metadata";
+			patchBytes = HlSectionPatch.encode(testModuleId, 7, 8, {
+				replaced: [{path: "app.Main", bytes: haxe.io.Bytes.ofString("section")}],
+				removed: ["app.Gone"],
+				renames: [{module: "app.Main", from: "app.Main.run", to: "app.Main.run~retired8"}],
+				guards: [{
+					key: {module: "app.Main", member: "app.Main.run~retired8"},
+					description: "run changed signature"
+				}],
+				migrations: [{
+					type: {module: "app.Main", member: "app.Main"},
+					initializer: {module: "app.Main", member: "app.Main.__liveinit"}
+				}]
+			}),
+			patch = HlSectionPatch.decode(patchBytes);
+		if (patch.baseRevision != 7 || patch.revision != 8 || patch.moduleId.compare(testModuleId) != 0)
+			throw "HLP round trip lost the module or its revisions";
+		var content = patch.content;
+		if (content.replaced.length != 1 || content.replaced[0].path != "app.Main"
+			|| content.replaced[0].bytes.toString() != "section" || content.removed.join(",") != "app.Gone"
+			|| content.renames.length != 1 || content.renames[0].to != "app.Main.run~retired8"
+			|| content.guards.length != 1 || content.guards[0].description != "run changed signature"
+			|| content.migrations.length != 1 || content.migrations[0].initializer.member != "app.Main.__liveinit")
+			throw "HLP round trip lost its sections, renames, guards or migrations";
 		try {
-			HlPatchReader.decode(patchBytes.sub(0, patchBytes.length - 1));
+			HlSectionPatch.decode(patchBytes.sub(0, patchBytes.length - 1));
 			throw "truncated HLP was accepted";
 		} catch (error:InternalError) {
-			if (error.message != "Truncated HLP data")
+			if (error.message != "Truncated HLP 12 patch")
 				throw error;
 		}
-		var extended = HlPatchWriter.encode(patchCode, testModuleId, [1], stableBySlot, 7, 8, 0, 0, 0, 0, [{
-			tag: 99,
-			bytes: haxe.io.Bytes.ofString("*")
-		}]);
-		if (HlPatchReader.decode(extended).functions.length != 1)
-			throw "unknown HLP section changed known data";
-		Sys.println("PASS: selective HLP functions and revisions round trip strictly");
+		Sys.println("PASS: HLP 12 sections, renames, guards and migrations round trip strictly");
 
 		var ir = new IrProgram("main");
 		var builder = new IrBuilder();

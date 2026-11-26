@@ -43,7 +43,8 @@ class HlModuleRoundTripMain {
 		expect(module.types.length == code.types.length, "every type reads back");
 		for (index in 0...code.types.length)
 			expect(sameType(module.types[index], code.types[index]), 'type $index reads back as written');
-		expect(module.sections.length == code.debugSections.length, "every debug section reads back");
+		// The writer adds the function identities, which name the functions.
+		expect(module.sections.length == code.debugSections.length + 1, "every debug section reads back");
 		expect(module.functions.length == code.functions.length, "every function reads back");
 		var instructions = 0, lines = 0;
 		for (index in 0...code.functions.length) {

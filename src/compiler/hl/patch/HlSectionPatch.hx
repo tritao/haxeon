@@ -31,6 +31,7 @@ typedef HlSectionPatchContent = {
  * slot, a new one takes the next, and a function whose linked code is the running one's is not compiled again.
  */
 class HlSectionPatch {
+	public static inline final MAGIC = "HLP";
 	public static inline final VERSION = 12;
 
 	public static function encode(moduleId:Bytes, baseRevision:Int, revision:Int, content:HlSectionPatchContent):Bytes {
@@ -40,7 +41,7 @@ class HlSectionPatch {
 			throw new InternalError("Invalid patch revision range");
 		var out = new BytesOutput();
 		out.bigEndian = false;
-		out.writeString(HlPatchFormat.MAGIC);
+		out.writeString(MAGIC);
 		out.writeByte(VERSION);
 		out.write(moduleId);
 		count(out, baseRevision);
@@ -83,7 +84,7 @@ class HlSectionPatch {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		try {
-			if (input.readString(3) != HlPatchFormat.MAGIC || input.readByte() != VERSION)
+			if (input.readString(3) != MAGIC || input.readByte() != VERSION)
 				throw new InternalError("Not an HLP 12 patch");
 			var moduleId = input.read(16), baseRevision = readCount(input), revision = readCount(input);
 			var replaced = [for (_ in 0...readCount(input)) {

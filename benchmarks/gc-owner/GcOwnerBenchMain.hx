@@ -1,6 +1,5 @@
 import compiler.Compiler;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
-import compiler.hl.HlWriter;
 import runtime.Runtime;
 
 private extern class GcStats {
@@ -97,7 +96,7 @@ function main():Int { return 0; }";
 			compiler.update("Main.hx", StringTools.replace(StringTools.replace(moduleSource, "ITER",
 				Std.string(iterations)), "LIVE", Std.string(liveNodes)));
 			var compiled = compiler.compile("Main");
-			var module = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(compiled.artifact).module).flatten(),
+			var module = Runtime.load(BackendArtifacts.hashLink(compiled.artifact).sections.flatten(),
 				BackendArtifacts.hashLink(compiled.artifact).runtimeIdentity);
 			var run = BackendArtifacts.hashLink(compiled.artifact).functionIds.get("Main.run");
 			var c0 = GcStats.collections(),

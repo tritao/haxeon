@@ -138,9 +138,8 @@ class HlcImage {
 		stubbed.natives = code.natives;
 		stubbed.constants = code.constants;
 		stubbed.entryPoint = code.entryPoint;
-		// The functions' names, which stack traces show as the JIT's do.
-		stubbed.debugSections =
-			[for (section in code.debugSections) if (section.kind == HlWriter.FUNCTION_IDENTITIES) section];
+		// The functions' names, which stack traces show as the JIT's do (`HlWriter.encode` writes them).
+		stubbed.functionNames = code.functionNames;
 		stubbed.functions = [for (fn in code.functions) {
 			var signature = types.signature(fn.type);
 			new HlFunction(fn.type, fn.functionIndex, signature.arguments.concat([signature.result]),

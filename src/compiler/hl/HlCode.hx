@@ -77,10 +77,10 @@ class HlDebugSection {
 	public var payload(get, never):haxeon.io.SegmentedBytes;
 
 	final stored:Null<haxeon.io.SegmentedBytes>;
-	final produce:Null<Null<HlWriterCache>->haxeon.io.SegmentedBytes>;
+	final produce:Null<Void->haxeon.io.SegmentedBytes>;
 
 	function new(kind:Int, version:Int, flags:Int, compression:Null<Int>, stored:Null<haxeon.io.SegmentedBytes>,
-			produce:Null<Null<HlWriterCache>->haxeon.io.SegmentedBytes>) {
+			produce:Null<Void->haxeon.io.SegmentedBytes>) {
 		this.kind = kind;
 		this.version = version;
 		this.flags = flags;
@@ -92,8 +92,7 @@ class HlDebugSection {
 	public static function of(kind:Int, version:Int, flags:Int, payload:haxe.io.Bytes, ?compression:Int):HlDebugSection
 		return new HlDebugSection(kind, version, flags, compression, haxeon.io.SegmentedBytes.ofBytes(payload), null);
 
-	/** `produce` gets the writer cache the module is being written with, if any, so it can reuse what it encoded for unchanged functions. */
-	public static function lazy(kind:Int, version:Int, flags:Int, produce:Null<HlWriterCache>->haxeon.io.SegmentedBytes,
+	public static function lazy(kind:Int, version:Int, flags:Int, produce:Void->haxeon.io.SegmentedBytes,
 			?compression:Int):HlDebugSection
 		return new HlDebugSection(kind, version, flags, compression, null, produce);
 
@@ -101,16 +100,13 @@ class HlDebugSection {
 	public function hasPayload():Bool
 		return stored != null || produce != null;
 
-	function get_payload():haxeon.io.SegmentedBytes
-		return payloadFor(null);
-
-	public function payloadFor(cache:Null<HlWriterCache>):haxeon.io.SegmentedBytes {
+	function get_payload():haxeon.io.SegmentedBytes {
 		if (stored != null)
 			return stored;
 		var encode = produce;
 		if (encode == null)
 			throw new InternalError("Debug section has no payload");
-		return encode(cache);
+		return encode();
 	}
 }
 

@@ -110,16 +110,9 @@ class HashLinkBackendSession implements BackendSession {
 	}
 
 	/** Why a module assembled from the same inputs differs from `previous`, or null when it is the same module. */
-	public function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String> {
-		var before = BackendArtifacts.hashLink(previous.artifact),
-			after = BackendArtifacts.hashLink(fresh.artifact),
-			sections = before.sections,
-			freshSections = after.sections;
-		if (sections == null || freshSections == null)
-			return sections == null && freshSections == null ? moduleDifference(before.module,
-				after.module) : "one of the modules is sectioned";
-		return sections.equals(freshSections) ? null : "module sections differ";
-	}
+	public function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String>
+		return BackendArtifacts.hashLink(previous.artifact).sections.equals(BackendArtifacts.hashLink(fresh.artifact)
+			.sections) ? null : "module sections differ";
 
 	static final noTimings:BackendTimings = {
 		cachePreparationMs: 0.0,
@@ -138,47 +131,6 @@ class HashLinkBackendSession implements BackendSession {
 			+ assembler.fieldReserve
 			+ ",development:"
 			+ assembler.developmentMetadata;
-
-	/** Why two modules differ, or null when they encode to the same bytes. */
-	public static function moduleDifference(previous:HlCode, fresh:HlCode):Null<String> {
-		var left = HlWriter.encode(previous), right = HlWriter.encode(fresh);
-		if (left.equals(right))
-			return null;
-		var functions = previous.functions, others = fresh.functions;
-		if (functions.length != others.length)
-			return "function count " + functions.length + " -> " + others.length;
-		for (index in 0...functions.length)
-			if (HlWriter.encodeFunction(functions[index]).compare(HlWriter.encodeFunction(others[index])) != 0)
-				return 'function ${functions[index].functionIndex} differs';
-		return tableDifference(previous, fresh);
-	}
-
-	/** The first table entry, constant or debug section in which `previous` and `fresh` differ. */
-	static function tableDifference(previous:HlCode, fresh:HlCode):String {
-		var found = firstDifference("int", previous.ints, fresh.ints, Std.string);
-		found = found ?? firstDifference("float", previous.floats, fresh.floats, Std.string);
-		found = found ?? firstDifference("string", previous.strings, fresh.strings, value -> value);
-		found = found ?? firstDifference("type", previous.types, fresh.types, Std.string);
-		found = found ?? firstDifference("global", previous.globals, fresh.globals, Std.string);
-		found = found ?? firstDifference("native", previous.natives, fresh.natives, Std.string);
-		found = found ?? firstDifference("constant", previous.constants, fresh.constants, Std.string);
-		found = found ?? firstDifference("debug section", previous.debugSections, fresh.debugSections,
-			section -> section.kind + "/" + section.payload.length + "/"
-			+ build.execution.ContentDigest.makeHex(section.payload.flatten()));
-		found = found ?? (previous.entryPoint == fresh.entryPoint
-			? null : 'entry point ${previous.entryPoint} -> ${fresh.entryPoint}');
-		return found ?? "module tables or debug sections differ";
-	}
-
-	/** The first entry of `left` that `show` spells otherwise in `right`, or their counts when one is a prefix of the other. */
-	static function firstDifference<T>(what:String, left:Array<T>, right:Array<T>, show:T->String):Null<String> {
-		for (index in 0...(left.length < right.length ? left.length : right.length)) {
-			var a = show(left[index]), b = show(right[index]);
-			if (a != b)
-				return '$what $index: $a -> $b';
-		}
-		return left.length == right.length ? null : '$what count ${left.length} -> ${right.length}';
-	}
 
 	/** Assembles `ir`; the session keeps the candidate assembler, which the compiler adopts with the candidate. */
 	public function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>,
@@ -232,8 +184,7 @@ class HashLinkBackendSession implements BackendSession {
 		// from scratch: the result depends only on the source, never on what the session compiled before.
 		// A plain build keeps the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
 		var loweredCache:Null<HlLoweredCache> = context.livePatching ? null : this.loweredCache;
-		var candidateAssembler = loweredCache != null ? new HlModuleAssembler(null,
-			loweredCache.debug) : context.state.compiledOnce
+		var candidateAssembler = loweredCache != null ? new HlModuleAssembler() : context.state.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching ? context.liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
@@ -466,6 +417,6 @@ class HashLinkBackendSession implements BackendSession {
 			> right.sourceHash ? 1 : 0);
 		if (code.sourceSnapshots.length > 0)
 			code.debugSections.push(compiler.hl.HlCode.HlDebugSection.lazy(HlWriter.SOURCE_SNAPSHOTS, 1, 0,
-				_ -> HlWriter.encodeSourceSnapshots(code.sourceSnapshots), compiler.hl.HlLz4.FAST));
+				() -> HlWriter.encodeSourceSnapshots(code.sourceSnapshots), compiler.hl.HlLz4.FAST));
 	}
 }

@@ -123,7 +123,7 @@ class HlPlainBuild {
 	/** The fresh assembler of a plain build, with an empty lowered cache. */
 	public static function assembler(developmentMetadata:Bool):HlModuleAssembler {
 		var cache = new HlLoweredCache(),
-			assembler = new HlModuleAssembler(null, cache.debug);
+			assembler = new HlModuleAssembler();
 		assembler.fieldReserve = 0;
 		assembler.developmentMetadata = developmentMetadata;
 		assembler.irVerified = true;

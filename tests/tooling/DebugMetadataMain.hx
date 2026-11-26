@@ -2,15 +2,14 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Frontend;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.core.Source.SourceFile;
+import compiler.hl.HlBytecodeInput;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlWriter;
-import compiler.hl.HlWriterCache;
 import compiler.hl.lower.HlLower;
-import compiler.hl.patch.HlPatchReader;
-import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.model.IrFunction;
 import haxe.io.Bytes;
+import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
 /** Focused regression coverage for the source-local debug metadata pipeline. */
@@ -91,75 +90,46 @@ class DebugMetadataMain {
 		var bytes = HlWriter.encode(code).flatten(),
 			suffix = encodedAssignmentSuffix(fn);
 		if (bytes.get(3) != compiler.hl.HlCode.VERSION
-			|| code.debugSections.length != 2
-			|| code.debugSections[0].kind != HlWriter.FUNCTION_IDENTITIES
-			|| code.debugSections[1].kind != HlWriter.OPCODE_SOURCE_SPANS
-			|| code.debugSections[1].payload.length == 0)
-			throw "HLB function identity and opcode source-span sections were not emitted";
+			|| code.debugSections.length != 1
+			|| code.debugSections[0].kind != HlWriter.OPCODE_SOURCE_SPANS
+			|| code.debugSections[0].payload.length == 0)
+			throw "The lowering did not attach its opcode source spans";
+		var identities = [
+			for (section in compiler.hl.HlModuleReader.read(bytes).sections)
+				if (section.kind == HlWriter.FUNCTION_IDENTITIES)
+				compiler.hl.HlModuleReader.functionIdentities(section.payload)
+		];
+		if (identities.length != 1 || identities[0].length != code.functions.length)
+			throw "A dense module does not name its functions";
+		for (index in 0...code.functions.length)
+			if (identities[0][index].qualifiedName != code.functionNames[index]
+				|| identities[0][index].stableId != code.functions[index].functionIndex)
+				throw "A dense module names a function otherwise than the lowering";
 		if (bytes.compare(HlWriter.encode(code).flatten()) != 0)
 			throw "HLB debug section encoding is not deterministic";
-		var writerCache = new HlWriterCache();
-		for (_ in 0...2) {
-			var streamed = new BytesOutput();
-			HlWriter.writeTo(code, streamed, writerCache);
-			if (bytes.compare(streamed.getBytes()) != 0)
-				throw "Streamed HLB encoding differs from canonical bytes";
-		}
-		if (fn.debugLocations.length < 3)
-			throw "Debug-file cache fixture needs three opcode locations";
-		// A function never changes (the writer and HlFunction.anchors rely on it): the fixture's mixed paths are another function.
-		var mixedLocations = fn.debugLocations.copy();
-		for (index in 0...3) {
-			var location = mixedLocations[index];
-			mixedLocations[index] =
-				new compiler.hl.HlFunction.HlDebugLocation(compiler.core.SourceAnchor.file(index == 1
-				? "second-source.hx" : "first-source.hx"), location.line,
-				location.column, location.endLine, location.endColumn, location.start, location.end, location.flags,
-				location.generatedText);
-		}
-		var fnIndex = code.functions.indexOf(fn);
-		code.functions[fnIndex] = new compiler.hl.HlFunction(fn.type, fn.functionIndex, fn.registers, fn.opcodes,
-			mixedLocations, fn.debugAssignments);
-		var mixedPaths = HlWriter.encode(code).flatten(),
-			mixedCache = new HlWriterCache();
-		for (_ in 0...2) {
-			var streamed = new BytesOutput();
-			HlWriter.writeTo(code, streamed, mixedCache);
-			if (mixedPaths.compare(streamed.getBytes()) != 0)
-				throw "Cached debug files changed non-contiguous source-file ordering";
-		}
-		code.functions[fnIndex] = fn;
 		if (!contains(bytes, suffix))
 			throw "HLB output did not serialize canonical debug assignment triples";
 		Sys.println("PASS: HLB serializes deterministic local and function debug metadata");
 
-		var stableBySlot:Map<Int, Int> = [
-			for (compiledFunction in code.functions)
-				compiledFunction.functionIndex => compiledFunction.functionIndex
-		],
-			patch = HlPatchReader.decode(HlPatchWriter.encode(code, haxe.io.Bytes.alloc(16),
-				[for (compiledFunction in code.functions) compiledFunction.functionIndex], stableBySlot, 0, 1,
-				code.ints.length, code.floats.length,
-				code.strings.length, code.types.length));
-		for (index in 0...patch.functions.length) {
-			var compiledFunction = code.functions[index],
-				positions = HlWriter.layout(compiledFunction.opcodes),
-				actual = patch.functions[index].debug,
+		var spans = opcodeSpans(code.debugSections[0].payload.flatten());
+		for (compiledFunction in code.functions) {
+			var positions = HlWriter.layout(compiledFunction.opcodes),
+				actual = spans.get(compiledFunction.functionIndex),
 				// One span per instruction written: a label no jump lands on again is left out (HlWriter.layout).
 				expected = [
 					for (opcode in 0...compiledFunction.opcodes.length)
 						if (positions[opcode + 1] != positions[opcode]) compiledFunction.debugLocations[opcode]
 				];
-			if (actual.length != expected.length)
-				throw "HLP lost opcode source spans";
-			// The module's locations count from their anchors (`HlDebugLocation`); the patch has them placed in its sources.
+			if (actual == null || actual.length != expected.length)
+				throw "The opcode source spans lost a function's spans";
+			// The module's locations count from their anchors (`HlDebugLocation`); the section has them placed in its sources.
 			var sources = code.sources;
 			for (opcode in 0...actual.length) {
 				var location = expected[opcode],
 					anchor = location.anchor,
 					line = sources.line(anchor),
 					offset = sources.offset(anchor);
-				if (patch.debugFiles[actual[opcode].file] != sources.path(anchor)
+				if (actual[opcode].file != sources.path(anchor)
 					|| actual[opcode].line != line + location.line
 					|| actual[opcode].column != location.column
 					|| actual[opcode].endLine != line + location.endLine
@@ -168,45 +138,13 @@ class DebugMetadataMain {
 					|| actual[opcode].start != (location.start < 0 ? -1 : offset + location.start)
 					|| actual[opcode].end != (location.end < 0 ? -1 : offset + location.end)
 					|| actual[opcode].flags != location.flags)
-					throw "HLP changed an opcode source span";
+					throw "The opcode source spans changed a location";
 			}
 		}
-		Sys.println("PASS: HLP preserves precise opcode source spans");
+		Sys.println("PASS: the opcode source spans place each location precisely");
 
 		testSourceSnapshots();
 		testShadowedScopes();
-		testIdentitiesFollowStableIds();
-	}
-
-	/**
-	 * A plain build assembles a fresh layout with the session's debug cache, which keeps each function's identity while the function
-	 * is the same IR object: a layout that gives it another stable id at the same index must not keep the earlier identity.
-	 */
-	static function testIdentitiesFollowStableIds():Void {
-		var compiler = new compiler.Compiler();
-		compiler.update("Main.hx",
-			"function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(20, 22); }");
-		var program = compiler.compile("Main").ir,
-			names = [for (fn in program.functions) fn.name];
-		function identities(stableIds:Null<Map<String, Int>>, debug:compiler.hl.lower.HlDebugMetadataCache):Bytes {
-			var assembler = new compiler.hl.incremental.HlModuleAssembler(stableIds, debug);
-			assembler.irVerified = true;
-			assembler.sources = compiler.sourceAnchors();
-			assembler.loweredCache = new compiler.hl.incremental.HlLoweredCache(debug);
-			var module = assembler.assemble(program, names, Patch).module;
-			for (section in module.debugSections)
-				if (section.kind == HlWriter.FUNCTION_IDENTITIES)
-					return section.payload.flatten();
-			throw "The module has no function identities";
-		}
-		var shared = new compiler.hl.lower.HlDebugMetadataCache();
-		identities(null, shared);
-		var moved = identities([for (index in 0...names.length) names[index] => 1000 + index], shared),
-			fresh = identities([for (index in 0...names.length) names[index] => 1000 + index],
-				new compiler.hl.lower.HlDebugMetadataCache());
-		if (moved.compare(fresh) != 0)
-			throw "A shared debug cache kept function identities whose stable ids moved";
-		Sys.println("PASS: function identities follow the stable ids of a fresh layout");
 	}
 
 	static function testSourceSnapshots():Void {
@@ -230,17 +168,6 @@ class DebugMetadataMain {
 		if (result.artifact.hashLink().hashLinkBytes().flatten()
 			.compare(result.artifact.hashLink().hashLinkBytes().flatten()) != 0)
 			throw "HLB source snapshot encoding is not deterministic";
-		var stableBySlot:Map<Int, Int> =
-			[for (fn in result.artifact.hashLink().module.functions) fn.functionIndex => fn.functionIndex],
-			patch = HlPatchReader.decode(HlPatchWriter.encode(result.artifact.hashLink().module, Bytes.alloc(16),
-				[for (fn in result.artifact.hashLink().module.functions) fn.functionIndex],
-				stableBySlot, 0, 1, result.artifact.hashLink().module.ints.length,
-				result.artifact.hashLink().module.floats.length,
-				result.artifact.hashLink().module.strings.length, result.artifact.hashLink().module.types.length));
-		if (patch.sourceSnapshots.length != 1
-			|| patch.sourceSnapshots[0].sourceHash != source.contentHash()
-			|| patch.sourceSnapshots[0].content.toString() != text)
-			throw "HLP did not preserve the referenced source snapshot";
 		Sys.println("PASS: compiler emits deterministic content-addressed source snapshots");
 	}
 
@@ -282,6 +209,52 @@ class DebugMetadataMain {
 		if (bounded != 2 || open != 1)
 			throw 'Expected two bounded inner assignments and one function-scoped assignment, got bounded=$bounded open=$open';
 		Sys.println("PASS: shadowed locals retain distinct identities and lexical opcode lifetimes");
+	}
+
+	/** By function index, the spans of an opcode source-span section (version 2, `HlWriter.encodeOpcodeSourceSpanGroups`). */
+	static function opcodeSpans(payload:Bytes):Map<Int, Array<{
+		file:String,
+		start:Int,
+		end:Int,
+		line:Int,
+		column:Int,
+		endLine:Int,
+		endColumn:Int,
+		sourceHash:Int,
+		flags:Int
+	}>> {
+		var input = new BytesInput(payload), files = [for (_ in 0...HlBytecodeInput.index(input)) {
+			var length = HlBytecodeInput.index(input);
+			input.readString(length);
+		}], result = new Map();
+		for (_ in 0...HlBytecodeInput.index(input)) {
+			var index = HlBytecodeInput.index(input), written = HlBytecodeInput.index(input), spans = [];
+			for (_ in 0...written) {
+				HlBytecodeInput.index(input);
+				var file = files[HlBytecodeInput.index(input)],
+					start = HlBytecodeInput.index(input) - 1,
+					end = HlBytecodeInput.index(input) - 1,
+					line = HlBytecodeInput.index(input),
+					column = HlBytecodeInput.index(input),
+					endLine = HlBytecodeInput.index(input),
+					endColumn = HlBytecodeInput.index(input),
+					sourceHash = input.readInt32(),
+					flags = HlBytecodeInput.index(input);
+				spans.push({
+					file: file,
+					start: start,
+					end: end,
+					line: line,
+					column: column,
+					endLine: endLine,
+					endColumn: endColumn,
+					sourceHash: sourceHash,
+					flags: flags
+				});
+			}
+			result.set(index, spans);
+		}
+		return result;
 	}
 
 	static function assertAssignmentsSorted(assignments:Array<compiler.hl.HlFunction.HlDebugAssignment>):Void {

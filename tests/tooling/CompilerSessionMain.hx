@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler.CompileResult;
 import compiler.core.FileVersion;
-import compiler.hl.HlWriter;
 import compiler.tools.CompilerArguments;
 import compiler.tools.CompilerDriver;
 import compiler.tools.CompilerSession;
@@ -37,18 +36,16 @@ class CompilerSessionMain {
 			"default builds must select development metadata");
 		var release = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])),
 			_ -> {}, modeSession);
-		expect(release.artifact.hashLink().module.debugSections.length == 1
-			&& release.artifact.hashLink().module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
+		expect(release.artifact.hashLink().module.debugSections.length == 0
 			&& release.artifact.hashLink().module.sourceSnapshots.length == 0,
-			"release artifacts must retain names but omit development spans and snapshots");
+			"release artifacts must omit development spans and snapshots");
 		var development = CompilerDriver.compile(CompilerArguments.parse(modeArgs), _ -> {}, modeSession);
-		expect(development.artifact.hashLink().module.debugSections.length == 3
+		expect(development.artifact.hashLink().module.debugSections.length == 2
 			&& development.artifact.hashLink().module.sourceSnapshots.length > 0,
-			"development artifacts must retain debug identities, spans and source snapshots");
+			"development artifacts must retain spans and source snapshots");
 		var releaseAgain = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])),
 			_ -> {}, modeSession);
-		expect(releaseAgain.artifact.hashLink().module.debugSections.length == 1
-			&& releaseAgain.artifact.hashLink().module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
+		expect(releaseAgain.artifact.hashLink().module.debugSections.length == 0
 			&& releaseAgain.artifact.hashLink().module.sourceSnapshots.length == 0,
 			"a persistent session must honor changes to build mode");
 

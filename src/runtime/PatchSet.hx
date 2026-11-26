@@ -62,7 +62,7 @@ class PatchSet {
 			cursor[0] += size;
 	}
 
-	/** HLP's variable-length index (`HlPatchReader.readIndex`), read at `cursor[0]`, which it advances; -1 past the end. */
+	/** HLP's variable-length index (`HlBytecodeInput.index`), read at `cursor[0]`, which it advances; -1 past the end. */
 	function readIndex(cursor:Array<Int>):Int {
 		var at:Int = cursor[0];
 		if (at < 0 || at >= bytes.length) {

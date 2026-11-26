@@ -1,27 +1,24 @@
 import compiler.Frontend;
 import compiler.hl.HlCode.HlDebugSection;
+import compiler.hl.HlValidationMarks;
 import compiler.hl.HlValidator;
 import compiler.hl.HlWriter;
-import compiler.hl.HlWriterCache;
 import compiler.hl.lower.HlLower;
 
-/** The writer cache keeps what it learned about a function when the list of debug files changes, except the function's encoding. */
-class HlWriterCacheMain {
+/** The validator marks what it checked, keeps the marks of the module just written, and checks a snapshot section against its model. */
+class HlValidationMarksMain {
 	static function main():Void {
 		var code =
 			HlLower.lower(Frontend.compile("function add(a:Int, b:Int):Int return a + b; function main():Int return add(40, 2);")),
-			cache = new HlWriterCache();
-		HlWriter.encode(code, cache).flatten();
+			marks = new HlValidationMarks();
+		HlValidator.validate(code, marks);
 		for (fn in code.functions)
-			expect(cache.isValidated(fn),
-				"a function validated by the first encode stays validated after the writer prepared the cache");
-		var function_ = code.functions[0];
-		expect(cache.get(function_, code.sources) != null, "its encoding is cached");
-		cache.prepare(["other.hx"]);
-		expect(cache.isValidated(function_), "a new debug file list keeps validation marks");
-		expect(cache.get(function_, code.sources) == null,
-			"a new debug file list drops the encodings, which name files by index");
-		Sys.println("PASS: writer cache validation marks survive a new debug file list");
+			expect(marks.isValidated(fn), "a validated function is marked");
+		var kept = code.functions[0];
+		marks.retainFunctions([kept]);
+		expect(marks.isValidated(kept), "the marks of the functions kept stay");
+		expect(!marks.isValidated(code.functions[1]), "the marks of the functions left out go");
+		Sys.println("PASS: validation marks follow the functions written");
 
 		// The snapshot section is compared with its model only when the compile checks its reuse (both come from the same model otherwise).
 		var content = haxe.io.Bytes.ofString("class A {}"),

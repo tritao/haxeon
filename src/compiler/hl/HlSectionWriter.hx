@@ -1171,7 +1171,7 @@ class HlSectionWriter {
 			for (position in 0...tables.functions.length) {
 				var fn = code.functions[tables.functions[position]];
 				if (fn.debugLocations.length > 0)
-					groups.push({stableId: position, locations: fn.debugLocations, opcodes: fn.opcodes});
+					groups.push({index: position, locations: fn.debugLocations, opcodes: fn.opcodes});
 			}
 			if (groups.length > 0)
 				sections.push({
@@ -1311,7 +1311,7 @@ class HlSectionCache {
 	final entries:Map<String, HlSectionEntry>;
 
 	/** The marks of the functions and snapshots validated (`HlValidator`), which hold while they are the same objects. */
-	final validation:HlWriterCache;
+	final validation:HlValidationMarks;
 
 	/** What the sections were encoded with besides their content (`HlSectionWriter.format`). */
 	final format:String;
@@ -1354,7 +1354,7 @@ class HlSectionCache {
 	static function following(previous:Null<HlSectionCache>, format:String, modules:Map<String, Int>,
 			declarations:DeclarationOwners):HlSectionCache {
 		var entries:Map<String, HlSectionEntry> = previous == null || previous.format != format ? [] : previous.entries,
-			validation = previous == null ? new HlWriterCache() : previous.validation;
+			validation = previous == null ? new HlValidationMarks() : previous.validation;
 		if (previous != null && previous.declares(modules, declarations)) {
 			var result = new HlSectionCache(entries, validation, format, previous.homes, previous.declared,
 				previous.declaredModules, previous.declaredCount, previous.moduleCount);

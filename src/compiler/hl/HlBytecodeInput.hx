@@ -6,9 +6,7 @@ import haxe.io.BytesInput;
 
 /**
  * HashLink's binary encodings, read the way the VM reads them (vendor/hashlink/src/code.c): variable-length indices, operand
- * lists, type definitions and string tables. The module reader (HlModuleReader) and the patch reader (HlPatchReader) both
- * decode through these, so the two formats share one decoder; each adds only its own rules (a patch takes only the opcodes
- * this compiler emits, and no enum types).
+ * lists, type definitions and string tables, for the module reader (HlModuleReader).
  */
 class HlBytecodeInput {
 	/** The largest operand list a decoder accepts, as the VM's patch decoder bounds it, before reading any of it. */

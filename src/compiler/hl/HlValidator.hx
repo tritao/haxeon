@@ -6,7 +6,7 @@ import compiler.hl.HlFunction.HlInstruction;
 
 /** Validates an in-memory HashLink module before serialization. */
 class HlValidator {
-	public static function validate(code:HlCode, ?cache:HlWriterCache, checkReuse:Bool = false):Void {
+	public static function validate(code:HlCode, ?cache:HlValidationMarks, checkReuse:Bool = false):Void {
 		if (code.types.length == 0)
 			throw new InternalError("HL module has no types");
 

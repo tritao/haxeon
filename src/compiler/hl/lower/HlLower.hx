@@ -16,7 +16,6 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
-import compiler.hl.lower.HlDebugMetadataCache.HlFunctionPlace;
 import compiler.hl.HlCode.HlDebugSection;
 import compiler.hl.HlFunction.HlDebugAssignment;
 import compiler.hl.HlLz4;
@@ -162,9 +161,7 @@ class HlLower {
 	}
 
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>,
-			?stableIds:Map<String, Int>,
-			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
-			fieldReserve:Int = 0,
+			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, fieldReserve:Int = 0,
 			developmentMetadata:Bool = true,
 			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
 			trustCache:Bool = false, ?frozen:String->Bool, checkReuse:Bool = false,
@@ -196,8 +193,8 @@ class HlLower {
 		}
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(program, symbols, indices, stableIds, affected, runtimeNatives, debugCache,
-				fieldReserve, developmentMetadata, loweredCache, trustCache, frozen, checkReuse, sources, !trustCache,
+			lowerer = new HlLower(program, symbols, indices, affected, runtimeNatives, fieldReserve,
+				developmentMetadata, loweredCache, trustCache, frozen, checkReuse, sources, !trustCache,
 				liveChain),
 			code = lowerer.lowerProgram(program);
 		return {
@@ -218,8 +215,6 @@ class HlLower {
 		};
 	}
 
-	final stableIds:Null<Map<String, Int>>;
-
 	/** The cache is the caller's word: every entry not named in `regenerated` is kept as it is (live patching), with no IR comparison, and the entries made carry no requests. */
 	final trustCache:Bool;
 
@@ -234,7 +229,6 @@ class HlLower {
 	var nativeVisible:Map<String, Bool> = [];
 
 	final regenerated:Map<String, Bool> = [];
-	final debugCache:Null<HlDebugMetadataCache>;
 	final developmentMetadata:Bool;
 
 	final typedInterfaces:HlTypedInterfaceTables;
@@ -244,9 +238,8 @@ class HlLower {
 	var finalizationMs = 0.0;
 	var allocationPhases:Array<PhaseAllocation> = [];
 
-	function new(program:IrProgram, symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>,
-			?regenerated:Array<String>,
-			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
+	function new(program:IrProgram, symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?regenerated:Array<String>,
+			?runtimeNatives:Array<IrNative>, fieldReserve:Int = 0,
 			developmentMetadata:Bool = true, ?loweredCache:compiler.hl.incremental.HlLoweredCache,
 			trustCache:Bool = false,
 			?frozen:String->Bool, checkReuse:Bool = false, ?sources:compiler.core.SourceAnchor.SourceAnchors,
@@ -261,10 +254,8 @@ class HlLower {
 		this.checkingTrust = trustCache && checkReuse;
 		this.requestKeys = loweredCache != null ? loweredCache.keys : new compiler.hl.incremental.HlRequestKeys();
 		this.fieldReserve = fieldReserve;
-		this.stableIds = stableIds;
 		this.trustCache = trustCache;
 		this.preparedRuntimeNatives = runtimeNatives;
-		this.debugCache = debugCache;
 		this.developmentMetadata = developmentMetadata;
 		if (regenerated != null)
 			for (name in regenerated)
@@ -678,34 +669,20 @@ class HlLower {
 		var functionsDoneAt = Sys.time() * 1000.0;
 		PeakProbe.mark("lower-functions-done");
 		var allocationAfterFunctions = AllocationMeter.sample();
-		// The VM uses function identities for stack-trace and profiler names in every mode.
-		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];
-		code.debugSections.push(HlDebugSection.of(HlWriter.FUNCTION_IDENTITIES, 1, 0,
-			debugCache == null
-			? HlWriter.encodeFunctionIdentities(identities) : debugCache.identitiesPayload(identities),
-			HlLz4.HIGH));
-		var allocationAfterIdentities = AllocationMeter.sample(),
-			allocationAfterSpanGroups = allocationAfterIdentities;
+		var allocationAfterSpanGroups = allocationAfterFunctions;
 		if (developmentMetadata) {
-			var spanGroups:Array<compiler.hl.HlWriter.HlOpcodeSourceSpanGroup> = [];
-			for (index in 0...code.functions.length) {
-				var identity = identities[index],
-					loweredFunction = code.functions[index];
-				spanGroups.push({
-					stableId: identity.stableId,
-					locations: loweredFunction.debugLocations,
-					opcodes: loweredFunction.opcodes
-				});
-			}
+			var spanGroups:Array<compiler.hl.HlWriter.HlOpcodeSourceSpanGroup> = [for (fn in code.functions) {
+				index: fn.functionIndex,
+				locations: fn.debugLocations,
+				opcodes: fn.opcodes
+			}];
 			allocationAfterSpanGroups = AllocationMeter.sample();
 			// The groups only point at the functions' locations; the section is encoded when the module is written. It captures
 			// the sources, not `code`, a field: that would keep this lowerer alive with every module.
 			var sources = code.sources;
 			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0,
-				cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, sources, cache), HlLz4.FAST));
+				() -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, sources), HlLz4.FAST));
 		}
-		if (debugCache != null)
-			debugCache.endGeneration();
 		var debugDoneAt = Sys.time() * 1000.0;
 		var allocationAfterDebug = AllocationMeter.sample();
 
@@ -731,8 +708,7 @@ class HlLower {
 			AllocationMeter.delta("backend-metadata", allocationAtStart, allocationAfterMetadata),
 			AllocationMeter.delta("backend-functions", allocationAfterMetadata, allocationAfterFunctions),
 			AllocationMeter.delta("backend-debug", allocationAfterFunctions, allocationAfterDebug),
-			AllocationMeter.delta("backend-debug-identities", allocationAfterFunctions, allocationAfterIdentities),
-			AllocationMeter.delta("backend-debug-span-groups", allocationAfterIdentities, allocationAfterSpanGroups),
+			AllocationMeter.delta("backend-debug-span-groups", allocationAfterFunctions, allocationAfterSpanGroups),
 			AllocationMeter.delta("backend-debug-encode", allocationAfterSpanGroups, allocationAfterDebug),
 			AllocationMeter.delta("backend-finalize", allocationAfterDebug, allocationAfterFinalize)
 		];
@@ -793,21 +769,6 @@ class HlLower {
 		var difference = compiler.hl.HlFunctionEquality.difference(kept, fresh);
 		if (difference != null)
 			throw new InternalError('--check-reuse: kept function ${fn.name} lowers to other code than its cached lowering: $difference');
-	}
-
-	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
-		// A function keeps its identity while its index, stable id and place hold; a fresh layout can move either id without the other.
-		var functionIndex = requireFunction(fn.name),
-			stableId = stableIdOf(fn.name, functionIndex),
-			body = fn.encodedBody(scratch.bodyBuilder);
-		return debugCache == null ? HlFunctionPlace.of(body).identity(fn.name, functionIndex, stableId,
-			code.sources) : debugCache.identity(fn, body, functionIndex, stableId, code.sources);
-	}
-
-	/** The stable id function `name` is known by: its session's, else its index. */
-	function stableIdOf(name:String, functionIndex:Int):Int {
-		var ids = stableIds, id = ids == null ? null : ids.get(name);
-		return id == null ? functionIndex : id;
 	}
 
 	function objectTypeReady(type:IrType):Bool

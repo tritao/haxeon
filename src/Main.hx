@@ -31,8 +31,7 @@ class Main {
 		for (warning in compiler.warnings(result.moduleNames))
 			Sys.stderr().writeString(warning.format() + "\n");
 		File.saveBytes(outputPath,
-			BackendArtifacts.hashLinkBytes(BackendArtifacts.hashLink(result.artifact), null,
-			options.checkReuse).flatten());
+			BackendArtifacts.hashLinkBytes(BackendArtifacts.hashLink(result.artifact)).flatten());
 		Sys.println('compiled $sourcePath -> $outputPath');
 	}
 
