@@ -4,7 +4,7 @@ import haxe.io.Bytes;
 import haxe.io.BytesBuffer;
 
 /** Incremental Server-Sent Events decoder. Chunks may split lines, multi-byte characters and events. */
-class SseParser {
+internal class SseParser {
 	final onEvent:(name:String, data:String) -> Void;
 	var pending:BytesBuffer = new BytesBuffer();
 	var pendingLength = 0;

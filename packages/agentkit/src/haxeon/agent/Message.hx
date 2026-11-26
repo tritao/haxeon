@@ -1,17 +1,24 @@
 package haxeon.agent;
 
+/** One message of a conversation: who sent it and its content blocks. */
 class Message {
+	/** Who sent it. */
 	public final role:Role;
+
+	/** Its text, tool calls and tool results. */
 	public final content:Array<ContentBlock>;
 
+	/** A message from `role`. */
 	public function new(role:Role, content:Array<ContentBlock>) {
 		this.role = role;
 		this.content = content;
 	}
 
+	/** A user message holding `text`. */
 	public static function user(text:String):Message
 		return new Message(User, [Text(text)]);
 
+	/** Its text blocks, joined. */
 	public function text():String {
 		var parts:Array<String> = [];
 		for (block in content)
@@ -23,6 +30,7 @@ class Message {
 		return parts.join("");
 	}
 
+	/** The tool calls it makes. */
 	public function toolUses():Array<ToolCall> {
 		var calls:Array<ToolCall> = [];
 		for (block in content)
@@ -34,6 +42,7 @@ class Message {
 		return calls;
 	}
 
+	/** It as Messages API JSON. */
 	public function toJson():String {
 		var blocks:Array<String> = [];
 		for (block in content)

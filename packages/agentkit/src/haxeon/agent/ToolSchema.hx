@@ -12,14 +12,18 @@ private typedef Property = {
 class ToolSchema {
 	final properties:Array<Property> = [];
 
+	/** A schema with no parameters. */
 	public function new() {}
 
+	/** Adds a string parameter, limited to `choices` when given. Returns this schema. */
 	public function string(name:String, description:String, required:Bool = true, ?choices:Array<String>):ToolSchema
 		return add(name, "string", description, required, choices);
 
+	/** Adds an integer parameter. Returns this schema. */
 	public function integer(name:String, description:String, required:Bool = false):ToolSchema
 		return add(name, "integer", description, required, null);
 
+	/** Adds a boolean parameter. Returns this schema. */
 	public function boolean(name:String, description:String, required:Bool = false):ToolSchema
 		return add(name, "boolean", description, required, null);
 
@@ -34,6 +38,7 @@ class ToolSchema {
 		return this;
 	}
 
+	/** The schema as JSON Schema. */
 	public function toJson():String {
 		var fields:Array<String> = [];
 		var required:Array<String> = [];

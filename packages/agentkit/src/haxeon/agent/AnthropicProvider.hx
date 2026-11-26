@@ -4,19 +4,24 @@ import haxe.io.Bytes;
 
 /** Anthropic Messages API over a host-supplied streaming transport. */
 class AnthropicProvider implements ModelProvider {
+	/** The Anthropic API's address. */
 	public static inline var DefaultBaseUrl = "https://api.anthropic.com";
+
+	/** The `anthropic-version` header it sends. */
 	public static inline var ApiVersion = "2023-06-01";
 
 	final transport:HttpTransport;
 	final apiKey:String;
 	final baseUrl:String;
 
+	/** A provider posting to `baseUrl` over `transport` with `apiKey`. */
 	public function new(transport:HttpTransport, apiKey:String, baseUrl:String = DefaultBaseUrl) {
 		this.transport = transport;
 		this.apiKey = apiKey;
 		this.baseUrl = baseUrl;
 	}
 
+	/** Posts `request` and streams the model's reply to `sink`. */
 	public function start(request:ModelRequest, sink:ModelSink):Cancelable {
 		var stream = new AnthropicStream(sink);
 		var headers = [
@@ -29,6 +34,7 @@ class AnthropicProvider implements ModelProvider {
 		return stream;
 	}
 
+	/** The Messages API request body for `request`, as JSON. */
 	public static function body(request:ModelRequest):String {
 		var fields = [
 			JsonWriter.stringField("model", request.model),

@@ -1,7 +1,7 @@
 package haxeon.agent;
 
 /** Builds JSON text without untyped values. Callers keep commas and nesting balanced through the helpers. */
-class JsonWriter {
+internal class JsonWriter {
 	public static function quote(text:String):String
 		return haxe.Json.stringify(text);
 

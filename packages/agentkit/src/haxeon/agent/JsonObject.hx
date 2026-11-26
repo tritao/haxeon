@@ -32,24 +32,29 @@ class JsonObject {
 	public function toString():String
 		return haxe.Json.stringify(value);
 
+	/** Whether the object has a field `name`. */
 	public function has(name:String):Bool
 		return Reflect.hasField(value, name) && Reflect.field(value, name) != null;
 
+	/** Field `name` as a string, or `fallback` when it is missing or not a string. */
 	public function string(name:String, fallback:String = ""):String {
 		var field:Dynamic = Reflect.field(value, name);
 		return Std.isOfType(field, String) ? field : fallback;
 	}
 
+	/** Field `name` as an integer, truncating a float, or `fallback` when it is not a number. */
 	public function int(name:String, fallback:Int = 0):Int {
 		var field:Dynamic = Reflect.field(value, name);
 		return Std.isOfType(field, Int) ? field : Std.isOfType(field, Float) ? Std.int(field) : fallback;
 	}
 
+	/** Field `name` as a boolean, or `fallback` when it is not one. */
 	public function bool(name:String, fallback:Bool = false):Bool {
 		var field:Dynamic = Reflect.field(value, name);
 		return Std.isOfType(field, Bool) ? field : fallback;
 	}
 
+	/** Field `name` as an object, or null when it is not one. */
 	public function object(name:String):Null<JsonObject> {
 		var field:Dynamic = Reflect.field(value, name);
 		return isObject(field) ? new JsonObject(field) : null;
@@ -68,6 +73,7 @@ class JsonObject {
 		return result;
 	}
 
+	/** The string elements of array field `name`; other elements are skipped. */
 	public function strings(name:String):Array<String> {
 		var field:Dynamic = Reflect.field(value, name);
 		var result:Array<String> = [];

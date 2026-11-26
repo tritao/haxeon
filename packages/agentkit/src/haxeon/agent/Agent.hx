@@ -10,6 +10,7 @@ class Agent {
 	/** Receives every event. Set before `send`. */
 	public var onEvent:AgentEvent->Void = function(_) {};
 
+	/** What the agent is doing now. */
 	public var state(default, null):AgentState = Idle;
 
 	/** Model for subsequent turns. A run in progress keeps the model it started its current turn with. */
@@ -22,11 +23,13 @@ class Agent {
 	var inflight:Null<Cancelable>;
 	var batch:Null<ToolBatch>;
 
+	/** An idle agent configured by `options`, with an empty conversation. */
 	public function new(options:AgentOptions) {
 		this.options = options;
 		model = options.model;
 	}
 
+	/** A copy of the conversation so far. */
 	public function messages():Array<Message>
 		return history.copy();
 
@@ -197,6 +200,7 @@ class Agent {
 		return null;
 	}
 
+	/** The conversation as JSON, for `restore` to read back. */
 	public function snapshot():String
 		return JsonWriter.object([
 			JsonWriter.field("version", "1"),

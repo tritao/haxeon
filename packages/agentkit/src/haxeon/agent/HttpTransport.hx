@@ -5,5 +5,6 @@ package haxeon.agent;
 	Sinks are called on the host's thread, never re-entrantly from `postStream`.
 **/
 interface HttpTransport {
+	/** Posts `request` and streams the response to `sink`; the result cancels the request. */
 	function postStream(request:HttpStreamRequest, sink:HttpStreamSink):Cancelable;
 }

@@ -2,12 +2,15 @@ package haxeon.agent;
 
 /** Deterministic provider for tests and offline hosts. Answers synchronously from a queue. */
 class ScriptedProvider implements ModelProvider {
+	/** Every request it received, in order. */
 	public final requests:Array<ModelRequest> = [];
 	final script:Array<ScriptedResponse>;
 
+	/** A provider answering each turn with the next of `script`, and failing once it runs out. */
 	public function new(script:Array<ScriptedResponse>)
 		this.script = script.copy();
 
+	/** Records `request` and answers with the next scripted response. */
 	public function start(request:ModelRequest, sink:ModelSink):Cancelable {
 		requests.push(request);
 		var response = script.shift();

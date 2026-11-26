@@ -1,6 +1,6 @@
 {
 	"version": 1,
-	"package": { "name": "haxeon-agentkit" },
+	"package": { "name": "haxeon-agentkit", "friends": ["haxeon-agentkit-check"] },
 	"sourceRoots": ["src"],
 	"scopeSourceRoots": false,
 	"publish": { "exclude": ["tests"] },
