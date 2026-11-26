@@ -98,6 +98,20 @@ tag-based enum could not. Per-case constants cover every other use of a number p
 | combinable bits | `enum abstract X(Int) implements Flags` |
 | open (codes from outside that no case may name) | an abstract over `Int` |
 
+### Later: raw values as enums
+
+Considered and deferred (2026-11-26). Keeping raw codes as enum abstracts leaves two constructs for closed sets, and
+the raw form is the weaker one (no payloads, no per-case constants). The simpler end state:
+
+- `enum PixelFormat : Int { Rgba8 = 1; }`, payload-free only, with `rawValue()` and checked `fromRaw()` synthesized as
+  ordinary members. An `Int` raw value is the enum's representation, so native boundaries stay free; `Null<E>` uses a
+  sentinel the domain leaves unused, or boxes when the codes use every bit pattern. `String` codes convert through a
+  table.
+- No user-facing `RawRepresentable` interface: today only its own tests use it as a bound. A generic need later is met
+  by interfaces with static requirements and `Self` ([FUTURE_LANGUAGE.md](FUTURE_LANGUAGE.md)), which raw-value enums
+  satisfy with their synthesized members. The binding generator emits raw-value enums, and the 23 declarations migrate.
+- `Flags` stays separate: combinable bits, with its own synthesis.
+
 ## Not in scope
 
 - GADTs (a case refining the type parameter) and open, extensible enums.
