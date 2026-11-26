@@ -7,8 +7,8 @@ kind, written in a transaction the taken build commits (slice 3b). The IR stages
 through their own mechanisms; "Steps 4 onward" lists them, what each becomes, and the order they move in. Its slices 1 and 2
 are done: the engine has the kinds they move onto (`ComputedQueryKind`, `QuerySummary`), and IR generation, the functions the
 frontend generates, the program's objects and what the frontend reads of each IR function are results in the database; the
-assembly stages are next. ADR 0003 decisions 1, 10 and 14 are the requirements; this note is how. The pass framework (M2) is
-built on this engine.
+assembly stages are next, on the driver and under the cost rule of "Per-access costs and the stage driver". ADR 0003 decisions 1,
+10 and 14 are the requirements; this note is how. The pass framework (M2) is built on this engine.
 
 ## Why now
 
@@ -146,7 +146,8 @@ new key does not rerun every function (`IR_PASS_INVENTORY.md`, Interface, rule 2
 The engine's summary is `QuerySummary`: which keys some contributor names, each contribution an array of keys (a computed
 memo, so one that held is the same array). A stage gives every contributor's contribution in each run between `open` and
 `close`; a contribution that is the array kept costs one comparison, a changed one is applied key by key, and a contributor
-not given is retracted at `close`. A reader reads one key's presence (`has`), or the whole set (`keys`), which changes with
+not given is retracted at `close`. A contribution made of its contributor's input alone is kept without being made while that
+input has not changed since it was given (`holds`). A reader reads one key's presence (`has`), or the whole set (`keys`), which changes with
 any key; only a key that appears or goes changes. A walk over the program (reachability, `IrWalkRecord` today) is a computed
 memo whose reads are the contributions of the functions it reached and the tables it read, verified like any other.
 
@@ -384,7 +385,8 @@ Measured (main-thread instructions, a synthetic warm build of 25 stages over 8,5
 held): today's `IrFunctionStages.run` with `IrLineage` and `IrStageMemo`, for a stage that leaves every function alone and
 reads no fact, costs 421 per function and stage (89.5M a build). The engine costs 226 per key with one read (its input) and
 318 with two (its input and a summary key), before the stage driver's own loop. Slice 3 measures its driver against today's;
-should the held path cost more, a stage visits only the keys whose reads changed.
+should the held path cost more, a stage visits only the keys whose reads changed ("Per-access costs and the stage driver", below,
+measures both drivers with their loops).
 
 Left for slice 3: helpers by name (`IrStageMemos.helper`) as computed keys of interned names; a summary's contributors per key,
 if a step needs which functions name a key and not only whether one does.
@@ -438,7 +440,8 @@ Design changes from the plan, with the reasons:
   body edit inside `put`), so `put` compares with `same` only, and the frontend's readers, which put the module's function
   before reading what it contributes, first check `kept(key) == fn` themselves (`FrontendCompilation.generated`,
   `IrLineage.start`). Even so a contribution read through the engine costs more than the `IrFunctionMemo` lookup it replaced:
-  the generic code's closures for `same` and the casts of its columns.
+  the generic code's closures for `same` and the casts of its columns. Since made concrete ("Per-access costs and the stage
+  driver", below): the kind is `@:generic`, and `put` checks identity itself.
 - **The order of the assembly's input is a result** (`AssemblyOrder`): sorting the names of all functions every build was most
   of collecting them, about 1.9% of a body edit, and the order is a function of the names alone. It is kept and taken while the
   program has the same names, checked by symbol id; a name two modules hold (a helper the module that asked for it first held
@@ -455,6 +458,109 @@ self-compile): the no-op rebuild 0.834G → 0.804G (−3.7%), the body edit 2.32
 788.2 MB. The self-compile: 50.46G → 50.50G instructions (+0.1%), live tables 243.4 → 246.2 MB (the kinds' columns, released
 with the IR before the passes), live IR 237.8 → 237.6 MB, backend 267.0 → 266.7 MB. Without the assembly order the body edit was
 +0.2% and the no-op +0.7%; the blank-line edit is not measured by perf-guard.
+
+### Per-access costs and the stage driver
+
+Before slice 3 moves the per-function stages, the engine's accesses were measured where a stage meets them, in code Haxeon
+compiles (`benchmarks/query-stages`: `StageCostMain` and `measure.py`, main-thread instructions counted as perf-guard counts
+them). About 9,000 functions go through 25 stages in warm builds, today's driver (`IrFunctionStages.run` with `IrLineage`,
+`IrStageMemo` and `IrFacts`, its loops and `IrLineage.start` included) against the engine's (below), in four cases: every
+function held, reading only its input; held, each rewrite having read one or three whole-program facts (today an `IrFacts`
+fact, on the engine a summary key); and every function rewritten because a fact it read changed, to a function equal to the one
+kept (early cutoff). Instructions per function and stage of a warm build:
+
+| Case | Today's driver | Engine, slice 2 | Engine now |
+|---|---|---|---|
+| held, no facts | 376 | 396 | 240 |
+| held, 1 fact | 483 | 1,139 | 413 |
+| held, 3 facts | 555 | 1,323 | 537 |
+| cutoff | 2,987 | 4,476 | 2,421 |
+
+The slice-2 column keeps each contribution as slice 1 planned, a computed memo per function verified and then given. Per access,
+in instructions per key (the first row is the loop the others are measured beyond):
+
+| Access | Slice 2 | Now |
+|---|---|---|
+| new revision, then `put` of the object the key holds | 468 | 92 |
+| `current` of a held key reading its input | 354 | 203 |
+| `current` of a held key reading its input and a summary key | 446 | 265 |
+| `contribute` of the array given last run | 225 | 240 |
+| keeping a contribution: its memo's `current` and `contribute` (slice 2), `holds` (now) | 643 | 109 |
+| computing a key again to an equal value: `begin`, a read of its input, `end` | 2,367 | 949 |
+| `has` in a recording frame | 196 | 123 |
+
+Where it went, from the HashLink code of the compiled engine:
+
+- **The erased kind.** Every `ComputedQueryKind<V>` shared one body with `V` erased: a value was read through the any-array
+  accessor (a call) and cast at the caller, `same` was called through an adapter that casts both arguments before calling the
+  closure, and `==` on `V` was a dynamic comparison. The kind is `@:generic` now, which Haxeon makes per type argument as Haxe
+  does (it took constrained classes only before): values are a typed column, `same` is called directly, and `put` and `end` find
+  the object the key holds by identity before calling it. The readers that compared identity themselves to spare the dynamic
+  comparison (`FrontendCompilation.generated`, `IrLineage.start`) put directly.
+- **Arrays of arrays.** An element of an `Array<Array<Int>>` is checked on each read (`__array_check_cast`, a call). The
+  database kept one array of reads per frame, allocated by every computation: the frames are now one stack of Ints, five per
+  frame, over one buffer of reads, from which a computed kind copies what a computation read into its pool. A computation
+  allocates nothing of the engine's.
+- **Summary reads by call.** A read of a summary key went through `changedAt`, a method call per read. A summary is settled
+  between its runs (`QueryKindBase.settled`): its change column holds every key's change, which a verification reads inline as it
+  reads a key verified in the revision.
+- **Marks on every verification.** `current` marked the key busy and counted the kind's verifications (which keep its pool in
+  place) for every key. It does so only once a read needs a call: a read answered inline cannot come back to the key.
+- **A memo per contribution.** Keeping a held function's contribution cost a verification and a `contribute`, more than the
+  rewrite's own memo. A contribution made of the function alone needs no memo: `QuerySummary.holds` keeps it while the stage's
+  input for that key has not changed since it was given, two Int columns and an inline read.
+- **The recorded kind's walk** (`RecordedQueryKind.latestChange`, the typer's facts) read the reads of the node on top of its path
+  from an array of arrays at every step; they are copied into one buffer of Ints as the node is entered.
+
+Profiled on the body edit (the compile server built ahead of time, perf over four edits), the engine took 2.30% of the compile
+thread and takes 2.07% now. Its computed kinds, which slice 2's users read (`irGeneration` and `irObjects` put by the frontend,
+`irTypeMentions` and `irCalls` read by `retainedFromPrevious` and the helper retention), went from about 1.2% to 0.8%; the casts,
+any-array reads and boxing that were about a fifth of their cost are gone, and what is left is `current` and the comparison of
+an IR made again equal (`put` calling `IrFunctionStateEquality.same`). The rest is the typer's walk over its facts (1.2%), whose
+cost is the walk itself.
+
+On the compiler's own sources (perf-guard, one machine, against origin/main): the no-op rebuild 0.802G → 0.790G instructions
+(−1.4%), the body edit 2.309G → 2.282G to 2.297G over two runs (−1.2% to −0.5%), the signature edit 18.31G → 18.22G (−0.5%),
+the cold self-compile 50.54G → 50.22G (−0.6%); allocation and live data unchanged. A cold check of the small project on the VM
+costs 0.5% more (10.78G → 10.83G): the kind's copies per value type are more code to compile at startup.
+
+**The rule for slice 3.** A stage moves onto the engine only when its held path costs no more than today's, measured in the case
+above nearest to its reads per function, and the body edit and no-op do not get slower. A stage whose held path cannot beat
+today's (one whose rewrites read many keys) does not verify every key: it visits only the keys whose reads changed, the keys its
+input changed in the revision and the readers of the summary keys that changed, and keeps the others as they are. The engine has
+neither list yet (per kind the keys changed in a revision, per summary key its readers); they come with the first stage that needs
+them.
+
+**The stage driver.** Each stage is a `ComputedQueryKind<IrFunction>` keyed by function symbol, whose input is the stage before's
+kind (the first stage's is `irGeneration`):
+
+```
+summary.open(db);                                   // a stage with a whole-program step
+for (fn in functions)
+    if (!summary.holds(db, key(fn), input))           // a contribution made of the function alone
+        summary.contribute(db, key(fn), pass.contribution(fn));
+summary.close(db);
+for (index in 0...functions.length) {
+    var key = key(functions[index]);
+    if (kind.current(db, key))
+        output[index] = kind.value(key);              // check mode: begin, then check against the rewrite
+    else {
+        kind.begin(db, key);
+        output[index] = kind.end(db, key, pass.rewrite(input.get(db, key), db));
+    }
+}
+```
+
+- What a rewrite reads besides its input is a summary key (`has`) or a key of another kind, read through the database, never a
+  string and never a fact print: `prepare`'s whole-program state becomes the summary, `fact` becomes reads of its keys. A
+  contribution that reads more than its function is a computed kind of its own, given with `contribute`.
+- A rewrite that leaves a function alone returns its input: `end` keeps it by identity, without `same`. One that makes an equal
+  function is cut off by `same` (`IrFunctionStateEquality.same`, which `IrLineage.settle` compares today), which gives it the
+  kept object and its change revision: the lineage's versions become `changes`.
+- The held path calls `current` and `value` and nothing else: no closure, no allocation, no interface, no handler.
+- Helpers a rewrite asks for are keys of interned names (slice 1, "Left for slice 3"), added in program order by `finish` as now.
+- `--check-reuse` computes every held key again and compares it (`check`), and makes every contribution `holds` kept and
+  compares it with the one given.
 
 **Net lines (estimate):** about 5,450 deleted and 2,350 added in `src/`, about 3,100 fewer, plus the test mains of
 deleted mechanisms (`IrVerifyMemoMain`, `WarmStageFactsMain`, `StaticNullCheckReuseMain`, `InlinerSession`,
