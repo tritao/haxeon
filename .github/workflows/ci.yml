@@ -134,6 +134,35 @@ jobs:
         # Through the pinned Haxe, as the Debug CRT step below: `haxeon.ps1 dev test-driver` ran silent past the job's hour.
         run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild test 8
 
+      # Builds go through a compile server on Windows too: a second build of a project reuses the first one's. Without one
+      # every build falls back to a one-shot compile and live edits reload instead of patching, which nothing else reports.
+      - name: Compile server on Windows
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          cmake --build out/cmake/windows-msvc --target haxeon-command
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:HAXEON_NATIVE_READY = "1"
+          $haxeon = (Resolve-Path ./scripts/haxeon.ps1).Path
+          $project = Join-Path $env:RUNNER_TEMP "compile-server"
+          New-Item -ItemType Directory -Force -Path $project | Out-Null
+          Push-Location $project
+          & $haxeon create . --template console
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $haxeon build --verbosity=normal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          (Get-Content src/Main.hx -Raw) -replace 'Hello', 'Hello again' | Set-Content src/Main.hx
+          $second = & $haxeon build --verbosity=normal 2>&1 | Out-String
+          $status = $LASTEXITCODE
+          Pop-Location
+          Write-Output $second
+          if ($status -ne 0) { exit $status }
+          if ($second -notmatch 'reusing compiler session') {
+            Write-Error "The second build did not reuse the compile server"
+            exit 1
+          }
+
       # The haxeon path on Windows (the launcher's build check, haxeon.exe, the tool cache, the driver), on two tests and with
       # every stage's output shown as it happens, until it can run the step above. It does not fail the job.
       - name: Test driver through haxeon (diagnostic)
