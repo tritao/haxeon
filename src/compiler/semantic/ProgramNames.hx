@@ -295,18 +295,12 @@ class ProgramNames {
 	/** The `@:discoverMethods` prefixes the classes declare, by class; a subclass takes its base's as the build meets it. */
 	public final discoveryPrefixes:Map<String, Array<String>>;
 
-	/** Type names that every module sees: dotted ones ("pkg.Type") and plain ones ("Type"), attached to each module's table. */
-	public final dottedSourceAliases:Map<String, String>;
-
-	public final plainSourceAliases:Map<String, String>;
-
 	/** Where each module's `using` and each type's `@:using` find static extensions. */
 	public final staticExtensions:StaticExtensionTable;
 
 	/** The alias universe: every name a canonicalization can resolve differently, sorted and joined. */
 	public final universe:String;
 
-	final aliasesByPackage:Map<String, Array<{source:String, declaration:String}>>;
 
 	/** What this was made from: the program's modules, in order, and their names. */
 	final moduleOrder:Array<String>;
@@ -332,9 +326,6 @@ class ProgramNames {
 			moduleTypeStatics = same.moduleTypeStatics;
 			moduleMembers = same.moduleMembers;
 			discoveryPrefixes = same.discoveryPrefixes;
-			dottedSourceAliases = same.dottedSourceAliases;
-			plainSourceAliases = same.plainSourceAliases;
-			aliasesByPackage = same.aliasesByPackage;
 			universe = same.universe;
 			staticExtensions = same.staticExtensions;
 			return;
@@ -348,16 +339,8 @@ class ProgramNames {
 		moduleTypeStatics = [];
 		moduleMembers = [];
 		discoveryPrefixes = [];
-		dottedSourceAliases = [];
-		plainSourceAliases = [];
 		for (index in 0...moduleOrder.length)
 			contributions[index].addTo(this, moduleOrder[index]);
-		aliasesByPackage = indexAliasesByPackage(sourceTypeAliases);
-		for (sourceName => declarationName in sourceTypeAliases)
-			if (sourceName.indexOf(".") >= 0)
-				dottedSourceAliases.set(sourceName, declarationName);
-			else
-				plainSourceAliases.set(sourceName, declarationName);
 		var names = [
 			for (sourceName => declarationName in sourceTypeAliases)
 				sourceName + "=" + declarationName
@@ -432,12 +415,50 @@ class ProgramNames {
 		return null;
 	}
 
+	static function sameMaps<T>(left:Map<String, T>, right:Map<String, T>, same:(T, T) -> Bool):Bool {
+		var count = 0;
+		for (key => value in left) {
+			count++;
+			if (!right.exists(key) || !same(value, right.get(key)))
+				return false;
+		}
+		for (_ in right.keys())
+			count--;
+		return count == 0;
+	}
+
+	static function sameList(left:Array<String>, right:Array<String>):Bool
+		return left.join("\n") == right.join("\n");
+}
+
+/**
+ * What canonicalizing a module reads of `ProgramNames` besides its maps, indexed for one build: made the first time a build
+ * canonicalizes a module again, which a no-op build does not.
+ */
+class ProgramNameIndex {
+	/** Type names that every module sees: dotted ones ("pkg.Type") and plain ones ("Type"), attached to each module's table. */
+	public final dottedSourceAliases:Map<String, String> = [];
+
+	public final plainSourceAliases:Map<String, String> = [];
+
+	final aliasesByPackage:Map<String, Array<{source:String, declaration:String}>>;
+	final visibleByPackage:Map<String, Map<String, String>> = [];
+
+	public function new(names:ProgramNames) {
+		var sourceTypeAliases = names.sourceTypeAliases;
+		aliasesByPackage = indexAliasesByPackage(sourceTypeAliases);
+		for (sourceName => declarationName in sourceTypeAliases)
+			if (sourceName.indexOf(".") >= 0)
+				dottedSourceAliases.set(sourceName, declarationName);
+			else
+				plainSourceAliases.set(sourceName, declarationName);
+	}
+
 	/**
 	 * The type names visible from package `packageName` without an import: its own types and its enclosing packages', each by its
-	 * name relative to the package and by its simple name, the nearest package first. `visibleByPackage` keeps them for a build.
+	 * name relative to the package and by its simple name, the nearest package first.
 	 */
-	public function visibleTypes(packageName:String,
-			visibleByPackage:Map<String, Map<String, String>>):Map<String, String> {
+	public function visibleTypes(packageName:String):Map<String, String> {
 		var known = visibleByPackage.get(packageName);
 		if (known != null)
 			return known;
@@ -495,18 +516,4 @@ class ProgramNames {
 		return index;
 	}
 
-	static function sameMaps<T>(left:Map<String, T>, right:Map<String, T>, same:(T, T) -> Bool):Bool {
-		var count = 0;
-		for (key => value in left) {
-			count++;
-			if (!right.exists(key) || !same(value, right.get(key)))
-				return false;
-		}
-		for (_ in right.keys())
-			count--;
-		return count == 0;
-	}
-
-	static function sameList(left:Array<String>, right:Array<String>):Bool
-		return left.join("\n") == right.join("\n");
 }

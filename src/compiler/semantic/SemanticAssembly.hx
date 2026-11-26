@@ -90,7 +90,16 @@ class SemanticAssembly {
 			session.aliasUniverseRevision = facts.revision;
 		}
 		var aliasRevision = session.aliasUniverseRevision;
-		var visibleByPackage:Map<String, Map<String, String>> = [];
+		// What canonicalizing a module reads besides the names' maps, indexed the first time a module is canonicalized again.
+		var nameIndex:Null<ProgramNames.ProgramNameIndex> = null;
+		function index():ProgramNames.ProgramNameIndex {
+			var made = nameIndex;
+			if (made == null) {
+				made = new ProgramNames.ProgramNameIndex(programNames);
+				nameIndex = made;
+			}
+			return made;
+		}
 		var reuseModuleContributions = !changesDiscoveredMethods(structuralChanged);
 		// The `@:discoverMethods` prefixes, with those a class takes from its base, which only a module canonicalized again reads:
 		// found the first time one is.
@@ -173,7 +182,7 @@ class SemanticAssembly {
 			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
 			// Unpackaged names wait until the current package's own types are in:
 			// in `package nav`, a plain `Path` is `nav.Path`, as in Haxe.
-			aliases.attach(programNames.dottedSourceAliases);
+			aliases.attach(index().dottedSourceAliases);
 			var constructorTargets:Map<String, String> = [],
 				ambiguousConstructors:Map<String, Bool> = [];
 			for (imported in ast.imports) {
@@ -235,13 +244,13 @@ class SemanticAssembly {
 			}
 			var visiblePackage = ast.packageName;
 			if (visiblePackage != null) {
-				var packageTypes = programNames.visibleTypes(visiblePackage, visibleByPackage);
+				var packageTypes = index().visibleTypes(visiblePackage);
 				// A name an import would silently take from this package resolves to a marker the typer reports where it is used.
 				for (name => marker in ImportShadowing.ambiguousNames(ast, importedTypes, packageTypes))
 					aliases.set(name, marker);
 				aliases.attach(packageTypes);
 			}
-			aliases.attach(programNames.plainSourceAliases);
+			aliases.attach(index().plainSourceAliases);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			// Enum constructors imported through their enum type are expression aliases, so a type of the same name keeps it in
 			// type positions such as `new Tabs()`. In an expression an imported constructor comes before a type of the package or
