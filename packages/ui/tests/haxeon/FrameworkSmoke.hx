@@ -895,6 +895,8 @@ class FrameworkSmoke {
 		if (!interactionChangesReuseStorage()) return 309;
 		if (!propertyInputContrastValid(fonts)) return 301;
 		if (!defaultTextFieldContrastValid(fonts)) return 303;
+		if (!localDefaultValueOverridesTheme(fonts))
+			throw "a widget style's default-equal value did not override the theme's rule";
 		if (!tabHierarchyValid(fonts)) return 302;
 		if (context.buildContext.fonts != fonts) return 30;
 		if (!commandHistoryValid(context)) return 230;
@@ -4379,6 +4381,27 @@ class FrameworkSmoke {
 			if (!valid) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * A widget's style overrides the theme in each field it assigns, a value equal to LayoutStyle's default included: the
+	 * theme gives text fields a background, and a field asked for a transparent one gets it.
+	 */
+	static function localDefaultValueOverridesTheme(fonts:FontCollection):Bool {
+		var theme = haxeon.ui.theme.Theme.light();
+		var context = new UiContext(null, fonts, theme);
+		var style = new LayoutStyle();
+		style.width = LayoutAxis.fixed(200.0);
+		style.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
+		var root = context.submit(new TextField("transparent-field", "Text", null, style),
+			new LayoutFrame(280.0, 48.0));
+		var background:Color = root.computedStyle.getColor(haxeon.ui.style.StyleProperty.Background);
+		context.dispose();
+		var plain = new UiContext(null, fonts, theme);
+		var unset = plain.submit(new TextField("themed-field", "Text"), new LayoutFrame(280.0, 48.0));
+		var themed:Color = unset.computedStyle.getColor(haxeon.ui.style.StyleProperty.Background);
+		plain.dispose();
+		return background != null && background.alpha == 0.0 && themed != null && themed.alpha == 1.0;
 	}
 
 	/** Retained readers are dirtied by the signals they read, without state revision snapshots. */

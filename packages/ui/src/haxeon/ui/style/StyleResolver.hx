@@ -311,16 +311,18 @@ internal class StyleResolver {
 		}
 	}
 
-	/** LayoutStyle's defaults, for applyLocal to find which fields a local style sets; never changed. */
-	static final localDefaults:LayoutStyle = new LayoutStyle();
-	/** The LayoutStyle fields the last applyLocal checked: every one, unless a new field has no style property yet. */
+	/**
+	 * The LayoutStyle fields the last applyLocal checked: every style field, unless a new one has no style property yet
+	 * (`assigned` is the record of them, not a field to apply).
+	 */
 	public static var localFieldsHandled(default, null):Int = 0;
 
+	/** Applies the fields the widget's style assigned, over the theme's and stylesheet's rules. */
 	function applyLocal(result:ComputedStyle, local:Null<LayoutStyle>):Void {
 		if (local == null)
 			return;
 		var source = new StyleSource("local", "widget", -1, "local");
-		var changed = haxeon.Diff.mask(local, localDefaults);
+		var changed = local.assigned;
 		// `handled` collects every field checked here, for localFieldsHandled.
 		var handled = 0, bit = 0;
 		bit = haxeon.Diff.bit(\LayoutStyle.width);

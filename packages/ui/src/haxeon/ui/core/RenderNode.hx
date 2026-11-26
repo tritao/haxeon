@@ -432,7 +432,7 @@ class RenderNode {
 			if (owner != null) built.children[index] = owner.currentRoot(child);
 		}
 		// A rebuild that changed nothing the frame comparison reads (typing in a field whose appearance stays) is compared with the node itself.
-		var styleChanged = haxeon.Diff.mask(built.style, fresh.layout.style) != 0;
+		var styleChanged = (haxeon.Diff.mask(built.style, fresh.layout.style) & LayoutStyle.valueFields) != 0;
 		// The layout is only shared with the stand-in when the rebuild leaves the style as it is.
 		var prior = this;
 		if (styleChanged || appearanceChanged(fresh, built)) {
@@ -1014,7 +1014,7 @@ class RenderNode {
 
 	/** Whether every LayoutStyle field invalidates something when it changes: a new field must join a group above. */
 	public static function styleFieldsClassified():Bool return (StyleLayoutFields
-		| StylePaintFields | StyleHitFields | StyleTransformFields) == haxeon.Diff.all(LayoutStyle);
+		| StylePaintFields | StyleHitFields | StyleTransformFields) == LayoutStyle.valueFields;
 
 	/** Classifies concrete LayoutNode mutations that bypass computed styles. */
 	function layoutInputDiffFlags(previous:RenderNode):UiDirtyFlag {

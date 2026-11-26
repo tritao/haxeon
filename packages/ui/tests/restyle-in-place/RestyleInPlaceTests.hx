@@ -1903,7 +1903,7 @@ private class UpdatingResources implements View {
 		// The frame comparison and local style resolution name LayoutStyle fields by hand; each must name every one.
 		check(RenderNode.styleFieldsClassified(),
 			"A LayoutStyle field is in no invalidation group of the frame comparison");
-		check(haxeon.ui.style.StyleResolver.localFieldsHandled == haxeon.Diff.all(LayoutStyle),
+		check(haxeon.ui.style.StyleResolver.localFieldsHandled == LayoutStyle.valueFields,
 			"A LayoutStyle field has no style property in local style resolution");
 		var style = new LayoutStyle();
 		style.padding = new haxeon.ui.Insets(1.0, 2.0, 3.0, 4.0);
