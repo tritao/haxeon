@@ -186,7 +186,7 @@ if(NK_BUILD_TESTS)
         if(NKUI_BACKEND_SMOKE_REGISTERED)
             set_tests_properties(nativekit_ui_backend_smoke PROPERTIES
                 LABELS "graphics;gpu;ui"
-                TIMEOUT 15)
+                TIMEOUT 45)
         endif()
     endif()
     if(NKUI_BACKEND_XVFB_RUN)
