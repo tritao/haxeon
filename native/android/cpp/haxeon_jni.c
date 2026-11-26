@@ -237,9 +237,8 @@ Java_org_haxeon_android_MainActivity_nativeApplyReload(JNIEnv *env, jclass clazz
     }
     payload_offset += module_size;
     const unsigned char *identity = bundle + payload_offset;
+    /* hl_runtime_module_load checks the identity's version and contents. */
     if (identity_size < 28 || memcmp(identity, "HLI", 3) != 0
-        || (identity[3] != 2 && identity[3] != 3)
-        || (identity[3] == 3 && identity_size < 32)
         || (size_t)identity_size != (size_t)length - payload_offset) {
         free(bundle);
         return HL_RUNTIME_BAD_FORMAT;

@@ -16,7 +16,6 @@ import compiler.hl.patch.HlPatchReader;
 import compiler.hl.patch.HlPatchWriter;
 import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
-import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.ir.codec.IrFunctionStateCodec;
 import runtime.LoadedModule;
@@ -557,7 +556,7 @@ class HotReloadMain {
 		var indices:Map<String, Int> = [], ids:Map<String, Int> = [];
 		indices.set("__init", 0);
 		ids.set("__init", compiler.hl.incremental.HlFunctionCache.INIT_STABLE_ID);
-		var identity = HlRuntimeIdentity.encode(moduleId, 1, indices, ids),
+		var identity = DenseRuntimeIdentity.encode(moduleId, 1, indices, ids),
 			invalidInitializer = identity.sub(0, identity.length);
 		invalidInitializer.setInt32(28, 1);
 		try {
@@ -839,7 +838,8 @@ class HotReloadMain {
 		indices.set("value", 0);
 		ids.set("value", 71000);
 		bySlot.set(0, 71000);
-		var loaded = Runtime.load(HlWriter.encode(code).flatten(), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
+		var loaded = Runtime.load(HlWriter.encode(code).flatten(),
+			DenseRuntimeIdentity.encode(moduleId, 1, indices, ids));
 		var initialCapacity = Runtime.metadataTypeCapacity(loaded);
 		if (Runtime.metadataTypeCount(loaded) != code.types.length || initialCapacity - code.types.length != 65536)
 			throw "type arena did not expose its fixed append reserve";
@@ -934,7 +934,8 @@ class HotReloadMain {
 		indices.set("value", 0);
 		ids.set("value", 70000);
 		bySlot.set(0, 70000);
-		var loaded = Runtime.load(HlWriter.encode(code).flatten(), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
+		var loaded = Runtime.load(HlWriter.encode(code).flatten(),
+			DenseRuntimeIdentity.encode(moduleId, 1, indices, ids));
 		code.ints.push(2);
 		code.floats.push(3.5);
 		code.strings.push("new symbol");

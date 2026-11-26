@@ -338,8 +338,8 @@ class HashLinkBackendSession implements BackendSession {
 				module: assembly.module,
 				functionIndices: CompilationContext.copyIndices(functionIndices),
 				functionIds: CompilationContext.copyIndices(stableIds),
-				runtimeIdentity: HlRuntimeIdentity.encode(context.moduleId, assembly.revision, functionIndices,
-					stableIds),
+				runtimeIdentity: HlRuntimeIdentity.encode(context.moduleId, assembly.revision,
+					functionIndices.exists(HlRuntimeIdentity.INITIALIZER)),
 				patchBytes: patchBytes,
 				sections: sections
 			}),

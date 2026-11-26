@@ -28,7 +28,15 @@ class HlRuntimeIdentity {
 	 */
 	public static inline final VERSION = 9;
 
-	public static inline final RUNTIME_VERSION = 3;
+	/**
+	 * HLI 4: the module id, the revision and the name of the module's initializer. The loader gives every function its stable id
+	 * (`hl_runtime_module_function_id` finds one by name), so the identity lists none.
+	 */
+	public static inline final RUNTIME_VERSION = 4;
+
+	/** The function a module runs when it loads, when it has one. */
+	public static inline final INITIALIZER = "__init";
+
 	@:processWide("makes each identity this process mints distinct; a process-wide counter by design")
 	static var sequence = 1;
 
@@ -41,30 +49,21 @@ class HlRuntimeIdentity {
 		return out;
 	}
 
-	public static function encode(moduleId:Bytes, revision:Int, indices:Map<String, Int>,
-			stableIds:Map<String, Int>):Bytes {
+	/** The HLI of revision `revision` of module `moduleId`; `initialized` says whether the module has an initializer to run. */
+	public static function encode(moduleId:Bytes, revision:Int, initialized:Bool):Bytes {
 		if (moduleId.length != 16)
 			throw new InternalError("Module ID must contain 16 bytes");
 		if (revision < 0)
 			throw new InternalError("Runtime revision cannot be negative");
-		var names = [for (name in stableIds.keys()) if (indices.exists(name)) name];
-		names.sort(Reflect.compare);
+		var initializer = Bytes.ofString(initialized ? INITIALIZER : "");
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		out.writeString("HLI");
 		out.writeByte(RUNTIME_VERSION);
 		out.write(moduleId);
 		out.writeInt32(revision);
-		out.writeInt32(names.length);
-		var initIndex = indices.get("__init");
-		out.writeInt32(initIndex == null ? -1 : initIndex);
-		for (name in names) {
-			var stableId = stableIds.get(name), index = indices.get(name);
-			if (stableId == null || index == null)
-				throw new InternalError('Missing runtime identity mapping for "$name"');
-			out.writeInt32(stableId);
-			out.writeInt32(index);
-		}
+		out.writeInt32(initializer.length);
+		out.write(initializer);
 		return out.getBytes();
 	}
 

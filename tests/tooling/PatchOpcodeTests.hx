@@ -9,7 +9,6 @@ import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchFormat;
 import compiler.hl.patch.HlPatchReader;
 import compiler.hl.patch.HlPatchWriter;
-import compiler.hl.persistence.HlRuntimeIdentity;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesOutput;
 import runtime.PatchSet;
@@ -268,7 +267,7 @@ class PatchOpcodeTests {
 			moduleId = HaxeBytes.alloc(16);
 		code.globals = [1];
 		var loaded = Runtime.load(HlWriter.encode(code).flatten(),
-			HlRuntimeIdentity.encode(moduleId, 1, ["main" => 0], ["main" => 70000]));
+			DenseRuntimeIdentity.encode(moduleId, 1, ["main" => 0], ["main" => 70000]));
 		var invalid:Array<HlInstruction> = [
 			Mod(1, 0, 0),
 			ShiftLeft(0, 1, 0),
@@ -412,7 +411,7 @@ class PatchOpcodeTests {
 
 	static function loadStrings():runtime.LoadedModule
 		return Runtime.load(HlWriter.encode(stringModule()).flatten(),
-			HlRuntimeIdentity.encode(HaxeBytes.alloc(16), 1, ["main" => 0], ["main" => 70000]));
+			DenseRuntimeIdentity.encode(HaxeBytes.alloc(16), 1, ["main" => 0], ["main" => 70000]));
 
 	static function readIndexAt(bytes:HaxeBytes, position:Int):{value:Int, next:Int} {
 		var first = bytes.get(position);
