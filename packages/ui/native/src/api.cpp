@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <condition_variable>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -563,8 +564,13 @@ void retain_text_engine(const std::shared_ptr<nkui::TextEngine> &engine,
     owners.push_back(engine);
 }
 
-struct DeferredRendererDestroy {
+/* A renderer's backend handed to the render thread to release. The waiting caller and the task
+   share it. */
+struct RendererRelease {
     std::unique_ptr<nkui::UiRenderer> renderer;
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool released = false;
 };
 
 void record_render_submission_stat(nkui_renderer renderer,
@@ -585,13 +591,47 @@ uint64_t elapsed_ns(uint64_t start, uint64_t end) noexcept {
     return end >= start ? end - start : 0;
 }
 
-void destroy_deferred_renderer(void *data) noexcept {
-    delete static_cast<DeferredRendererDestroy *>(data);
+void NK_CALL run_renderer_release(void *data) {
+    (*static_cast<std::shared_ptr<RendererRelease> *>(data))->renderer.reset();
 }
 
-void NK_CALL run_deferred_renderer_destroy(void *data) {
-    auto *destroy = static_cast<DeferredRendererDestroy *>(data);
-    destroy->renderer.reset();
+/* Runs after the task, or instead of it when a stopping executor discards it, so the caller
+   always wakes. */
+void finish_renderer_release(void *data) noexcept {
+    auto *task = static_cast<std::shared_ptr<RendererRelease> *>(data);
+    auto &release = **task;
+    release.renderer.reset();
+    {
+        std::lock_guard<std::mutex> lock(release.mutex);
+        release.released = true;
+    }
+    release.condition.notify_all();
+    delete task;
+}
+
+/* Releases a renderer's backend before returning, on every platform: a surface cannot close while
+   its GPU resources remain. With a render thread the backend belongs to that thread, so the
+   release runs there, after the work queued before it that still uses the backend. */
+void release_renderer_backend(std::unique_ptr<nkui::UiRenderer> renderer) {
+    if (!renderer)
+        return;
+    if (!nk::core::render_executor_physical() || nk_executor_is_current(NK_EXECUTOR_RENDER)) {
+        renderer.reset();
+        return;
+    }
+    auto release = std::make_shared<RendererRelease>();
+    release->renderer = std::move(renderer);
+    auto *task = new std::shared_ptr<RendererRelease>(release);
+    if (nk::core::dispatch_to_render(&run_renderer_release, task, &finish_renderer_release,
+                                     sizeof(RendererRelease)) != NK_OK) {
+        /* An executor that is not running, or is stopping, takes no task; nothing else uses the
+           backend then. */
+        release->renderer.reset();
+        delete task;
+        return;
+    }
+    std::unique_lock<std::mutex> lock(release->mutex);
+    release->condition.wait(lock, [&] { return release->released; });
 }
 
 bool render_sealed_submission(RenderSubmission &submission, bool target_bound = false) {
@@ -3641,40 +3681,33 @@ extern "C" nkui_result nkui_renderer_get_gpu_renderer(
 }
 
 extern "C" nkui_result nkui_renderer_destroy(nkui_renderer renderer) {
-    std::lock_guard<std::mutex> lock(renderers_mutex);
-    auto *slot = resolve(renderer);
-    if (!slot)
-        return NKUI_ERROR_INVALID_HANDLE;
-    if (slot->frame_steps)
-        return NKUI_ERROR_RESOURCE_LIMIT;
-    std::unique_lock<std::shared_mutex> execution_lock;
-    if (nk::core::render_executor_physical())
-        execution_lock = std::unique_lock<std::shared_mutex>(renderer_execution_mutex);
-    if (nk::core::render_executor_physical() && slot->renderer) {
-        auto *destroy = new DeferredRendererDestroy{std::move(slot->renderer)};
-        if (nk::core::dispatch_to_render(&run_deferred_renderer_destroy, destroy,
-                                         &destroy_deferred_renderer,
-                                         sizeof(DeferredRendererDestroy)) != NK_OK) {
-            /* Keep destruction on the owning thread if the runtime is already
-               shutting down and cannot accept another render task. */
-            destroy->renderer.reset();
-            delete destroy;
-        }
-    } else {
-        slot->renderer.reset();
+    std::unique_ptr<nkui::UiRenderer> backend;
+    {
+        std::lock_guard<std::mutex> lock(renderers_mutex);
+        auto *slot = resolve(renderer);
+        if (!slot)
+            return NKUI_ERROR_INVALID_HANDLE;
+        if (slot->frame_steps)
+            return NKUI_ERROR_RESOURCE_LIMIT;
+        std::unique_lock<std::shared_mutex> execution_lock;
+        if (nk::core::render_executor_physical())
+            execution_lock = std::unique_lock<std::shared_mutex>(renderer_execution_mutex);
+        backend = std::move(slot->renderer);
+        slot->backend_api = 0;
+        slot->backend_device = {};
+        slot->backend_native_device = 0;
+        slot->active = false;
+        slot->custom_effects.clear();
+        slot->registered_custom_effects = 0;
+        clear_path_cache(*slot);
+        slot->retired_gpu = {};
+        slot->stats = {};
+        slot->generation = static_cast<uint16_t>(slot->generation + 1);
+        if (!slot->generation)
+            slot->generation = 1;
     }
-    slot->backend_api = 0;
-    slot->backend_device = {};
-    slot->backend_native_device = 0;
-    slot->active = false;
-    slot->custom_effects.clear();
-    slot->registered_custom_effects = 0;
-    clear_path_cache(*slot);
-    slot->retired_gpu = {};
-    slot->stats = {};
-    slot->generation = static_cast<uint16_t>(slot->generation + 1);
-    if (!slot->generation)
-        slot->generation = 1;
+    /* Released without the locks: the render work queued before the release takes them. */
+    release_renderer_backend(std::move(backend));
     return NKUI_OK;
 }
 

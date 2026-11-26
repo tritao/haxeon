@@ -99,6 +99,32 @@ jobs:
           name: nativekit-ui-web-visual-diffs
           path: packages/ui/build-web/visual-diffs/*.png
 
+  # Windows and macOS render on a thread of their own, which the Linux backend does not have.
+  ui-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2022, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Set up Windows toolchain
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install Ninja
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - name: Build the UI native renderer test
+        run: >-
+          cmake -S packages/ui/native -B out/packages/ui/native-tests -GNinja
+          -DCMAKE_BUILD_TYPE=Debug -DNK_BUILD_SHARED=OFF -DNK_BUILD_TESTS=ON -DNK_BUILD_EXAMPLES=OFF &&
+          cmake --build out/packages/ui/native-tests --target nativekit_ui_backend_smoke_test
+      - name: Run the UI native renderer test
+        run: ctest --test-dir out/packages/ui/native-tests -R nativekit_ui_backend_smoke --output-on-failure --timeout 600
+
   audio:
     runs-on: ubuntu-latest
     timeout-minutes: 30

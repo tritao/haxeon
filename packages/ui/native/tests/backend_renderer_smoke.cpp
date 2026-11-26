@@ -8,6 +8,7 @@
 #include "adapter_internal.h"
 #include "core/executor.hpp"
 #include "core/frame_backend.hpp"
+#include "core/graphics_image_registry.h"
 #include "testing.h"
 
 #include <chrono>
@@ -797,12 +798,6 @@ bool run_shutdown_orphan_completion_test() {
     }
     renderer = {};
     list = {};
-    RenderTask destroy_barrier{};
-    destroy_barrier.function = [](RenderTask &task) noexcept { task.success = true; };
-    if (!dispatch_render_task(destroy_barrier)) {
-        shutdown_runtime();
-        return false;
-    }
 
     shutdown_runtime();
     if (!check(nk::core::frame_ticket_count() == 0, "shutdown orphan frame tickets cleared"))
@@ -836,6 +831,100 @@ bool run_shutdown_orphan_completion_test() {
         return fail("destroy reinitialized shutdown orphan runtime");
     shutdown_runtime();
     return true;
+}
+
+/*
+ * Destroying a renderer releases its GPU resources before it returns, as an app's shutdown needs:
+ * it closes the surface next, which fails while the device is still retained. The render thread is
+ * busy with earlier work when the renderer is destroyed, so a destroy that only queued the release
+ * would return with the device still held.
+ */
+bool run_renderer_release_test() {
+    if (!nk::core::render_executor_physical())
+        return true;
+
+    nk_init_options init{};
+    init.struct_size = sizeof(init);
+    init.api_version = NK_API_VERSION;
+    if (!check(nk_init(&init) == NK_OK, "renderer release nk_init"))
+        return false;
+    nk_window window{};
+    nk_surface surface{};
+    nkui_display_list list{};
+    nkui_renderer renderer{};
+    BlockingRenderTask blocker{};
+    auto release_blocker = [&blocker] {
+        {
+            std::lock_guard lock(blocker.mutex);
+            blocker.release = true;
+        }
+        blocker.condition.notify_one();
+    };
+    const bool success = [&] {
+        nk_window_options options{};
+        options.struct_size = sizeof(options);
+        options.width = 256;
+        options.height = 192;
+        options.title = "NativeKit renderer release smoke";
+        int32_t width = 0;
+        int32_t height = 0;
+        nk_surface_frame_target target{};
+        if (!check(nk_window_create(&options, &window) == NK_OK,
+                   "create renderer release window") ||
+            !check(nkgpu_surface_create(window, options.width, options.height, &surface) ==
+                       NKGPU_OK,
+                   "create renderer release surface") ||
+            !wait_surface_ready(window, surface, width, height, target) ||
+            !check(nkui_display_list_create(&list) == NKUI_OK,
+                   "create renderer release display list") ||
+            !check(nkui_renderer_create(&renderer) == NKUI_OK,
+                   "create renderer release renderer"))
+            return false;
+        const nkui_frame_info frame{sizeof(frame),
+                                    static_cast<float>(options.width),
+                                    static_cast<float>(options.height),
+                                    width,
+                                    height,
+                                    1.0f};
+        RenderTask barrier{};
+        barrier.function = [](RenderTask &task) noexcept { task.success = true; };
+        if (!check(nkui_renderer_render_frame(renderer, list, surface, &frame) == NKUI_OK,
+                   "render before the renderer release") ||
+            !dispatch_render_task(barrier) ||
+            !check(nk_core_graphics_device_has_references(target.device) != 0,
+                   "the rendered renderer retains the device") ||
+            !start_blocking_render_task(blocker))
+            return false;
+        std::thread releaser([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            release_blocker();
+        });
+        const nkui_result destroyed = nkui_renderer_destroy(renderer);
+        releaser.join();
+        if (!check(destroyed == NKUI_OK, "destroy the renderer while the render thread is busy"))
+            return false;
+        renderer = {};
+        return check(nk_core_graphics_device_has_references(target.device) == 0,
+                     "the renderer released the device before its destroy returned");
+    }();
+    release_blocker();
+    // The surface closes right after the renderer, as in an app's shutdown.
+    bool closed = true;
+    if (renderer.id)
+        (void)nkui_renderer_destroy(renderer);
+    if (list.id)
+        closed = check(nkui_display_list_destroy(list) == NKUI_OK,
+                       "destroy renderer release display list") &&
+                 closed;
+    if (surface)
+        closed = check(nk_surface_destroy(surface) == NK_OK,
+                       "close the surface after the renderer") &&
+                 closed;
+    if (window)
+        closed = check(nk_window_destroy(window) == NK_OK, "close the window after the renderer") &&
+                 closed;
+    nk_shutdown();
+    return success && closed;
 }
 
 } // namespace
@@ -1657,5 +1746,7 @@ cleanup:
         nk_shutdown();
     if (!result && !run_shutdown_orphan_completion_test())
         result = 35;
+    if (!result && !run_renderer_release_test())
+        result = 36;
     return result;
 }
