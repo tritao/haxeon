@@ -302,8 +302,14 @@ function checkCompiler(root:String, aot:Bool):Void {
 		fail('the compiler was built from sources: $built');
 	if (!WINDOWS) {
 		var worker = aot ? '$root/bin/haxeon-aot serve' : '$root/bin/hl $root/bin/haxeon-compiler.hl serve';
-		if (execute("pgrep", ["-f", worker], work).status != 0)
-			fail('no compile server of the expected compiler (AOT: $aot) is running');
+		if (execute("pgrep", ["-f", worker], work).status != 0) {
+			var running = [
+				for (line in execute("ps", ["-ax", "-o", "command="], work).out.split("\n"))
+					if (line.indexOf("haxeon") >= 0 || line.indexOf(" serve") >= 0) line
+			];
+			fail('no compile server of the expected compiler (AOT: $aot) is running: expected "$worker", running:\n'
+				+ running.join("\n"));
+		}
 	}
 }
 
