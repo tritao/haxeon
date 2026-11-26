@@ -7,12 +7,18 @@ import nativekit.ffi.NativeKitAudioTypes;
 
 /** Configures the optional filter component of a DSP patch. */
 class DspFilterOptions {
+	/** The filter, or None. */
 	public var type:DspFilterType = DspFilterType.None;
+
+	/** Its cutoff frequency. */
 	public var cutoffHz:Float = 0.0;
+
+	/** How much it emphasizes the cutoff. */
 	public var resonance:Float = 0.0;
 	/** Nonlinear saturation, [0, 1]; zero gives a linear resonance response. */
 	public var drive:Float = 0.5;
 
+	/** No filter. */
 	public function new() {}
 
 	/** Nominal linear SVF Q, [0.5, 100]. Drive suppresses the measured resonance peak. */

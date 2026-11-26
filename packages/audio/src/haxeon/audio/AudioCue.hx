@@ -263,6 +263,7 @@ class AudioCue implements Disposable {
 			throw failure;
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

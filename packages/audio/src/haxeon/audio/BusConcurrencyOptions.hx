@@ -15,6 +15,7 @@ class BusConcurrencyOptions {
 	/** Keeps admitted voices advancing silently until capacity becomes available. */
 	public var virtualize:Bool = false;
 
+	/** Options with no voice limit. */
 	public function new() {}
 
 	@:allow(haxeon.audio.Bus)

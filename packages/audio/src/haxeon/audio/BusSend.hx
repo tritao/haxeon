@@ -17,10 +17,14 @@ class BusSend implements Disposable {
 		this.owned = owned;
 		value = owned.borrow();
 	}
+
+	/** Sets how much of the bus's signal it sends. */
 	public function setVolume(volume:Float):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_send_set_volume(value, volume), "audio.send.setVolume");
 	}
+
+	/** How much it sends. */
 	public function volume():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_send_get_volume(value);
@@ -34,6 +38,8 @@ class BusSend implements Disposable {
 		if (status != null && status != Result.ErrorInvalidHandle)
 			AudioResult.check(status, "audio.send.dispose");
 	}
+
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool return disposed;
 	function ensureLive():Void {
 		if (disposed) throw BindingError.disposed("BusSend.ensureLive", "Audio send has been disposed");

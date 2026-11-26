@@ -18,6 +18,7 @@ private typedef CachedBank = {
 	var stamp:Float;
 }
 
+/** Counts for a SoundFont cache: what it holds and how its loads went. */
 typedef SoundFontCacheStats = {
 	var banks:Int;
 	var loading:Int;
@@ -49,6 +50,7 @@ class SoundFontCache implements Disposable {
 	var failedLoads = 0;
 	var closed = false;
 
+	/** A cache keeping at most `maxBanks` banks and `maxSourceBytes` bytes of their files. */
 	public function new(maxBanks:Int = 4, maxSourceBytes:Int = 8 * 1024 * 1024) {
 		if (maxBanks < 1 || maxBanks > 64 || maxSourceBytes < 1 || maxSourceBytes > 512 * 1024 * 1024)
 			throw BindingError.invalidArgument("SoundFontCache.new", "Invalid SoundFont cache limits");
@@ -181,6 +183,8 @@ class SoundFontCache implements Disposable {
 		condition.release();
 		if (close) entry.font.dispose();
 	}
+
+	/** Its counts. */
 	public function stats():SoundFontCacheStats {
 		condition.acquire();
 		var loading = 0;
@@ -244,19 +248,23 @@ class SoundFontLease implements Disposable {
 	function ensureLive():Void {
 		if (disposed) throw BindingError.disposed("SoundFontLease.ensureLive", "SoundFont lease disposed");
 	}
+
+	/** The bank's presets. */
 	public function presets():Array<SoundFontPresetInfo> {
 		ensureLive();
 		return [for (info in entry.inventory) {
 			index: info.index, bank: info.bank, program: info.program, name: info.name
 		}];
 	}
+
+	/** Preset `index`, played at `gain`, valid while the lease is. */
 	public function preset(index:Int, gain:Float = 1):InstrumentDefinition {
 		ensureLive();
 		if (index < 0 || index >= entry.inventory.length || !Math.isFinite(gain) || gain < 0 || gain > 4)
 			throw BindingError.invalidArgument("SoundFontLease.preset", "Invalid cached SoundFont preset");
 		return new LeasedPreset(this, index, gain);
 	}
-	public function createInstrument(engine:DspEngine, index:Int, gain:Float = 1):DspInstrument {
+	internal function createInstrument(engine:DspEngine, index:Int, gain:Float = 1):DspInstrument {
 		ensureLive();
 		var font:SoundFont = cast entry.font;
 		return font.preset(index, gain).createInstrument(engine);

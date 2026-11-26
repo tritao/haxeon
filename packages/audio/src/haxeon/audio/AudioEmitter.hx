@@ -24,6 +24,7 @@ class AudioEmitter implements Disposable {
 	var velocity:Vector3 = Vector3.zero();
 	var disposed:Bool = false;
 
+	/** An emitter playing `cue` in space; `events` tell it when its voices finish. */
 	public function new(cue:AudioCue, events:EventPump) {
 		if (cue == null)
 			throw BindingError.invalidArgument("AudioEmitter.new", "Audio emitter cue must not be null");
@@ -147,6 +148,7 @@ class AudioEmitter implements Disposable {
 			throw failure;
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

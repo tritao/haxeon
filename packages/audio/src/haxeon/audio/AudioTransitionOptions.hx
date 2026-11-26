@@ -9,5 +9,6 @@ class AudioTransitionOptions {
 	/** Seconds to wait before starting the transition. */
 	public var delaySeconds:Float = 0.0;
 
+	/** Options with the default fade times. */
 	public function new() {}
 }

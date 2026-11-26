@@ -5,7 +5,10 @@ import nativekit.ffi.NativeKitAudioTypes;
 
 /** Configures the pitched oscillator component of a DSP patch. */
 class DspOscillatorOptions {
+	/** Its wave shape. */
 	public var waveform:DspWaveform = DspWaveform.Sine;
+
+	/** Its level, from 0. */
 	public var level:Float = 1.0;
 
 	/** Optional immutable wavetable source; null selects the built-in waveform. */
@@ -15,6 +18,7 @@ class DspOscillatorOptions {
 	/** Initial and automatable normalized phase offset. */
 	public var phase:Float = 0.0;
 
+	/** A full-level sine oscillator. */
 	public function new() {}
 
 	@:allow(haxeon.audio.DspPatchBuilder)

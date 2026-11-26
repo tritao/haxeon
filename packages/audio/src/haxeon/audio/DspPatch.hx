@@ -24,7 +24,7 @@ class DspPatch implements InstrumentDefinition implements Disposable {
 	public static function builder():DspPatchBuilder
 		return new DspPatchBuilder();
 
-	public function nativeHandle():DspPatchHandle {
+	internal function nativeHandle():DspPatchHandle {
 		ensureLive();
 		return value;
 	}
@@ -47,6 +47,7 @@ class DspPatch implements InstrumentDefinition implements Disposable {
 			throw new NativeKitError(status, "audio.dsp.patch.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

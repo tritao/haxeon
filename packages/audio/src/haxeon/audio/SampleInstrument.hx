@@ -11,6 +11,11 @@ import nativekit.ffi.NativeKitAudioTypes;
 class SampleInstrument implements InstrumentDefinition {
 	final samples:Array<Float>;
 	final options:NativeDspSampleOptions;
+
+	/**
+	 * An instrument playing `samples` at `rootNote`, interleaved over `channels`, looping between the loop frames when
+	 * they differ.
+	 */
 	public function new(samples:Array<Float>, sampleRate:Int, channels:Int = 1,
 			rootNote:Int = 60, gain:Float = 1, loopStartFrame:Int = 0,
 			loopEndFrame:Int = 0, ?envelope:DspEnvelopeOptions) {
@@ -28,6 +33,8 @@ class SampleInstrument implements InstrumentDefinition {
 		options.loop_end_frame = loopEndFrame;
 		options.set_envelope(env.nativeValue());
 	}
+
+	/** Creates the instrument on `engine`. */
 	public function createInstrument(engine:DspEngine):DspInstrument {
 		if (engine == null) throw BindingError.invalidArgument("SampleInstrument.createInstrument",
 			"Sample instrument engine must not be null");

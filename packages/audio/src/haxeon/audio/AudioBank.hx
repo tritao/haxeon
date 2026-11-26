@@ -30,6 +30,7 @@ class AudioBank implements Disposable {
 	/** Called once when an async entry fails to load. */
 	public var onFailed:AudioBankEntry->Result->Void = null;
 
+	/** An empty bank loading through `cache`, told of finished loads by `events`. */
 	public function new(cache:ResourceCache, events:EventPump) {
 		if (cache == null)
 			throw BindingError.invalidArgument("AudioBank.new", "Audio bank resource cache must not be null");
@@ -92,6 +93,7 @@ class AudioBank implements Disposable {
 	public function createClip(name:String):Clip
 		return get(name).createClip();
 
+	/** Whether it has an entry `name`. */
 	public function contains(name:String):Bool
 		return find(name) != null;
 
@@ -149,6 +151,7 @@ class AudioBank implements Disposable {
 		disposed = true;
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

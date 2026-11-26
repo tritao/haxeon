@@ -26,7 +26,7 @@ class MixSnapshot implements Disposable {
 		return new MixSnapshot(made.out_snapshot);
 	}
 
-	public function nativeHandle():MixSnapshotHandle {
+	internal function nativeHandle():MixSnapshotHandle {
 		ensureLive();
 		return value;
 	}
@@ -97,6 +97,7 @@ class MixSnapshot implements Disposable {
 			throw new NativeKitError(status, "audio.mixSnapshot.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

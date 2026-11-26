@@ -25,6 +25,7 @@ class DeviceOptions {
 	 * NativeKit DSP, SF2 and stream-worker behavior is independent. */
 	public var resourceLoading:ResourceLoading = ResourceLoading.Background;
 
+	/** Options for the default playback device. */
 	public function new() {}
 
 	@:allow(haxeon.audio.Mixer)

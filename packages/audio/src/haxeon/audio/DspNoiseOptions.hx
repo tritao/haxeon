@@ -5,8 +5,10 @@ import nativekit.ffi.NativeKitAudioTypes;
 
 /** Configures the additive white-noise component of a DSP patch. */
 class DspNoiseOptions {
+	/** The noise level, from 0. */
 	public var level:Float = 0.0;
 
+	/** No noise. */
 	public function new() {}
 
 	@:allow(haxeon.audio.DspPatchBuilder)

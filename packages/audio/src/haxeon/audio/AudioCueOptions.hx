@@ -24,6 +24,7 @@ class AudioCueOptions {
 	/** Default concurrency priority assigned to each new playback. */
 	public var priority:Int = 0;
 
+	/** Options whose voices use `voiceOptions`, or the defaults. */
 	public function new(?voiceOptions:VoiceOptions) {
 		this.voiceOptions = copyVoiceOptions(voiceOptions);
 	}

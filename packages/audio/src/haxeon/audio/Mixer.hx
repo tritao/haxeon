@@ -89,10 +89,12 @@ class Mixer {
 		return result.out_channels;
 	}
 
+	/** Sets the master output's linear gain. */
 	public static function setMasterVolume(volume:Float):Void
 		AudioResult.check(NativeKitAudio.nk_audio_set_master_volume(volume),
 			"audio.mixer.setMasterVolume");
 
+	/** The master output's linear gain. */
 	public static function masterVolume():Float {
 		var result = NativeKitAudio.nk_audio_get_master_volume();
 		AudioResult.check(result.status, "audio.mixer.masterVolume");

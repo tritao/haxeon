@@ -24,6 +24,7 @@ class DspEngine implements Disposable {
 		this.value = owned.borrow();
 	}
 
+	/** A renderer configured by `options`, or the defaults. */
 	public static function create(?options:DspEngineOptions):DspEngine {
 		var actual = options == null ? new DspEngineOptions() : options;
 		var made = NativeKitAudio.nk_audio_dsp_engine_create(actual.nativeValue());
@@ -31,7 +32,7 @@ class DspEngine implements Disposable {
 		return new DspEngine(made.out_engine);
 	}
 
-	public function nativeHandle():DspEngineHandle {
+	internal function nativeHandle():DspEngineHandle {
 		ensureLive();
 		return value;
 	}
@@ -59,7 +60,7 @@ class DspEngine implements Disposable {
 		return result;
 	}
 
-	public function createSoundFontInstrument(font:SoundFont, preset:Int, gain:Float = 1.0):DspInstrument {
+	internal function createSoundFontInstrument(font:SoundFont, preset:Int, gain:Float = 1.0):DspInstrument {
 		ensureLive();
 		if (font == null) throw BindingError.invalidArgument("DspEngine.createSoundFontInstrument",
 			"SoundFont must not be null");
@@ -109,11 +110,15 @@ class DspEngine implements Disposable {
 		AudioResult.check(result.status, "audio.dsp.engine.noteOn");
 		return result.out_note_token;
 	}
+
+	/** Releases note `token` at `frame`. */
 	public function noteOff(token:Int64, frame:Int64):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_note_off(value, token, frame),
 			"audio.dsp.engine.noteOff");
 	}
+
+	/** Validates and copies a score of `sections`, ready to play without changing what sounds. */
 	public function prepareTransport(sections:Array<DspTransportSection>):DspTransport {
 		ensureLive();
 		var nativeSections:Array<NativeDspTransportSection> = [];
@@ -145,11 +150,15 @@ class DspEngine implements Disposable {
 		AudioResult.check(result.status, "audio.dsp.transport.prepare");
 		return new DspTransport(this, result.out_program_id);
 	}
+
+	/** Moves the playing score to `section` at its next bar. */
 	public function requestSection(section:Int):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_request_section(value, section),
 			"audio.dsp.transport.requestSection");
 	}
+
+	/** Stops the playing score. */
 	public function stopTransport():Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_stop_transport(value), "audio.dsp.transport.stop");
@@ -161,6 +170,8 @@ class DspEngine implements Disposable {
 		AudioResult.check(result.status, "audio.dsp.transport.position");
 		return {section: result.out_section, frame: result.out_frame};
 	}
+
+	/** A consistent snapshot of the playing score and the engine's counters. */
 	public function runtimeStatus():DspRuntimeStatus {
 		ensureLive();
 		var status = new NativeDspRuntimeStatus();
@@ -187,6 +198,8 @@ class DspEngine implements Disposable {
 		AudioResult.check(result.status, "audio.dsp.voiceCounts");
 		return {activeVoices: result.out_active_voices, activeTails: result.out_active_tails};
 	}
+
+	/** Reclaims resources the audio thread has finished with; call it regularly off that thread. */
 	public function collect():Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_collect(value), "audio.dsp.engine.collect");
@@ -197,6 +210,7 @@ class DspEngine implements Disposable {
 		}
 	}
 
+	/** Returns instruments and voices to their starting state. Detach from the device first. */
 	public function reset():Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_reset(value), "audio.dsp.engine.reset");
@@ -257,6 +271,7 @@ class DspEngine implements Disposable {
 			"audio.dsp.engine.clearSchedule");
 	}
 
+	/** What the renderer's backend supports. */
 	public function capabilities():DspCapabilities {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_dsp_engine_get_capabilities(value);
@@ -321,6 +336,7 @@ class DspEngine implements Disposable {
 			throw new NativeKitError(status, "audio.dsp.engine.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

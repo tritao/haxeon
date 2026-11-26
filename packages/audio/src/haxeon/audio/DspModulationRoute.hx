@@ -7,15 +7,23 @@ import nativekit.ffi.NativeKitAudioTypes;
 
 /** One typed source-to-destination modulation route in a DSP patch. */
 class DspModulationRoute {
+	/** What modulates. */
 	public final source:DspModulationSource;
+
+	/** What is modulated. */
 	public final destination:DspModulationDestination;
+
+	/** How strongly. */
 	public final amount:Float;
+
+	/** Whether the source swings both ways or one. */
 	public final polarity:DspModulationPolarity;
 	/** One-based oscillator target; zero targets all oscillator sources. */
 	public final oscillatorIndex:Int;
 	/** One-based oscillator source when source is Oscillator; otherwise zero. */
 	public final sourceOscillatorIndex:Int;
 
+	/** A route from `source` to `destination`. */
 	public function new(source:DspModulationSource, destination:DspModulationDestination,
 			amount:Float, ?polarity:DspModulationPolarity, oscillatorIndex:Int = 0,
 			sourceOscillatorIndex:Int = 0) {

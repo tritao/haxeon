@@ -10,6 +10,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 import sys.io.File;
 
+/** One preset of a bank: its index, bank and program numbers, and name. */
 typedef SoundFontPresetInfo = {
 	var index:Int;
 	var bank:Int;
@@ -29,6 +30,8 @@ class SoundFont implements Disposable {
 		this.owned = owned;
 		value = owned.borrow();
 	}
+
+	/** Decodes an SF2 bank from `bytes`. */
 	public static function fromMemory(bytes:Bytes):SoundFont {
 		if (bytes == null || bytes.length == 0) throw BindingError.invalidArgument("SoundFont.fromMemory",
 			"SoundFont data must not be empty");
@@ -36,15 +39,19 @@ class SoundFont implements Disposable {
 		AudioResult.check(result.status, "audio.soundfont.load");
 		return new SoundFont(result.out_soundfont);
 	}
+
+	/** Decodes the SF2 bank at `path`. */
 	public static function fromFile(path:String):SoundFont {
 		if (path == null || path.length == 0) throw BindingError.invalidArgument("SoundFont.fromFile",
 			"SoundFont path must not be empty");
 		return fromMemory(File.getBytes(path));
 	}
-	public function nativeHandle():SoundFontHandle {
+	internal function nativeHandle():SoundFontHandle {
 		if (disposed) throw BindingError.disposed("SoundFont.nativeHandle", "SoundFont has been disposed");
 		return value;
 	}
+
+	/** The bank's presets. */
 	public function presets():Array<SoundFontPresetInfo> {
 		nativeHandle();
 		var result = NativeKitAudio.nk_audio_soundfont_get_preset_count(value);
@@ -60,6 +67,8 @@ class SoundFont implements Disposable {
 		}
 		return output;
 	}
+
+	/** Preset `index`, played at `gain`. */
 	public function preset(index:Int, gain:Float = 1.0):SoundFontPreset {
 		nativeHandle();
 		return new SoundFontPreset(this, index, gain);
@@ -73,17 +82,20 @@ class SoundFont implements Disposable {
 	}
 }
 
+/** One preset of a SoundFont, ready to create instruments from. */
 class SoundFontPreset implements InstrumentDefinition {
 	final font:SoundFont;
 	final index:Int;
 	final gain:Float;
-	public function new(font:SoundFont, index:Int, gain:Float) {
+	internal function new(font:SoundFont, index:Int, gain:Float) {
 		if (font == null || index < 0 || !Math.isFinite(gain) || gain < 0 || gain > 4)
 			throw BindingError.invalidArgument("SoundFontPreset.new", "Invalid SoundFont preset");
 		this.font = font;
 		this.index = index;
 		this.gain = gain;
 	}
+
+	/** Creates the instrument on `engine`. */
 	public function createInstrument(engine:DspEngine):DspInstrument
 		return engine.createSoundFontInstrument(font, index, gain);
 }

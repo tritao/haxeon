@@ -22,7 +22,7 @@ class Voice implements Disposable {
 		this.value = owned.borrow();
 	}
 
-	public static function fromClip(clip:Clip, ?options:VoiceOptions):Voice {
+	internal static function fromClip(clip:Clip, ?options:VoiceOptions):Voice {
 		if (clip == null)
 			throw BindingError.invalidArgument("Voice.fromClip", "Audio voice clip must not be null");
 		if (options == null)
@@ -32,21 +32,25 @@ class Voice implements Disposable {
 		return new Voice(made.out_voice);
 	}
 
+	/** The native voice, which audio events name; compare it with an event's source. */
 	public function nativeHandle():VoiceHandle {
 		ensureLive();
 		return value;
 	}
 
+	/** Starts or resumes playing. */
 	public function start():Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_voice_start(value), "audio.voice.start");
 	}
 
+	/** Stops without rewinding. */
 	public function stop():Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_voice_stop(value), "audio.voice.stop");
 	}
 
+	/** Seeks to the start, playing or not. */
 	public function rewind():Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_voice_rewind(value), "audio.voice.rewind");
@@ -89,6 +93,7 @@ class Voice implements Disposable {
 			"audio.voice.fadeAt");
 	}
 
+	/** Whether it is playing. */
 	public function isPlaying():Bool {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_voice_is_playing(value);
@@ -109,6 +114,7 @@ class Voice implements Disposable {
 		return loadState() == VoiceLoadState.Ready;
 	}
 
+	/** Whether it has reached the end. */
 	public function atEnd():Bool {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_voice_at_end(value);
@@ -151,12 +157,14 @@ class Voice implements Disposable {
 		return result.out_virtualized;
 	}
 
+	/** Sets its linear gain. */
 	public function setVolume(volume:Float):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_voice_set_volume(value, volume),
 			"audio.voice.setVolume");
 	}
 
+	/** Its linear gain. */
 	public function volume():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_voice_get_volume(value);
@@ -164,11 +172,13 @@ class Voice implements Disposable {
 		return result.out_volume;
 	}
 
+	/** Sets its stereo pan, from -1 (left) to 1 (right). */
 	public function setPan(pan:Float):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_voice_set_pan(value, pan), "audio.voice.setPan");
 	}
 
+	/** Its stereo pan. */
 	public function pan():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_voice_get_pan(value);
@@ -176,12 +186,14 @@ class Voice implements Disposable {
 		return result.out_pan;
 	}
 
+	/** Sets its pitch multiplier; 1 is the source pitch. */
 	public function setPitch(pitch:Float):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_voice_set_pitch(value, pitch),
 			"audio.voice.setPitch");
 	}
 
+	/** Its pitch multiplier. */
 	public function pitch():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_voice_get_pitch(value);
@@ -378,12 +390,14 @@ class Voice implements Disposable {
 		return result.out_factor;
 	}
 
+	/** Makes it loop or not. */
 	public function setLooping(looping:Bool):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_voice_set_looping(value, looping),
 			"audio.voice.setLooping");
 	}
 
+	/** Whether it loops. */
 	public function isLooping():Bool {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_voice_is_looping(value);
@@ -391,6 +405,7 @@ class Voice implements Disposable {
 		return result.out_looping;
 	}
 
+	/** Where it is playing, in seconds. */
 	public function timeSeconds():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_voice_get_time_seconds(value);
@@ -398,6 +413,7 @@ class Voice implements Disposable {
 		return result.out_seconds;
 	}
 
+	/** The source's length, in seconds. */
 	public function lengthSeconds():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_voice_get_length_seconds(value);
@@ -415,6 +431,7 @@ class Voice implements Disposable {
 			throw new NativeKitError(status, "audio.voice.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

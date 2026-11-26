@@ -6,6 +6,7 @@ import haxe.Int64;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 
+/** One event of a score section: a note on, a note off or a tempo change. */
 typedef DspTransportEvent = {
 	var frame:Float;
 	/** 0 = note on, 1 = note off, 2 = tempo. */
@@ -16,11 +17,15 @@ typedef DspTransportEvent = {
 	var velocity:Float;
 	var bpm:Float;
 }
+
+/** One section of a score: its length, its events and its bar lines. */
 typedef DspTransportSection = {
 	var lengthFrames:Float;
 	var events:Array<DspTransportEvent>;
 	var bars:Array<Float>;
 }
+
+/** A snapshot of an engine's playing score and its counters, which only grow. */
 typedef DspRuntimeStatus = {
 	var playing:Bool;
 	var section:Int;
@@ -43,6 +48,8 @@ class DspTransport implements Disposable {
 		this.engine = engine;
 		this.id = id;
 	}
+
+	/** Plays the score from `section` at `startFrame`. */
 	public function play(section:Int, startFrame:Int64):Void {
 		if (disposed) throw BindingError.disposed("DspTransport.play", "DSP transport has been disposed");
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_play_transport(engine.nativeHandle(),
@@ -65,6 +72,8 @@ class DspTransport implements Disposable {
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_group_play_transport(groupTracks(programs), section, startFrame),
 			"audio.dsp.transport.playGroup");
 	}
+
+	/** Moves every score in `programs` to `section` at the same bar. */
 	public static function requestGroup(programs:Array<DspTransport>, section:Int):Void {
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_group_request_section(groupTracks(programs), section),
 			"audio.dsp.transport.requestGroup");
@@ -74,6 +83,8 @@ class DspTransport implements Disposable {
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_group_seek_transport(groupTracks(programs),
 			section, frame, paused ? 1 : 0), "audio.dsp.transport.seekGroup");
 	}
+
+	/** Pauses or resumes every score in `programs` together. */
 	public static function setGroupPaused(programs:Array<DspTransport>, paused:Bool):Void {
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_group_set_paused(groupTracks(programs),
 			paused ? 1 : 0), "audio.dsp.transport.setGroupPaused");

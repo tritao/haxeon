@@ -5,15 +5,22 @@ import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 /** Typed source configuration, copied when a patch is built. Controls are immutable per patch. */
 class DspSourceOptions {
+	/** What kind of source it is. */
 	public final kind:DspSourceKind;
+
+	/** The samples, for a sample-based source. */
 	public var samples:Array<Float> = [];
 	final options:NativeDspSourceOptions;
+
+	/** A source of `kind` with the native defaults for that kind. */
 	public function new(kind:DspSourceKind) {
 		this.kind = kind;
 		var made = NativeKitAudio.nk_audio_dsp_source_defaults(kind);
 		AudioResult.check(made.status, "audio.dsp.source.defaults");
 		options = made.out_options;
 	}
+
+	/** Sets `parameter`. Returns these options. */
 	public function set(parameter:DspSourceParameter, value:Float):DspSourceOptions {
 		var domain = NativeKitAudio.nk_audio_dsp_source_parameter_info(kind, parameter);
 		AudioResult.check(domain.status, "audio.dsp.source.parameter");
@@ -31,6 +38,8 @@ class DspSourceOptions {
 		options.set_values(parameter.rawValue(), value);
 		return this;
 	}
+
+	/** The value of `parameter`. */
 	public function get(parameter:DspSourceParameter):Float {
 		var domain = NativeKitAudio.nk_audio_dsp_source_parameter_info(kind, parameter);
 		AudioResult.check(domain.status, "audio.dsp.source.parameter");

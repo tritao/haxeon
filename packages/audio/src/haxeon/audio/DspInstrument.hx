@@ -20,7 +20,7 @@ class DspInstrument implements Disposable {
 		this.value = owned.borrow();
 	}
 
-	public function nativeHandle():DspInstrumentHandle {
+	internal function nativeHandle():DspInstrumentHandle {
 		ensureLive();
 		return value;
 	}
@@ -81,6 +81,7 @@ class DspInstrument implements Disposable {
 			throw new NativeKitError(status, "audio.dsp.instrument.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

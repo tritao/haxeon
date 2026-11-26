@@ -44,6 +44,7 @@ class AudioTrackPlayer implements Disposable {
 	/** Called when a pending crossfade is superseded before completion. */
 	public var onTransitionCancelled:AudioTrack->Void = null;
 
+	/** A player timed by `events`, routing its voices through `bus` or the master output. */
 	public function new(events:EventPump, ?bus:Bus) {
 		if (events == null)
 			throw BindingError.invalidArgument("AudioTrackPlayer.new",
@@ -208,12 +209,14 @@ class AudioTrackPlayer implements Disposable {
 		return queuedTrackValue;
 	}
 
+	/** Whether a crossfade between tracks is running. */
 	public function isTransitioning():Bool {
 		ensureLive();
 		update();
 		return transitionActive;
 	}
 
+	/** Whether the playing track is fading out to stop. */
 	public function isStopping():Bool {
 		ensureLive();
 		update();
@@ -240,6 +243,7 @@ class AudioTrackPlayer implements Disposable {
 		disposed = true;
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

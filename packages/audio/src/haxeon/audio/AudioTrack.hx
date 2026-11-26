@@ -9,12 +9,20 @@ import haxeon.platform.BindingError;
  * player using the track has been disposed.
  */
 class AudioTrack {
+	/** The clip it plays. */
 	public final clip:Clip;
+
+	/** The gain it plays at. */
 	public final volume:Float;
+
+	/** Its pitch multiplier. */
 	public final pitch:Float;
+
+	/** Its voice priority on its bus. */
 	public final priority:Int;
 	final voiceOptions:VoiceOptions;
 
+	/** A track of `clip`, with `options` or the defaults. */
 	public function new(clip:Clip, ?options:AudioTrackOptions) {
 		if (clip == null)
 			throw BindingError.invalidArgument("AudioTrack.new", "Audio track clip must not be null");

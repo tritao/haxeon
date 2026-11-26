@@ -6,10 +6,16 @@ import nativekit.ffi.NativeKitAudioTypes;
 
 /** Configures a voice's primitive playback behavior. */
 class VoiceOptions {
+	/** Whether the voice loops. */
 	public var looping:Bool = false;
+
+	/** Whether it decodes while it plays instead of all up front. */
 	public var streaming:Bool = false;
+
+	/** Whether it loads in the background, when the backend can. */
 	public var asynchronous:Bool = false;
 
+	/** Options for a plain, decoded, one-shot voice. */
 	public function new() {}
 
 	@:allow(haxeon.audio.Voice)

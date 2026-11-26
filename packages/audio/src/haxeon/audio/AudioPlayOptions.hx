@@ -15,5 +15,6 @@ class AudioPlayOptions {
 	/** Optional source velocity override. */
 	public var velocity:Null<Vector3> = null;
 
+	/** Options that override nothing. */
 	public function new() {}
 }

@@ -50,7 +50,7 @@ class DspWavetable implements Disposable {
 		return new DspWavetable(made.out_wavetable);
 	}
 
-	public function nativeHandle():DspWavetableHandle {
+	internal function nativeHandle():DspWavetableHandle {
 		ensureLive();
 		return value;
 	}
@@ -65,6 +65,7 @@ class DspWavetable implements Disposable {
 			throw new NativeKitError(status, "audio.dsp.wavetable.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

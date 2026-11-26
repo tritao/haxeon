@@ -22,6 +22,7 @@ class Clip implements Disposable {
 		this.value = owned.borrow();
 	}
 
+	/** A clip of the audio file at `path`. */
 	public static function fromFile(path:String):Clip {
 		if (path == null || path.length == 0)
 			throw BindingError.invalidArgument("Clip.fromFile", "Audio clip path must not be empty");
@@ -48,6 +49,7 @@ class Clip implements Disposable {
 		return new Clip(made.out_clip);
 	}
 
+	/** A clip of the encoded audio in `data`, which it copies. */
 	public static function fromMemory(data:Bytes):Clip {
 		if (data == null || data.length == 0)
 			throw BindingError.invalidArgument("Clip.fromMemory", "Audio clip data must not be empty");
@@ -78,11 +80,12 @@ class Clip implements Disposable {
 		return new Clip(made.out_clip);
 	}
 
-	public function nativeHandle():ClipHandle {
+	internal function nativeHandle():ClipHandle {
 		ensureLive();
 		return value;
 	}
 
+	/** A stopped voice playing the clip, configured by `options`. */
 	public function createVoice(?options:VoiceOptions):Voice {
 		ensureLive();
 		return Voice.fromClip(this, options);
@@ -98,6 +101,7 @@ class Clip implements Disposable {
 			throw new NativeKitError(status, "audio.clip.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

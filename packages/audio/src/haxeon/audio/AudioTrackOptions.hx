@@ -11,6 +11,7 @@ class AudioTrackOptions {
 	/** Concurrency priority assigned to the track voice. */
 	public var priority:Int = 0;
 
+	/** Options whose voice uses `voiceOptions`, or the defaults. */
 	public function new(?voiceOptions:VoiceOptions) {
 		this.voiceOptions = copyVoiceOptions(voiceOptions);
 	}

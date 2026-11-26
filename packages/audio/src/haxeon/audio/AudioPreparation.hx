@@ -34,6 +34,7 @@ class AudioPreparation<T> implements Disposable {
 	var closed:Bool = false;
 	var disposed:Bool = false;
 
+	/** A worker holding at most `capacity` jobs at once, from 1 to 64. */
 	public function new(capacity:Int = 8) {
 		if (capacity < 1 || capacity > 64) throw BindingError.invalidArgument("AudioPreparation.new",
 			"Audio preparation capacity must be 1..64");

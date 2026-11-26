@@ -9,22 +9,41 @@ import nativekit.ffi.NativeKitAudioTypes;
 class DspPatchBuilder {
 	/** Pitched sources are mixed additively in source order. */
 	public final oscillators:Array<DspOscillatorOptions> = [new DspOscillatorOptions()];
+
+	/** The noise source. */
 	public var noise:DspNoiseOptions = new DspNoiseOptions();
+
+	/** The amplitude envelope. */
 	public var envelope:DspEnvelopeOptions = new DspEnvelopeOptions();
 	/** Independent brightness envelope; amplitude envelope controls voice lifetime. */
 	public var filterEnvelope:DspEnvelopeOptions = new DspEnvelopeOptions();
+
+	/** How far the envelope moves the filter cutoff, in semitones. */
 	public var filterEnvelopeAmountSemitones:Float = 0;
+
+	/** Stacked detuned copies of the oscillators. */
 	public var unison:DspUnisonOptions = new DspUnisonOptions();
+
+	/** The filter. */
 	public var filter:DspFilterOptions = new DspFilterOptions();
+
+	/** The low-frequency oscillator. */
 	public var lfo:DspLfoOptions = new DspLfoOptions();
 	/** Optional second and third LFOs, addressed by Lfo2 and Lfo3 routes. */
 	public final additionalLfos:Array<DspLfoOptions> = [];
+
+	/** The patch's output gain. */
 	public var gain:Float = 1.0;
+
+	/** How notes connect. */
 	public var articulation:DspArticulationOptions = new DspArticulationOptions();
 	/** Optional specialized generator, sharing this patch envelope and filter. */
 	public var source:Null<DspSourceOptions>;
+
+	/** The modulation routes. */
 	public final routes:Array<DspModulationRoute> = [];
 
+	/** A builder with the defaults. */
 	public function new() {}
 
 	/** Appends a pitched source and returns this builder for fluent construction. */

@@ -5,11 +5,19 @@ import nativekit.ffi.NativeKitAudioTypes;
 
 /** Configures the ADSR amplitude or filter envelope of a DSP patch. */
 class DspEnvelopeOptions {
+	/** How long a note takes to reach full level. */
 	public var attackSeconds:Float = 0.01;
+
+	/** How long it then takes to fall to the sustain level. */
 	public var decaySeconds:Float = 0.1;
+
+	/** The level it holds while the note is held, from 0 to 1. */
 	public var sustainLevel:Float = 0.8;
+
+	/** How long it takes to fade after the note is released. */
 	public var releaseSeconds:Float = 0.1;
 
+	/** A quick attack and decay into a sustain at 0.8. */
 	public function new() {}
 
 	@:allow(haxeon.audio.DspPatchBuilder)

@@ -20,7 +20,7 @@ class BusEffect implements Disposable {
 		this.value = owned.borrow();
 	}
 
-	public function nativeHandle():BusEffectHandle {
+	internal function nativeHandle():BusEffectHandle {
 		ensureLive();
 		return value;
 	}
@@ -33,6 +33,7 @@ class BusEffect implements Disposable {
 		return result.out_gain;
 	}
 
+	/** Which effect it is. */
 	public function type():EffectType {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_effect_get_type(value);
@@ -49,12 +50,14 @@ class BusEffect implements Disposable {
 			engine.nativeHandle(), beats), "audio.busEffect.followTransportTempo");
 	}
 
+	/** Turns it on or off; off passes the signal through. */
 	public function setEnabled(enabled:Bool):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_enabled(value, enabled),
 			"audio.busEffect.setEnabled");
 	}
 
+	/** Whether it is on. */
 	public function isEnabled():Bool {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_effect_is_enabled(value);
@@ -77,12 +80,14 @@ class BusEffect implements Disposable {
 			"audio.busEffect.setPosition");
 	}
 
+	/** Sets a low-pass filter's cutoff and order. */
 	public function setLowPass(cutoffFrequencyHz:Float, order:Int):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_low_pass(value, cutoffFrequencyHz, order),
 			"audio.busEffect.setLowPass");
 	}
 
+	/** A low-pass filter's settings. */
 	public function lowPass():FilterSettings {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_effect_get_low_pass(value);
@@ -90,12 +95,14 @@ class BusEffect implements Disposable {
 		return new FilterSettings(result.out_cutoff_frequency_hz, result.out_order);
 	}
 
+	/** Sets a high-pass filter's cutoff and order. */
 	public function setHighPass(cutoffFrequencyHz:Float, order:Int):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_high_pass(value, cutoffFrequencyHz, order),
 			"audio.busEffect.setHighPass");
 	}
 
+	/** A high-pass filter's settings. */
 	public function highPass():FilterSettings {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_effect_get_high_pass(value);
@@ -103,12 +110,14 @@ class BusEffect implements Disposable {
 		return new FilterSettings(result.out_cutoff_frequency_hz, result.out_order);
 	}
 
+	/** Sets how loud a delay's echoes are. */
 	public function setDelayWet(wet:Float):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_delay_wet(value, wet),
 			"audio.busEffect.setDelayWet");
 	}
 
+	/** How loud the echoes are. */
 	public function delayWet():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_effect_get_delay_wet(value);
@@ -116,12 +125,14 @@ class BusEffect implements Disposable {
 		return result.out_wet;
 	}
 
+	/** Sets how loud a delay's direct signal is. */
 	public function setDelayDry(dry:Float):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_delay_dry(value, dry),
 			"audio.busEffect.setDelayDry");
 	}
 
+	/** How loud the direct signal is. */
 	public function delayDry():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_effect_get_delay_dry(value);
@@ -129,12 +140,14 @@ class BusEffect implements Disposable {
 		return result.out_dry;
 	}
 
+	/** Sets how much each echo keeps of the last. */
 	public function setDelayDecay(decay:Float):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_delay_decay(value, decay),
 			"audio.busEffect.setDelayDecay");
 	}
 
+	/** How much each echo keeps. */
 	public function delayDecay():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_effect_get_delay_decay(value);
@@ -170,6 +183,7 @@ class BusEffect implements Disposable {
 		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_reset(value), "audio.busEffect.reset");
 	}
 
+	/** How many frames the effect delays the signal by. */
 	public function latencyFrames():Int {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_effect_get_latency(value);
@@ -195,6 +209,7 @@ class BusEffect implements Disposable {
 			throw new NativeKitError(status, "audio.busEffect.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

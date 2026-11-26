@@ -24,6 +24,7 @@ class Bus implements Disposable {
 		this.value = owned.borrow();
 	}
 
+	/** A bus feeding `parent`, or the master output. */
 	public static function create(?parent:Bus):Bus {
 		var options = new NativeBusOptions();
 		options.struct_size = NativeBusOptions.byteSize();
@@ -36,16 +37,18 @@ class Bus implements Disposable {
 		return new Bus(made.out_bus);
 	}
 
-	public function nativeHandle():BusHandle {
+	internal function nativeHandle():BusHandle {
 		ensureLive();
 		return value;
 	}
 
+	/** Lets the voices routed through it play. */
 	public function start():Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_start(value), "audio.bus.start");
 	}
 
+	/** Silences the voices routed through it until `start`. */
 	public function stop():Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_stop(value), "audio.bus.stop");
@@ -90,6 +93,7 @@ class Bus implements Disposable {
 			"audio.bus.clearSchedule");
 	}
 
+	/** Whether it is started. */
 	public function isPlaying():Bool {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_is_playing(value);
@@ -97,12 +101,14 @@ class Bus implements Disposable {
 		return result.out_playing;
 	}
 
+	/** Sets its linear gain. */
 	public function setVolume(volume:Float):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_set_volume(value, volume),
 			"audio.bus.setVolume");
 	}
 
+	/** Its linear gain. */
 	public function volume():Float {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_get_volume(value);
@@ -126,12 +132,14 @@ class Bus implements Disposable {
 			"audio.bus.fadeAt");
 	}
 
+	/** Mutes or unmutes it, keeping its volume. */
 	public function setMuted(muted:Bool):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_set_muted(value, muted),
 			"audio.bus.setMuted");
 	}
 
+	/** Whether it is muted. */
 	public function isMuted():Bool {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_is_muted(value);
@@ -274,6 +282,7 @@ class Bus implements Disposable {
 			throw new NativeKitError(status, "audio.bus.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

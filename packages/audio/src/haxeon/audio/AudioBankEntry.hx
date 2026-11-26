@@ -14,9 +14,14 @@ import nativekit.ffi.NativeKitTypes;
  * caller-owned audio resources and remain valid after the entry is unloaded.
  */
 class AudioBankEntry {
+	/** The entry's name in its bank. */
 	public final name:String;
+
+	/** The resource it loads. */
 	public final resource:Resource;
 	final asset:ResourceAsset;
+
+	/** The cache request loading it, which resource events name. */
 	public final request:haxe.Int64;
 	var readyNotified:Bool = false;
 	var failedNotified:Bool = false;
@@ -42,12 +47,15 @@ class AudioBankEntry {
 		return asset.loadResult();
 	}
 
+	/** Whether it is still loading. */
 	public function isLoading():Bool
 		return loadState() == ResourceAssetLoadState.Loading;
 
+	/** Whether it has loaded. */
 	public function isReady():Bool
 		return loadState() == ResourceAssetLoadState.Ready;
 
+	/** Whether loading failed. */
 	public function isFailed():Bool
 		return loadState() == ResourceAssetLoadState.LoadFailed;
 
@@ -59,6 +67,7 @@ class AudioBankEntry {
 		return Clip.fromAsset(asset);
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
