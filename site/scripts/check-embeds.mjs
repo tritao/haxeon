@@ -1,5 +1,6 @@
 // Drives every live embed on the built site (LiveEmbed.astro): nothing of it loads before the visitor starts it, it
-// starts and draws at desktop and mobile widths, and a failed load leaves the button ready for another try.
+// starts and draws at desktop and mobile widths, a failed load leaves the button ready for another try, and without
+// JavaScript there is no button.
 import assert from 'node:assert/strict';
 import { globSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -66,7 +67,15 @@ try {
     await wrapper(page).getByText(embed.failed).waitFor({ timeout: 60_000 });
     assert.equal(await start.isEnabled(), true, `${embed.title} can be started again after a failure`);
     await page.close();
-    console.log(`${embed.title} on ${embed.page}: starts and draws at both widths, and recovers from a failed load.`);
+
+    // Without JavaScript nothing can start the embed, so the page offers no start button: the poster and its link remain.
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    await serveDirectory(context, dist);
+    const still = await context.newPage();
+    await still.goto(origin + embed.page);
+    assert.equal(await wrapper(still).locator('[data-start]').isVisible(), false, `${embed.title} offers no start button without JavaScript`);
+    await context.close();
+    console.log(`${embed.title} on ${embed.page}: starts and draws at both widths, recovers from a failed load, and offers no start button without JavaScript.`);
   }
 } finally {
   await browser.close();

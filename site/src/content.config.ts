@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
-import { docsSchema } from '@astrojs/starlight/schema';
+import { i18nLoader } from '@astrojs/starlight/loaders';
+import { docsSchema, i18nSchema } from '@astrojs/starlight/schema';
 import {
   apiPackages,
   cliDirectory,
@@ -200,4 +201,8 @@ const api = defineCollection({
   },
 });
 
-export const collections = { docs, api };
+// Starlight's own UI strings, where the site changes one: the docs sidebar is labelled Documentation, apart from the
+// header's Main navigation it appears beside.
+const i18n = defineCollection({ loader: i18nLoader(), schema: i18nSchema() });
+
+export const collections = { docs, api, i18n };

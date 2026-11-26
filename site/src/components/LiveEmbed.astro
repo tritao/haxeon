@@ -30,7 +30,8 @@ const built = existsSync(join(__SITE_ROOT__, 'public', new URL(src, 'file:').pat
   style={`--embed-aspect: ${aspect}; --embed-min-height: ${minHeight}`}
 >
   <slot name="poster" />
-  {built && <button class="btn primary" type="button" data-start>{button}</button>}
+  {/* Shown by the script that starts the embed, so a page without JavaScript offers no button that does nothing. */}
+  {built && <button class="btn primary" type="button" data-start hidden>{button}</button>}
   <p role="status" hidden></p>
   <slot />
 </live-embed>
@@ -43,6 +44,7 @@ const built = existsSync(join(__SITE_ROOT__, 'public', new URL(src, 'file:').pat
     connectedCallback() {
       const start = this.querySelector<HTMLButtonElement>('[data-start]');
       if (!start) return;
+      start.hidden = false;
       const status = this.querySelector<HTMLElement>('[role="status"]')!;
       const { src, title, minWidth, loading, failed: failedText } = this.dataset;
 
