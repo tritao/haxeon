@@ -24,12 +24,16 @@ import sys.thread.Mutex;
  * A process reads the file once, on its first lookup, and writes it back (`save`) only when it hashed something worth keeping,
  * under a name of its own and renamed into place, so concurrent processes never see a partial file; the last to save wins, which
  * at worst costs another process's new entries a hash next time. A save drops the entries the process neither used nor made once
- * they are older than `RETAIN_SECONDS`, so the files of deleted projects do not pile up.
+ * they are older than `RETAIN_SECONDS`, and keeps at most `MAX_ENTRIES`, the newest first: test runs make projects in the temporary
+ * directory by the thousand, and their files are gone long before they age out.
  */
 class DigestStore {
 	static inline final HEADER = "haxeon-content-digests 1";
 
 	static inline final RETAIN_SECONDS = 30 * 24 * 3600.0;
+
+	/** Enough for several checkouts of a large project and its dependencies. */
+	static inline final MAX_ENTRIES = 60000;
 
 	static var sharedStore:Null<DigestStore> = null;
 	#if (target.threaded && !eval)
@@ -109,6 +113,22 @@ class DigestStore {
 		unlock();
 	}
 
+	/** The entries a save keeps: those this process used, then the newest of those younger than `oldest`, up to `MAX_ENTRIES`. */
+	function keptEntries(current:Map<String, DigestEntry>, oldest:Float):Array<KeptDigest> {
+		var kept:Array<KeptDigest> = [], others:Array<KeptDigest> = [];
+		for (key => entry in current)
+			if (used.exists(key))
+				kept.push({key: key, entry: entry});
+			else if (entry.hashedAt >= oldest)
+				others.push({key: key, entry: entry});
+		if (kept.length + others.length > MAX_ENTRIES)
+			others.sort((left, right) -> Reflect.compare(right.entry.hashedAt, left.entry.hashedAt));
+		for (other in others)
+			if (kept.length < MAX_ENTRIES)
+				kept.push(other);
+		return kept;
+	}
+
 	/** Writes the store back when this process added to it; a failure leaves the file as it was. */
 	public function save():Void {
 		lock();
@@ -121,17 +141,17 @@ class DigestStore {
 		var text = new StringBuf(), oldest = clock() - RETAIN_SECONDS;
 		text.add(HEADER);
 		text.add("\n");
-		for (key => entry in current)
-			if (used.exists(key) || entry.hashedAt >= oldest) {
-				text.add(entry.digest);
-				text.add("\t");
-				text.add(Std.string(Math.fround(entry.hashedAt * 1000.0)));
-				text.add("\t");
-				text.add(entry.signature);
-				text.add("\t");
-				text.add(key);
-				text.add("\n");
-			}
+		for (kept in keptEntries(current, oldest)) {
+			var entry = kept.entry, key = kept.key;
+			text.add(entry.digest);
+			text.add("\t");
+			text.add(Std.string(Math.fround(entry.hashedAt * 1000.0)));
+			text.add("\t");
+			text.add(entry.signature);
+			text.add("\t");
+			text.add(key);
+			text.add("\n");
+		}
 		unlock();
 		var temporary = path + ".tmp." + Std.random(1000000000);
 		try {
@@ -155,7 +175,14 @@ class DigestStore {
 		var text = try File.getContent(path) catch (_:Dynamic) null;
 		if (text == null || !StringTools.startsWith(text, HEADER + "\n"))
 			return result;
-		for (line in text.split("\n")) {
+		// One line at a time: the file holds tens of thousands, too many for one split on the interpreter's stack.
+		var start = 0;
+		while (start < text.length) {
+			var end = text.indexOf("\n", start);
+			if (end < 0)
+				end = text.length;
+			var line = text.substring(start, end);
+			start = end + 1;
 			var fields = line.split("\t");
 			if (fields.length < 4)
 				continue;
@@ -185,4 +212,10 @@ class DigestStore {
 		mutex.release();
 		#end
 	}
+}
+
+/** An entry a save writes back, with its path. */
+private typedef KeptDigest = {
+	final key:String;
+	final entry:DigestEntry;
 }
