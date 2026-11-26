@@ -191,7 +191,7 @@ class ProjectWorkspace {
 			compilerPathByDisk.set(normalized, compilerPath);
 			diskPathByCompiler.set(compilerPath, normalized);
 			if (!open)
-				service.update(compilerPath, source);
+				service.update(compilerPath, source, normalized);
 		} else {
 			diskSources.remove(normalized);
 			if (!open)
@@ -339,7 +339,7 @@ class ProjectWorkspace {
 	public function restore(path:String, service:LanguageService):Bool {
 		var normalized = normalize(path), source = diskSources.get(normalized);
 		if (source != null) {
-			service.update(compilerPath(path), source);
+			service.update(compilerPath(path), source, normalized);
 			return true;
 		} else if (compilerPathByDisk.exists(normalized)) {
 			service.remove(compilerPath(path));
@@ -608,7 +608,7 @@ class ProjectWorkspace {
 					compilerPathByDisk.set(path, compilerPath);
 					diskPathByCompiler.set(compilerPath, path);
 					if (!isOpen(path))
-						service.update(compilerPath, source);
+						service.update(compilerPath, source, path);
 					loaded++;
 				}
 			}

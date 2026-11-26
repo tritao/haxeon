@@ -399,7 +399,7 @@ class LspProtocol {
 			project.includeDocument(document.path, service, path -> documents.forPath(path) != null);
 		var generation = ++analysisGeneration;
 		var path = activateConfiguration(document.path);
-		service.update(path, document.source);
+		service.update(path, document.source, document.path);
 		var changedModule = ModulePath.fromFile(path),
 			targets = service.compiler.dependentModules(changedModule);
 		if (targets.length == 0)
@@ -557,7 +557,7 @@ class LspProtocol {
 				open = documents.forPath(diskPath),
 				// An open document also shows what its package requires documented; checking every module of a large
 				// package on each analysis would cost more than the editor can spend.
-				diagnostics = open == null ? state.diagnostics : service.moduleDiagnostics(state, diskPath),
+				diagnostics = open == null ? state.diagnostics : service.moduleDiagnostics(state),
 				fingerprint = diagnosticFingerprint(diagnostics),
 				published = publishedDiagnostics.get(uri);
 			if (published == fingerprint)

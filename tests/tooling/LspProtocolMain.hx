@@ -77,6 +77,7 @@ class LspProtocolMain {
 		hxmlOutputDirectories();
 		offlineManifestDependency();
 		documentedManifestWorkspace();
+		internalAcrossPackages();
 		linkedManifestWorkspace();
 		recoveredDefinitionNavigation();
 		recoveredTypeNavigation();
@@ -1909,6 +1910,51 @@ class LspProtocolMain {
 		if (protocol.project.compilerPath(base + "/lib/code/Value.hx") != "helper/Value.hx")
 			throw 'a dependency module is named ${protocol.project.compilerPath(base + "/lib/code/Value.hx")}, not helper/Value.hx';
 		Sys.println("PASS: a manifest workspace opened through a symbolic link keeps its sources and dependencies");
+	}
+
+	/** The editor reports a use of another package's `internal` declaration as `haxeon check` does (E1031). */
+	static function internalAcrossPackages():Void {
+		var base = haxe.io.Path.normalize(sys.FileSystem.fullPath("out")) + "/lsp-internal-" + Std.random(0x7fffffff);
+		sys.FileSystem.createDirectory(base + "/app/src");
+		sys.FileSystem.createDirectory(base + "/lib/src/lib");
+		sys.io.File.saveContent(base + "/app/haxeon.json",
+			'{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"dependencies":{"lib":{"path":"../lib"}}}');
+		sys.io.File.saveContent(base + "/lib/haxeon.json",
+			'{"version":1,"package":{"name":"lib"},"sourceRoots":["src"]}');
+		sys.io.File.saveContent(base + "/lib/src/lib/Cache.hx",
+			"package lib; internal class Cache { public static function size():Int return 1; }");
+		var mainPath = base + "/app/src/Main.hx",
+			uri = FileUri.fromPath(mainPath),
+			source = "class Main { public static function main():Int return lib.Cache.size(); }",
+			protocol = new LspProtocol(),
+			codes:Array<String> = [];
+		sys.io.File.saveContent(mainPath, source);
+		try {
+			request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 881,
+				method: "initialize",
+				params: {rootUri: FileUri.fromPath(base + "/app")}
+			}));
+			for (raw in protocol.handle(Json.stringify({
+				jsonrpc: "2.0",
+				method: "textDocument/didOpen",
+				params: {textDocument: {uri: uri, version: 1, languageId: "haxe", text: source}}
+			}))) {
+				var message:Dynamic = Json.parse(raw);
+				if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri) {
+					var diagnostics:Array<Dynamic> = message.params.diagnostics;
+					codes = [for (diagnostic in diagnostics) Std.string(diagnostic.code)];
+				}
+			}
+		} catch (error:Dynamic) {
+			FileTree.remove(base);
+			throw error;
+		}
+		FileTree.remove(base);
+		if (codes.indexOf("E1031") < 0)
+			throw 'a use of another package\'s internal class was not reported: $codes';
+		Sys.println("PASS: the language server reports a use of another package's internal declaration");
 	}
 
 	/**

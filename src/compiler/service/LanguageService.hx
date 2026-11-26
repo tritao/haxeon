@@ -220,7 +220,7 @@ class LanguageService {
 
 	public var compiler(default, null):Compiler;
 
-	final editorSources:Map<String, String> = [];
+	final editorSources:Map<String, {text:String, physicalPath:Null<String>}> = [];
 	final configurationCompilers:Map<String, Compiler> = [];
 	final configurationOrder:Array<String> = [];
 	var activeConfiguration:Null<String>;
@@ -252,14 +252,18 @@ class LanguageService {
 		compiler.addStandardLibrarySourceRoot(stdlib);
 	}
 
-	public function update(path:String, source:String):ModuleState {
-		editorSources.set(path, source);
+	/**
+	 * Sets the module at compiler path `path` to `source`. `physicalPath` is the file on disk, which decides the package it
+	 * belongs to (`SourcePackages`): where its `internal` declarations may be used, and whether it requires documentation.
+	 */
+	public function update(path:String, source:String, ?physicalPath:String):ModuleState {
+		editorSources.set(path, {text: source, physicalPath: physicalPath});
 		for (candidate in configurationCompilers)
 			if (candidate != compiler)
-				candidate.update(path, source);
+				candidate.update(path, source, null, physicalPath);
 		var previous = compiler.modules.get(ModulePath.fromFile(path)),
 			previousRevision = previous == null ? 0 : previous.revision,
-			state = compiler.update(path, source);
+			state = compiler.update(path, source, null, physicalPath);
 		if (state.revision != previousRevision)
 			invalidateWorkspaceIndex();
 		return state;
@@ -296,7 +300,7 @@ class LanguageService {
 				selected = new Compiler(compiler.exportIdentityState(), CompilerIntrinsics.configuration(), ffi);
 				selected.addStandardLibrarySourceRoot(stdlib);
 				for (path => source in editorSources)
-					selected.update(path, source);
+					selected.update(path, source.text, null, source.physicalPath);
 				configurationCompilers.set(key, selected);
 			}
 			compiler = selected;
@@ -394,15 +398,12 @@ class LanguageService {
 
 	public function diagnostics(path:String):Array<Diagnostic> {
 		var state = stateFor(path);
-		return state == null ? [] : moduleDiagnostics(state, path);
+		return state == null ? [] : moduleDiagnostics(state);
 	}
 
-	/**
-	 * What the editor shows for `state`, the module of the file at `diskPath`: its compile's diagnostics, and E1032 for what
-	 * its package requires documented.
-	 */
-	public function moduleDiagnostics(state:ModuleState, diskPath:String):Array<Diagnostic>
-		return state.diagnostics.concat(missingDocumentation(state, diskPath));
+	/** What the editor shows for `state`: its compile's diagnostics, and E1032 for what its package requires documented. */
+	public function moduleDiagnostics(state:ModuleState):Array<Diagnostic>
+		return state.diagnostics.concat(missingDocumentation(state));
 
 	/**
 	 * The package that requires its documentation (`package.documentation`), whose files the editor checks as `haxeon check`
@@ -414,13 +415,13 @@ class LanguageService {
 	 * E1032 for each undocumented declaration of `state`'s API, when it is a module of the package that requires its
 	 * documentation and its typed program is current: from a description of that one module (`DocumentationCoverage`).
 	 */
-	function missingDocumentation(state:ModuleState, diskPath:String):Array<Diagnostic> {
+	function missingDocumentation(state:ModuleState):Array<Diagnostic> {
 		var semantic = compiler.state.semanticProgram, documented = documentedPackage;
 		if (documented == null || semantic == null
 			|| [for (diagnostic in state.diagnostics) if (diagnostic.severity == Error) diagnostic].length > 0)
 			return [];
 		var packages = new compiler.SourcePackages(compiler.options.sourcePackages);
-		if (packages.packageOf(diskPath) != documented)
+		if (packages.packageOf(state.source.physicalPath) != documented)
 			return [];
 		var model = ApiModelBuilder.build(semantic, compiler.modules, [], [state.name], packages);
 		return [
