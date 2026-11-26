@@ -69,6 +69,7 @@ class TestCatalog {
 		"TypedMetadataMergeMain",
 		"WarmRebuildReuseMain",
 		"WarmStageFactsMain",
+		"ManyValueArrayElementsMain",
 		"StructurePrinterWarmEditMain",
 		"NonNullFieldWarmEditMain",
 		"StructuralWarmEditMain",

@@ -163,6 +163,9 @@ private class ValueArrayFunctionIndex {
  */
 @:nullSafety(Strict)
 class IrValueArrayProgramRewrite {
+	/** The stage of each element's rewrite, which runs once per element type, each a part of it (`IrFunctionStages.run`). */
+	static inline final STAGE = "value-array-rewrite";
+
 	/** The types naming an array or an iterator each function has. */
 	@:processWide("a contribution memo's key, only ever read")
 	public static final ARRAY_TYPES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<Int>>("array-types");
@@ -437,7 +440,8 @@ class IrValueArrayProgramRewrite {
 			}
 			return parts.join("\n");
 		}
-		var stage = "value-array-rewrite:" + IrTypeIdentity.text(element),
+		// One stage for every element type, each element its part: the count of element types a program has is not limited.
+		var part = IrTypeIdentity.text(element),
 			requests = new IrValueArrayRequests(factory.helpers, methods, elements),
 			pass = new ValueArrayElementPass(fn -> index.has(fn, element) || index.needsDynamic(fn), rewriteOne,
 				requests,
@@ -446,7 +450,8 @@ class IrValueArrayProgramRewrite {
 			// The versions of the functions a place method may be specialized from, before the rewrite changes them.
 			originalVersions:Map<String, Int> = stageMemos == null
 				? [] : [for (name => fn in originals) name => fn.version],
-			output = compiler.ir.pipeline.IrFunctionStages.run(stage, pass, program.functions, stageMemos, builder);
+			output = compiler.ir.pipeline.IrFunctionStages.run(STAGE, pass, program.functions, stageMemos, builder,
+				part);
 		for (position in 0...output.length)
 			if (output[position] != program.functions[position]) {
 				rewritten = output;
@@ -480,13 +485,13 @@ class IrValueArrayProgramRewrite {
 		if (stageMemos != null)
 			for (position in generatedStart...program.functions.length) {
 				var fn = program.functions[position], origin = methods.origins.get(fn.name);
-				program.functions[position] = compiler.ir.pipeline.IrFunctionStages.derived(stage, fn.name, pass,
+				program.functions[position] = compiler.ir.pipeline.IrFunctionStages.derived(STAGE, fn.name, pass,
 					origin == null
 					? compiler.ir.pipeline.IrFunctionStages.FROM_NAME : originalVersions.get(origin) ?? 0,
 					stageMemos, builder, reader -> {
 						reader.read(ValueArrayElementPass.ELEMENT, "");
 						fn;
-					});
+					}, part);
 			}
 		var nullableScalars = false;
 		for (slot in factory.layout.lanes.slots)

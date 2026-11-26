@@ -587,8 +587,15 @@ list and the target list: one driver, so the stages past the encode point moved 
 - **Settling.** Before the encode point a function made again the same is the object kept: by the stage's `end` (`same`), and,
   after a stage without a memo, by a `put` of each function it made into that stage's kind (`IrStageMemos.settle`); what a stage's
   `finish` added is put the same way. Past the encode point nothing is compared, as before (`IrStageMemos.bodies`).
+- **Parts.** A stage that runs once per part of the program (the value array rewrite and scalar lowering, once per element type)
+  is one kind, each part's functions keyed apart (`IrStageQueries.part`, `partKey`): a database holds at most 256 kinds, and a kind
+  per element type let a program with many element types fail to compile (`ManyValueArrayElementsMain`, 300 of them). What the
+  stages derive, what their `finish` adds and what the stages without a memo make are one kind each the same way (`ir-derived`,
+  `ir-derived-bodies`, `ir-added`, `ir-settled`), each stage a part: they hold few functions, and a kind per stage had columns as
+  long as the program's.
 - **Helpers by name** (`IrStageMemos.helper`, the enum dispatch's boxes, views and unboxes) are a kind put by the helper's name and
-  swept with the build.
+  swept with the build; it keeps a helper as made, without comparing it (whether one made again is the same is settled where the
+  stage adds it).
 - **Check mode** computes every held key again in a frame it then drops (`ComputedQueryKind.cancel`) and compares it, its
   summary and its requests.
 
@@ -628,8 +635,10 @@ difference below is the build, not the driver.
 So the held path meets the cost rule within the build's variance with up to one fact, and not with three: each fact read is a read
 of the verification loop (about 75 instructions, against 36 for a print compared). The stages read a fact for some functions, not
 three for each, and on the compiler's own sources the edits do not get slower (perf-guard, one machine, against origin/main): the
-no-op rebuild 0.794G → 0.794G instructions, the body edit 2.286G → 2.270G (−0.7%), the signature edit 18.22G → 18.31G (+0.5%);
-allocation of the body edit 237.9 → 234.3 MB, of the signature edit 992 → 1,013 MB; the server's live data 785 → 797 MB. The
+no-op rebuild 0.794G → 0.795G instructions, the body edit 2.286G → 2.273G (−0.6%), the signature edit 18.26G → 18.35G (+0.5%);
+allocation of the body edit 237.8 → 234.4 MB, of the signature edit 992 → 1,013 MB (+2%, in the two stages whose `finish` adds
+about 200 helpers on that edit, each compared with what the stage added last build; not yet traced further); the server's live
+data 785 → 791 MB. The
 self-compile is byte-identical, warm builds equal fresh ones with and without `--check-reuse`, the edit replay and the test
 driver pass.
 

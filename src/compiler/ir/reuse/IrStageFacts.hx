@@ -102,8 +102,12 @@ class IrStageFacts extends QueryKindBase {
 			keys.push(key);
 			values.push(0);
 			computedIn.push(0);
-			QueryRead.extend(verifiedAt, made + 1);
-			QueryRead.extend(changes, made + 1);
+			if (made >= verifiedAt.length) {
+				// Lengthened by half again: a build that names many new facts must not copy the columns once per fact.
+				var length = made + 1 + (made >> 1);
+				QueryRead.extend(verifiedAt, length);
+				QueryRead.extend(changes, length);
+			}
 		} else {
 			spaceOf[made] = space;
 			kinds[made] = kind;
@@ -172,9 +176,22 @@ class IrStageFacts extends QueryKindBase {
 			|| spaceOf[key] < 0 ? "a dropped fact" : spaceNames[spaceOf[key]] + " " + kinds[key] + " "
 			+ keys[key];
 
-	/** Drops the facts no build read since `since`, and the interned texts no fact kept has as its value. */
+	/**
+	 * Drops the facts no build read since `since`, when they outnumber those read, and the interned texts no fact kept has as its
+	 * value.
+	 */
 	override public function sweep(since:Int):Int {
 		if (usedAt < since)
+			return 0;
+		// Facts are dropped once those the build did not read are many: a sweep walks every fact and every interned text.
+		var live = 0, read = 0;
+		for (id in 0...spaceOf.length)
+			if (spaceOf[id] >= 0) {
+				live++;
+				if (verifiedAt[id] >= since)
+					read++;
+			}
+		if (live - read <= read + 1024)
 			return 0;
 		var dropped = 0, kept:Map<Int, Bool> = [];
 		for (id in 0...spaceOf.length) {

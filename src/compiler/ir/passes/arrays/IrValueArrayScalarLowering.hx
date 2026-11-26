@@ -57,10 +57,9 @@ class IrValueArrayScalarLowering extends compiler.ir.pipeline.IrFunctionPass {
 			}
 		if (!helpers.keys().hasNext())
 			return;
-		program.functions = compiler.ir.pipeline.IrFunctionStages.run("value-array-scalar:"
-			+ compiler.ir.model.IrTypeIdentity.text(element),
+		program.functions = compiler.ir.pipeline.IrFunctionStages.run("value-array-scalar",
 			new IrValueArrayScalarLowering(suffix, helpers, scratch, stageMemos), program.functions, stageMemos,
-			builder);
+			builder, compiler.ir.model.IrTypeIdentity.text(element));
 	}
 
 	/** Whether `name` is named as one of the element's helpers, expanded or not. */

@@ -167,8 +167,8 @@ class IrStageMemos {
 	public function stage(name:String, bodies:Bool):IrStageQueries {
 		var known = queries.get(name);
 		if (known == null) {
-			known = new IrStageQueries(database.register(new compiler.query.ComputedQueryKind<IrFunction>(name,
-				bodies ? sameObject : compiler.ir.codec.IrFunctionStateEquality.same, null, functionName)));
+			known = new IrStageQueries(database, name,
+				bodies ? sameObject : compiler.ir.codec.IrFunctionStateEquality.same);
 			queries.set(name, known);
 		}
 		return known;
@@ -177,8 +177,11 @@ class IrStageMemos {
 	static function sameObject(left:IrFunction, right:IrFunction):Bool
 		return left == right;
 
-	static function functionName(key:Int):String
+	public static function functionName(key:Int):String
 		return compiler.ir.model.IrSymbol.ofFunctionKey(key).name;
+
+	/** The kind of what the stages without a memo made (`settle`), each stage a part of it: they make few functions. */
+	static inline final SETTLED = "ir-settled";
 
 	/**
 	 * After `name`, a stage before the encode point that keeps no memo of its own: each function in `functions` made since
@@ -186,11 +189,11 @@ class IrStageMemos {
 	 * after it find the object they made their memos from. `functions` is changed in place.
 	 */
 	public function settle(name:String, functions:Array<IrFunction>, since:Int):Void {
-		var kind = stage(name, false).functions;
+		var settled = stage(SETTLED, false), kind = settled.functions, keys = settled.part(name);
 		for (index in 0...functions.length) {
 			var fn = functions[index];
 			if (fn.version > since) {
-				var kept = kind.put(database, fn.symbol.functionKey(), fn);
+				var kept = kind.put(database, settled.partKey(keys, fn.symbol.functionKey()), fn);
 				if (kept != fn)
 					functions[index] = kept;
 			}
@@ -244,8 +247,10 @@ class IrStageMemos {
 	public function keepHelper(fn:IrFunction):Void {
 		var kind = helpers;
 		if (kind == null)
+			// A helper made again is kept as made: whether it is the same is the stage's to settle, not the memo's.
 			helpers = kind = database.register(new compiler.query.ComputedQueryKind<IrFunction>("ir-helpers",
-				compiler.ir.codec.IrFunctionStateEquality.same, null, functionName));
+				sameObject, null,
+				functionName));
 		kind.put(database, fn.symbol.functionKey(), fn);
 	}
 
@@ -283,8 +288,40 @@ class IrStageQueries {
 
 	var requests:Map<Int, Array<IrStageRequest>> = [];
 
-	public function new(functions:compiler.query.ComputedQueryKind<IrFunction>)
-		this.functions = functions;
+	/**
+	 * A stage that runs once per part of the program (once per value array element type, `IrValueArrayProgramRewrite`) keys each
+	 * function of each part apart, so that one kind holds every part and the count of parts has no limit: by part, the key of each
+	 * function by its name's number, plus one (`partKey`); and by key, the name's number.
+	 */
+	final parts:Map<String, Array<Int>> = [];
+
+	var functionsByKey:Array<Int> = [];
+
+	public function new(database:compiler.query.QueryDatabase, name:String, same:(IrFunction, IrFunction) -> Bool) {
+		functions = database.register(new compiler.query.ComputedQueryKind<IrFunction>(name, same, null,
+			key -> IrStageMemos.functionName(functionsByKey.length > 0 ? functionsByKey[key] : key)));
+	}
+
+	/** The keys of the functions of part `name` (`partKey`). */
+	public function part(name:String):Array<Int> {
+		var known = parts.get(name);
+		if (known == null)
+			parts.set(name, known = []);
+		return known;
+	}
+
+	/** The key of the function whose name's number is `named` in the part whose keys are `keys` (`part`). */
+	public inline function partKey(keys:Array<Int>, named:Int):Int
+		return named < keys.length && keys[named] != 0 ? keys[named] - 1 : givePartKey(keys, named);
+
+	function givePartKey(keys:Array<Int>, named:Int):Int {
+		var key = functionsByKey.length;
+		functionsByKey.push(named);
+		if (named >= keys.length)
+			compiler.query.QueryKind.QueryRead.extend(keys, named + 1 + (named >> 1));
+		keys[named] = key + 1;
+		return key;
+	}
 
 	/** The input of a function made from nothing but its name, such as a helper its name describes (`made`). */
 	public static inline final FROM_NAME = -1;
@@ -352,6 +389,8 @@ class IrStageQueries {
 		summaries = [];
 		asks = [];
 		requests = [];
+		parts.clear();
+		functionsByKey = [];
 	}
 }
 
