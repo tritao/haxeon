@@ -249,8 +249,8 @@ Everything below keeps results across builds outside the engine. Lines are the f
 | `IrStageMemo`, `IrStageMemos`, `IrStageEntry` | 526 (the file, with `IrLineage` and the contribution memos) | stage and function slot; input version, fact reads, output, summary, helper requests; dropped when the stage's last run did not use it | `IrFunctionStages.run`, the ~25 `IrFunctionPass` stages | a computed kind per stage, keyed by function symbol; done for every per-function stage (slice 3), the inliner keeps `IrStageMemo` until slice 5 |
 | ~~`IrLineage`, `IrFunctionSlots`~~ | (above), 95 | slot → function object and version; a version is never given twice; slots swept when cells exceed twice the functions | every stage (`settle`, `versionOf`), `IrStage` | done (slice 3): a version is the function object's own number (`IrFunction.version`), settling is early cutoff in the stages' kinds |
 | `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests); the passes' facts are done (slice 3: `IrStageFacts`, `IrFactReader` reads it); `IrFacts` stays for the inliner (slice 5), verification (6) and lowering (7) |
-| Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemo.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrTypeAwareWalk.SUMMARIES`, `IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the rest left ("Slice 3 as built") |
-| `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | summary queries; tables read as table results |
+| Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemo.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the requests and enum mentions done (summaries, slice 3), the walk summaries done (`IrWalkMemo`), the enum dispatch's encodings a kind by type id; those read past the encode point left (slice 4) |
+| `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | a kind per walk (`IrWalkMemo`); done for the walks before the encode point (slice 3), the record stays for those past it (4) and `HlPlainBuild` (6) |
 | Reuse code inside passes | ~750 lines naming the above in 49 files; est. 1,000–1,400 with the code around them | — | — | query declarations (est. a third of it); fact reads stay as engine reads |
 | ~~`IrGeneratedFunctions` (structure printers, initializers)~~ | 95 | key and identity of the input objects; swept when untouched | `FrontendCompilation`, `IrProgramAssembler` | done (slice 2): results in the generation kind with their reads |
 | ~~`objectCache`, `canonicalObjectCache` (`SessionState`)~~ | ~40 in `FrontendCompilation` | class name; while the declaration is unchanged | frontend, walks' table copies | done (slice 2): objects by name in a computed kind, one made the same is last build's; the object set stays state (below) |
@@ -326,7 +326,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 | B | Module sections and load-time linking ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), its slices 1–5) | −3,300 / +1,200, fork +650 net | link and replay, published slots and stable ids, symbol persistence | 0.1 / 1.4 / 0 | A; checks also ci-tier debug-metadata and hot-reload, self-compile oracle takes a new base |
 | 1 | **Done** (below): engine for per-function stages: a computed kind keyed by function symbol with equality cutoff, contributions and summaries with per-key reads, sweep of computed memos | +400 | `QueryKind.computed` | none; verifying the memos must keep the body edit at today's cost (`IrLineage.start` alone is 2.4% of it) | — |
 | 2 | **Done** (below): IR generation, generated functions, object tables as results | −450 / +250; built −437 / +527 | `IrFunctionVersions`, `IrGeneratedFunctions`, `canonicalObjectCache` (`objectCache` stays as the object set), the INPUT settling of `IrLineage.start`, frontend `IrFunctionMemo` users | 0.1 / 0.1 / 0.1; built 0.03 / 0.02 / not measured (no-op 0.03) | 1 |
-| 3 | Assembly stages before the encode point; first part **done** (below): the stage driver for every per-function stage, facts as a kind, the lineage gone | −2,000 / +500; first part built −~700 / +~650 (below) | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage`; first part: `IrLineage`, `IrFunctionSlots`, the stage memos of the per-function stages, the memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05; first part: body edit −0.7%, no-op 0, signature edit +0.5% | 2 |
+| 3 | Assembly stages before the encode point; **done** (below, two parts): the stage driver for every per-function stage, facts as a kind, the lineage gone; held keys visited only when their facts changed; the walks, requests and mentions before the encode point on the engine | −2,000 / +500; first part built −~700 / +~650 (below) | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage`; first part: `IrLineage`, `IrFunctionSlots`, the stage memos of the per-function stages, the memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05; first part: body edit −0.7%, no-op 0, signature edit +0.5% | 2 |
 | 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4) | −400 / +250 | their whole-program rereads | 0.2 / 1.2 / 0.2 | 3 |
 | 5 | Inliner | −300 / +150 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A | 4 |
 | 6 | Verification and final-IR summaries | −450 / +100 | `IrVerifyMemo`, `IrFunctionMemo`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, plain-build reach record | 0.1 / 0.3 / 0.05 | 5 |
@@ -529,9 +529,8 @@ costs 0.5% more (10.78G → 10.83G): the kind's copies per value type are more c
 **The rule for slice 3.** A stage moves onto the engine only when its held path costs no more than today's, measured in the case
 above nearest to its reads per function, and the body edit and no-op do not get slower. A stage whose held path cannot beat
 today's (one whose rewrites read many keys) does not verify every key: it visits only the keys whose reads changed, the keys its
-input changed in the revision and the readers of the summary keys that changed, and keeps the others as they are. The engine has
-neither list yet (per kind the keys changed in a revision, per summary key its readers); they come with the first stage that needs
-them.
+input changed in the revision and the readers of the summary keys that changed, and keeps the others as they are. Every stage
+does so for its facts since slice 3 (the second part, below: per fact its readers, per run the facts that changed).
 
 **The stage driver.** Each stage is a `ComputedQueryKind<IrFunction>` keyed by function symbol, whose input is the stage before's
 kind (the first stage's is `irGeneration`):
@@ -647,17 +646,81 @@ Lines in `src/`: 1,121 deleted and 1,163 added, about 180 of each a rename (`lin
 about 700 lines (`IrLineage`, `IrFunctionSlots`, the stage memo paths of `IrFunctionStages`, `IrStage` and `IrFactReader`, the
 shared name index), the added engine code about 650 (`IrStageFacts`, `IrStageQueries`, the driver, `IrFactRecorder`).
 
-**Left for slice 3**, the whole-program memos of the stages before the encode point, each a summary over per-function
-contributions with the stage's facts read as its keys (est. −450 / +250):
+### Slice 3 as built (second part)
 
-- the walks of `dispatch-walk` and `entry-prune` (`IrTypeAwareWalk.runKept`, `referenced`, `IrWalkRecord`, the `SUMMARIES`
-  contribution memo), about 200 lines;
-- the enum dispatch's kept encodings and escape reach (`IrEnumDynamicDispatch.ENCODINGS`, `IrEnumEscapeReach`), about 120;
-- the per-function contribution memos read before the encode point (`IrGenericOwnerErasure` and `IrTypedInterfaceDispatch`
-  `REQUESTS`, `IrEnumRuntimeSpecializations.MENTIONS`, `IrInlineEnumEligibility.USES`), about 100;
-- the held path of a rewrite that read several facts, which the cost rule does not let cost more than the prints did: a stage
-  then visits only the keys whose reads changed, with per fact the keys that read it and per run the facts that changed (the
-  engine has neither list yet; est. +150 in `IrStageFacts` and the driver).
+The whole-program memos of the stages before the encode point, and the held path of a rewrite that read several facts.
+
+- **Visiting only the keys whose facts changed.** `IrStageFacts` keeps, per fact, the keys of its stage's kind whose memos read it
+  (an edge list per fact, recorded from a memo's reads when it is computed, `IrStageQueries.readersOf`). A run brings the facts its
+  memos read up to date before its loop and marks the readers of those that changed (`markReaders`); a key made from the same
+  function, whose memo was verified in the stage's last run and is not marked, is taken as verified (`ComputedQueryKind.hold`)
+  without reading its reads. A memo that read anything but facts is always verified. A changed fact's list is dropped as its
+  readers are marked, the readers computed again give it again, and the lists are compacted (without repeats or keys whose memo
+  is gone) once they outgrow what they held. `--check-reuse` still computes every held key again.
+- **Requests and mentions as summaries.** What the erasure and the method references (erasure requests), the typed interface
+  dispatch (interface requests) and the enum runtime specializations (enum mentions) read of every function is a `QuerySummary`
+  (`IrContributionSummary`): a function contributes the items it names, each interned to a key by its text, and keeps its
+  contribution while it is the same object (`QuerySummary.holdsFrom`, by `IrFunction.version`); the step reads the items some
+  function names. The interface dispatch and the enum mentions also run past the encode point; each place has a summary of its
+  own, so both moved.
+- **Walks as kinds.** The dispatch walk, the entry prune's walk, the enum dispatch's dropped equalities and escape reach and the
+  tag lowering's called equalities are each an `IrWalkMemo`: what the walk reads is settled once per build into change revisions
+  (key 0: what its caller gives it, the program's tables, `IrWalkTables`, and its functions' names, order and declarations; a key
+  per function for its edges, `IrWalkSummary`, compared only where the function is not the object it was), and the memo of its
+  result holds while none of the keys its walk read changed since it was verified. Walks at different places share the summary of
+  a function they are given as the same object, as the summary memo by version did (a summary per walk held 28 MB more).
+  `--check-reuse` walks a held memo again and compares, and reads each summary a walk reads again from its function: the edit
+  replay found a walk that took its own summary of the function it held for the one it was given, which a walk done again
+  did not show.
+- **The enum dispatch's helper names** by type (`ENCODINGS`, a whole-program result) are a kind by type id
+  (`IrStageMemos.typeEncoding`), swept with the build.
+
+Design changes from the plan, with the reasons:
+
+- **A walk's memo is not a computed kind.** Its reads are keys of its own kind, verified against that kind's change column, not
+  recorded in a database frame: the walk is the kind's only reader, its result types differ per walk (a `@:generic` kind per
+  result type would be three more copies of the kind's code), and the reads it records (one per function it follows) need no
+  frame.
+- **Declarations are one key, not a key per function.** A walk reads every function's declaration and the set and order of the
+  functions, so any of them changing changes its result in general; a key per function would cost a read per function at every
+  verification for nothing.
+- **The mapping was wrong about `IrInlineEnumEligibility.USES`**: it is read by the inline enum lowering, past the encode point,
+  and stays with the stages there (slice 4). `IrEnumEscapeReach.STORES` (the closures and map stores a reach is given) stays too:
+  the reaches past the encode point read it, and the one before reads its logs as given inputs.
+- **`IrWalkRecord` stays** for the walks past the encode point (`IrScalarArguments`, `IrNullableScalarFlow`,
+  `IrClosedEnumTagAbi`, `IrInlineEnumEligibility`) and `HlPlainBuild`; its table copies and declaration comparison moved into
+  `IrWalkTables`, which both use.
+
+Found on the way: the driver's settling of what a stage's `finish` added (the `ir-added` put) told the added functions from the
+stage's own by their place in the list, but the enum dispatch and the tag lowering drop functions in `finish`, which moves the
+rest: each function rewritten in the build after the first one dropped was compared with what was put last build, frozen by then,
+which encoded it. That was the signature edit's 2% more allocation of the first part (in those two stages, 22 and 16 MB against 5
+and 7); a function is now the stage's own when its kind holds it for its name (`IrStageQueries.keeps`).
+
+Measured, the stage benchmark (instructions per function and stage of a warm build, one machine):
+
+| Case | Before the stage driver | First part | Now | Engine loop |
+|---|---|---|---|---|
+| held, no facts | 373 | 392 | 360 | 240 |
+| held, 1 fact | 479 | 492 | 393 | 413 |
+| held, 3 facts | 552 | 628 | 394 | 537 |
+| cutoff | 2,984 | 2,543 | 2,949 | 2,422 |
+
+(The first column is the first part's measurement, "Slice 3 as built (first part)"; the others are this machine's builds of the first
+part and of this one.) A held key now costs the same whatever it read, below the bare engine loop that verifies each read.
+
+The cutoff case pays for recording each computed key's readers again. On the compiler's own sources (perf-guard, one machine,
+against origin/main): the no-op rebuild 0.80G → 0.78G instructions, the body edit 2.28G → 2.23G (−2.2%), the signature edit
+18.36G → 18.33G (−0.2%; 18.20G before the walks moved, which read the summaries of the functions that changed at each walk);
+allocation of the signature edit 1,013 → 1,002 MB; the server's live data 754 → 761 MB (the facts'
+readers and the walks' columns). The self-compile is byte-identical, warm builds equal fresh ones with and without
+`--check-reuse`, the edit replay and the test driver pass.
+
+Lines in `src/`: 433 deleted and 905 added, of which about 110 moved (the table comparison, from `IrWalkRecord` to
+`IrWalkTables`), against the estimated −450 / +250 and +150: the visiting is about 180 lines, the summaries about 100 with their
+interning, the walks' kind about 200. Less was deleted than estimated because the walks past the encode point keep the record,
+the contribution memos and `lastResult` (slice 4), and the moved steps' callers still build what the walks are given. What the moved memos left behind (`IrContributionMemo`, `lastResult`, `IrWalkRecord`, the
+remaining contribution keys) serves the stages past the encode point and goes with slice 4.
 
 ## Prior art
 
