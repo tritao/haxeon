@@ -10,19 +10,21 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.State;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 
-/** Shared Haxe implementation for checkbox and switch-style boolean controls. */
-class BinaryControl implements View implements Observable {
+/**
+ * Shared Haxe implementation for checkbox and switch-style boolean controls. The caller owns the value: activation flips
+ * this instance's observable `checked`, which reruns the control's scope at once, and reports it through `onChange`; a
+ * parent that builds again with another value replaces it.
+ */
+class BinaryControl implements ScopeView implements Observable {
 	/** Identifies the control among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
 
@@ -63,23 +65,30 @@ class BinaryControl implements View implements Observable {
 		this.enabled = true;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(new Key(key), function() {
-			var nodeId = context.rootId(toggle ? "toggle" : "checkbox");
-			// This read belongs to the enclosing build: activation must invalidate the retained parent even though the
-			// control itself can patch its render node in place.
-			var invalidation:Null<State<Bool>> = null;
-			if (onChange != null) {
-				invalidation = context.state(nodeId, false);
-				invalidation.value;
-			}
-			// Hover and press change only how the control looks, so it updates itself and the panel around it stays cached.
-			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId, invalidation));
-		});
+	public function scopeKey():String return key;
+
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, BinaryControl)) return false;
+		var other:BinaryControl = cast previous;
+		return key == other.key && label == other.label && accessibilityLabel == other.accessibilityLabel
+			&& checked == other.checked && indeterminate == other.indeterminate && enabled == other.enabled
+			&& onChange == other.onChange && toggle == other.toggle && haxeon.Diff.mask(style, other.style) == 0;
 	}
 
+	public function build(context:BuildContext):RenderNode {
+		// The enclosing scope reads `checked` too, so activation reruns it: callers commonly keep the flag in a plain
+		// field and branch on it, as in a "show advanced" switch, and that read is not tracked.
+		if (onChange != null) readChecked();
+		return context.mountComponent(this);
+	}
+
+	function readChecked():Bool return checked;
+
+	public function buildBody(context:BuildContext):RenderNode return buildControl(context,
+		context.rootId(toggle ? "toggle" : "checkbox"));
+
 	function buildControl(context:BuildContext,
-			nodeId:haxeon.ui.core.WidgetId, invalidation:Null<State<Bool>>):RenderNode {
+			nodeId:haxeon.ui.core.WidgetId):RenderNode {
 		var flags = context.interactionStates.get(nodeId);
 		flags = (checked ? flags.insert(StyleState.Checked) : flags.remove(StyleState.Checked));
 		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
@@ -98,6 +107,8 @@ class BinaryControl implements View implements Observable {
 		var node = context.createNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
 		node.setStyleIdentity(toggle ? "toggle" : "checkbox", key, key, null, [toggle ? "toggle" : "checkbox"]);
 		node.states = flags;
+		// The indicator and its mark take the row's hover and press.
+		node.buildsFromHover = true;
 		node.computedStyle = computed;
 		node.focusable = enabled;
 		node.enabled = enabled;
@@ -204,10 +215,7 @@ class BinaryControl implements View implements Observable {
 			semantics.value = checked ? "true" : "false";
 			if (checked) semantics.states |= AccessibilityState.Checked;
 			else semantics.states = semantics.states.remove(AccessibilityState.Checked);
-			if (onChange != null) {
-				onChange(checked);
-				if (invalidation != null) invalidation.update(!invalidation.value);
-			}
+			if (onChange != null) onChange(checked);
 		};
 		node.onActivate(activate);
 		return node;

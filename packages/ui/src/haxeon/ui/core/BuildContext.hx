@@ -268,7 +268,8 @@ class BuildContext implements Disposable {
 	public function hoverRebuilds(node:RenderNode):Bool {
 		var owner = updatingOwner(node);
 		var entry = owner == null ? null : updatingBuild(owner);
-		return !updateInPlace || (entry != null && entry.buildsFromHover) || hasHoverStyle(node);
+		return !updateInPlace || node.buildsFromHover || (entry != null && entry.buildsFromHover)
+			|| hasHoverStyle(node);
 	}
 
 	/** Conservative guard for retained hover. Conditional rules are included even when inactive. */

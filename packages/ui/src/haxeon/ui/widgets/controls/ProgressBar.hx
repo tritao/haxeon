@@ -1,5 +1,7 @@
 package haxeon.ui.widgets.controls;
 
+import Observable;
+
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
@@ -18,8 +20,11 @@ import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleTarget;
 
-/** Read-only progress indicator painted from a normalized numeric range. */
-class ProgressBar implements ScopeView {
+/**
+ * Read-only progress indicator painted from a normalized numeric range. Its fields are observable: setting `value` or
+ * `mode` reruns the bar's scope.
+ */
+class ProgressBar implements ScopeView implements Observable {
 	/**
 	 * Identifies the bar among its siblings, so its animation carries on across rebuilds: required, and never empty.
 	 */

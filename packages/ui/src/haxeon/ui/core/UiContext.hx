@@ -1359,7 +1359,7 @@ class UiContext implements Disposable {
 	function queueNativeInteraction(node:RenderNode, hoverOnly:Bool):Bool {
 		var owner = buildContext.interactionRenderScope(node);
 		if (owner == null) return false;
-		if (node.recordsInteraction && (!hoverOnly || buildContext.hasHoverStyle(node))) owner.markDirty();
+		if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) owner.markDirty();
 		else if (node.hasPaintHandler() && patchFramePaintNodes.indexOf(node) < 0) patchFramePaintNodes.push(node);
 		return true;
 	}

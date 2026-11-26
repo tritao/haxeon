@@ -71,6 +71,12 @@ class RenderNode {
 	 */
 	public var recordsInteraction(default, null):Bool = false;
 
+	/**
+	 * Whether the widget built more than this node's own style from its hover state, as a control whose indicator takes the
+	 * row's hover does. Hover alone then rebuilds it even when no stylesheet rule matches this node on hover.
+	 */
+	public var buildsFromHover:Bool = false;
+
 	/** Invalidate a retained custom display list without changing geometry or text. */
 	public function invalidatePaint():Void {
 		paintKeyResolved = false;
@@ -172,6 +178,7 @@ class RenderNode {
 		enabled = true;
 		states = StyleState.empty();
 		recordsInteraction = false;
+		buildsFromHover = false;
 		styleType = null;
 		styleKey = null;
 		styleId = null;

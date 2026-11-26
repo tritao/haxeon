@@ -192,6 +192,8 @@ class LayoutSessionSmoke {
 		if (ScopeRootSubmissionMain.run() != 42) throw "A cached submission lost its current component body root";
 		var navigation = NavigationScopesMain.run();
 		if (navigation != 42) throw "Navigation scope motion failed at stage " + navigation;
+		var controls = ControlScopesMain.run();
+		if (controls != 42) throw "Caller-owned control scopes failed at stage " + controls;
 		var session = LayoutSession.create();
 		session.verifyTransactions = true;
 		for (mode in 0...3) {

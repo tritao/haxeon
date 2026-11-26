@@ -1,17 +1,17 @@
 package haxeon.ui.widgets.controls;
 
+import Observable;
+
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.State;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
@@ -21,8 +21,11 @@ import haxeon.ui.style.StyleTarget;
 /**
  * Horizontal value slider with Haxe-owned pointer, keyboard, and semantic behavior. It draws only its track and thumb:
  * show a visible label, usually with the value, beside it.
+ *
+ * The caller owns the value: an edit sets this instance's observable `value`, which reruns the slider's scope at once,
+ * and reports it through `onChange`; a parent that builds again with another value replaces it.
  */
-class Slider implements View {
+class Slider implements ScopeView implements Observable {
 	/** Identifies the slider among its siblings, so its state survives rebuilds: required, and never empty. */
 	public final key:String;
 
@@ -76,12 +79,19 @@ class Slider implements View {
 		enabled = true;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(new Key(key), function() {
-			var nodeId = context.rootId("slider");
-			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId));
-		});
+	public function scopeKey():String return key;
+
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, Slider)) return false;
+		var other:Slider = cast previous;
+		return key == other.key && accessibleName == other.accessibleName && value == other.value
+			&& minimum == other.minimum && maximum == other.maximum && step == other.step && enabled == other.enabled
+			&& onChange == other.onChange && haxeon.Diff.mask(style, other.style) == 0;
 	}
+
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+
+	public function buildBody(context:BuildContext):RenderNode return buildControl(context, context.rootId("slider"));
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
 		var flags = context.interactionStates.get(nodeId);
@@ -107,8 +117,7 @@ class Slider implements View {
 		if (!enabled) semantics.states |= haxeon.ui.semantics.Semantics.AccessibilityState.Disabled;
 		node.semantics = semantics;
 
-		var invalidation:State<Float> = context.state(node.id, value);
-		var dragging:State<Bool> = context.state(context.id("dragging"), false);
+		var drag = context.lazyState(context.id("drag"), function() return new SliderDrag()).value;
 		var setValue = function(next:Float) {
 			if (!enabled || !finite(next)) return false;
 			var bounded = clamp(next, minimum, maximum);
@@ -116,22 +125,19 @@ class Slider implements View {
 			bounded = clamp(snapped, minimum, maximum);
 			if (bounded == value) return false;
 			value = bounded;
-			if (context.requestPatch(nodeId)) invalidation.update(value);
-			else invalidation.update(value);
 			if (onChange != null) onChange(value);
 			return true;
 		};
 		var valueAtPointer = function(event:UiEvent) {
-			var live = RenderNode.latest(node);
-			if (live.resolved == null) return false;
-			var geometry:ResolvedLayoutItem = cast live.resolved;
+			if (node.resolved == null) return false;
+			var geometry:ResolvedLayoutItem = cast node.resolved;
 			var point = geometry.viewportToLayout(event.x, event.y);
 			var usableWidth = Math.max(1.0, geometry.width - 20.0);
 			var fraction = clamp((point.x - geometry.x - 10.0) / usableWidth, 0.0, 1.0);
 			return setValue(minimum + fraction * (maximum - minimum));
 		};
 		node.onPaint(function(canvas, geometry) {
-			var liveStyle:haxeon.ui.style.ComputedStyle = cast RenderNode.latest(node).computedStyle;
+			var liveStyle:haxeon.ui.style.ComputedStyle = cast node.computedStyle;
 			var accent = liveStyle.getColor(StyleProperty.SliderFillColor);
 			var muted = liveStyle.getColor(StyleProperty.SliderTrackColor);
 			var foreground = liveStyle.getColor(StyleProperty.SliderThumbColor);
@@ -146,20 +152,19 @@ class Slider implements View {
 		node.on(UiEventKind.PointerDown, function(event) {
 			if (enabled && event.button == 0) {
 				event.capturePointer();
-				dragging.update(true);
+				drag.active = true;
 				valueAtPointer(event);
 				event.preventDefault();
 			}
 		});
 		node.on(UiEventKind.PointerMove, function(event) {
-			var isDragging:Bool = dragging.value;
-			if (isDragging) valueAtPointer(event);
+			if (drag.active) valueAtPointer(event);
 		});
 		node.on(UiEventKind.PointerUp, function(_) {
-			dragging.update(false);
+			drag.active = false;
 		});
 		node.on(UiEventKind.PointerCancel, function(_) {
-			dragging.update(false);
+			drag.active = false;
 		});
 
 		var handleKey = function(event:UiEvent) {
@@ -268,4 +273,11 @@ class Slider implements View {
 	}
 
 	static inline function whitespace(code:Int):Bool return code == 9 || code == 10 || code == 13 || code == 32;
+}
+
+/** Whether a pointer is dragging the thumb; scope state, so it survives the reruns the drag causes. */
+private class SliderDrag {
+	public var active = false;
+
+	public function new() {}
 }

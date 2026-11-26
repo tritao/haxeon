@@ -88,6 +88,8 @@ class Radio implements ScopeView {
 		var node = context.createNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
 		node.setStyleIdentity("radio", key.rawValue(), key.rawValue(), null, ["radio"]);
 		node.states = flags;
+		// The indicator and its dot take the row's hover and press.
+		node.buildsFromHover = true;
 		node.computedStyle = computed;
 		node.focusable = enabled;
 		node.enabled = enabled;
