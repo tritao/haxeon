@@ -7,6 +7,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
@@ -42,11 +43,11 @@ private class ScopeSubmissionView implements View {
 	public function new(width:Signal<Int>) scope = new TrackedScope("width", () -> new SubmissionBox(width.value));
 	public function build(context:BuildContext):RenderNode {
 		builds++;
-		var root = scope.build(context);
-		root.layout.style.zIndex = 7;
-		root.on(UiEventKind.Focus, _ -> focuses++, UiEventPhase.Capture);
-		root.add(context.createNode(context.id("overlay")));
-		return root;
+		var modifier = new RootModifier();
+		modifier.zIndex = 7;
+		modifier.on(UiEventKind.Focus, _ -> focuses++, UiEventPhase.Capture);
+		modifier.add(context.createNode(context.id("overlay")));
+		return context.build(scope, modifier);
 	}
 }
 

@@ -10,6 +10,7 @@ import haxeon.ui.Rect;
 import haxeon.ui.TextLayout;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
@@ -284,15 +285,9 @@ internal class SelectionPopup {
 				optionSelected, ["selection-option"], null, null, null,
 				optionSelected ? SelectionIndicator.check("option-check-" + originalIndex,
 				context.theme.tokens.textPrimary) : null, null, true, null, null, null, optionSemantics);
-			var optionNode = context.withScope(new haxeon.ui.core.Key("option-" + option.key),
-				function() return optionButton.build(context));
-			optionNodes.push(optionNode);
-			optionParent.add(optionNode);
-		}
-
-		for (position in 0...optionNodes.length) {
 			var optionPosition = position;
-			optionNodes[position].on(UiEventKind.KeyDown, function(event) {
+			var optionModifier = new RootModifier();
+			optionModifier.on(UiEventKind.KeyDown, function(event) {
 				if (event.key == UiKey.Escape) {
 					onClose();
 					event.preventDefault();
@@ -315,7 +310,12 @@ internal class SelectionPopup {
 					&& nextPosition < optionNodes.length) context.requestFocus(optionNodes[nextPosition].id);
 				event.preventDefault();
 			});
+			var optionNode = context.withScope(new haxeon.ui.core.Key("option-" + option.key),
+				function() return context.build(optionButton, optionModifier));
+			optionNodes.push(optionNode);
+			optionParent.add(optionNode);
 		}
+
 		return dropdown;
 	}
 

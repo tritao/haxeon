@@ -21,6 +21,9 @@ import haxeon.ui.core.RenderNode;
 	var authored_focusTrap:Bool;
 	var authored_hitTestSelf:Bool;
 	var authored_commandShortcutFilter:Null<String->Bool>;
+	var authored_computedStyle:Null<haxeon.ui.style.ComputedStyle>;
+	var authored_focusable:Bool;
+	var authored_enabled:Bool;
 
 	var styleOverrides:Int = 0;
 	var semanticsOverride:Bool = false;
@@ -43,6 +46,9 @@ import haxeon.ui.core.RenderNode;
 		authored_focusTrap = root.focusTrap;
 		authored_hitTestSelf = root.hitTestSelf;
 		authored_commandShortcutFilter = root.commandShortcutFilter;
+		authored_computedStyle = root.computedStyle;
+		authored_focusable = root.focusable;
+		authored_enabled = root.enabled;
 
 		handlers = root.handlers == null ? 0 : root.handlers.length;
 		outside = root.outsidePointerDownHandlers == null ? 0 : root.outsidePointerDownHandlers.length;
@@ -93,6 +99,31 @@ import haxeon.ui.core.RenderNode;
 		resolved = nextResolved;
 		paint = nextPaint;
 		decorations = nextDecorations;
+	}
+
+	/** What a caller changed on `root` since its body built it, or null when nothing did. */
+	public function callerChanges(root:RenderNode):Null<String> {
+		var styleBits = haxeon.Diff.mask(style, root.layout.style) & LayoutStyle.valueFields;
+		if (styleBits != 0) return "layout style (fields " + styleBits + ")";
+		if (root.cursor != authored_cursor || root.tabIndex != authored_tabIndex
+			|| root.commandScope != authored_commandScope || root.windowDecoration != authored_windowDecoration
+			|| root.windowDecorationCursor != authored_windowDecorationCursor
+			|| root.hitTestBehavior != authored_hitTestBehavior || root.focusTrap != authored_focusTrap
+			|| root.hitTestSelf != authored_hitTestSelf || root.commandShortcutFilter != authored_commandShortcutFilter
+			|| root.focusable != authored_focusable || root.enabled != authored_enabled)
+			return "node fields";
+		if (root.computedStyle != authored_computedStyle) return "computed style";
+		if (root.semantics != semantics) return "semantics";
+		if ((root.handlers == null ? 0 : root.handlers.length) != handlers) return "listeners";
+		if ((root.outsidePointerDownHandlers == null ? 0 : root.outsidePointerDownHandlers.length) != outside)
+			return "outside-press listeners";
+		if ((root.resolvedHandlers == null ? 0 : root.resolvedHandlers.length) != resolved) return "resolved callbacks";
+		if ((root.paintHandlers == null ? 0 : root.paintHandlers.length) != paint) return "paint";
+		if ((root.decorations == null ? 0 : root.decorations.length) != decorations) return "decorations";
+		if (root.children.length != children.length) return "children";
+		// A nested scope that ran again replaced its own root here; the declared child resolves to it.
+		for (child in root.children) if (!owns(child)) return "children";
+		return null;
 	}
 
 	public function owns(child:RenderNode):Bool {
@@ -160,6 +191,9 @@ import haxeon.ui.core.RenderNode;
 		if (authored_hitTestSelf == inner.authored_hitTestSelf) authored_hitTestSelf = next.hitTestSelf;
 		if (authored_commandShortcutFilter
 			== inner.authored_commandShortcutFilter) authored_commandShortcutFilter = next.commandShortcutFilter;
+		if (authored_computedStyle == inner.authored_computedStyle) authored_computedStyle = next.computedStyle;
+		if (authored_focusable == inner.authored_focusable) authored_focusable = next.focusable;
+		if (authored_enabled == inner.authored_enabled) authored_enabled = next.enabled;
 		if (semantics == inner.semantics) semantics = next.semantics;
 		handlers += (next.handlers == null ? 0 : next.handlers.length) - inner.handlers;
 		outside += (next.outsidePointerDownHandlers == null ? 0 : next.outsidePointerDownHandlers.length)
@@ -211,6 +245,9 @@ import haxeon.ui.core.RenderNode;
 		var next_commandShortcutFilter = next.commandShortcutFilter;
 		if ((nodeOverrides & 256) != 0) next.commandShortcutFilter = previous.commandShortcutFilter;
 		authored_commandShortcutFilter = next_commandShortcutFilter;
+		authored_computedStyle = next.computedStyle;
+		authored_focusable = next.focusable;
+		authored_enabled = next.enabled;
 	}
 
 	function transferStyle(previous:LayoutStyle, next:LayoutStyle):Void {

@@ -7,6 +7,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
@@ -50,7 +51,7 @@ class Tabs implements View {
 
 	/** Requests a menu for an enabled tab without changing the selected page. */
 	public var onTabContextMenu:Null<String->UiEvent->Void>;
-	/** Called after each header is built so dock hosts can register geometry. */
+	/** Called with each tab's header, the strip's own node around its button, so dock hosts can register geometry or add to it. */
 	public var onTabHeaderBuilt:Null<String->RenderNode->Void>;
 
 	/** Opt-in header retention; callers include all application-owned header inputs. */
@@ -252,8 +253,48 @@ class Tabs implements View {
 				function(event) {
 					if (event.kind == UiEventKind.Activate || event.button == 0) select(item.key);
 				}, tabSemantics);
+			// What the strip adds to each tab button goes through its modifier: the button owns its root.
+			var tabIndex = buttonNodes.length;
+			var buttonModifier = new RootModifier();
+			var closeFocus:Null<State<Bool>> = null;
+			if (item.onClose != null) {
+				var focus = context.state(context.id("tab-close-focus:" + item.key), false);
+				trackFocus(buttonModifier, context, rootId, focus);
+				closeFocus = focus;
+			}
+			installTabDragHandlers(buttonModifier, item.key, tabDragState);
+			if (item.enabled && onTabContextMenu != null) {
+				var requestMenu = function(event:UiEvent) {
+					var handler = onTabContextMenu;
+					if (handler == null) return;
+					handler(item.key, event);
+					event.preventDefault();
+					event.stopPropagation();
+				};
+				buttonModifier.on(UiEventKind.PointerDown, function(event) {
+					if (event.button == 1) requestMenu(event);
+				});
+				buttonModifier.on(UiEventKind.KeyDown, function(event) {
+					if (UiKey.isContextMenuRequest(event.key, event.modifiers)) requestMenu(event);
+				});
+			}
+			buttonModifier.on(UiEventKind.KeyDown, function(event) {
+				var direction = event.key == UiKey.Right
+					|| event.key == UiKey.Down ? 1 : event.key == UiKey.Left || event.key == UiKey.Up ? -1 : 0;
+				if (direction == 0 || buttonNodes.length == 0) return;
+				var nextIndex = tabIndex;
+				for (_ in 0...buttonNodes.length) {
+					nextIndex = (nextIndex + direction + buttonNodes.length) % buttonNodes.length;
+					if (items[nextIndex].enabled) break;
+				}
+				if (items[nextIndex].enabled) {
+					select(items[nextIndex].key);
+					context.requestFocus(buttonNodes[nextIndex].id);
+					event.preventDefault();
+				}
+			});
 			var buttonNode = context.withStyleParent(rootComputed, function() {
-				return context.withScope(new Key(item.key), function() return button.build(context));
+				return context.withScope(new Key(item.key), function() return context.build(button, buttonModifier));
 			});
 			var headerStyle = new LayoutStyle();
 			headerStyle.direction = LayoutDirection.TopToBottom;
@@ -269,7 +310,7 @@ class Tabs implements View {
 				if (close != null) close();
 			}, UiEventPhase.Capture);
 			var headerContent = item.onClose == null ? buttonNode : buildClosableHeader(context, item, buttonNode,
-				rootId);
+				rootId, cast closeFocus);
 			header.add(headerContent);
 			// Inactive accents are fully transparent and have no layout or hit-test effect.
 			if (item.key == active) {
@@ -288,41 +329,8 @@ class Tabs implements View {
 			}
 			strip.add(header);
 			buttonNodes.push(buttonNode);
-			if (onTabHeaderBuilt != null) onTabHeaderBuilt(item.key, buttonNode);
-			installTabDragHandlers(buttonNode, item.key, tabDragState);
-			if (item.enabled && onTabContextMenu != null) {
-				var requestMenu = function(event:UiEvent) {
-					var handler = onTabContextMenu;
-					if (handler == null) return;
-					handler(item.key, event);
-					event.preventDefault();
-					event.stopPropagation();
-				};
-				buttonNode.on(UiEventKind.PointerDown, function(event) {
-					if (event.button == 1) requestMenu(event);
-				});
-				buttonNode.on(UiEventKind.KeyDown, function(event) {
-					if (UiKey.isContextMenuRequest(event.key, event.modifiers)) requestMenu(event);
-				});
-			}
-		}
-		for (index in 0...buttonNodes.length) {
-			var tabIndex = index;
-			buttonNodes[index].on(UiEventKind.KeyDown, function(event) {
-				var direction = event.key == UiKey.Right
-					|| event.key == UiKey.Down ? 1 : event.key == UiKey.Left || event.key == UiKey.Up ? -1 : 0;
-				if (direction == 0 || buttonNodes.length == 0) return;
-				var nextIndex = tabIndex;
-				for (_ in 0...buttonNodes.length) {
-					nextIndex = (nextIndex + direction + buttonNodes.length) % buttonNodes.length;
-					if (items[nextIndex].enabled) break;
-				}
-				if (items[nextIndex].enabled) {
-					select(items[nextIndex].key);
-					context.requestFocus(buttonNodes[nextIndex].id);
-					event.preventDefault();
-				}
-			});
+			// The header is the strip's own node around the button: hosts may add to it.
+			if (onTabHeaderBuilt != null) onTabHeaderBuilt(item.key, header);
 		}
 		return strip;
 	}
@@ -371,7 +379,7 @@ class Tabs implements View {
 	}
 
 	function buildClosableHeader(context:BuildContext, item:TabItem, buttonNode:RenderNode,
-			rootId:WidgetId):RenderNode {
+			rootId:WidgetId, focused:State<Bool>):RenderNode {
 		var rowStyle = new LayoutStyle();
 		rowStyle.direction = LayoutDirection.LeftToRight;
 		rowStyle.childAlignY = LayoutAlignmentY.Center;
@@ -380,7 +388,6 @@ class Tabs implements View {
 		row.hitTestSelf = false;
 		row.add(buttonNode);
 		var hover = context.state(context.id("tab-close-hover:" + item.key), false);
-		var focused = context.state(context.id("tab-close-focus:" + item.key), false);
 		var slotStyle = new LayoutStyle();
 		slotStyle.width = LayoutAxis.fixed(28);
 		slotStyle.height = LayoutAxis.fixed(24);
@@ -397,25 +404,28 @@ class Tabs implements View {
 				var handler = item.onClose;
 				if ((event.kind == UiEventKind.Activate || event.button == 0) && handler != null) handler();
 			});
-		var closeNode = close.build(context);
-		closeNode.on(UiEventKind.PointerDown, function(event) event.stopPropagation());
-		closeNode.on(UiEventKind.PointerUp, function(event) event.stopPropagation());
+		var closeModifier = new RootModifier();
+		closeModifier.on(UiEventKind.PointerDown, function(event) event.stopPropagation());
+		closeModifier.on(UiEventKind.PointerUp, function(event) event.stopPropagation());
 		// Built from state; the handlers only update it and the rebuild they cause shows or hides the button, rather than
 		// changing a node of the submitted tree behind the frame's back.
-		closeNode.layout.style.visible = hover.value || focused.value;
+		closeModifier.visible = hover.value || focused.value;
+		trackFocus(closeModifier, context, rootId, focused);
+		var closeNode = context.build(close, closeModifier);
 		row.onTargetBubble(UiEventKind.HoverEnter, function(event) {
 			if (event.target.equals(row.id)) setHeaderFlag(context, rootId, hover, true);
 		});
 		row.onTargetBubble(UiEventKind.HoverLeave, function(event) {
 			if (event.target.equals(row.id)) setHeaderFlag(context, rootId, hover, false);
 		});
-		for (node in [buttonNode, closeNode]) {
-			node.on(UiEventKind.Focus, function(_) setHeaderFlag(context, rootId, focused, true), UiEventPhase.Capture);
-			node.on(UiEventKind.Blur, function(_) setHeaderFlag(context, rootId, focused, false), UiEventPhase.Capture);
-		}
 		slot.add(closeNode);
 		row.add(slot);
 		return row;
+	}
+
+	static function trackFocus(modifier:RootModifier, context:BuildContext, rootId:WidgetId, focused:State<Bool>):Void {
+		modifier.on(UiEventKind.Focus, function(_) setHeaderFlag(context, rootId, focused, true), UiEventPhase.Capture);
+		modifier.on(UiEventKind.Blur, function(_) setHeaderFlag(context, rootId, focused, false), UiEventPhase.Capture);
 	}
 
 	static function setHeaderFlag(context:BuildContext, rootId:WidgetId, state:State<Bool>, value:Bool):Void {
@@ -442,10 +452,10 @@ class Tabs implements View {
 		return result;
 	}
 
-	function installTabDragHandlers(buttonNode:RenderNode, tabKey:String, dragState:Null<State<TabDragState>>):Void {
+	function installTabDragHandlers(modifier:RootModifier, tabKey:String, dragState:Null<State<TabDragState>>):Void {
 		if (dragState == null) return;
 		// Only these handlers read the drag state, never a build, so changing it must not invalidate the caches around the tabs.
-		buttonNode.on(UiEventKind.PointerDown, function(event) {
+		modifier.on(UiEventKind.PointerDown, function(event) {
 			if (event.button != 0) return;
 			var drag = dragState.value;
 			drag.active = true;
@@ -459,7 +469,7 @@ class Tabs implements View {
 			// drag routed to this tab without grabbing the native window pointer.
 			event.capturePointer(false);
 		});
-		buttonNode.on(UiEventKind.PointerMove, function(event) {
+		modifier.on(UiEventKind.PointerMove, function(event) {
 			var drag = dragState.value;
 			if (!drag.active || drag.pointerId != event.pointerId || drag.tabKey != tabKey) return;
 			var dx = event.x - drag.startX;
@@ -474,7 +484,7 @@ class Tabs implements View {
 				event.preventDefault();
 			}
 		});
-		buttonNode.on(UiEventKind.PointerUp, function(event) {
+		modifier.on(UiEventKind.PointerUp, function(event) {
 			var drag = dragState.value;
 			if (!drag.active || drag.pointerId != event.pointerId || drag.tabKey != tabKey) return;
 			if (drag.dragging) {
@@ -485,7 +495,7 @@ class Tabs implements View {
 			dragState.update(drag);
 			event.releasePointer();
 		});
-		buttonNode.on(UiEventKind.PointerCancel, function(event) {
+		modifier.on(UiEventKind.PointerCancel, function(event) {
 			var drag = dragState.value;
 			if (!drag.active || drag.pointerId != event.pointerId || drag.tabKey != tabKey) return;
 			if (drag.dragging && onTabDragCancel != null) onTabDragCancel(tabKey, event);
@@ -493,7 +503,7 @@ class Tabs implements View {
 			dragState.update(drag);
 			event.releasePointer();
 		});
-		buttonNode.on(UiEventKind.KeyDown, function(event) {
+		modifier.on(UiEventKind.KeyDown, function(event) {
 			var drag = dragState.value;
 			if (event.key != UiKey.Escape || !drag.active) return;
 			event.cancelPointerCapture();

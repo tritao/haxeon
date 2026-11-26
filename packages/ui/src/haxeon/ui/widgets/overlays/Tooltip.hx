@@ -10,9 +10,11 @@ import haxeon.ui.animation.AnimationScheduler;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleTarget;
 
@@ -112,6 +114,36 @@ class Tooltip implements View {
 				visible);
 			var tooltip = new AnonymousTooltipContent(content, tooltipStyle, visible);
 			var rootStyle = fillAnchor ? FillRootStyle : FitRootStyle;
+			var anchorModifier = new RootModifier();
+			anchorModifier.on(UiEventKind.HoverEnter, function(_) {
+				focused.update(false);
+				pointer.suppressed = false;
+				state.update(!requirePointerMovement && (showWhen == null || showWhen()));
+			});
+			if (requirePointerMovement) anchorModifier.on(UiEventKind.PointerMove, function(event) {
+				var moved = !pointer.known || pointer.x != event.x || pointer.y != event.y;
+				pointer.x = event.x;
+				pointer.y = event.y;
+				pointer.known = true;
+				if (moved && (!state.value || pointer.suppressed) && (showWhen == null || showWhen())) {
+					pointer.suppressed = false;
+					state.update(true);
+				}
+			});
+			anchorModifier.on(UiEventKind.Focus, function(event) {
+				pointer.suppressed = false;
+				focused.update(!context.interactionStates.get(event.target).contains(StyleState.Hovered)
+					&& (showWhen == null || showWhen()));
+			}, UiEventPhase.Capture);
+			anchorModifier.on(UiEventKind.Blur, function(_) {
+				focused.update(false);
+			}, UiEventPhase.Capture);
+			anchorModifier.on(UiEventKind.FocusLost, function(_) {
+				focused.update(false);
+			}, UiEventPhase.Capture);
+			anchorModifier.on(UiEventKind.HoverLeave, function(_) {
+				state.update(false);
+			});
 			var root = context.withScope(new Key("layers"), function() {
 				var rootId = context.rootId("stack");
 				var rootComputed = context.resolveStyle(new StyleTarget("tooltip-layer",
@@ -126,7 +158,8 @@ class Tooltip implements View {
 				result.states = context.interactionStates.get(rootId);
 				result.computedStyle = rootComputed;
 				var anchorNode = context.withStyleParent(rootComputed,
-					function() return context.withScope(new Key("anchor"), function() return anchor.build(context)));
+					function() return context.withScope(new Key("anchor"),
+					function() return context.build(anchor, anchorModifier)));
 				var tooltipNode = context.withStyleParent(rootComputed,
 					function() return context.withScope(new Key("tooltip"), function() return tooltip.build(context)));
 				result.add(anchorNode);
@@ -159,35 +192,6 @@ class Tooltip implements View {
 					tooltipNode.layout.style.width = LayoutAxis.fit(0, maxWidth);
 					context.requestLayoutFeedback();
 				}
-			});
-			anchorNode.on(UiEventKind.HoverEnter, function(_) {
-				focused.update(false);
-				pointer.suppressed = false;
-				state.update(!requirePointerMovement && (showWhen == null || showWhen()));
-			});
-			if (requirePointerMovement) anchorNode.on(UiEventKind.PointerMove, function(event) {
-				var moved = !pointer.known || pointer.x != event.x || pointer.y != event.y;
-				pointer.x = event.x;
-				pointer.y = event.y;
-				pointer.known = true;
-				if (moved && (!state.value || pointer.suppressed) && (showWhen == null || showWhen())) {
-					pointer.suppressed = false;
-					state.update(true);
-				}
-			});
-			anchorNode.on(UiEventKind.Focus, function(event) {
-				pointer.suppressed = false;
-				focused.update(!context.interactionStates.get(event.target).contains(StyleState.Hovered)
-					&& (showWhen == null || showWhen()));
-			}, UiEventPhase.Capture);
-			anchorNode.on(UiEventKind.Blur, function(_) {
-				focused.update(false);
-			}, UiEventPhase.Capture);
-			anchorNode.on(UiEventKind.FocusLost, function(_) {
-				focused.update(false);
-			}, UiEventPhase.Capture);
-			anchorNode.on(UiEventKind.HoverLeave, function(_) {
-				state.update(false);
 			});
 			tooltipNode.hitTestBehavior = HitTestBehavior.None;
 			root.hitTestSelf = false;
@@ -241,8 +245,37 @@ class Tooltip implements View {
 			if (fillAnchor) style.width = LayoutAxis.grow();
 			var root = context.createNode(context.rootId("layers"), LayoutVisualKind.Box, style);
 			root.hitTestSelf = false;
-			var header = anchor.build(context);
-			if (fillAnchor) header.layout.style.width = LayoutAxis.stretch();
+			var headerModifier = new RootModifier();
+			if (fillAnchor) headerModifier.width = LayoutAxis.stretch();
+			var headerId:Null<WidgetId> = null;
+			headerModifier.on(UiEventKind.Focus, function(_) {
+				focused.update((headerId == null
+					|| !context.interactionStates.get(headerId).contains(StyleState.Hovered))
+					&& (showWhen == null || showWhen()));
+			});
+			headerModifier.on(UiEventKind.Blur, function(_) {
+				focused.update(false);
+			});
+			headerModifier.on(UiEventKind.FocusLost, function(_) {
+				focused.update(false);
+			});
+			headerModifier.on(UiEventKind.HoverEnter, function(_) {
+				focused.update(false);
+				if (showWhen == null || showWhen()) {
+					if (hoverGroup != null) hoverGroup.enter(key.rawValue());
+					else delay.start();
+				}
+			});
+			headerModifier.on(UiEventKind.HoverLeave, function(_) {
+				if (hoverGroup != null) hoverGroup.leave(key.rawValue());
+				else delay.cancel();
+			});
+			headerModifier.on(UiEventKind.PointerDown, function(_) {
+				if (hoverGroup != null) hoverGroup.cancel();
+				else delay.cancel();
+			}, UiEventPhase.Capture);
+			var header = context.build(anchor, headerModifier);
+			headerId = header.id;
 			root.add(header);
 			var tipStyle = new LayoutStyle();
 			tipStyle.positioning = LayoutPositioning.Absolute;
@@ -317,31 +350,6 @@ class Tooltip implements View {
 			// The overlay must never extend the tab's hover area into the editor.
 			tip.hitTestBehavior = HitTestBehavior.None;
 			root.add(tip);
-			header.on(UiEventKind.Focus, function(_) {
-				focused.update(!context.interactionStates.get(header.id).contains(StyleState.Hovered)
-					&& (showWhen == null || showWhen()));
-			});
-			header.on(UiEventKind.Blur, function(_) {
-				focused.update(false);
-			});
-			header.on(UiEventKind.FocusLost, function(_) {
-				focused.update(false);
-			});
-			header.on(UiEventKind.HoverEnter, function(_) {
-				focused.update(false);
-				if (showWhen == null || showWhen()) {
-					if (hoverGroup != null) hoverGroup.enter(key.rawValue());
-					else delay.start();
-				}
-			});
-			header.on(UiEventKind.HoverLeave, function(_) {
-				if (hoverGroup != null) hoverGroup.leave(key.rawValue());
-				else delay.cancel();
-			});
-			header.on(UiEventKind.PointerDown, function(_) {
-				if (hoverGroup != null) hoverGroup.cancel();
-				else delay.cancel();
-			}, UiEventPhase.Capture);
 			return root;
 		});
 	}

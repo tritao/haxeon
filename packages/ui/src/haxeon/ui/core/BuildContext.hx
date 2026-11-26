@@ -1076,8 +1076,49 @@ class BuildContext implements Disposable {
 		return owner;
 	}
 
+	/**
+	 * Builds `view` with `modifier` added to its root. A component's root belongs to its body, so callers place, flag or
+	 * decorate it this way instead of editing what `build` returned: the modifier is applied after each body run.
+	 */
+	public function build(view:View, ?modifier:RootModifier):RenderNode {
+		if (view == null) throw "A view is required";
+		if (modifier == null) return view.build(this);
+		if (!Std.isOfType(view, haxeon.ui.core.RenderScope.ScopeView)) {
+			var node = view.build(this);
+			modifier.apply(node);
+			return node;
+		}
+		// A component's build mounts it before building anything else, which takes the modifier.
+		pendingModifier = modifier;
+		var node = view.build(this);
+		if (pendingModifier != null) {
+			pendingModifier = null;
+			throw "A component's build must mount it with mountComponent";
+		}
+		return node;
+	}
+
+	var pendingModifier:Null<RootModifier> = null;
+
+	/**
+	 * Debug check that every caller left component roots to their bodies, passing a modifier instead of editing one. It runs
+	 * with retention verification, or always when this is set; HAXEON_UI_CHECK_COMPONENT_ROOTS=1 sets it.
+	 */
+	public var checkComponentRoots:Bool = Sys.getEnv("HAXEON_UI_CHECK_COMPONENT_ROOTS") == "1";
+
+	@:allow(haxeon.ui.core.UiContext) function verifyComponentRoots():Void {
+		for (owner in renderScopes) {
+			if (owner.disposed || !owner.mounted) continue;
+			var change = owner.callerChanges();
+			if (change != null)
+				throw 'A caller changed the ${change} of component root ${stateStore.describe(owner.root.id)}; pass a RootModifier to BuildContext.build instead';
+		}
+	}
+
 	/** Capture inherited values on the native owner, with no mount-path build closures or layout wrapper. */
 	public function mountComponent(component:haxeon.ui.core.RenderScope.ScopeView):RenderNode {
+		var modifier = pendingModifier;
+		pendingModifier = null;
 		var previousScope = scope;
 		scope = scope.child(new Key(component.scopeKey()));
 		defer scope = previousScope;
@@ -1094,6 +1135,7 @@ class BuildContext implements Disposable {
 		try {
 			owner.mount(rootId);
 			stateStore.installScope(owner);
+			if (modifier != null) owner.setModifier(modifier);
 		} catch (error:Dynamic) {
 			owner.dispose();
 			renderScopes.remove(owner);

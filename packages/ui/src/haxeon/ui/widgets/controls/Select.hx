@@ -8,6 +8,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
@@ -194,8 +195,8 @@ class Select<T> implements View {
 				null,
 				null,
 				triggerSemantics);
-			triggerNode = context.withScope(new Key("trigger"), function() return trigger.build(context));
-			triggerNode.on(UiEventKind.KeyDown, function(event) {
+			var triggerModifier = new RootModifier();
+			triggerModifier.on(UiEventKind.KeyDown, function(event) {
 				if (!enabled || firstEnabled < 0) return;
 				if (event.key == UiKey.Escape && openState.value == true) {
 					close();
@@ -215,7 +216,7 @@ class Select<T> implements View {
 				if (wasOpen) focusOption(next);
 				event.preventDefault();
 			});
-			triggerNode.on(UiEventKind.AccessibilitySetValue, function(event) {
+			triggerModifier.on(UiEventKind.AccessibilitySetValue, function(event) {
 				if (!enabled || event.text == null) return;
 				for (index in 0...options.length) if (options[index].enabled
 					&& (options[index].key == event.text || options[index].label == event.text)) {
@@ -224,8 +225,7 @@ class Select<T> implements View {
 					return;
 				}
 			});
-			root.add(triggerNode);
-			triggerNode.onResolved(function(geometry) {
+			triggerModifier.onResolved(function(geometry) {
 				if (finite(geometry.x) && finite(geometry.y)
 					&& finite(geometry.width) && finite(geometry.height) && geometry.width >= 0.0
 					&& geometry.height >= 0.0) {
@@ -236,6 +236,9 @@ class Select<T> implements View {
 					if (anchorKnownState.value != true) anchorKnownState.update(true);
 				}
 			});
+			triggerNode = context.withScope(new Key("trigger"),
+				function() return context.build(trigger, triggerModifier));
+			root.add(triggerNode);
 
 			root.focusTrap = isOpen;
 			if (isOpen) {

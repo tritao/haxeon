@@ -6,6 +6,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
@@ -74,13 +75,9 @@ class RadioGroup implements View {
 				var radio = new Radio(option.key, option.label, option.value, option.value == active, function(next) {
 					select(next);
 				}, null, option.enabled);
-				var node = radio.build(context);
-				root.add(node);
-				nodes.push(node);
-			}
-			for (index in 0...nodes.length) {
-				var radioIndex = index;
-				nodes[index].on(UiEventKind.KeyDown, function(event) {
+				var radioIndex = nodes.length;
+				var modifier = new RootModifier();
+				modifier.on(UiEventKind.KeyDown, function(event) {
 					var direction = event.key == UiKey.Right
 						|| event.key == UiKey.Down ? 1 : event.key == UiKey.Left || event.key == UiKey.Up ? -1 : 0;
 					if (direction == 0 || nodes.length == 0) return;
@@ -95,6 +92,9 @@ class RadioGroup implements View {
 						event.preventDefault();
 					}
 				});
+				var node = context.build(radio, modifier);
+				root.add(node);
+				nodes.push(node);
 			}
 			return root;
 		});

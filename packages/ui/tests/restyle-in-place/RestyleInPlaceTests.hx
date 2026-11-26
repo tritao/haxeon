@@ -15,6 +15,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RetainedView;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
@@ -38,29 +39,47 @@ import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
 
 /** A control the way a container uses one: built, then given a listener, a style change and an overlay child by its caller. */
+/** Builds a view with a caller's additions: a listener, a placement and an overlay child, passed as a RootModifier. */
 private class DecoratedControl implements View {
 	public var presses = 0;
 	public var builtNode(default, null):Null<RenderNode> = null;
 	public final key:String;
-	final make:BuildContext->RenderNode;
+	final make:BuildContext->View;
+	final decorate:Null<(BuildContext, RootModifier) -> Void>;
 
-	public function new(key:String, make:BuildContext->RenderNode) {
+	public function new(key:String, make:BuildContext->View, ?decorate:(BuildContext, RootModifier) -> Void) {
 		this.key = key;
 		this.make = make;
+		this.decorate = decorate;
 	}
 
+	/** A decorated plain node, which its builder makes in each pass. */
+	public static function ofNodes(key:String, make:BuildContext->RenderNode):DecoratedControl
+		return new DecoratedControl(key, _ -> new NodeView(make));
+
 	public function build(context:BuildContext):RenderNode {
-		var node = make(context);
-		builtNode = node;
-		node.on(UiEventKind.PointerDown, function(_) presses++);
-		node.layout.style.zIndex = 3;
-		// As DockWorkspace does with tab buttons: an overlay child added by the caller.
+		var modifier = new RootModifier();
+		modifier.on(UiEventKind.PointerDown, function(_) presses++);
+		modifier.zIndex = 3;
+		// As a dock host does with a tab header: an overlay child added by the caller.
 		var overlayStyle = new LayoutStyle();
 		overlayStyle.width = LayoutAxis.fixed(5.5);
 		overlayStyle.height = LayoutAxis.fixed(7.5);
-		node.add(new RenderNode(context.id("caller-overlay"), haxeon.ui.LayoutNode.LayoutVisualKind.Box, overlayStyle));
+		modifier.add(new RenderNode(context.id("caller-overlay"), haxeon.ui.LayoutNode.LayoutVisualKind.Box,
+			overlayStyle));
+		if (decorate != null) decorate(context, modifier);
+		var node = context.build(make(context), modifier);
+		builtNode = node;
 		return node;
 	}
+}
+
+private class NodeView implements View {
+	final make:BuildContext->RenderNode;
+
+	public function new(make:BuildContext->RenderNode) this.make = make;
+
+	public function build(context:BuildContext):RenderNode return make(context);
 }
 
 /** Registers listeners during routing to exercise hover preflight and the dispatcher snapshot. */
@@ -254,8 +273,6 @@ private class MotionRig {
 	public final slider:Slider;
 	public final progress:ProgressBar;
 	public final decorated:Array<DecoratedControl>;
-	public var sliderBuilt:Null<RenderNode>;
-	public var progressBuilt:Null<RenderNode>;
 	public var panelBuilds = 0;
 	final frame = new LayoutFrame(240.0, 140.0);
 	final view:View;
@@ -270,15 +287,10 @@ private class MotionRig {
 		slider = new Slider("live-slider", "Live slider", 0.0, 0.0, 1.0, 0.05);
 		progress = new ProgressBar("live-progress", 0.0);
 		progress.animationDuration = 0.3;
-		decorated = [new DecoratedControl("slider-host", function(context) {
-			var node = slider.build(context);
-			sliderBuilt = node;
-			return decorate(node);
-		}), new DecoratedControl("progress-host", function(context) {
-			var node = progress.build(context);
-			progressBuilt = node;
-			return decorate(node);
-		})];
+		decorated = [
+			new DecoratedControl("slider-host", _ -> slider, decorate),
+			new DecoratedControl("progress-host", _ -> progress, decorate)
+		];
 		view = new RetainedView("motion-panel", function(_) {
 			panelBuilds++;
 			return new Column("motion-column",
@@ -289,10 +301,8 @@ private class MotionRig {
 		}, patched ? null : function() return Std.string(panelBuilds));
 	}
 
-	function decorate(node:RenderNode):RenderNode {
-		node.layout.style.width = LayoutAxis.fixed(180.0);
-		node.onPaint(function(canvas, _) canvas.fillRect(new Rect(1.0, 1.0, 2.0, 2.0), Color.rgba(0.2, 0.3, 0.4, 1.0)));
-		return node;
+	static function decorate(_:BuildContext, modifier:RootModifier):Void {
+		modifier.width = LayoutAxis.fixed(180.0);
 	}
 
 	public function submit():RenderNode {
@@ -323,19 +333,14 @@ private class Rig {
 		ui.buildContext.updateInPlace = restyleInPlace;
 		frame = new LayoutFrame(240.0, controls ? 460.0 : 200.0);
 		var rig = this;
-		decorated = controls ? [new DecoratedControl("decorated-icon",
-			function(context) return new IconButton("decorated-icon",
-			IconName.Search,
-			"Decorated icon",
-			function() rig.clicks++).build(context)), new DecoratedControl("decorated-check", function(context) {
-				var checkbox:View = new Checkbox("decorated-check", "Decorated check", false, function(_) rig.clicks++);
-				return checkbox.build(context);
-			}), new DecoratedControl("decorated-radio",
-				function(context) return new Radio("decorated-radio",
-				"Decorated radio", "d", false, function(_) rig.clicks++).build(context)),] : [
-					new DecoratedControl("decorated",
-						function(context) return new Button("Decorated", null, null, "decorated").build(context)),
-				];
+		decorated = controls ? [
+			new DecoratedControl("decorated-icon",
+				_ -> new IconButton("decorated-icon", IconName.Search, "Decorated icon", function() rig.clicks++)),
+			new DecoratedControl("decorated-check",
+				_ -> new Checkbox("decorated-check", "Decorated check", false, function(_) rig.clicks++)),
+			new DecoratedControl("decorated-radio",
+				_ -> new Radio("decorated-radio", "Decorated radio", "d", false, function(_) rig.clicks++))
+		] : [new DecoratedControl("decorated", _ -> new Button("Decorated", null, null, "decorated"))];
 		var panel = new RetainedView("panel", function(_) {
 			rig.panelBuilds++;
 			var items:Array<KeyedView> = controls ? [
@@ -486,7 +491,7 @@ private class TabsRig {
 		tabs = new haxeon.ui.widgets.controls.Tabs("local-tabs", [first, disabled, second], "first", _ -> changes++,
 			style);
 		tabs.headerRevision = () -> "headers";
-		decorated = new DecoratedControl("tabs-host", context -> tabs.build(context));
+		decorated = new DecoratedControl("tabs-host", _ -> tabs);
 		view = new RetainedView("tabs-panel", _ -> {
 			panelBuilds++;
 			return decorated;
@@ -591,7 +596,7 @@ private class UpdatingResources implements View {
 			return context.selfUpdating(id, () -> {
 				var root = new RenderNode(id, LayoutVisualKind.Box);
 				if (enabled) root.add(new RetainedView("nested",
-					_ -> new DecoratedControl("inner", context -> {
+					_ -> DecoratedControl.ofNodes("inner", context -> {
 						var child = context.id("child");
 						childId = child;
 						return context.selfUpdating(child,
@@ -983,10 +988,10 @@ private class UpdatingResources implements View {
 		textField(fonts);
 	}
 
-	static function paintTrace(node:RenderNode):PaintTrace {
+	static function paintTrace(node:RenderNode, expected:Int = 2):PaintTrace {
 		var trace = new PaintTrace();
 		var handlers:Array<Dynamic> = Reflect.field(node, "paintHandlers");
-		check(handlers != null && handlers.length == 2, "Builder or caller paint was lost or duplicated");
+		check(handlers != null && handlers.length == expected, "Builder or caller paint was lost or duplicated");
 		for (handler in handlers) {
 			var paint:Canvas->ResolvedLayoutItem->Void = cast handler;
 			paint(trace, cast node.resolved);
@@ -1000,7 +1005,7 @@ private class UpdatingResources implements View {
 		var left = patched.submit(), right = reference.submit();
 		var slider = left.children[0], progress = left.children[1];
 		var overlaySlider = slider.children[0], overlayProgress = progress.children[0];
-		var previousPaint = paintTrace(progress), animatedSteps = 0, steps = 0;
+		var previousPaint = paintTrace(progress, 1), animatedSteps = 0, steps = 0;
 		var compare = function() {
 			left = patched.submit();
 			right = reference.submit();
@@ -1008,8 +1013,8 @@ private class UpdatingResources implements View {
 			// A motion step reruns the control's own scope, which builds a new body root; the caller's additions move to it.
 			slider = left.children[0];
 			progress = left.children[1];
-			check(patched.ui.buildContext.currentRoot(cast patched.sliderBuilt) == slider
-				&& patched.ui.buildContext.currentRoot(cast patched.progressBuilt) == progress,
+			check(patched.ui.buildContext.currentRoot(cast patched.decorated[0].builtNode) == slider
+				&& patched.ui.buildContext.currentRoot(cast patched.decorated[1].builtNode) == progress,
 				"A build root did not resolve to the live node");
 			check(slider.children[0] == overlaySlider && progress.children[0] == overlayProgress,
 				"The caller's child was replaced");
@@ -1024,9 +1029,10 @@ private class UpdatingResources implements View {
 				+ steps + ": slider=" + sliderSemantics.value + "/" + otherSlider.value + " progress="
 				+ progressSemantics.value
 				+ "/" + otherProgress.value + " targets=" + patched.progress.value + "/" + reference.progress.value);
-			check(paintTrace(slider).same(paintTrace(right.children[0])), "Slider paint differs at step " + steps);
-			var painted = paintTrace(progress);
-			check(painted.same(paintTrace(right.children[1])), "Progress paint differs at step " + steps);
+			check(paintTrace(slider, 1).same(paintTrace(right.children[0], 1)),
+				"Slider paint differs at step " + steps);
+			var painted = paintTrace(progress, 1);
+			check(painted.same(paintTrace(right.children[1], 1)), "Progress paint differs at step " + steps);
 			if (!painted.same(previousPaint)) animatedSteps++;
 			previousPaint = painted;
 			for (node in [slider, progress]) check(node.layout.style.zIndex == 3
@@ -1114,7 +1120,7 @@ private class UpdatingResources implements View {
 		var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120);
 		ui.verifyRetentionEvery = 1;
 		var revealed = false, target = 0;
-		var view:View = new DecoratedControl("feedback-focus", context -> {
+		var view:View = DecoratedControl.ofNodes("feedback-focus", context -> {
 			var root = new RenderNode(context.id("feedback-root"),
 				LayoutVisualKind.Box);
 			var id = context.id("late-target");
@@ -1248,7 +1254,7 @@ private class UpdatingResources implements View {
 		var flags:haxeon.ui.style.StyleState = haxeon.ui.style.StyleState.Checked;
 		var label = "hovered pressed";
 		var view:View = new RetainedView("flag-verification",
-			_ -> new DecoratedControl("flags", context -> {
+			_ -> DecoratedControl.ofNodes("flags", context -> {
 				var node = new RenderNode(context.id("flags"),
 					LayoutVisualKind.Box);
 				node.states = flags;
@@ -1718,11 +1724,8 @@ private class UpdatingResources implements View {
 		caller.enabled = true;
 		var view:View = new RetainedView("resource-panel", _ -> {
 			builds++;
-			return new DecoratedControl("resource-host", context -> {
-				var node = widget.build(context);
-				node.add(context.withScope(new Key("caller"), () -> caller.build(context)));
-				return node;
-			});
+			return new DecoratedControl("resource-host", _ -> widget,
+				(context, modifier) -> modifier.add(context.withScope(new Key("caller"), () -> caller.build(context))));
 		});
 		var frame = new LayoutFrame(200, 100), key = "resources";
 		var factories = 0;

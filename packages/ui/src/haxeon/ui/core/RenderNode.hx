@@ -672,6 +672,20 @@ class RenderNode {
 		return this;
 	}
 
+	@:allow(haxeon.ui.core.RootModifier) function handlerCount():Int return handlers == null ? 0 : handlers.length;
+
+	@:allow(haxeon.ui.core.RootModifier) function resolvedHandlerCount():Int return resolvedHandlers == null ? 0
+		: resolvedHandlers.length;
+
+	/** Removes the `count` listeners a modifier added from `start`. */
+	@:allow(haxeon.ui.core.AppliedModifier) function removeHandlers(start:Int, count:Int):Void {
+		if (count > 0 && handlers != null) handlers.splice(start, count);
+	}
+
+	@:allow(haxeon.ui.core.AppliedModifier) function removeResolvedHandlers(start:Int, count:Int):Void {
+		if (count > 0 && resolvedHandlers != null) resolvedHandlers.splice(start, count);
+	}
+
 	/**
 	 * Calls `handler` each time layout places the node, with where it went; for a widget that positions something by
 	 * its geometry. Returns the node.

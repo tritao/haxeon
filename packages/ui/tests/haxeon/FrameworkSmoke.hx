@@ -6532,7 +6532,9 @@ class FrameworkSmoke {
 		});
 		if (previewTab == null) return failDock();
 		var sawTabIndicator = false;
-		for (child in previewTab.children) if (child.layout.visualKind == LayoutVisualKind.Custom
+		// The indicator goes on the strip's header around the tab button, which the button does not own.
+		var tabHeader:Null<RenderNode> = previewTab.parent;
+		if (tabHeader != null) for (child in tabHeader.children) if (child.layout.visualKind == LayoutVisualKind.Custom
 			&& child.layout.style.zIndex == 2) sawTabIndicator = true;
 		if (!sawTabIndicator) return failDock();
 		uiContext.key(UiEventKind.KeyDown, UiKey.Escape);
@@ -7096,7 +7098,12 @@ private class DecoratedButtonSmoke implements View {
 	final decorated:Bool;
 	public function new(decorated:Bool) this.decorated = decorated;
 	public function build(context:BuildContext):RenderNode {
-		var node = new Button("Decorated", null, function() {}, "decoration-normalization").build(context);
+		// A plain focusable box the caller owns, so it may restyle it: a component's root belongs to its body.
+		var boxStyle = new LayoutStyle();
+		boxStyle.width = LayoutAxis.fixed(80);
+		boxStyle.height = LayoutAxis.fixed(28);
+		var node = context.createNode(context.rootId("decoration-normalization"), LayoutVisualKind.Box, boxStyle);
+		node.focusable = true;
 		if (decorated) {
 			var computed = context.resolveStyle(new StyleTarget("box", "caller-decoration"), node.layout.style);
 			computed.setDecorations(DecorationChain.of([new BorderDecoration(Color.fromBytes(255, 0, 0), 2)]), null);

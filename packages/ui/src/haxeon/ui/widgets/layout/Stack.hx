@@ -6,6 +6,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.style.StyleTarget;
 
@@ -37,15 +38,15 @@ class Stack implements View {
 			for (layer in layers) {
 				var child = context.withStyleParent(computed,
 					function() return context.withScope(new Key(layer.key), function() {
-						var node = layer.view.build(context);
-						node.layout.style.positioning = LayoutPositioning.Absolute;
-						node.layout.style.positionX = layer.x;
-						node.layout.style.positionY = layer.y;
-						node.layout.style.zIndex = layer.zIndex;
-						node.layout.style.clipToParent = layer.clipToParent;
-						if (layer.width != null) node.layout.style.width = cast layer.width;
-						if (layer.height != null) node.layout.style.height = cast layer.height;
-						return node;
+						var placement = new RootModifier();
+						placement.positioning = LayoutPositioning.Absolute;
+						placement.positionX = layer.x;
+						placement.positionY = layer.y;
+						placement.zIndex = layer.zIndex;
+						placement.clipToParent = layer.clipToParent;
+						if (layer.width != null) placement.width = cast layer.width;
+						if (layer.height != null) placement.height = cast layer.height;
+						return context.build(layer.view, placement);
 					}));
 				root.add(child);
 			}

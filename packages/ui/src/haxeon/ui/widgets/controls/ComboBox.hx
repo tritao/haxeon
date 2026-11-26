@@ -9,6 +9,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
@@ -300,17 +301,18 @@ class ComboBox<T> implements View {
 				SelectionIndicator.chevron("toggle-indicator",
 				enabled ? context.theme.tokens.textPrimary : context.theme.tokens.textDisabled,
 				isOpen), null, null, null, isOpen ? "Hide options" : "Show options", null, arrowSemantics);
-			var arrowNode = context.withScope(new Key("toggle"), function() return arrow.build(context));
-			arrowNode.layout.style.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
-			arrowNode.layout.style.positionX = -32;
-			arrowNode.layout.style.zIndex = 3;
-			arrowNode.layout.style.clipToParent = false;
-			arrowNode.on(UiEventKind.KeyDown, function(event) {
+			var arrowModifier = new RootModifier();
+			arrowModifier.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
+			arrowModifier.positionX = -32;
+			arrowModifier.zIndex = 3;
+			arrowModifier.clipToParent = false;
+			arrowModifier.on(UiEventKind.KeyDown, function(event) {
 				if (event.key == UiKey.Escape && openState.value == true) {
 					close();
 					event.preventDefault();
 				}
 			});
+			var arrowNode = context.withScope(new Key("toggle"), function() return context.build(arrow, arrowModifier));
 			arrowAnchor.add(arrowNode);
 			triggerRow.add(arrowAnchor);
 			root.add(triggerRow);

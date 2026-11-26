@@ -1319,6 +1319,7 @@ class UiContext implements Disposable {
 			next = buildContext.currentRoot(next);
 			if (!queueIncomingRenderScopes(next)) {
 				buildContext.flushRenderScopes(next);
+				if (verifyRetentionEvery > 0 || buildContext.checkComponentRoots) buildContext.verifyComponentRoots();
 				return next;
 			}
 			if (++passes >= 8) throw "Interaction scope updates did not settle";

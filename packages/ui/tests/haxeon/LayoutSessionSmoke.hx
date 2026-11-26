@@ -194,6 +194,8 @@ class LayoutSessionSmoke {
 		if (navigation != 42) throw "Navigation scope motion failed at stage " + navigation;
 		var controls = ControlScopesMain.run();
 		if (controls != 42) throw "Caller-owned control scopes failed at stage " + controls;
+		var modified = RootModifierMain.run();
+		if (modified != 42) throw "Root modifiers failed at stage " + modified;
 		var session = LayoutSession.create();
 		session.verifyTransactions = true;
 		for (mode in 0...3) {

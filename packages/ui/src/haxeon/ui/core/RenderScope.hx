@@ -36,6 +36,11 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 
 	@:allow(haxeon.ui.core.UiContext) var builtEpoch:Int = 0;
 
+	/** What the caller adds to the root, applied after each body run; `applied` takes it off again. */
+	var modifier:Null<RootModifier> = null;
+
+	var applied:Null<AppliedModifier> = null;
+
 	public function new(resourceId:ScopeResourceId,
 			identityId:Int,
 			context:BuildContext,
@@ -108,6 +113,9 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 		var previous = root;
 		var parent = previous == null ? null : previous.parent;
 		var slot = parent == null ? -1 : parent.children.indexOf(previous);
+		// The body builds a fresh root: take the caller's modifiers off the old one, outermost first, so what moves to
+		// the new root is only what earlier callers added by hand.
+		if (previous != null) removeSharedModifiers(this, previous);
 		beginDependencies();
 		var next:Null<RenderNode> = null;
 		try {
@@ -132,6 +140,7 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 				else if (parent != null) parent.insertChild(slot, next);
 			} else if (parent != null && next.parent == null) parent.insertChild(slot, next);
 			root = next;
+			if (previous != null) applySharedModifiers(next);
 			finishDependencies();
 			builtEpoch = context.retainedEditEpoch;
 		} catch (error:Dynamic) {
@@ -139,6 +148,7 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 				previous.detach();
 				parent.insertChild(slot, previous);
 			}
+			if (previous != null && root == previous) applySharedModifiers(previous);
 			failDependencies();
 			throw error;
 		}
@@ -146,6 +156,39 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 		// (TooltipOverlayHost lifts tooltips) must see what the body made, or the new nodes and the ones it moved
 		// before would carry one ID. The initial mount runs inside that view's build, which sees it.
 		if (previous != null) context.renderScopeRebuilt(next);
+	}
+
+	/** What a caller changed on this root by hand, beside its modifier; null when nothing. */
+	@:allow(haxeon.ui.core.BuildContext) function callerChanges():Null<String> {
+		if (root == null || boundary == null) return null;
+		if (applied != null) applied.remove();
+		var change = boundary.callerChanges(root);
+		applied = modifier == null ? null : modifier.apply(root);
+		return change;
+	}
+
+	/** Replaces the caller's modifier, keeping the body. */
+	@:allow(haxeon.ui.core.BuildContext) function setModifier(next:Null<RootModifier>):Void {
+		if (applied != null) applied.remove();
+		applied = null;
+		modifier = next;
+		if (next != null && root != null) applied = next.apply(root);
+	}
+
+	static function removeSharedModifiers(scope:RenderScope, shared:RenderNode):Void {
+		var outer = scope.parentScope;
+		if (outer != null && outer.root == shared) removeSharedModifiers(outer, shared);
+		if (scope.applied != null) scope.applied.remove();
+		scope.applied = null;
+	}
+
+	/** This scope's modifier, then each forwarding ancestor's, as their builds applied them. */
+	function applySharedModifiers(node:RenderNode):Void {
+		var scope:Null<RenderScope> = this;
+		while (scope != null && scope.root == node) {
+			if (scope.modifier != null) scope.applied = scope.modifier.apply(node);
+			scope = scope.parentScope;
+		}
 	}
 
 	override public function onMaybeStale():Void {
