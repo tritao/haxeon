@@ -821,8 +821,7 @@ retain their declared bits.
 
 
 Integer `fromRaw` helpers use one typed switch; String helpers use equality
-tests. The switch becomes a jump table where its codes are dense enough and span
-at most 256 values, the most HashLink's JIT takes.
+tests. The switch becomes a jump table where its codes are dense enough.
 
 ## Equality and hashing
 
