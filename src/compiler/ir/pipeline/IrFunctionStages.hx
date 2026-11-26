@@ -112,12 +112,13 @@ class IrFunctionStages {
 			stage.made(key, fn.version, summaries[index], reader.requests());
 		}
 		var result = pass.finish(output);
-		// What `finish` added before the encode point (the helpers the rewrites asked for) is last build's when made the same.
+		// What `finish` added before the encode point (the helpers the rewrites asked for) is last build's when made the same. What
+		// the rewrites made is told apart by identity, not by place: `finish` may drop functions, which moves the rest.
 		if (!bodies) {
 			var added:Null<IrStageQueries> = null;
 			for (index in 0...result.length) {
 				var fn = result[index];
-				if (fn.version > since && (index >= count || output[index] != fn)) {
+				if (fn.version > since && (index >= count || output[index] != fn) && !stage.keeps(partKeys, fn)) {
 					if (added == null)
 						added = memos.stage(ADDED, false);
 					result[index] = added.functions.put(database, added.partKey(added.part(partName(name, part)),

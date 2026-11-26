@@ -323,6 +323,12 @@ class IrStageQueries {
 		return key;
 	}
 
+	/** Whether `fn` is what the stage's memo holds for its name in the part whose keys are `keys` (`part`), or with no part. */
+	public function keeps(keys:Null<Array<Int>>, fn:IrFunction):Bool {
+		var named = fn.symbol.functionKey(), key = keys == null ? named : named < keys.length ? keys[named] - 1 : -1;
+		return key >= 0 && functions.kept(key) == fn;
+	}
+
 	/** The input of a function made from nothing but its name, such as a helper its name describes (`made`). */
 	public static inline final FROM_NAME = -1;
 
