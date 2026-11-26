@@ -136,6 +136,11 @@ imports the compile reads, never the native libraries), for the project's target
 session, so a check after a build, or a build after a check, reuses what the other typed. It exits with 1 when the program
 has an error.
 
+A package whose manifest sets `package.documentation = "required"` also has every public declaration of its own modules
+checked for a doc comment ([E1032](../ERRORS.md#e1032-public-declaration-without-a-doc-comment)). The check then types every
+module of the package, as `haxeon doc` does, not only what the entry reaches. A package that depends on it is not checked
+for it.
+
 ```text
 Checking my-app (host)…
 ✔ No errors (0.3 s)
@@ -148,7 +153,8 @@ to `--output`: every public type, member, and module-level function and variable
 where it is declared. A package's API is its own modules, without what it declares `internal`, which the description marks
 and the reference leaves out; it reaches what they use, so a type the API refers to is in the description as well, and the file lists which modules
 are the API (`described`). A library needs no `entry`. Types are written as the source writes them, so a signature keeps
-the names of the typedefs it uses. The format is Haxeon's own JSON, versioned.
+the names of the typedefs it uses. The format is Haxeon's own JSON, versioned. A package that requires its documentation
+fails `haxeon doc` as it fails `haxeon check`, on each public declaration without a doc comment.
 
 ```sh
 haxeon doc

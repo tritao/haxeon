@@ -87,6 +87,7 @@ Paths are relative to the manifest's directory.
 | `version` | integer | `1` | The manifest format; only 1 exists. |
 | `package.name` | string | the directory's name | The package's name, which dependencies use. |
 | `package.version` | string | | The package's version; publishing writes it. |
+| `package.documentation` | `"required"` | not required | Every public declaration of the package's own modules has a doc comment, its own or one it inherits from the member it overrides or implements; `haxeon check` and `haxeon doc` of the package report each one without as E1032. Packages that depend on it are not checked for it. |
 | `package.friends` | array of strings | `[]` | Packages that may use this package's `internal` declarations as its own code does, such as its tests built as a project of their own. Only the package can name its friends. |
 | `entry` | string | none | The entry module of a program; a library has none. |
 | `sourceRoots` | array of strings | `["src"]` | Source directories. |

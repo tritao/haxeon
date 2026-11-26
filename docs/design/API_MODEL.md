@@ -72,7 +72,7 @@ the package's location joined with it. Without a package (the standard library, 
 `package` is null and the file is relative to its source root. No path in the model is this machine's.
 | Tag | `name` (`param`, `return`, `throws`, `see`, `deprecated`, `since`), `parameter` (the name for `param`, otherwise null), `text` |
 | Type parameter | `name`, `constraints` (types) |
-| Member | `name`, `kind`, `isStatic`, `source`, then by kind: `field` has `isFinal`, `type` and `overrides`, `enumValue` has `type`; `property` has `type`, `get` and `set` (`default`, `null`, `never`, `get`, `set`, `dynamic`) and `overrides`; `constructor`, `method`, `function` (a module's), `enumConstructor`, `conversion` and `operator` have `typeParameters`, `arguments` and `result`, with `overrides` for a method, `operatorText` for an operator, `conversion` (`from` or `to`) for a conversion, and `constants` for a case of an enum with per-case constants (each `name`, `value` as written, `isDefault` when the case leaves it at its default) |
+| Member | `name`, `kind`, `isStatic`, `source`, then by kind: `field` has `isFinal`, `type`, `overrides` and `inherited`, `enumValue` has `type`; `property` has `type`, `get` and `set` (`default`, `null`, `never`, `get`, `set`, `dynamic`), `overrides` and `inherited`; `constructor`, `method`, `function` (a module's), `enumConstructor`, `conversion` and `operator` have `typeParameters`, `arguments` and `result`, with `overrides` and `inherited` for a method, `operatorText` for an operator, `conversion` (`from` or `to`) for a conversion, and `constants` for a case of an enum with per-case constants (each `name`, `value` as written, `isDefault` when the case leaves it at its default) |
 | Argument | `name` (null for an unnamed enum payload), `type`, `optional`, `defaultValue` (source text or null) |
 
 A declaration written `internal` (docs/reference/LANGUAGE_SUPPORT.md) is described, with `visibility` `internal`: the
@@ -84,7 +84,10 @@ found as Javadoc finds inherited documentation: the interfaces a type implements
 superclass chain. A member without a comment of its own is documented by that member's comment, followed up the
 hierarchy until one has a comment; the reference says which type it is from, the editor shows it on hover, and the
 coverage counts it as documented. A comment is then written once, on the interface or base class, and not repeated on
-every implementation.
+every implementation. The model gives that comment as `inherited` (`from`, the type that declares it, and its
+`documentation`), on a member with an `overrides` and no comment of its own, so a reader needs no other description to
+show it. A package that sets `package.documentation = "required"` fails `haxeon check` and `haxeon doc` on a declaration
+of its API that has neither (E1032).
 
 Class inheritance and interface extension are `supertypes`; implemented interfaces and declared conformances are
 `interfaces`. An extern abstract has kind `abstract` with `isExtern: true`. The metadata kept is `deprecated`,

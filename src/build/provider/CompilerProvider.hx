@@ -24,8 +24,11 @@ class CompilerProvider {
 			output:String, aheadOfTime:Bool = false, ?shaderRoot:String):ExecutionAction {
 		if (project == null)
 			throw new InternalError("CompilerProvider requires a resolved project");
-		// A description of a library's API has no program to start: it types the package's modules themselves.
-		var describe = context.checkOnly && context.apiJson != null, entry = project.manifest.entry;
+		// A description of a library's API has no program to start: it types the package's modules themselves. A check of a
+		// package that requires its documentation checks that description.
+		var requireDocs = context.checkOnly && project.manifest.documentationRequired,
+			describe = context.checkOnly && context.apiJson != null || requireDocs,
+			entry = project.manifest.entry;
 		if (entry == null && !describe)
 			throw new InternalError('Root package "${project.rootPackage.name}" must declare an "entry" for a build');
 		// The compiler is built from the sources of the SDK's checkout (or `HAXEON_COMPILER_SOURCE`), with its pinned Haxe; a
@@ -81,7 +84,10 @@ class CompilerProvider {
 				arguments.push(compiler.CompileOptions.PACKAGE_FRIEND + entry.name + "=" + friend);
 		}
 		if (describe) {
-			arguments.push("--api-json=" + context.apiJson);
+			if (context.apiJson != null)
+				arguments.push("--api-json=" + context.apiJson);
+			if (requireDocs)
+				arguments.push(compiler.CompileOptions.REQUIRE_DOCS);
 			for (root in project.rootPackage.sourceRoots)
 				arguments.push("--api-source=" + root);
 		}

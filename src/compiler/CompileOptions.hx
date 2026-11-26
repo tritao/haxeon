@@ -19,6 +19,7 @@ typedef CompileOptionsInit = {
 	final ?checkIrBody:Bool;
 	final ?phaseCollections:Bool;
 	final ?inlineAllocation:Bool;
+	final ?requireDocumentation:Bool;
 	final ?nullSafety:Array<NullSafetyRule>;
 	final ?sourcePackages:Array<SourcePackage>;
 	final ?scriptModule:String;
@@ -109,6 +110,13 @@ class CompileOptions {
 	public final inlineAllocation:Bool;
 
 	/**
+	 * Fail a check of the sources an API model describes (`--api-source`) when one of their public declarations has no doc comment
+	 * (`DocumentationCoverage`): what a package's `package.documentation = "required"` becomes. It changes what a compile reports,
+	 * so `key` keeps it.
+	 */
+	public final requireDocumentation:Bool;
+
+	/**
 	 * The null-safety rules of the compile (`--null-safety=MODE[:PATH[:shallow]]`): what Haxe's `--macro nullSafety(...)` states,
 	 * and what a project's `nullSafety` setting becomes. Empty by default, so only `@:nullSafety` metadata turns the checker on.
 	 * They change what a compile reports, so `key` keeps them.
@@ -141,6 +149,7 @@ class CompileOptions {
 		verifyIr = checkIrBody || init == null || init.verifyIr != false;
 		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
 		inlineAllocation = init != null && init.inlineAllocation == true;
+		requireDocumentation = init != null && init.requireDocumentation == true;
 		nullSafety = init == null || init.nullSafety == null ? [] : init.nullSafety;
 		sourcePackages = init == null || init.sourcePackages == null ? [] : init.sourcePackages;
 	}
@@ -173,6 +182,7 @@ class CompileOptions {
 			checkIrBody: checkIrBody,
 			phaseCollections: phaseCollections,
 			inlineAllocation: inlineAllocation,
+			requireDocumentation: requireDocumentation,
 			nullSafety: nullSafety,
 			sourcePackages: sourcePackages,
 			scriptModule: scriptModule
@@ -211,6 +221,8 @@ class CompileOptions {
 			flags.push(NO_PHASE_COLLECTIONS);
 		if (inlineAllocation)
 			flags.push(INLINE_ALLOCATION);
+		if (requireDocumentation)
+			flags.push(REQUIRE_DOCS);
 		if (scriptModule != null)
 			flags.push(SCRIPT_MODULE + scriptModule);
 		for (rule in nullSafety)
@@ -229,6 +241,9 @@ class CompileOptions {
 
 	/** Allocates objects inline in a `--target=hlc` build (`inlineAllocation`). */
 	public static inline final INLINE_ALLOCATION = "--inline-allocation";
+
+	/** Fails a check on an undocumented public declaration (`requireDocumentation`). */
+	public static inline final REQUIRE_DOCS = "--require-docs";
 
 	/** One null-safety rule (`nullSafety`). */
 	public static inline final NULL_SAFETY = "--null-safety=";
@@ -272,7 +287,7 @@ class CompileOptions {
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
-				INLINE_ALLOCATION: true;
+				INLINE_ALLOCATION, REQUIRE_DOCS: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, NULL_SAFETY)
 				|| StringTools.startsWith(argument, SOURCE_PACKAGE) || StringTools.startsWith(argument, PACKAGE_FRIEND)
 				|| StringTools.startsWith(argument, SCRIPT_MODULE);
@@ -296,6 +311,7 @@ class CompileOptions {
 			phaseCollections: arguments.indexOf(PHASE_COLLECTIONS) >= 0 ? true : arguments.indexOf(NO_PHASE_COLLECTIONS)
 				>= 0 ? false : null,
 			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0,
+			requireDocumentation: arguments.indexOf(REQUIRE_DOCS) >= 0,
 			nullSafety: nullSafetyFrom(arguments),
 			sourcePackages: sourcePackagesFrom(arguments),
 			scriptModule: scriptModuleFrom(arguments)

@@ -9,10 +9,12 @@ import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.core.CancellationToken;
+import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.PeakProbe;
 import compiler.documentation.ApiJsonWriter;
 import compiler.documentation.ApiModelBuilder;
+import compiler.documentation.DocumentationCoverage;
 import compiler.ffi.CHeaderEmitter;
 import compiler.hl.HlWriter;
 import compiler.ir.codec.CanonicalIrCodec;
@@ -235,7 +237,8 @@ class CompilerDriver {
 			apiJsonOutput = request.apiJsonOutput;
 		// A description covers every source it was given, not only what an entry reaches: each loaded module but the standard
 		// library's is typed as a root. Without an entry, those roots are the whole program.
-		var roots = apiJsonOutput == null ? [] : describedModules(compiler, request.apiSources);
+		var describes = apiJsonOutput != null || request.options.requireDocumentation,
+			roots = describes ? describedModules(compiler, request.apiSources) : [];
 		var hasEntry = request.entry != ModuleReachability.NO_ENTRY;
 		progressReport(hasEntry ? "checking entry " + request.entry : "checking " + roots.length + " modules");
 		var result = compiler.analyze(request.entry, cancellation, hasEntry, roots),
@@ -244,17 +247,24 @@ class CompilerDriver {
 		for (warning in compiler.warnings(result.moduleNames))
 			warned(printer.warning(warning));
 		progressReport("checked " + Std.string(result.moduleNames.length) + " modules");
-		if (apiJsonOutput != null) {
+		if (describes) {
 			var semantic = compiler.state.semanticProgram;
 			if (semantic == null)
 				throw new InternalError("An analysis keeps its semantic program");
 			var sourceRoots = request.roots.concat([request.stdlib]);
 			for (root in request.packageRoots)
 				sourceRoots.push(root.path);
-			sys.FileSystem.createDirectory(Path.directory(absolutePath(apiJsonOutput)));
-			File.saveContent(apiJsonOutput,
-				ApiJsonWriter.emit(ApiModelBuilder.build(semantic, compiler.modules, sourceRoots, roots,
-				new compiler.SourcePackages(request.options.sourcePackages))));
+			var model = ApiModelBuilder.build(semantic, compiler.modules, sourceRoots, roots,
+				new compiler.SourcePackages(request.options.sourcePackages));
+			if (apiJsonOutput != null) {
+				sys.FileSystem.createDirectory(Path.directory(absolutePath(apiJsonOutput)));
+				File.saveContent(apiJsonOutput, ApiJsonWriter.emit(model));
+			}
+			if (request.options.requireDocumentation) {
+				var missing = DocumentationCoverage.missing(model);
+				if (missing.length > 0)
+					throw new CompileError(missing[0], missing.slice(1));
+			}
 		}
 		return result;
 	}

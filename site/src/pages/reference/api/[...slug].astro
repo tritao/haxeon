@@ -62,7 +62,7 @@ if (current) {
   for (const type of current.types) {
     await documentation(type.source);
     for (const member of type.members) {
-      const inherited = memberDocumentation(member, index);
+      const inherited = memberDocumentation(member);
       if (inherited) await documentation(inherited.source);
     }
   }
@@ -71,7 +71,7 @@ if (current) {
 
 // A member's documentation, its own or the one it inherits, with the type an inherited one is from.
 const memberDocs = (member) => {
-  const inherited = memberDocumentation(member, index);
+  const inherited = memberDocumentation(member);
   return inherited ? { ...docs.get(inherited.source), from: inherited.from } : null;
 };
 const tagLabel = { param: 'Parameter', return: 'Returns', throws: 'Throws', see: 'See', deprecated: 'Deprecated', since: 'Since' };
@@ -110,7 +110,7 @@ const headings = current
           </thead>
           <tbody>
             {groups.map((entry) => {
-              const { total, documented } = documentationCoverage(entry.types, entry.modules, index);
+              const { total, documented } = documentationCoverage(entry.types, entry.modules);
               return (
                 <tr>
                   <td><a href={haxePackageUrl(directory, entry.name)}><code>{entry.name || '(top level)'}</code></a></td>

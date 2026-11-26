@@ -3,6 +3,7 @@ package compiler.documentation;
 import compiler.core.InternalError;
 import compiler.documentation.ApiModel.ApiArgument;
 import compiler.documentation.ApiModel.ApiDeclaration;
+import compiler.documentation.ApiModel.ApiDocumentation;
 import compiler.documentation.ApiModel.ApiMember;
 import compiler.documentation.ApiModel.ApiModule;
 import compiler.documentation.ApiModel.ApiSource;
@@ -69,22 +70,22 @@ class ApiJsonWriter {
 			output.list("arguments", entry.arguments, (output, text) -> output.scalar(text));
 			output.close();
 		});
-		output.field("documentation", () -> {
-			var documentation = value.documentation;
-			if (documentation == null) {
-				output.nothing();
-				return;
-			}
+		output.field("documentation", () -> documentation(output, value.documentation));
+		output.close();
+	}
+
+	static function documentation(output:JsonOutput, value:Null<ApiDocumentation>):Void {
+		if (value == null) {
+			output.nothing();
+			return;
+		}
+		output.open();
+		output.string("markdown", value.markdown);
+		output.list("tags", value.tags, (output, tag) -> {
 			output.open();
-			output.string("markdown", documentation.markdown);
-			output.list("tags", documentation.tags, (output, tag) -> {
-				output.open();
-				output.string("name", tag.name);
-				output.field("parameter",
-					() -> tag.parameter == null ? output.nothing() : output.scalar(tag.parameter));
-				output.string("text", tag.text);
-				output.close();
-			});
+			output.string("name", tag.name);
+			output.field("parameter", () -> tag.parameter == null ? output.nothing() : output.scalar(tag.parameter));
+			output.string("text", tag.text);
 			output.close();
 		});
 		output.close();
@@ -133,8 +134,21 @@ class ApiJsonWriter {
 		output.close();
 	}
 
-	static function overrides(output:JsonOutput, value:ApiMember):Void
+	/** What an instance member overrides or implements, and the comment it inherits from that line when it has none. */
+	static function overrides(output:JsonOutput, value:ApiMember):Void {
 		output.field("overrides", () -> value.overrides == null ? output.nothing() : output.scalar(value.overrides));
+		output.field("inherited", () -> {
+			var inherited = value.inherited;
+			if (inherited == null) {
+				output.nothing();
+				return;
+			}
+			output.open();
+			output.string("from", inherited.from);
+			output.field("documentation", () -> documentation(output, inherited.documentation));
+			output.close();
+		});
+	}
 
 	static function argument(output:JsonOutput, value:ApiArgument):Void {
 		output.open();

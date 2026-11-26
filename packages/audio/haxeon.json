@@ -1,7 +1,8 @@
 {
   "version": 1,
   "package": {
-    "name": "haxeon-audio"
+    "name": "haxeon-audio",
+    "documentation": "required"
   },
   "sourceRoots": [
     "src"

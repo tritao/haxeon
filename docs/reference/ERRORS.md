@@ -269,6 +269,18 @@ class Main {
 }
 ```
 
+## E1032: Public declaration without a doc comment
+
+A package whose manifest sets `package.documentation = "required"` documents every declaration of its public API: each
+public type, each of its public members, and each module-level function and variable. A member that overrides or
+implements a documented one inherits that comment and needs none of its own. Write a doc comment that says what the
+declaration is for, or make it `internal` if it is not for other packages. `haxeon check` and `haxeon doc` of the package
+report each one:
+
+```text
+src/stats/Meter.hx:8:2: error[E1032]: Public method "Meter.reset" has no doc comment; document it, or make it internal if it is not for other packages
+```
+
 ## E2001: Missing module or type
 
 A module dependency or a type within a module could not be resolved. Check its spelling, package path, module contents, and project source roots or dependencies.

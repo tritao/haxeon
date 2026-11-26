@@ -4,6 +4,7 @@ import compiler.SourcePackages;
 import compiler.core.Source.SourceFile;
 import compiler.core.Source.SourceSpan;
 import compiler.documentation.ApiModel.ApiDeclaration;
+import compiler.documentation.ApiModel.ApiInheritedDocumentation;
 import compiler.documentation.ApiModel.ApiMember;
 import compiler.documentation.ApiModel.ApiModule;
 import compiler.documentation.ApiModel.ApiSource;
@@ -382,7 +383,8 @@ class ApiModelBuilder {
 					isStatic: field.isStatic,
 					isFinal: field.isFinal,
 					type: type,
-					overrides: field.isStatic ? null : overridden(owner.name, field.name)
+					overrides: field.isStatic ? null : overridden(owner.name, field.name),
+					inherited: field.isStatic ? null : inheritedFor(owner.name, field.name, span, field.metadata)
 				});
 			else
 				members.push({
@@ -393,7 +395,8 @@ class ApiModelBuilder {
 					type: type,
 					get: access(field.readAccess),
 					set: access(field.writeAccess),
-					overrides: field.isStatic ? null : overridden(owner.name, field.name)
+					overrides: field.isStatic ? null : overridden(owner.name, field.name),
+					inherited: field.isStatic ? null : inheritedFor(owner.name, field.name, span, field.metadata)
 				});
 		}
 		return members;
@@ -464,7 +467,9 @@ class ApiModelBuilder {
 			}],
 				result: typeOf(method.result, () -> types.resultType(signature, scope), method.span, scope),
 				typeParameters: parameters(method.typeParameters ?? [], method.typeConstraints, scope),
-				overrides: overrides};
+				overrides: overrides,
+				inherited: overrides == null
+				|| hasComment(method.span, method.metadata) ? null : inheritedFrom(overrides, name)};
 	}
 
 	/**
@@ -488,18 +493,44 @@ class ApiModelBuilder {
 	 * overrides or implements, followed up the hierarchy as `overridden` finds it. Null when none has a comment.
 	 */
 	public function inheritedDocumentation(owner:String, name:String):Null<Documentation> {
-		var current = owner;
-		while (true) {
-			var supertype = overridden(current, name);
-			if (supertype == null)
-				return null;
-			var declared = instanceMember(supertype, name);
+		var supertype = overridden(owner, name),
+			found = supertype == null ? null : inheritedComment(supertype, name);
+		return found == null ? null : found.documentation;
+	}
+
+	/**
+	 * The comment of the member `name` that `supertype` declares, or, when it has none, of the one that member overrides,
+	 * followed up the hierarchy; with the supertype that declares it. Null when none has a comment.
+	 */
+	function inheritedComment(supertype:String, name:String):Null<{from:String, documentation:Documentation}> {
+		var current:Null<String> = supertype;
+		while (current != null) {
+			var declared = instanceMember(current, name);
 			var doc = declared == null ? null : commentAt(declared.span, declared.metadata);
 			if (doc != null && doc.lines.length > 0)
-				return doc;
-			current = supertype;
+				return {from: current, documentation: doc};
+			current = overridden(current, name);
 		}
+		return null;
 	}
+
+	/** What documents the member `name` of `supertype`'s line that a member with no comment inherits, as the model gives it. */
+	function inheritedFrom(supertype:String, name:String):Null<ApiInheritedDocumentation> {
+		var found = inheritedComment(supertype, name);
+		return found == null ? null : {from: found.from, documentation: DocumentationTools.forApi(found.documentation)};
+	}
+
+	/** The comment the instance member `name` of `owner`, declared at `span`, inherits when it has none of its own. */
+	function inheritedFor(owner:String, name:String, span:SourceSpan,
+			metadata:Null<Array<AstMetadata>>):Null<ApiInheritedDocumentation> {
+		if (hasComment(span, metadata))
+			return null;
+		var supertype = overridden(owner, name);
+		return supertype == null ? null : inheritedFrom(supertype, name);
+	}
+
+	function hasComment(span:SourceSpan, metadata:Null<Array<AstMetadata>>):Bool
+		return commentAt(span, metadata).lines.length > 0;
 
 	/** Where the class or interface `path` declares the instance member `name`, if it does. */
 	function instanceMember(path:String, name:String):Null<{span:SourceSpan, metadata:Null<Array<AstMetadata>>}> {
@@ -671,7 +702,8 @@ class ApiModelBuilder {
 			visibility: "public",
 			position: {file: locate(span.file, moduleName(span)).file, line: span.file.lineAt(span.start)},
 			documentation: {markdown: documentation, tags: []},
-			metadata: []
+			metadata: [],
+			span: span
 		};
 
 	function source(span:SourceSpan, metadata:Null<Array<AstMetadata>>, isInternal:Null<Bool> = false):ApiSource {
@@ -692,7 +724,8 @@ class ApiModelBuilder {
 			visibility: isInternal == true ? "internal" : "public",
 			position: {file: locate(file, moduleName(span)).file, line: file.lineAt(span.start)},
 			documentation: doc.lines.length == 0 ? null : DocumentationTools.forApi(doc),
-			metadata: annotations
+			metadata: annotations,
+			span: span
 		};
 	}
 

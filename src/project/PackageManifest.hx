@@ -175,6 +175,14 @@ class PackageManifest {
 	 * tests built as a project of their own. The package names them, so no other package can grant itself the access.
 	 */
 	public final friends:Array<String>;
+
+	/**
+	 * `package.documentation = "required"`: every public declaration of the package has a doc comment, which `haxeon check` and
+	 * `haxeon doc` of the package enforce (`CompileOptions.requireDocumentation`). A package that depends on it is not checked
+	 * for it.
+	 */
+	public final documentationRequired:Bool;
+
 	public final entry:Null<String>;
 	public final legacySources:Array<String>;
 	public final sourceRoots:Array<String>;
@@ -234,10 +242,11 @@ class PackageManifest {
 			nullSafety:NullSafetyMode, nullSafetyRules:Array<NullSafetyRule>, ?instrument:InstrumentManifest,
 			?app:AppManifest, ?packageVersion:String, ?publish:PublishManifest,
 			?patches:Map<String, Map<String, String>>, ?shaderVariants:Map<String, Map<String, Array<String>>>,
-			?friends:Array<String>) {
+			?friends:Array<String>, documentationRequired:Bool = false) {
 		this.version = version;
 		this.packageName = packageName;
 		this.friends = friends == null ? [] : friends.copy();
+		this.documentationRequired = documentationRequired;
 		this.packageId = new PackageId(packageName);
 		this.entry = entry;
 		this.legacySources = legacySources.copy();
@@ -478,7 +487,18 @@ class PackageManifest {
 			parseNullSafety(raw, path), [], parseInstrument(raw, path), parseApp(raw, packageName, path),
 			packageData == null ? null : optionalNullableString(packageData, "version", '$path package'),
 			parsePublish(raw, path), parsePatches(raw, path), parseShaderVariants(raw, path),
-			packageData == null ? [] : stringArray(packageData, "friends", '$path package', []));
+			packageData == null ? [] : stringArray(packageData, "friends", '$path package', []),
+			packageData != null && parseDocumentation(packageData, path));
+	}
+
+	/** `package.documentation`: "required", or left out. */
+	static function parseDocumentation(packageData:Dynamic, path:String):Bool {
+		var value = optionalNullableString(packageData, "documentation", '$path package');
+		if (value == null)
+			return false;
+		if (value != "required")
+			throw new UsageError('$path "package.documentation" is "required" or left out, not "$value"');
+		return true;
 	}
 
 	/** `publish`: false, or a table with `exclude` and `vendor` (PublishManifest). */

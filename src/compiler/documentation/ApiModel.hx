@@ -45,6 +45,9 @@ typedef ApiSource = {
 	final position:{file:String, line:Int};
 	final metadata:Array<ApiAnnotation>;
 	final documentation:Null<ApiDocumentation>;
+
+	/** Where the declaration is, for the diagnostics the model's checks report (`DocumentationCoverage`); not written to JSON. */
+	final span:compiler.core.Source.SourceSpan;
 }
 
 typedef ApiAnnotation = {
@@ -86,6 +89,18 @@ typedef ApiMember = {
 	 * one overrides or implements (`ApiModelBuilder.overridden`), whose comment documents it when it has none of its own.
 	 */
 	final ?overrides:String;
+
+	/**
+	 * For a member with no comment of its own: the comment of the member it overrides or implements, followed up the hierarchy
+	 * (`ApiModelBuilder.inheritedComment`), and the supertype it is from. It documents the member.
+	 */
+	final ?inherited:ApiInheritedDocumentation;
+}
+
+/** The comment a member inherits, and the supertype that declares it. */
+typedef ApiInheritedDocumentation = {
+	final from:String;
+	final documentation:ApiDocumentation;
 }
 
 /** One case's value for a per-case constant: its source text, and whether the case leaves it at the default. */

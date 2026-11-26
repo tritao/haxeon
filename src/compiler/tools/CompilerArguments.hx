@@ -190,12 +190,17 @@ class CompilerArguments {
 			|| irOutput != null
 			|| inputsOutput != null || ffiHeader != null))
 			throw new UsageError("--no-output builds nothing, so it takes no option that writes a build's file or a live publication");
-		// A description of the sources is an analysis: it types them and builds nothing, and needs no entry.
+		// A description of the sources is an analysis: it types them and builds nothing, and needs no entry. Requiring their
+		// documentation checks the same description.
+		var requireDocs = optionFlags.indexOf(compiler.CompileOptions.REQUIRE_DOCS) >= 0,
+			describes = apiJsonOutput != null || requireDocs;
 		if (apiJsonOutput != null && !noOutput)
 			throw new UsageError("--api-json describes the sources without building them: use it with --no-output");
-		if (apiSources.length > 0 && apiJsonOutput == null)
-			throw new UsageError("--api-source shapes what --api-json describes: use it with --api-json");
-		if (apiJsonOutput != null && !entryGiven)
+		if (requireDocs && !noOutput)
+			throw new UsageError("--require-docs checks the sources' description without building them: use it with --no-output");
+		if (apiSources.length > 0 && !describes)
+			throw new UsageError("--api-source shapes what --api-json and --require-docs describe: use it with one of them");
+		if (describes && !entryGiven)
 			entry = compiler.modules.ModuleReachability.NO_ENTRY;
 		if (baseline != null && !live)
 			throw new UsageError("--baseline requires --live");

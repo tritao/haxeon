@@ -1,6 +1,6 @@
 {
 	"version": 1,
-	"package": { "name": "haxeon-agentkit-nativekit" },
+	"package": { "name": "haxeon-agentkit-nativekit", "documentation": "required" },
 	"sourceRoots": ["src"],
 	"scopeSourceRoots": false,
 	"dependencies": {

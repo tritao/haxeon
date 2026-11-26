@@ -2,6 +2,7 @@
   "version": 1,
   "package": {
     "name": "haxeon-gpu",
+    "documentation": "required",
     "friends": ["gpu-tests"]
   },
   "sourceRoots": [
