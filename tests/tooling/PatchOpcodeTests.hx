@@ -31,8 +31,7 @@ class PatchOpcodeTests {
 				requiresReload: false,
 				reloadReasons: [],
 				patchAvailable: true,
-				changedFunctions: [],
-				identities: []
+				changedFunctions: []
 			};
 		var current = publication(3, 4);
 		if (!tools.LivePublication.canPatch(current, publication(4, 5)))

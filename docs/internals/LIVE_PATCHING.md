@@ -373,6 +373,8 @@ way, and HL assembly is about a tenth of a compile, so nothing meaningful is los
   (`Compiler.livePatching`), and `CompilerDriver` sets it from the request.
 - The `<output>.hli` and `<output>.live.json` sidecars describe the session (module identity, revision), not
   the artifact, and still differ between sessions.
+- The live host finds the entry class's functions (`start`, `tick` and the rest) by name in the module it runs
+  (`Runtime.functionId`, `hl_runtime_module_function_id`), so `.live.json` lists no function ids.
 - `<output>.live.stamp` holds the publication key (`identity:revision`) and is published after `.live.json`. The live
   host reads it every tick and parses the description only when it changes; without a stamp it parses every tick.
 

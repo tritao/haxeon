@@ -12,7 +12,6 @@ import runtime.RuntimeStatus;
 import sys.FileSystem;
 import sys.io.File;
 import tools.LivePublication.LiveDescription;
-import tools.LivePublication.LiveFunction;
 
 private typedef FullModule = {
 	final module:haxe.io.Bytes;
@@ -57,10 +56,10 @@ class LiveHost {
 		// A reload whose full module is not published yet waits here while the current module keeps running.
 		var pendingReload:Null<LiveDescription> = null, pendingSince = 0.0;
 		try {
-			Runtime.callStringArg(module, functionId(description, entry + "." + LiveEntryPoints.START), arguments);
+			Runtime.callStringArg(module, entryPoint(module, entry + "." + LiveEntryPoints.START), arguments);
 			var running = true;
 			while (running) {
-				running = Runtime.callInt(module, functionId(description, entry + "." + LiveEntryPoints.TICK)) != 0;
+				running = Runtime.callInt(module, entryPoint(module, entry + "." + LiveEntryPoints.TICK)) != 0;
 				var published = readStamp(path);
 				var seenAt = Sys.time();
 				var candidate = published == null || published != stamp ? tryDescription(path) : null;
@@ -98,8 +97,8 @@ class LiveHost {
 							// An app that rebuilds its UI from its code lets go of it around the patch (`Runtime.patchSetRebuilding`).
 							Runtime.patchSetRebuilding(module,
 								new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions),
-								optionalFunctionId(description, entry + "." + LiveEntryPoints.RELEASE),
-								optionalFunctionId(description, entry + "." + LiveEntryPoints.REBUILD),
+								Runtime.functionId(module, entry + "." + LiveEntryPoints.RELEASE),
+								Runtime.functionId(module, entry + "." + LiveEntryPoints.REBUILD),
 								(rebuilding,
 								error) -> hookErrors.push('$entry.${rebuilding ? LiveEntryPoints.REBUILD : LiveEntryPoints.RELEASE}() threw: $error'));
 							applied = true;
@@ -116,7 +115,7 @@ class LiveHost {
 							report('haxeon: warning: $error');
 						if (applied) {
 							// The summary stands in for the 1 MB full description.
-							description = patchedDescription(description, candidate);
+							description = candidate;
 							revision = candidate.revision;
 							rejectedPublication = "";
 						}
@@ -187,12 +186,12 @@ class LiveHost {
 					}
 				}
 			}
-			var status = Runtime.callInt(module, functionId(description, entry + "." + LiveEntryPoints.CLOSE));
+			var status = Runtime.callInt(module, entryPoint(module, entry + "." + LiveEntryPoints.CLOSE));
 			if (status != 0)
 				Sys.exit(status);
 		} catch (error:haxe.Exception) {
 			try
-				Runtime.callInt(module, functionId(description, entry + "." + LiveEntryPoints.CLOSE))
+				Runtime.callInt(module, entryPoint(module, entry + "." + LiveEntryPoints.CLOSE))
 			catch (_:Dynamic) {}
 			Runtime.dispose(module);
 			throw error;
@@ -218,7 +217,7 @@ class LiveHost {
 			arguments:String):Null<LoadedModule> {
 		var state:String;
 		try
-			state = Runtime.callString(current, functionId(previous, entry + "." + LiveEntryPoints.SAVE_STATE))
+			state = Runtime.callString(current, entryPoint(current, entry + "." + LiveEntryPoints.SAVE_STATE))
 		catch (error:Dynamic) {
 			report('haxeon: could not save live state; keeping revision ${previous.revision}: ${Std.string(error)}');
 			return null;
@@ -233,9 +232,10 @@ class LiveHost {
 		var oldClosed = false;
 		try {
 			oldClosed = true;
-			Runtime.callInt(current, functionId(previous, entry + "." + LiveEntryPoints.CLOSE));
-			Runtime.callStringArg(replacement, functionId(next, entry + "." + LiveEntryPoints.START), arguments);
-			Runtime.callStringArg(replacement, functionId(next, entry + "." + LiveEntryPoints.RESTORE_STATE), state);
+			Runtime.callInt(current, entryPoint(current, entry + "." + LiveEntryPoints.CLOSE));
+			Runtime.callStringArg(replacement, entryPoint(replacement, entry + "." + LiveEntryPoints.START), arguments);
+			Runtime.callStringArg(replacement, entryPoint(replacement, entry + "." + LiveEntryPoints.RESTORE_STATE),
+				state);
 			try
 				Runtime.dispose(current)
 			catch (error:Dynamic)
@@ -244,14 +244,14 @@ class LiveHost {
 			return replacement;
 		} catch (error:Dynamic) {
 			try
-				Runtime.callInt(replacement, functionId(next, entry + "." + LiveEntryPoints.CLOSE))
+				Runtime.callInt(replacement, entryPoint(replacement, entry + "." + LiveEntryPoints.CLOSE))
 			catch (_:Dynamic) {}
 			try
 				Runtime.dispose(replacement)
 			catch (_:Dynamic) {}
 			if (oldClosed) {
-				Runtime.callStringArg(current, functionId(previous, entry + "." + LiveEntryPoints.START), arguments);
-				Runtime.callStringArg(current, functionId(previous, entry + "." + LiveEntryPoints.RESTORE_STATE),
+				Runtime.callStringArg(current, entryPoint(current, entry + "." + LiveEntryPoints.START), arguments);
+				Runtime.callStringArg(current, entryPoint(current, entry + "." + LiveEntryPoints.RESTORE_STATE),
 					state);
 			}
 			report('haxeon: reload failed; restored revision ${previous.revision}: ${Std.string(error)}');
@@ -303,19 +303,6 @@ class LiveHost {
 			report('haxeon: $line');
 		report('haxeon: ================================================================');
 	}
-
-	/** The running module's description once `candidate`'s patch applied: function ids are stable, so they carry over. */
-	static function patchedDescription(current:LiveDescription, candidate:LiveDescription):LiveDescription
-		return {
-			revision: candidate.revision,
-			baseRevision: candidate.baseRevision,
-			moduleIdentity: candidate.moduleIdentity,
-			requiresReload: candidate.requiresReload,
-			reloadReasons: candidate.reloadReasons,
-			patchAvailable: candidate.patchAvailable,
-			changedFunctions: candidate.changedFunctions,
-			identities: current.identities
-		};
 
 	/** The watch's events file (`WatchEvents`), when a watcher started this host. */
 	static final events:Null<String> = WatchEvents.current();
@@ -370,7 +357,6 @@ class LiveHost {
 	static function readDescription(path:String, file:String = ".live.json"):LiveDescription {
 		var value:Dynamic = Json.parse(File.getContent(path + file));
 		var changed:Array<Dynamic> = value.changedFunctions,
-			identities:Array<Dynamic> = value.identities,
 			reasons:Null<Array<Dynamic>> = value.reloadReasons;
 		var base:Null<Dynamic> = value.baseRevision;
 		return {
@@ -381,17 +367,11 @@ class LiveHost {
 			reloadReasons: reasons == null
 				? [] : [for (reason in reasons) Std.string(reason.code) + " " + Std.string(reason.entityId)],
 			patchAvailable: value.patchAvailable,
-			changedFunctions: [for (id in changed)(id: Int)],
-			identities: [
-				for (item in identities)
-					({
-						name: item.name, id: item.id
-					}: LiveFunction)
-			]
+			changedFunctions: [for (id in changed)(id: Int)]
 		};
 	}
 
-	/** The small summary the compiler writes beside the full description, so a patch does not parse the whole function list. */
+	/** The small summary the compiler writes beside the description, which a patch is applied from. */
 	static function tryDescription(path:String):Null<LiveDescription> {
 		try
 			return readDescription(path,
@@ -406,17 +386,11 @@ class LiveHost {
 		return full != null && publicationKey(full) == publicationKey(summary) ? full : null;
 	}
 
-	static function optionalFunctionId(description:LiveDescription, name:String):Null<Int> {
-		for (item in description.identities)
-			if (item.name == name)
-				return item.id;
-		return null;
-	}
-
-	static function functionId(description:LiveDescription, name:String):Int {
-		for (item in description.identities)
-			if (item.name == name)
-				return item.id;
-		throw new InternalError('Missing live entry point "$name"');
+	/** A live entry point of the running module, found by its name as the module names it. */
+	static function entryPoint(module:LoadedModule, name:String):Int {
+		var id = Runtime.functionId(module, name);
+		if (id == null)
+			throw new InternalError('Missing live entry point "$name"');
+		return id;
 	}
 }

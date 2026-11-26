@@ -1,10 +1,5 @@
 package tools;
 
-typedef LiveFunction = {
-	final name:String;
-	final id:Int;
-}
-
 typedef LiveDescription = {
 	final revision:Int;
 	/** The revision the build's patch applies to; -1 from a compiler that does not say. */
@@ -15,7 +10,6 @@ typedef LiveDescription = {
 	final reloadReasons:Array<String>;
 	final patchAvailable:Bool;
 	final changedFunctions:Array<Int>;
-	final identities:Array<LiveFunction>;
 }
 
 /** Publication compatibility is checked before the live host invokes the runtime patcher. */

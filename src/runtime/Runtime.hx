@@ -10,6 +10,9 @@ private class RuntimeNative {
 			identityLength:Int):hl.Abstract<"realtime_module">
 		return null;
 
+	public static function function_id(module:hl.Abstract<"realtime_module">, name:hl.Bytes):Int
+		return 0;
+
 	public static function call_i32(module:hl.Abstract<"realtime_module">, index:Int):Int
 		return 0;
 
@@ -133,6 +136,15 @@ class Runtime {
 		if (module == null)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the module bytes");
 		return new LoadedModule(module);
+	}
+
+	/** The stable id of the function named `name` in `module`, as the module names it (its key's member), or null. */
+	public static function functionId(module:LoadedModule, name:String):Null<Int> {
+		var text = Bytes.ofString(name), bytes = Bytes.alloc(text.length + 1);
+		bytes.blit(0, text, 0, text.length);
+		bytes.set(text.length, 0);
+		var id = module.access(handle -> RuntimeNative.function_id(handle, bytes.getData()));
+		return id < 0 ? null : id;
 	}
 
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int

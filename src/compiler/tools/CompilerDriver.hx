@@ -111,15 +111,12 @@ class CompilerDriver {
 			var stampedAt = -1.0;
 			var publishPatch = function() {
 				var build = BackendArtifacts.hashLink(result.artifact);
-				var identities = session == null
-					? identitiesJson(build.functionIds) : session.functionIds.of(build.functionIds,
-					identitiesJson);
 				var patch = build.patchBytes;
 				if (patch != null)
 					File.saveBytes(request.output + ".hlp", patch);
 				else
 					deleteIfExists(request.output + ".hlp");
-				// The host applies a patch from this summary alone; the full description (every function id) is for reloads.
+				// The host applies a patch from this summary alone and finds functions by name in the module it runs.
 				var summary = request.output + ".live.patch.json";
 				File.saveContent(summary + ".tmp", Json.stringify({
 					revision: result.revision,
@@ -128,14 +125,12 @@ class CompilerDriver {
 					requiresReload: result.requiresReload,
 					reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
 					patchAvailable: patch != null,
-					changedFunctions: result.changedFunctions,
-					identities: ([]: Array<Dynamic>)
+					changedFunctions: result.changedFunctions
 				}));
 				replaceFile(summary + ".tmp", summary);
 				var manifest = request.output + ".live.json";
 				var temporary = manifest + ".tmp";
-				// The identities come last, as their cached text.
-				var head = Json.stringify({
+				File.saveContent(temporary, Json.stringify({
 					revision: result.revision,
 					baseRevision: result.baseRevision,
 					unchanged: result.unchanged,
@@ -144,8 +139,7 @@ class CompilerDriver {
 					reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
 					patchAvailable: patch != null,
 					changedFunctions: result.changedFunctions
-				});
-				File.saveContent(temporary, head.substr(0, head.length - 1) + ',"identities":' + identities + "}");
+				}));
 				replaceFile(temporary, manifest);
 				// The live host reads this small stamp every tick, and the description only when the stamp changes.
 				var stamp = request.output + ".live.stamp";
@@ -562,40 +556,6 @@ class CompilerDriver {
 				for (instructionIndex in 0...fn.opcodes.length)
 					report('$instructionIndex\t${Std.string(fn.opcodes[instructionIndex])}');
 			}
-	}
-
-	/** The live manifest's identities: every function's stable id, by name, in name order, as JSON. */
-	/**
-	 * The live manifest's identities, `[{"id":N,"name":"..."},...]` in name order, written directly: an edit that moves the ids
-	 * writes every one again, which through the reflective printer cost more than encoding the module.
-	 */
-	static function identitiesJson(ids:Map<String, Int>):String {
-		var names = [for (name in ids.keys()) name];
-		names.sort(Reflect.compare);
-		var text = new StringBuf();
-		text.addChar("[".code);
-		for (index in 0...names.length) {
-			var name = names[index];
-			if (index > 0)
-				text.addChar(",".code);
-			text.add('{"id":');
-			text.add(ids.get(name));
-			text.add(',"name":');
-			text.add(plainJson(name) ? '"' + name + '"' : Json.stringify(name));
-			text.addChar("}".code);
-		}
-		text.addChar("]".code);
-		return text.toString();
-	}
-
-	/** Whether `text` is printable ASCII without a quote or a backslash, which JSON quotes as it is. */
-	static function plainJson(text:String):Bool {
-		for (index in 0...text.length) {
-			var code = StringTools.fastCodeAt(text, index);
-			if (code < 0x20 || code > 0x7e || code == '"'.code || code == "\\".code)
-				return false;
-		}
-		return true;
 	}
 
 	static function functionMap(indices:Map<String, Int>):String {

@@ -3,6 +3,11 @@ HL_PRIM hl_runtime_module *HL_NAME(load)( vbyte *bytes, int length, vbyte *ident
 	return hl_runtime_module_load(bytes,length,identity,identity_length,&runtime) == HL_RUNTIME_OK ? runtime : NULL;
 }
 
+/* The stable id of the function named `name` (UTF-8, NUL-terminated), or -1. */
+HL_PRIM int HL_NAME(function_id)( hl_runtime_module *runtime, vbyte *name ) {
+	return hl_runtime_module_function_id(runtime,(const char*)name);
+}
+
 HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 	int result = 0;
 	vdynamic *exception = NULL;

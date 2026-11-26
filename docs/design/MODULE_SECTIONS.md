@@ -472,9 +472,9 @@ In 4a a patch that adds a native is refused by the patch linker, as the planner 
   `HlSectionWriter.declaringModule` of the name); guards from `assembly.guards` by name; migrations from the `__liveinit`
   functions and their classes by name. Reserved-slot fills need nothing: the section's class names the slot.
 - The `.hli` becomes HLI 4 (`HlRuntimeIdentity.encode`), and every consumer of stable ids from the compiler goes through
-  names: `src/tools/LiveHost.hx` and `src/runtime/Runtime.hx` (a `function_id` native in `native/runtime/module_runtime.c`),
-  `.live.json`'s function ids (`CompilerDriver.identitiesJson`), Android HXR (`native/android/cpp/haxeon_jni.c`,
-  `src/tools/AndroidWatch.hx`), and `CompilerDriver`'s `functionIds.get("main")`.
+  names. Done first (4b step 1): the live host finds its entry points by name (`Runtime.functionId`, the `function_id`
+  native), and `.live.json` no longer lists function ids. Left: Android HXR (`native/android/cpp/haxeon_jni.c`,
+  `src/tools/AndroidWatch.hx`), `CompilerDriver`'s `functionIds.get("main")` and the REPL's.
 - A function's runtime index is the loader's (`HlSectionOutput.linkedIndices`), not the live layout's: the `.functions`
   sidecar and the debugger tests that read slots take the linked numbering, as plain builds already do.
 
