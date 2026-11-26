@@ -1,0 +1,71 @@
+# The typer's per-build state as results
+
+Status: proposed. Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
+
+## Why
+
+After the IR stages and the inliner moved onto the engine (slices 1–5) and generated helpers are kept
+([WARM_REBUILD_REUSE.md](WARM_REBUILD_REUSE.md)), most of what a no-op build still does is the typer rebuilding state that
+depends on the whole program, because `TypingSession` is new each build. Measured on the compiler's own sources (edit-cost
+session, wall ms, at 4bf42ab4d): the no-op is 0.585G main-thread instructions, and of it
+
+| Phase | No-op | Body edit | What it rebuilds every build |
+|---|---|---|---|
+| `setup` | 15–18 | 13–15 | `DeclarationTypeTable.new`: the `AstFunction` → key map and the inferred-key map over every declaration, `leavesSignatureToInference` for about 40k functions |
+| `generated` | 23–25 | 22–23 | `registerProgramTypes` over every typed function, class, interface, enum and native: anonymous types, enum representations, generic owners discovered again; `keepAnonymousUnits` over every unit the previous program lists; 26 generic-owner specializations typed again (`takeFromPrevious`) |
+| `ir-generation` | 40–42 | 41–42 | the publication step: `publishObjects`/`objectsFrom` over every class, the prune's module scans (`generatedHelpersStillCalled`, `pruneModule`), `retainedFromPrevious` |
+| frontend | 23–26 | — | the alias universe sorted and joined, `indexAliasesByPackage`, `StaticExtensionTable.build` |
+
+The signature edit is not the target: it retypes the functions whose calls really change, and step 3c's cutoff covers the
+case where an inferred type stays equal. This step is about the floor every build pays.
+
+## The rule
+
+State the typer derives from the whole program becomes a **summary over per-unit contributions**, held by the engine across
+builds. A unit (a module's declarations, a typed function, a field initializer, a generated helper) contributes its part when
+it is typed or parsed; a unit that is kept keeps its contribution without being walked; the summary changes by the
+contributions that changed. This is the pattern the IR stages already use (`IrContributionSummary`, slice 3), applied to the
+typer, so no new machinery: computed kinds keyed by unit, summaries with per-key reads, the database's undo log for rollback.
+
+What it rules out: session maps that survive builds by hand. A persistent map outside the engine either grows by one entry
+per edit or breaks rollback of a build that is not taken (the reason the floor agent did not add one); the engine's undo log
+gives both.
+
+## The pieces
+
+1. **Declaration keys by module** (`setup`). Each module's parse contributes its `AstFunction` → key entries and its
+   inferred keys (what `DeclarationTypeTable.new` and `markInferred` compute now), computed once per parse of that module. A
+   module whose parse is reused contributes the same object; the table reads the module's contribution through the
+   function's module instead of one program-wide map. `leavesSignatureToInference` runs only for re-parsed modules.
+2. **Program types by unit** (`generated`). `registerProgramTypes`' discoveries (anonymous types, enum representations,
+   generic owners) become each unit's recorded contribution, which `AnonymousTypeRegistry` already attributes to units for
+   `anonymousUnits`. A kept unit's contribution stays; the registries are the union. `keepAnonymousUnits` goes: it is this
+   rule done by hand over the previous program.
+3. **Generic-owner specializations kept** (`generated`). A specialization is a unit like a generated helper: kept while
+   nothing it read changed, which needs the specialized class's field shape to be a recorded read first.
+4. **Publication by contribution** (`ir-generation`). `objectsFrom` per class as a contribution; the prune and
+   `retainedFromPrevious` follow reverse edges from unit records (COMPILER_FOUNDATIONS item 1) instead of scanning modules.
+   This piece shares its object tables with engine slices 6 and 7 and lands with them if that is simpler.
+5. **Frontend tables by module** (frontend). The alias index by package and the static-extension table as summaries over
+   each module's aliases and extensions; the sorted alias universe only when a module's aliases change (its revision is
+   already recorded since 8bca2e7f0).
+
+## Checks
+
+- Warm equals cold, as for every engine step: `--check-reuse` compares each summary with one built from scratch, the programs
+  suite with `--check-reuse`, the edit replay, a self-compile byte-identical.
+- Rollback: a build that is not taken, and a retracted publication, leave every summary as the build before it
+  (`QueryEngineMain`-style tests on the new kinds).
+- Each piece lands only if no edit gets slower and live memory does not grow (`perf-guard --only=incremental`, `--only=live`).
+
+## Order and expected effect
+
+Pieces 1, 2 and 5 are independent and small to medium; 3 needs a recorded read added to typing; 4 is the largest and may go
+with slices 6/7. Expected together: the no-op from 0.585G to roughly 0.25–0.3G and the body edit by about 0.25G, an
+estimate from the phase times above, to be measured per piece.
+
+## Open questions
+
+- Piece 4 here or with engine slices 6/7: the object tables are the same data, so landing them twice would be waste.
+- Whether piece 1 should key by module parse (simplest, matches how ASTs are replaced) or by declaration (finer, but a
+  module's re-parse replaces all its `AstFunction` nodes anyway, so likely no gain).
