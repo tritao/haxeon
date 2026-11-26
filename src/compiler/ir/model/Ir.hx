@@ -307,19 +307,21 @@ class IrObjectTools {
 	}
 
 	/**
-	 * Whether two objects declare the same name, kind, base, interfaces, fields (names and types) and methods (names and the
-	 * functions they name): what the whole-program walks read of an object (`IrWalkTables`).
+	 * Whether two objects declare the same name, kind, native layout, base, interfaces, fields (names, types, layouts and storage)
+	 * and methods (names and the functions they name): what the whole-program walks and steps read of an object (`IrWalkTables`).
 	 */
 	public static function sameShape(left:IrObject, right:IrObject):Bool {
 		if (left == right)
 			return true;
 		if (left.name != right.name || left.isValue != right.isValue || left.base != right.base
 			|| !sameNames(left.interfaces, right.interfaces) || left.fields.length != right.fields.length
-			|| left.methods.length != right.methods.length)
+			|| left.methods.length != right.methods.length || !sameNativeLayout(left.nativeLayout, right.nativeLayout))
 			return false;
 		for (index in 0...left.fields.length) {
 			var a = left.fields[index], b = right.fields[index];
-			if (a.name != b.name || !compiler.ir.model.IrTypeIdentity.same(a.type, b.type))
+			if (a.name != b.name || !compiler.ir.model.IrTypeIdentity.same(a.type, b.type)
+				|| !sameFieldLayout(a.nativeLayout, b.nativeLayout) || !sameStorage(a.scalarStorage, b.scalarStorage)
+				|| !sameStorage(a.nullableScalarStorage, b.nullableScalarStorage))
 				return false;
 		}
 		for (index in 0...left.methods.length) {
@@ -329,6 +331,18 @@ class IrObjectTools {
 		}
 		return true;
 	}
+
+	static function sameNativeLayout(left:Null<IrObjectNativeLayout>, right:Null<IrObjectNativeLayout>):Bool
+		return left == null || right == null ? left == right : left.target == right.target && left.size == right.size
+			&& left.alignment == right.alignment;
+
+	static function sameFieldLayout(left:Null<IrObjectFieldNativeLayout>, right:Null<IrObjectFieldNativeLayout>):Bool
+		return left == null || right == null ? left == right : left.offset == right.offset && left.size == right.size
+			&& left.alignment == right.alignment && left.signed == right.signed
+			&& left.inlineRecord == right.inlineRecord;
+
+	static function sameStorage(left:Null<IrScalarStorage>, right:Null<IrScalarStorage>):Bool
+		return left == null || right == null ? left == right : left.size == right.size && left.signed == right.signed;
 
 	/** Whether two lists of names are equal. */
 	public static function sameNames(left:Array<String>, right:Array<String>):Bool {

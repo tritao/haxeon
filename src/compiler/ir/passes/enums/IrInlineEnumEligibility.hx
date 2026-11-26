@@ -105,15 +105,13 @@ class IrInlineEnumEligibility {
 
 	/**
 	 * What the decision reads besides the program's tables and declarations and the functions' uses: the entry point, the
-	 * reflectable objects, whether the program reflects, the classes with a native layout and what the layouts read
-	 * (`IrInlineEnumLayout.inputs`).
+	 * reflectable objects, whether the program reflects and what the layouts read (`IrInlineEnumLayout.inputs`).
 	 */
 	function givenOf(program:IrProgram, reflectableObjects:Null<Array<String>>):Array<String>
 		return [
 			program.entryPoint,
 			(reflectableObjects ?? []).join(","),
 			IrObjectReflection.usedByProgram(program) ? "reflection" : "",
-			[for (object in program.objects) if (object.nativeLayout != null) object.name].join(","),
 			planner.inputs()
 		];
 
