@@ -1,7 +1,8 @@
 {
   "version": 1,
   "package": {
-    "name": "haxeon-gpu"
+    "name": "haxeon-gpu",
+    "friends": ["gpu-tests"]
   },
   "sourceRoots": [
     "src"

@@ -26,6 +26,7 @@ class Sampler implements Disposable {
 		registration = renderer.registerResource(rendererClosed);
 	}
 
+	/** A sampler filtering and wrapping as given, nearest and clamped by default. */
 	public static function create(renderer:Renderer, minFilter:Filter = Filter.Nearest,
 			magFilter:Filter = Filter.Nearest, wrapU:Wrap = Wrap.ClampToEdge,
 			wrapV:Wrap = Wrap.ClampToEdge):Sampler {
@@ -35,11 +36,12 @@ class Sampler implements Disposable {
 		return new Sampler(renderer, made.out_sampler);
 	}
 
-	public function nativeHandle():nkgpu_sampler {
+	internal function nativeHandle():nkgpu_sampler {
 		ensureLive();
 		return value;
 	}
 
+	/** Binds it to sampler `slot` for the next draws. */
 	public function apply(slot:Int):Void {
 		ensureLive();
 		renderer.ensureFrame();
@@ -57,6 +59,7 @@ class Sampler implements Disposable {
 		registration.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

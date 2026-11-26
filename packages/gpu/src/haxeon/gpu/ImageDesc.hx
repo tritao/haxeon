@@ -10,17 +10,37 @@ import nativekit.ffi.NativeKitGpu;
 
 /** Portable descriptor for a NativeKit GPU image. */
 class ImageDesc {
+	/** Its width, in pixels. */
 	public var width:Int;
+
+	/** Its height, in pixels. */
 	public var height:Int;
+
+	/** Its pixel format. */
 	public var format:ImageFormat;
+
+	/** What it is used for: sampling, rendering, storage or transfers. */
 	public var usage:ImageUsage;
+
+	/** How many mip levels it has. */
 	public var mipCount:Int;
+
+	/** Its multisample count; one for none. */
 	public var sampleCount:Int;
+
+	/** How many layers it has; six per cube for cube images. */
 	public var layerCount:Int;
+
+	/** The bytes per row of its initial data, or zero for tightly packed rows. */
 	public var rowPitch:Int;
+
+	/** Whether it is updated after creation. */
 	public var dynamicUpdate:Bool;
+
+	/** Its shape; Auto picks 2D, or a 2D array with more than one layer. */
 	public var type:ImageType;
 
+	/** A one-level, single-sample 2D image. */
 	public function new(width:Int, height:Int, format:ImageFormat = ImageFormat.Rgba8,
 			usage:ImageUsage = ImageUsage.Sampled) {
 		this.width = width;

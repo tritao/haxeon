@@ -7,6 +7,10 @@ import nativekit.ffi.NativeKitTypes.SurfaceFlags;
 
 /** Configures a platform surface for the GPU adapter's default backend. */
 class SurfaceOptions {
+	/**
+	 * Options for a `width` by `height` surface with depth and stencil, filling its window, on the GPU's default
+	 * backend.
+	 */
 	public static function forGpu(width:Int, height:Int, ?flags:SurfaceFlags):PlatformSurfaceOptions {
 		if (width <= 0 || height <= 0)
 			throw haxeon.platform.BindingError.invalidArgument("SurfaceOptions.forGpu",

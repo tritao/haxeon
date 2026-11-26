@@ -11,10 +11,16 @@ import nativekit.ffi.NativeKitGpu;
 
 /** One color attachment and its optional MSAA resolve image. */
 class ColorAttachment {
+	/** The image drawn into. */
 	public final image:Image;
+
+	/** Where a multisampled image is resolved to, or null. */
 	public var resolveImage:Null<Image>;
+
+	/** How the pass loads and stores it. */
 	public var action:AttachmentAction;
 
+	/** An attachment drawing into `image`. */
 	public function new(image:Image, action:AttachmentAction,
 			resolveImage:Null<Image> = null) {
 		this.image = image;
@@ -25,16 +31,23 @@ class ColorAttachment {
 
 /** Portable render-pass attachment description. */
 class RenderPassDesc {
+	/** The colour attachments, in output order. */
 	public var colors:Array<ColorAttachment>;
+
+	/** The depth-stencil image, or null. */
 	public var depthStencil:Null<Image>;
+
+	/** How the pass loads and stores it. */
 	public var depthStencilAction:AttachmentAction;
 
+	/** A pass with no attachments yet. */
 	public function new() {
 		colors = [];
 		depthStencil = null;
 		depthStencilAction = new AttachmentAction();
 	}
 
+	/** Adds a colour attachment. Returns this description. */
 	public function color(image:Image, action:AttachmentAction,
 			resolveImage:Null<Image> = null):RenderPassDesc {
 		if (colors.length >= 4)
@@ -44,6 +57,7 @@ class RenderPassDesc {
 		return this;
 	}
 
+	/** Sets the depth-stencil attachment, loading and storing by default. Returns this description. */
 	public function depth(image:Image, action:AttachmentAction = null):RenderPassDesc {
 		depthStencil = image;
 		depthStencilAction = action == null ? new AttachmentAction() : action;

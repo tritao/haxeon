@@ -29,7 +29,7 @@ class Batch implements Disposable {
 		registration = renderer.registerResource(rendererClosed);
 	}
 
-	public static function begin(renderer:Renderer):Batch {
+	internal static function begin(renderer:Renderer):Batch {
 		renderer.ensureLive();
 		var made = NativeKitGpu.nkgpu_batch_begin(renderer.nativeHandle());
 		GpuResult.check(made.status, "batch.begin");
@@ -116,6 +116,7 @@ class Batch implements Disposable {
 		registration.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

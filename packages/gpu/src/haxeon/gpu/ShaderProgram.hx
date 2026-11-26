@@ -3,16 +3,31 @@ package haxeon.gpu;
 import haxeon.gpu.Enums;
 import nativekit.ffi.NativeKitGpu;
 
+/** A native shading language and version a program carries sources for. */
 enum ShaderTarget {
+	/** Desktop OpenGL 4.1. */
 	Glsl410;
+
+	/** OpenGL ES 3.0 and WebGL 2. */
 	Glsl300Es;
+
+	/** Direct3D 11. */
 	Hlsl5;
+
+	/** Metal on macOS. */
 	MetalMacos;
+
+	/** Metal on iOS. */
 	MetalIos;
+
+	/** Desktop OpenGL 4.3, for compute. */
 	Glsl430;
+
+	/** OpenGL ES 3.1, for compute. */
 	Glsl310Es;
 }
 
+/** A vertex input a program reads. */
 typedef ShaderAttribute = {
 	final slot:Int;
 	final name:String;
@@ -20,12 +35,14 @@ typedef ShaderAttribute = {
 	final semanticIndex:Int;
 }
 
+/** A uniform block a program declares. */
 typedef ShaderBlock = {
 	final slot:Int;
 	final stage:ShaderStage;
 	final size:Int;
 }
 
+/** One member of a uniform block. */
 typedef ShaderUniform = {
 	final block:Int;
 	final member:Int;
@@ -34,6 +51,7 @@ typedef ShaderUniform = {
 	final count:Int;
 }
 
+/** A texture and sampler pair a program samples. */
 typedef ShaderTexture = {
 	final view:Int;
 	final sampler:Int;
@@ -42,6 +60,7 @@ typedef ShaderTexture = {
 	final name:String;
 }
 
+/** A storage buffer a program reads or writes. */
 typedef ShaderStorageBuffer = {
 	final view:Int;
 	final stage:ShaderStage;
@@ -74,6 +93,7 @@ class ShaderProgram {
 	final attributes:Array<ShaderAttribute>;
 	final targets:Array<ShaderTargetProgram>;
 
+	/** A program with `attributes` and one entry per target. */
 	public function new(attributes:Array<ShaderAttribute>, targets:Array<ShaderTargetProgram>) {
 		this.attributes = attributes;
 		this.targets = targets;

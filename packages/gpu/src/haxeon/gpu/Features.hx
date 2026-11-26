@@ -6,16 +6,37 @@ import nativekit.ffi.NativeKitGpu;
 
 /** Optional GPU capabilities exposed by one renderer. */
 class Features {
+	/** How many colour attachments a pass may have. */
 	public final mrtCount:Int;
+
+	/** The highest multisample count. */
 	public final maxSamples:Int;
+
+	/** Whether shaders can use storage buffers. */
 	public final storageBuffer:Bool;
+
+	/** Whether shaders can use storage images. */
 	public final storageImage:Bool;
+
+	/** Whether compute passes are available. */
 	public final compute:Bool;
+
+	/** Whether instanced draws are available. */
 	public final instancing:Bool;
+
+	/** Whether buffers can be copied on the GPU. */
 	public final bufferCopy:Bool;
+
+	/** Whether images can be copied on the GPU. */
 	public final imageCopy:Bool;
+
+	/** Whether images can be read back to the CPU. */
 	public final imageReadback:Bool;
+
+	/** Whether buffers can be read back to the CPU. */
 	public final bufferReadback:Bool;
+
+	/** Whether GPU timestamps can be measured. */
 	public final timestamps:Bool;
 
 	private function new(value:nkgpu_features) {

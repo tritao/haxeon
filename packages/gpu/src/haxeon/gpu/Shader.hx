@@ -30,6 +30,7 @@ class Shader implements Disposable {
 		registration = renderer.registerResource(rendererClosed);
 	}
 
+	/** A shader from `program`, the sources and bindings the shader build generated for every backend. */
 	public static function create(renderer:Renderer, program:ShaderProgram):Shader {
 		renderer.ensureResourceOperation();
 		var made = NativeKitGpu.nkgpu_shader_create_from_table(renderer.nativeHandle(), program.table());
@@ -37,6 +38,10 @@ class Shader implements Disposable {
 		return new Shader(renderer, made.out_shader);
 	}
 
+	/**
+	 * Starts a shader from hand-written vertex and fragment sources in `language`, whose bindings the builder
+	 * declares. Generated programs and `create` are the usual route.
+	 */
 	public static function begin(renderer:Renderer, language:ShaderLanguage,
 			vertexSource:String, fragmentSource:String):ShaderBuilder {
 		renderer.ensureResourceOperation();
@@ -55,7 +60,7 @@ class Shader implements Disposable {
 		return new ShaderBuilder(renderer, made.out_builder);
 	}
 
-	public function nativeHandle():nkgpu_shader {
+	internal function nativeHandle():nkgpu_shader {
 		ensureLive();
 		return value;
 	}
@@ -73,6 +78,7 @@ class Shader implements Disposable {
 		registration.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
@@ -103,6 +109,7 @@ class ShaderBuilder {
 		registration = renderer.registerResource(rendererClosed);
 	}
 
+	/** Declares uniform block `slot` of `size` bytes for `stage`. Returns this builder. */
 	public function uniformBlock(slot:Int, stage:ShaderStage, size:Int):ShaderBuilder {
 		ensureLive();
 		if (slot < 0 || size <= 0)
@@ -112,6 +119,7 @@ class ShaderBuilder {
 		return this;
 	}
 
+	/** Declares vertex attribute `location`, by its GLSL name and HLSL semantic. Returns this builder. */
 	public function attribute(location:Int, glslName:String, hlslSemantic:String,
 			semanticIndex:Int = 0):ShaderBuilder {
 		ensureLive();
@@ -122,6 +130,7 @@ class ShaderBuilder {
 		return this;
 	}
 
+	/** Declares member `memberIndex` of uniform block `slot`. Returns this builder. */
 	public function uniform(slot:Int, memberIndex:Int, name:String, type:UniformType,
 			arrayCount:Int = 1):ShaderBuilder {
 		ensureLive();
@@ -132,6 +141,7 @@ class ShaderBuilder {
 		return this;
 	}
 
+	/** Declares a texture and its sampler for `stage`. Returns this builder. */
 	public function texture(viewSlot:Int, samplerSlot:Int, stage:ShaderStage, name:String):ShaderBuilder {
 		ensureLive();
 		if (viewSlot < 0 || samplerSlot < 0)
@@ -175,6 +185,7 @@ class ShaderBuilder {
 		return this;
 	}
 
+	/** Creates the shader. */
 	public function build():Shader {
 		ensureLive();
 		var made = NativeKitGpu.nkgpu_shader_end(value);

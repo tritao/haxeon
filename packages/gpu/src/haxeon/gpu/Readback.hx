@@ -64,6 +64,7 @@ class Readback implements Disposable {
 		return new Readback(renderer, made.out_readback);
 	}
 
+	/** Whether the copy has finished, and the shape of its data. */
 	public function query():ReadbackInfo {
 		ensureLive();
 		renderer.ensureResourceOperation();
@@ -72,6 +73,7 @@ class Readback implements Disposable {
 		return ReadbackInfo.fromNative(result.out_info);
 	}
 
+	/** Copies the finished data into `data` and returns how many bytes it wrote. */
 	public function read(data:Bytes):Int {
 		ensureLive();
 		if (data == null || data.length == 0)
@@ -91,6 +93,7 @@ class Readback implements Disposable {
 		registration.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
@@ -109,10 +112,19 @@ class Readback implements Disposable {
 
 /** Snapshot of an asynchronous readback's state and packed result layout. */
 class ReadbackInfo {
+	/** Whether the data is pending, ready or failed. */
 	public final state:ReadbackState;
+
+	/** How many bytes it holds. */
 	public final size:Int;
+
+	/** The bytes per row, for an image. */
 	public final rowPitch:Int;
+
+	/** The image's width, in pixels. */
 	public final width:Int;
+
+	/** The image's height, in pixels. */
 	public final height:Int;
 
 	private function new(state:ReadbackState, size:Int, rowPitch:Int, width:Int, height:Int) {

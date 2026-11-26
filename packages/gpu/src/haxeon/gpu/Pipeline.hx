@@ -39,6 +39,7 @@ class Pipeline implements Disposable {
 		return new PipelineBuilder(renderer, made.out_builder);
 	}
 
+	/** Starts building a render pipeline for `shader` whose vertices follow `layout`. */
 	public static function begin(renderer:Renderer, shader:Shader, layout:VertexLayout):PipelineBuilder
 		return layout.apply(beginWithStride(renderer, shader, layout.stride));
 
@@ -53,11 +54,12 @@ class Pipeline implements Disposable {
 		return new PipelineBuilder(renderer, made.out_builder);
 	}
 
-	public function nativeHandle():nkgpu_pipeline {
+	internal function nativeHandle():nkgpu_pipeline {
 		ensureLive();
 		return value;
 	}
 
+	/** Binds it for the next draws. */
 	public function apply():Void {
 		ensureLive();
 		renderer.ensureFrame();
@@ -73,6 +75,7 @@ class Pipeline implements Disposable {
 		registration.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
@@ -107,6 +110,9 @@ class PipelineBuilder {
 		registration = renderer.registerResource(rendererClosed);
 	}
 
+	/**
+	 * Reads vertex attribute `location` from buffer `bufferIndex` at byte `offset`, in `format`. Returns this builder.
+	 */
 	public function attribute(location:Int, bufferIndex:Int, offset:Int, format:VertexFormat):PipelineBuilder {
 		ensureLive();
 		if (location < 0 || bufferIndex < 0 || offset < 0)
@@ -117,6 +123,7 @@ class PipelineBuilder {
 		return this;
 	}
 
+	/** Turns depth testing and writing on or off. Returns this builder. */
 	public function depthStencil(enabled:Bool):PipelineBuilder {
 		ensureLive();
 		GpuResult.check(NativeKitGpu.nkgpu_pipeline_depth_stencil(value, enabled ? 1 : 0), "pipeline.depthStencil");
@@ -130,12 +137,14 @@ class PipelineBuilder {
 		return this;
 	}
 
+	/** Sets how indexed draws read indices. Returns this builder. */
 	public function indexType(type:IndexType):PipelineBuilder {
 		ensureLive();
 		GpuResult.check(NativeKitGpu.nkgpu_pipeline_index_type(value, type), "pipeline.indexType");
 		return this;
 	}
 
+	/** Creates the pipeline. */
 	public function build():Pipeline {
 		ensureLive();
 		var made = NativeKitGpu.nkgpu_pipeline_end(value);

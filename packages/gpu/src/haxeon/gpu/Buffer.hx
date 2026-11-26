@@ -37,6 +37,7 @@ class Buffer implements Disposable {
 		return new Buffer(renderer, made.out_buffer);
 	}
 
+	/** An immutable vertex buffer holding `data`. */
 	public static function fromBytes(renderer:Renderer, data:Bytes):Buffer {
 		if (data == null || data.length == 0)
 			throw BindingError.invalidArgument("Buffer.fromBytes", "GPU buffer data must not be empty");
@@ -46,6 +47,7 @@ class Buffer implements Disposable {
 		return new Buffer(renderer, made.out_buffer);
 	}
 
+	/** An immutable vertex buffer holding `values` as 32-bit floats. */
 	public static function vertexFloats(renderer:Renderer, values:Array<Float>):Buffer {
 		if (values == null || values.length == 0 || values.length > 536870911)
 			throw BindingError.invalidArgument("Buffer.vertexFloats",
@@ -62,6 +64,7 @@ class Buffer implements Disposable {
 		return new Buffer(renderer, made.out_buffer);
 	}
 
+	/** An immutable index buffer holding `values` as 16-bit indices. */
 	public static function indices16(renderer:Renderer, values:Array<Int>):Buffer {
 		if (values == null || values.length == 0 || values.length > 1073741823)
 			throw BindingError.invalidArgument("Buffer.indices16",
@@ -78,11 +81,12 @@ class Buffer implements Disposable {
 		return new Buffer(renderer, made.out_buffer);
 	}
 
-	public function nativeHandle():nkgpu_buffer {
+	internal function nativeHandle():nkgpu_buffer {
 		ensureLive();
 		return value;
 	}
 
+	/** Binds it as vertex buffer `slot` for the next draws, reading from byte `offset`. */
 	public function applyVertex(slot:Int, offset:Int = 0):Void {
 		ensureLive();
 		renderer.ensureFrame();
@@ -93,6 +97,7 @@ class Buffer implements Disposable {
 			"buffer.applyVertex");
 	}
 
+	/** Binds it as the index buffer for the next draws, reading from byte `offset`. */
 	public function applyIndex(offset:Int = 0):Void {
 		ensureLive();
 		renderer.ensureFrame();
@@ -130,6 +135,7 @@ class Buffer implements Disposable {
 		registration.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

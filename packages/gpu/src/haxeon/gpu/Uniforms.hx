@@ -21,6 +21,7 @@ class Uniforms {
 		registration = renderer.registerResource(rendererClosed);
 	}
 
+	/** Writes `number` at byte `offset`. Returns this block. */
 	public function writeFloat(offset:Int, number:Float):Uniforms {
 		ensureLive();
 		if (offset < 0)
@@ -29,6 +30,7 @@ class Uniforms {
 		return this;
 	}
 
+	/** Sets uniform block `slot` to it for the next draws. */
 	public function apply(slot:Int):Void {
 		ensureLive();
 		if (slot < 0)

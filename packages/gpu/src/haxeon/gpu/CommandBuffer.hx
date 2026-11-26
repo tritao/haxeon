@@ -11,6 +11,10 @@ import haxeon.gpu.Renderer;
 
 import haxe.io.Bytes;
 
+/**
+ * Commands recorded ahead of time and replayed by `Renderer.submit` or a batch, so a frame's drawing can be built once
+ * and reused.
+ */
 class CommandBuffer {
 	final renderer:Renderer;
 	var bytes:Bytes;
@@ -25,13 +29,14 @@ class CommandBuffer {
 		length = 0;
 	}
 
+	/** Empties it for recording again. */
 	public function reset():Void
 		length = 0;
 
-	public function data():Bytes
+	internal function data():Bytes
 		return bytes;
 
-	public function size():Int
+	internal function size():Int
 		return length;
 
 	@:allow(haxeon.gpu.Renderer)
@@ -42,12 +47,14 @@ class CommandBuffer {
 				"GPU command buffer belongs to a different renderer");
 	}
 
+	/** Records binding `pipeline`. */
 	public function applyPipeline(pipeline:Pipeline):Void {
 		ensureRenderer(pipeline.rendererOwner());
 		header(1, 12);
 		word(pipeline.nativeHandle().rawValue());
 	}
 
+	/** Records binding `buffer` as vertex buffer `slot`, from byte `offset`. */
 	public function applyVertexBuffer(slot:Int, buffer:Buffer, offset:Int):Void {
 		ensureRenderer(buffer.rendererOwner());
 		if (slot < 0 || offset < 0)
@@ -59,6 +66,7 @@ class CommandBuffer {
 		word(offset);
 	}
 
+	/** Records binding `buffer` as the index buffer, from byte `offset`. */
 	public function applyIndexBuffer(buffer:Buffer, offset:Int):Void {
 		ensureRenderer(buffer.rendererOwner());
 		if (offset < 0)
@@ -69,6 +77,7 @@ class CommandBuffer {
 		word(offset);
 	}
 
+	/** Records binding `image` to texture `slot`. */
 	public function applyImage(slot:Int, image:Image):Void {
 		ensureRenderer(image.rendererOwner());
 		if (slot < 0)
@@ -78,6 +87,7 @@ class CommandBuffer {
 		word(image.nativeHandle().rawValue());
 	}
 
+	/** Records binding `sampler` to sampler `slot`. */
 	public function applySampler(slot:Int, sampler:Sampler):Void {
 		ensureRenderer(sampler.rendererOwner());
 		if (slot < 0)
@@ -87,6 +97,7 @@ class CommandBuffer {
 		word(sampler.nativeHandle().rawValue());
 	}
 
+	/** Records binding `buffer` to storage buffer `slot`. */
 	public function applyStorageBuffer(slot:Int, buffer:Buffer):Void {
 		ensureRenderer(buffer.rendererOwner());
 		if (slot < 0)
@@ -97,6 +108,7 @@ class CommandBuffer {
 		word(buffer.nativeHandle().rawValue());
 	}
 
+	/** Records binding `image` to storage image `slot`. */
 	public function applyStorageImage(slot:Int, image:Image):Void {
 		ensureRenderer(image.rendererOwner());
 		if (slot < 0)
@@ -107,6 +119,7 @@ class CommandBuffer {
 		word(image.nativeHandle().rawValue());
 	}
 
+	/** Records setting uniform block `slot` to `data`. */
 	public function applyUniforms(slot:Int, data:Bytes):Void {
 		if (slot < 0 || data == null)
 			throw BindingError.invalidArgument("CommandBuffer.applyUniforms", "GPU uniform slot and data are invalid");
@@ -119,6 +132,7 @@ class CommandBuffer {
 		length += data.length;
 	}
 
+	/** Records setting uniform block `slot` to two floats. */
 	public function applyUniform2f(slot:Int, x:Float, y:Float):Void {
 		if (slot < 0)
 			throw BindingError.invalidArgument("CommandBuffer.applyUniform2f", "GPU uniform slot must be non-negative");
@@ -132,6 +146,7 @@ class CommandBuffer {
 		length += 16;
 	}
 
+	/** Records drawing `elementCount` elements from `baseElement`, `instanceCount` times. */
 	public function draw(baseElement:Int, elementCount:Int, instanceCount:Int):Void {
 		if (baseElement < 0 || elementCount <= 0 || instanceCount <= 0)
 			throw BindingError.invalidArgument("CommandBuffer.draw",
@@ -142,6 +157,7 @@ class CommandBuffer {
 		word(instanceCount);
 	}
 
+	/** Records setting or clearing the scissor rectangle, in framebuffer pixels. */
 	public function scissor(enabled:Bool, x:Int = 0, y:Int = 0, width:Int = 0,
 			height:Int = 0):Void {
 		if (enabled && (width <= 0 || height <= 0))
@@ -155,6 +171,7 @@ class CommandBuffer {
 		word(height);
 	}
 
+	/** Records setting the viewport, in framebuffer pixels. */
 	public function viewport(x:Int, y:Int, width:Int, height:Int):Void {
 		if (width <= 0 || height <= 0)
 			throw BindingError.invalidArgument("CommandBuffer.viewport", "GPU viewport dimensions must be positive");
@@ -165,6 +182,7 @@ class CommandBuffer {
 		word(height);
 	}
 
+	/** Records dispatching `x` by `y` by `z` compute workgroups. */
 	public function dispatch(x:Int, y:Int = 1, z:Int = 1):Void {
 		if (x <= 0 || y <= 0 || z <= 0)
 			throw BindingError.invalidArgument("CommandBuffer.dispatch", "GPU dispatch dimensions must be positive");
@@ -174,6 +192,7 @@ class CommandBuffer {
 		word(z);
 	}
 
+	/** Records copying `size` bytes between buffers. */
 	public function copyBuffer(source:Buffer, destination:Buffer, size:Int,
 			sourceOffset:Int = 0, destinationOffset:Int = 0):Void {
 		ensureRenderer(source.rendererOwner());
@@ -188,6 +207,7 @@ class CommandBuffer {
 		word(size);
 	}
 
+	/** Records copying a rectangle between images. */
 	public function copyImage(source:Image, destination:Image, width:Int, height:Int,
 			sourceX:Int = 0, sourceY:Int = 0, destinationX:Int = 0, destinationY:Int = 0,
 			sourceMip:Int = 0, sourceLayer:Int = 0, destinationMip:Int = 0,
@@ -212,6 +232,7 @@ class CommandBuffer {
 		word(height);
 	}
 
+	/** Records uploading a buffer's rows into an image rectangle. */
 	public function copyBufferToImage(source:Buffer, destination:Image, width:Int, height:Int,
 			rowPitch:Int = 0, bufferOffset:Int = 0, x:Int = 0, y:Int = 0,
 			mipLevel:Int = 0, layer:Int = 0):Void {
@@ -234,6 +255,7 @@ class CommandBuffer {
 		word(height);
 	}
 
+	/** Records downloading an image rectangle into a buffer. */
 	public function copyImageToBuffer(source:Image, destination:Buffer, width:Int, height:Int,
 			rowPitch:Int = 0, bufferOffset:Int = 0, x:Int = 0, y:Int = 0,
 			mipLevel:Int = 0, layer:Int = 0):Void {
@@ -255,9 +277,6 @@ class CommandBuffer {
 		word(width);
 		word(height);
 	}
-
-	public function finish():Bytes
-		return bytes.sub(0, length);
 
 	function header(opcode:Int, size:Int):Void {
 		require(size);

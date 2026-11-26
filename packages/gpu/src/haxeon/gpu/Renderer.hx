@@ -41,13 +41,14 @@ class Renderer implements Disposable {
 		registration = surface.registerDependent(dispose);
 	}
 
+	/** A renderer drawing to `surface`, disposed with it. */
 	public static function create(surface:Surface):Renderer {
 		var made = NativeKitGpu.nkgpu_renderer_create(surface.nativeHandle());
 		GpuResult.check(made.status, "renderer.create");
 		return new Renderer(surface, made.out_renderer);
 	}
 
-	public function nativeHandle():nkgpu_renderer {
+	internal function nativeHandle():nkgpu_renderer {
 		ensureLive();
 		return value;
 	}
@@ -76,6 +77,7 @@ class Renderer implements Disposable {
 		return ImageFormatSupport.fromNative(result.out_support);
 	}
 
+	/** Starts a frame drawing to the window. Throws when one is already active. */
 	public function beginFrame():Void {
 		ensureLive();
 		if (frameActive)
@@ -85,6 +87,7 @@ class Renderer implements Disposable {
 		passActive = true;
 	}
 
+	/** Ends the frame and presents it. */
 	public function endFrame():Void {
 		ensureLive();
 		if (!frameActive)
@@ -295,17 +298,20 @@ class Renderer implements Disposable {
 			"renderer.scissor");
 	}
 
+	/** Replays `commands` in the active pass. */
 	public function submit(commands:CommandBuffer):Void {
 		ensureFrame();
 		commands.ensureRenderer(this);
 		GpuResult.check(NativeKitGpu.nkgpu_submit_commands(value, commands.data(), commands.size()), "renderer.submit");
 	}
 
+	/** A command buffer with room for `capacity` bytes of commands; it grows when full. */
 	public function commandBuffer(capacity:Int):CommandBuffer {
 		ensureLive();
 		return new CommandBuffer(this, capacity);
 	}
 
+	/** Starts a batch of passes to seal and submit together. */
 	public function batch():Batch
 		return Batch.begin(this);
 
@@ -313,6 +319,7 @@ class Renderer implements Disposable {
 	function ownsFrame(frame:haxeon.platform.SurfaceFrame):Bool
 		return frame.belongsTo(surface);
 
+	/** Starts a uniform block of `size` bytes for the next draws. */
 	public function uniforms(size:Int):Uniforms {
 		ensureFrame();
 		if (size <= 0)
@@ -322,6 +329,7 @@ class Renderer implements Disposable {
 		return new Uniforms(this, made.out_builder);
 	}
 
+	/** Draws `elementCount` elements from `baseElement`, `instanceCount` times. */
 	public function draw(baseElement:Int, elementCount:Int, instanceCount:Int = 1):Void {
 		ensureFrame();
 		if (baseElement < 0 || elementCount <= 0 || instanceCount <= 0)
@@ -340,6 +348,7 @@ class Renderer implements Disposable {
 		resources.releaseAll();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

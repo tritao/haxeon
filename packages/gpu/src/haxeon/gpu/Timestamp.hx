@@ -45,6 +45,7 @@ class Timestamp implements Disposable {
 		return new Timestamp(renderer, made.out_timestamp);
 	}
 
+	/** Ends the measured scope in the active frame. */
 	public function end():Void {
 		ensureLive();
 		renderer.ensureFrame();
@@ -52,6 +53,7 @@ class Timestamp implements Disposable {
 			"timestamp.end");
 	}
 
+	/** Whether the measurement is ready, and how long the scope took. */
 	public function query():TimestampInfo {
 		ensureLive();
 		renderer.ensureResourceOperation();
@@ -77,6 +79,7 @@ class Timestamp implements Disposable {
 		registration.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
@@ -95,7 +98,10 @@ class Timestamp implements Disposable {
 
 /** Snapshot of a timestamp query's state and elapsed GPU time. */
 class TimestampInfo {
+	/** Whether the measurement is pending, ready or failed. */
 	public final state:TimestampState;
+
+	/** How long the scope took on the GPU. */
 	public final nanoseconds:haxe.Int64;
 
 	private function new(state:TimestampState, nanoseconds:haxe.Int64) {

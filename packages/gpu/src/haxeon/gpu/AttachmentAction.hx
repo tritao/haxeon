@@ -9,15 +9,31 @@ import nativekit.ffi.NativeKitGpu;
 
 /** Clear and store behavior for one render-pass attachment. */
 class AttachmentAction {
+	/** What the pass starts the attachment with: its contents, a clear, or nothing defined. */
 	public var loadAction:LoadAction;
+
+	/** Whether the pass keeps what it drew. */
 	public var storeAction:StoreAction;
+
+	/** The clear colour's red, from 0 to 1. */
 	public var clearRed:Float;
+
+	/** Its green. */
 	public var clearGreen:Float;
+
+	/** Its blue. */
 	public var clearBlue:Float;
+
+	/** Its alpha. */
 	public var clearAlpha:Float;
+
+	/** The depth a clear writes. */
 	public var clearDepth:Float;
+
+	/** The stencil value a clear writes. */
 	public var clearStencil:Int;
 
+	/** An action that loads and stores by default. */
 	public function new(loadAction:LoadAction = LoadAction.Load,
 			storeAction:StoreAction = StoreAction.Store) {
 		this.loadAction = loadAction;

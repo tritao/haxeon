@@ -20,7 +20,11 @@ class Image implements Disposable {
 	final renderer:Renderer;
 	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_image;
+
+	/** Its width, in pixels. */
 	public final width:Int;
+
+	/** Its height, in pixels. */
 	public final height:Int;
 	var disposed:Bool = false;
 
@@ -66,11 +70,12 @@ class Image implements Disposable {
 		return new Image(renderer, made.out_image, width, height);
 	}
 
-	public function nativeHandle():nkgpu_image {
+	internal function nativeHandle():nkgpu_image {
 		ensureLive();
 		return value;
 	}
 
+	/** Binds it to texture `slot` for the next draws. */
 	public function apply(slot:Int):Void {
 		ensureLive();
 		renderer.ensureFrame();
@@ -116,6 +121,7 @@ class Image implements Disposable {
 		registration.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
