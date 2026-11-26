@@ -305,6 +305,9 @@ in_background run_case instance-properties 0
 in_background run_case assignment-values 0
 in_background run_case abstract-generic-structure 0
 in_background run_case generic-class 0
+in_background run_error_case generic-class-static-error
+in_background run_compile_failure generic-class-static-method-error
+in_background run_case generic-class-static-unmade 0
 in_background run_case constrained-type-parameter-members 0
 in_background run_case constrained-type-parameter-assignment 0
 in_background run_compile_failure uncalled-generic-error

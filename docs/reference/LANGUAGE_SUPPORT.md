@@ -121,7 +121,8 @@ The current subset includes:
   (`Box<Int>` as `Box<Dynamic>`), as in Haxe, including through a base class or an implemented interface. Every instantiation
   of a generic class shares one erased layout, except a `@:generic` class's, which is made for its exact type arguments as
   in Haxe (on a function `@:generic` changes nothing: generic functions are specialized by their arguments' runtime shapes
-  already). Only a whole `Dynamic` argument on the expected side widens: the other direction, differing concrete arguments,
+  already). As in Haxe, a `@:generic` class with a static field is rejected (`E1007`) where it is first made for its arguments;
+  a static read through the class alone compiles. Only a whole `Dynamic` argument on the expected side widens: the other direction, differing concrete arguments,
   and `Dynamic` nested inside an argument (`Box<Array<Dynamic>>`) are still type errors.
 - `==` on enums follows Haxe. A constructor without fields denotes one value, so `Dot == Dot` is true however the two values
   came about; values of constructors with fields compare by identity, so `Circle(1) == Circle(1)` is false for two separately

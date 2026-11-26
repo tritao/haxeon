@@ -312,6 +312,8 @@ class TypeRepresentation {
 			representations.push(decision.representation);
 		}
 		validateOwnerComplexity(representations, name, declaration.span);
+		if (GenericSpecializationPolicy.isGeneric(declaration))
+			rejectGenericStatics(declaration, arguments);
 		var specialization = session.genericSpecializations.request(compiler.semantic.GeneratedNames.ownerOrigin(name),
 			representations, policies),
 			existing = ownerRequests.get(specialization.name);
@@ -330,6 +332,32 @@ class TypeRepresentation {
 		ownerRequests.set(result.name, result);
 		session.output.requestOwner(result);
 		return result;
+	}
+
+	/**
+	 * Each instance of a `@:generic` class is a class of its own, which a static would not belong to: Haxe rejects one where the
+	 * class is first made for its arguments, at the static.
+	 */
+	static function rejectGenericStatics(declaration:AstClass, arguments:Array<CompilerType>):Void {
+		// A static read through the class names it with `Dynamic` arguments, which makes no instance of its own.
+		var made = false;
+		for (argument in arguments)
+			switch argument {
+				case TDynamic:
+				default: made = true;
+			}
+		if (!made)
+			return;
+		var span:Null<SourceSpan> = null;
+		for (field in declaration.fields)
+			if (field.isStatic && span == null)
+				span = field.declarationSpan ?? field.span;
+		for (method in declaration.methods)
+			if (method.isStatic && span == null)
+				span = method.span;
+		if (span != null)
+			throw new CompileError(new Diagnostic(DiagnosticCode.DECLARATION_OR_MODIFIER,
+				"A generic class can't have static fields", span));
 	}
 
 	static function validateOwnerComplexity(arguments:Array<CompilerType>, name:String, span:SourceSpan):Void {
