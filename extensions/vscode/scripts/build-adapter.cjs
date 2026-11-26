@@ -35,7 +35,8 @@ try {
   cpSync(path.join(root, "vendor/format/format"), path.join(checkout, "format"), {recursive: true});
   const compiler = path.join(root, ".tools/haxe", process.platform === "win32" ? "haxe.exe" : "haxe");
   execFileSync(existsSync(compiler) ? compiler : "haxe", [
-    "-cp", "src", "-cp", ".",
+    // hld links a module of sections with the compiler's static link (compiler.hl.HlStaticLink), which imports only haxe.
+    "-cp", "src", "-cp", ".", "-cp", path.join(root, "src"),
     "-cp", path.join(externs, "src"), "-cp", path.join(node, "src"), "-cp", script,
     path.join(node, "extraParams.hxml"), "-D", "hxnodejs", "-D", "js-es=6", "-D", "project-adapter",
     "-main", "HLAdapter", "-js", path.join(dist, "hashlink.js")

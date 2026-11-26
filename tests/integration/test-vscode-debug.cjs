@@ -11,7 +11,23 @@ const root = resolve(__dirname, "../..");
 const cli = join(root, "scripts/haxeon");
 const adapter = join(root, "extensions/vscode/dist/adapter.js");
 
-async function debug(cwd, attach = false, overrideModule = false) {
+// The probe built by the compiler itself as module sections (HLB 9), run in place of the plan's dense module: the debugger
+// reads the file through its static link, the VM links it when it loads it. `haxeon run` writes dense modules until sections
+// are the default, so only the attached target can run one.
+async function buildSections(project, output) {
+  const run = promisify(execFile);
+  const compiler = process.env.HAXEON_COMPILER_HL
+    || (await run(cli, ["dev", "tool-path", "compiler.tools.HaxeonCompiler"], {cwd: root})).stdout.trim();
+  const hashlink = (await run(join(root, "scripts/hashlink-path.sh"))).stdout.trim();
+  const libraries = [join(root, "out"), hashlink, process.env.LD_LIBRARY_PATH].filter(Boolean).join(":");
+  await run(join(hashlink, "hl"), [compiler, "--module-sections", "--entry=Probe", `--root=${join(project, "src")}`,
+    `--root=${join(root, "stdlib")}`, join(project, "src/Probe.hx"), `--output=${output}`],
+  {cwd: root, env: {...process.env, LD_LIBRARY_PATH: libraries}});
+  const head = await readFile(output);
+  assert.equal(head.toString("latin1", 0, 3) + head[3], "HLB9", `${output} is not a module of sections`);
+}
+
+async function debug(cwd, attach = false, overrideModule = false, sections = false) {
   const session = spawn(process.execPath, [adapter], {stdio: ["pipe", "pipe", "inherit"]});
   const exited = once(session, "exit");
   const messages = [];
@@ -68,6 +84,13 @@ async function debug(cwd, attach = false, overrideModule = false) {
       await promisify(execFile)(cli, ["run", "--launch-plan", planFile, "--debug-port", String(port), "--", "41"], {cwd});
       const plan = JSON.parse(await readFile(planFile, "utf8"));
       let program;
+      if (sections) {
+        program = join(cwd, "sections.hl");
+        await buildSections(cwd, program);
+        const at = plan.arguments.indexOf(plan.program);
+        assert.ok(at >= 0, JSON.stringify(plan));
+        plan.arguments[at] = program;
+      }
       if (overrideModule) {
         program = join(cwd, "override.hl");
         await rename(plan.command + ".hl", program);
@@ -132,6 +155,8 @@ async function main() {
     console.log("PASS: console project launch, breakpoint, variables, step and termination");
     await debug(project, true);
     console.log("PASS: attach by port, breakpoint, variables, step and termination");
+    await debug(project, true, false, true);
+    console.log("PASS: attach to a build of module sections, breakpoint, variables, step and termination");
     await appendFile(join(project, "haxeon.toml"), '\n[app]\nname = "debug-probe"\nid = "org.example.debugprobe"\nversion = "1.0.0"\nplatforms = ["linux"]\n');
     await debug(project);
     console.log("PASS: embedded desktop runner launch, breakpoint, variables, step and termination");
