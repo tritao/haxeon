@@ -3,7 +3,6 @@ import haxeon.animation.AnimationAsset;
 import haxeon.animation.AnimationInstance;
 import haxeon.animation.ClipPlayer;
 import haxeon.animation.rig.HumanBone;
-import haxeon.animation.rig.HumanBones;
 import haxeon.animation.rig.HumanPose;
 import haxeon.animation.rig.HumanoidRig;
 
@@ -74,7 +73,7 @@ class AnimationSmoke {
 		var human = AnimationAsset.fromBytes(Bytes.ofString(document));
 		var rig = HumanoidRig.detect(human);
 		check(rig.mapping.name == "mixamo", "namespaced rig detection");
-		for (bone in HumanBones.REQUIRED) check(rig.has(bone), "missing required bone");
+		for (bone in HumanBone.REQUIRED) check(rig.has(bone), "missing required bone");
 		var posed = new AnimationInstance(human);
 		var pose = new HumanPose(rig, posed.readJointMatrices());
 		var head = pose.bonePosition(HumanBone.Head);

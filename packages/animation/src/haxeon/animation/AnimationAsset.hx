@@ -37,13 +37,24 @@ typedef AssetMaterial = {
  * Every node of the glTF scene is a joint, so names match the source nodes.
  */
 class AnimationAsset {
+	/** The skeleton's joints, by name, in index order. */
 	public final jointNames:Array<String> = [];
 	/** Parent joint per joint, or -1 for roots; parents precede children. */
 	public final jointParents:Array<Int> = [];
+
+	/** The animation clips, by name, in index order. */
 	public final clipNames:Array<String> = [];
+
+	/** Each clip's length, in seconds. */
 	public final clipDurations:Array<Float> = [];
+
+	/** The meshes to draw. */
 	public final primitives:Array<AssetPrimitive> = [];
+
+	/** The materials the primitives use. */
 	public final materials:Array<AssetMaterial> = [];
+
+	/** How many images the materials' textures decode to. */
 	public final imageCount:Int;
 	/** Non-fatal import diagnostics, such as unsupported features that were skipped. */
 	public final warnings:Array<String> = [];
@@ -204,9 +215,11 @@ class AnimationAsset {
 		return read.data;
 	}
 
+	/** The width of image `image`, in pixels. */
 	public function imageWidth(image:Int):Int
 		return imageInfo(image).width;
 
+	/** The height of image `image`, in pixels. */
 	public function imageHeight(image:Int):Int
 		return imageInfo(image).height;
 

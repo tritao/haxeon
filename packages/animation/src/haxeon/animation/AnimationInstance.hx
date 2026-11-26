@@ -8,11 +8,15 @@ import haxe.io.Bytes;
  * the CPU-skinned vertex streams and joint matrices in model space.
  */
 class AnimationInstance {
+	/** How many clip layers an instance blends at once. */
 	public static inline var MAX_LAYERS:Int = 4;
 	/** Bytes per joint turn in a batch: an int32 joint, then x, y, z, w and weight as float32. */
 	static inline var JOINT_TURN_RECORD:Int = 24;
+
+	/** How many two-bone IK chains an instance solves. */
 	public static inline var MAX_IK_CHAINS:Int = 4;
 
+	/** The asset it animates. */
 	public final asset:AnimationAsset;
 	final owner:Ownedak_instance_handle;
 	var disposed:Bool = false;
@@ -161,6 +165,7 @@ class AnimationInstance {
 		];
 	}
 
+	/** Releases the native instance; it may not be used afterwards. */
 	public function dispose():Void {
 		if (disposed)
 			return;

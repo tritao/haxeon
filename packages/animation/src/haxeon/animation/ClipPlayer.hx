@@ -6,6 +6,7 @@ package haxeon.animation;
  * all of that at a weight the caller sets, to hold a pose such as a crouch at any depth between the two.
  */
 class ClipPlayer {
+	/** The instance it plays clips on. */
 	public final instance:AnimationInstance;
 	/** Playback rate multiplier applied to both clips. */
 	public var speed:Float = 1.0;
@@ -31,10 +32,12 @@ class ClipPlayer {
 	/** A time to hold the overlay at instead of letting it run, or null. */
 	var overlayHold:Null<Float> = null;
 
+	/** A player driving `instance`'s base layers. */
 	public function new(instance:AnimationInstance) {
 		this.instance = instance;
 	}
 
+	/** The index of the clip playing, or -1 for none. */
 	public function currentClip():Int
 		return clip;
 
@@ -46,6 +49,7 @@ class ClipPlayer {
 	public function fading():Bool
 		return outgoing.length > 0;
 
+	/** How far into the current clip it is, in seconds. */
 	public function currentTime():Float
 		return time;
 
@@ -115,6 +119,7 @@ class ClipPlayer {
 		overlayHold = hold;
 	}
 
+	/** How strongly the overlay clip shows, from 0 to 1. */
 	public function overlayAmount():Float
 		return overlayWeight;
 

@@ -7,10 +7,12 @@ package haxeon.animation.rig;
  * alternatives, used in order, for variants within one rig family.
  */
 class RigMapping {
+	/** The mapping's name, such as "mixamo". */
 	public final name:String;
 	final joints:Map<String, String>;
 	final alternatives:Map<String, Array<String>> = new Map();
 
+	/** A mapping named `name` from standard bone names to the asset's joint names. */
 	public function new(name:String, joints:Map<String, String>) {
 		this.name = name;
 		this.joints = joints;
@@ -109,6 +111,7 @@ class RigMapping {
 		return new RigMapping("mixamo", joints);
 	}
 
+	/** The built-in mappings, tried in order: Quaternius, Mixamo, then Quaternius Universal. */
 	public static function presets():Array<RigMapping>
 		return [quaternius(), mixamo(), universal()];
 

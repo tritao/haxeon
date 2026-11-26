@@ -13,6 +13,7 @@ import haxe.io.Bytes;
  * every rig. Other bones use their own joint frame with scale removed.
  */
 class HumanPose {
+	/** The rig whose bones it poses. */
 	public final rig:HumanoidRig;
 	var matrices:Bytes;
 	final corrections:Map<String, Array<Float>> = new Map();

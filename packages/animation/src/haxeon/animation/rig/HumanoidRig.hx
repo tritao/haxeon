@@ -4,6 +4,7 @@ import haxeon.animation.AnimationAsset;
 
 /** An asset's joints resolved onto the standard humanoid bones. */
 class HumanoidRig {
+	/** How the asset's joint names were matched to standard bones. */
 	public final mapping:RigMapping;
 	final joints:Map<String, Int> = new Map();
 
@@ -17,14 +18,14 @@ class HumanoidRig {
 				byLocalName.set(local, index);
 		}
 		var missing:Array<String> = [];
-		for (bone in HumanBones.all()) {
+		for (bone in HumanBone.all()) {
 			var joint:Null<Int> = null;
 			for (name in mapping.jointNames(bone))
 				if (joint == null)
 					joint = byLocalName.get(name);
 			if (joint != null)
 				joints.set(bone, joint);
-			else if (HumanBones.REQUIRED.indexOf(bone) >= 0)
+			else if (HumanBone.REQUIRED.indexOf(bone) >= 0)
 				missing.push(bone);
 		}
 		if (missing.length > 0)
@@ -50,6 +51,7 @@ class HumanoidRig {
 		return found == null ? -1 : found;
 	}
 
+	/** Whether the asset provides `bone`. */
 	public function has(bone:HumanBone):Bool
 		return joints.exists(bone);
 }

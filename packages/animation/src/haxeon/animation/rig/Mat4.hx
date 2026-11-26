@@ -1,7 +1,7 @@
 package haxeon.animation.rig;
 
 /** Column-major 4x4 matrix helpers over Array<Float>, using column vectors. */
-class Mat4 {
+internal class Mat4 {
 	public static function identity():Array<Float>
 		return [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
