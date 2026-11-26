@@ -37,10 +37,14 @@ class HaxeProjectConfiguration {
 	/** The project's packages and their directories, as its build passes them (`CompilerInputs.sourcePackages`). */
 	public final sourcePackages:ReadOnlyArray<compiler.SourcePackages.SourcePackage>;
 
+	/** The project's own package when its manifest requires its documentation (`package.documentation`), else null. */
+	public final documentedPackage:Null<String>;
+
 	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>,
 			libraries:Array<String>,
 			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration, ?nullSafety:Array<compiler.NullSafetyRule>,
-			?sourcePackages:Array<compiler.SourcePackages.SourcePackage>) {
+			?sourcePackages:Array<compiler.SourcePackages.SourcePackage>, ?documentedPackage:String) {
+		this.documentedPackage = documentedPackage;
 		this.ffi = ffi == null ? new compiler.ffi.FfiRegistry.FfiConfiguration() : ffi;
 		ffiIdentity = TextDigest.sha256(haxe.Json.stringify({
 			interfaces: this.ffi.interfaceSources(),
@@ -62,7 +66,8 @@ class HaxeProjectConfiguration {
 		].join("\n"));
 		id = TextDigest.sha256(scopeId + "\n" + this.defines.join("|") + "\n"
 			+ [for (rule in this.nullSafety) rule.argument()].join("|") + "\n"
-			+ [for (entry in this.sourcePackages) entry.argument() + ":" + entry.friends.join(",")].join("|"));
+			+ [for (entry in this.sourcePackages) entry.argument() + ":" + entry.friends.join(",")].join("|") + "\n"
+			+ (documentedPackage ?? ""));
 	}
 
 	public function owns(path:String):Bool {
@@ -536,7 +541,8 @@ class ProjectWorkspace {
 				}]);
 			var defines = inputs.defines.concat(compiler.tools.CompilerDriver.targetDefines(inputs.target));
 			return new HaxeProjectConfiguration(file, roots, inputs.entry == null ? [] : [inputs.entry], defines, [],
-				ffi, inputs.nullSafety, inputs.sourcePackages);
+				ffi, inputs.nullSafety, inputs.sourcePackages,
+				resolved.manifest.documentationRequired ? resolved.rootPackage.name : null);
 		}
 		var value:Dynamic = Json.parse(File.getContent(file)),
 			base = Path.directory(file),

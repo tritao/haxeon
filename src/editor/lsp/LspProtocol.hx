@@ -554,18 +554,21 @@ class LspProtocol {
 				return [];
 			var diskPath = project.diskPath(state.source.path),
 				uri = documents.uri(diskPath),
-				fingerprint = diagnosticFingerprint(state.diagnostics),
-				published = publishedDiagnostics.get(uri),
-				open = documents.forPath(diskPath);
+				open = documents.forPath(diskPath),
+				// An open document also shows what its package requires documented; checking every module of a large
+				// package on each analysis would cost more than the editor can spend.
+				diagnostics = open == null ? state.diagnostics : service.moduleDiagnostics(state, diskPath),
+				fingerprint = diagnosticFingerprint(diagnostics),
+				published = publishedDiagnostics.get(uri);
 			if (published == fingerprint)
 				continue;
 			// A client needs diagnostics for open documents and workspace files. Clean unopened modules
 			// that have no previous publication need no empty notification.
-			if (open == null && (state.diagnostics.length == 0 || !project.hasDiskSource(diskPath)))
+			if (open == null && (diagnostics.length == 0 || !project.hasDiskSource(diskPath)))
 				continue;
 			var params:Dynamic = {
 				uri: uri,
-				diagnostics: [for (diagnostic in state.diagnostics) diagnosticJson(diagnostic)]
+				diagnostics: [for (diagnostic in diagnostics) diagnosticJson(diagnostic)]
 			};
 			if (open != null)
 				Reflect.setField(params, "version", open.version);
@@ -1341,7 +1344,8 @@ class LspProtocol {
 
 	function configure(configuration:editor.lsp.ProjectWorkspace.HaxeProjectConfiguration):Void
 		service.configure(configuration.id, configuration.scopeId, configuration.defines.copy(), configuration.ffi,
-			configuration.ffiIdentity, configuration.nullSafety.copy(), configuration.sourcePackages.copy());
+			configuration.ffiIdentity, configuration.nullSafety.copy(), configuration.sourcePackages.copy(),
+			configuration.documentedPackage);
 
 	static function documentUri(request:Dynamic):String
 		return requiredString(required(required(request, "params"), "textDocument"), "uri");

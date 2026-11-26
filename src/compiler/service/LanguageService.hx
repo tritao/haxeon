@@ -10,6 +10,7 @@ import compiler.core.Source.SourceSpan;
 import compiler.documentation.ApiModel.ApiDeclaration;
 import compiler.documentation.ApiModel.ApiMember;
 import compiler.documentation.ApiModelBuilder;
+import compiler.documentation.DocumentationCoverage;
 import compiler.documentation.ApiText;
 import compiler.documentation.Documentation.DocumentationComment;
 import compiler.documentation.Documentation.DocumentationTools;
@@ -284,7 +285,8 @@ class LanguageService {
 	public function configure(identity:String, scopeIdentity:String, defines:Array<String>,
 			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration,
 			ffiIdentity:String = "", ?nullSafety:Array<compiler.NullSafetyRule>,
-			?sourcePackages:Array<compiler.SourcePackages.SourcePackage>):Void {
+			?sourcePackages:Array<compiler.SourcePackages.SourcePackage>, ?documentedPackage:String):Void {
+		this.documentedPackage = documentedPackage;
 		var key = haxe.Json.stringify({scope: scopeIdentity, ffi: ffiIdentity});
 		if (activeConfiguration != key) {
 			// Typed declarations and frozen FFI models belong to one configuration.
@@ -392,7 +394,39 @@ class LanguageService {
 
 	public function diagnostics(path:String):Array<Diagnostic> {
 		var state = stateFor(path);
-		return state == null ? [] : state.diagnostics.copy();
+		return state == null ? [] : moduleDiagnostics(state, path);
+	}
+
+	/**
+	 * What the editor shows for `state`, the module of the file at `diskPath`: its compile's diagnostics, and E1032 for what
+	 * its package requires documented.
+	 */
+	public function moduleDiagnostics(state:ModuleState, diskPath:String):Array<Diagnostic>
+		return state.diagnostics.concat(missingDocumentation(state, diskPath));
+
+	/**
+	 * The package that requires its documentation (`package.documentation`), whose files the editor checks as `haxeon check`
+	 * does; null for none.
+	 */
+	var documentedPackage:Null<String> = null;
+
+	/**
+	 * E1032 for each undocumented declaration of `state`'s API, when it is a module of the package that requires its
+	 * documentation and its typed program is current: from a description of that one module (`DocumentationCoverage`).
+	 */
+	function missingDocumentation(state:ModuleState, diskPath:String):Array<Diagnostic> {
+		var semantic = compiler.state.semanticProgram, documented = documentedPackage;
+		if (documented == null || semantic == null
+			|| [for (diagnostic in state.diagnostics) if (diagnostic.severity == Error) diagnostic].length > 0)
+			return [];
+		var packages = new compiler.SourcePackages(compiler.options.sourcePackages);
+		if (packages.packageOf(diskPath) != documented)
+			return [];
+		var model = ApiModelBuilder.build(semantic, compiler.modules, [], [state.name], packages);
+		return [
+			for (diagnostic in DocumentationCoverage.missing(model))
+				if (diagnostic.span.file == state.source) diagnostic
+		];
 	}
 
 	public function codeActions(path:String, start:Int, end:Int):Array<CodeAction> {

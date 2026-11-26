@@ -76,6 +76,7 @@ class LspProtocolMain {
 		haxeonManifestWorkspace();
 		hxmlOutputDirectories();
 		offlineManifestDependency();
+		documentedManifestWorkspace();
 		linkedManifestWorkspace();
 		recoveredDefinitionNavigation();
 		recoveredTypeNavigation();
@@ -1908,6 +1909,65 @@ class LspProtocolMain {
 		if (protocol.project.compilerPath(base + "/lib/code/Value.hx") != "helper/Value.hx")
 			throw 'a dependency module is named ${protocol.project.compilerPath(base + "/lib/code/Value.hx")}, not helper/Value.hx';
 		Sys.println("PASS: a manifest workspace opened through a symbolic link keeps its sources and dependencies");
+	}
+
+	/**
+	 * A project that requires its documentation (`package.documentation`) has the editor report each undocumented public
+	 * declaration of an open file as `haxeon check` does (E1032), and nothing once it is documented.
+	 */
+	static function documentedManifestWorkspace():Void {
+		var base = haxe.io.Path.normalize(sys.FileSystem.fullPath("out")) + "/lsp-documented-" + Std.random(0x7fffffff);
+		sys.FileSystem.createDirectory(base + "/src");
+		sys.io.File.saveContent(base + "/haxeon.json",
+			'{"version":1,"package":{"name":"app","documentation":"required"},"entry":"Main","sourceRoots":["src"]}');
+		var main =
+			"/** The program. */ class Main { /** Runs it. */ public static function main():Int return Tool.answer(); }",
+			undocumented = "/** A tool. */ class Tool { public static function answer():Int return 42; }",
+			documented =
+				"/** A tool. */ class Tool { /** The answer. */ public static function answer():Int return 42; }",
+			toolPath = base + "/src/Tool.hx",
+			uri = FileUri.fromPath(toolPath),
+			protocol = new LspProtocol();
+		sys.io.File.saveContent(base + "/src/Main.hx", main);
+		sys.io.File.saveContent(toolPath, undocumented);
+		function codes(messages:Array<String>):Null<Array<String>> {
+			var found:Null<Array<String>> = null;
+			for (raw in messages) {
+				var message:Dynamic = Json.parse(raw);
+				if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri) {
+					var diagnostics:Array<Dynamic> = message.params.diagnostics;
+					found = [for (diagnostic in diagnostics) Std.string(diagnostic.code)];
+				}
+			}
+			return found;
+		}
+		try {
+			request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 871,
+				method: "initialize",
+				params: {rootUri: FileUri.fromPath(base)}
+			}));
+			var opened = codes(protocol.handle(Json.stringify({
+				jsonrpc: "2.0",
+				method: "textDocument/didOpen",
+				params: {textDocument: {uri: uri, version: 1, languageId: "haxe", text: undocumented}}
+			})));
+			if (opened == null || opened.join(",") != "E1032")
+				throw 'an undocumented method of a project that requires documentation was not reported: $opened';
+			var changed = codes(protocol.handle(Json.stringify({
+				jsonrpc: "2.0",
+				method: "textDocument/didChange",
+				params: {textDocument: {uri: uri, version: 2}, contentChanges: [{text: documented}]}
+			})));
+			if (changed == null || changed.length != 0)
+				throw 'a documented file still reports: $changed';
+		} catch (error:Dynamic) {
+			FileTree.remove(base);
+			throw error;
+		}
+		FileTree.remove(base);
+		Sys.println("PASS: the language server reports an undocumented declaration of a project that requires documentation");
 	}
 
 	/**
