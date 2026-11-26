@@ -1234,10 +1234,10 @@ class CallResolver {
 
 		if ((name == "rawValue" || name == "toString")
 			&& rawDeclaration != null
-			&& RawRepresentableGenerator.conforms(session, rawDeclaration)) {
+			&& RawEnumGenerator.conforms(session, rawDeclaration)) {
 			if (arguments.length != 0)
 				fail(DiagnosticCode.CALL_FORM, '$name expects no arguments', span);
-			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, abstractName, name, span),
+			return new TypedExpression(TCall(RawEnumGenerator.request(session, abstractName, name, span),
 				[receiver]),
 				name == "toString" ? TString : bodyTyper.lowerType(rawDeclaration.underlying, rawDeclaration.span),
 				span);
@@ -1921,13 +1921,13 @@ class CallResolver {
 			var rawOwner = session.enumAbstractName(name.substring(0, rawOwnerEnd)),
 				declaration = rawOwner == null ? null : session.enumAbstractDecls.get(rawOwner);
 			if (declaration != null && !declaresMethod(declaration, "fromRaw", true)
-				&& RawRepresentableGenerator.conforms(session, declaration)) {
+				&& RawEnumGenerator.conforms(session, declaration)) {
 				if (arguments.length != 1)
 					fail(DiagnosticCode.CALL_FORM, "fromRaw expects one argument", span);
 				var raw = bodyTyper.lowerType(declaration.underlying, declaration.span),
 					argument = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, raw), raw,
 						"fromRaw argument");
-				return new TypedExpression(TCall(RawRepresentableGenerator.request(session, rawOwner, "fromRaw", span),
+				return new TypedExpression(TCall(RawEnumGenerator.request(session, rawOwner, "fromRaw", span),
 					[argument]),
 					TNullable(TAbstract(rawOwner, [], raw)), span);
 			}

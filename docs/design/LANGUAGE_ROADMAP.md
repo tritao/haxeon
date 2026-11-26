@@ -21,7 +21,7 @@ The rules for every entry:
 | Interfaces as the abstraction | No separate trait feature. Interface bounds dispatch statically and specialize for struct type arguments; a struct boxes only when converted to an interface-typed value. | [STRUCTS.md](STRUCTS.md) |
 | Generic specialization for structs | Generic code over struct type arguments uses the concrete representation, the general fix for `Array<S>`, `Map<K, S>` and `T`-typed closures boxing structs. Extends [GENERIC_SPECIALIZATION.md](../internals/GENERIC_SPECIALIZATION.md). | [STRUCTS.md](STRUCTS.md) |
 | `Equatable`, `Hashable` | Value-only declared equality, synthesized when every field supports it; nonconforming struct comparisons are errors. Class/interface `==` is always identity; classes cannot declare either capability. Replaces `@:structural`. | [STRUCTS.md](STRUCTS.md) |
-| `RawRepresentable` | Closed Int/String enum abstracts synthesize inline raw-value access and checked conversion from declared constants; implicit conversions are rejected. Implemented. | [STRUCTS.md](STRUCTS.md#closed-raw-value-enums) |
+| Raw-value enums | `enum X:Int` and `enum X:String` give each case a code, with inline `rawValue()` and checked `fromRaw()`; implicit conversions are rejected. Replaces `RawRepresentable` enum abstracts. Implemented. | [ENUM_MEMBERS.md](ENUM_MEMBERS.md#raw-value-enums) |
 | `Flags` | Closed integer flags synthesize checked bit sets, immutable operations and readable formatting with no implicit conversions. Implemented. | [STRUCTS.md](STRUCTS.md#closed-flags) |
 | `Diffable` | Explicit conformance for field masks (`Diff.mask/apply/bit/all`); writes only to writable fields. | [STRUCTS.md](STRUCTS.md) |
 | Key paths | Typed field references, readable/writable capabilities, composition and `Diff.bit` paths. Escaped nullable-struct values await scalar callable ABI support. | [KEY_PATHS.md](../reference/KEY_PATHS.md) |
@@ -30,16 +30,14 @@ The rules for every entry:
 | Result builders | Conditional proposal: a library-declared builder lowers `if`, `switch` and `for`; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 | Lazy parameters | Conditional proposal: `Lazy<T>` parameters receive the caller's expression unevaluated; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 | `internal` | An access level for what a package's modules share but its users may not use, enforced per manifest package, with named friends (`package.friends`) for its own test projects and no public declaration exposing an internal type. Implemented. | [LANGUAGE_SUPPORT.md](../reference/LANGUAGE_SUPPORT.md) |
-| Enum members and per-case constants | `enum` is the one construct for closed value sets: any methods and static members, and immutable per-case constants (`final` fields each case sets, checked complete at the declaration). Raw codes stay `RawRepresentable` enum abstracts. Decided, not implemented. | [ENUM_MEMBERS.md](ENUM_MEMBERS.md) |
+| Enum members and per-case constants | `enum` is the one construct for closed value sets: any methods and static members, and immutable per-case constants (`final` fields each case sets, checked complete at the declaration). Raw codes are raw-value enums. Implemented. | [ENUM_MEMBERS.md](ENUM_MEMBERS.md) |
 
-### RawRepresentable (implemented)
+### Raw-value enums (implemented)
 
-Closed `enum abstract X(Int|String) implements RawRepresentable` synthesizes inline
-`rawValue()` and checked static `fromRaw(value):Null<X>` from declared constants.
-Unknown values return null; implicit `from`/`to` conversions are compile errors.
-The nominal type survives checking while storage keeps the underlying
-representation. Generic constrained calls specialize against the concrete type.
-See [STRUCTS.md](STRUCTS.md#closed-raw-value-enums).
+`enum X:Int` and `enum X:String` synthesize inline `rawValue()` and checked static
+`fromRaw(value):Null<X>` from their cases. Unknown codes return null; there are no
+implicit conversions. The nominal type survives checking while storage keeps the
+code's representation. See [ENUM_MEMBERS.md](ENUM_MEMBERS.md#raw-value-enums).
 
 ### Key paths (implemented)
 

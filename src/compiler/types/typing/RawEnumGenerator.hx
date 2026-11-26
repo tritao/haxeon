@@ -12,61 +12,50 @@ import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.HelperRequests.HelperRequest;
 
-/** Declared raw-value capabilities are synthesized from the current constants, never from runtime reflection. */
+/** A raw-value enum's `rawValue()`, `fromRaw()` and `toString()`, synthesized from its cases, never from runtime reflection. */
 @:access(compiler.types.typing.BodyTyper)
-class RawRepresentableGenerator {
-	public static inline final PREFIX = "$raw-representable:";
+class RawEnumGenerator {
+	public static inline final PREFIX = "$raw-enum:";
 
+	/** Whether `declaration` is a raw-value enum, `enum Name:Int { ... }`. */
 	public static function conforms(session:TypingSession, declaration:AstAbstract):Bool
-		return declaration.isRawEnum == true || DeclaredConformance.has(session,
-			TAbstract(declaration.name, [], session.declarations.resolve(declaration.underlying, declaration.span)),
-			"RawRepresentable");
+		return declaration.isRawEnum == true;
 
 	public static function name(owner:String, method:String):String
 		return PREFIX + owner + ":" + method;
 
+	/** A raw-value enum's codes are of an Int or String raw type, compile-time constants, and unique. */
 	public static function validate(session:TypingSession, typer:BodyTyper, declaration:AstAbstract):Void {
 		if (!conforms(session, declaration))
 			return;
-		var raw = typer.lowerType(declaration.underlying, declaration.span);
-		switch raw {
+		switch typer.lowerType(declaration.underlying, declaration.span) {
 			case TInt, TString:
 			default:
-				BodyTyper.fail(DiagnosticCode.CONFORMANCE, declaration.isRawEnum == true
-					? 'Enum "${declaration.name}": a raw value is an Int or a String'
-					: "RawRepresentable requires an Int or String enum abstract", declaration.span);
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE,
+					'Enum "${declaration.name}": a raw value is an Int or a String',
+					declaration.span);
 		}
-		if (declaration.fromTypes.length != 0 || declaration.toTypes.length != 0)
-			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
-				"RawRepresentable enum abstracts cannot declare implicit from/to conversions",
-				declaration.span);
+		var seen:Map<String, String> = [];
 		for (value in declaration.values) {
 			if (value.name == "rawValue" || value.name == "fromRaw" || value.name == "toString")
 				BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
-					'Constant "${declaration.name}.${value.name}" conflicts with a synthesized RawRepresentable member',
+					'Enum case ${declaration.name}.${value.name} has the name of a synthesized member', value.span);
+			var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
+			if (constant == null)
+				BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+					'Enum case ${declaration.name}.${value.name} needs a compile-time constant raw value', value.span);
+			// A code names one case, so fromRaw can return it.
+			var key = switch constant.expression {
+				case TIntLiteral(raw): "int:" + raw;
+				case TStringLiteral(raw): "string:" + raw;
+				default: value.name;
+			};
+			var other = seen.get(key);
+			if (other != null)
+				BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+					'Enum case ${declaration.name}.${value.name} has the raw value of ${declaration.name}.$other',
 					value.span);
-			if (InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value)) == null)
-				BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, declaration.isRawEnum == true
-					? 'Enum case ${declaration.name}.${value.name} needs a compile-time constant raw value'
-					: "RawRepresentable requires compile-time constant raw values", value.span);
-		}
-		if (declaration.isRawEnum == true) {
-			// A raw value names one case, so fromRaw can return it.
-			var seen:Map<String, String> = [];
-			for (value in declaration.values) {
-				var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
-				var key = constant == null ? value.name : switch constant.expression {
-					case TIntLiteral(raw): "int:" + raw;
-					case TStringLiteral(raw): "string:" + raw;
-					default: value.name;
-				};
-				var other = seen.get(key);
-				if (other != null)
-					BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
-						'Enum case ${declaration.name}.${value.name} has the raw value of ${declaration.name}.$other',
-						value.span);
-				seen.set(key, value.name);
-			}
+			seen.set(key, value.name);
 		}
 	}
 
@@ -74,7 +63,7 @@ class RawRepresentableGenerator {
 		if (method != "rawValue" && method != "fromRaw" && method != "toString")
 			throw new InternalError('Unknown synthesized raw member "$method"');
 		var helper = name(owner, method);
-		session.requestHelper(RawRepresentableHelper(helper, {
+		session.requestHelper(RawEnumHelper(helper, {
 			owner: owner,
 			method: method,
 			origin: session.generatedFunctionOrigin(),
@@ -120,7 +109,7 @@ class RawRepresentableGenerator {
 	public static function generate(session:TypingSession, typer:BodyTyper,
 			generated:Map<String, TypedFunction>):Array<TypedFunction> {
 		var pending = [
-			for (name in session.programOutput.requests.rawRepresentables.keys())
+			for (name in session.programOutput.requests.rawEnums.keys())
 				if (!generated.exists(name)) name
 		];
 		pending.sort(Reflect.compare);
@@ -133,12 +122,12 @@ class RawRepresentableGenerator {
 		return result;
 	}
 
-	/** The member `helper` a `RawRepresentable` abstract was asked for. */
+	/** The member `helper` a raw-value enum was asked for. */
 	static function member(session:TypingSession, typer:BodyTyper, helper:String):TypedFunction {
-		var request:HelperRequests.MemberHelperRequest = session.programOutput.requests.rawRepresentables.get(helper),
+		var request:HelperRequests.MemberHelperRequest = session.programOutput.requests.rawEnums.get(helper),
 			declaration = session.enumAbstractDecls.get(request.owner);
 		if (declaration == null || !conforms(session, declaration))
-			throw new InternalError('Missing RawRepresentable declaration "${request.owner}"');
+			throw new InternalError('Missing raw-value enum "${request.owner}"');
 		var raw = typer.lowerType(declaration.underlying, declaration.span),
 			nominal:CompilerType = TAbstract(declaration.name, [], raw),
 			span = declaration.span,
@@ -210,7 +199,7 @@ class RawRepresentableGenerator {
 		var fn:TypedFunction = {
 			name: helper,
 			role: ProviderFunction(nominal, compiler.core.Provides.ProviderOperations
-				.detailed(compiler.core.Provides.ProviderOperation.RawRepresentable, request.method)),
+				.detailed(compiler.core.Provides.ProviderOperation.RawEnum, request.method)),
 			origin: request.origin,
 			originKind: Helper,
 			owner: null,

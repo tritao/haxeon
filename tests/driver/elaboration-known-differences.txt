@@ -20,7 +20,6 @@ generic-constrained-owner-lookup-allocations	constrained parameter: a member is 
 generic-struct-functions	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
 generic-struct-owner-allocations	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
 helper-ownership-enum-equality	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
-raw-representable	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
 scoped-cleanup	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
 specialized-map-scalar-keys	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
 struct-value-semantics	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)

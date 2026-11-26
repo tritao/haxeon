@@ -102,7 +102,7 @@ continues to validate the same C ABI independently through `tools/test-wine.sh`.
 
 ### Closed native enum values
 
-Generated non-flags enums implement `RawRepresentable` without implicit integer
+Generated non-flags enums are raw-value enums (`enum X:Int`) without implicit integer
 conversions. Native reads use non-nullable checked decoders, shared by interfaces
 that import the same type. UI enum names are separate from native codes.
 

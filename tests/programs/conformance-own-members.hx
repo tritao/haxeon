@@ -1,11 +1,11 @@
-// A member an enum abstract declares itself wins over the one its RawRepresentable or Flags conformance synthesizes; the
+// A member a raw-value enum or a Flags enum abstract declares itself wins over the one the compiler synthesizes; the
 // members it does not declare are still synthesized.
-enum abstract Code(Int) implements RawRepresentable {
-	var Low = 1;
-	var High = 7;
+enum Code:Int {
+	Low = 1;
+	High = 7;
 
 	public function toString():String
-		return "code " + this;
+		return "code " + this.rawValue();
 
 	public static function fromRaw(raw:Int):Null<Code>
 		return raw == 0 ? null : High;

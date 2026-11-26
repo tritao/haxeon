@@ -12,7 +12,7 @@ import compiler.types.analysis.Scope;
  * interpolation (which lowers to `Std.string`) all use it, so a value prints the same way through each:
  * - an abstract with a `toString()` method, where its type is known (not through a type parameter), calls it, private or
  *   not, and a nullable one that holds null is `null`, as Haxe does;
- * - an enum abstract that names its values (`RawRepresentable`, `Flags`) prints its name, and a nullable one `null`;
+ * - an enum abstract that names its values (a raw-value enum, `Flags`) prints its name, and a nullable one `null`;
  * - a String, or an abstract that converts to one, is itself;
  * - Float and Dynamic values go through `Std.string`, and everything else through the runtime's boxed conversion.
  */

@@ -23,7 +23,7 @@ class PurityAnnotations {
 	public static function isDeclaredPure(name:String, signatures:Map<String, AstFunction>,
 			classDecls:Map<String, AstClass>):Bool
 		return StringTools.startsWith(name, compiler.types.typing.FlagsGenerator.PREFIX)
-			|| StringTools.startsWith(name, compiler.types.typing.RawRepresentableGenerator.PREFIX)
+			|| StringTools.startsWith(name, compiler.types.typing.RawEnumGenerator.PREFIX)
 			|| compiler.runtime.CompilerIntrinsics.isPure(name) || compiler.types.typing.DiffIntrinsics.isConstant(name)
 			|| hasPureAnnotation(name, signatures, classDecls);
 

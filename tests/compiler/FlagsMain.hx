@@ -51,7 +51,7 @@ class FlagsMain {
 			+ 'function accepts<T:Flags>(value:T):Int return 42; function main():Int return accepts(1);', "constraint");
 		var inherited = makeCompiler("hl", true);
 		inherited.update("Main.hx",
-			'interface LocalFlags extends Flags {} interface LocalRaw extends RawRepresentable {} enum abstract Bits(Int) implements LocalFlags { var A=1; } enum abstract Code(Int) implements LocalRaw { var A=42; } function main():Int { return Bits.A.rawValue() + Code.A.rawValue() - 1; }');
+			'interface LocalFlags extends Flags {} enum abstract Bits(Int) implements LocalFlags { var A=1; } enum Code:Int { A=42; } function main():Int { return Bits.A.rawValue() + Code.A.rawValue() - 1; }');
 		if (new compiler.ir.tools.IrInterpreter(inherited.compile("Main").ir).run("main") != 42)
 			throw "Inherited synthesis conformance was not resolved";
 		var defaults = makeCompiler("hl", true);
@@ -108,7 +108,7 @@ class FlagsMain {
 		// Reference-valued maps use native primitives; the interpreter validates the core flags above.
 		// Exercise the typed cursor-cache key shape and its read allocations on the three runtimes.
 		var mapped = source.replace("class Probe {",
-			'enum abstract NativeShape(Int) implements RawRepresentable { var Arrow=0; var Text=1; } class Probe { public static var cache:Map<NativeShape,Holder>; public static var states:Map<Int,Access>;');
+			'enum NativeShape:Int { Arrow=0; Text=1; } class Probe { public static var cache:Map<NativeShape,Holder>; public static var states:Map<Int,Access>;');
 		mapped = mapped.replace("total+=read(result);",
 			'var cached=cache.get(NativeShape.Text); if(cached==null || cached.code!=Access.Read || !cached.initial.isEmpty())return -3; total+=read(result);');
 		mapped = mapped.replace("if(Probe.perform(32)!=32)",

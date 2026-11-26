@@ -216,7 +216,7 @@ class Main {
 
 ## E1025: Invalid or missing conformance
 
-This umbrella code covers invalid or missing capabilities such as Equatable, Hashable, Flags, and RawRepresentable, including failed synthesis and recursive requirements. Check the required conformance, member signatures, and the types of fields or enum payloads.
+This umbrella code covers invalid or missing capabilities such as Equatable, Hashable and Flags, and invalid raw-value enums, including failed synthesis and recursive requirements. Check the required conformance, member signatures, and the types of fields or enum payloads.
 
 ```haxe
 enum Direction implements Equatable {

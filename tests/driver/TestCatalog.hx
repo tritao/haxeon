@@ -40,7 +40,7 @@ class TestCatalog {
 		"RpcServiceTypingMain",
 		"NullableAbstractWarmMain",
 		"EnumTagStorageMain",
-		"RawRepresentableMain",
+		"RawEnumMain",
 		"FlagsMain",
 		"InterpreterInt32Main",
 		"EnumTagRewriteMain",

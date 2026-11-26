@@ -72,9 +72,9 @@ class FlagsGenerator {
 			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 				"Flags enum abstracts cannot declare implicit from/to conversions",
 				declaration.span);
-		if (RawRepresentableGenerator.conforms(session, declaration))
+		if (RawEnumGenerator.conforms(session, declaration))
 			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
-				"Flags already defines raw conversion; declare Flags without RawRepresentable",
+				'Enum "${declaration.name}" has raw values, so it is a closed set, not Flags; declare it as an enum abstract',
 				declaration.span);
 		var mask = 0;
 		for (value in declaration.values) {

@@ -36,7 +36,7 @@ typedef DynamicStructureRequest = {
 	final span:SourceSpan;
 }
 
-/** A synthesized member of an enum abstract (`Flags`, `RawRepresentable`). */
+/** A synthesized member of a `Flags` enum abstract or a raw-value enum. */
 typedef MemberHelperRequest = {
 	final owner:String;
 	final method:String;
@@ -54,7 +54,7 @@ enum HelperRequest {
 	EnumInterfaceAdapterHelper(name:String, request:EnumInterfaceAdapterRequest);
 	HashHelper(name:String, request:EqualityRequest);
 	FlagsHelper(name:String, request:MemberHelperRequest);
-	RawRepresentableHelper(name:String, request:MemberHelperRequest);
+	RawEnumHelper(name:String, request:MemberHelperRequest);
 	DynamicStructureHelper(name:String, request:DynamicStructureRequest);
 }
 
@@ -83,7 +83,7 @@ class HelperRequests {
 	public final hashes:Map<String, EqualityRequest> = [];
 
 	public final flags:Map<String, MemberHelperRequest> = [];
-	public final rawRepresentables:Map<String, MemberHelperRequest> = [];
+	public final rawEnums:Map<String, MemberHelperRequest> = [];
 
 	/** `Dynamic` to anonymous structure copies, one per target type. */
 	public final dynamicStructures:Map<String, DynamicStructureRequest> = [];
@@ -101,7 +101,7 @@ class HelperRequests {
 	public static function unitOf(request:HelperRequest):Null<String>
 		return switch request {
 			case ValueEqualityHelper(name, _), EnumEqualityHelper(name, _), HashHelper(name, _): name;
-			case EnumMethodHelper(name, _), FlagsHelper(name, _), RawRepresentableHelper(name, _): name;
+			case EnumMethodHelper(name, _), FlagsHelper(name, _), RawEnumHelper(name, _): name;
 			case DynamicStructureHelper(name, _): name;
 			case EnumInterfaceAdapterHelper(name, _): name + ".new";
 			case WireCodecHelper(_, _), JsonCodecHelper(_, _): null;
@@ -122,7 +122,7 @@ class HelperRequests {
 			case EnumInterfaceAdapterHelper(name, value): addTo(enumInterfaceAdapters, name, value);
 			case HashHelper(name, value): addTo(hashes, name, value);
 			case FlagsHelper(name, value): addTo(flags, name, value);
-			case RawRepresentableHelper(name, value): addTo(rawRepresentables, name, value);
+			case RawEnumHelper(name, value): addTo(rawEnums, name, value);
 			case DynamicStructureHelper(name, value): addTo(dynamicStructures, name, value);
 		};
 		if (added)

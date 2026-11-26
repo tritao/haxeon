@@ -717,44 +717,43 @@ Showcase editing fell from 12,835 to 12,622 objects per measured scenario; full,
 A native, wire or file-format constant keeps its declared raw value:
 
 ```haxe
-enum abstract PixelFormat(Int) implements RawRepresentable {
-    var Rgba8 = 1;
-    var Rgb8 = 2;
+enum PixelFormat:Int {
+    Rgba8 = 1;
+    Rgb8 = 2;
 }
 var code:Int = PixelFormat.Rgba8.rawValue();
 var format:Null<PixelFormat> = PixelFormat.fromRaw(code);
 ```
 
-`RawRepresentable` synthesizes inline `rawValue():Int|String` and static
-`fromRaw(value):Null<Self>` from the declaration's current constants. Unknown raw
-values return null; aliases with the same raw value denote the same value. Both
-members are reserved names. Constants must be compile-time Int/String values.
-The conformance rejects implicit `from`/`to` conversions. Explicit conversion is
-required in both directions, including calls, assignments and native boundaries.
+A raw-value enum ([ENUM_MEMBERS.md](ENUM_MEMBERS.md#raw-value-enums)) synthesizes
+inline `rawValue():Int|String` and static `fromRaw(value):Null<Self>` from its
+current cases. Unknown codes return null; codes are unique, so each names one
+case. Both members, and `toString`, are reserved case names. Codes must be
+compile-time Int/String values. There are no implicit conversions: explicit
+conversion is required in both directions, including calls, assignments and
+native boundaries.
 
-Enum abstracts retain their nominal type during checking and use their underlying
-scalar/reference representation in storage. Bare constants resolve from that
-nominal expected type; no declaration-side hint table survives erasure. Generic
-`T:RawRepresentable` calls resolve against the concrete enum abstract. Synthesized
-helpers are requested on demand and regenerated when constants change. Array search
+It compiles as an enum abstract over its code: it keeps its nominal type during
+checking and uses the code's representation in storage. Bare cases resolve from
+that nominal expected type; no declaration-side hint table survives erasure.
+Synthesized helpers are requested on demand and regenerated when cases change. Array search
 and String-array joining choose the raw storage operation while keeping the
 nominal element type for argument checks.
-`rawValue()` and constrained reads allocate nothing with inlining disabled too.
+`rawValue()` allocates nothing with inlining disabled too.
 `fromRaw()` follows the existing `Null<Int>`/`Null<String>` ABI; this feature does
 not introduce scalar nullable specialization (queue item a2).
 
 ### Native enum boundaries
 
 A generated binding owns the native integer codes. Non-flags native enums are
-closed `enum abstract X(Int) implements RawRepresentable`; their parameters and
-record fields retain that type. There are no implicit Int conversions. Ordinary
+raw-value enums, `enum X:Int`; their parameters and record fields retain that type. There are no implicit Int conversions. Ordinary
 UI choices already migrated in this series retain their plain enums. Their
 exhaustive UI-to-native switches share one home, `haxeon.ui.NativeEnums`, including
 layout policy, cursor, effect, mask, cache and accessibility projections. UI
 fingerprints and snapshots use the UI case, independently of native codes.
 For future types, a UI choice that mirrors a native enum one to one uses the
 generated binding type directly; a separate UI enum and mapping are appropriate
-only when the UI meaning differs. RawRepresentable belongs on a distinct UI type
+only when the UI meaning differs. A raw-value enum belongs on a distinct UI type
 only when that type's own number is a file, wire or persisted-data format.
 
 Typed reads from C use a generated checked decoder returning X directly, rather
@@ -799,8 +798,8 @@ status and rejection of an unknown result.
 `enum abstract Access(Int) implements Flags` declares named bits and combinations.
 Every nonzero constant must be a single bit or contain only declared single bits;
 zero and the signed high bit are supported. Implicit `from`/`to` conversions are
-rejected. Conformance uses the same declared-interface lookup as `Equatable`,
-`Hashable` and `RawRepresentable`, including inherited interfaces.
+rejected. Conformance uses the same declared-interface lookup as `Equatable` and
+`Hashable`, including inherited interfaces.
 
 The compiler synthesizes inline `|`, `&`, `contains`, `insert`, `remove`,
 `isEmpty`, `isSingle`, `empty`, `rawValue`, `fromRaw` and `toString`. Set updates
@@ -821,10 +820,9 @@ than call `fromRaw` directly. Signed high bits and 8/16/32/64-bit native words
 retain their declared bits.
 
 
-Integer `RawRepresentable.fromRaw` helpers use one typed switch with duplicate
-raw values combined; String helpers retain equality tests. General IR switch
-lowering currently emits branches, so backend jump-table selection remains a
-follow-up rather than a claimed benefit of this synthesis.
+Integer `fromRaw` helpers use one typed switch; String helpers use equality
+tests. The switch becomes a jump table where its codes are dense enough and span
+at most 256 values, the most HashLink's JIT takes.
 
 ## Equality and hashing
 

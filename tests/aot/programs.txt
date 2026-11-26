@@ -449,7 +449,7 @@ q3-nullary-enum-string
 range-comprehension
 range-counted-loop
 range-iteration
-raw-representable
+raw-enum-conversions
 reactive-capture-allocations
 reactive-dependency-identity
 reactive-dependency-scale

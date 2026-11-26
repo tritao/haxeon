@@ -1,8 +1,8 @@
 // A typedef of an enum abstract reaches the abstract's values, statics and conversions, as the abstract itself does
 // (packages re-export generated native enums this way).
-enum abstract TypedefCode(Int) implements RawRepresentable {
-	var Low = 1;
-	var High = 7;
+enum TypedefCode:Int {
+	Low = 1;
+	High = 7;
 }
 
 enum abstract TypedefAccess(Int) implements Flags {

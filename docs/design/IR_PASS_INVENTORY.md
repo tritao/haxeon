@@ -32,7 +32,7 @@ interpolation are not markers.
 - [ ] Value dynamic and interface box/unbox/type-test, typed interface dispatch, checked casts and generic erasure markers.
   Deferred: do when this code is next touched.
 - [ ] Optional field/value/scalar and nullable scalar helper markers, including wrappers and call boundaries.
-- [ ] Typing-generated flags, raw-representable, equality/hash, wire/JSON, key-path and receiver-readonly markers; runtime
+- [ ] Typing-generated flags, raw-value enum, equality/hash, wire/JSON, key-path and receiver-readonly markers; runtime
   type dependencies and fresh-constructor markers where consumed as compiler metadata. Deferred: do when this code is next touched.
 - [ ] Wasm GC holder/place and lane-storage markers, and backend-generated array accessors and runtime names that are parsed.
   Deferred: do when this code is next touched.

@@ -95,7 +95,7 @@ backend's switch lowering handles it (a jump table where the backend makes one).
 
 ## Raw-value enums
 
-Status: decided (2026-11-26), in progress. Before this, closed sets with a fixed external code were enum abstracts,
+Status: decided and implemented (2026-11-26). Before this, closed sets with a fixed external code were enum abstracts,
 which leave two constructs for closed sets; the raw form was the weaker one (no per-case constants, `this` is the bare
 code, and `cast` makes values outside the set).
 
@@ -129,8 +129,8 @@ enum PixelFormat:Int {
 - **Enum abstracts remain** for Haxe code and for the compiler's own source, which builds with stock Haxe. Haxeon's
   packages and generated bindings use raw-value enums.
 
-Stages: syntax and typing with tests on every backend; tools (API model and site, formatter, LSP); the binding
-generator, with checked decoding of unknown codes; migration of the packages; removal of `RawRepresentable`.
+Done in stages: syntax and typing with tests on every backend; tools (API model and site, formatter); the binding
+generator; migration of the packages, ui's keys and accessibility actions included; removal of `RawRepresentable`.
 
 ## Not in scope
 

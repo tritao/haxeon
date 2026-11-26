@@ -52,7 +52,7 @@ class EnumAbstractValues {
 	}
 
 	/**
-	 * The text of an enum abstract value that names its values (`RawRepresentable` or `Flags`), or null for any other value.
+	 * The text of an enum abstract value that names its values (a raw-value enum or `Flags`), or null for any other value.
 	 * String conversion uses it, so `"Role: " + role` and `Std.string(role)` print a name as an enum constructor does.
 	 */
 	public static function nameOf(session:TypingSession, value:TypedExpression, span:SourceSpan):Null<TypedExpression> {
@@ -66,8 +66,8 @@ class EnumAbstractValues {
 		if (FlagsGenerator.conforms(session, declaration))
 			return new TypedExpression(TCall(FlagsGenerator.request(session, owner, "toString", span), [value]),
 				TString, span);
-		if (RawRepresentableGenerator.conforms(session, declaration))
-			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, owner, "toString", span),
+		if (RawEnumGenerator.conforms(session, declaration))
+			return new TypedExpression(TCall(RawEnumGenerator.request(session, owner, "toString", span),
 				[value]), TString, span);
 		return null;
 	}

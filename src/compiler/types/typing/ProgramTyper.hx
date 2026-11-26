@@ -123,7 +123,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		// An enum abstract value may call a class's static, as a constant that is not one does before it is rejected.
 		session.bindNominalDeclarations();
 		for (decl in session.declarations.enumAbstractsInOrder()) {
-			RawRepresentableGenerator.validate(session, bodyTyper, decl);
+			RawEnumGenerator.validate(session, bodyTyper, decl);
 			FlagsGenerator.validate(session, bodyTyper, decl);
 			for (value in decl.values)
 				EnumAbstractValues.raw(bodyTyper, decl, value);
@@ -478,7 +478,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			var before = requestCount();
 			for (method in FlagsGenerator.generate(session, bodyTyper, flagMethods))
 				assembler.registerProgramTypes([method], [], [], [], []);
-			for (method in RawRepresentableGenerator.generate(session, bodyTyper, rawMethods))
+			for (method in RawEnumGenerator.generate(session, bodyTyper, rawMethods))
 				assembler.registerProgramTypes([method], [], [], [], []);
 			for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums)
 				.concat(WireCodecGenerator.generateJson(session, typedClasses, typedEnums))) {

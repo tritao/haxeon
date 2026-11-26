@@ -1,12 +1,12 @@
-// An enum abstract that names its values prints the name wherever it becomes a String: concatenation, interpolation,
-// Std.string and toString(). A raw value outside the declared set prints as Owner(raw).
-enum abstract Shape(Int) implements RawRepresentable {
-	var Circle = 1;
-	var Square = 2;
+// A raw-value enum or a Flags enum abstract prints its names wherever it becomes a String: concatenation, interpolation,
+// Std.string and toString(). A code outside the cases, made by a cast, prints as Owner(raw).
+enum Shape:Int {
+	Circle = 1;
+	Square = 2;
 }
 
-enum abstract Mime(String) implements RawRepresentable {
-	var Json = "application/json";
+enum Mime:String {
+	Json = "application/json";
 }
 
 enum abstract Access(Int) implements Flags {

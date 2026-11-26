@@ -40,7 +40,7 @@ enum abstract ProviderOperation(String) to String {
 	var DynamicStructure = "dynamic-structure";
 	var StaticInitializer = "static-initializer";
 	var ReceiverCheck = "receiver-check";
-	var RawRepresentable = "raw-representable";
+	var RawEnum = "raw-enum";
 	var Flags = "flags";
 	var StructureString = "structure-string";
 }
@@ -60,7 +60,7 @@ class ProviderOperations {
 			|| base == ProviderOperation.Hash
 			|| base == ProviderOperation.Wire
 			|| base == ProviderOperation.Json
-			|| base == ProviderOperation.RawRepresentable
+			|| base == ProviderOperation.RawEnum
 			|| base == ProviderOperation.Flags;
 	}
 

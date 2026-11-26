@@ -12,7 +12,7 @@ scheduled with ADR 0003 M4, since the invalidation key is a query dependency the
 (through `Nullable`), else the generated span of a structural type. The value and enum equality helpers used it already; the hash
 helpers (`HashGenerator`) and the enum-to-interface adapters (`EnumInterfaceAdapter`) use it now. A failure while generating
 (`E1025`, a type that cannot be hashed) is still reported at the requester's span, which is the useful place. Wire and JSON codecs and
-the `Flags`/`RawRepresentable` members were already built from declaration spans, and the enum custom methods are typed from their
+the `Flags` and raw-value enum members were already built from declaration spans, and the enum custom methods are typed from their
 source. So no shared helper's bytes depend on which use asked first, or in which order the uses were typed, as long as every helper
 of a module is emitted into the same module, which holds whenever the requesters share one (every sweep program).
 

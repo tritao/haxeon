@@ -2225,7 +2225,7 @@ class FrontendCompilation {
 		compiler.types.typing.HashGenerator.HASH_PREFIX,
 		compiler.types.typing.EnumConformanceMethods.PREFIX,
 		compiler.types.typing.FlagsGenerator.PREFIX,
-		compiler.types.typing.RawRepresentableGenerator.PREFIX,
+		compiler.types.typing.RawEnumGenerator.PREFIX,
 		compiler.types.typing.KeyPathTyping.HELPER_PREFIX
 	];
 

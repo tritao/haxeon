@@ -35,7 +35,7 @@ The current subset includes:
   `E.fromRaw(code)` the case or `null`. In its methods `this` is the enum value, and a `switch` over it covers every case,
   with an implicit default that throws for a code this build does not know. It declares methods and static members as
   any enum does, but no type parameters or per-case constants.
-- An enum abstract that names its values (`RawRepresentable` or `Flags`) prints its name wherever it becomes a String:
+- A raw-value enum or a `Flags` enum abstract prints its names wherever it becomes a String:
   concatenation, interpolation, `Std.string` and `toString()` (`Button`, `Access[Read | Write]`; an undeclared raw value
   prints as `Kind(9)`, and a nullable one as `null`).
 - A bare name is an enum abstract's value where Haxe makes it one: in the abstract's own code and module, where the
@@ -230,7 +230,7 @@ The current subset includes:
   call's specialization. There a member of a value of a type parameter is its constraints', in the order written
   (`function measure<T:Measured>(value:T) return value.measure()`, `T:Readable & Writable`), and `T has no field x` when
   none has it; `sizeof<T>`, `alignof<T>`, `offsetof`, `typeInfo<T>` and `RawPtr<T>` layouts, and the members Haxeon
-  synthesizes for `T:Flags` and `T:RawRepresentable`, are left to each specialization, which checks them.
+  synthesizes for `T:Flags`, are left to each specialization, which checks them.
 - `new Box(values)` of a generic abstract infers its type arguments as Haxe does: from the constructor's arguments, a
   parameter they leave open (`new Box([])`) from the expected type (`var box:Box<Int> = new Box([])`).
 - Module-level `var`, `final` and functions, as in Haxe: the module's own code names them bare, and other modules import

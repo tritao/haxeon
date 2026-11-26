@@ -6,7 +6,7 @@ import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.tools.CompilerDriver;
 
-class RawRepresentableMain {
+class RawEnumMain {
 	static function makeCompiler(target:String, inlining:Bool):Compiler {
 		var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		c.addStandardLibrarySourceRoot("stdlib");
@@ -29,25 +29,19 @@ class RawRepresentableMain {
 	}
 
 	static function main():Void {
-		var decl = 'enum abstract Code(Int) implements RawRepresentable { var A=4; } ';
+		var decl = 'enum Code:Int { A=4; } ';
 		rejected(decl + 'function main():Int { var bad:Code=4; return 42; }', "Type mismatch");
 		rejected(decl + 'function main():Int { var bad:Int=Code.A; return 42; }', "Type mismatch");
-		rejected('enum abstract Mime(String) implements RawRepresentable { var Text="text"; } function main():Int { var bad:Mime="text"; return 42; }',
+		rejected('enum Mime:String { Text="text"; } function main():Int { var bad:Mime="text"; return 42; }',
 			"Type mismatch");
-		rejected('enum abstract Mime(String) implements RawRepresentable { var Text="text"; } function main():Int { var bad:String=Mime.Text; return 42; }',
+		rejected('enum Mime:String { Text="text"; } function main():Int { var bad:String=Mime.Text; return 42; }',
 			"Type mismatch");
-		rejected('enum abstract Code(Int) from Int implements RawRepresentable { var A=4; } function main():Int return 42;',
-			"cannot declare implicit");
-		rejected('enum abstract Code(Int) to Int implements RawRepresentable { var A=4; } function main():Int return 42;',
-			"cannot declare implicit");
-		rejected('enum abstract Bad(Float) implements RawRepresentable { var A=1.0; } function main():Int return 42;',
-			"requires an Int or String");
+		rejected('enum Code:Int from Int { A=4; } function main():Int return 42;', 'expected "implements" or "{"');
+		rejected('enum Code:Int to Int { A=4; } function main():Int return 42;', 'expected "implements" or "{"');
+		rejected('enum Bad:Float { A=1.0; } function main():Int return 42;', "a raw value is an Int or a String");
 		rejected(decl + 'function main():Int { Code.fromRaw("wrong"); return 42; }', "Type mismatch");
 		rejected(decl
-			+ 'function accepts<T:RawRepresentable>(value:T):Int return 42; function main():Int return accepts(4);',
-			"constraint");
-		rejected(decl
-			+ 'enum abstract Other(Int) implements RawRepresentable { var A=4; } function main():Int { var bad:Other=Code.A; return 42; }',
+			+ 'enum Other:Int { A=4; } function main():Int { var bad:Other=Code.A; return 42; }',
 			"Type mismatch");
 
 		rejected(decl + 'function main():Int { var values:Array<Code>=[Code.A]; return values.indexOf(4); }',
@@ -62,25 +56,25 @@ class RawRepresentableMain {
 
 	static function incremental():Void {
 		var c = makeCompiler("hl", true);
-		c.update("Code.hx", 'enum abstract Code(Int) implements RawRepresentable { var A=4; }');
+		c.update("Code.hx", 'enum Code:Int { A=4; }');
 		c.update("Main.hx",
 			'function main():Int { var value=Code.fromRaw(7); return value==null ? 0 : value.rawValue(); }');
 		function result():Int
 			return new compiler.ir.tools.IrInterpreter(c.compile("Main").ir).run("main");
 		if (result() != 0)
 			throw "Unknown initial raw value";
-		c.update("Code.hx", 'enum abstract Code(Int) implements RawRepresentable { var A=4; var B=7; }');
+		c.update("Code.hx", 'enum Code:Int { A=4; B=7; }');
 		if (result() != 7 || result() != 7)
 			throw "Added constant did not update retained raw helper";
-		c.update("Code.hx", 'enum abstract Code(Int) implements RawRepresentable { var A=4; var B=8; }');
+		c.update("Code.hx", 'enum Code:Int { A=4; B=8; }');
 		if (result() != 0)
 			throw "Changed constant left a stale raw helper";
-		c.update("Code.hx", 'enum abstract Code(Int) implements RawRepresentable { var A=7; }');
+		c.update("Code.hx", 'enum Code:Int { A=7; }');
 		if (result() != 7)
 			throw "Replaced constant did not update raw helper";
 		var imported = makeCompiler("hl", true);
 		imported.update("wire/Code.hx",
-			'package wire; enum abstract Code(Int) implements RawRepresentable { var A=4; }');
+			'package wire; enum Code:Int { A=4; }');
 		imported.update("Main.hx",
 			'import wire.Code as WireCode; function main():Int { var value=WireCode.fromRaw(4); return value==null ? 0 : value.rawValue(); }');
 		if (new compiler.ir.tools.IrInterpreter(imported.compile("Main").ir).run("main") != 4)
@@ -91,11 +85,11 @@ class RawRepresentableMain {
 
 	static function check(target:String, inlining:Bool):Void {
 		var c = makeCompiler(target, inlining);
-		c.update("Main.hx", sys.io.File.getContent("tests/programs/raw-representable.hx"));
+		c.update("Main.hx", sys.io.File.getContent("tests/programs/raw-enum-conversions.hx"));
 		var result = c.compile("Main"), p = result.ir;
 		if (new compiler.ir.tools.IrInterpreter(p).run("main") != 42)
 			throw "Raw interpreter result";
-		var raw32 = Lambda.find(p.functions, f -> f.name == "$raw-representable:Code32:fromRaw");
+		var raw32 = Lambda.find(p.functions, f -> f.name == "$raw-enum:Code32:fromRaw");
 		if (raw32 != null) {
 			var branches = 0;
 			for (block in raw32.blocks)
