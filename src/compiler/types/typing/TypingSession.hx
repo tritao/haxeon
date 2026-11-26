@@ -882,7 +882,8 @@ class TypingSession {
 		localPurity = null;
 		inferredPureFunctions = compiler.types.analysis.PurityInference.infer(signatures.withoutReads(),
 			classDecls.withoutReads(),
-			declarations.abstracts.withoutReads(), enumDecls.withoutReads(), isDeclaredPure,
+			declarations.abstracts.withoutReads(), declarations.aliases.withoutReads(), enumDecls.withoutReads(),
+			isDeclaredPure,
 			isTypeName);
 	}
 

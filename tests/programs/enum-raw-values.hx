@@ -27,6 +27,18 @@ enum Side:String {
 	Right = "R";
 }
 
+// A struct's final field of a raw-value enum is a value: reading its code does not write the struct, so the method runs
+// on a temporary copy.
+struct Tagged {
+	public final format:PixelFormat;
+
+	public function new(format:PixelFormat)
+		this.format = format;
+
+	public function code():Int
+		return format.rawValue();
+}
+
 function name(format:PixelFormat):String
 	return switch format {
 		case Rgba8: "rgba";
@@ -42,7 +54,7 @@ function main():Int {
 		return 3;
 	if (Side.fromRaw("Right") != null || name(Rgba8) != "rgba" || name(R8) != "other")
 		return 4;
-	if (Bgra8.doubled() != 4 || Std.string(Side.Left) != "Left")
+	if (Bgra8.doubled() != 4 || Std.string(Side.Left) != "Left" || new Tagged(R8).code() != 3)
 		return 5;
 	var maybe:Null<PixelFormat> = PixelFormat.fromRaw(1);
 	return maybe == Rgba8 ? 42 : 6;

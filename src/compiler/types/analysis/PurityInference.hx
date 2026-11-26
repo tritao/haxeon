@@ -269,7 +269,7 @@ class PurityInference {
 	 * facts its walk read, and taken from `previous` while they are unchanged (`PurityDependencies`).
 	 */
 	public static function infer(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>,
-			abstracts:Map<String, AstAbstract>,
+			abstracts:Map<String, AstAbstract>, aliases:Map<String, AstTypeAlias>,
 			enums:Map<String, AstEnum>, isAnnotatedPure:String->Bool, isTypeName:String->Bool,
 			?previous:PurityDependencies, ?next:PurityDependencies):Map<String, Bool> {
 		var inference = new PurityInference(signatures, classes, enums, isAnnotatedPure, isTypeName),
@@ -282,7 +282,8 @@ class PurityInference {
 			var owner = compiler.core.QualifiedName.parent(name),
 				declaration = owner == null ? null : classes.get(owner);
 			if (declaration != null && !fn.isStatic && isValueClass(declaration)
-				&& ReceiverMutationInference.isReadOnly(declaration, fn))
+				&& ReceiverMutationInference.isReadOnly(declaration, fn,
+				type -> isScalarValue(type, abstracts, aliases, 0)))
 				receiverFacts.set(ReceiverMutationInference.PREFIX + name, true);
 		}
 		// A constructor writes its fresh receiver, but that is not an observable effect if it cannot
@@ -371,6 +372,25 @@ class PurityInference {
 		if (declaration.isStruct == true) return true;
 		for (metadata in declaration.metadata) if (metadata.name == "value") return true;
 		return false;
+	}
+
+	/**
+	 * Whether `type` holds a value with no identity: Int, Float, Bool or String, through typedefs and abstracts over one
+	 * (an enum abstract, a raw-value enum). A copy of it is never a way to write what it was copied from.
+	 */
+	static function isScalarValue(type:Null<AstType>, abstracts:Map<String, AstAbstract>,
+			aliases:Map<String, AstTypeAlias>, depth:Int):Bool {
+		if (depth > 16)
+			return false;
+		return switch type {
+			case IntType, FloatType, BoolType, StringType: true;
+			case NamedType(name):
+				var alias = aliases.get(name), abstractDecl = abstracts.get(name);
+				alias != null ? isScalarValue(alias.type, abstracts, aliases, depth + 1)
+					: abstractDecl != null && abstractDecl.typeParameters.length == 0
+					&& isScalarValue(abstractDecl.underlying, abstracts, aliases, depth + 1);
+			default: false;
+		};
 	}
 
 	static function isOperatorMethod(fn:AstFunction, owner:Null<String>, abstracts:Map<String, AstAbstract>):Bool {

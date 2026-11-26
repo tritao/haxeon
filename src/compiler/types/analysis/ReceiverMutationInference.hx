@@ -14,36 +14,41 @@ class ReceiverMutationInference extends BindingWalker {
 	final scalarFields:Map<String, Bool> = [];
 	final methods:Map<String, AstFunction> = [];
 	final getters:Map<String, Bool> = [];
+	/** Final fields of a scalar type: a method called on one works on a copy, so it cannot write the receiver. */
+	final finalScalarFields:Map<String, Bool> = [];
 	final declaration:AstClass;
 	final visiting:Map<String, Bool>;
+	final isScalar:AstType->Bool;
 	var mutates = false;
 
-	function new(declaration:AstClass, visiting:Map<String, Bool>) {
+	function new(declaration:AstClass, visiting:Map<String, Bool>, isScalar:AstType->Bool) {
 		super();
 		this.declaration = declaration;
 		this.visiting = visiting;
+		this.isScalar = isScalar;
 		for (field in declaration.fields) if (!field.isStatic) {
 			fields.set(field.name, true);
 			if (field.readAccess == GetAccess || field.readAccess == DynamicAccess) getters.set(field.name, true);
-			else switch field.type {
-				case IntType, FloatType, BoolType, StringType: scalarFields.set(field.name, true);
-				default:
+			else if (field.type != null && isScalar(field.type)) {
+				scalarFields.set(field.name, true);
+				if (field.isFinal == true) finalScalarFields.set(field.name, true);
 			}
 		}
 		for (method in declaration.methods) if (!method.isStatic) methods.set(method.name, method);
 		bind("this", "$receiver");
 	}
 
-	public static function isReadOnly(declaration:AstClass, fn:AstFunction):Bool {
-		return proveReadOnly(declaration, fn, []);
+	public static function isReadOnly(declaration:AstClass, fn:AstFunction, isScalar:AstType->Bool):Bool {
+		return proveReadOnly(declaration, fn, [], isScalar);
 	}
 
-	static function proveReadOnly(declaration:AstClass, fn:AstFunction, visiting:Map<String, Bool>):Bool {
+	static function proveReadOnly(declaration:AstClass, fn:AstFunction, visiting:Map<String, Bool>,
+			isScalar:AstType->Bool):Bool {
 		if (fn.isExtern == true) return false;
 		// Struct methods dispatch to this declaration, so a recursive cycle is safe only if every body in it is safe.
 		if (visiting.exists(fn.name)) return true;
 		visiting.set(fn.name, true);
-		var walker = new ReceiverMutationInference(declaration, visiting);
+		var walker = new ReceiverMutationInference(declaration, visiting, isScalar);
 		walker.walkFunction(fn.arguments, fn.statements);
 		visiting.remove(fn.name);
 		return !walker.mutates;
@@ -51,7 +56,7 @@ class ReceiverMutationInference extends BindingWalker {
 
 	function receiverCall(name:String):Void {
 		var method = methods.get(name);
-		if (method == null || !proveReadOnly(declaration, method, visiting)) mutates = true;
+		if (method == null || !proveReadOnly(declaration, method, visiting, isScalar)) mutates = true;
 	}
 
 	override function written(name:String, declaration:Null<String>, span:SourceSpan):Void {
@@ -66,7 +71,7 @@ class ReceiverMutationInference extends BindingWalker {
 
 	override function memberCall(local:String, declaration:Null<String>, name:String, dot:Int, span:SourceSpan):Void {
 		if (local == "this") receiverCall(name.substring(dot + 1, name.length));
-		else if (declaration == null && fields.exists(local)) mutates = true;
+		else if (declaration == null && fields.exists(local) && !finalScalarFields.exists(local)) mutates = true;
 		super.memberCall(local, declaration, name, dot, span);
 	}
 
@@ -85,7 +90,8 @@ class ReceiverMutationInference extends BindingWalker {
 			case MethodCall(Variable("this", _), name, arguments, _):
 				receiverCall(name);
 				for (argument in arguments) if (containsReceiver(argument)) mutates = true;
-			case MethodCall(target, _, _, _) if (isReceiverPlace(target)): mutates = true;
+			case MethodCall(target, _, _, _) if (isReceiverPlace(target) && !isFinalScalarField(target)):
+				mutates = true;
 			case Call(_, arguments, _), MethodCall(_, _, arguments, _):
 				for (argument in arguments) if (containsReceiver(argument)) mutates = true;
 			case Variable(name,
@@ -97,6 +103,15 @@ class ReceiverMutationInference extends BindingWalker {
 		}
 		super.expression(value);
 	}
+
+	function isFinalScalarField(value:AstExpression):Bool
+		return switch value {
+			case Variable(name,
+				_) if (name == BindingWalker.rootOf(name) && resolve(name) == null): finalScalarFields.exists(name);
+			case Variable(name, _) if (StringTools.startsWith(name, "this.")): finalScalarFields.exists(name.substr(5));
+			case Member(Variable("this", _), name, _): finalScalarFields.exists(name);
+			default: false;
+		};
 
 	function isReceiverPlace(value:AstExpression):Bool
 		return switch value {

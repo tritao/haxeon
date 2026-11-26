@@ -558,13 +558,15 @@ class SemanticAssembly {
 		];
 		var previousFacts = context.state.programFacts, inferred = previousFacts;
 		if (inferred == null || !sameContributions(inferred.contributions, contributions)) {
-			inferred = inferProgramFacts(contributions, classes, interfaces, enums, abstracts, programFunctions, facts,
+			inferred = inferProgramFacts(contributions, classes, interfaces, enums, abstracts, typeAliases,
+				programFunctions, facts,
 				previousFacts == null ? null : previousFacts.dependencies);
 			context.state.programFacts = inferred;
 			// `--check-reuse`: what the bodies whose facts held were taken to depend on gives what walking every body gives.
 			if (context.options.checkReuse && previousFacts != null)
 				checkPurity(inferred,
-					inferProgramFacts(contributions, classes, interfaces, enums, abstracts, programFunctions,
+					inferProgramFacts(contributions, classes, interfaces, enums, abstracts, typeAliases,
+					programFunctions,
 					facts, null));
 			if (previousFacts != null)
 				moveAnswers(facts, previousFacts, inferred);
@@ -724,7 +726,7 @@ class SemanticAssembly {
 	 */
 	static function inferProgramFacts(contributions:Array<Array<AstFunction>>, classes:Array<AstClass>,
 			interfaces:Array<compiler.syntax.Ast.AstInterface>, enums:Array<compiler.syntax.Ast.AstEnum>,
-			abstracts:Array<compiler.syntax.Ast.AstAbstract>,
+			abstracts:Array<compiler.syntax.Ast.AstAbstract>, aliases:Array<compiler.syntax.Ast.AstTypeAlias>,
 			programFunctions:Array<AstFunction>, declarationFacts:DeclarationFacts,
 			previous:Null<compiler.types.analysis.PurityInference.PurityDependencies>):InferredProgramFacts {
 		var purityScopeClasses:Map<String, AstClass> = [for (classDecl in classes) classDecl.name => classDecl];
@@ -749,7 +751,8 @@ class SemanticAssembly {
 			dependencies: dependencies,
 			facts: {
 				pure: compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses,
-					purityScopeAbstracts, purityScopeEnums, isAnnotatedPure, isTypeName, previous, dependencies),
+					purityScopeAbstracts, [for (alias in aliases) alias.name => alias], purityScopeEnums,
+					isAnnotatedPure, isTypeName, previous, dependencies),
 				noReturn: compiler.types.analysis.NoReturnDeclarations.declared(purityScopeSignatures)
 			},
 			isAnnotatedPure: isAnnotatedPure
