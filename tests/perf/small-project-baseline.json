@@ -20,10 +20,9 @@
 			"raise_reason": "the VM compiles the whole compile server at startup, and the server program grew 4.8% from a6e8ed9a1 to d0d30ce1c (module-sections writer and linking, query-engine kinds and frames, slice-3 walks, smaller steps over ~200 commits); measured back to back on the recording machine, where d1586e828 and a6e8ed9a1 still reproduce the old baselines within 0.4%; making the module sections the default adds no instructions"
 		},
 		"vm_check_allocated_bytes": {
-			"value": 70440760,
+			"value": 67051184,
 			"tolerance": 0.02,
-			"why": "What the compile server on the VM allocated for the check: deterministic for a given compiler and project.",
-			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (check about +2.4 and +0.9 MB); then stdlib typed in every program: 8b5e8403e (keyValueIterator on Array, Map and String, +0.4 MB), 0bf8f03af (Std's map formatter, +1.1 MB), ac8a1069b (ObjectMap's iteration methods nest V in {key, value}, so JsonPrinter's ObjectMap<Dynamic, Bool> is a specialized owner typed for every program, +2.2 MB after 07b95ac10 took back its repeated owner walks); 4ff774d3e's AST fields +0.3 MB after d3bb11835; smaller steps under 0.4 MB"
+			"why": "What the compile server on the VM allocated for the check: deterministic for a given compiler and project."
 		},
 		"vm_build_empty_store_instructions": {
 			"value": 14647488311,
@@ -31,10 +30,9 @@
 			"why": "As build_instructions, with the digest store emptied first: the build that reads and hashes every input, the pinned Haxe and the compiler's sources among them. A regression guard."
 		},
 		"aot_build_instructions": {
-			"value": 1633410174,
+			"value": 1524875986,
 			"tolerance": 0.03,
-			"why": "Instructions of every process the build starts with haxeon-aot, from perf: startup, which dominates a small project's build, and the compile. Compared only where perf is installed and allowed.",
-			"raise_reason": "ac8a1069b types Map and Array as KeyValueIterables for every program (+40M, with its allocation); d76d07a0f's full collection after each compile's response, off the build's path (wall unchanged), counted because the measurement runs until the server exits (+63M: main without it measures 1.564G); 4ff774d3e's API model grows the AOT image every process start pays (+14M); 07b95ac10 took back 9M (bisected over 25 commits from ccd159f11)"
+			"why": "Instructions of every process the build starts with haxeon-aot, from perf: startup, which dominates a small project's build, and the compile. Compared only where perf is installed and allowed."
 		},
 		"aot_build_allocated_bytes": {
 			"value": 43631136,
@@ -43,16 +41,14 @@
 			"raise_reason": "The small project's build writes module sections (MODULE_SECTIONS.md slice 2b): requests recorded per function and each section's tables collected and encoded"
 		},
 		"aot_check_instructions": {
-			"value": 1396909540,
+			"value": 1344291758,
 			"tolerance": 0.03,
-			"why": "As aot_build_instructions, for a check, which types the project without writing a module.",
-			"raise_reason": "as aot_build_instructions: ac8a1069b's stdlib typing (+40M), d76d07a0f's collection after the response (+51M: main without it measures 1.338G), 4ff774d3e's larger AOT image (+14M); 07b95ac10 took back 13M"
+			"why": "As aot_build_instructions, for a check, which types the project without writing a module."
 		},
 		"aot_check_allocated_bytes": {
-			"value": 40029448,
+			"value": 38886984,
 			"tolerance": 0.02,
-			"why": "What the compile server with haxeon-aot allocated for the check: deterministic for a given compiler and project.",
-			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.53 MB ahead of time); then stdlib typed in every program: 8b5e8403e (+0.24 MB), 0bf8f03af (+0.67 MB), ac8a1069b (JsonPrinter's ObjectMap<Dynamic, Bool> now a specialized owner, +1.2 MB after 07b95ac10); the commits after 0bf8f03af took 0.7 to 0.9 MB back"
+			"why": "What the compile server with haxeon-aot allocated for the check: deterministic for a given compiler and project."
 		},
 		"aot_build_empty_store_instructions": {
 			"value": 6651895150,
