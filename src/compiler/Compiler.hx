@@ -801,10 +801,15 @@ class Compiler {
 		return result;
 	}
 
+	/**
+	 * Keeps `result` for a compile of the same inputs (`compile`). A compiler that tracks publications never takes it, as each of
+	 * its builds is a publication, so it keeps none: the result's IR and module are the build's.
+	 */
 	function rememberCompile(entryModule:String, result:CompileResult):Void {
+		var tracking = publication.status().tracking;
 		cachedCompileRevision = state.queries.inputRevision;
-		cachedCompileEntry = entryModule;
-		cachedCompileResult = result;
+		cachedCompileEntry = tracking ? null : entryModule;
+		cachedCompileResult = tracking ? null : result;
 	}
 
 	/** Returns to a state the compiler held before, with the query database's results as that state was taken with. */

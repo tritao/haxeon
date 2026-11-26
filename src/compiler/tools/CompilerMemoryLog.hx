@@ -43,7 +43,7 @@ class CompilerMemoryLog {
 		#end
 	}
 
-	/** Whether the places that keep a module refer to one module object: the cached result, the reuse snapshot, the encoded-bytes cache. */
+	/** Whether the places that keep a module refer to one module's bytes: the cached result, the reuse snapshot, the encoded-bytes cache. */
 	static function moduleIdentities(session:CompilerSession):String {
 		#if hl
 		@:privateAccess {
@@ -54,9 +54,9 @@ class CompilerMemoryLog {
 				pipeline = compiler.state.pipelineSnapshot,
 				known = session.encodedModule;
 			var backend = pipeline == null ? null : pipeline.backend;
-			var result = cached == null ? null : BackendArtifacts.hashLink(cached.artifact).module,
-				snapshot = backend == null ? null : BackendArtifacts.hashLink(backend.artifact).module,
-				encoded = known == null ? null : known.code;
+			var result = cached == null ? null : BackendArtifacts.hashLink(cached.artifact).sections,
+				snapshot = backend == null ? null : BackendArtifacts.hashLink(backend.artifact).sections,
+				encoded = known == null ? null : known.bytes;
 			return 'result==snapshot:${result == snapshot} result==encoded:${result == encoded} snapshot==encoded:${snapshot == encoded} result:${result != null} snapshot:${snapshot != null} encoded:${encoded != null}';
 		}
 		#else

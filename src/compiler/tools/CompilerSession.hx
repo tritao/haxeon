@@ -10,7 +10,6 @@ import compiler.ffi.FfiRegistry.FfiConfiguration;
 import compiler.ffi.FfiRegistry.FfiInterfaceSource;
 import compiler.ffi.FfiRegistry.FfiProjectionSource;
 import compiler.ffi.HxiInterfaceOrder;
-import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
 import compiler.modules.CodeIdentityTable;
 import compiler.modules.ModulePath;
@@ -67,39 +66,26 @@ class CompilerSession {
 	}
 
 	/**
-	 * The bytes of the module last written, with the module they encode and their build id, which a build that reuses the module
-	 * (see `PipelineSnapshot`) takes without digesting the bytes again.
+	 * The bytes of the module last written, with their build id, which a build that reuses the module (see `PipelineSnapshot`)
+	 * takes without digesting the bytes again. Only the bytes: the module's object form is the build's, not the session's.
 	 */
-	var encodedModule:Null<{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>}>;
-
-	public function encodeHashLink(artifact:HlArtifact):haxeon.io.SegmentedBytes
-		return encoded(artifact).bytes;
-
-	function encoded(artifact:HlArtifact):{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>} {
-		var known = encodedModule;
-		if (known == null || known.code != artifact.module) {
-			known = {
-				code: artifact.module,
-				bytes: artifact.sections,
-				buildId: null
-			};
-			encodedModule = known;
-		}
-		return known;
-	}
+	var encodedModule:Null<{bytes:haxeon.io.SegmentedBytes, buildId:String}>;
 
 	/** The build id of `artifact`'s module: the SHA-256 of the bytes `writeHashLink` writes, worked out once for them. */
 	public function hashLinkBuildId(artifact:HlArtifact):String {
-		var known = encoded(artifact), id = known.buildId;
-		if (id == null) {
-			id = build.execution.ContentDigest.makeHex(known.bytes.flatten());
-			known.buildId = id;
+		var known = encodedModule;
+		if (known == null || known.bytes != artifact.sections) {
+			known = {
+				bytes: artifact.sections,
+				buildId: build.execution.ContentDigest.makeHex(artifact.sections.flatten())
+			};
+			encodedModule = known;
 		}
-		return id;
+		return known.buildId;
 	}
 
 	public function writeHashLink(artifact:HlArtifact, path:String):Void
-		HlWriter.saveSegments(encodeHashLink(artifact), path);
+		HlWriter.saveSegments(artifact.sections, path);
 
 	/** Wasm guests import their host services through this interface of the standard library at `stdlib`. */
 	static function hostInterfaces(target:Null<BackendTarget>, stdlib:String):{

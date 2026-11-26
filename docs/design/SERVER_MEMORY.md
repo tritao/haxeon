@@ -128,3 +128,18 @@ is what the session keeps from one edit to the next. The incremental part's cens
 from the server's log as each response arrives, before the server has settled. The baselines moved with the measure, not with
 the compiler: the UI session 386.40 → 377.38 MB and the small project 9.33 → 9.12 MB (perf-guard's bytes; 359.9 and 8.7 MB in
 the census's MiB).
+
+### Step 2: the session keeps the written module as bytes
+
+`CompilerSession` keeps the bytes it wrote and their build id, keyed by the bytes object (a reused build's artifact carries the
+same one), not the module's `HlCode`; and a compiler that tracks publications keeps no compile result (`Compiler.rememberCompile`),
+since none of its builds is ever answered from one. So between edits a live session holds the module's sections and no object
+graph of it: the UI session 377.38 → 376.33 MB, the small project 9.12 → 9.02 MB. Far less than the 34 MB the first-path table
+suggested, as the module's functions and relocations are the published functions the next build reuses
+(`HlModuleAssembler.published`, the section memo).
+
+Nothing is rebuilt on demand, as nothing between builds asks for the object form. A plain session still holds the last module
+through its reuse snapshot (`PipelineSnapshot`) and cached result, which hand it back for a build of the same inputs. The
+published `HlFunction`s stay objects: every build's module is made of them, and the section memo keeps a section while its
+functions are the same objects (`HlSectionWriter.unchanged`); holding them as bytes would mean writing kept sections without
+their functions, which step 4's eviction can take up.
