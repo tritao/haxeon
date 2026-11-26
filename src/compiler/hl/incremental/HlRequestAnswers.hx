@@ -2,8 +2,8 @@ package compiler.hl.incremental;
 
 /**
  * The answers one build's tables and function layout give the requests (`HlRequestKeys`), each worked out the first time a
- * function being linked asks it. Asking an interning request adds what it names to the tables, as lowering does, so the requests
- * of the functions, asked in program order, make the tables lowering them would.
+ * function being relocated asks it. Asking a request adds what it names to the tables, as lowering does, so the tables hold
+ * everything a kept function names.
  */
 class HlRequestAnswers {
 	/** The answer of a field without a slot, or of a native field with no narrow storage. */

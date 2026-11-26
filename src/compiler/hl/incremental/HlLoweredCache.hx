@@ -35,11 +35,8 @@ class HlLoweredCache {
 	/** Each function's form with its runtime calls through helpers, while its IR is the same object (`IrSharedRuntimeCalls`). */
 	public var sharedCalls = new compiler.hl.IrSharedRuntimeCalls.IrSharedCallsMemo();
 
-	/** The tables the entries were linked into, with what made them, for the next build to keep (`HlLinkRecord`). */
-	public var tables:Null<HlLinkRecord> = null;
-
-	/** The tables the last sectioned build's functions were relocated into, for the next to extend (`HlLoweredTables`). */
-	public var sectionTables:Null<HlLoweredTables> = null;
+	/** The tables the last build's functions were relocated into, for the next to extend (`HlLoweredTables`). */
+	public var tables:Null<HlLoweredTables> = null;
 
 	/** The module sections the last plain build wrote, for the next to keep the ones it writes alike (`HlSectionWriter`). */
 	public var sections:Null<compiler.hl.HlSectionWriter.HlSectionCache> = null;
@@ -66,7 +63,6 @@ class HlLoweredCache {
 		result.sharedCalls = sharedCalls.copy();
 		result.environment = environment;
 		result.tables = tables;
-		result.sectionTables = sectionTables;
 		result.sections = sections;
 		return result;
 	}
@@ -86,13 +82,12 @@ class HlLoweredCache {
 			return;
 		entries = [];
 		tables = null;
-		sectionTables = null;
 		environment = next;
 	}
 }
 
 /**
- * The tables a sectioned build lowered and relocated its functions into, with the answers its requests got and its String
+ * The tables a build lowered and relocated its functions into, with the answers its requests got and its String
  * constants. A sectioned build names entries by key, so their order is no one's concern: the next build with the same metadata
  * and function layout extends these tables instead of making its own, and every request answered here keeps its answer, so a
  * function kept from here asks nothing. Entries no function names any more stay until a build starts afresh.

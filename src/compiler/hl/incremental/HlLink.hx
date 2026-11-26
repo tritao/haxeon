@@ -6,64 +6,13 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.hl.lower.HlLoweringView;
 
-/** A lowered function given the indices of a build, or the reason it cannot have them. */
-typedef HlLinked = {
-	final fn:Null<HlFunction>;
-	final reason:Null<String>;
-
-	/** When the indices moved, the function as lowering it in this build would have recorded it; null when they all stay. */
-	final ?rebased:HlLoweredFunction;
-}
-
 /**
- * The link step for lowered functions: gives a function that was lowered against one set of tables and one function layout the
- * indices of another, without lowering it again. It checks the facts the function read about object types, asks its requests of the
- * new tables (`HlRequestAnswers`, which also makes the tables what lowering the functions in order would have made them), and
- * rewrites the constant, type, global and function indices in its code, registers and debug names when some moved. A function whose
- * indices all stay is returned as it is, so the encoding cached for it stays valid.
- *
- * A sectioned build keeps every function as the build that lowered it made it and rewrites none (`relocate`): its sections name
- * entries by key, so a function's indices only need to be found in the build's tables, never written back into its code.
+ * Relocation of lowered functions: whether a function lowered against one build's tables and function layout holds in another's,
+ * without lowering it again. A build keeps every function as the build that lowered it made it and rewrites none (`relocate`): its
+ * sections name entries by key, so a function's indices only need to be found in the build's tables, never written back into
+ * its code. A tool that shows one function with this build's indices rewrites it (`rewritten`, `HlRelocations.materialize`).
  */
 class HlLink {
-	public static function link(lowered:HlLoweredFunction, answers:HlRequestAnswers, functions:Map<String, Int>,
-			view:HlLoweringView, remap:HlRemap):HlLinked {
-		var stale = view.holds(lowered.facts);
-		if (stale != null)
-			return {fn: null, reason: 'fact $stale changed'};
-		var keys = lowered.keys, recorded = lowered.answers, requests = answers.keys, moved = false;
-		// The questions that add nothing to the tables first, so a function that must be lowered again has added nothing before it is:
-		// lowering it asks in its own order.
-		for (pass in 0...2)
-			for (index in 0...keys.length) {
-				var key = keys[index];
-				if (requests.interns(key) != (pass == 1))
-					continue;
-				var answer = answers.answer(key), before = recorded[index];
-				if (answer == before)
-					continue;
-				var table = requests.table(key);
-				if (table == HlRequestKeys.CHECK || answer < 0 || before < 0)
-					return {fn: null, reason: describe(requests.request(key))};
-				moved = true;
-			}
-		var own = functions.get(lowered.name);
-		if (own == null)
-			return {fn: null, reason: 'function ${lowered.name} is not in the layout'};
-		var before = lowered.fn;
-		if (!moved && own == before.functionIndex)
-			return {fn: before, reason: null};
-		var conflict = fill(lowered, answers, remap);
-		if (conflict != null)
-			return {fn: null, reason: conflict};
-		var rebased = [for (key in keys) answers.answer(key)], fn = rewritten(before, own, remap);
-		return {
-			fn: fn,
-			reason: null,
-			rebased: new HlLoweredFunction(lowered.name, lowered.source, fn, keys, rebased, lowered.facts)
-		};
-	}
-
 	/** `relocate`: the function does not hold in this build, and is lowered again. */
 	public static inline final STALE = -1;
 

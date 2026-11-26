@@ -231,7 +231,7 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAfterAbi = AllocationMeter.sample();
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
-		// A plain build links the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
+		// A plain build keeps the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
 		var loweredCache:Null<HlLoweredCache> = context.livePatching ? null : this.loweredCache;
 		var candidateAssembler = loweredCache != null ? new HlModuleAssembler(null,
 			loweredCache.debug) : context.state.compiledOnce

@@ -145,8 +145,8 @@ class HlSymbolTable {
 	}
 
 	/**
-	 * Makes this table a fork of `other` (see `fork`), dropping what it held: a build that keeps the last build's tables
-	 * (`HlLinkRecord`) works on them without changing them for the tables that hold them.
+	 * Makes this table a fork of `other` (see `fork`), dropping what it held: a build that extends the last build's tables
+	 * (`HlLoweredTables`) works on them without changing them for the tables that hold them.
 	 */
 	public function shareFrom(other:HlSymbolTable):Void {
 		var forked = other.fork();
@@ -168,75 +168,6 @@ class HlSymbolTable {
 		pendingTypes = forked.pendingTypes;
 		pendingEnumCaseCounts.clear();
 		shared = ALL;
-	}
-
-	/** Empties the table, as a new one is. */
-	public function clear():Void
-		shareFrom(new HlSymbolTable());
-
-	/**
-	 * Puts the leaf entry at `from` of `table` (`HlRequestKeys.INTS`, `FLOATS`, `STRINGS`, or `GLOBALS` for a String constant's
-	 * global) at `to` instead of the entry there, which no longer exists; `from` is left for `truncate`. The entries are leaves:
-	 * no other entry refers to them (`HlLinkRecord`).
-	 */
-	public function replaceLeaf(table:Int, from:Int, to:Int):Void {
-		writable(switch table {
-			case HlRequestKeys.INTS: INTS;
-			case HlRequestKeys.FLOATS: FLOATS;
-			case HlRequestKeys.STRINGS: STRINGS;
-			default: GLOBALS;
-		});
-		switch table {
-			case HlRequestKeys.INTS:
-				intIndices.remove(ints[to]);
-				ints[to] = ints[from];
-				intIndices.set(ints[to], to);
-			case HlRequestKeys.FLOATS:
-				floatIndices.remove(floatKey(floats[to]));
-				floats[to] = floats[from];
-				floatIndices.set(floatKey(floats[to]), to);
-			case HlRequestKeys.STRINGS:
-				stringIndices.remove(strings[to]);
-				strings[to] = strings[from];
-				stringIndices.set(strings[to], to);
-			case HlRequestKeys.GLOBALS:
-				var removed = stringConstantAt(to), moved = stringConstantAt(from);
-				if (removed < 0 || moved < 0)
-					throw new InternalError('global $to or $from holds no String constant');
-				var value = stringConstants[moved].value;
-				globalIndices.remove(STRING_CONSTANT_PREFIX + stringConstants[removed].value);
-				globalIndices.set(STRING_CONSTANT_PREFIX + value, to);
-				globals[to] = globals[from];
-				stringConstants[removed] = {global: to, value: value};
-			default:
-				throw new InternalError('table $table has no leaf entries');
-		}
-	}
-
-	/** Drops the entries past these lengths, which `replaceLeaf` moved elsewhere (their keys name their new places). */
-	public function truncate(lengths:HlTableLengths):Void {
-		if (ints.length > lengths.ints) {
-			writable(INTS);
-			ints.resize(lengths.ints);
-		}
-		if (floats.length > lengths.floats) {
-			writable(FLOATS);
-			floats.resize(lengths.floats);
-		}
-		if (strings.length > lengths.strings) {
-			writable(STRINGS);
-			strings.resize(lengths.strings);
-		}
-		if (types.length > lengths.types) {
-			writable(TYPES);
-			types.resize(lengths.types);
-		}
-		if (globals.length > lengths.globals) {
-			writable(GLOBALS);
-			globals.resize(lengths.globals);
-			while (stringConstants.length > 0 && stringConstants[stringConstants.length - 1].global >= lengths.globals)
-				stringConstants.pop();
-		}
 	}
 
 	public function lengths():HlTableLengths
@@ -358,53 +289,6 @@ class HlSymbolTable {
 				return false;
 		}
 		return true;
-	}
-
-	/** Whether a type names string `index` (as its name or a field's), so that string is not a leaf. */
-	public function typesName(index:Int):Bool {
-		for (type in types)
-			switch type {
-				case Abstract(name) if (name == index):
-					return true;
-				case Object(name, _, _, fields, methods, _) | Structure(name, _, fields, methods, _):
-					if (name == index)
-						return true;
-					for (field in fields)
-						if (field.name == index)
-							return true;
-					for (method in methods)
-						if (method.name == index)
-							return true;
-				case Virtual(name, fields):
-					if (name == index)
-						return true;
-					for (field in fields)
-						if (field.name == index)
-							return true;
-				case Enum(name, _, constructors):
-					if (name == index)
-						return true;
-					for (constructor in constructors)
-						if (constructor.name == index)
-							return true;
-				default:
-			}
-		return false;
-	}
-
-	/** The position in `stringConstants` of the one of global `global`, or -1. */
-	function stringConstantAt(global:Int):Int {
-		var low = 0, high = stringConstants.length - 1;
-		while (low <= high) {
-			var middle = (low + high) >> 1, at = stringConstants[middle].global;
-			if (at == global)
-				return middle;
-			if (at < global)
-				low = middle + 1;
-			else
-				high = middle - 1;
-		}
-		return -1;
 	}
 
 	function ensureWritable():Void

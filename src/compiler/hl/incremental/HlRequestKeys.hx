@@ -12,14 +12,11 @@ import compiler.ir.model.IrTypeIds;
  * The session keeps one, with the lowered functions (`HlLoweredCache`); it only grows, so the copies of the cache share it.
  */
 class HlRequestKeys {
-	/** Questions by number, as first asked: the index in them is the asker's, which a replay ignores. */
+	/** Questions by number, as first asked: the index in them is the asker's answer, which another build may answer otherwise. */
 	final requests:Array<HlSymbolRequest> = [];
 
 	/** By number, which table the answer indexes (`HlRemap`), or `CHECK` for a position that must not move. */
 	final tables:Array<Int> = [];
-
-	/** By number, whether asking adds to the tables, so asking it in another order would order them differently. */
-	final interning:Array<Bool> = [];
 
 	final ints:Map<Int, Int> = [];
 	final floats:Map<String, Int> = [];
@@ -67,9 +64,6 @@ class HlRequestKeys {
 
 	public inline function table(key:Int):Int
 		return tables[key];
-
-	public inline function interns(key:Int):Bool
-		return interning[key];
 
 	/** The symbol table's key of the type with id `type`, which a `TypeOf` or `RefTo` names. */
 	public function typeKey(type:Int):String {
@@ -154,11 +148,6 @@ class HlRequestKeys {
 			case GlobalSlot(_, _, _) | GlobalByName(_, _) | StringLiteral(_, _) | EnumValue(_, _, _): GLOBALS;
 			case FunctionRef(_, _): FUNCTIONS;
 			case FieldSlot(_, _, _) | MethodSlot(_, _, _) | InterfaceSlot(_, _, _) | MethodSlotKnown(_, _, _): CHECK;
-		});
-		interning.push(switch request {
-			case GlobalByName(_, _) | FunctionRef(_, _) | FieldSlot(_, _, _) | MethodSlot(_, _, _) | InterfaceSlot(_, _,
-				_) | MethodSlotKnown(_, _, _): false;
-			default: true;
 		});
 		return key;
 	}

@@ -179,10 +179,10 @@ class HlModuleAssembler {
 	/** Lower what the lowering cache would reuse again and compare (`CompileOptions.checkReuse`). */
 	public var checkReuse:Bool = false;
 
-	/** The functions of the last plain build to link instead of lowering again, and the ones this build lowers (see `HlLoweredCache`). */
+	/** The functions of the last plain build to keep instead of lowering again, and the ones this build lowers (see `HlLoweredCache`). */
 	public var loweredCache:Null<HlLoweredCache>;
 
-	/** The build patches a running module: functions are kept by name (`published`). Otherwise they are linked from `loweredCache`. */
+	/** The build patches a running module: functions are kept by name (`published`). Otherwise they are kept from `loweredCache`. */
 	public var livePatching = false;
 
 	/**
@@ -1015,10 +1015,10 @@ class HlModuleAssembler {
 			if (!listedForLowering.exists(name))
 				relowered.push(name);
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, relowered,
-			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false,
+			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata,
 			livePatching || keepsLowered ? liveCache : null, irVerified,
 			livePatching,
-			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources, !livePatching),
+			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;

@@ -5,11 +5,11 @@ import compiler.ir.model.Ir.IrType;
 
 /**
  * One question lowering put to the symbol tables or the function layout while it lowered a function, with the answer it got. The
- * requests of a function, in order, are everything its code leans on outside itself: replaying them against other tables gives the
- * indices the same function needs there (`HlRemap`), and the tables come out as lowering the functions in that order would make them.
+ * requests of a function, in order, are everything its code leans on outside itself: asking them of other tables gives the
+ * indices the same function names there (`HlRemap`).
  *
  * Constants, types, globals and functions are remapped. A field, a method slot or an enum constructor is a position inside a
- * type the IR names: it is not remapped, and a replay that finds a different one means the function must be lowered again. A
+ * type the IR names: it is not remapped, and another answer for it means the function must be lowered again. A
  * lowered function keeps its requests as numbers (`HlRequestKeys`).
  */
 enum HlSymbolRequest {

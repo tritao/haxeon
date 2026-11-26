@@ -6,7 +6,7 @@ import compiler.ir.model.IrFunction;
  * A lowered function with everything it leans on outside itself: the requests lowering made to the symbol tables and the function
  * layout (`HlSymbolRequest`, numbered by `HlRequestKeys`), and the facts it read about object types (`HlLoweringView`). The
  * function's own code stays valid for any build in which the IR (`source`) is the same, the facts hold and the requests have
- * answers; `HlLink` gives it the indices of that build.
+ * answers; `HlLink.relocate` finds where that build's tables hold what it names.
  */
 class HlLoweredFunction {
 	public final name:String;
