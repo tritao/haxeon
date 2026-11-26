@@ -1,5 +1,7 @@
 package haxeon.ui.core;
 
+
+import haxeon.ui.core.UiEvent;
 /** Normalized NativeKit key values used for framework-level defaults. */
 class UiKey {
 	public static inline var Space:Int = 32;

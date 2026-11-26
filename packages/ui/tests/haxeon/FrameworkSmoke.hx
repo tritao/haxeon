@@ -8,7 +8,7 @@ import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.input.TextEdit as PlatformTextEdit;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
-import haxeon.ui.core.UiEventPhase;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.host.UiOverlay;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
@@ -40,8 +40,7 @@ import haxeon.ui.TextStyle;
 import haxeon.ui.widgets.text.TextDecoration;
 import NativeKitEventDecoderTests;
 import haxeon.ui.core.NativeInputAdapter;
-import haxeon.ui.core.CursorShape as UiCursorShape;
-import haxeon.ui.core.CachePolicy;
+import haxeon.ui.core.RenderNode.CursorShape as UiCursorShape;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Dependencies;
 import haxeon.reactive.ReactiveRuntime;
@@ -50,10 +49,7 @@ import haxeon.reactive.Signal;
 import haxeon.reactive.Derived;
 import haxeon.reactive.Effect;
 import haxeon.ui.core.Command;
-import haxeon.ui.core.CommandContext;
-import haxeon.ui.core.CommandParameters;
 import haxeon.ui.core.CommandRegistry;
-import haxeon.ui.core.CommandResult;
 import haxeon.ui.docking.DockNode;
 import haxeon.ui.docking.DockWorkspaceSnapshot;
 import haxeon.ui.docking.DockWorkspaceModel;
@@ -65,22 +61,15 @@ import haxeon.ui.properties.PropertyBinding;
 import haxeon.ui.properties.PropertyEditorRegistry;
 import haxeon.ui.properties.PropertyValue;
 import haxeon.ui.plotting.PlotModel;
-import haxeon.ui.core.ViewportCamera;
-import haxeon.ui.core.ViewportContent;
 import haxeon.ui.core.EventDispatcher;
 import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.HitTest;
-import haxeon.ui.core.HitTestBehavior;
 import haxeon.ui.core.InteractionStateStore;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.UiContext;
-import haxeon.ui.core.UiDirtyFlag;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.core.UiModifier;
-import haxeon.ui.core.UiTouchData;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.core.View;
 import haxeon.ui.core.Shortcut;
@@ -631,7 +620,7 @@ class FrameworkSmoke {
 		0.0,
 		button,
 		0,
-		haxeon.ui.core.UiModifier.empty(),
+		haxeon.ui.core.UiEvent.UiModifier.empty(),
 		null,
 		null,
 		0,
@@ -746,7 +735,7 @@ class FrameworkSmoke {
 	}
 
 	static function run():Int {
-		var originalTypography = new haxeon.ui.core.ResolvedTextStyle(new TextStyle(16.0),
+		var originalTypography = new haxeon.ui.core.TextStyleOverride.ResolvedTextStyle(new TextStyle(16.0),
 			new ParagraphStyle(TextWrap.WordCharacter),
 			Color.fromBytes(0, 0, 0));
 		var mergedTypography = originalTypography.merge(new TextStyleOverride(null, 20.0, null, TextWrap.None, null,
@@ -766,7 +755,7 @@ class FrameworkSmoke {
 			|| copiedParagraph.wrap != TextWrap.Word) throw "Typography replacements were not constructed";
 		if (mergedTypography.textStyle.fontSize != 20.0
 			|| mergedTypography.paragraphStyle.wrap != TextWrap.None) throw "Typography copies must remain independent";
-		var clickSequence = new haxeon.ui.core.PointerClickSequence();
+		var clickSequence = new haxeon.ui.widgets.collections.TreeView.PointerClickSequence();
 		if (clickSequence.register("a",
 			clickEvent(1.0)) != 1 || clickSequence.register("a", clickEvent(1.1)) != 2 || clickSequence.register("a",
 			clickEvent(1.2)) != 1 || clickSequence.register("b",
@@ -1432,15 +1421,15 @@ class FrameworkSmoke {
 		var wordClickX = wordTextGeometry.x + (wordStartX + wordNextX) * 0.5;
 		var wordClickY = wordTextGeometry.y + wordStartCaret.y + (wordStartCaret.ascender + wordStartCaret.descender)
 			* 0.5;
-		context.pointerDown(wordClickX, wordClickY, 0, haxeon.ui.core.UiModifier.empty(), 0, null, 1.0);
+		context.pointerDown(wordClickX, wordClickY, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), 0, null, 1.0);
 		if (wordEditor.selectionStart != wordEditor.selectionEnd
 			|| wordEditor.selectionFocus < 4 || wordEditor.selectionFocus > 5) return 202;
 		context.pointerUp(wordClickX, wordClickY, 0);
-		context.pointerDown(wordClickX, wordClickY, 0, haxeon.ui.core.UiModifier.empty(), 0, null, 1.1);
+		context.pointerDown(wordClickX, wordClickY, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), 0, null, 1.1);
 		if (wordEditor.selectionStart != 4 || wordEditor.selectionEnd != 7) return 192;
 		if (wordEditor.layout.selectionRects(new TextPosition(4, 0), new TextPosition(7, 0)).length == 0) return 200;
 		context.pointerUp(wordClickX, wordClickY, 0);
-		context.pointerDown(wordClickX, wordClickY, 0, haxeon.ui.core.UiModifier.empty(), 0, null, 1.2);
+		context.pointerDown(wordClickX, wordClickY, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), 0, null, 1.2);
 		if (wordEditor.selectionStart != 0 || wordEditor.selectionEnd != 8) return 193;
 		context.pointerUp(wordClickX, wordClickY, 0);
 		#if (mac || ios)
@@ -1490,11 +1479,11 @@ class FrameworkSmoke {
 			var pageEditor:TextEditorState = cast pageState.value;
 			if (!context.focusWidget(pageRoot.id)) throw "page navigation field did not focus";
 			pageEditor.placeCaret(3, false);
-			context.key(UiEventKind.KeyDown, UiKey.PageDown, haxeon.ui.core.UiModifier.empty());
+			context.key(UiEventKind.KeyDown, UiKey.PageDown, haxeon.ui.core.UiEvent.UiModifier.empty());
 			var pageEnd = pageEditor.selectionFocus;
 			if (pageEnd <= 14 || pageEnd >= pageText.length
 				|| pageEnd % 11 != 3) throw "PageDown did not move a page while preserving the column";
-			context.key(UiEventKind.KeyDown, UiKey.PageUp, haxeon.ui.core.UiModifier.empty());
+			context.key(UiEventKind.KeyDown, UiKey.PageUp, haxeon.ui.core.UiEvent.UiModifier.empty());
 			if (pageEditor.selectionFocus != 3) throw "PageUp did not return to the original line";
 			context.key(UiEventKind.KeyDown, UiKey.PageDown, UiModifier.Shift);
 			if (pageEditor.selectionAnchor != 3
@@ -1933,13 +1922,13 @@ class FrameworkSmoke {
 		context.pointerDown(coordinateGlobal.x,
 			coordinateGlobal.y,
 			0,
-			haxeon.ui.core.UiModifier.empty(),
+			haxeon.ui.core.UiEvent.UiModifier.empty(),
 			0,
 			"coordinate-test");
 		context.pointerUp(coordinateGlobal.x,
 			coordinateGlobal.y,
 			0,
-			haxeon.ui.core.UiModifier.empty(),
+			haxeon.ui.core.UiEvent.UiModifier.empty(),
 			0,
 			"coordinate-test");
 		var expectedRootPoint = root.globalToLocal(coordinateGlobal);
@@ -3784,9 +3773,9 @@ class FrameworkSmoke {
 		context.pointerMove(captureDividerX, captureDividerY);
 		// Physical capture is shared by the window, while logical capture stays
 		// independent per pointer. Releasing pointer 1 must not release pointer 0.
-		context.pointerDown(captureDividerX, captureDividerY, 0, haxeon.ui.core.UiModifier.empty(), 1);
+		context.pointerDown(captureDividerX, captureDividerY, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), 1);
 		if (!context.events.hasPointerCapture(captureDivider.id, 1) || platformCaptureStates.length != 1) return 253;
-		context.pointerUp(captureDividerX, captureDividerY, 0, haxeon.ui.core.UiModifier.empty(), 1);
+		context.pointerUp(captureDividerX, captureDividerY, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), 1);
 		if (context.events.hasPointerCapture(captureDivider.id,
 			1) || !context.events.hasPointerCapture(captureDivider.id) || platformCaptureStates.length != 1) return 254;
 		context.pointerMove(captureButtonX, captureButtonY);
@@ -4600,14 +4589,14 @@ class FrameworkSmoke {
 		store.endFrame();
 		store.beginFrame();
 		var parentMarker = store.usageMarker();
-		store.retain([haxeon.ui.core.ResourceId.widget(id)]);
+		store.retain([haxeon.ui.core.WidgetId.ResourceId.widget(id)]);
 		var parentIds = store.usedIdsSince(parentMarker);
 		store.endFrame();
 		store.beginFrame();
 		store.retain(parentIds);
 		store.endFrame();
 		var retained = parentIds.length == 1
-			&& parentIds[0] == haxeon.ui.core.ResourceId.widget(id) && store.contains(id) && disposals == 0;
+			&& parentIds[0] == haxeon.ui.core.WidgetId.ResourceId.widget(id) && store.contains(id) && disposals == 0;
 		store.beginFrame();
 		store.endFrame();
 		return retained && !store.contains(id) && disposals == 1;
@@ -5398,9 +5387,9 @@ class FrameworkSmoke {
 		var viewportRoot = uiContext.submit(viewport, new LayoutFrame(320.0, 180.0));
 		if (viewportRoot == null
 			|| viewportRoot.semantics == null || viewportRoot.semantics.label != "GPU viewport") return false;
-		uiContext.pointerDown(40.0, 40.0, 0, haxeon.ui.core.UiModifier.empty(), 7);
-		uiContext.pointerMove(55.0, 52.0, haxeon.ui.core.UiModifier.empty(), 7);
-		uiContext.pointerUp(55.0, 52.0, 0, haxeon.ui.core.UiModifier.empty(), 7);
+		uiContext.pointerDown(40.0, 40.0, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), 7);
+		uiContext.pointerMove(55.0, 52.0, haxeon.ui.core.UiEvent.UiModifier.empty(), 7);
+		uiContext.pointerUp(55.0, 52.0, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), 7);
 		if (viewportCamera.panX == 0.0 || viewportCamera.panY == 0.0) return false;
 
 		var vector = new SmokeVector(1.0, 2.0, 3.0);

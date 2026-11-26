@@ -4,10 +4,10 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Transform2D;
 import haxeon.ui.animation.AnimationController;
-import haxeon.ui.component.ScopeView;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.Semantics;
 

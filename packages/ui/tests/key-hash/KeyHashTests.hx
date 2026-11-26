@@ -3,7 +3,7 @@
 //     --root=packages/ui/tests/key-hash --root=packages/ui/src packages/ui/tests/key-hash/KeyHashTests.hx \
 //     packages/ui/src/haxeon/ui/core/KeyHash.hx
 //   LD_LIBRARY_PATH=out:$(scripts/hashlink-path.sh) $(scripts/hashlink-path.sh)/hl OUT.hl
-import haxeon.ui.core.KeyHash;
+import haxeon.ui.core.Key;
 
 class KeyHashTests {
 	static function expect(ok:Bool, message:String):Void {

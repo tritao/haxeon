@@ -1,9 +1,17 @@
 package haxeon.ui.core;
 
 import haxeon.reactive.ReactiveDependencySet;
-import haxeon.ui.component.ScopeView;
+import haxeon.ui.LayoutNode;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.View;
 import haxeon.ui.style.ComputedStyle;
 
+import haxeon.ui.core.Key;
+import haxeon.ui.core.LiveTextBinding;
+import haxeon.ui.core.TextStyleOverride;
+import haxeon.ui.core.WidgetId;
 /** A structural computation whose identity is its actual body root. */
 internal class RenderScope extends ReactiveDependencySet implements Disposable {
 	public var root(default, null):RenderNode;
@@ -177,4 +185,49 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 	public function attached(submittedRoot:Null<RenderNode>):Bool {
 		return !disposed && context.attachedToRoot(root, submittedRoot);
 	}
+}
+
+/** A component is its structural description; its native owner runs this body directly. */
+interface ScopeView extends View {
+	/** Identifies this component among its siblings: its state lives as long as each build gives it the same key. */
+	function scopeKey():String;
+
+	/** Whether `previous`, the description this one replaces, has the same inputs, so its body would build the same. */
+	function inputsEqual(previous:ScopeView):Bool;
+
+	/** Builds the component's content inside its own scope, which `BuildContext.mountComponent` opens for it. */
+	function buildBody(context:BuildContext):RenderNode;
+}
+
+/** A component's actual body root carries its native owner; ordinary descendants carry no owner field. */
+internal class ScopeRootNode extends RenderNode {
+	var owner:RenderScope;
+
+	public function new(id:WidgetId, kind:LayoutVisualKind, style:Null<LayoutStyle>, owner:RenderScope) {
+		super(id, kind, style);
+		this.owner = owner;
+	}
+
+	override public function scopeOwner():Null<RenderScope> return owner;
+	override public function setScopeOwner(owner:RenderScope):Void this.owner = owner;
+}
+
+/** Live text keeps its submitted-value bookkeeping when it is also a component's body root. */
+internal class ScopeTextRootNode extends LiveTextNode {
+	var owner:RenderScope;
+
+	public function new(id:WidgetId, style:LayoutStyle, value:String, owner:RenderScope) {
+		super(id, style, value);
+		this.owner = owner;
+	}
+
+	override public function scopeOwner():Null<RenderScope> return owner;
+	override public function setScopeOwner(owner:RenderScope):Void this.owner = owner;
+}
+
+/** A component instance lifetime, independent of its widget identity. */
+internal abstract ScopeResourceId(Int) {
+	@:allow(haxeon.ui.core.StateStore) @:allow(haxeon.ui.core.ResourceId) inline function new(value:Int) this = value;
+
+	public inline function rawValue():Int return this;
 }

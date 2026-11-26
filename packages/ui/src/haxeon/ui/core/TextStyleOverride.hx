@@ -1,11 +1,10 @@
 package haxeon.ui.core;
 
+import haxeon.ui.Color;
 import haxeon.ui.FontCollection;
 import haxeon.ui.TextStyle;
-
-
-
-import haxeon.ui.Color;
+import haxeon.ui.theme.TextRole;
+import haxeon.ui.theme.Theme;
 
 /**
  * Sparse typography changes applied to the current inherited text style.
@@ -116,4 +115,58 @@ class TextStyleOverride {
 
 	static inline function finite(value:Float):Bool
 		return value == value && value - value == 0.0;
+}
+
+/** Concrete typography snapshot emitted onto a text-capable render node. */
+class ResolvedTextStyle {
+	/** The font, size and spacing. */
+	public final textStyle:TextStyle;
+
+	/** Wrapping, alignment, line height, direction and tab width. */
+	public final paragraphStyle:ParagraphStyle;
+
+	/** The color text is drawn in. */
+	public final textColor:Color;
+
+	/** A complete text style. */
+	public function new(textStyle:TextStyle, paragraphStyle:ParagraphStyle, textColor:Color,
+			?override:TextStyleOverride) {
+		if (textStyle == null || paragraphStyle == null)
+			throw "Resolved text styles require complete values";
+		this.textStyle = new TextStyle(override == null
+			|| override.fontSize == null ? textStyle.fontSize : override.fontSize,
+			override == null || override.font == null ? textStyle.font : override.font,
+			override == null || override.letterSpacing == null ? textStyle.letterSpacing : override.letterSpacing);
+		this.paragraphStyle = new ParagraphStyle(override == null
+			|| override.wrap == null ? paragraphStyle.wrap : override.wrap,
+			override == null || override.alignment == null ? paragraphStyle.alignment : override.alignment,
+			override == null || override.lineHeight == null ? paragraphStyle.lineHeight : override.lineHeight,
+			override == null || override.direction == null ? paragraphStyle.direction : override.direction,
+			override == null || override.tabWidth == null ? paragraphStyle.tabWidth : override.tabWidth);
+		this.textColor = override == null || override.color == null ? textColor : override.color;
+	}
+
+	/** The theme's body text style. */
+	public static function fromTheme(theme:Theme):ResolvedTextStyle {
+		if (theme == null)
+			throw "Resolved text styles require a theme";
+		return fromRoleStyle(theme.body);
+	}
+
+	/** The style of a theme text role, such as a heading or a caption. */
+	public static function fromRoleStyle(role:TextRoleStyle):ResolvedTextStyle {
+		if (role == null)
+			throw "Resolved text styles require a role";
+		return new ResolvedTextStyle(role.textStyle, role.paragraphStyle, role.color);
+	}
+
+	/** Applies sparse local changes without mutating either input style. */
+	public function merge(override:Null<TextStyleOverride>):ResolvedTextStyle
+		return new ResolvedTextStyle(textStyle, paragraphStyle, textColor, override);
+
+	/** Returns this snapshot with a state-dependent foreground color. */
+	public function withTextColor(color:Color):ResolvedTextStyle {
+		return new ResolvedTextStyle(textStyle, paragraphStyle, color);
+	}
+
 }

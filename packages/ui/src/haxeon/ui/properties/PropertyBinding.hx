@@ -2,7 +2,7 @@ package haxeon.ui.properties;
 import haxeon.ui.editing.EditHistory;
 import haxeon.ui.properties.PropertyDescriptor.PropertyCommitter;
 
-import haxeon.ui.core.CommandContext;
+import haxeon.ui.core.Command;
 
 import haxeon.ui.properties.PropertyDescriptor;
 /**

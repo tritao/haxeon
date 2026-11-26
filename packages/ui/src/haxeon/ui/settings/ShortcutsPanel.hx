@@ -1,6 +1,5 @@
 package haxeon.ui.settings;
 
-import haxeon.ui.core.UiModifier;
 
 import Observable;
 
@@ -11,7 +10,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.Shortcut;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;

@@ -1,14 +1,11 @@
 package haxeon.ui.core;
 
+import haxeon.editor.CodepointOffset;
 import haxeon.platform.Surface;
 import haxeon.platform.input.TextInput;
 import haxeon.platform.input.TextInputState;
-
-import haxeon.ui.TextLayout.TextRangeRect;
-
-
 import haxeon.ui.Rect;
-import haxeon.ui.widgets.text.TextInputWindow;
+import haxeon.ui.TextLayout.TextRangeRect;
 import nativekit.ffi.NativeKitTypes.Result;
 import nativekit.ffi.NativeKitTypes.TextInputFlags;
 
@@ -287,4 +284,25 @@ class TextInputBridge implements Disposable {
 
 	static inline function finite(value:Float):Bool
 		return value == value && value - value == 0.0;
+}
+
+/**
+	A bounded UTF-8 window with absolute document code-point offsets, and the selection as reported with it: clamped
+	into the window, since platform text input requires it there, when a selection reaches past it.
+**/
+internal class TextInputWindow {
+	public final text:String;
+	public final start:CodepointOffset;
+	public final end:CodepointOffset;
+	public final selectionStart:CodepointOffset;
+	public final selectionEnd:CodepointOffset;
+
+	public function new(text:String, start:CodepointOffset, end:CodepointOffset, ?selectionStart:CodepointOffset,
+			?selectionEnd:CodepointOffset) {
+		this.text = text == null ? "" : text;
+		this.start = start;
+		this.end = end;
+		this.selectionStart = selectionStart == null ? start : selectionStart;
+		this.selectionEnd = selectionEnd == null ? this.selectionStart : selectionEnd;
+	}
 }

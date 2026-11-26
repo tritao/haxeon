@@ -16,7 +16,7 @@ import haxeon.ui.Path;
 import haxeon.ui.Rect;
 import haxeon.ui.Renderer.RendererStats;
 import haxeon.ui.Transform2D;
-import haxeon.ui.core.CachePolicy;
+import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.CanvasView;
 import haxeon.ui.widgets.ImageView;

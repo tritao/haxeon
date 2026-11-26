@@ -1,7 +1,6 @@
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;

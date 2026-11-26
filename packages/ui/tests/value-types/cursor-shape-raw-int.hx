@@ -1,4 +1,4 @@
-import haxeon.ui.core.CursorShape;
+import haxeon.ui.core.RenderNode;
 
 function main():Int {
 	var state:CursorShape = 1;

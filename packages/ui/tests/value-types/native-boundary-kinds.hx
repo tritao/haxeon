@@ -1,6 +1,6 @@
 import haxeon.ui.Canvas;
 import haxeon.ui.Image;
-import haxeon.ui.core.CachePolicy;
+import haxeon.ui.core.RenderNode;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.Mask;
 

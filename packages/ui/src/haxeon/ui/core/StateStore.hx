@@ -1,5 +1,9 @@
 package haxeon.ui.core;
 
+
+import haxeon.ui.core.Key;
+import haxeon.ui.core.RenderScope;
+import haxeon.ui.core.WidgetId;
 /** Haxe-owned per-widget state retained while views are rebuilt. */
 class StateStore implements Disposable {
 	final handles:Map<Int, State<Dynamic>> = new Map();

@@ -1,7 +1,6 @@
 package haxeon.ui.widgets;
 
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.CursorShape;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;

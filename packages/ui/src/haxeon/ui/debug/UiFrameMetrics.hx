@@ -1,6 +1,6 @@
 package haxeon.ui.debug;
 
-import haxeon.ui.core.UiDirtyFlag;
+import haxeon.ui.core.RenderNode;
 
 /** Timing, style-cache, and style-invalidation counters for the most recent UI frame. */
 class UiFrameMetrics {

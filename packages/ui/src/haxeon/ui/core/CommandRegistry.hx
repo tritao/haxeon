@@ -6,6 +6,8 @@ import haxeon.ui.editing.EditHistory;
 import haxeon.ui.editing.EditorDocument;
 
 
+import haxeon.ui.core.Command;
+import haxeon.ui.core.UiEvent;
 /**
  * Ordered application command registry. The last active scope wins, making
  * viewport, text-editor, and modal scopes able to override global shortcuts.

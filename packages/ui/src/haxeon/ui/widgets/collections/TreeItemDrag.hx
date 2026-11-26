@@ -5,8 +5,6 @@ import haxeon.ui.Rect;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
-import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.UiKey;
 
 /** Pointer gesture shared by model-backed trees; application policy owns mutations. */

@@ -1,5 +1,8 @@
 package haxeon.ui.core;
 
+
+import haxeon.ui.core.Key;
+import haxeon.ui.core.WidgetId;
 /** Retains a bounded set of explicitly keyed alternatives under one stable parent. */
 class RetainedVariants implements View {
 	final key:String;

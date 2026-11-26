@@ -1,7 +1,6 @@
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.core.WidgetIdCache;
 
 /** Consecutive virtualized windows reuse storage while dropping the previous rows' identities. */
 class WidgetIdCacheCensus {

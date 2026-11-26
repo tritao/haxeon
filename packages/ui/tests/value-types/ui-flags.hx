@@ -1,5 +1,5 @@
-import haxeon.ui.core.UiDirtyFlag;
-import haxeon.ui.core.UiModifier;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.style.ComputedStyle.StyleImpact;
 import haxeon.ui.style.StyleState;
 

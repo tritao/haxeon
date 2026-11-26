@@ -16,8 +16,7 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.UiContext;
-import haxeon.ui.core.UiEventKind;
-import haxeon.ui.core.UiEventPhase;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
@@ -1418,10 +1417,11 @@ private class UpdatingResources implements View {
 			&& !haxeon.Equality.equals(metrics,
 			new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 5)),
 			"Text metrics equality ignores a field");
-		check(new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Control) == new haxeon.ui.core.Shortcut(65,
-			haxeon.ui.core.UiModifier.Control) && new haxeon.ui.core.Shortcut(65,
-			haxeon.ui.core.UiModifier.Control) != new haxeon.ui.core.Shortcut(65,
-			haxeon.ui.core.UiModifier.Alt),
+		check(new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiEvent.UiModifier.Control)
+			== new haxeon.ui.core.Shortcut(65,
+			haxeon.ui.core.UiEvent.UiModifier.Control) && new haxeon.ui.core.Shortcut(65,
+			haxeon.ui.core.UiEvent.UiModifier.Control) != new haxeon.ui.core.Shortcut(65,
+			haxeon.ui.core.UiEvent.UiModifier.Alt),
 			"Shortcut equality is wrong");
 		check(haxeon.ui.style.CustomEffect.EffectParameter.vec2(1.0,
 			2.0) == haxeon.ui.style.CustomEffect.EffectParameter.vec2(1.0, 2.0)

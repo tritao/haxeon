@@ -1,7 +1,7 @@
 package haxeon.ui.properties;
 
 import Observable;
-import haxeon.ui.core.CommandContext;
+import haxeon.ui.core.Command;
 import haxeon.ui.properties.PropertyValue;
 
 /** Stable property schema plus model read/write/validation hooks. */

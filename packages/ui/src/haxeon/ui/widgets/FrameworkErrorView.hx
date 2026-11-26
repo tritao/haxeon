@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.ui.widgets;
 
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
@@ -9,6 +9,9 @@ import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.text.Text;
 
+import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.View;
 /** Minimal last-resort view for errors raised while building or rendering a frame. */
 class FrameworkErrorView implements View {
 	final message:String;

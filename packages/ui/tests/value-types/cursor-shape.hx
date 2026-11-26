@@ -1,4 +1,3 @@
-import haxeon.ui.core.CursorShape;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
 import nativekit.ffi.NativeKitTypes.NativeCursorShape;

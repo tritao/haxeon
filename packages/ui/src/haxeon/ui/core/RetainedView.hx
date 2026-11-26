@@ -1,5 +1,8 @@
 package haxeon.ui.core;
 
+
+import haxeon.ui.core.Key;
+import haxeon.ui.core.WidgetId;
 /**
  * Reuses a render subtree while its tracked signals, Observable fields and interaction state remain current.
  */

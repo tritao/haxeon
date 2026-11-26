@@ -3,6 +3,7 @@ package haxeon.ui.core;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.semantics.Semantics;
 
+import haxeon.ui.core.RenderNode;
 /** The boundary between a component root and decorations added by its caller.
  * Stored by value on the native scope; it never reconciles or mutates the new body's contents. */
 @:access(haxeon.ui.core.RenderNode) internal struct ScopeRootBoundary {

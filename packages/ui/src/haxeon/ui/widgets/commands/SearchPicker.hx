@@ -8,10 +8,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
-import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.collections.VirtualList;
@@ -159,7 +156,7 @@ class SearchPicker implements View {
 		}
 		input.placeholder = placeholder;
 		input.onSubmit = function(_) {
-			model.navigate(UiKey.Enter, haxeon.ui.core.UiModifier.empty(), 1);
+			model.navigate(UiKey.Enter, haxeon.ui.core.UiEvent.UiModifier.empty(), 1);
 			onChanged();
 		};
 		var focusedInput = new SearchPickerInput(input, function(ctx, node) {

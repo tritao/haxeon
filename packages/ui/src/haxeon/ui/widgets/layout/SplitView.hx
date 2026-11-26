@@ -5,12 +5,10 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.CursorShape;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityRequest;
@@ -138,7 +136,7 @@ class SplitView implements View {
 					lineStyle.height = horizontal ? LayoutAxis.stretch() : LayoutAxis.fixed(dividerExtent);
 					var line = context.createNode(context.rootId("divider-visual"), LayoutVisualKind.Custom, lineStyle);
 					line.hitTestSelf = false;
-					line.cachePolicy = haxeon.ui.core.CachePolicy.None;
+					line.cachePolicy = haxeon.ui.core.RenderNode.CachePolicy.None;
 					line.onPaint(function(canvas, geometry) {
 						var density = context.environment.pixelDensity;
 						var transform = geometry.transform;

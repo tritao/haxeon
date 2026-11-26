@@ -2,6 +2,7 @@ package haxeon.ui.core;
 
 import Hashable;
 
+import haxeon.ui.core.UiEvent;
 /** A normalized key/modifier chord used by application commands. */
 struct Shortcut implements Hashable {
 	/** The key code (`UiKey`); never a modifier key alone. */

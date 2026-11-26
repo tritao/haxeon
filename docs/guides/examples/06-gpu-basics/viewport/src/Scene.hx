@@ -5,7 +5,6 @@ import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
 import haxeon.ui.Color;
 import haxeon.ui.GraphicsSurface;
-import haxeon.ui.core.GraphicsSurfaceViewportContent;
 import haxeon.ui.host.UiOverlay;
 import haxeon.ui.widgets.GpuViewport;
 

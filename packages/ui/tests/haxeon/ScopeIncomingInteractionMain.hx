@@ -8,9 +8,9 @@ import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.style.StyleState;
 
 /** A retained incoming owner must receive interactions queued against the outgoing physical instance. */

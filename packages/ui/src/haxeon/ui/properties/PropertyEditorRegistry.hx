@@ -1,7 +1,7 @@
 package haxeon.ui.properties;
 
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.CommandContext;
+import haxeon.ui.core.Command;
 import haxeon.ui.core.View;
 import haxeon.ui.properties.PropertyValue;
 

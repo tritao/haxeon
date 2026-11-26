@@ -1,18 +1,12 @@
 package haxeon.ui.core;
 
 import haxeon.ui.style.StyleState;
-
 import haxeon.reactive.ReactiveRuntime;
-
 import haxeon.ui.debug.RenderCost;
-
 import haxeon.ui.Color;
 import haxeon.ui.Paint;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
-
-
-
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutChanges;
@@ -26,6 +20,9 @@ import haxeon.ui.style.Decoration;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.semantics.Semantics;
 
+import haxeon.ui.core.Key;
+import haxeon.ui.core.TextStyleOverride;
+import haxeon.ui.core.UiEvent;
 /** One Haxe-owned node joins visual layout, interaction, focus, and state identity. */
 class RenderNode {
 	/** Ordinary nodes carry no scope field; only component body roots override this method. */
@@ -1179,4 +1176,54 @@ private enum HandlerPhase {
 	TargetHandler;
 	BubbleHandler;
 	TargetBubbleHandler;
+}
+
+/** Rendering cache policy for a retained custom-paint plane. */
+typedef CachePolicy = NativeKitUI.UiLayoutCachePolicy;
+
+/** Platform-independent cursor intent for a render node. */
+typedef CursorShape = nativekit.ffi.NativeKitTypes.NativeCursorShape;
+
+/** Controls whether a render node contributes itself, its descendants, or neither to hit testing. */
+enum HitTestBehavior {
+	/** Use the node's legacy hitTestSelf flag and traverse children. */
+	Auto;
+	/** Exclude this node and its entire subtree from hit testing. */
+	None;
+	/** Hit-test this node but do not traverse its children. */
+	SelfOnly;
+	/** Traverse children but never hit-test this node's own bounds. */
+	ChildrenOnly;
+}
+
+/** Work categories used by the style/layout invalidation boundary. */
+enum abstract UiDirtyFlag(Int) implements Flags {
+	/** No work is pending. */
+	var None = 0;
+
+	/** Views must be built again. */
+	var NeedsBuild = 1 << 0;
+
+	/** Computed styles must be resolved again. */
+	var NeedsStyle = 1 << 1;
+
+	/** Text must be shaped again. */
+	var NeedsTextLayout = 1 << 2;
+
+	/** Sizes and positions must be computed again. */
+	var NeedsLayout = 1 << 3;
+
+	/** The UI must be drawn again. */
+	var NeedsPaint = 1 << 4;
+
+	/** Layers must be composited again. */
+	var NeedsComposite = 1 << 5;
+
+	/** What assistive technology is told must be updated. */
+	var NeedsSemantics = 1 << 6;
+	/** Resolved transforms, clips, bounds, or paint order must be refreshed. */
+	var NeedsHitGeometry = 1 << 7;
+
+	/** Work that changes a serialized native node; build/child membership is compared separately. */
+	var NativeInputs = NeedsTextLayout | NeedsLayout | NeedsPaint | NeedsComposite | NeedsHitGeometry;
 }

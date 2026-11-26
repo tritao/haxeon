@@ -1,7 +1,7 @@
 package haxeon.ui.settings;
 
 import Observable;
-import haxeon.ui.core.UiEventPhase;
+import haxeon.ui.core.UiEvent;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -319,9 +319,10 @@ class SettingsPanel implements View implements Observable implements Disposable 
 				focusSearchPending = false;
 			}
 		}
-		root.on(haxeon.ui.core.UiEventKind.KeyDown, function(event) {
-			if (event.key == haxeon.ui.core.UiKey.F && (event.modifiers.contains(haxeon.ui.core.UiModifier.Control)
-				|| event.modifiers.contains(haxeon.ui.core.UiModifier.Super))) {
+		root.on(haxeon.ui.core.UiEvent.UiEventKind.KeyDown, function(event) {
+			if (event.key == haxeon.ui.core.UiKey.F
+				&& (event.modifiers.contains(haxeon.ui.core.UiEvent.UiModifier.Control)
+				|| event.modifiers.contains(haxeon.ui.core.UiEvent.UiModifier.Super))) {
 				if (focusRegion(searchNode)) {
 					event.preventDefault();
 					event.stopPropagation();
@@ -337,11 +338,11 @@ class SettingsPanel implements View implements Observable implements Disposable 
 				return;
 			}
 			if (event.key != haxeon.ui.core.UiKey.F6
-				|| !event.modifiers.remove(haxeon.ui.core.UiModifier.Shift).isEmpty()) return;
+				|| !event.modifiers.remove(haxeon.ui.core.UiEvent.UiModifier.Shift).isEmpty()) return;
 			var regions = [searchNode, categoryNode, inspectorNode];
 			var index = 0;
 			for (i in 0...regions.length) if (regions[i] != null && regions[i].find(event.target) != null) index = i;
-			var step = event.modifiers.contains(haxeon.ui.core.UiModifier.Shift) ? -1 : 1;
+			var step = event.modifiers.contains(haxeon.ui.core.UiEvent.UiModifier.Shift) ? -1 : 1;
 			for (offset in 1...4) if (focusRegion(regions[(index + step * offset + 6) % 3])) {
 				event.preventDefault();
 				event.stopPropagation();

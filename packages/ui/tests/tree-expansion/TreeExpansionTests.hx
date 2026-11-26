@@ -6,7 +6,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.UiContext;
-import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.collections.TreeView;

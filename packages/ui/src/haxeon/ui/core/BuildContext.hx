@@ -16,6 +16,12 @@ import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.theme.Theme;
 
+import haxeon.ui.core.Command;
+import haxeon.ui.core.Key;
+import haxeon.ui.core.LiveTextBinding;
+import haxeon.ui.core.RenderScope;
+import haxeon.ui.core.TextStyleOverride;
+import haxeon.ui.core.WidgetId;
 /** Frame-local identity scopes backed by a persistent UiContext state store. */
 class BuildContext implements Disposable {
 	/** The state widgets keep between builds; `state` reads it for the widget being built. */
@@ -1128,7 +1134,7 @@ class BuildContext implements Disposable {
 	}
 
 	/** Capture inherited values on the native owner, with no mount-path build closures or layout wrapper. */
-	public function mountComponent(component:haxeon.ui.component.ScopeView):RenderNode {
+	public function mountComponent(component:haxeon.ui.core.RenderScope.ScopeView):RenderNode {
 		var previousScope = scope;
 		scope = scope.child(new Key(component.scopeKey()));
 		try {
@@ -1240,7 +1246,7 @@ class BuildContext implements Disposable {
 	}
 
 	/** Keep tracking cleanup local to the direct call, including a throwing body. */
-	function readComponentBody(component:haxeon.ui.component.ScopeView, capture:Dependencies):RenderNode {
+	function readComponentBody(component:haxeon.ui.core.RenderScope.ScopeView, capture:Dependencies):RenderNode {
 		var frame = ReactiveRuntime.enterTracking(capture);
 		try {
 			var result = component.buildBody(this);

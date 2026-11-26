@@ -2,9 +2,9 @@ package haxeon.ui.widgets.controls;
 
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.component.ScopeView;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.Semantics;

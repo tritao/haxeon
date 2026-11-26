@@ -6,7 +6,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
-import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.CanvasView;
 import haxeon.ui.widgets.KeyedView;

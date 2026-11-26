@@ -6,7 +6,7 @@ import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.CommandContext;
+import haxeon.ui.core.Command;
 import haxeon.ui.core.CommandRegistry;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;

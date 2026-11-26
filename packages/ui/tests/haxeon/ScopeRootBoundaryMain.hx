@@ -3,7 +3,7 @@ import haxeon.ui.core.EventDispatcher;
 import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.ScopeRootBoundary;
-import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.WidgetId;
 
 /** Root replacement transfers caller contributions without retaining the previous body. */

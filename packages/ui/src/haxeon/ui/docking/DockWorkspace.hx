@@ -1,6 +1,5 @@
 package haxeon.ui.docking;
 
-import haxeon.ui.core.KeyHash;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Tabs;
 import haxeon.ui.widgets.layout.Column;
@@ -18,9 +17,8 @@ import haxeon.ui.TextStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.InteractionStateSnapshot;
 import haxeon.ui.core.Key;
-import haxeon.ui.core.KeyScope;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.ResourceId;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.core.State;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.View;

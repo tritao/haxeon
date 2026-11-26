@@ -1,6 +1,6 @@
 package haxeon.ui.semantics;
 
-import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEvent;
 
 import haxeon.ui.semantics.Semantics;
 /** Decoded platform accessibility request routed to a Haxe semantic target. */

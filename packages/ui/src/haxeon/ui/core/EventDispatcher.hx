@@ -1,10 +1,12 @@
 package haxeon.ui.core;
 
-import haxeon.ui.core.CursorShape as UiCursorShape;
+import haxeon.ui.core.RenderNode.CursorShape as UiCursorShape;
 import haxeon.ui.style.StyleState;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
+import haxeon.ui.core.Command;
+import haxeon.ui.core.UiEvent;
 /** Capture/target/bubble dispatch with per-pointer hover and pointer capture.
  * Focus, blur and focus-lost capture root to target, then dispatch once at the target without bubbling. */
 class EventDispatcher {
@@ -429,7 +431,8 @@ class EventDispatcher {
 		if (node == null) return;
 		var path = HitTest.pathTo(node);
 		if (path.length > 0) dispatchPath(path,
-			new UiEvent(kind, node.id, 0.0, 0.0, 0.0, 0.0, 0, 0, haxeon.ui.core.UiModifier.empty(), text, data));
+			new UiEvent(kind, node.id, 0.0, 0.0, 0.0, 0.0, 0, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), text,
+			data));
 	}
 
 	/** Dispatches a platform semantic action from its addressed node through capture and bubble. */
@@ -443,7 +446,8 @@ class EventDispatcher {
 		var path = HitTest.pathTo(root.find(id));
 		if (path.length == 0) return false;
 		dispatchPath(path,
-			new UiEvent(kind, id, 0.0, 0.0, deltaX, deltaY, 0, 0, haxeon.ui.core.UiModifier.empty(), text, data));
+			new UiEvent(kind, id, 0.0, 0.0, deltaX, deltaY, 0, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), text,
+			data));
 		return true;
 	}
 
@@ -464,7 +468,7 @@ class EventDispatcher {
 						0.0,
 						0,
 						0,
-						haxeon.ui.core.UiModifier.empty(),
+						haxeon.ui.core.UiEvent.UiModifier.empty(),
 						null,
 						null,
 						0,
@@ -555,7 +559,7 @@ class EventDispatcher {
 				0.0,
 				0,
 				0,
-				haxeon.ui.core.UiModifier.empty(),
+				haxeon.ui.core.UiEvent.UiModifier.empty(),
 				null,
 				null,
 				0,
@@ -574,7 +578,7 @@ class EventDispatcher {
 				0.0,
 				0,
 				0,
-				haxeon.ui.core.UiModifier.empty(),
+				haxeon.ui.core.UiEvent.UiModifier.empty(),
 				null,
 				null,
 				0,

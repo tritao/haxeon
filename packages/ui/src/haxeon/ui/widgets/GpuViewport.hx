@@ -1,26 +1,22 @@
 package haxeon.ui.widgets;
 
-import haxeon.ui.LayoutNode;
-import haxeon.ui.Path;
-
+import Observable;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.GraphicsSurface;
 import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Paint;
+import haxeon.ui.Path;
+import haxeon.ui.Point;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.CachePolicy;
-import haxeon.ui.core.GraphicsSurfaceViewportContent;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.View;
-import haxeon.ui.core.ViewportCamera;
-import haxeon.ui.core.ViewportContent;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleTarget;
 
@@ -312,4 +308,191 @@ class GpuViewport implements View {
 		+ backgroundBottom.red + ":" + backgroundBottom.green + ":" + backgroundBottom.blue + ":" + gridColor.red + ":"
 		+ gridColor.green + ":" + gridColor.blue + ":" + gridColor.alpha + ":" + gridSize + ":"
 		+ (gridEnabled ? "1" : "0");
+}
+
+/** Renderable content contract consumed by the shared GPU viewport node. */
+interface ViewportContent {
+	/** The content width, in logical pixels. */
+	function width():Float;
+
+	/** The content height, in logical pixels. */
+	function height():Float;
+
+	/** Changes whenever the content does, so a viewport repaints only then. */
+	function revision():Int;
+
+	/** Draws the content scaled into `destination` on `canvas`. */
+	function paint(canvas:Canvas, destination:Rect):Void;
+}
+
+/** Camera state shared by GPU viewport widgets and application overlays. */
+class ViewportCamera implements Observable {
+	/** The smallest zoom allowed. */
+	public final minZoom:Float;
+
+	/** The largest zoom allowed. */
+	public final maxZoom:Float;
+
+	/** How many viewport pixels one world unit spans. */
+	public var zoom(default, null):Float;
+
+	/** The world x at the viewport's left edge. */
+	public var panX(default, null):Float;
+
+	/** The world y at the viewport's top edge. */
+	public var panY(default, null):Float;
+
+	/** Counts the camera's changes, so a viewport redraws only when it moved. */
+	public var revision(default, null):Int;
+
+	/**
+	 * A camera at `zoom`, clamped into `minZoom`...`maxZoom`, panned to (`panX`, `panY`). Throws when a value is not
+	 * finite or the zoom range is empty.
+	 */
+	public function new(zoom:Float = 1.0, panX:Float = 0.0, panY:Float = 0.0,
+			minZoom:Float = 0.01, maxZoom:Float = 100.0) {
+		if (!finite(zoom) || !finite(panX) || !finite(panY) || !finite(minZoom) || !finite(maxZoom) || minZoom <= 0.0
+			|| maxZoom < minZoom)
+			throw "Viewport camera values must be finite and ordered";
+		this.minZoom = minZoom;
+		this.maxZoom = maxZoom;
+		this.zoom = clamp(zoom, minZoom, maxZoom);
+		this.panX = panX;
+		this.panY = panY;
+		revision = 1;
+	}
+
+	/** Sets the zoom, clamped into range. Returns whether it changed. Throws when `value` is not finite. */
+	public function setZoom(value:Float):Bool {
+		if (!finite(value))
+			throw "Viewport zoom must be finite";
+		var next = clamp(value, minZoom, maxZoom);
+		if (next == zoom)
+			return false;
+		zoom = next;
+		revision++;
+		return true;
+	}
+
+	/** Sets the pan. Returns whether it changed. */
+	public function setPan(x:Float, y:Float):Bool {
+		if (!finite(x) || !finite(y))
+			throw "Viewport pan must be finite";
+		if (x == panX && y == panY)
+			return false;
+		panX = x;
+		panY = y;
+		revision++;
+		return true;
+	}
+
+	/** Moves the world under the pointer by a screen-space delta. */
+	public function panByScreen(deltaX:Float, deltaY:Float):Bool
+		return setPan(panX - deltaX / zoom, panY - deltaY / zoom);
+
+	/** Keeps the world point under the given viewport point fixed while zooming. */
+	public function zoomAt(factor:Float, viewportX:Float, viewportY:Float):Bool {
+		if (!finite(factor) || factor <= 0.0 || !finite(viewportX) || !finite(viewportY))
+			throw "Viewport zoom gesture values must be finite and positive";
+		var worldX = panX + viewportX / zoom;
+		var worldY = panY + viewportY / zoom;
+		var nextZoom = clamp(zoom * factor, minZoom, maxZoom);
+		if (nextZoom == zoom)
+			return false;
+		zoom = nextZoom;
+		panX = worldX - viewportX / zoom;
+		panY = worldY - viewportY / zoom;
+		revision++;
+		return true;
+	}
+
+	/** Fits a content rectangle into a viewport, preserving its center. */
+	public function fit(contentWidth:Float, contentHeight:Float, viewportWidth:Float,
+			viewportHeight:Float, margin:Float = 16.0):Bool {
+		if (!finite(contentWidth) || !finite(contentHeight) || !finite(viewportWidth) || !finite(viewportHeight)
+			|| contentWidth <= 0.0 || contentHeight <= 0.0 || viewportWidth <= 0.0 || viewportHeight <= 0.0
+			|| margin < 0.0)
+			throw "Viewport fit dimensions must be finite and positive";
+		var availableWidth = Math.max(1.0, viewportWidth - margin * 2.0);
+		var availableHeight = Math.max(1.0, viewportHeight - margin * 2.0);
+		var nextZoom = clamp(Math.min(availableWidth / contentWidth,
+			availableHeight / contentHeight), minZoom, maxZoom);
+		var worldWidth = viewportWidth / nextZoom;
+		var worldHeight = viewportHeight / nextZoom;
+		var nextPanX = (contentWidth - worldWidth) * 0.5;
+		var nextPanY = (contentHeight - worldHeight) * 0.5;
+		if (nextZoom == zoom && nextPanX == panX && nextPanY == panY)
+			return false;
+		zoom = nextZoom;
+		panX = nextPanX;
+		panY = nextPanY;
+		revision++;
+		return true;
+	}
+
+	/** Where the world point (`x`, `y`) appears in the viewport. */
+	public function worldToViewport(x:Float, y:Float):Point
+		return new Point((x - panX) * zoom, (y - panY) * zoom);
+
+	/** The world point under the viewport point (`x`, `y`). */
+	public function viewportToWorld(x:Float, y:Float):Point
+		return new Point(panX + x / zoom, panY + y / zoom);
+
+	static inline function clamp(value:Float, minimum:Float, maximum:Float):Float
+		return Math.max(minimum, Math.min(maximum, value));
+
+	static inline function finite(value:Float):Bool
+		return value == value && value - value == 0.0;
+}
+
+/** Adapts a retained NativeKit GPU image/surface to a viewport content plane. */
+class GraphicsSurfaceViewportContent implements ViewportContent {
+	/** The GPU surface shown. */
+	public final surface:GraphicsSurface;
+
+	/** The content width, in logical pixels. */
+	public final contentWidth:Float;
+
+	/** The content height, in logical pixels. */
+	public final contentHeight:Float;
+
+	/** Counts the changes `invalidate` reports. */
+	public var contentRevision(default, null):Int;
+
+	/** Viewport content showing `surface` at `width` by `height` logical pixels. */
+	public function new(surface:GraphicsSurface, width:Float, height:Float) {
+		if (surface == null || surface.isDisposed() || width <= 0.0 || height <= 0.0 || !finite(width)
+			|| !finite(height))
+			throw "Graphics viewport content requires a live surface and positive dimensions";
+		this.surface = surface;
+		contentWidth = width;
+		contentHeight = height;
+		contentRevision = 1;
+	}
+
+	/** The content width, in logical pixels. */
+	public function width():Float
+		return contentWidth;
+
+	/** The content height, in logical pixels. */
+	public function height():Float
+		return contentHeight;
+
+	/** Changes whenever the surface's pixels do. */
+	public function revision():Int
+		return contentRevision;
+
+	/** Marks the surface pixels as changed without replacing the GPU resource. */
+	public function invalidate():Void
+		contentRevision++;
+
+	/** Draws the surface scaled into `destination`. */
+	public function paint(canvas:Canvas, destination:Rect):Void {
+		if (canvas == null || destination == null)
+			throw "Graphics viewport painting requires a canvas and destination";
+		canvas.drawSurface(surface, destination);
+	}
+
+	static inline function finite(value:Float):Bool
+		return value == value && value - value == 0.0;
 }

@@ -1,9 +1,8 @@
 import haxeon.ui.core.Command;
-import haxeon.ui.core.CommandContext;
 import haxeon.ui.core.CommandRegistry;
 import haxeon.ui.core.Shortcut;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.core.UiModifier;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.properties.PropertyBinding;
 import haxeon.ui.properties.PropertyDescriptor;
 import haxeon.ui.properties.PropertyInspector;
@@ -592,7 +591,7 @@ class SettingsTests {
 		var commands = sampleCommands(log);
 		check(commands.shortcutsFor("editor.palette").length == 2, "registered shortcuts, primary first");
 		commands.setShortcuts("scene.frame", [new Shortcut(UiKey.F2)]);
-		check(commands.dispatch(UiKey.F2, haxeon.ui.core.UiModifier.empty()) && log.join(",") == "frame",
+		check(commands.dispatch(UiKey.F2, haxeon.ui.core.UiEvent.UiModifier.empty()) && log.join(",") == "frame",
 			"a custom binding runs its command");
 		commands.setShortcuts("editor.save", []);
 		check(!commands.dispatch(UiKey.S, UiModifier.Control) && log.length == 1, "an unbound command no longer runs");
@@ -614,7 +613,7 @@ class SettingsTests {
 		check(commands.customShortcutIds().indexOf("plugin.later") >= 0,
 			"bindings for commands not registered yet are kept");
 		commands.register(new Command("plugin.later", "Later", () -> log.push("later")));
-		check(commands.dispatch(UiKey.F5, haxeon.ui.core.UiModifier.empty()) && log[2] == "later",
+		check(commands.dispatch(UiKey.F5, haxeon.ui.core.UiEvent.UiModifier.empty()) && log[2] == "later",
 			"and apply once the command is registered");
 	}
 

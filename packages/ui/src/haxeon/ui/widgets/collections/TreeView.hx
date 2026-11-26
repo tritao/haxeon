@@ -10,13 +10,10 @@ import haxeon.ui.Path;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Dependencies;
 import haxeon.ui.core.Key;
-import haxeon.ui.core.PointerClickSequence;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.icons.IconName;
@@ -24,12 +21,12 @@ import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.widgets.Icon;
 import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.collections.VirtualViewport;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Spacer;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
 
-import haxeon.ui.widgets.collections.VirtualViewport;
 /** Model-backed virtual tree with lazy visible-branch indexing and stable selection state. */
 class TreeView implements View {
 	/**
@@ -1309,4 +1306,26 @@ interface TreeViewModel {
 	function extentAt(key:String):Float;
 	/** The view of the item `key`. */
 	function buildItem(key:String):View;
+}
+
+/** Recognizes a primary double click on the same item across UI rebuilds. */
+internal class PointerClickSequence {
+	var previousKey:String = "";
+	var previousTime:Float = -1.0;
+	var previousX:Float = 0.0;
+	var previousY:Float = 0.0;
+
+	public function new() {}
+
+	public function register(key:String, event:UiEvent):Int {
+		var now = event.timestamp >= 0 ? event.timestamp : Sys.time();
+		var dx = event.x - previousX, dy = event.y - previousY;
+		var doubleClick = event.button == 0 && key == previousKey && previousTime >= 0
+			&& now >= previousTime && now - previousTime <= 0.5 && dx * dx + dy * dy <= 25;
+		previousKey = doubleClick || event.button != 0 ? "" : key;
+		previousTime = now;
+		previousX = event.x;
+		previousY = event.y;
+		return doubleClick ? 2 : 1;
+	}
 }

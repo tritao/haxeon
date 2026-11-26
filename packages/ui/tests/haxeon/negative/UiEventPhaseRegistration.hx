@@ -1,5 +1,5 @@
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.WidgetId;
 
 function main():Int {

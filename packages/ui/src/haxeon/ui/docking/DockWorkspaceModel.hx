@@ -3,7 +3,6 @@ package haxeon.ui.docking;
 import Observable;
 import haxeon.ui.core.Command;
 import haxeon.ui.core.CommandRegistry;
-import haxeon.ui.core.CommandResult;
 import haxeon.ui.docking.DockNode;
 
 import haxeon.ui.docking.DockWorkspaceSnapshot;

@@ -6,9 +6,8 @@ import haxeon.ui.core.EventDispatcher;
 import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.StateStore;
-import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.core.UiModifier;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.controls.Select;
 

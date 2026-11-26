@@ -19,7 +19,7 @@ import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.FontCollection;
 import nativekit.ffi.NativeKit;
-import haxeon.ui.core.CursorShape as UiCursorShape;
+import haxeon.ui.core.RenderNode.CursorShape as UiCursorShape;
 import haxeon.ui.semantics.AccessibilityBridge;
 import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.Semantics;
@@ -36,6 +36,9 @@ import haxeon.ui.debug.UiNodeSnapshot;
 import haxeon.ui.debug.UiStyleInvalidationMetrics;
 import haxeon.ui.debug.UiStyleInvalidationMetrics.UiStyleInvalidationFrame;
 
+import haxeon.ui.core.Command;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.UiEvent;
 /** Owns the frame-local render tree and the Haxe-side UI subsystems. */
 class UiContext implements Disposable {
 	final session:LayoutSession;

@@ -6,8 +6,8 @@ import haxeon.platform.FrameTick;
 import haxeon.platform.Runtime;
 import haxeon.platform.SurfaceFrame;
 import haxeon.platform.WindowOptions;
-import haxeon.ui.core.FrameworkErrorView;
 import haxeon.ui.host.UiOverlay;
+import haxeon.ui.widgets.FrameworkErrorView;
 import nativekit.ffi.NativeKitTypes.WindowFlags;
 
 /** Audio Lab uses one frame for its controls and diagnostics. */

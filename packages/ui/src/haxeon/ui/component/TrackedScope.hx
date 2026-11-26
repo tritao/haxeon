@@ -5,6 +5,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 
+import haxeon.ui.core.RenderScope;
 /** A tracked, independently re-running plain Haxe view body. */
 class TrackedScope implements ScopeView {
 	static final DefaultStyle = new LayoutStyle();

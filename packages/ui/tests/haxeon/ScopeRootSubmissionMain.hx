@@ -8,8 +8,7 @@ import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
-import haxeon.ui.core.UiEventKind;
-import haxeon.ui.core.UiEventPhase;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
 
 /** A cached submission follows a replaced top-level body, with fresh verification on every changed frame. */

@@ -1,4 +1,3 @@
-import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.WidgetId;
 

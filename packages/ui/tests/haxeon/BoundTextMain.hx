@@ -2,8 +2,8 @@ import haxeon.reactive.Signal;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.component.BoundText;
 import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.StateStore;
-import haxeon.ui.core.UiDirtyFlag;
 import haxeon.ui.debug.UiStyleInvalidationMetrics;
 import haxeon.ui.theme.Theme;
 

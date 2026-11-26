@@ -1,4 +1,4 @@
-import haxeon.ui.core.IdSet;
+import haxeon.ui.core.WidgetId;
 
 /** Deletion repairs wraparound clusters and keeps removals allocation free after growth. */
 class IdSetMain {

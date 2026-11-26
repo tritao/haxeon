@@ -1,5 +1,6 @@
 package haxeon.ui.core;
 
+import nativekit.ffi.NativeKitTypes.TouchTool;
 
 /** Routed event shared by capture, target, and bubble handlers. */
 class UiEvent {
@@ -179,4 +180,132 @@ class UiEvent {
 
 	/** Requests cancellation of pointer capture owned by this event's target. */
 	public function cancelPointerCapture():Void pointerCancelRequested = true;
+}
+
+/** Normalized event names routed within the Haxe widget tree. */
+class UiEventKind {
+	/** The pointer moved, over the widget or while it holds the pointer captured. */
+	public static inline var PointerMove:String = "pointerMove";
+
+	/** A button was pressed or a touch began. */
+	public static inline var PointerDown:String = "pointerDown";
+
+	/** A button was released or a touch ended. */
+	public static inline var PointerUp:String = "pointerUp";
+
+	/** A press and release on the same widget, sent to the widget pressed. */
+	public static inline var Click:String = "click";
+
+	/** A wheel or touchpad scroll, by `deltaX` and `deltaY`. */
+	public static inline var Scroll:String = "scroll";
+
+	/** A key was pressed, sent to the focused widget. */
+	public static inline var KeyDown:String = "keyDown";
+
+	/** A key was released. */
+	public static inline var KeyUp:String = "keyUp";
+
+	/** A held key repeated. */
+	public static inline var KeyRepeat:String = "keyRepeat";
+
+	/** The focused widget was activated from the keyboard, by Enter or Space: what a click does for a pointer. */
+	public static inline var Activate:String = "activate";
+
+	/** Text was typed, with the text in `text`. */
+	public static inline var TextInput:String = "textInput";
+
+	/** An input method changed the text it is composing, before committing it with `TextInput`. */
+	public static inline var TextEdit:String = "textEdit";
+
+	/** The pointer came over the widget. */
+	public static inline var HoverEnter:String = "hoverEnter";
+
+	/** The pointer left the widget. */
+	public static inline var HoverLeave:String = "hoverLeave";
+
+	/** The widget became the focused one. */
+	public static inline var Focus:String = "focus";
+
+	/** The window lost focus while the widget held it; its focus comes back with the window's. */
+	public static inline var FocusLost:String = "focusLost";
+
+	/** The widget stopped being the focused one. */
+	public static inline var Blur:String = "blur";
+
+	/** The pointer sequence ended without a release, as when the window loses focus or a gesture takes it over. */
+	public static inline var PointerCancel:String = "pointerCancel";
+
+	/** Assistive technology asked to set the widget's value. */
+	public static inline var AccessibilitySetValue:String = "accessibilitySetValue";
+
+	/** Assistive technology asked to select a range of the widget's text. */
+	public static inline var AccessibilitySetSelection:String = "accessibilitySetSelection";
+
+	/** Assistive technology asked to increase the widget's value, as by a slider step. */
+	public static inline var AccessibilityIncrement:String = "accessibilityIncrement";
+
+	/** Assistive technology asked to decrease the widget's value. */
+	public static inline var AccessibilityDecrement:String = "accessibilityDecrement";
+
+	/** Assistive technology asked the widget to move to its next item or page. */
+	public static inline var AccessibilityMoveNext:String = "accessibilityMoveNext";
+
+	/** Assistive technology asked the widget to move to its previous item or page. */
+	public static inline var AccessibilityMovePrevious:String = "accessibilityMovePrevious";
+}
+
+/** Position of the current delivery in a routed event. Direct notifications use Target. */
+enum UiEventPhase {
+	/** Going down from the root to the target: an ancestor sees the event before the widget does. */
+	Capture;
+
+	/** At the target itself. */
+	Target;
+
+	/** Coming back up from the target to the root. */
+	Bubble;
+}
+
+/** Modifier bit values shared with NativeKit input events. */
+enum abstract UiModifier(Int) implements Flags {
+	/** Either Shift key. */
+	var Shift = 1 << 0;
+
+	/** Either Control key. */
+	var Control = 1 << 1;
+
+	/** Either Alt (Option) key. */
+	var Alt = 1 << 2;
+
+	/** Either Super key: Command on macOS, the Windows key on Windows. */
+	var Super = 1 << 3;
+
+	/** Caps Lock is on. */
+	var CapsLock = 1 << 4;
+
+	/** Num Lock is on. */
+	var NumLock = 1 << 5;
+}
+
+/** Platform touch details preserved on normalized pointer events. */
+class UiTouchData {
+	/** What touched: a finger, a pen or an eraser. */
+	public final tool:TouchTool;
+
+	/** How hard, normalized from 0 to 1; the platform's default when the device does not report it. */
+	public final pressure:Float;
+
+	/** A pen's tilt around the x axis, in the platform's normalized units; 0 when not reported. */
+	public final tiltX:Float;
+
+	/** A pen's tilt around the y axis, in the platform's normalized units; 0 when not reported. */
+	public final tiltY:Float;
+
+	/** Touch details as the platform reports them. */
+	public function new(tool:TouchTool, pressure:Float, tiltX:Float, tiltY:Float) {
+		this.tool = tool;
+		this.pressure = pressure;
+		this.tiltX = tiltX;
+		this.tiltY = tiltY;
+	}
 }

@@ -2,9 +2,8 @@ package haxeon.ui.widgets.commands;
 import haxeon.ui.widgets.overlays.Menu;
 
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.CommandContext;
+import haxeon.ui.core.Command;
 import haxeon.ui.core.CommandRegistry;
-import haxeon.ui.core.CommandResult;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 

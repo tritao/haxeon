@@ -2,6 +2,7 @@ package haxeon.ui.core;
 
 import haxeon.ui.LayoutStyle;
 
+import haxeon.ui.core.RenderNode;
 /** Hit testing and target paths derived from the resolved Haxe render tree. */
 class HitTest {
 	/**
