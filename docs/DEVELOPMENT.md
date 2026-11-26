@@ -299,8 +299,10 @@ The compiler builds itself. Three scripts cover that:
 
 Both bootstrap modes compile the same sorted manifest of every `.hx` file under `src/`, `lib/` and `stdlib/`.
 
-The writer emits HashLink bytecode format version 8 (`HlCode.VERSION`), the newest the decoder in
-`vendor/hashlink/src/code.c` accepts.
+A plain build writes HLB 9, one section per module, which the fork's loader links when it loads the file
+(`vendor/hashlink/src/link.c`, [MODULE_SECTIONS.md](design/MODULE_SECTIONS.md)); stock HashLink does not read it. A live build
+writes the dense HLB 8 (`HlCode.VERSION`) until live patches are made of sections. `bootstrap/compiler.hl` is a plain build, so
+it needs the fork's VM.
 
 ## Prebuilt tools: `haxeon dev tool-path`
 

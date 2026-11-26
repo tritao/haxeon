@@ -26,15 +26,14 @@ makes from the same sources, and its work is proportional to the edit.
   walk and table trim as `IrBodyEdges`; the enum escape reaches follow no function's edges and give the closures and
   map stores they read as inputs, and keep each answer about a supported callable with their results.
 - **Inlining:** `IrInlineCache` keeps each inlined function with everything its result depended on.
-- **Lowering (HashLink):** a function is lowered with relocations instead of table indices (`HlLoweredFunction`); a link step
-  assigns the indices in the order a cold lowering would, so cold and warm output are equal by construction.
-  `HlLoweredCache` keeps the last plain build's lowered functions by name. A build whose metadata tables and function
-  layout are the last build's keeps the last build's tables as well (`HlLinkRecord`): a function kept at its position
-  asks nothing, and what a changed function first asks must be what it first asked last build, except that a String,
-  integer, float or String constant only it asked for, which no other entry names, may give way to a new one at the same
-  index; anything else lowers again with fresh tables. What lowering reads about other entities goes
-  through `HlLoweringView`, which records each answer, and a changed answer lowers the function again. A live build keeps
-  its append-only tables and trusts every lowered function it is not told to regenerate.
+- **Lowering (HashLink):** a function is lowered with its requests to the symbol tables recorded (`HlLoweredFunction`).
+  `HlLoweredCache` keeps the last plain build's lowered functions by name. A function whose IR is the same and whose facts
+  hold is kept as the build that lowered it made it (`HlLink.relocate`, `HlCode.relocations`), and a build whose metadata
+  tables and function layout are the last build's extends the last build's tables (`HlLoweredTables`), so a kept function
+  asks nothing. The module is written as sections that name entries by key, so cold and warm output are equal without
+  making the tables what a cold build's order would ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), section 3). What lowering
+  reads about other entities goes through `HlLoweringView`, which records each answer, and a changed answer lowers the
+  function again. A live build keeps its append-only tables and trusts every lowered function it is not told to regenerate.
 - **Verification:** a function stays verified while it and what the verifier read about the rest of the program
   (`IrVerifyMemo`) are unchanged.
 - **Positions:** an IR location counts from its anchor (`SourceAnchor`, `SourceLocation`), the member declaration it lies in

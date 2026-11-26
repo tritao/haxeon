@@ -1,11 +1,12 @@
 # Module sections and load-time linking (design note)
 
-Status: designed 2026-11-25; the open questions are decided (section 9). Slice 1, the loader, has landed, and slice 2a: the
-compiler writes sections behind `--module-sections`, links them ahead of time, and every reader of modules reads them
-(section 8). Slices 3a and 3b have landed too: homes by declaration, a warm build keeps every section whose encoding would
-read the same, and keeps its functions as they were lowered, with no link or replay (section 3, "As built in slice 3a", "As
-built in slice 3b"). The option stays off until slice 2b flips it. The user's decision: per-module sections and load-time linking replace "stable output indices"
-([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3, [QUERY_ENGINE.md](QUERY_ENGINE.md) row B).
+Status: designed 2026-11-25; the open questions are decided (section 9). Slices 1, 2 and 3 have landed (section 8): the fork's
+loader links sections, every plain HashLink build writes them (slice 2b made them the default and removed the dense plain path,
+"As built in slice 2b"), every reader of modules reads them, and a warm build keeps every section whose encoding would read the
+same and its functions as they were lowered, with no link or replay (section 3, "As built in slice 3a", "As built in slice
+3b"). Live builds stay on HLB 8 until slice 4. The user's decision: per-module sections and load-time linking replace "stable
+output indices" ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3, [QUERY_ENGINE.md](QUERY_ENGINE.md) row B). Plain
+output needs the fork's VM: stock HashLink does not read HLB 9, which the user accepted.
 
 **Problem.** HashLink's function, type, global, string and constant tables are dense and numbered in first-use order, so a
 cold build's index depends on everything lowered before it. A warm build that adds an entry renumbers, relinks and
@@ -311,12 +312,35 @@ None of these can come from a correct compiler. The compiler-side linker (see 5)
   2.209 G against 2.291 G) and back 2.079 G against 2.220 G, one section of 522 encoded; the signature edit 17.73 G against
   18.30 G (slice 3a: 19.06 G against 18.35 G), 14 sections encoded and 14 changed. A cold sectioned build is byte-identical to slice 3a's, and the dense path to
   the one before.
-- **Left for after slice 2b.** The dense path still links and replays, so that a warm HLB 8 build is byte-identical to a cold
-  one: `HlLinkRecord` and `HlKeptTables`, `HlLink.link`, the dense branches of `HlLower.lowerProgramWithNatives` (kept
-  tables, the recorded String constants, `settleKept`, `settleTables`, `verifyLinking`, `sameReplayTable`),
-  `HlSymbolTable.replaceLeaf`, `truncate`, `typesName` and `stringConstantAt`, and `HlRequestKeys.interns`. The sectioned
-  path uses none of them; they go when plain builds stop writing HLB 8, about −650 lines. Live builds keep their own machinery
-  until slice 4.
+- **Left for after slice 2b.** The dense path still linked and replayed, so that a warm HLB 8 build was byte-identical to a
+  cold one. Slice 2b deleted it (below).
+
+### As built in slice 2b
+
+- **The default.** Every plain HashLink build writes sections: the session's (`HashLinkBackendSession`, whenever the build is
+  not live), the CLI's one-shot build, `haxeon run` and the stateless `HlBackend`, which has no modules and so writes one
+  shared section. A live build writes dense HLB 8 until slice 4. With no dense plain path left, `--module-sections`,
+  `CompileOptions.moduleSections`, `HlModuleAssembler.moduleSections`, the test driver's `--module-sections` and the
+  `driver-sections` suite went rather than being inverted (`driver-checked` runs the same builds). Plain output needs the
+  fork's VM; the fork still reads HLB 8 and stock-Haxe bytecode.
+- **One lowering switch.** `HlLower` is relocatable in an assembly that does not trust its cache: it records each function's
+  requests and keeps the functions as lowered (`HlCode.relocations`). A live build, which trusts its cache, and a lowering by
+  itself (`HlLower.lower`, what tests write as HLB 8) are not. `HlWriter.encode` refuses a relocatable module, so whatever
+  writes a plain build takes its bytes through `BackendArtifacts.hashLinkBytes` (the REPL, the language service, the tests that
+  compared or ran a plain build's dense encoding).
+- **Deleted**, about −650 lines of compiler: `HlLinkRecord` and `HlKeptTables`, `HlLink.link`, the kept-table branches of
+  `HlLower.lowerProgramWithNatives` (the recorded String constants, `settleKept`, `settleTables`, the retry with fresh tables),
+  `verifyLinking` and `sameReplayTable`, `HlSymbolTable.replaceLeaf`, `truncate`, `clear`, `typesName` and
+  `stringConstantAt`, and the interning flags of `HlRequestKeys`. `HlLoweredCache.tables` is now the extended tables
+  (`HlLoweredTables`).
+- **Kept for slice 4.** Live builds still assemble on a published layout: the trusted lowered cache (`HlModuleAssembler.livePatching`,
+  `published`), `HlSymbolTable`'s published prefix and `fork`/`shareFrom`/`writable` groups (which the extended tables also
+  use), `HlFunctionCache` slots and stable ids, the dense `HlWriter` with `HlWriterCache`, `HlPatchWriter`/`HlPatchReader`,
+  the persistence codecs and `HlRuntimeIdentity`'s id maps. They go when live patches are made of sections. `HlRemap`,
+  `HlRequestAnswers` and `HlLink.relocate`/`rewritten` stay: they are how a kept function is found in a build's tables.
+- **Bases.** The checked-in compiler (`bootstrap/compiler.hl`) is a module of sections, refreshed to the fixed point of these
+  sources (5.29 MB against 5.75 MB for its last dense refresh), so it needs the fork's VM (`bootstrap-loads` checks it loads).
+  The self-compile oracle compares HLB 9 bytes.
 
 ## 4. Live patching
 
@@ -411,8 +435,8 @@ and perf-guard, including startup.
 |---|---|---|---|---|
 | A | Positions relative to their declaration (in progress elsewhere) | — | — | — |
 | 1 | Fork: `link.c` and the HLB 9 reader beside the dense one. C tests on hand-built two-section modules cover every failure mode, plus `hldump`. Landed: `tests/native/code_link.c` (the `code-link` suite) | +1,500 C (+1,400 C tests) | fork tests; existing suites untouched (the compiler still writes HLB 8) | — |
-| 2 | Compiler: home modules, `HlSectionWriter`, `HlStaticLink`. Plain builds write HLB 9; live builds stay on HLB 8. AOT, `hl-stat` and the binary-size report link statically. **Split.** 2a landed: the writer, the static link, the readers (`HlModuleReader`, hl-stat, the size report, the debugger) and the check that the VM's link equals the static link (`code_link --compare`, the `module-sections` suite, the `driver-sections` suite), with sections behind the typed option `--module-sections`. 2b: plain builds write sections by default, the self-compile oracle and the checked-in bootstrap take their new base | +1,100 / −150 | the self-compile takes its new base. New validation: the VM's link equals `HlStaticLink`'s. The ci debug-metadata suite | 1, A |
-| 3 | Plain warm builds without link and replay. One memo per module section, then folded into engine slice 7. **Split.** 3a landed: homes by declaration and the section memo (section 3, "As built in slice 3a"). 3b landed: functions kept as lowered, tables extended, the memo in section terms (section 3, "As built in slice 3b"); link and replay go with dense plain builds | −1,000 / +150 | `--check-reuse` | 2 |
+| 2 | Compiler: home modules, `HlSectionWriter`, `HlStaticLink`. Plain builds write HLB 9; live builds stay on HLB 8. AOT, `hl-stat` and the binary-size report link statically. **Split.** 2a landed: the writer, the static link, the readers (`HlModuleReader`, hl-stat, the size report, the debugger) and the check that the VM's link equals the static link (`code_link --compare`, the `module-sections` suite, then a `driver-sections` suite), with sections behind the typed option `--module-sections`. 2b landed: plain builds write sections, the option is gone, link and replay are deleted, the self-compile oracle and the checked-in bootstrap took their new base (section 3, "As built in slice 2b") | +1,100 / −150 | the self-compile takes its new base. New validation: the VM's link equals `HlStaticLink`'s. The ci debug-metadata suite | 1, A |
+| 3 | Plain warm builds without link and replay. One memo per module section, then folded into engine slice 7. **Split.** 3a landed: homes by declaration and the section memo (section 3, "As built in slice 3a"). 3b landed: functions kept as lowered, tables extended, the memo in section terms (section 3, "As built in slice 3b"); link and replay went with dense plain builds in 2b | −1,000 / +150 | `--check-reuse` | 2 |
 | 4 | Live patching on sections: HLP 12, the patch linker, loader stable ids, slots and codecs removed, HXR | −2,100 / +500 compiler, −450 / +450 fork | the ci hot-reload suite, the patch mains, `NominalInterfacePatchMain`, an Android watch run; with live pruning ([LIVE_PRUNING.md](LIVE_PRUNING.md) slice 3) | 3 |
 | 5 | Per-class initializer parts in their owning modules. The compiler no longer writes HLB 8 for live builds | −50 / +100 | edit replay on a static-initializer edit | 4 |
 

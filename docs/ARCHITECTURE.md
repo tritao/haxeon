@@ -207,9 +207,11 @@ verification, then HashLink lowering (`HlLower`), then the writer. Each stage ke
 - **Per-function verification.** `IrVerifier` reads the rest of the program only through `IrVerifyTable`s. `IrVerifyMemo` records what
   each accepted function read, so a build verifies the functions that changed and the ones whose reads changed.
 - **Relocatable lowering.** `HlLower` records, for every function, the requests it made to the symbol tables and the facts it read about
-  object types (through `HlLoweringView`, the only way lowering sees another entity). `HlLink` replays them against the next build's tables
-  and gives the function its indices, so a function whose IR and facts are unchanged is linked, not lowered again.
-  `HlLoweredCache` holds the entries.
+  object types (through `HlLoweringView`, the only way lowering sees another entity). `HlLink.relocate` asks them of the next build's
+  tables, so a function whose IR and facts are unchanged is kept as it was lowered, not lowered again; the section writer finds what
+  its indices name there (`HlRelocations`) and names it by key. `HlLoweredCache` holds the entries.
+- **Module sections.** The writer writes one section per module (`HlSectionWriter`, HLB 9), and keeps a section whose encoding
+  would read the same as the last build's, so an edit re-encodes only the sections it changes.
 - **Live patching** uses the same cache with trust instead of replay: append-only tables and stable slots keep a kept function's operands
   valid, so an entry not named in `regenerated` is kept as it is (`HlModuleAssembler.livePatching`).
 
