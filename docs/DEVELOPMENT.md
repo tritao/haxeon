@@ -131,17 +131,27 @@ after the edits and its growth over them. The census counts the bytes of the liv
 to run and machine to machine, so they are gated tightly; the pages the collector keeps mapped move with fragmentation and the
 machine, and are printed beside them, not compared. `--live-owners` runs that session with the full census and prints the live
 data by owner after its last edit, to tell what a regression kept.
-The first run builds haxeon-ui's native libraries, which takes minutes; later runs keep them. The ui app builds NativeKit and
-haxeon-ui's own native libraries, whose submodules `bootstrap-tools.sh` does not fetch; the guard checks that they are at their
-pins before it starts, and names the command that puts them there. In a fresh worktree, before the guard:
+
+The ui app measures the compiler, not the UI library: it is made and built from a frozen input, the app template, the packages it
+compiles (haxeon-ui and the packages it depends on by path, NativeKit's bindings among them) and NativeKit, at the revision
+`ui_input_revision` in `tests/perf/live-baseline.json` names, extracted with `git archive` into `out/perf-guard/live/ui-input-*`
+with the submodules in them at the commits that revision pins (taken from the checkout's clones, a missing commit fetched alone).
+The guard writes the template's files as `haxeon create` does, names the frozen packages as the checkout's registry does (`ui`,
+`platform`, ...), and points the project's `ui` dependency at the frozen copy with `[patch.haxeon]`, so the packages' native
+libraries are built from the frozen sources too and match the frozen bindings. Only the standard library is the checkout's: the
+compiler is built with it. A change to `packages/` or `templates/` therefore leaves the ui metrics where they were. The first run on a revision builds the app's native libraries, which takes minutes; later runs
+keep them (`out/perf-guard/live/ui-app`), and configure them again after a configure that failed. The submodules are read from
+the checkout's clones, which `bootstrap-tools.sh` does not fetch; in a fresh worktree, before the guard:
 
 ```sh
 git submodule update --init --recursive vendor/nativekit packages/ui
 ./scripts/build-native.sh
 ```
 
-After a pin moves, the same command brings them back to it. The guard keeps the app's native build (`out/perf-guard/live/ui-app`)
-between runs, and configures it again after a configure that failed.
+Move `ui_input_revision` deliberately, to measure a newer UI library (or when the frozen one no longer builds with the compiler),
+in a commit of its own that re-records the ui metrics measured on it: set the revision, run `--only=live --update`, and
+`--raise` each ui metric that went up, with the move as its reason. The first run after the move extracts the new input and
+rebuilds the native libraries.
 `--only=self-compile`, `--only=incremental`, `--only=small-project` or `--only=live` runs one part. The `edit-replay-short` suite (`wave`)
 replays the last two commits that change `src/compiler` as warm builds in one server, each checked against a fresh build;
 `edit-replay` (`ci`) replays four. In a shallow clone each fetches the history it needs.

@@ -84,6 +84,7 @@ import functools
 import json
 import os
 import platform
+import re
 import select
 import shutil
 import signal
@@ -144,13 +145,21 @@ def frozen_input(out):
     if not os.path.exists(os.path.join(tree, "sources.txt")):
         shutil.rmtree(tree, ignore_errors=True)
         os.makedirs(tree)
-        # A shallow clone (CI's) lacks the revision: fetch it alone, without the submodules, whose pins it may not reach.
-        if subprocess.run(["git", "cat-file", "-e", revision + "^{tree}"], cwd=ROOT, stderr=subprocess.DEVNULL).returncode != 0:
-            run(["git", "fetch", "--quiet", "--no-recurse-submodules", "--depth=1", "origin", revision])
-        archive = subprocess.run(["git", "archive", revision] + SOURCE_ROOTS, cwd=ROOT, check=True, stdout=subprocess.PIPE).stdout
-        subprocess.run(["tar", "-x", "-C", tree], input=archive, check=True)
+        extract(ROOT, revision, SOURCE_ROOTS, tree)
         list_sources(tree, os.path.join(tree, "sources.txt"))
     return tree, os.path.join(tree, "sources.txt")
+
+
+def extract(repository, revision, paths, tree):
+    """Writes `paths` of `repository` at `revision` into `tree` (git archive), without the submodules in them. A shallow clone
+    (CI's) lacks the revision: it is fetched alone, without the submodules, whose pins it may not reach."""
+    if subprocess.run(["git", "cat-file", "-e", revision + "^{tree}"], cwd=repository,
+                      stderr=subprocess.DEVNULL).returncode != 0:
+        subprocess.run(["git", "fetch", "--quiet", "--no-recurse-submodules", "--depth=1", "origin", revision], cwd=repository,
+                       check=True)
+    archive = subprocess.run(["git", "archive", revision, "--"] + paths, cwd=repository, check=True,
+                             stdout=subprocess.PIPE).stdout
+    subprocess.run(["tar", "-x", "-C", tree], input=archive, check=True)
 
 
 @functools.cache
@@ -809,8 +818,10 @@ def measure_small_project_mode(out, mode, expected_server):
 # (measure_live_growth). The CLI and the server are what a user's edits run on: haxeon-aot, which main builds when it is not
 # current; the metrics that depend on it are named after it (`aot_`).
 #   small   tests/perf/live-project: a host program of three files
-#   ui      the app template (`haxeon create`), a window on haxeon-ui: one file of its own over about 500 of the package's, the
-#           size of program a UI edit recompiles. Runs under xvfb-run; skipped, passing, without it.
+#   ui      the app template, as `haxeon create` makes it, a window on haxeon-ui: one file of its own over about 500 of the
+#           package's, the size of program a UI edit recompiles. Made and built from the template and packages at the baseline's
+#           `ui_input_revision` (frozen_ui_input), so a change to the UI library does not move its metrics. Runs under
+#           xvfb-run; skipped, passing, without it.
 LIVE_BASELINE = os.path.join(ROOT, "tests", "perf", "live-baseline.json")
 LIVE_PROJECT = os.path.join(ROOT, "tests", "perf", "live-project")
 LIVE_WARM_EDITS = 2
@@ -840,23 +851,14 @@ def live_apps(work):
         shutil.copytree(LIVE_PROJECT, project)
 
     def ui(project):
-        # The native build of haxeon-ui takes minutes; it is kept between runs, and the template's files are written afresh.
-        for name in (os.path.join("src", "Main.hx"), "haxeon.toml", "haxeon.lock"):
-            if os.path.exists(os.path.join(project, name)):
-                os.remove(os.path.join(project, name))
-        os.makedirs(project, exist_ok=True)
-        with open(os.path.join(work, "ui-create.log"), "w") as log:
-            status = subprocess.run([os.path.join(ROOT, "scripts", "haxeon"), "create", "."], cwd=project, stdout=log,
-                                    stderr=subprocess.STDOUT).returncode
-        if status != 0:
-            raise SystemExit(f"perf-guard: haxeon create failed for the live ui app (exit {status}); log: {log.name}")
+        prepare_ui_project(project, frozen)
 
     apps = [LiveApp("small", small, os.path.join("src", "model", "Counter.hx"),
                     lambda index: f"return {index + 1};",
                     (os.path.join("src", "model", "Report.hx"), "static function label(value:Int):String",
                      "static function label(value:Int, ?suffix:String):String"))]
     if shutil.which("xvfb-run"):
-        check_ui_submodules()
+        frozen = frozen_ui_input(work)
         apps.append(LiveApp("ui", ui, os.path.join("src", "Main.hx"),
                             lambda index: "times')" if index == 0 else f"times ({index})')",
                             (os.path.join("src", "Main.hx"), "static function options():UiHostOptions",
@@ -866,24 +868,136 @@ def live_apps(work):
     return apps
 
 
-# The native sources the ui app builds: NativeKit and haxeon-ui's own libraries, each with submodules of its own, which
-# bootstrap-tools.sh does not fetch.
-UI_SUBMODULES = [os.path.join("vendor", "nativekit"), os.path.join("packages", "ui")]
+# What the ui app is made and built from, at the live baseline's `ui_input_revision`: the app template, the packages it compiles
+# (haxeon-ui and the packages it depends on by path, NativeKit's bindings among them) and NativeKit, with every submodule in them,
+# whose native libraries the app builds. The standard library is the checkout's: the compiler is built with it.
+UI_INPUT_ROOTS = [os.path.join("templates", "app")] + [os.path.join("packages", name)
+                                                      for name in ("ui", "platform", "gpu", "editor", "nativekit")] + [
+                     os.path.join("vendor", "nativekit")]
 
 
-def check_ui_submodules():
-    """Fails, naming the command that fixes it, when a submodule the ui app builds is not checked out at its pin: a worktree
-    that has none gets as far as the native build and fails there, one at another revision fails on a header."""
-    status = subprocess.run(["git", "submodule", "status", "--recursive", "--"] + UI_SUBMODULES, cwd=ROOT, check=True,
-                            stdout=subprocess.PIPE, text=True).stdout
-    stale = [line[1:].split()[1] for line in status.splitlines() if line[:1] in ("-", "+", "U")]
-    if stale:
-        raise SystemExit("perf-guard: the live ui app needs these submodules at their pins: " + ", ".join(stale) + "; run "
-                         "git submodule update --init --recursive " + " ".join(UI_SUBMODULES))
+def frozen_ui_input(work):
+    """The tree of UI_INPUT_ROOTS at the live baseline's `ui_input_revision`, made once per revision, the layout of a checkout's,
+    so the packages' paths to each other and to NativeKit hold."""
+    with open(LIVE_BASELINE) as source:
+        revision = json.load(source)["ui_input_revision"]
+    tree = os.path.join(work, "ui-input-" + revision[:12])
+    complete = os.path.join(tree, ".complete")
+    if not os.path.exists(complete):
+        for name in os.listdir(work):
+            if name.startswith("ui-input-"):
+                shutil.rmtree(os.path.join(work, name))
+        os.makedirs(tree)
+        extract(ROOT, revision, UI_INPUT_ROOTS, tree)
+        extract_submodules(ROOT, "", revision, UI_INPUT_ROOTS, tree)
+        name_as_registry(tree)
+        open(complete, "w").close()
+    return tree
+
+
+def name_as_registry(tree):
+    """Names each package of the frozen input, and its dependencies, as the checkout's haxeon registry does (its directory's
+    name, project.RegistryPublisher.publishedManifest), so the app's [patch.haxeon] can point `ui` at it. The dependencies
+    between them stay paths, within the frozen input."""
+    packages = os.path.join(tree, "packages")
+    for name in os.listdir(packages):
+        path = os.path.join(packages, name, "haxeon.json")
+        with open(path) as source:
+            manifest = json.load(source)
+        manifest["package"]["name"] = name
+        manifest["dependencies"] = {os.path.basename(os.path.normpath(value["path"])) if "path" in value else key: value
+                                    for key, value in manifest.get("dependencies", {}).items()}
+        with open(path, "w") as target:
+            json.dump(manifest, target, indent="\t")
+
+
+def extract_submodules(repository, relative, revision, paths, tree):
+    """Writes into `tree` the submodules in `paths` of `repository` (at `relative` in the checkout) at `revision`, at the commits
+    it pins, from the checkout's clones of them, and theirs in turn."""
+    listing = subprocess.run(["git", "ls-tree", "-r", "-z", revision, "--"] + paths, cwd=repository, check=True,
+                             stdout=subprocess.PIPE, text=True).stdout
+    for entry in listing.split("\0"):
+        if not entry.startswith("160000 "):
+            continue
+        commit, path = entry.split(" ", 2)[2].split("\t", 1)
+        submodule = os.path.join(relative, path)
+        clone = os.path.join(ROOT, submodule)
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=clone, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, text=True).stdout.strip() if os.path.isdir(clone) else ""
+        if not top or os.path.realpath(top) != os.path.realpath(clone):
+            raise SystemExit(f"perf-guard: the live ui app is built from {submodule}, which is not checked out; run "
+                             "git submodule update --init --recursive vendor/nativekit packages/ui")
+        os.makedirs(os.path.join(tree, submodule), exist_ok=True)
+        extract(clone, commit, [], os.path.join(tree, submodule))
+        extract_submodules(clone, submodule, commit, [], tree)
+
+
+def prepare_ui_project(project, frozen):
+    """The ui app's project, the template of the frozen input as `haxeon create` makes it, with haxeon-ui patched to the frozen
+    input's copy ([patch.haxeon]). Its native build takes minutes: it is kept between runs on one revision, and dropped when the
+    revision moves. Each run writes the template's files afresh, leaving the unchanged ones untouched for that build."""
+    stamp = project + ".input"
+    if not os.path.exists(stamp) or open(stamp).read() != frozen:
+        shutil.rmtree(project, ignore_errors=True)
+    os.makedirs(project, exist_ok=True)
+    with open(stamp, "w") as target:
+        target.write(frozen)
+    lock = os.path.join(project, "haxeon.lock")
+    if os.path.exists(lock):
+        os.remove(lock)
+    template = os.path.join(frozen, "templates", "app")
+    # `haxeon create`'s placeholders (tools.ProjectCreator), for the package the project's directory names, every platform the
+    # template has a runner for, and the CLI's version.
+    package = os.path.basename(project)
+    version = re.match(r"haxeon (\d+\.\d+)\.", run([os.path.join(ROOT, "scripts", "haxeon"), "--version"])).group(1)
+    platforms = sorted(name for name in os.listdir(template) if name in APP_PLATFORMS)
+    values = {"package": package, "name": " ".join(word[:1].upper() + word[1:] for word in re.split(r"[-_]+", package) if word),
+              "id": "com.example." + package.replace("-", "_").lower(), "haxeon_version": version,
+              "platforms": "[" + ", ".join(f'"{name}"' for name in platforms) + "]"}
+    for directory, _, names in os.walk(template):
+        for name in names:
+            source = os.path.join(directory, name)
+            relative = os.path.relpath(source, template)
+            if relative.endswith(".template"):
+                relative = relative[:-len(".template")]
+            with open(source, "rb") as content:
+                data = content.read()
+            if not name.endswith(".jar"):
+                data = fill_template(data.decode(), values, relative).encode()
+            if relative == "haxeon.toml":
+                data += ("\n[patch.haxeon]\nui = { path = \"" + os.path.relpath(os.path.join(frozen, "packages", "ui"), project)
+                         + "\" }\n").encode()
+            write_changed(os.path.join(project, relative), data, os.stat(source).st_mode)
+
+
+# The platforms an app's runner can be for (project.PackageManifest.AppManifest.PLATFORMS).
+APP_PLATFORMS = ("linux", "windows", "macos", "android", "web", "ios")
+
+
+def fill_template(text, values, path):
+    def value(match):
+        if match.group(1) not in values:
+            raise SystemExit(f"perf-guard: the ui app template's {path} has a placeholder {{{{{match.group(1)}}}}} the guard does "
+                             "not fill; add it to prepare_ui_project as tools.ProjectCreator fills it")
+        return values[match.group(1)]
+
+    return re.sub(r"\{\{(.*?)\}\}", value, text)
+
+
+def write_changed(path, data, mode):
+    """Writes `data` to `path` unless it holds it already, so a build that is kept sees no change there."""
+    if os.path.exists(path):
+        with open(path, "rb") as current:
+            if current.read() == data:
+                return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as target:
+        target.write(data)
+    os.chmod(path, mode & 0o777)
 
 
 def live_project(work, app):
-    """Where `app`'s project is built. The directory names the package `haxeon create` makes, so it is not a dependency's name."""
+    """Where `app`'s project is built. The directory names the app's package, so it is not a dependency's name."""
     return os.path.join(work, app.name + "-app")
 
 
