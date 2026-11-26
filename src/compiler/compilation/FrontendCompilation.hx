@@ -1189,6 +1189,15 @@ class FrontendCompilation {
 			return fn != null && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
 				&& (fn.physicalOwner == null || !currentSpecializedOwners.exists(fn.physicalOwner));
 		}
+		// Whether `unit` is a source function its module no longer declares: the prune drops it with its record after this, and a
+		// fresh build would not have typed it, so what it asked for is not reached through it.
+		var owners = build.semanticAssembly.owners;
+		function removed(record:compiler.semantic.DeclarationFacts.UnitReads, unit:String):Bool {
+			if (typedByName.exists(unit) || owners.exists(unit))
+				return false;
+			var state = modules.get(record.module), fn = state == null ? null : state.typedFunctions.get(unit);
+			return fn != null && fn.originKind == null;
+		}
 		var reached:Map<String, Bool> = [],
 			pending:Array<compiler.semantic.DeclarationFacts.UnitReads> = [];
 		function reach(record:compiler.semantic.DeclarationFacts.UnitReads):Void {
@@ -1209,7 +1218,7 @@ class FrontendCompilation {
 		for (id in 0...facts.resultLimit) {
 			var record = facts.unitRecord(id);
 			if (record != null && record.specializations != null && inBuild.exists(record.module)
-				&& !reachedOnly(record, facts.name(id)))
+				&& !reachedOnly(record, facts.name(id)) && !removed(record, facts.name(id)))
 				reach(record);
 		}
 		var next = 0;
