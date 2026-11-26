@@ -449,6 +449,9 @@ private class IrTypeAwareWalkState {
 		if (!reached.exists(name) && fn != null) {
 			pending.push(name);
 			if (root) {
+				var session = memo;
+				if (session != null)
+					session.signature(fn);
 				create(fn.result);
 				for (argument in fn.arguments)
 					create(argument.type);

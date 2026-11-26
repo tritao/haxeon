@@ -29,19 +29,29 @@ class IrWalkTables {
 	}
 
 	/** Whether two functions of one name declare the same to a walk: provider row, retention and signature. */
-	public static function sameDeclaration(left:IrFunction, right:IrFunction):Bool {
-		if (left.retention != right.retention || left.arguments.length != right.arguments.length
-			|| !IrTypeIdentity.same(left.result, right.result))
+	public static function sameDeclaration(left:IrFunction, right:IrFunction):Bool
+		return sameRole(left, right) && sameSignature(left, right);
+
+	/** Whether two functions of one name have the same role in a walk: retention and provider row. */
+	public static function sameRole(left:IrFunction, right:IrFunction):Bool {
+		if (left.retention != right.retention)
 			return false;
-		for (index in 0...left.arguments.length)
-			if (!IrTypeIdentity.same(left.arguments[index].type, right.arguments[index].type))
-				return false;
 		return switch [left.provides, right.provides] {
 			case [None, None]: true;
 			case [Serves(leftType, leftOperation), Serves(rightType, rightOperation)]:
 				leftOperation == rightOperation && leftType.toString() == rightType.toString();
 			default: false;
 		};
+	}
+
+	/** Whether two functions of one name have the same argument and result types. */
+	public static function sameSignature(left:IrFunction, right:IrFunction):Bool {
+		if (left.arguments.length != right.arguments.length || !IrTypeIdentity.same(left.result, right.result))
+			return false;
+		for (index in 0...left.arguments.length)
+			if (!IrTypeIdentity.same(left.arguments[index].type, right.arguments[index].type))
+				return false;
+		return true;
 	}
 
 	/**

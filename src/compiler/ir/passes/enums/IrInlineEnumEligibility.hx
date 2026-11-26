@@ -198,6 +198,8 @@ class IrInlineEnumEligibility {
 				var fn = functions.get(method.functionName.name);
 				if (fn == null)
 					continue;
+				if (memo != null)
+					memo.signature(fn);
 				var node = named(objectNodes, object.name);
 				for (argument in fn.arguments)
 					depend(node, argument.type);
@@ -242,6 +244,8 @@ class IrInlineEnumEligibility {
 					var fn = functions.get(method.functionName.name);
 					if (fn == null)
 						continue;
+					if (memo != null)
+						memo.signature(fn);
 					for (argument in fn.arguments)
 						value(argument.type, "ordinary method signature");
 					value(fn.result, "ordinary method signature");
@@ -258,7 +262,7 @@ class IrInlineEnumEligibility {
 			escape(native.result, "C native signature");
 		}
 		for (index in 0...program.functions.length)
-			replay(program.functions[index], uses[index], program.entryPoint);
+			replay(program.functions[index], uses[index], program.entryPoint, memo);
 		// One walk for every reason: an enum is blocked for the first reason, in order, whose roots reach it.
 		var rooted = [for (reason in escapeOrder) if (escapeRoots.get(reason) != null) reason],
 			reachedEach = reflectionReach.collectEach(ESCAPES, [for (reason in rooted) escapeRoots.get(reason) ?? []],
@@ -291,8 +295,11 @@ class IrInlineEnumEligibility {
 	}
 
 	/** What one function's rows let escape or keep in value form (its record, `IrInlineEnumUses`), and its verified callable descriptors. */
-	function replay(fn:IrFunction, uses:IrInlineEnumUses, entryPoint:String):Void {
+	function replay(fn:IrFunction, uses:IrInlineEnumUses, entryPoint:String,
+			memo:Null<compiler.ir.reuse.IrWalkMemo<IrInlineEnumUses, IrInlineEnumDecision>>):Void {
 		if (fn.retention == Expose || fn.name == entryPoint) {
+			if (memo != null)
+				memo.signature(fn);
 			for (argument in fn.arguments)
 				escape(argument.type, "host signature");
 			escape(fn.result, "host signature");

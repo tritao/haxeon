@@ -251,6 +251,8 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 			for (id in record.kindTypes)
 				escape(IrTypeIds.type(id));
 			if (fn.retention == Expose || fn.name == program.entryPoint) {
+				if (memo != null)
+					memo.signature(fn);
 				for (a in fn.arguments)
 					escape(a.type);
 				escape(fn.result);
@@ -266,6 +268,8 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 					escapeId(type);
 				else {
 					var target = names.get(name);
+					if (target != null && memo != null)
+						memo.signature(target);
 					if (target != null && position < target.arguments.length && switch target.arguments[position].type {
 						case Dyn: true;
 						default: false;

@@ -115,12 +115,13 @@ class IrNullableScalarFlow extends IrFunctionPass {
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		originals = functions;
 		var known = stageMemos,
-			memo:Null<compiler.ir.reuse.IrWalkMemo<IrFunction, NullableScalarChoice>> = null,
+			memo:Null<compiler.ir.reuse.IrWalkMemo<IrNullableCandidateRead, NullableScalarChoice>> = null,
 			kept:Null<NullableScalarChoice> = null;
 		if (known != null) {
-			var step:compiler.ir.reuse.IrWalkMemo<IrFunction, NullableScalarChoice> = known.step(CHOICE, sameFunction);
-			// The choice reads nothing of the program but these functions, so a changed one is chosen again.
-			kept = step.kept(known.database, program, functions, [], [], readWhole);
+			var step:compiler.ir.reuse.IrWalkMemo<IrNullableCandidateRead, NullableScalarChoice> = known.step(CHOICE,
+				IrNullableCandidateRead.same);
+			// The choice reads nothing of the program but the functions that may be candidates, so a changed one is chosen again.
+			kept = step.kept(known.database, program, functions, [], [], candidateRead);
 			memo = step;
 		}
 		var made = new IrBodyNullableScalars(scratch, candidates, helpers);
@@ -150,11 +151,9 @@ class IrNullableScalarFlow extends IrFunctionPass {
 				inputs.set(name, fn.version);
 	}
 
-	static function readWhole(fn:IrFunction):IrFunction
-		return fn;
-
-	static function sameFunction(left:IrFunction, right:IrFunction):Bool
-		return left == right;
+	/** What the choice reads of `fn`: all of it when it may be a candidate (`summarize`), else nothing. */
+	function candidateRead(fn:IrFunction):IrNullableCandidateRead
+		return summarize(fn) & MAY_BE_CANDIDATE != 0 ? new IrNullableCandidateRead(fn) : IrNullableCandidateRead.NONE;
 
 	/**
 	 * Chooses into `chosen` the candidates among `functions` (by their summaries), which it returns; the helpers their analysis
@@ -162,13 +161,14 @@ class IrNullableScalarFlow extends IrFunctionPass {
 	 */
 	function choose(functions:Array<IrFunction>, summaries:Array<Int>, chosen:Map<String, IrFunction>,
 			needs:Map<String, IrType>,
-			memo:Null<compiler.ir.reuse.IrWalkMemo<IrFunction, NullableScalarChoice>>):Map<String, IrFunction> {
-		for (index in 0...functions.length)
-			if (summaries[index] & MAY_BE_CANDIDATE != 0) {
+			memo:Null<compiler.ir.reuse.IrWalkMemo<IrNullableCandidateRead, NullableScalarChoice>>):Map<String, IrFunction> {
+		// Whether a function may be a candidate is read of every function: it changes with the signature.
+		for (index in 0...functions.length) {
+			if (memo != null)
+				memo.summary(functions[index]);
+			if (summaries[index] & MAY_BE_CANDIDATE != 0)
 				chosen.set(functions[index].name, functions[index]);
-				if (memo != null)
-					memo.summary(functions[index]);
-			}
+		}
 		var analysis = new IrBodyNullableScalars(scratch, chosen, needs), builder = scratch.bodyBuilder, changed = true;
 		while (changed) {
 			changed = false;
@@ -687,4 +687,20 @@ class IrBodyNullableScalars {
 		var left = body.operand(row, 0), right = body.operand(row, 1);
 		return (isCandidate(left) && isNull(right)) || (isCandidate(right) && isNull(left));
 	}
+}
+
+/** What the nullable scalar flow's choice reads of a function (`IrNullableScalarFlow.CHOICE`): all of it when it may be a candidate. */
+@:nullSafety(Strict)
+class IrNullableCandidateRead {
+	/** A function that may not be a candidate, of which the choice reads nothing. */
+	@:processWide("a shared immutable marker")
+	public static final NONE = new IrNullableCandidateRead(null);
+
+	public final candidate:Null<IrFunction>;
+
+	public function new(candidate:Null<IrFunction>)
+		this.candidate = candidate;
+
+	public static function same(left:IrNullableCandidateRead, right:IrNullableCandidateRead):Bool
+		return left.candidate == right.candidate;
 }

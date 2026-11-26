@@ -40,6 +40,9 @@ class IrEnumEscapeReach {
 
 	final mapLog:Array<Int> = [];
 
+	/** The session's walk or step under way, which records the signatures the reach reads (`IrWalkMemo.signature`). */
+	var recording:Null<compiler.ir.reuse.IrWalkMemo<Dynamic, Dynamic>> = null;
+
 	/**
 	 * `scans`, when given, tells the functions whose closures and map stores to read: the others have none.
 	 */
@@ -88,7 +91,9 @@ class IrEnumEscapeReach {
 		memo.begin(stageMemos.database);
 		for (fn in program.functions)
 			reach.give(memo.summary(fn));
+		reach.recording = cast memo;
 		var result = reach.collect(roots, _ -> false);
+		reach.recording = null;
 		memo.end(stageMemos.database, result.copy());
 		return result;
 	}
@@ -277,6 +282,7 @@ class IrEnumEscapeReach {
 			return [for (result in kept.results) result.copy()];
 		}
 		memo.begin(stageMemos.database);
+		recording = cast memo;
 		var asked:Array<IrType> = [], answers:Array<Bool> = [];
 		var results = walkEach(lists, type -> {
 			var answer = supportsCallableEscape(type);
@@ -284,6 +290,7 @@ class IrEnumEscapeReach {
 			answers.push(answer);
 			answer;
 		});
+		recording = null;
 		memo.end(stageMemos.database,
 			{results: [for (result in results) result.copy()], asked: asked, answers: answers});
 		return results;
@@ -509,6 +516,9 @@ class IrEnumEscapeReach {
 			for (method in current.methods) {
 				var fn = functions.get(method.functionName.name);
 				if (fn != null) {
+					var session = recording;
+					if (session != null)
+						session.signature(fn);
 					var signature = Function([for (argument in fn.arguments) argument.type], fn.result);
 					inspect(signature, false);
 					walkReferences(signature);

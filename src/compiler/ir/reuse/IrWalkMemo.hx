@@ -11,12 +11,13 @@ import compiler.query.QueryKind.QueryRead;
 /**
  * A whole-program walk or step at one place in the pipeline as a kind of the session's database (docs/design/QUERY_ENGINE.md,
  * Whole-program steps): what it reads, settled once per build (`settle`), and the memo of its result, whose reads are keys of the
- * kind. Key 0 is what its caller gave it, the program's tables (`IrWalkTables`) and the names, order and declarations of the
- * functions it may read; key `k + 1` is the summary `S` of the function whose name's number is `k` (its edges, `IrWalkSummary`, or
- * what a step reads of it), read where the walk follows it (`summary`). Each changes when what it stands for does: a function given
- * as the same object as last build is not looked at, one that is not is compared by its declaration and, when the walk reads
- * summaries, its summary (`same`). The memo holds while none of its reads changed since it was verified, and a build then takes
- * its result without walking (`kept`).
+ * kind. Key 0 is what its caller gave it, the program's tables (`IrWalkTables`) and the names, order, retention and provider rows
+ * of the functions it may read; for the function whose name's number is `k`, key `2k + 1` is its summary `S` (its edges,
+ * `IrWalkSummary`, or what a step reads of it), read where the walk follows it (`summary`), and key `2k + 2` its signature, read
+ * where the walk reads its arguments' or result's types (`signature`). Each changes when what it stands for does: a function given
+ * as the same object as last build is not looked at, one that is not is compared by its role, its signature and, when the walk
+ * reads summaries, its summary (`same`). The memo holds while none of its reads changed since it was verified, and a build then
+ * takes its result without walking (`kept`): an edit of a signature only the walks that read it decide again.
  */
 @:nullSafety(Strict)
 class IrWalkMemo<S, R> extends QueryKindBase {
@@ -51,7 +52,12 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 	/** `--check-reuse` in the walk under way: each summary it reads is read again from its function and compared. */
 	var checking = false;
 
-	/** By key, the walk that last read it, so a walk records each read once. */
+	/**
+	 * By key, the walk that last read the function's keys and which it read (1 its summary, 2 its signature), so a walk records
+	 * each read once.
+	 */
+	var readWalk:Array<Int> = [];
+
 	var readIn:Array<Int> = [];
 
 	var walks = 0;
@@ -104,20 +110,23 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 				summaries.resize(length);
 				QueryRead.extend(seen, length);
 				QueryRead.extend(readIn, length);
-				QueryRead.extend(changes, length + 1);
+				QueryRead.extend(readWalk, length);
+				QueryRead.extend(changes, 2 * length + 1);
 			}
 			seen[key] = stamp;
 			var last = kept[key];
 			if (last == fn)
 				continue;
-			if (last == null || !IrWalkTables.sameDeclaration(fn, last))
+			if (last == null || !IrWalkTables.sameRole(fn, last))
 				whole = true;
+			else if (!IrWalkTables.sameSignature(fn, last))
+				changes[2 * key + 2] = revision;
 			// The summary is found before the function is kept: this walk's own, of the function it held, is not `fn`'s.
 			if (read != null) {
 				var before = summaries[key], now = sharedSummary(key, fn, read);
 				summaries[key] = now;
 				if (before == null || !same(before, now))
-					changes[key + 1] = revision;
+					changes[2 * key + 1] = revision;
 			}
 			kept[key] = fn;
 		}
@@ -128,7 +137,8 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 			if (seen[key] != stamp) {
 				kept[key] = null;
 				summaries[key] = null;
-				changes[key + 1] = revision;
+				changes[2 * key + 1] = revision;
+				changes[2 * key + 2] = revision;
 			}
 		this.order = [for (fn in functions) fn.symbol.functionKey()];
 	}
@@ -186,25 +196,45 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 
 	/** The summary of `fn`, one of the functions settled, recorded as a read of the walk under way. */
 	public function summary(fn:IrFunction):S {
-		var key = fn.symbol.functionKey(),
-			known = key < summaries.length && functions[key] == fn ? summaries[key] : null,
-			read = reader;
+		var key = settledKey(fn, "summary"), known = summaries[key], read = reader;
 		if (known == null)
-			throw new InternalError('the walk $kindName reads the summary of ${fn.name}, which it did not settle');
+			throw new InternalError('the walk $kindName reads the summary of ${fn.name}, which it settled without one');
 		if (checking && read != null && !same(known, read(fn)))
 			throw new InternalError('--check-reuse: the walk $kindName reused a summary of ${fn.name} that differs from its instructions');
-		if (recording && readIn[key] != walks) {
-			readIn[key] = walks;
-			reads.push(key + 1);
+		if (recording && readIn[key] & 1 == 0) {
+			readIn[key] |= 1;
+			reads.push(2 * key + 1);
 		}
 		return known;
+	}
+
+	/** Records that the walk under way reads the types of the arguments and result of `fn`, one of the functions settled. */
+	public function signature(fn:IrFunction):Void {
+		var key = settledKey(fn, "signature");
+		if (recording && readIn[key] & 2 == 0) {
+			readIn[key] |= 2;
+			reads.push(2 * key + 2);
+		}
+	}
+
+	/** The key of `fn`, which the walk must have settled as that object; a walk reads its `what` (`summary`, `signature`). */
+	function settledKey(fn:IrFunction, what:String):Int {
+		var key = fn.symbol.functionKey();
+		if (key >= functions.length || functions[key] != fn)
+			throw new InternalError('the walk $kindName reads the $what of ${fn.name}, which it did not settle');
+		if (recording && readWalk[key] != walks) {
+			readWalk[key] = walks;
+			readIn[key] = 0;
+		}
+		return key;
 	}
 
 	override public function changedAt(database:QueryDatabase, key:Int):Int
 		return key < changes.length ? changes[key] : database.revision;
 
 	override public function describe(key:Int):String
-		return kindName + "(" + (key == 0 ? "program" : compiler.ir.model.IrSymbol.ofFunctionKey(key - 1).name) + ")";
+		return kindName + "(" + (key == 0 ? "program" : (key & 1 == 1 ? "summary of " : "signature of ")
+			+ compiler.ir.model.IrSymbol.ofFunctionKey((key - 1) >> 1).name) + ")";
 
 	public function clear():Void {
 		tables = null;
@@ -215,6 +245,7 @@ class IrWalkMemo<S, R> extends QueryKindBase {
 		summaries = [];
 		seen = [];
 		readIn = [];
+		readWalk = [];
 		result = null;
 		reader = null;
 		reads.resize(0);

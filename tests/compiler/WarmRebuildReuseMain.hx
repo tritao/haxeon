@@ -592,6 +592,45 @@ class WarmRebuildReuseMain {
 					"Main.hx"
 						=> "class Main { static function main():Int return Same.boxes(new Box(Pair(1, 1)), new Box(Pair(1, 2))) ? 1 : 42; }"
 				]
+			},
+			// The walks and steps read a signature as a key of its own: an edit of a signature alone must reach them.
+			{
+				label: "an enum kept inline after a method's signature gains it",
+				files: [
+					"Small.hx" => "enum Small { A; B(i:Int); }",
+					"Holder.hx"
+						=> "class Holder { public function new() {} public function take(i:Int):Int return i; }",
+					"Main.hx"
+						=> "class Main { static function main():Int { var s = Small.B(2); var n = switch s { case B(i): i; case A: 0; }; return new Holder().take(n); } }"
+				],
+				edit: [
+					"Holder.hx"
+						=> "class Holder { public function new() {} public function take(i:Int, ?s:Small):Int return i; }"
+				]
+			},
+			{
+				label: "a closed tag after the argument a function passes it to becomes dynamic",
+				files: [
+					"Tag.hx" => "enum Tag { Red; Green; }",
+					"Sink.hx" => "class Sink { public static function keep(x:Tag):Int return x == Tag.Red ? 1 : 2; }",
+					"Main.hx" => "class Main { static function main():Int return Sink.keep(Tag.Green) + 40; }"
+				],
+				edit: [
+					"Sink.hx"
+						=> "class Sink { public static function keep(x:Dynamic):Int return x == Tag.Red ? 1 : 2; }"
+				]
+			},
+			{
+				label: "a nullable scalar candidate after its argument becomes nullable",
+				files: [
+					"Count.hx"
+						=> "class Count { @:noInline public static function plus(x:Int):Int return x + 1; }",
+					"Main.hx" => "class Main { static function main():Int return Count.plus(41); }"
+				],
+				edit: [
+					"Count.hx"
+						=> "class Count { @:noInline public static function plus(x:Null<Int>):Int return x + 1; }"
+				]
 			}
 		];
 		for (scenario in cases)

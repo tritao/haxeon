@@ -43,7 +43,7 @@ class IrInlineEnumLayout {
 	final valueCopies:Map<String, String> = [];
 	var decisionPlanner:Null<IrInlineEnumLayout>;
 
-	/** The session's stage memos, and their kind of the lanes laid out as this layout lays them out (`lanesOf`); null without a session. */
+	/** The session's stage memos and their kind of the lanes this layout lays out (`lanesOf`); null without a session. */
 	final stageMemos:Null<IrStageMemos>;
 
 	final laneMemos:Null<compiler.query.ComputedQueryKind<IrInlineEnumLanes>>;
