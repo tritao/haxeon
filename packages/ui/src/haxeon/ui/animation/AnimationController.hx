@@ -5,9 +5,16 @@ import haxeon.ui.animation.AnimationScheduler;
 
 /** Time-based scalar tween controller retained in Haxe widget state. */
 class AnimationController implements Animation {
+	/** The tween's current value. */
 	public var value(default, null):Float;
+
+	/** Whether a tween is running. */
 	public var active(default, null):Bool;
+
+	/** Called with each new value. */
 	public var onUpdate:Float->Void;
+
+	/** Called when a tween reaches its end. */
 	public var onComplete:Void->Void;
 	var hasUpdate:Bool;
 	var hasComplete:Bool;
@@ -17,6 +24,7 @@ class AnimationController implements Animation {
 	var tween:Null<Tween>;
 	var elapsed:Float;
 
+	/** An idle controller at zero, advanced by `scheduler` once it has one. */
 	public function new(?scheduler:AnimationScheduler, ?onUpdate:Float->Void,
 			?onComplete:Void->Void) {
 		this.scheduler = scheduler;
@@ -32,6 +40,7 @@ class AnimationController implements Animation {
 		elapsed = 0.0;
 	}
 
+	/** Moves the controller to `scheduler`, carrying a running tween over. */
 	public function attach(scheduler:AnimationScheduler):Void {
 		if (scheduler == null)
 			throw "Animation controller requires a scheduler";
@@ -43,6 +52,7 @@ class AnimationController implements Animation {
 			track();
 	}
 
+	/** Tweens from `from` to `to` over `duration` seconds. A zero duration jumps to `to` and completes at once. */
 	public function play(from:Float, to:Float, duration:Float,
 			easing:Easing = Easing.Linear):Void {
 		var next = new Tween(from, to, duration, easing);
@@ -62,6 +72,7 @@ class AnimationController implements Animation {
 		}
 	}
 
+	/** Stops the tween where it is, without completing it. */
 	public function stop():Void {
 		active = false;
 		cancelRegistration();
@@ -101,11 +112,22 @@ class AnimationController implements Animation {
 
 /** Immutable scalar tween sampled by an AnimationController. */
 class Tween {
+	/** The value at the start. */
 	public final from:Float;
+
+	/** The value at the end. */
 	public final to:Float;
+
+	/** How long it takes, in seconds. */
 	public final duration:Float;
+
+	/** How it moves between the two. */
 	public final easing:Easing;
 
+	/**
+	 * A tween from `from` to `to` over `duration` seconds. Throws when a value is not finite or the duration is
+	 * negative.
+	 */
 	public function new(from:Float, to:Float, duration:Float, easing:Easing = Easing.Linear) {
 		if (!finite(from) || !finite(to) || !finite(duration) || duration < 0.0)
 			throw "Tween endpoints and duration must be finite, and the duration non-negative";
@@ -115,6 +137,7 @@ class Tween {
 		this.easing = easing;
 	}
 
+	/** Its value `seconds` after the start, holding `to` once the duration has passed. */
 	public function valueAt(seconds:Float):Float {
 		if (!finite(seconds))
 			throw "Tween sample time must be finite";
@@ -152,20 +175,41 @@ enum Easing {
 
 /** Damped scalar spring simulated in Haxe with bounded semi-implicit steps. */
 class SpringController implements Animation {
+	/** The spring's current position. */
 	public var value(default, null):Float;
+
+	/** Its current velocity, per second. */
 	public var velocity(default, null):Float;
+
+	/** Where it is settling toward. */
 	public var target(default, null):Float;
+
+	/** Whether it is still moving. */
 	public var active(default, null):Bool;
+
+	/** How hard it pulls toward the target. */
 	public final stiffness:Float;
+
+	/** How strongly it resists motion. */
 	public final damping:Float;
+
+	/** How heavy it is. */
 	public final mass:Float;
+
+	/** How close to the target and to rest it must be to stop. */
 	public final tolerance:Float;
+
+	/** Called with each new position. */
 	public var onUpdate:Float->Void;
 	var hasUpdate:Bool;
 	var scheduler:Null<AnimationScheduler>;
 	final animationToken:Animation;
 	var registration:Null<AnimationHandle>;
 
+	/**
+	 * A spring at rest at `initial`. Throws when a parameter is not finite, or the stiffness, mass or tolerance is not
+	 * positive, or the damping is negative.
+	 */
 	public function new(initial:Float, stiffness:Float = 180.0, damping:Float = 24.0,
 			mass:Float = 1.0, tolerance:Float = 0.001,
 			?scheduler:AnimationScheduler, ?onUpdate:Float->Void) {
@@ -187,6 +231,7 @@ class SpringController implements Animation {
 		hasUpdate = onUpdate != null;
 	}
 
+	/** Sets where the spring settles, starting it with `initialVelocity`. */
 	public function setTarget(value:Float, initialVelocity:Float = 0.0):Void {
 		if (!finite(value) || !finite(initialVelocity))
 			throw "Spring target and velocity must be finite";
@@ -196,6 +241,7 @@ class SpringController implements Animation {
 		track();
 	}
 
+	/** Moves the spring to `scheduler`, carrying its motion over. */
 	public function attach(scheduler:AnimationScheduler):Void {
 		if (scheduler == null)
 			throw "Spring controller requires a scheduler";
@@ -207,6 +253,7 @@ class SpringController implements Animation {
 			track();
 	}
 
+	/** Stops the spring where it is. */
 	public function stop():Void {
 		active = false;
 		velocity = 0.0;

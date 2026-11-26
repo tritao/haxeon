@@ -24,9 +24,13 @@ interface RetainedAnimation extends Animation {}
 
 /** Repeating normalized phase advanced by the Haxe UI frame clock. */
 class LoopAnimation implements Animation {
+	/** Where in the loop it is, from 0 up to 1. */
 	public var phase(default, null):Float;
+
+	/** Loops per second. */
 	public var speed:Float;
 
+	/** A loop at phase zero, running `speed` loops per second. Throws unless `speed` is finite and positive. */
 	public function new(speed:Float = 1.0) {
 		if (!finite(speed) || speed <= 0.0)
 			throw "Loop animation speed must be finite and positive";

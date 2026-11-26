@@ -2,7 +2,7 @@
   "version": 1,
   "package": {
     "name": "haxeon-ui",
-    "friends": ["haxeon-ui-property-tests", "ui-restyle-in-place-tests"]
+    "friends": ["haxeon-ui-property-tests", "haxeon-ui-search-picker-tests", "ui-restyle-in-place-tests"]
   },
   "sourceRoots": [
     "src"

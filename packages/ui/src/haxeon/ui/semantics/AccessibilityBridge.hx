@@ -16,12 +16,14 @@ import nativekit.ffi.NativeKitTypes.AccessibilityUpdate;
 import nativekit.ffi.NativeKitTypes.AccessibilityUpdateFlags;
 
 /** Projects Haxe semantics and resolved geometry into NativeKit's virtual tree. */
-class AccessibilityBridge implements Disposable {
+internal class AccessibilityBridge implements Disposable {
+	/** Multiplies bounds into the surface's native coordinates. */
 	public var coordinateScale:Float = 1.0;
 	final surface:Surface;
 	var previousParents:Map<Int, Int>;
 	var disposed:Bool;
 
+	/** A bridge publishing to `surface`'s accessibility tree. */
 	public function new(surface:Surface) {
 		if (surface == null || surface.isDisposed())
 			throw "Accessibility projection requires a live NativeKit surface";
@@ -219,26 +221,62 @@ class AccessibilityBridge implements Disposable {
 }
 
 /** Surface-local semantic record ready for projection into NativeKit. */
-class AccessibilitySnapshotNode {
+internal class AccessibilitySnapshotNode {
+	/** The node's id. */
 	public final id:Int;
+
+	/** Its parent's id, or -1 for the root. */
 	public final parentId:Int;
+
+	/** Its index among its parent's children. */
 	public final childIndex:Int;
+
+	/** Its role. */
 	public final role:AccessibilityRole;
+
+	/** Its states, focus included. */
 	public final states:AccessibilityState;
+
+	/** The actions it supports. */
 	public final actions:AccessibilityAction;
+
+	/** Its bounds on the surface. */
 	public final bounds:Rect;
+
+	/** The semantics it was projected from. */
 	public final semantics:Semantics;
+
+	/** Its group's size. */
 	public final setSize:Int;
+
+	/** Its position in the group. */
 	public final positionInSet:Int;
+
+	/** Its table's rows. */
 	public final rowCount:Int;
+
+	/** Its table's columns. */
 	public final columnCount:Int;
+
+	/** Its row. */
 	public final rowIndex:Int;
+
+	/** Its column. */
 	public final columnIndex:Int;
+
+	/** The rows it spans. */
 	public final rowSpan:Int;
+
+	/** The columns it spans. */
 	public final columnSpan:Int;
+
+	/** Its depth in a tree. */
 	public final hierarchyLevel:Int;
+
+	/** Its orientation. */
 	public final orientation:AccessibilityOrientation;
 
+	/** A projected node. */
 	public function new(id:Int, parentId:Int, childIndex:Int, role:AccessibilityRole,
 			states:AccessibilityState, actions:AccessibilityAction, bounds:Rect, semantics:Semantics) {
 		this.id = id;
@@ -263,12 +301,16 @@ class AccessibilitySnapshotNode {
 }
 
 /** Complete Haxe-owned input for one native accessibility update call. */
-class AccessibilityUpdateBatch {
+internal class AccessibilityUpdateBatch {
+	/** The update passed to NativeKit. */
 	public final nativeUpdate:AccessibilityUpdate;
 	/** Packed little-endian 32-bit node IDs consumed by the core binding helper. */
 	public final removedNodeIds:haxe.io.Bytes;
+
+	/** How many ids `removedNodeIds` holds. */
 	public final removedNodeCount:Int;
 
+	/** A batch for one update call. */
 	public function new(nativeUpdate:AccessibilityUpdate,
 			removedNodeIds:haxe.io.Bytes, removedNodeCount:Int) {
 		this.nativeUpdate = nativeUpdate;

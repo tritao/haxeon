@@ -4,6 +4,7 @@ import haxeon.ui.Path;
 
 /** Generated 24×24 vector paths derived from the vendored Lucide SVG assets. */
 class IconData {
+	/** The path of icon `name`, on a 24 by 24 grid, stroked rather than filled. */
 	public static function build(name:IconName):Path {
 		return switch name {
 			case IconName.ArrowUp: new PathBuilder().moveTo(12, 19).lineTo(12, 5).moveTo(5, 12).lineTo(12, 5).lineTo(19,

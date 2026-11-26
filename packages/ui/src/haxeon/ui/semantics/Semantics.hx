@@ -4,36 +4,74 @@ import haxeon.ui.widgets.text.Utf8Text;
 
 /** Haxe-owned accessible name, value, role, state, and supported actions. */
 class Semantics {
+	/** What kind of control or content it is. */
 	public final role:AccessibilityRole;
+
+	/** Its accessible name. */
 	public var label:Null<String>;
+
+	/** Its value as text, such as a field's contents; setting it updates `documentLength`. */
 	public var value(get, set):Null<String>;
 	var storedValue:Null<String>;
 	/** Where a deferred value is read from, and the source's revision when it was set. */
 	var valueSource:Null<SemanticsValueSource>;
 	var valueRevision:Int;
+
+	/** Its states, such as checked, selected or disabled. */
 	public var states:AccessibilityState;
+
+	/** The actions assistive technology may request of it. */
 	public var actions:AccessibilityAction;
+
+	/** Its value, for a slider, progress bar or other range. */
 	public var numericValue:Float;
+
+	/** The range's minimum. */
 	public var numericMinimum:Float;
+
+	/** The range's maximum. */
 	public var numericMaximum:Float;
+
+	/** Where `value` starts within the whole document, in code points, when it holds only part of it. */
 	public var textStart:Int;
+
+	/** The whole document's length, in code points. */
 	public var documentLength:Int;
+
+	/** Where the text selection starts, in document code points, or -1 for none. */
 	public var selectionStart:Int;
+
+	/** Where it ends, or -1 for none. */
 	public var selectionEnd:Int;
+
+	/** How many items its group has, or zero when unspecified. */
 	public var setSize:Int;
+
+	/** Its one-based position in that group, or zero when unspecified. */
 	public var positionInSet:Int;
+
+	/** How many rows a table or grid has, or zero when unspecified. */
 	public var rowCount:Int;
+
+	/** How many columns, or zero when unspecified. */
 	public var columnCount:Int;
 	/** Zero-based row index; -1 means unspecified. */
 	public var rowIndex:Int;
 	/** Zero-based column index; -1 means unspecified. */
 	public var columnIndex:Int;
+
+	/** How many rows a cell spans, or zero when unspecified. */
 	public var rowSpan:Int;
+
+	/** How many columns a cell spans, or zero when unspecified. */
 	public var columnSpan:Int;
 	/** One-based hierarchy depth; zero means unspecified. */
 	public var hierarchyLevel:Int;
+
+	/** Which way it is laid out, for lists, sliders and scroll bars. */
 	public var orientation:AccessibilityOrientation;
 
+	/** Semantics with `role`, `label` and `value`; `knownDocumentLength` saves measuring `value`. */
 	public function new(role:AccessibilityRole, ?label:String, ?value:String,
 			?knownDocumentLength:Int) {
 		this.role = role;

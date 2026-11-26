@@ -5,10 +5,10 @@ import haxeon.ui.animation.Animation;
 /** Advances active Haxe animations whenever the host drives a UI frame. */
 class AnimationScheduler {
 	final active:Array<AnimationHandle>;
-	public var onFrameRequested:Null<Void->Void>;
-	public var revision(default, null):Int;
+	internal var onFrameRequested:Null<Void->Void>;
+	internal var revision(default, null):Int;
 
-	public function new() {
+	internal function new() {
 		active = [];
 		onFrameRequested = null;
 		revision = 0;
@@ -28,7 +28,7 @@ class AnimationScheduler {
 		return handle;
 	}
 
-	/** Compatibility removal for callers that still retain the animation object. */
+	/** Stops advancing `animation`, as cancelling the handle `track` returned for it does. */
 	public function remove(animation:Animation):Void {
 		if (animation == null || active.length == 0)
 			return;
@@ -53,7 +53,7 @@ class AnimationScheduler {
 		}
 	}
 
-	public function advance(deltaSeconds:Float):Void {
+	internal function advance(deltaSeconds:Float):Void {
 		if (!finite(deltaSeconds) || deltaSeconds < 0.0)
 			throw "Animation time must be finite and non-negative";
 		if (active.length == 0) return;
@@ -71,7 +71,7 @@ class AnimationScheduler {
 			revision++;
 	}
 
-	public function cancelAll():Void {
+	internal function cancelAll():Void {
 		if (active.length == 0)
 			return;
 		var rebuilding = rebuildingCount > 0;
@@ -81,6 +81,7 @@ class AnimationScheduler {
 		if (rebuilding) revision++;
 	}
 
+	/** How many animations it is advancing. */
 	public var activeCount(get, never):Int;
 	inline function get_activeCount():Int
 		return active.length;
@@ -132,6 +133,8 @@ class AnimationScheduler {
 class AnimationHandle {
 	final scheduler:AnimationScheduler;
 	final animation:Animation;
+
+	/** Whether the animation is still being advanced. */
 	public var active(default, null):Bool;
 	/** Whether advancing it only edits nodes on screen (RetainedAnimation), so it needs no rebuild. */
 	public final retained:Bool;

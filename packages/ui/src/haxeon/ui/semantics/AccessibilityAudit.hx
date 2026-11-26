@@ -18,6 +18,9 @@ import haxeon.ui.widgets.text.Utf8Text;
 
 /** Small deterministic audit for common accessibility mistakes in resolved trees. */
 class AccessibilityAudit {
+	/**
+	 * The problems found in the tree under `root`, such as duplicate ids, missing labels or out-of-range selections.
+	 */
 	public static function inspect(root:Null<RenderNode>):Array<AccessibilityIssue> {
 		var issues:Array<AccessibilityIssue> = [];
 		if (root == null)
@@ -27,6 +30,7 @@ class AccessibilityAudit {
 		return issues;
 	}
 
+	/** Whether `inspect` finds nothing. */
 	public static function isValid(root:Null<RenderNode>):Bool
 		return inspect(root).length == 0;
 
@@ -167,10 +171,16 @@ class AccessibilityAudit {
 
 /** One actionable accessibility audit finding. */
 class AccessibilityIssue {
+	/** The render node it is about. */
 	public final nodeId:Int;
+
+	/** A stable name for the problem, such as `missing-label`. */
 	public final code:String;
+
+	/** What is wrong, for a person. */
 	public final message:String;
 
+	/** A finding `code` on node `nodeId`. */
 	public function new(nodeId:Int, code:String, message:String) {
 		this.nodeId = nodeId;
 		this.code = code;

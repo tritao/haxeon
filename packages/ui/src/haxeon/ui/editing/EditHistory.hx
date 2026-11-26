@@ -9,12 +9,27 @@ class EditHistory implements Observable {
 	var activeTransaction:Null<EditTransaction>;
 	var nextStateToken:Int;
 	var nextPersistentToken:Int = 1;
+
+	/**
+	 * Identifies the saved-content state: it changes only with edits that affect persistence, and undoing back gives
+	 * the earlier token again.
+	 */
 	public var persistentStateToken(default, null):Int = 0;
 	var coalescingAllowed:Bool = true;
+
+	/** The most undo entries kept, or zero for no limit. */
 	public final maxOperations:Int;
+
+	/** The most memory, estimated, the entries may retain, or zero for no limit. The oldest entries go first. */
 	public final maxEstimatedBytes:Int;
+
+	/** The memory the entries retain, estimated from their operations. */
 	public var estimatedRetainedBytes(default, null):Int;
+
+	/** Identifies the current state; undoing back to a state gives its token again. */
 	public var stateToken(default, null):Int;
+
+	/** Counts changes to the history, so views of it rebuild. */
 	public var revision(default, null):Int;
 
 	/** A zero limit means unlimited. Project documents opt into explicit limits. */
@@ -32,29 +47,35 @@ class EditHistory implements Observable {
 		revision = 0;
 	}
 
+	/** Whether there is an entry to undo. */
 	public var canUndo(get, never):Bool;
 	inline function get_canUndo():Bool {
 		var currentRevision = revision;
 		return undoStack.length > 0;
 	}
 
+	/** Whether there is an entry to redo. */
 	public var canRedo(get, never):Bool;
 	inline function get_canRedo():Bool {
 		var currentRevision = revision;
 		return redoStack.length > 0;
 	}
 
+	/** How many entries can be undone. */
 	public var undoCount(get, never):Int;
 	inline function get_undoCount():Int
 		return undoStack.length;
 
+	/** How many entries can be redone. */
 	public var redoCount(get, never):Int;
 	inline function get_redoCount():Int
 		return redoStack.length;
 
+	/** The label of the entry `undo` would undo, or null. */
 	public function undoLabel():Null<String>
 		return undoStack.length == 0 ? null : undoStack[undoStack.length - 1].label;
 
+	/** The label of the entry `redo` would redo, or null. */
 	public function redoLabel():Null<String>
 		return redoStack.length == 0 ? null : redoStack[redoStack.length - 1].label;
 
@@ -100,6 +121,7 @@ class EditHistory implements Observable {
 	/** Preserve this history state as an independently undoable boundary. */
 	public function breakCoalescing():Void coalescingAllowed = false;
 
+	/** Undoes the latest entry. Returns false when there is none. */
 	public function undo():Bool {
 		breakCoalescing();
 		ensureNoActiveTransaction();
@@ -115,6 +137,7 @@ class EditHistory implements Observable {
 		return true;
 	}
 
+	/** Redoes the latest undone entry. Returns false when there is none. */
 	public function redo():Bool {
 		breakCoalescing();
 		ensureNoActiveTransaction();
@@ -130,6 +153,7 @@ class EditHistory implements Observable {
 		return true;
 	}
 
+	/** Drops every entry. Throws while a transaction is open. */
 	public function clear():Void {
 		ensureNoActiveTransaction();
 		undoStack.resize(0);
@@ -277,11 +301,13 @@ class EditHistory implements Observable {
 
 /** One reversible application mutation owned by EditHistory. */
 class EditOperation {
+	/** What the edit is called in menus, as in "Undo Move". */
 	public final label:String;
 	/** Session operations remain undoable without changing the document savepoint. */
 	public final affectsPersistence:Bool;
 	@:allow(haxeon.ui.editing.EditHistory) var beforePersistentToken:Int;
 	@:allow(haxeon.ui.editing.EditHistory) var afterPersistentToken:Int;
+	/** Merges this operation into the previous one when both have the same key, so a run of edits undoes as one step. */
 	public final coalesceKey:Null<String>;
 	/** Approximate bytes retained by this operation and its captured undo data. */
 	public var estimatedRetainedBytes(default, null):Int;
@@ -297,6 +323,10 @@ class EditOperation {
 	@:allow(haxeon.ui.editing.EditHistory)
 	var afterStateToken:Int;
 
+	/**
+	 * An operation `label` that `apply` performs and `undo` reverses; `merge` may fold a later operation with the same
+	 * `coalesceKey` into this one.
+	 */
 	public function new(label:String, apply:Void->Void, undo:Void->Void,
 			?coalesceKey:String, ?merge:EditOperation->Bool, ?mergeData:Dynamic,
 			?estimatedRetainedBytes:Int = 256, affectsPersistence:Bool = true) {
@@ -319,9 +349,11 @@ class EditOperation {
 		afterStateToken = -1;
 	}
 
+	/** Performs the edit. */
 	public function apply():Void
 		applyAction();
 
+	/** Reverses it. */
 	public function undo():Void
 		undoAction();
 
@@ -352,7 +384,11 @@ class EditOperation {
 /** Collects several already-applied edits into one undoable history entry. */
 class EditTransaction {
 	final history:EditHistory;
+
+	/** What the compound edit is called in menus. */
 	public final label:String;
+
+	/** Merges the committed entry into the previous one with the same key. */
 	public final coalesceKey:Null<String>;
 	final operations:Array<EditOperation>;
 	var closed:Bool;

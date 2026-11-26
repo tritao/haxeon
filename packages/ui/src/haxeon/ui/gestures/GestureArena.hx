@@ -81,9 +81,9 @@ class GestureArena {
 	final active:Map<Int, GestureSequence>;
 	final lastTaps:Map<Int, LastTap>;
 	var elapsedSeconds:Float;
-	public var revision(default, null):Int;
+	internal var revision(default, null):Int;
 
-	public function new() {
+	internal function new() {
 		active = new Map();
 		lastTaps = new Map();
 		elapsedSeconds = 0.0;
@@ -94,7 +94,7 @@ class GestureArena {
 	public function timeSeconds():Float
 		return elapsedSeconds;
 
-	public function pointerDown(target:WidgetId, event:UiEvent,
+	internal function pointerDown(target:WidgetId, event:UiEvent,
 			recognizers:Array<GestureRecognizer>):Void {
 		if (target == null || event == null || recognizers == null)
 			return;
@@ -123,7 +123,7 @@ class GestureArena {
 		}
 	}
 
-	public function pointerMove(event:UiEvent):Void {
+	internal function pointerMove(event:UiEvent):Void {
 		var sequence = active.get(event.pointerId);
 		if (sequence == null)
 			return;
@@ -161,7 +161,7 @@ class GestureArena {
 		}
 	}
 
-	public function pointerUp(event:UiEvent):Void {
+	internal function pointerUp(event:UiEvent):Void {
 		var sequence = active.get(event.pointerId);
 		active.remove(event.pointerId);
 		if (sequence == null)
@@ -213,7 +213,7 @@ class GestureArena {
 		lastTaps.set(event.pointerId, new LastTap(sequence.target, event.x, event.y, elapsedSeconds));
 	}
 
-	public function pointerCancel(pointerId:Int):Void {
+	internal function pointerCancel(pointerId:Int):Void {
 		var sequence = active.get(pointerId);
 		if (sequence != null)
 			endPinch(sequence);
@@ -242,7 +242,7 @@ class GestureArena {
 			revision++;
 	}
 
-	public function cancelAll():Void {
+	internal function cancelAll():Void {
 		if (active.size() > 0 || lastTaps.size() > 0) {
 			for (sequence in active)
 				endPinch(sequence);
