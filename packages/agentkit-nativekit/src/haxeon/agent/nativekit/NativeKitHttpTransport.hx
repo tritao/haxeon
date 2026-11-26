@@ -44,6 +44,7 @@ class NativeKitHttpTransport implements HttpTransport {
 		subscription = events.listen(onEvent);
 	}
 
+	/** Posts `request` and streams the response to `sink`; the result cancels the request. */
 	public function postStream(request:HttpStreamRequest, sink:HttpStreamSink):Cancelable {
 		var handle = new NativeKitStreamRequest(this, sink);
 		if (disposed) {
@@ -105,6 +106,7 @@ class NativeKitHttpTransport implements HttpTransport {
 		}
 	}
 
+	/** Cancels the open requests and stops listening for events. */
 	public function dispose():Void {
 		if (disposed)
 			return;

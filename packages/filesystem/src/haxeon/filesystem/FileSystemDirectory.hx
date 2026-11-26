@@ -30,6 +30,7 @@ class FileSystemDirectory {
 		return new FileSystemDirectoryEntry(name, result.out_entry);
 	}
 
+	/** Releases the cursor; later reads fail. */
 	public function close():Void {
 		if (closed)
 			return;
@@ -49,9 +50,13 @@ class FileSystemDirectory {
 
 /** Metadata for one native directory entry. */
 class FileSystemDirectoryEntry {
+	/** The entry's name, or null when it is not valid UTF-8. */
 	public final name:Null<String>;
+
+	/** Its kind, size and times. */
 	public final metadata:FileSystemEntry;
 
+	/** An entry named `name`. */
 	public function new(name:Null<String>, metadata:FileSystemEntry) {
 		this.name = name;
 		this.metadata = metadata;

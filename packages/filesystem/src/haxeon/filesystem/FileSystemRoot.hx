@@ -10,6 +10,7 @@ class FileSystemRoot {
 	final value:Int;
 	var closed:Bool = false;
 
+	/** Grants access to the directory at `absolutePath` and everything below it, and nothing outside. */
 	public function new(absolutePath:String) {
 		var opened = NativeKitFilesystem.nk_filesystem_root_open(absolutePath);
 		check(opened.status, "filesystem.rootOpen");

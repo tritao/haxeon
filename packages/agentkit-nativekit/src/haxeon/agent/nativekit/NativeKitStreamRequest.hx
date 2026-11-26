@@ -8,7 +8,7 @@ import nativekit.ffi.NativeKitNetTypes.HttpStreamHandle;
 import nativekit.ffi.NativeKitTypes.Result;
 
 /** One in-flight streaming request. Terminal state is reached exactly once. */
-class NativeKitStreamRequest implements Cancelable {
+internal class NativeKitStreamRequest implements Cancelable {
 	final transport:NativeKitHttpTransport;
 	final sink:HttpStreamSink;
 	var request:Null<haxe.Int64>;
