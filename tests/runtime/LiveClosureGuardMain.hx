@@ -435,6 +435,8 @@ class LiveClosureGuardMain {
 		mainId:Int
 	} {
 		var compiler = new Compiler();
+		// The test calls these as the live host does, by name: nothing in the programs reaches them.
+		compiler.setExportedFunctions(["Main.finish", "Main.liveRebuild", "Main.liveRelease", "Main.start"]);
 		if (stdlib) {
 			CompilerIntrinsics.register(compiler);
 			compiler.addStandardLibrarySourceRoot("stdlib");

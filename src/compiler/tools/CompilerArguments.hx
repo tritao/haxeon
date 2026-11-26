@@ -219,8 +219,9 @@ class CompilerArguments {
 			throw new UsageError("--wasm-gc-allocation-count requires --target=wasm-gc");
 		if (wasmRuntimeNeutral && backend != Wasm32)
 			throw new UsageError("--wasm-runtime-neutral requires --target=wasm32");
-		if (exports.length != 0 && !wasm)
-			throw new UsageError("Function exports require a Wasm32 or Wasm GC target");
+		// A live module's host calls its exports by name, as a Wasm host does.
+		if (exports.length != 0 && !wasm && !live)
+			throw new UsageError("Function exports require a Wasm32 or Wasm GC target, or --live");
 		if (memoryContract != null && !wasm)
 			throw new UsageError("--wasm-memory-contract requires --target=wasm32 or --target=wasm-gc");
 		if (sharedMemory && (!importMemory || memoryContract == null))

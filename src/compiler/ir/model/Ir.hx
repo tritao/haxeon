@@ -450,6 +450,12 @@ class IrProgram {
 	public var prunedFunctions:Map<String, Bool> = [];
 
 	/**
+	 * The functions the early prune gave a declaration stub in place of their body: methods nothing can receive, and in a live
+	 * layout every method nothing reaches (`IrEntryPrune.run`). Empty without the prune.
+	 */
+	public var stubbedFunctions:Map<String, Bool> = [];
+
+	/**
 	 * Lookups the passes share over this program (`IrProgramIndex.of`, `IrMethodResolution.of`), each rebuilt when the declaration
 	 * arrays it was made from change. They are the program's own, so they go with it, and a copy starts without them.
 	 */
@@ -491,6 +497,7 @@ class IrProgram {
 		result.positionalPlaces = positionalPlaces;
 		result.positionalSources = positionalSources;
 		result.prunedFunctions = prunedFunctions;
+		result.stubbedFunctions = stubbedFunctions;
 		result.reachedNatives = reachedNatives;
 		result.classIds = classIds;
 		return result;

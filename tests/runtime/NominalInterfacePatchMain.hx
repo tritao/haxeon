@@ -7,6 +7,8 @@ class NominalInterfacePatchMain {
 	static function configuredCompiler():Compiler {
 		var result = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		result.addStandardLibrarySourceRoot("stdlib");
+		// The test calls these as a host does, by name.
+		result.setExportedFunctions(["Main.make", "Main.probe", "Main.reject"]);
 		return result;
 	}
 	static function contract(version:Int):String return "interface BaseReader { function score():Int; }\n"

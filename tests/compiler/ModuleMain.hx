@@ -130,10 +130,12 @@ class ModuleMain {
 			throw "Unrelated edit replaced cached IR objects";
 		compiler.update("Temp.hx", "function oldValue():Int { return 3; }");
 		compiler.update("Main.hx",
-			"import Temp; function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
+			"import Temp; function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22) + Temp.oldValue() - 3; }");
 		var withOld = compiler.compile("Main"),
 			oldIndex = withOld.artifact.hashLink().functionIndices.get("Temp.oldValue");
 		compiler.update("Temp.hx", "function freshValue():Int { return 4; }");
+		compiler.update("Main.hx",
+			"import Temp; function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22) + Temp.freshValue() - 4; }");
 		var removed = compiler.compile("Main");
 		if (removed.artifact.hashLink().functionIndices.get("Temp.oldValue") != oldIndex
 			|| removed.artifact.hashLink().functionIndices.get("Temp.freshValue") <= oldIndex)

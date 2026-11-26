@@ -153,12 +153,9 @@ class TestRunner {
 		];
 		for (root in roots)
 			arguments.push("--root=" + root);
-		if (!run.plain) {
+		if (!run.plain)
 			arguments.push("--live");
-			// A live build keeps every function, `Reflect`'s among them, so it reflects over every layout and boxes what a plain
-			// build keeps inline: a program's allocation census holds only in a plain build, which `live_build` tells it.
-			arguments.push("--define=live_build");
-		} else {
+		else {
 			if (release) {
 				arguments.push("--build-mode=release");
 				arguments.push("--verify-ir");
@@ -251,6 +248,12 @@ class TestRunner {
 				log.add(warm.output);
 				if (warm.status != 0)
 					return warm;
+			}
+			// A live session's builds patch one module, whose layout keeps what earlier builds published, so its bytes are not a
+			// fresh build's: its reuse checks compare each warm program with a fresh one (`--check-reuse`), and its last module runs.
+			if (!run.plain) {
+				File.saveBytes(output, File.getBytes(Path.join([directory, 'warm-${edits.length}.hl'])));
+				return {status: 0, output: 'compiled $source (live warm edit rebuilds) -> $output\n'};
 			}
 			// The fresh builds come last: each starts the session over.
 			for (index in 0...edits.length) {
@@ -387,7 +390,8 @@ class TestRunner {
 
 	static function runName(run:ProgramRun):String
 		return run.test.name
-			+ (run.warm ? " (warm edit rebuilds" : run.plain ? " (plain build" : "")
+			+ (run.warm ? (run.plain ? " (warm edit rebuilds" : " (live warm edit rebuilds") : run.plain
+			? " (plain build" : "")
 			+ (run.unpruned ? ", no early prune" : "")
 			+ (run.warm || run.plain ? ")" : "");
 
@@ -395,7 +399,8 @@ class TestRunner {
 		return Path.join([
 			root,
 			"out",
-			run.test.name + (run.warm ? ".warm" : run.plain ? ".plain" : "") + (run.unpruned ? ".unpruned" : "") + ".hl"
+			run.test.name + (run.warm ? (run.plain ? ".warm" : ".live.warm") : run.plain ? ".plain" : "")
+				+ (run.unpruned ? ".unpruned" : "") + ".hl"
 		]);
 
 	/**
@@ -562,8 +567,8 @@ class TestRunner {
 	}
 
 	/**
-	 * The builds of one program: live and plain, and, when the driver checks reuse (`--check-reuse`), a third that is edited and
-	 * rebuilt warm. A cold compile in a fresh process reuses nothing, so only that third build exercises the checks on a program.
+	 * The builds of one program: live and plain, and, when the driver checks reuse (`--check-reuse`), builds that are edited and
+	 * rebuilt warm, live and plain. A cold compile in a fresh process reuses nothing, so only those exercise the checks on a program.
 	 */
 	static function runsOf(test:ProgramCase, checkReuse:Bool):Array<ProgramRun> {
 		var runs:Array<ProgramRun> = [
@@ -587,6 +592,12 @@ class TestRunner {
 			}
 		];
 		if (checkReuse) {
+			runs.push({
+				test: test,
+				plain: false,
+				unpruned: false,
+				warm: true
+			});
 			runs.push({
 				test: test,
 				plain: true,

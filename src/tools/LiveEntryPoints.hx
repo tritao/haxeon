@@ -23,4 +23,10 @@ class LiveEntryPoints {
 	public static inline final RELEASE:String = "liveRelease";
 
 	public static inline final REBUILD:String = "liveRebuild";
+
+	/**
+	 * Every entry point the host may call. A live build roots each the entry class declares, as a one-shot build roots `main`,
+	 * since nothing in the program calls them (docs/design/LIVE_PRUNING.md).
+	 */
+	public static final ALL:Array<String> = REQUIRED.concat([RELEASE, REBUILD]);
 }

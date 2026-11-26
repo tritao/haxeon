@@ -49,12 +49,12 @@ class ManagedClosureCensus {
 }
 function main():Int {
 	ManagedClosureCensus.prepare();
-	#if !(wasm || live_build)
+	#if !wasm
 	hl.Gc.major();
 	var before = hl.Gc.totalAllocated();
 	#end
 	if (ManagedClosureCensus.perform(8) != 8 || ManagedClosureCensus.perform(1024) != 1024) return 1;
-	#if !(wasm || live_build)
+	#if !wasm
 	if (hl.Gc.totalAllocated() != before) return 2;
 	#end
 	return 42;

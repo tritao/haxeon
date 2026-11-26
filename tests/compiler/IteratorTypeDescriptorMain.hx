@@ -276,6 +276,12 @@ class IteratorTypeDescriptorMain {
 			var runtime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 			runtime.addStandardLibrarySourceRoot("stdlib");
 			runtime.update("Main.hx", source);
+			// The census functions the module exports are what nothing in the program calls.
+			runtime.setExportedFunctions([
+				"BytesIteratorCensus.prepare",
+				"BytesIteratorCensus.iterate",
+				"BytesIteratorCensus.allocateBytes"
+			]);
 			var program = runtime.compile("Main").ir;
 			compiler.ir.passes.inlining.IrInliner.run(program,
 				new compiler.ir.passes.inlining.IrInliner

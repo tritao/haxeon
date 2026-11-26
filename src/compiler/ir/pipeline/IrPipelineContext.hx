@@ -71,6 +71,21 @@ class IrPipelineContext {
 	/** What the prune removed; empty without it. */
 	public var pruned:Map<String, Bool> = [];
 
+	/**
+	 * The prune keeps every method of every class in its table, one nothing reaches with a declaration stub: a live layout, which
+	 * a later edit's reach must not move (`IrEntryPrune.run`).
+	 */
+	public var declaredMethods:Bool = false;
+
+	/** The functions the prune gave a declaration stub; empty without it. */
+	public var stubbed:Map<String, Bool> = [];
+
+	/**
+	 * With `declaredMethods`, the bodies the prune removed or stubbed: a live layout's runtime surface is what they need too, since
+	 * natives come before every function slot and a later edit may reach them (`IrProgramAssembler.finish`).
+	 */
+	public var unreachedBodies:Array<IrFunction> = [];
+
 	/** Where the stages record their time and allocation, when the compile reports them; null for pipelines that do not. */
 	public var meter:Null<compiler.core.IrPassMeter> = null;
 

@@ -94,7 +94,7 @@ function main():Int {
 	if (CallbackMethodCensus.enums(8) != 672 || CallbackMethodCensus.records(8) != 672
 		|| CallbackMethodCensus.concrete(8) != 672)
 		return 1;
-	#if !(wasm || live_build)
+	#if !wasm
 	for (count in [8, 1024]) {
 		hl.Gc.censusStart(0);
 		var before = hl.Gc.totalAllocated();

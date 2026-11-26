@@ -143,6 +143,11 @@ class LiveObjectLayoutMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
+		// The test calls these as a host does, by name: nothing in the programs reaches them.
+		compiler.setExportedFunctions([
+			"Main.failure", "Main.finish", "Main.fresh", "Main.later", "Main.reflected", "Main.rounds", "Main.start",
+			"Main.unsetMade"
+		]);
 		return compiler;
 	}
 

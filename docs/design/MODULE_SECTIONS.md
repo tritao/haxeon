@@ -4,9 +4,10 @@ Status: designed 2026-11-25; the open questions are decided (section 9). Slices 
 fork's loader links sections, every plain HashLink build writes them (slice 2b made them the default and removed the dense
 plain path, "As built in slice 2b"), every reader of modules reads them, and a warm build keeps every section whose encoding
 would read the same and its functions as they were lowered, with no link or replay (section 3, "As built in slice 3a", "As
-built in slice 3b"). Slice 4 is planned in four parts (section 8, "Slice 4 plan"); 4a and 4b have landed: the fork links patches
-made of sections ("As built in slice 4a"), and every HashLink build, live ones too, writes sections and patches by section
-("As built in slice 4b"). The user's decision: per-module sections and
+built in slice 3b"). Slice 4 is planned in four parts (section 8, "Slice 4 plan"), which have landed: the fork links patches
+made of sections ("As built in slice 4a"), every HashLink build, live ones too, writes sections and patches by section
+("As built in slice 4b"), live builds prune as one-shot builds do ("As built in slice 4c"), and the dense paths are gone ("As
+built in slice 4d"). The user's decision: per-module sections and
 load-time linking replace "stable output indices" ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3,
 [QUERY_ENGINE.md](QUERY_ENGINE.md) row B). Plain output needs the fork's VM: stock HashLink does not read HLB 9, which the
 user accepted.
@@ -485,6 +486,26 @@ In 4a a patch that adds a native is refused by the patch linker, as the planner 
   it reports changed functions, until 4d.
 - A function's runtime index is the loader's (`HlSectionOutput.linkedIndices`), not the live layout's: the `.functions`
   sidecar and the debugger tests that read slots take the linked numbering, as plain builds already do.
+
+### As built in slice 4c
+
+- **Live pruning** ([LIVE_PRUNING.md](LIVE_PRUNING.md), "As built in slice 3"): a live build prunes with the one-shot
+  build's walk and roots, the live host's entry points among its exports; its layout keeps every class, global and declared
+  method, an unreached method as a declaration stub; the published set only grows within a module identity, a function leaving
+  the reach set keeping its slot and code; a function first reached takes a new key in its section, which the patch carries;
+  `FunctionRemoved` is a removed declaration only; and the live `--check-reuse` builds the same tree from a fresh state and
+  compares the reached program, re-lowers every kept function, and checks the patch carries every first-reached function.
+- **Sections.** A section holds its module's reached functions and stubs; the patch is still the sections whose digests
+  changed (`HashLinkBackendSession.sectionPatch`), so a reach change re-encodes only the sections whose functions changed. A
+  function a section no longer defines (one leaving the reach set) keeps its slot and code in the running module, as 4a's
+  loader does for any key a replaced section no longer defines.
+- **Not done.** Natives a patch adds: the runtime natives `IrProgramAssembler.finish` adds follow the declared program, so a
+  newly reached function finds them; a lowering intrinsic or a C dispatch signature that no reached function used before still
+  reloads ("runtime natives added", "dispatch natives"), and the patch linker still refuses a new native.
+- **Measured** (perf-guard's live part and a live build of each app): the server's live data after the growth session
+  460.95 → 386.40 MB on the UI template app (−16%) and 11.64 → 9.33 MB on the small project (−20%); the live module 4.66 →
+  3.25 MB (−30%, 9,017 → 6,071 function and native entries) and 134 → 32 KB; the median body edit, save to applied, 848 → 617 ms
+  and 113 → 82 ms (walls, loose). Every perf-guard edit still patches the same functions.
 
 ### As built in slice 4d
 

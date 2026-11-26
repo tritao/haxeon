@@ -41,12 +41,14 @@ class ReachabilityPruneMain {
 		CompilerIntrinsics.register(liveCompiler);
 		liveCompiler.addStandardLibrarySourceRoot("stdlib");
 		liveCompiler.update("Main.hx", source);
-		var liveNames:Map<String, Bool> = [
-			for (fn in liveCompiler.compile("Main", null, false).ir.functions)
-				fn.name => true
-		];
-		expect(liveNames.exists("Main.unusedFree") && liveNames.exists("Dead.never"),
-			"the program of a live build is complete");
+		var live = liveCompiler.compile("Main", null, false),
+			liveNames:Map<String, Bool> = [for (fn in live.ir.functions) fn.name => true];
+		// A live build prunes as a one-shot build does, but its layout keeps every declared method, one nothing reaches as a stub.
+		expect(!liveNames.exists("Main.unusedFree") && !liveNames.exists("unusedFree"),
+			"a live build drops a function nothing calls");
+		expect(liveNames.exists("Dead.never") && live.ir.stubbedFunctions.exists("Dead.never"),
+			"a live build keeps the method of a class nothing mentions as a declaration stub");
+		expect(GeneratedProgramRunner.exitCode(live) == 42, "the pruned live program runs");
 		// A call on a class nothing constructs keeps the method's slot, as a stub that throws; what the body called is gone.
 		var stubCompiler = new Compiler();
 		stubCompiler.livePatching = false;
@@ -64,7 +66,7 @@ class ReachabilityPruneMain {
 			&& !stubbed.artifact.hashLink().functionIndices.exists("Main.fromBodyOnly"),
 			"what the body of such a method calls is not in the module");
 		expect(GeneratedProgramRunner.exitCode(stubbed) == 42, "the program with a declaration-only method runs");
-		Sys.println("PASS: unreachable functions and the methods of unmentioned classes are dropped, reflection on a live class still works");
+		Sys.println("PASS: unreachable functions and the methods of unmentioned classes are dropped, reflection on a live class still works, live layouts keep method stubs");
 	}
 
 	static function expect(condition:Bool, message:String):Void {

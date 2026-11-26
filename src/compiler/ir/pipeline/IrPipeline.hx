@@ -327,10 +327,18 @@ class IrPipeline {
 	 */
 	static function entryPrune(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var functions = assembly.functions;
+		// The prune stubs methods in place, so the bodies a live layout's runtime surface reads are taken first.
+		var before = context.declaredMethods ? functions.copy() : null;
 		var pruneInput = pruneInputOf(assembly, context, functions);
 		var pruned = IrEntryPrune.run(pruneInput, context.pruneRoots, pruneDependencies(assembly, functions),
-			context.stageMemos);
+			context.stageMemos, context.declaredMethods);
 		context.pruned = pruned.removed;
+		context.stubbed = pruned.stubbed;
+		if (before != null)
+			context.unreachedBodies = [
+				for (fn in before)
+					if (pruned.removed.exists(fn.name) || pruned.stubbed.exists(fn.name)) fn
+			];
 		context.prunedMethods = pruned.removedMethods;
 		assembly.reachedNatives = pruned.calledNatives;
 		assembly.functions = pruneInput.functions;

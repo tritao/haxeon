@@ -181,7 +181,7 @@ class CarrierCensus {
 	}
 }
 function main():Int {
-	#if !(wasm || live_build)
+	#if !wasm
 	CarrierCensus.prepare(null);
 	if (!CarrierCensus.checkMutation()) return 10;
 	if (!CarrierCensus.checkNullable()) return 14;

@@ -1,14 +1,14 @@
 # Live builds prune like one-shot builds (design note)
 
-Status: designed 2026-11-26, not started; the open questions are decided (end of the note). Decided by the user: a live
-HashLink build keeps what a one-shot build keeps, by the same roots and the same walk (reflection, `@:keep`, the reflectable
+Status: designed 2026-11-26; slice 3 landed with module sections slice 4c ("As built in slice 3", at the end). Decided by the user: a
+live HashLink build keeps what a one-shot build keeps, by the same roots and the same walk (reflection, `@:keep`, the reflectable
 set), so a live session is no more forgiving than a normal build. It lands with module sections slice 4
 ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), section 4), with the reach set as an engine summary
 ([QUERY_ENGINE.md](QUERY_ENGINE.md), "Whole-program steps") and a live counterpart of `--check-reuse`.
 
-**Today.** A live build skips the early prune (`FrontendCompilation.runIrPipeline` passes `pruneFromEntry` and
+**Before slice 3.** A live build skipped the early prune (`FrontendCompilation.runIrPipeline` passed `pruneFromEntry` and
 `walkFromEntry` false when `livePatching`) and the plain backend's prune (`HashLinkBackendSession`, `HlPlainBuild.reachable`).
-The server runs every pass on, lowers, encodes and keeps every function of every loaded module, because the host may call
+The server ran every pass on, lowered, encoded and kept every function of every loaded module, because the host may call
 any function by id and a reachability change must not move the dense layout ([REACHABILITY_WALK.md](REACHABILITY_WALK.md),
 "Live and hot-reload builds").
 
@@ -173,9 +173,9 @@ ci-tier hot-reload suite and perf-guard's live part (first build, edits and serv
 
 | # | Slice | Size (est.) | Extra checks | Depends on |
 |---|---|---|---|---|
-| 1 | Host entry points in the live request's `exports`; live builds run the prune walk without pruning and report its counts | +80 | the driver's live runs report the reach; a host started with a pruned module starts | — |
+| 1 | Host entry points in the live request's `exports`; live builds run the prune walk without pruning and report its counts. Folded into 3: the exports landed with it | +80 | the driver's live runs report the reach; a host started with a pruned module starts | — |
 | 2 | The reach set as an engine summary over per-function contributions, for plain builds; `IrWalkRecord` of the prune walk goes | −200 / +300 | `--check-reuse` recomputes contributions and the walk | engine slice 3 (or beside it) |
-| 3 | Live prune on sections: layouts from declarations, the growing published set, `firstReached` carried, planner causes narrowed, live `--check-reuse` | −150 / +450 compiler, +60 fork | the new live edits; the patch mains; an Android watch run | 1, 2, MODULE_SECTIONS slice 4 |
+| 3 | Live prune on sections: layouts from declarations, the growing published set, `firstReached` carried, planner causes narrowed, live `--check-reuse`. Landed ("As built in slice 3") | −150 / +450 compiler, +60 fork | the new live edits; the patch mains; an Android watch run | 1, 2, MODULE_SECTIONS slice 4 |
 | 4 | Remove the unpruned live path: the live builds' skip of the prune, the driver's unpruned live run, `--no-early-prune` | −150 | — | 3, two pushes |
 | 5 | IR generation on demand from the walk (REACHABILITY_WALK.md 3b) | not estimated | live data of unreached modules | 3 |
 
@@ -192,3 +192,46 @@ Decided by the user on 2026-11-26:
 - **Where `firstReached` is lowered.** A function first reached many edits after it was generated is lowered from its held
   stage memos. The live `--check-reuse` verifies that its lowering equals a fresh build's: check 1 compares the reached
   functions' lowering, not only their final IR.
+
+## As built in slice 3
+
+Landed as module sections slice 4c ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), "As built in slice 4c").
+
+- **The prune.** A live HashLink build prunes at the 3a point with the one-shot build's walk and roots
+  (`FrontendCompilation.runIrPipeline`), and `--no-early-prune` turns it off for both. The live host's entry points are
+  exports: `CompilerProvider` passes `--export=<entry>.<point>` for every name of `LiveEntryPoints.ALL` on a live build, which
+  `CompilerArguments` takes with `--live` as with a Wasm target; a name the entry class does not declare roots nothing.
+- **Layouts from declarations.** With `declaredMethods` (`IrPipelineContext`, a live layout) the prune keeps every method of
+  every class in its table; one nothing reaches gets a declaration stub (`IrEntryPrune.run`), kept across builds while its
+  signature is the same (`IrStageMemos.helper`). The program lists them (`IrProgram.stubbedFunctions`). Classes, globals,
+  enums and interfaces are all laid out as before, since a live build runs no `trimTables`. The runtime surface (the runtime
+  natives and helpers `IrProgramAssembler.finish` adds) is what the reached functions and the bodies the prune removed or
+  stubbed need (`IrPipelineContext.unreachedBodies`): runtime natives come before every slot, so a function a later edit
+  reaches finds them in the running module.
+- **The published set grows.** The assembler's slots are the published set (`HlFunctionCache`). A function the build no
+  longer reaches is not in the program and keeps its slot and code, as a removed one does; a stub over a slot that holds real
+  code of the same signature is withheld from the program and keeps that code (`HlModuleAssembler.retainedCode`), so an
+  instance the running program made before still runs it. The assembler knows which slots hold stubs (`stubs`, not kept over a
+  restore, after which a slot counts as real code). A function that comes back into the reach set, or replaces a stub, is
+  lowered again when its code is not its own (`enteringReach`); one first reached takes a new slot and is lowered, and its
+  section carries it. Regenerated functions the build does not reach are not lowered. A fresh layout drops what the build
+  does not reach and lowers the stubs it withheld.
+- **Planner.** `PatchPlanner.plan` takes the functions the build declares but does not reach (`IrProgram.prunedFunctions`):
+  one that leaves the reach set is no `FunctionRemoved`, so a constructor no longer reached patches. Method dispatch never
+  changes by reach, since the tables hold every declared method. Drop guards (`dropGuards`) are for removed declarations
+  only.
+- **Live `--check-reuse`.** A live build in check mode builds the same tree from a fresh state with the same options and roots
+  (`FrontendCompilation.checkLiveAfresh`) and requires the same reached functions, each with the same final IR, and the same
+  stubs; the trusted lowering of every kept function is lowered again and compared (`HlLower.verifyKept`), so every reached
+  function's lowering is the lowering of a fresh build's IR in the running layout; and every function first reached is in a
+  section the patch replaces (`HashLinkBackendSession.checkFirstReach`). `IrEntryPrune.checkRemoved` runs on the live program
+  as on a plain one. The test driver adds a live warm-edit run of every program under `--check-reuse`, and the driver no
+  longer defines `live_build`: a live build's allocation census is a plain build's.
+- **Natives.** A native that lowering itself adds (`HlLower.discoverRuntimeNatives`'s intrinsics) or a new C dispatch
+  signature still reloads, as before; appending natives in a patch is not done (it needs the slot layout to interleave
+  natives and the fork's patch linker to bind them).
+- **Reach on the engine.** The prune's walk is the session's walk (`IrTypeAwareWalk.runKept` over `IrWalkMemo`): per-function
+  summaries as keys of the database and the walk's result memoized by what it read, so an edit that changes no summary or
+  table the walk read takes the reach set without walking, and one that does walks over held summaries. Publishing the reach
+  set as a `QuerySummary` for the stages after it, and the plain backend's second prune with its `IrWalkRecord`, are slice 2
+  and still open.

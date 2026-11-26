@@ -16,6 +16,7 @@ import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.runtime.CompilerIntrinsics;
 import runtime.LoadedModule;
 import runtime.ModuleRetirementStatus.ModuleRetirementFlag;
 import runtime.PatchSet;
@@ -33,6 +34,7 @@ class HotReloadMain {
 		testJitSupportModuleRetirement();
 		testLiveAbiPatchMatrix();
 		testLiveReachability();
+		testLivePrunedReach();
 		testRetainedPatchedClosure();
 		if (Runtime.retryRetirements() != 0)
 			throw "released closure kept module retirement blocked after its frame unwound";
@@ -377,6 +379,8 @@ class HotReloadMain {
 
 	static function testRetainedObject():Void {
 		var compiler = new Compiler();
+		// The test calls `fail` as a host does, by name: nothing in the program reaches it.
+		compiler.setExportedFunctions(["Main.fail"]);
 		compiler.update("Main.hx",
 			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value; } function fail():Int { throw new Box(1); } function main():Int { return read(make()); }");
 		var initial = compiler.compile("Main"),
@@ -413,6 +417,8 @@ class HotReloadMain {
 
 	static function testRetainedPatchedClosure():Void {
 		var compiler = new Compiler();
+		// The test calls `make` as a host does, by name: nothing in the program reaches it.
+		compiler.setExportedFunctions(["Main.make"]);
 		compiler.update("Main.hx",
 			"function value():Int { return 40; } function make():() -> Int { return value; } function main():Int { return value(); }");
 		var initial = compiler.compile("Main"),
@@ -584,6 +590,72 @@ class HotReloadMain {
 			baseRevision = changed.revision;
 			if (Runtime.callInt(loaded, Runtime.requireFunctionId(loaded, "main")) != 42)
 				throw 'step $step: the patched module does not run the edited program';
+		}
+		Runtime.dispose(loaded);
+	}
+
+	/**
+	 * A live build prunes as a one-shot build does (docs/design/LIVE_PRUNING.md), and every edit below patches: one that reaches a
+	 * function of a loaded standard-library module no code of the module came from, one that first creates a class whose method overrides one (its
+	 * slot holds a declaration stub until then), and one after which nothing creates a class the running program holds an
+	 * instance of, whose method keeps the code it had.
+	 */
+	static function testLivePrunedReach():Void {
+		// StringTools is loaded from the start, as a module the program imports and does not call.
+		var shapes =
+			"import StringTools;\nclass Shape { public function new() {} public function area():Int return 1; }\n"
+			+ "class Square extends Shape { public function new() super(); override public function area():Int return 4; }\n"
+			+ "class Keep { public static var shape:Null<Shape> = null; }\n";
+		function program(body:String):String
+			return shapes + "function main():Int { " + body + " }";
+		var compiler = new Compiler();
+		CompilerIntrinsics.register(compiler);
+		// The test runs in out/.
+		compiler.addStandardLibrarySourceRoot("../stdlib");
+		compiler.update("Main.hx",
+			program("if (Keep.shape == null) Keep.shape = new Shape(); return Keep.shape.area();"));
+		var first = compiler.compile("Main"),
+			hashLink = first.artifact.hashLink(),
+			loaded = Runtime.load(hashLink.hashLinkBytes().flatten(), hashLink.runtimeIdentity),
+			main = Runtime.requireFunctionId(loaded, "main"),
+			areaSlot = hashLink.functionIndices.get("Shape.area");
+		if (hashLink.functionIndices.exists("StringTools.hex"))
+			throw "a live build kept a standard-library function nothing calls";
+		if (!hashLink.functionIndices.exists("Square.area") || !first.ir.stubbedFunctions.exists("Square.area"))
+			throw "a live layout must keep the override of a class nothing creates, as a stub";
+		if (Runtime.callInt(loaded, main) != 1)
+			throw "the pruned live module does not run";
+		var revision = first.revision;
+		for (step in [
+			{
+				label: "reaching StringTools.hex",
+				body: "if (Keep.shape == null) Keep.shape = new Shape(); return Keep.shape.area() + StringTools.hex(255).length;",
+				expected: 3
+			},
+			{
+				label: "creating Square",
+				body: "if (Keep.shape == null) Keep.shape = new Shape(); var square:Shape = new Square(); return Keep.shape.area() + square.area();",
+				expected: 5
+			},
+			{
+				label: "no longer creating Shape",
+				body: "if (Keep.shape == null) Keep.shape = new Square(); return Keep.shape.area();",
+				expected: 1
+			}
+		]) {
+			compiler.update("Main.hx", program(step.body));
+			var changed = compiler.compile("Main");
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
+				throw '${step.label}: a reach change must patch, not reload: ${[for (reason in changed.reloadReasons) Std.string(reason)]}';
+			if (changed.artifact.hashLink().functionIndices.get("Shape.area") != areaSlot)
+				throw '${step.label}: Shape.area moved';
+			Runtime.patchSet(loaded,
+				new PatchSet(revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
+			revision = changed.revision;
+			var actual = Runtime.callInt(loaded, main);
+			if (actual != step.expected)
+				throw '${step.label}: the patched module returned $actual, not ${step.expected}';
 		}
 		Runtime.dispose(loaded);
 	}

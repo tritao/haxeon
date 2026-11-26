@@ -134,8 +134,13 @@ class CompilerProvider {
 		for (rule in compilerInputs.nullSafety)
 			arguments.push(CompileOptions.NULL_SAFETY + rule.argument());
 		// Artifact builds are the default: the module depends only on the source. Live sessions opt in.
-		if (live)
+		if (live) {
 			arguments.push("--live");
+			// The live host calls the entry class's entry points, which nothing in the program reaches.
+			if (entry != null)
+				for (point in tools.LiveEntryPoints.ALL)
+					arguments.push("--export=" + entry + "." + point);
+		}
 		if (android && !context.checkOnly) {
 			arguments.push("--baseline-output=" + output + ".hcs");
 		}

@@ -27,6 +27,9 @@ typedef IrPruneResult = {
 	final removedMethods:Map<String, Bool>;
 
 	final calledNatives:Map<String, Bool>;
+
+	/** The functions the prune gave a declaration stub in place of their body (`declarationStub`). */
+	final stubbed:Map<String, Bool>;
 }
 
 /**
@@ -77,10 +80,14 @@ class IrEntryPrune {
 		return IrTypeAwareWalk.runKept(name, program, walkRoots, true, classDependencies, stageMemos);
 	}
 
-	/** Prunes `program` to what `roots` (the entry's function, the static initializers, the exported functions) and `@:keep` reach. */
+	/**
+	 * Prunes `program` to what `roots` (the entry's function, the static initializers, the exported functions) and `@:keep` reach.
+	 * With `declaredMethods`, for a live layout, every method of every class keeps its table entry: one nothing reaches gets a
+	 * declaration stub, so the method a later edit reaches takes a body in the slot it has (docs/design/LIVE_PRUNING.md).
+	 */
 	public static function run(program:IrProgram, roots:Array<String>,
 			?classDependencies:IrClassDependencies,
-			?stageMemos:compiler.ir.reuse.IrStageMemos):IrPruneResult {
+			?stageMemos:compiler.ir.reuse.IrStageMemos, declaredMethods:Bool = false):IrPruneResult {
 		var removedMethods:Map<String, Bool> = [];
 		// The type-aware walk alone: a class that is only mentioned, never created, keeps none of its methods. Its reach beyond what the old walk
 		// keeps are the provider rows a dynamic site reaches over the created types (the equality helper of a struct that only `__dynamic_equal`
@@ -90,13 +97,18 @@ class IrEntryPrune {
 		// A method named by a reachable call on a class that cannot have an instance keeps its class-table entry and loses its body: the
 		// verifier resolves the call against the table, but nothing can receive it, so the body is a stub that throws (the way an interface
 		// method without an implementation is). A body that calls natives or other functions no longer keeps them.
-		var stubbed = 0;
+		var declared:Map<String, Bool> = [];
+		if (declaredMethods)
+			for (object in program.objects)
+				for (method in object.methods)
+					declared.set(method.functionName.name, true);
+		var stubbed:Map<String, Bool> = [];
 		for (index in 0...program.functions.length) {
 			var fn = program.functions[index];
-			if (walked.declarationOnly.exists(fn.name) && !reachable.exists(fn.name)) {
-				program.functions[index] = declarationStub(fn);
+			if ((walked.declarationOnly.exists(fn.name) || declared.exists(fn.name)) && !reachable.exists(fn.name)) {
+				program.functions[index] = declarationStub(fn, stageMemos);
 				reachable.set(fn.name, true);
-				stubbed++;
+				stubbed.set(fn.name, true);
 			}
 		}
 		var removed:Map<String, Bool> = [];
@@ -108,16 +120,43 @@ class IrEntryPrune {
 				if (!reachable.exists(method.functionName.name))
 					removedMethods.set(object.name + "\u0001" + method.name, true);
 		IrReachability.prune(program, reachable);
-		return {removed: removed, removedMethods: removedMethods, calledNatives: walked.calledNatives};
+		return {
+			removed: removed,
+			removedMethods: removedMethods,
+			calledNatives: walked.calledNatives,
+			stubbed: stubbed
+		};
 	}
 
-	/** The function with the same name and signature and a body that throws: the declaration of a method nothing can call. */
-	static function declarationStub(fn:IrFunction):IrFunction {
+	/**
+	 * The function with the same name and signature and a body that throws: the declaration of a method nothing can call. A stub
+	 * is made of its declaration's signature alone, so in a session last build's stands while the signature is the same.
+	 */
+	static function declarationStub(fn:IrFunction, stageMemos:Null<compiler.ir.reuse.IrStageMemos>):IrFunction {
+		var kept = stageMemos == null ? null : stageMemos.helper(fn.name);
+		if (kept != null && sameDeclaration(kept, fn))
+			return kept;
 		var builder = new IrBuilder();
 		for (argument in fn.arguments)
 			builder.argument(argument.name, argument.type);
 		builder.unreachable();
-		return new IrFunction(fn.name, builder.arguments, fn.result, builder.blocks, fn.kind);
+		var stub = new IrFunction(fn.name, builder.arguments, fn.result, builder.blocks, fn.kind);
+		if (stageMemos != null)
+			stageMemos.keepHelper(stub);
+		return stub;
+	}
+
+	static function sameDeclaration(stub:IrFunction, fn:IrFunction):Bool {
+		if (!stub.kind.match(Ordinary) || !fn.kind.match(Ordinary) || stub.arguments.length != fn.arguments.length
+			|| compiler.ir.model.IrTypeIdentity.text(stub.result) != compiler.ir.model.IrTypeIdentity.text(fn.result))
+			return false;
+		for (index in 0...fn.arguments.length) {
+			var a = stub.arguments[index], b = fn.arguments[index];
+			if (a.name != b.name
+				|| compiler.ir.model.IrTypeIdentity.text(a.type) != compiler.ir.model.IrTypeIdentity.text(b.type))
+				return false;
+		}
+		return true;
 	}
 
 	/**

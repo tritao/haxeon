@@ -119,7 +119,7 @@ function main():Int {
 		return 3;
 	if (!EnumCensus.arrays() || EnumCensus.perform(8) != 336)
 		return 1;
-	#if !(wasm || live_build)
+	#if !wasm
 	for (count in [8, 1024]) {
 		hl.Gc.censusStart(0);
 		var before = hl.Gc.totalAllocated();

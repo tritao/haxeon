@@ -42,6 +42,8 @@ class GcModuleLifetimeMain {
 
 	static function main() {
 		var compiler = new Compiler();
+		// The test calls `make` as a host does, by name: nothing in the program reaches it.
+		compiler.setExportedFunctions(["Main.make"]);
 		compiler.update("Main.hx",
 			"function make():() -> Int { var values = [40, 2]; return function() return values[0] + values[1]; } function main():Int { return 42; }");
 		var compiled = compiler.compile("Main");

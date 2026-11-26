@@ -65,10 +65,14 @@ class PatchPlanner {
 	 * the layout the running module has (`HlModuleAssembler.planObjects`). Value objects and closure environments are not:
 	 * other objects hold value objects inline, and closures already made hold their environments. A compiler resumed from
 	 * saved identity state has the running module's ABI but not its layout, and passes false.
+	 *
+	 * `unreached`: the functions the build declares but does not reach (`IrProgram.prunedFunctions`). One that leaves the reach set
+	 * is not removed: a live module keeps its slot and its code (docs/design/LIVE_PRUNING.md), so only a removed declaration is
+	 * `FunctionRemoved`.
 	 */
 	public static function plan(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor,
 			addsFunctions:Bool = false,
-			checksObjectMembers:Bool = false):PatchDecision {
+			checksObjectMembers:Bool = false, ?unreached:Map<String, Bool>):PatchDecision {
 		if (previous == null)
 			return Patch;
 		var reasons:Array<AbiChange> = [];
@@ -76,7 +80,7 @@ class PatchPlanner {
 			if (oldValue == null)
 				return FunctionAdded(name);
 			if (newValue == null)
-				return FunctionRemoved(name);
+				return unreached != null && unreached.exists(name) ? null : FunctionRemoved(name);
 			return FunctionSignatureChanged(name);
 		}, reasons);
 		var objectReasons:Array<AbiChange> = [];
@@ -223,7 +227,7 @@ class PatchPlanner {
 	}
 
 	static function compare(previous:Map<String, String>, next:Map<String, String>,
-			change:(String, Null<String>, Null<String>) -> AbiChange,
+			change:(String, Null<String>, Null<String>) -> Null<AbiChange>,
 			reasons:Array<AbiChange>):Void {
 		var names:Map<String, Bool> = [];
 		for (name in previous.keys())
@@ -232,8 +236,11 @@ class PatchPlanner {
 			names.set(name, true);
 		for (name in names.keys()) {
 			var oldValue = previous.get(name), newValue = next.get(name);
-			if (oldValue != newValue)
-				reasons.push(change(name, oldValue, newValue));
+			if (oldValue != newValue) {
+				var reason = change(name, oldValue, newValue);
+				if (reason != null)
+					reasons.push(reason);
+			}
 		}
 	}
 }

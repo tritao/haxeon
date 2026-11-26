@@ -28,6 +28,8 @@ class GcOwnerRetirementMain {
 
 	static function main() {
 		var compiler = new Compiler();
+		// The test calls these as a host does, by name: nothing in the program reaches them.
+		compiler.setExportedFunctions(["Main.makeBox", "Main.make"]);
 		compiler.update("Main.hx",
 			"class Box { public var value:Int; public function new(value:Int) { this.value = value; } }
 function makeBox():Box { return new Box(42); }

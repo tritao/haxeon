@@ -643,7 +643,7 @@ class IrProgramAssembler {
 			?inlineCache:IrInlineCache,
 			?valueTarget:compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget,
 			?exportedFunctions:Array<String>,
-			walkFromEntry = false, pruneFromEntry = false,
+			walkFromEntry = false, pruneFromEntry = false, declaredMethods = false,
 			?canonicalObjects:Array<IrObject>, ?options:compiler.CompileOptions,
 			?meter:compiler.core.IrPassMeter, ?stageMemos:compiler.ir.reuse.IrStageMemos):IrProgram {
 		var allFunctions:Array<IrFunction> = [];
@@ -675,6 +675,7 @@ class IrProgramAssembler {
 		context.canonicalObjects = canonicalObjects;
 		context.walkFromEntry = walkFromEntry || pruneFromEntry;
 		context.pruneFromEntry = pruneFromEntry;
+		context.declaredMethods = declaredMethods;
 		// What a plain build's prune keeps (docs/design/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and the
 		// exported functions.
 		var pruneRoots = entryPoint == null ? ["main", "Main.main"] : [entryPoint];
@@ -731,6 +732,7 @@ class IrProgramAssembler {
 			mapRuntimeNames:Map<String, Bool> = [],
 			mapHandleListings:Map<String, Bool> = [];
 		program.prunedFunctions = removedByPrune;
+		program.stubbedFunctions = context.stubbed;
 		program.reachedNatives = reachedNativesAfterPrune;
 		program.objects = objects == null ? [] : objects;
 		program.cNatives = cNatives == null ? [] : cNatives;
@@ -738,10 +740,9 @@ class IrProgramAssembler {
 			needsUnreachable = false;
 		var builder = context.passScratch.bodyBuilder;
 		var stageMemos = context.stageMemos, cNativeKey = [for (native in program.cNatives) native.name].join("\n");
-		for (index in 0...allFunctions.length) {
-			var fn = allFunctions[index],
-				needs = IrRuntimeNeeds.of(fn, builder, cNativeNames, cNativeKey, stageMemos),
-				flags = needs.flags;
+		// What a function needs of the runtime surface.
+		function take(needs:IrRuntimeNeeds):Void {
+			var flags = needs.flags;
 			if (flags & IrRuntimeNeeds.INT64_TO_INT != 0)
 				needsInt64ToInt = true;
 			if (flags & IrRuntimeNeeds.EXCEPTION != 0)
@@ -778,6 +779,12 @@ class IrProgramAssembler {
 				mapRuntimeNames.set(name, true);
 			for (name in needs.mapHandles)
 				mapHandleListings.set(name, true);
+		}
+		for (index in 0...allFunctions.length) {
+			var fn = allFunctions[index],
+				needs = IrRuntimeNeeds.of(fn, builder, cNativeNames, cNativeKey, stageMemos),
+				flags = needs.flags;
+			take(needs);
 			if (flags & IrRuntimeNeeds.C_NATIVES != 0) {
 				// The function stops being the one the assembly holds, whose array may be a cache's.
 				if (allFunctions == assembly.functions)
@@ -785,6 +792,10 @@ class IrProgramAssembler {
 				allFunctions[index] = cNativeCalls(fn.encodedBody(builder), cNativeNames, builder);
 			}
 		}
+		// A live layout's natives come before every function slot, so its runtime surface is what the declared program needs: a
+		// function a later edit reaches then calls only natives the running module has. What C natives a body calls is its own.
+		for (fn in context.unreachedBodies)
+			take(IrRuntimeNeeds.of(fn, builder, cNativeNames, cNativeKey, stageMemos));
 		program.interfaces = interfaces == null ? [] : interfaces;
 		program.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions,
 			objects == null ? [] : objects,

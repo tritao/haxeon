@@ -11,8 +11,16 @@ import sys.io.File;
 class PluginMain {
 	static final fixtureRoot = "tests/fixtures/pragtical/";
 
+	/** What the host calls by name, which nothing in the plugin's program reaches. */
+	static final hostFunctions = [
+		"Main.activate", "Main.callbackCount", "Main.cursor", "Main.deactivate", "Main.documentCount",
+		"Main.restoreState",
+		"Main.runCommand", "Main.saveState"
+	];
+
 	static function main():Void {
 		var output = Sys.args()[0], compiler = new Compiler();
+		compiler.setExportedFunctions(hostFunctions);
 		compiler.enablePublicationTracking();
 		loadFixture(compiler, "pragtical/api/Plugin.hx");
 		loadFixture(compiler, "pragtical/api/Document.hx");
@@ -77,6 +85,7 @@ class PluginMain {
 		}
 
 		var resumed = new Compiler(compiler.exportIdentityState());
+		resumed.setExportedFunctions(hostFunctions);
 		switch resumed.reconcileRuntime(first.artifact.hashLink().runtimeIdentity.sub(4, 16), bodyEdit.revision) {
 			case ContinuePatching:
 			case ReloadDomain(reason):

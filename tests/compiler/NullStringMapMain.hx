@@ -14,7 +14,8 @@ class NullStringMapMain {
 		for (target in ["hl", "wasm32", "wasm-gc"]) for (inlining in [false, true]) {
 			var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 			c.addStandardLibrarySourceRoot("stdlib");
-			c.setExportedFunctions(exports);
+			// The host calls `Main.census` by name, which nothing in the program calls.
+			c.setExportedFunctions(target == "hl" ? exports.concat(["Main.census"]) : exports);
 			c.configure("null-map-" + target + inlining, "null-map",
 				CompilerDriver.targetDefines(target));
 			c.options = new CompileOptions({inlining: inlining});

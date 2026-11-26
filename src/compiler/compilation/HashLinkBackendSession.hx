@@ -145,8 +145,8 @@ class HashLinkBackendSession implements BackendSession {
 		if (!context.livePatching) {
 			// A plain HashLink build writes only what is reachable from the entry: a function nothing reaches is not lowered or
 			// encoded, and a class no reachable function mentions loses its methods. The program in the result keeps everything
-			// (other backends and tools read it), and a live module keeps every function too, because its host can call any of
-			// them by id and a reachability change must not move its layout.
+			// (other backends and tools read it). A live module was pruned with the same walk and keeps every class, global and
+			// declared method, so a reachability change moves nothing in its layout (docs/design/LIVE_PRUNING.md).
 			var plain = HlPlainBuild.reachable(ir, context.options.checkReuse, summaries),
 				reachable = plain.reachable;
 			assemblyIr = plain.program;
@@ -168,7 +168,7 @@ class HashLinkBackendSession implements BackendSession {
 		// Patch planning describes what a running module must do to adopt this build. Without live patching there is no
 		// running module, and the plan would only mix session history into the build.
 		var decision = context.livePatching && nextAbi != null ? PatchPlanner.plan(previousAbi, nextAbi, true,
-			baseAssembler.isPublished()) : PatchDecision.Patch,
+			baseAssembler.isPublished(), ir.prunedFunctions) : PatchDecision.Patch,
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];
 				case ReloadDomain(reasons): reasons;
@@ -272,6 +272,8 @@ class HashLinkBackendSession implements BackendSession {
 			|| assembly.changedFunctions.length == 0 ? null : sectionPatch(context, assembly,
 			baseAssembler.sectionDigests,
 			written.written, declarations, modules);
+		if (patchBytes != null && context.options.checkReuse)
+			checkFirstReach(baseAssembler, candidateAssembler, written.written, declarations, modules);
 		var allocationAfterPatch = AllocationMeter.sample();
 		assembler = candidateAssembler;
 		compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices, sections);
@@ -367,6 +369,27 @@ class HashLinkBackendSession implements BackendSession {
 				type: key(migration.className),
 				initializer: key(migration.initializer)
 			}]});
+	}
+
+	/**
+	 * `--check-reuse` of a live patch: every function the running module has no slot for, which this build reaches first, is in a
+	 * section the patch replaces, so the runtime links it (docs/design/LIVE_PRUNING.md, "Live `--check-reuse`"). Its lowering is
+	 * of the final IR the frontend checked against a fresh build, and every function kept as lowered is lowered again and compared
+	 * (`HlLower.verifyKept`).
+	 */
+	static function checkFirstReach(base:HlModuleAssembler, candidate:HlModuleAssembler,
+			written:Array<compiler.hl.HlSectionWriter.HlWrittenSection>,
+			declarations:compiler.semantic.DeclarationOwners,
+			modules:Map<String, Int>):Void {
+		var acknowledged = base.sectionDigests,
+			replaced:Map<String, Bool> = [
+				for (section in written)
+					if (acknowledged.get(section.path) != section.digest) section.path => true
+			];
+		for (name in candidate.cache.slots)
+			if (!base.cache.userSlots.exists(name)
+				&& !replaced.exists(compiler.hl.HlSectionWriter.homeOf(name, declarations, modules)))
+				throw new InternalError('--check-reuse: $name, which the running module has no code for, is in no section the patch replaces');
 	}
 
 	/** Records the files `code`'s debug locations are placed in (`placedFiles`). */

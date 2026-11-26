@@ -129,11 +129,11 @@ function main():Int {
 	valueCallbackView.value = elementIdentity;
 	if (valueCallbacks.value(new BoundaryElement(42, "ok")).number != 42) return 14;
 	BoundaryClosureCensus.prepare();
-	#if !(wasm || live_build)
+	#if !wasm
 	var before = hl.Gc.totalAllocated();
 	#end
 	if (BoundaryClosureCensus.perform(8) != 8 || BoundaryClosureCensus.perform(1024) != 1024) return 22;
-	#if !(wasm || live_build)
+	#if !wasm
 	if (hl.Gc.totalAllocated() != before) return 23;
 	#end
 	return 42;

@@ -176,6 +176,13 @@ class HlModuleAssembler {
 	var programNames:Null<Map<String, Bool>> = null;
 
 	/**
+	 * The functions whose code in the module is a declaration stub (`IrProgram.stubbedFunctions`): a method no build reached
+	 * since it took its slot. Not kept across a restore, after which every slot counts as holding real code, which keeps what a
+	 * stub would replace and so is never wrong.
+	 */
+	var stubs:Map<String, Bool> = [];
+
+	/**
 	 * Reserved slots each object gets when this assembler lays out a fresh module (see `HlLower.reservedSlots`): the
 	 * fields live patches can add to it. Zero without live patching.
 	 */
@@ -252,6 +259,7 @@ class HlModuleAssembler {
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
 		result.renamed = renamed.copy();
 		result.programNames = programNames == null ? null : [for (name in programNames.keys()) name => true];
+		result.stubs = stubs.copy();
 		return result;
 	}
 
@@ -550,10 +558,11 @@ class HlModuleAssembler {
 
 	/**
 	 * The functions the running module has that this build drops, which closures it stored may still call: those the last
-	 * program had and `program` lacks, lambdas retired by a rename among them. Retired functions an adapter now serves, and
-	 * functions moved for a changed signature (`moveChangedSignatures` guards those), are left out.
+	 * program had and `program` lacks, lambdas retired by a rename among them. Retired functions an adapter now serves, functions
+	 * moved for a changed signature (`moveChangedSignatures` guards those), and functions still `declared` that the build only
+	 * does not reach, whose slots keep their code, are left out.
 	 */
-	function dropGuards(program:IrProgram, skip:Map<String, Bool>,
+	function dropGuards(program:IrProgram, skip:Map<String, Bool>, declared:Map<String, Bool>,
 			sources:SourceAnchors):Array<{
 				name:String,
 				description:String
@@ -563,6 +572,7 @@ class HlModuleAssembler {
 		for (name in cache.slots) {
 			if (present.exists(name)
 				|| skip.exists(name)
+				|| declared.exists(name)
 				|| RetiredName.movedFrom(name) != null
 				|| name == "__init"
 				|| StringTools.endsWith(name, "." + IrProgramAssembler.LIVE_INITIALIZER))
@@ -876,6 +886,48 @@ class HlModuleAssembler {
 		return result;
 	}
 
+	/**
+	 * The stubs of `program` (`IrProgram.stubbedFunctions`) whose slot holds real code of the same signature: a method the build no
+	 * longer reaches keeps the code it last had, as the published set only grows within a module identity, for the instances the
+	 * running program made before (docs/design/LIVE_PRUNING.md).
+	 */
+	function retainedCode(program:IrProgram):Array<IrFunction> {
+		var stubbed = program.stubbedFunctions;
+		return [
+			for (fn in program.functions)
+				if (stubbed.exists(fn.name) && cache.userSlots.exists(fn.name) && !stubs.exists(fn.name)
+				&& cache.signatureOf(fn.name) == HlFunctionCache.signature(fn)) fn
+		];
+	}
+
+	/**
+	 * The functions of `program` the module has code for that is not theirs: a stub a reached method replaces, or the code of one
+	 * the last build did not reach, which edits since may have changed. Lowering trusts the rest.
+	 */
+	function enteringReach(program:IrProgram):Array<String> {
+		var stubbed = program.stubbedFunctions, result:Array<String> = [];
+		for (fn in program.functions) {
+			if (!cache.userSlots.exists(fn.name) || stubbed.exists(fn.name))
+				continue;
+			if (stubs.exists(fn.name))
+				result.push(fn.name);
+			else if (programNames == null || !programNames.exists(fn.name)) {
+				var held = cache.functions.get(fn.name);
+				if (held == null || held != fn && !compiler.ir.codec.IrFunctionStateEquality.same(held, fn))
+					result.push(fn.name);
+			}
+		}
+		return result;
+	}
+
+	/** Records which of `functions`, now in the cache, are declaration stubs (`stubs`). */
+	function noteStubs(functions:Array<IrFunction>, stubbed:Map<String, Bool>):Void
+		for (fn in functions)
+			if (stubbed.exists(fn.name))
+				stubs.set(fn.name, true);
+			else
+				stubs.remove(fn.name);
+
 	/** Of the regenerated functions, those that differ from their form in the resumed module, or that it does not have. */
 	static function changedSinceResumed(regenerated:Array<String>, program:IrProgram,
 			resumed:Map<String, haxe.io.Bytes>):Array<String> {
@@ -902,16 +954,32 @@ class HlModuleAssembler {
 			loweredCache == null ? null : loweredCache.sharedCalls),
 			slotted:Map<String, Bool> = [for (name in cache.slots) name => true];
 		program = shared.program;
-		// The cache holds each function as this rewrite left it, so a resumed function is compared in that form.
-		regenerated = resumed == null ? regenerated.copy() : changedSinceResumed(regenerated, program, resumed);
-		for (name in shared.helpers)
-			if (!slotted.exists(name) && regenerated.indexOf(name) < 0)
-				regenerated.push(name);
 		var reload = switch decision {
 			case Patch: false;
 			case ReloadDomain(_): true;
 			case Reject(diagnostics): throw new InternalError(diagnostics.join("; "));
 		};
+		var live = livePatching && initialized && !reload,
+			retained = live ? retainedCode(program) : [];
+		if (retained.length > 0) {
+			var withheld:Map<String, Bool> = [for (fn in retained) fn.name => true];
+			program = program.copy();
+			program.functions = [for (fn in program.functions) if (!withheld.exists(fn.name)) fn];
+		}
+		// The cache holds each function as this rewrite left it, so a resumed function is compared in that form.
+		regenerated = resumed == null ? regenerated.copy() : changedSinceResumed(regenerated, program, resumed);
+		if (live) {
+			// A function the build does not reach keeps its slot and its code: it is not lowered again, whatever was regenerated.
+			var reached:Map<String, Bool> = [for (fn in program.functions) fn.name => true];
+			regenerated = [for (name in regenerated) if (reached.exists(name)) name];
+			var listedRegenerated:Map<String, Bool> = [for (name in regenerated) name => true];
+			for (name in enteringReach(program))
+				if (!listedRegenerated.exists(name))
+					regenerated.push(name);
+		}
+		for (name in shared.helpers)
+			if (!slotted.exists(name) && regenerated.indexOf(name) < 0)
+				regenerated.push(name);
 		var guards:Array<{name:String, description:String}> = [];
 		if (initialized && !reload) {
 			var tag = Std.string(lastRevision() + 1);
@@ -932,7 +1000,11 @@ class HlModuleAssembler {
 			if (moves.moved.length > 0)
 				for (name in callersOfMoved(moves.moved, tag, [for (fn in program.functions) fn.name => true]))
 					regenerate(name);
-			guards = moves.guards.concat(dropGuards(program, [for (name in moves.adapted) name => true], sources));
+			var declared:Map<String, Bool> = [for (name in program.prunedFunctions.keys()) name => true];
+			for (fn in retained)
+				declared.set(fn.name, true);
+			guards = moves.guards.concat(dropGuards(program, [for (name in moves.adapted) name => true], declared,
+				sources));
 		}
 		// Once this patch applies, no closure the running module holds reaches a guard: the runtime refuses the patch while one
 		// does, and the new code calls none. So a guard keeps its slot, stable ID, signature and the code the module has in the
@@ -941,6 +1013,7 @@ class HlModuleAssembler {
 			vacate(guard.name);
 		var publishedSlots = cache.slots.length;
 		cache.update(program.functions);
+		noteStubs(program.functions, program.stubbedFunctions);
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
 		ordered.cNatives = program.cNatives;
@@ -956,8 +1029,16 @@ class HlModuleAssembler {
 		var present:Map<String, Bool> = [for (fn in program.functions) fn.name => true];
 		function startFresh():Void {
 			discardPublishedSymbols();
-			if (cache.dropRetired(function(name) return RetiredName.is(name) || !present.exists(name)))
-				ordered.functions = cache.ordered();
+			// A fresh module keeps nothing of the running one's code: the stubs withheld for it are the functions' code again.
+			if (retained.length > 0) {
+				cache.update(retained);
+				noteStubs(retained, program.stubbedFunctions);
+				for (fn in retained)
+					present.set(fn.name, true);
+				retained = [];
+			}
+			cache.dropRetired(function(name) return RetiredName.is(name) || !present.exists(name));
+			ordered.functions = cache.ordered();
 		}
 		var reuseLowered = initialized && !reload;
 		var layoutReasons:Array<String> = [];
@@ -1080,7 +1161,7 @@ class HlModuleAssembler {
 		// what lowering ignores) is the published revision again: a new revision would carry no patch, and the runtime
 		// can only reach a revision without a patch by reloading.
 		var baseRevision = revision;
-		programNames = [for (fn in program.functions) fn.name => true];
+		programNames = [for (name in present.keys()) name => true];
 		var renames = reload ? [] : pendingRenames;
 		pendingRenames = [];
 		var unchanged = initialized && !reload && changed.length == 0 && !addsFunctions

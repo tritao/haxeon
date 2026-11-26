@@ -1642,7 +1642,7 @@ class FrontendCompilation {
 				build.initializers, entryPoint, irCNatives, build.reflectable,
 				context.state.inlineCache, context.valueArrayTarget(),
 				context.exportedFunctions(), context.isWasmTarget() || !context.livePatching,
-				!context.livePatching && !context.isWasmTarget() && context.options.earlyPrune,
+				!context.isWasmTarget() && context.options.earlyPrune, context.livePatching && !context.isWasmTarget(),
 				[for (object in objects) {
 					if (object.isValue && object.nativeLayout != null) {
 						var canonical = canonicalObjects.get(object.name);
@@ -1711,6 +1711,8 @@ class FrontendCompilation {
 			// The prune ran early: after the last pass nothing may call what it removed (`IrEntryPrune`).
 			if (checkingReuse)
 				compiler.ir.analysis.IrEntryPrune.checkRemoved("the pipeline", ir.functions, ir.prunedFunctions);
+			if (checkingReuse && context.livePatching && context.state.compiledOnce && !context.isWasmTarget())
+				checkLiveAfresh(build, ir);
 			context.state.pipelineSnapshot = context.livePatching
 				|| inputs == null ? null : new PipelineSnapshot(inputs, ir);
 		}
@@ -1811,6 +1813,31 @@ class FrontendCompilation {
 				[for (fn in build.cached) if (!unusedPrinters.exists(fn.name)) fn]));
 		if (difference != null)
 			throw new InternalError('--check-reuse: what the frontend kept from earlier builds differs from a fresh frontend run ($difference)');
+	}
+
+	/**
+	 * `--check-reuse` of a live build (docs/design/LIVE_PRUNING.md, "Live `--check-reuse`"): the same tree built from a fresh
+	 * state, with the same options and roots, reaches the same functions, each with the same final IR, and stubs the same methods,
+	 * whatever the session's memos held. A function first reached many edits after it was generated is then lowered from what a
+	 * fresh build makes of it; the backend checks the lowering (`HashLinkBackendSession`).
+	 */
+	static function checkLiveAfresh(build:FrontendBuild, ir:IrProgram):Void {
+		var fresh = build.context.over(build.context.state.freshFromSources()), freshBuild:Null<FrontendBuild> = null;
+		try
+			freshBuild = throughTables(fresh, build.entryModule, build.token, [], true, false, null, null, null).build
+		catch (error:CompileError)
+			throw new InternalError('--check-reuse: the live build run afresh fails where the warm build passed (${error.message})');
+		if (freshBuild == null)
+			throw new InternalError("--check-reuse: the live build run afresh produced no IR tables");
+		runIrPipeline(freshBuild);
+		var freshIr = freshBuild.ir;
+		var difference = PipelineSnapshot.irDifference(freshIr, ir);
+		if (difference == null)
+			for (name in ir.stubbedFunctions.keys())
+				if (!freshIr.stubbedFunctions.exists(name))
+					difference = 'function $name is a stub';
+		if (difference != null)
+			throw new InternalError('--check-reuse: the live program differs from the one a fresh build of the same tree makes ($difference)');
 	}
 
 	/** Everything the IR pipeline reads for this build (see `PipelineInputs`). */
