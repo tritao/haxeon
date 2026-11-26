@@ -6227,11 +6227,15 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 */
 		reserved: array<u32, 3> @offset(28);
 		/**
-		 * Borrowed native device token (ID3D11Device* or id<MTLDevice> where applicable).
+		 * Borrowed native device token (ID3D11Device* or id<MTLDevice> where applicable). Direct3D 11
+		 * and Metal surfaces share one device per process, so other surfaces' frames use it too.
 		 */
 		native_device: u64 @offset(40);
 		/**
 		 * Borrowed execution token (ID3D11DeviceContext* or id<MTLCommandQueue> where applicable).
+		 * A Direct3D 11 immediate context is shared like its device and is the render thread's: use it
+		 * only there, and leave no view bound when the frame ends (`ClearState`), since the platform
+		 * resizes and releases a surface's swapchain without unbinding it.
 		 */
 		native_context: u64 @offset(48);
 		/**
