@@ -7,8 +7,8 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
@@ -16,7 +16,7 @@ import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 
 /** Selectable radio option; use RadioGroup for exclusive selection and arrow keys. */
-class Radio implements View {
+class Radio implements ScopeView {
 	final key:Key;
 	/** The text beside the button, and its accessible name. */
 	public final label:String;
@@ -59,13 +59,20 @@ class Radio implements View {
 			: onSelect;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(key, function() {
-			var nodeId = context.rootId("radio");
-			// Hover and press change only how the option looks, so it updates itself and the panel around it stays cached.
-			return context.selfUpdating(nodeId, function() return buildRadio(context, nodeId));
-		});
+	public function scopeKey():String return key.rawValue();
+
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, Radio)) return false;
+		var other:Radio = cast previous;
+		return key == other.key && label == other.label && value == other.value && selected == other.selected
+			&& enabled == other.enabled && hasSelectHandler == other.hasSelectHandler && onSelect == other.onSelect
+			&& haxeon.Diff.mask(style, other.style) == 0;
 	}
+
+	public function buildBody(context:BuildContext):RenderNode return buildRadio(context, context.rootId("radio"));
+
+	// Hover and press change only how the option looks: they rerun this scope, and the panel around it stays cached.
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 
 	function buildRadio(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
 		var flags = context.interactionStates.get(nodeId);

@@ -11,16 +11,15 @@ import haxeon.ui.animation.Animation;
 import haxeon.ui.animation.AnimationController;
 import haxeon.ui.animation.AnimationScheduler;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.State;
-import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleTarget;
 
 /** Read-only progress indicator painted from a normalized numeric range. */
-class ProgressBar implements View {
+class ProgressBar implements ScopeView {
 	/**
 	 * Identifies the bar among its siblings, so its animation carries on across rebuilds: required, and never empty.
 	 */
@@ -69,12 +68,19 @@ class ProgressBar implements View {
 		animationDuration = 0.22;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(new Key(key), function() {
-			var nodeId = context.rootId("progress");
-			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId));
-		});
+	public function scopeKey():String return key;
+
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, ProgressBar)) return false;
+		var other:ProgressBar = cast previous;
+		return key == other.key && label == other.label && value == other.value && minimum == other.minimum
+			&& maximum == other.maximum && mode == other.mode && animationDuration == other.animationDuration
+			&& haxeon.Diff.mask(style, other.style) == 0;
 	}
+
+	public function buildBody(context:BuildContext):RenderNode return buildControl(context, context.rootId("progress"));
+
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
 		var computed = context.styleResolver.resolve(new StyleTarget("progress-bar", key, key, null, ["progress-bar"],
@@ -106,7 +112,7 @@ class ProgressBar implements View {
 		var painter:ProgressPainter = cast stored.value;
 		painter.configure(mode, fraction, animationDuration, context.environment.reducedMotion);
 		node.onPaint(function(canvas, geometry) {
-			var liveStyle:haxeon.ui.style.ComputedStyle = cast RenderNode.latest(node).computedStyle;
+			var liveStyle:haxeon.ui.style.ComputedStyle = cast node.computedStyle;
 			painter.paint(canvas,
 				geometry,
 				liveStyle.getColor(StyleProperty.ProgressTrackColor),
