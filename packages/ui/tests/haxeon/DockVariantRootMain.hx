@@ -82,7 +82,7 @@ class DockVariantRootMain {
 		if (!hasText(second, "B content") || !clickTab(second, "pane-a")) throw "Dock variant stage 3";
 		var returned = uiContext.submit(workspace, frame);
 		if (tabs(returned) != firstTabs || !hasText(returned, "A content")) throw "Dock variant stage 4";
-		if (!uiContext.buildContext.requestPatch(firstTabs.id)) throw "Dock variant stage 5";
+		if (firstTabs.scopeOwner() == null) throw "Dock variant stage 5";
 		uiContext.submit(workspace, frame);
 		if (uiContext.verifyRetention(() -> workspace, frame) != null) throw "Dock variant stage 6";
 		// Moving retained panel content away invalidates any hidden pane that used its former parent.
@@ -91,8 +91,10 @@ class DockVariantRootMain {
 		uiContext.submit(workspace, frame);
 		model.setRoot(DockNode.Tabs(["pane-a", "pane-b"], "pane-a"));
 		var moved = uiContext.submit(workspace, frame);
-		if (!hasText(moved,
-			"A content") || uiContext.verifyRetention(() -> workspace, frame) != null) throw "Dock variant stage 7";
+		var movedText = hasText(moved, "A content");
+		var movedDiff = uiContext.verifyRetention(() -> workspace, frame);
+		if (!movedText || movedDiff != null) throw "Dock variant stage 7: "
+			+ (movedText ? movedDiff : "the panel content is missing");
 		// Matching panel names and revisions do not make callbacks from another model interchangeable.
 		var replacement = new DockWorkspaceModel();
 		for (id in ["pane-a", "pane-b"]) replacement.register(new DockPanelDescriptor(id, id));

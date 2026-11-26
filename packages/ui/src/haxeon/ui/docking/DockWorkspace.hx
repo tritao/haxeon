@@ -18,6 +18,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.InteractionStateSnapshot;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.core.State;
 import haxeon.ui.core.TextStyleOverride;
@@ -775,11 +776,13 @@ private class DockPanelCacheEntry implements Disposable {
 				positions.push(parent == null ? -1 : variableParent ? -2 : parent.children.indexOf(node));
 				// A nested self-updating widget owns its children and may reconcile them while this pane is live.
 				// Its interaction snapshot tracks that build; retain only the children its caller added afterward.
+				// A component's body is still captured: a retained subtree inside it can move to another pane, and
+				// when the component runs again its new children only cost this pane a rebuild.
 				var owner = node == root ? null : topologyContext.updatingBuild(node);
 				var native = topologyContext.renderScopeAt(node);
 				childCounts.push(owner == null && native == null ? node.children.length : -1);
 				for (child in node.children) {
-					var owned = native != null && native.owns(child);
+					var owned = false;
 					if (owner != null
 						&& owner.built != null) for (made in owner.built.children) if (made.id.value == child.id.value)
 						{
@@ -875,8 +878,8 @@ private class DockDropTargetView implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var node = child.build(context);
-		interaction.registerTarget(new DockDropTarget(targetPanelId, node));
+		// The preview overlay goes on the child's root through a modifier: the child may be a component that owns it.
+		var modifier = new RootModifier();
 		var activePreview = interaction.preview;
 		if (activePreview != null && activePreview.targetPanelId == targetPanelId) {
 			var previewStyle = new LayoutStyle();
@@ -897,8 +900,10 @@ private class DockDropTargetView implements View {
 				canvas.fillRectIfPositive(previewRect(preview.zone, geometry.width, geometry.height),
 					Color.rgba(0.18, 0.52, 0.95, 0.22));
 			}, "dock-drop-preview:" + previewKey);
-			node.add(previewNode);
+			modifier.add(previewNode);
 		}
+		var node = context.build(child, modifier);
+		interaction.registerTarget(new DockDropTarget(targetPanelId, node));
 		return node;
 	}
 

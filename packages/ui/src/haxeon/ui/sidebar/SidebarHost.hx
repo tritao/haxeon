@@ -4,6 +4,7 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.controls.Tabs;
 import haxeon.ui.widgets.text.Text;
@@ -18,8 +19,6 @@ class SidebarHost implements View {
 	final activeOnly:Bool;
 	/** Optional fixed header actions for the active destination. */
 	public var headerActions:Null<String->Null<View>> = null;
-	/** Evaluate against the built pane; hidden actions retain their layout space. */
-	public var headerActionsVisible:Null<RenderNode->Bool> = null;
 
 	/**
 	 * A sidebar showing `model`'s selected destination under a strip of its destinations, calling `onSelect` with the
@@ -52,20 +51,11 @@ class SidebarHost implements View {
 		// clipping here makes Clay treat the whole stack as scroll content and
 		// leaves the page at its intrinsic height instead of sizing its viewport.
 		// Each destination owns its vertical clipping and scrolling.
-		var actions:Null<SidebarHeaderActions> = null;
-		if (headerActions != null) {
-			var content = headerActions(selected.id);
-			if (content != null) {
-				actions = new SidebarHeaderActions(content);
-				options.headerTrailing = actions;
-			}
-		}
+		if (headerActions != null) options.headerTrailing = headerActions(selected.id);
 		var tabs = Tabs.withOptions(key, items, selected.id, onSelect, options);
-		var node = tabs.build(context);
-		if (actions != null && actions.node != null && headerActionsVisible != null)
-			actions.node.layout.style.visible = headerActionsVisible(node);
-		node.onResolved(function(bounds) model.rememberWidth(bounds.width));
-		return node;
+		var modifier = new RootModifier();
+		modifier.onResolved(function(bounds) model.rememberWidth(bounds.width));
+		return context.build(tabs, modifier);
 	}
 }
 
@@ -73,14 +63,4 @@ private class SidebarPage implements View {
 	final mode:SidebarMode;
 	public function new(mode:SidebarMode) this.mode = mode;
 	public function build(context:BuildContext):RenderNode return mode.provider().build(context);
-}
-
-private class SidebarHeaderActions implements View {
-	final child:View;
-	public var node(default, null):Null<RenderNode>;
-	public function new(child:View) this.child = child;
-	public function build(context:BuildContext):RenderNode {
-		node = child.build(context);
-		return node;
-	}
 }

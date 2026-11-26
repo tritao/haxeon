@@ -490,7 +490,6 @@ private class TabsRig {
 		style.height = LayoutAxis.fixed(200);
 		tabs = new haxeon.ui.widgets.controls.Tabs("local-tabs", [first, disabled, second], "first", _ -> changes++,
 			style);
-		tabs.headerRevision = () -> "headers";
 		decorated = new DecoratedControl("tabs-host", _ -> tabs);
 		view = new RetainedView("tabs-panel", _ -> {
 			panelBuilds++;
@@ -1547,8 +1546,9 @@ private class UpdatingResources implements View {
 		function compareTabs():Void {
 			var left = patched.submit(), right = reference.submit();
 			steps++;
-			check(left == root && left.children.indexOf(caller) >= 0 && left.layout.style.zIndex == 3,
-				"Tabs lost their root or caller additions at step " + steps);
+			// The strip is a component: a rerun replaces its root node, and its modifier puts the caller's additions back.
+			check(left.id.equals(root.id) && left.children.indexOf(caller) >= 0 && left.layout.style.zIndex == 3,
+				"Tabs lost their identity or caller additions at step " + steps);
 			check(signature(left) == signature(right), "Tabs differ from a full rebuild at step " + steps);
 			check(patched.tabs.selectedKey == reference.tabs.selectedKey && patched.changes == reference.changes
 				&& patched.closes == reference.closes && patched.decorated.presses == reference.decorated.presses,

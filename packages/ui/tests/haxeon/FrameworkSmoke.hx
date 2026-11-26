@@ -2948,38 +2948,34 @@ class FrameworkSmoke {
 
 		var tabChanges = 0;
 		var retainedHeaderBuilds = 0;
-		var retainedHeaderRevision = "initial";
 		var retainedTabOptions = new haxeon.ui.widgets.controls.Tabs.TabsOptions();
 		retainedTabOptions.selectionMode = haxeon.ui.widgets.controls.Tabs.TabsSelectionMode.Controlled;
-		var retainedTabs = Tabs.withOptions("retained-tabs-smoke",
-			[
-				new TabItem("first", "First", new Text("first page")),
-				new TabItem("second", "Second", new Text("second page"))
-			],
-			"first",
-			null,
-			retainedTabOptions);
-		retainedTabs.headerRevision = function() return retainedHeaderRevision;
-		retainedTabs.onTabHeaderBuilt = function(_, _) {
+		retainedTabOptions.onTabHeaderBuilt = function(_, _) {
 			retainedHeaderBuilds++;
 		};
-		context.submit(retainedTabs, new LayoutFrame(320, 192));
-		context.submit(retainedTabs, new LayoutFrame(320, 192));
-		if (retainedHeaderBuilds != 2) throw "Unchanged tab headers must be retained";
-		retainedTabs.selectedKey = "second";
-		context.submit(retainedTabs, new LayoutFrame(320, 192));
-		if (retainedHeaderBuilds != 4) throw "Selection changes must update retained tab headers";
-		retainedTabs.items[0] = new TabItem("first", "First *", new Text("edited page"));
-		retainedHeaderRevision = "edited";
-		context.submit(retainedTabs, new LayoutFrame(320, 192));
-		if (retainedHeaderBuilds != 6) throw "Label changes must update retained tab headers";
+		var firstPage = new Text("first page"), secondPage = new Text("second page");
+		function retainedTabs(selected:String, firstLabel:String):Tabs {
+			return Tabs.withOptions("retained-tabs-smoke",
+				[new TabItem("first", firstLabel, firstPage), new TabItem("second", "Second", secondPage)],
+				selected,
+				null,
+				retainedTabOptions);
+		}
+		context.submit(retainedTabs("first", "First"), new LayoutFrame(320, 192));
+		context.submit(retainedTabs("first", "First"), new LayoutFrame(320, 192));
+		if (retainedHeaderBuilds != 2) throw "Tabs described with equal inputs must keep their headers";
+		context.submit(retainedTabs("second", "First"), new LayoutFrame(320, 192));
+		if (retainedHeaderBuilds != 4) throw "Selection changes must build the tab headers again";
+		context.submit(retainedTabs("second", "First *"), new LayoutFrame(320, 192));
+		if (retainedHeaderBuilds != 6) throw "Label changes must build the tab headers again";
+		var onTabChange = function(_:String) {
+			tabChanges++;
+		};
 		var tabs = new Tabs("tabs-smoke", [
 			new TabItem("first", "First", new Text("First page")),
 			new TabItem("second", "Second", new Text("Second page")),
 			new TabItem("locked", "Locked", new Text("Locked page"), false)
-		], "first", function(_) {
-			tabChanges++;
-		});
+		], "first", onTabChange);
 		var tabsFrame = new LayoutFrame(256.0, 192.0);
 		var tabsRoot = context.submit(tabs, tabsFrame);
 		var secondTab = tabStrip(tabsRoot).children[1].children[0];
@@ -2999,10 +2995,13 @@ class FrameworkSmoke {
 
 		var tabMenus = 0;
 		var menuTab = "";
-		tabs.onTabContextMenu = function(key, event) {
+		var menuOptions = new haxeon.ui.widgets.controls.Tabs.TabsOptions();
+		menuOptions.onTabContextMenu = function(key, event) {
 			tabMenus++;
 			menuTab = key;
 		};
+		// The same key keeps the strip and its local selection.
+		tabs = Tabs.withOptions("tabs-smoke", tabs.items, "first", onTabChange, menuOptions);
 		tabsRoot = context.submit(tabs, tabsFrame);
 		var tabContextGeometry = tabStrip(tabsRoot).children[1].children[0].resolved;
 		if (tabContextGeometry == null) return 1001;
@@ -3031,7 +3030,6 @@ class FrameworkSmoke {
 			function(_) closeSelections++,
 			null,
 			function(_, _) closeDrags++);
-		closeTabs.headerRevision = function() return "stable";
 		context.pointerMove(0, 180);
 		var closeRoot = context.submit(closeTabs, tabsFrame);
 		var closeRow = tabStrip(closeRoot).children[1].children[0];

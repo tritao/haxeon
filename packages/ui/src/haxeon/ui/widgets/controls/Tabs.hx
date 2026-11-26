@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 
+import haxeon.reactive.Signal;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutAxis;
@@ -7,13 +8,11 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.RootModifier;
-import haxeon.ui.core.RetainedView;
-import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
-import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleTarget;
@@ -22,48 +21,49 @@ import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
 import haxeon.ui.icons.IconName;
 
-/** Scrollable tab strip and selected page composed from Haxe buttons and views. */
-class Tabs implements View {
-	final key:Key;
+/**
+ * Scrollable tab strip over the selected tab's page. A local strip keeps the user's selection itself; a controlled one
+ * shows the caller's `selectedKey` and only reports the user's choice through `onChange`.
+ */
+class Tabs implements ScopeView {
+	/** Identifies the strip among its siblings, so its selection survives rebuilds: required, and never empty. */
+	public final key:String;
 	/** The tabs, in header order. */
 	public final items:Array<TabItem>;
 
-	/** The key of the selected tab; an empty or unknown key selects the first enabled tab. */
-	public var selectedKey:String;
-	/** Whether selection is retained locally or supplied by the caller. */
-	public var selectionMode(default, null):TabsSelectionMode;
+	/**
+	 * The key of the selected tab; an empty or unknown key selects the first enabled tab. A local strip starts from it
+	 * and then shows the user's choice here.
+	 */
+	public var selectedKey(default, null):String;
+	/** Whether selection is kept by the strip or supplied by the caller. */
+	public final selectionMode:TabsSelectionMode;
 	/** The box holding the header strip and the selected page. */
 	public final style:LayoutStyle;
 
 	/** Called with the key of the tab the user selects. */
-	public var onChange:String->Void;
-	var hasChangeHandler:Bool;
-	/** Optional pointer-drag lifecycle used by generic dock workspaces. */
-	public var onTabDragStart:Null<String->UiEvent->Void>;
+	public var onChange(default, null):Null<String->Void>;
+	/** Called with a tab's key when the user starts dragging it, for dock hosts. */
+	public var onTabDragStart(default, null):Null<String->UiEvent->Void>;
 	/** Called with the dragged tab's key as the pointer moves during a tab drag. */
-	public var onTabDragMove:Null<String->UiEvent->Void>;
-
+	public var onTabDragMove(default, null):Null<String->UiEvent->Void>;
 	/** Called with the dragged tab's key when the pointer is released. */
-	public var onTabDragEnd:Null<String->UiEvent->Void>;
-
+	public var onTabDragEnd(default, null):Null<String->UiEvent->Void>;
 	/** Called with the dragged tab's key when a tab drag is abandoned, as by Escape or a lost pointer capture. */
-	public var onTabDragCancel:Null<String->UiEvent->Void>;
-
+	public var onTabDragCancel(default, null):Null<String->UiEvent->Void>;
 	/** Requests a menu for an enabled tab without changing the selected page. */
-	public var onTabContextMenu:Null<String->UiEvent->Void>;
-	/** Called with each tab's header, the strip's own node around its button, so dock hosts can register geometry or add to it. */
-	public var onTabHeaderBuilt:Null<String->RenderNode->Void>;
-
-	/** Opt-in header retention; callers include all application-owned header inputs. */
-	public var headerRevision:Null<Void->String>;
+	public var onTabContextMenu(default, null):Null<String->UiEvent->Void>;
+	/**
+	 * Called while the strip builds with each tab's header, the strip's own node around its button, so dock hosts can
+	 * register geometry or add to it. It shapes what the strip builds, so a new function always builds the strip again.
+	 */
+	public var onTabHeaderBuilt(default, null):Null<String->RenderNode->Void>;
 	/** Fixed actions beside the scrolling tab strip. */
-	public var headerTrailing:Null<View> = null;
-	/** Overrides the default scrolling viewport; the caller owns overflow and selected-tab reveal. */
-	public var transformHeaderStrip:Null<(RenderNode, BuildContext) -> RenderNode>;
+	public var headerTrailing(default, null):Null<View>;
 
 	/**
 	 * A tab strip over `items` with `selectedKey` selected. The drag callbacks and `selectionMode` are for dock hosts;
-	 * `withOptions` sets these and the rest by name.
+	 * `withOptions` sets these and the rest by name. Throws when `key` is empty or two tabs share a key.
 	 */
 	public function new(key:String,
 			items:Array<TabItem>,
@@ -76,20 +76,20 @@ class Tabs implements View {
 			?onTabDragCancel:String->UiEvent->Void,
 			?selectionMode:TabsSelectionMode,
 			?onTabHeaderBuilt:String->RenderNode->Void) {
-		this.key = new Key(key);
+		if (key == null || key.length == 0) throw "Tabs require a stable key";
+		this.key = key;
 		this.items = items == null ? [] : items.copy();
 		this.selectedKey = selectedKey == null ? "" : selectedKey;
 		this.selectionMode = selectionMode == null ? TabsSelectionMode.Local : selectionMode;
 		this.style = style == null ? defaultStyle() : style.copy();
-		hasChangeHandler = onChange != null;
-		this.onChange = onChange == null ? function(_) {}
-			: onChange;
+		this.onChange = onChange;
 		this.onTabDragStart = onTabDragStart;
 		this.onTabDragMove = onTabDragMove;
 		this.onTabDragEnd = onTabDragEnd;
 		this.onTabDragCancel = onTabDragCancel;
 		this.onTabHeaderBuilt = onTabHeaderBuilt;
-		this.onTabContextMenu = null;
+		onTabContextMenu = null;
+		headerTrailing = null;
 		var keys:Map<String, Bool> = new Map();
 		for (item in this.items) {
 			if (item == null || keys.exists(item.key)) throw "Tab keys must be unique";
@@ -120,60 +120,61 @@ class Tabs implements View {
 		return tabs;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(key, function() {
-			var rootId = context.rootId("tabs");
-			return context.selfUpdating(rootId, function() return buildControl(context, rootId), false);
-		});
+	public function scopeKey():String return key;
+
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, Tabs)) return false;
+		var other:Tabs = cast previous;
+		if (key != other.key || selectionMode != other.selectionMode || items.length != other.items.length
+			|| haxeon.Diff.mask(style, other.style) != 0 || headerTrailing != other.headerTrailing
+			|| onTabHeaderBuilt != other.onTabHeaderBuilt || (onChange == null) != (other.onChange == null)
+			|| (onTabContextMenu == null) != (other.onTabContextMenu == null) || dragged() != other.dragged())
+			return false;
+		// A local strip's own selection outlives the key it started from.
+		if (selectionMode == TabsSelectionMode.Controlled && selectedKey != other.selectedKey) return false;
+		for (index in 0...items.length) if (!items[index].sameAs(other.items[index])) return false;
+		return true;
 	}
 
-	function buildControl(context:BuildContext, rootId:WidgetId):RenderNode {
-		var state:State<String> = context.state(context.id("selected-tab"), selectedKey);
-		var active:String = selectionMode == TabsSelectionMode.Controlled ? selectedKey : state.value;
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+
+	public function buildBody(context:BuildContext):RenderNode {
+		var rootId = context.rootId("tabs");
+		var selection = context.lazyState(context.id("selected-tab"), function() return new Signal<String>(selectedKey))
+			.value;
+		var active = selectionMode == TabsSelectionMode.Controlled ? selectedKey : selection.value;
 		if (!isEnabled(active)) active = firstEnabled();
-		// Uncontrolled selection owns its saved value. A controlled tab strip derives selection from its caller and must
-		// not write its unused state while the build is tracked.
-		if (selectionMode != TabsSelectionMode.Controlled && active != state.value) state.update(active);
 		selectedKey = active;
+		var latest = context.latestOf(this);
 		var select = function(next:String) {
-			if (next == selectedKey) return;
-			if (selectionMode == TabsSelectionMode.Controlled) {
-				if (hasChangeHandler) onChange(next);
-				return;
+			var tabs = latest();
+			if (next == tabs.selectedKey) return;
+			if (tabs.selectionMode == TabsSelectionMode.Local) {
+				tabs.selectedKey = next;
+				selection.value = next;
 			}
-			selectedKey = next;
-			state.update(next);
-			if (!context.updateInPlace || !context.requestPatch(rootId)) state.update(next);
-			if (hasChangeHandler) onChange(next);
+			var handler = tabs.onChange;
+			if (handler != null) handler(next);
 		};
 
 		var rootFlags = context.interactionStates.get(rootId);
-		var rootComputed = context.styleResolver.resolve(new StyleTarget("tabs", key.rawValue, key.rawValue, null,
-			["tabs"], rootFlags),
+		var rootComputed = context.styleResolver.resolve(new StyleTarget("tabs", key, key, null, ["tabs"], rootFlags),
 			context.inheritedStyle,
 			context.theme.styles,
 			context.styleSheet,
 			style,
 			context.environment);
 		var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-		root.setStyleIdentity("tabs", key.rawValue, key.rawValue, null, ["tabs"]);
+		root.setStyleIdentity("tabs", key, key, null, ["tabs"]);
 		root.states = rootFlags;
 		root.computedStyle = rootComputed;
 		var tabsSemantics = new Semantics(AccessibilityRole.TabList, "Tabs");
 		tabsSemantics.orientation = AccessibilityOrientation.Horizontal;
 		root.semantics = tabsSemantics;
-		var stripView = new TabsStripView(function(buildContext) {
-			var strip = buildStrip(buildContext, rootComputed, active, select, rootId);
-			var transform:Null<(RenderNode, BuildContext) -> RenderNode> = transformHeaderStrip;
-			return transform == null ? scrollStrip(strip, buildContext, active) : transform(strip, buildContext);
-		});
-		var revision:Null<Void->String> = headerRevision;
-		var strip = revision == null ? stripView.build(context) : new RetainedView("tab-headers",
-			function(_) return stripView,
-			function() return context.theme.tokens.tabHeaderHeight + ":" + active.length + ":" + active
-			+ revision()).build(context);
-		strip.layout.style.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
-		if (headerTrailing != null) {
+		var trailing = headerTrailing;
+		var strip = scrollStrip(buildStrip(context, rootComputed, active, select, latest), context, active,
+			trailing == null ? LayoutAxis.stretch() : LayoutAxis.grow());
+		if (trailing != null) {
 			var headerStyle = new LayoutStyle();
 			headerStyle.width = LayoutAxis.grow();
 			headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
@@ -181,9 +182,8 @@ class Tabs implements View {
 			headerStyle.childAlignY = haxeon.ui.LayoutStyle.LayoutAlignmentY.Center;
 			var header = context.createNode(context.rootId("header-with-actions"), LayoutVisualKind.Box, headerStyle);
 			header.hitTestSelf = false;
-			strip.layout.style.width = LayoutAxis.grow();
 			header.add(strip);
-			header.add(context.withScope(new Key("header-actions"), function() return headerTrailing.build(context)));
+			header.add(context.withScope(new Key("header-actions"), function() return context.build(trailing)));
 			root.add(header);
 		} else root.add(strip);
 
@@ -201,10 +201,12 @@ class Tabs implements View {
 				panelStyle.direction = LayoutDirection.TopToBottom;
 				var node = context.createNode(context.rootId("tab-panel"), LayoutVisualKind.Box, panelStyle);
 				node.semantics = new Semantics(AccessibilityRole.TabPanel, item.label);
+				var contentModifier = new RootModifier();
+				contentModifier.width = LayoutAxis.stretch();
 				var content = context.withStyleParent(rootComputed, function() {
-					return context.withScope(new Key("content"), function() return item.content.build(context));
+					return context.withScope(new Key("content"), function() return context.build(item.content,
+						contentModifier));
 				});
-				content.layout.style.width = LayoutAxis.stretch();
 				// A quiet content boundary is independent of the active-tab accent.
 				var dividerStyle = new LayoutStyle();
 				dividerStyle.width = LayoutAxis.stretch();
@@ -226,48 +228,48 @@ class Tabs implements View {
 			rootComputed:ComputedStyle,
 			active:String,
 			select:String->Void,
-			rootId:WidgetId):RenderNode {
+			latest:Void->Tabs):RenderNode {
 		var stripStyle = new LayoutStyle();
-		stripStyle.width = LayoutAxis.grow();
+		stripStyle.width = LayoutAxis.fit();
 		stripStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 		stripStyle.direction = LayoutDirection.LeftToRight;
 		stripStyle.childGap = 4.0;
 		var strip = context.createNode(context.rootId("tab-strip"), LayoutVisualKind.Box, stripStyle);
 		var buttonNodes:Array<RenderNode> = [];
-		var tabDragState:Null<State<TabDragState>> = null;
-		if (onTabDragStart != null
-			|| onTabDragMove != null || onTabDragEnd != null
-			|| onTabDragCancel != null) tabDragState = context.lazyState(context.id("tab-drag"),
-			function() return new TabDragState());
+		var drag = dragged() ? context.lazyState(context.id("tab-drag"),
+			function() return new TabDragState()).value : null;
 		for (item in items) {
+			var tabKey = item.key;
 			var buttonStyle = new LayoutStyle();
 			buttonStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 			var tabName = item.label + (item.badgeCount > 0 ? ", " + item.badgeCount : "");
 			var tabSemantics = new Semantics(AccessibilityRole.Tab, tabName);
 			tabSemantics.actions = AccessibilityAction.Select;
 			var button = new Button(item.displayLabel == null ? item.label : item.displayLabel, buttonStyle, null,
-				item.key,
-				item.enabled, ButtonVariant.Navigation, item.key == active, ["tab-header"], item.icon, null,
+				tabKey,
+				item.enabled, ButtonVariant.Navigation, tabKey == active, ["tab-header"], item.icon, null,
 				item.iconView,
 				item.badgeCount > 0 ? new CountBadge(item.badgeCount) : null, null, null, 14.0, tabName,
 				function(event) {
-					if (event.kind == UiEventKind.Activate || event.button == 0) select(item.key);
+					if (event.kind == UiEventKind.Activate || event.button == 0) select(tabKey);
 				}, tabSemantics);
 			// What the strip adds to each tab button goes through its modifier: the button owns its root.
 			var tabIndex = buttonNodes.length;
 			var buttonModifier = new RootModifier();
-			var closeFocus:Null<State<Bool>> = null;
+			var closeFocus:Null<Signal<Bool>> = null;
 			if (item.onClose != null) {
-				var focus = context.state(context.id("tab-close-focus:" + item.key), false);
-				trackFocus(buttonModifier, context, rootId, focus);
+				var focus = context.lazyState(context.id("tab-close-focus:" + tabKey),
+					function() return new Signal(false))
+					.value;
+				trackFocus(buttonModifier, focus);
 				closeFocus = focus;
 			}
-			installTabDragHandlers(buttonModifier, item.key, tabDragState);
+			if (drag != null) installTabDragHandlers(buttonModifier, tabKey, drag, latest);
 			if (item.enabled && onTabContextMenu != null) {
 				var requestMenu = function(event:UiEvent) {
-					var handler = onTabContextMenu;
+					var handler = latest().onTabContextMenu;
 					if (handler == null) return;
-					handler(item.key, event);
+					handler(tabKey, event);
 					event.preventDefault();
 					event.stopPropagation();
 				};
@@ -294,26 +296,24 @@ class Tabs implements View {
 				}
 			});
 			var buttonNode = context.withStyleParent(rootComputed, function() {
-				return context.withScope(new Key(item.key), function() return context.build(button, buttonModifier));
+				return context.withScope(new Key(tabKey), function() return context.build(button, buttonModifier));
 			});
 			var headerStyle = new LayoutStyle();
 			headerStyle.direction = LayoutDirection.TopToBottom;
 			headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
-			var header = context.createNode(context.rootId("tab-header:" + item.key), LayoutVisualKind.Box,
-				headerStyle);
+			var header = context.createNode(context.rootId("tab-header:" + tabKey), LayoutVisualKind.Box, headerStyle);
 			header.hitTestSelf = false;
 			if (item.enabled && item.onClose != null) header.on(UiEventKind.Click, function(event) {
 				if (event.button != 2) return;
 				event.preventDefault();
 				event.stopPropagation();
-				var close = item.onClose;
-				if (close != null) close();
+				closeTab(latest(), tabKey);
 			}, UiEventPhase.Capture);
-			var headerContent = item.onClose == null ? buttonNode : buildClosableHeader(context, item, buttonNode,
-				rootId, cast closeFocus);
+			var headerContent = closeFocus == null ? buttonNode : buildClosableHeader(context, item, buttonNode,
+				closeFocus, latest);
 			header.add(headerContent);
 			// Inactive accents are fully transparent and have no layout or hit-test effect.
-			if (item.key == active) {
+			if (tabKey == active) {
 				var indicatorStyle = new LayoutStyle();
 				indicatorStyle.width = LayoutAxis.grow();
 				indicatorStyle.height = LayoutAxis.fixed(2.0);
@@ -321,7 +321,7 @@ class Tabs implements View {
 				indicatorStyle.zIndex = 1;
 				indicatorStyle.clipToParent = true;
 				indicatorStyle.background = context.theme.tokens.accent;
-				var indicator = context.createNode(context.rootId("tab-indicator:" + item.key),
+				var indicator = context.createNode(context.rootId("tab-indicator:" + tabKey),
 					LayoutVisualKind.Box,
 					indicatorStyle);
 				indicator.hitTestSelf = false;
@@ -330,20 +330,19 @@ class Tabs implements View {
 			strip.add(header);
 			buttonNodes.push(buttonNode);
 			// The header is the strip's own node around the button: hosts may add to it.
-			if (onTabHeaderBuilt != null) onTabHeaderBuilt(item.key, header);
+			if (onTabHeaderBuilt != null) onTabHeaderBuilt(tabKey, header);
 		}
 		return strip;
 	}
 
 	/** Keep intrinsic header widths; overflow belongs to a clipped viewport, not the labels. */
-	function scrollStrip(strip:RenderNode, context:BuildContext, active:String):RenderNode {
+	function scrollStrip(strip:RenderNode, context:BuildContext, active:String, width:LayoutAxis):RenderNode {
 		var state = context.lazyState(context.id("tab-scroll-state"), function() return new TabsScrollState()).value;
-		strip.layout.style.width = LayoutAxis.fit();
 		var style = new LayoutStyle();
-		style.width = LayoutAxis.stretch();
+		style.width = width;
 		style.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 		var scroll = new ScrollView("tab-viewport",
-			new TabsStripView(function(_) return strip),
+			new TabsStripView(strip),
 			style,
 			ScrollAxis.Horizontal,
 			state.controller);
@@ -378,60 +377,67 @@ class Tabs implements View {
 		return viewport;
 	}
 
-	function buildClosableHeader(context:BuildContext, item:TabItem, buttonNode:RenderNode,
-			rootId:WidgetId, focused:State<Bool>):RenderNode {
+	function buildClosableHeader(context:BuildContext, item:TabItem, buttonNode:RenderNode, focused:Signal<Bool>,
+			latest:Void->Tabs):RenderNode {
+		var tabKey = item.key;
 		var rowStyle = new LayoutStyle();
 		rowStyle.direction = LayoutDirection.LeftToRight;
 		rowStyle.childAlignY = LayoutAlignmentY.Center;
 		rowStyle.background = buttonNode.layout.style.background;
-		var row = context.createNode(context.rootId("tab-actions:" + item.key), LayoutVisualKind.Box, rowStyle);
+		var row = context.createNode(context.rootId("tab-actions:" + tabKey), LayoutVisualKind.Box, rowStyle);
 		row.hitTestSelf = false;
 		row.add(buttonNode);
-		var hover = context.state(context.id("tab-close-hover:" + item.key), false);
+		var hover = context.lazyState(context.id("tab-close-hover:" + tabKey),
+			function() return new Signal(false)).value;
 		var slotStyle = new LayoutStyle();
 		slotStyle.width = LayoutAxis.fixed(28);
 		slotStyle.height = LayoutAxis.fixed(24);
-		var slot = context.createNode(context.rootId("tab-close-slot:" + item.key), LayoutVisualKind.Box, slotStyle);
+		var slot = context.createNode(context.rootId("tab-close-slot:" + tabKey), LayoutVisualKind.Box, slotStyle);
 		slot.hitTestSelf = true;
 		var closeStyle = new LayoutStyle();
 		closeStyle.width = LayoutAxis.fixed(24);
 		closeStyle.height = LayoutAxis.fixed(24);
 		closeStyle.padding = new Insets(4, 4, 4, 4);
 		var close = new Button("",
-			closeStyle, null, "tab-close:" + item.key, item.enabled, ButtonVariant.Navigation, null, ["tab-close"],
+			closeStyle, null, "tab-close:" + tabKey, item.enabled, ButtonVariant.Navigation, null, ["tab-close"],
 			haxeon.ui.icons.IconName.Close, null, null, null, null, null, 14, "Close " + item.label, function(event) {
 				event.stopPropagation();
-				var handler = item.onClose;
-				if ((event.kind == UiEventKind.Activate || event.button == 0) && handler != null) handler();
+				if (event.kind == UiEventKind.Activate || event.button == 0) closeTab(latest(), tabKey);
 			});
 		var closeModifier = new RootModifier();
 		closeModifier.on(UiEventKind.PointerDown, function(event) event.stopPropagation());
 		closeModifier.on(UiEventKind.PointerUp, function(event) event.stopPropagation());
-		// Built from state; the handlers only update it and the rebuild they cause shows or hides the button, rather than
-		// changing a node of the submitted tree behind the frame's back.
+		// Built from the hover and focus signals, which the handlers only set: the rerun they cause shows or hides it.
 		closeModifier.visible = hover.value || focused.value;
-		trackFocus(closeModifier, context, rootId, focused);
+		trackFocus(closeModifier, focused);
 		var closeNode = context.build(close, closeModifier);
 		row.onTargetBubble(UiEventKind.HoverEnter, function(event) {
-			if (event.target.equals(row.id)) setHeaderFlag(context, rootId, hover, true);
+			if (event.target.equals(row.id)) hover.value = true;
 		});
 		row.onTargetBubble(UiEventKind.HoverLeave, function(event) {
-			if (event.target.equals(row.id)) setHeaderFlag(context, rootId, hover, false);
+			if (event.target.equals(row.id)) hover.value = false;
 		});
 		slot.add(closeNode);
 		row.add(slot);
 		return row;
 	}
 
-	static function trackFocus(modifier:RootModifier, context:BuildContext, rootId:WidgetId, focused:State<Bool>):Void {
-		modifier.on(UiEventKind.Focus, function(_) setHeaderFlag(context, rootId, focused, true), UiEventPhase.Capture);
-		modifier.on(UiEventKind.Blur, function(_) setHeaderFlag(context, rootId, focused, false), UiEventPhase.Capture);
+	static function trackFocus(modifier:RootModifier, focused:Signal<Bool>):Void {
+		modifier.on(UiEventKind.Focus, function(_) focused.value = true, UiEventPhase.Capture);
+		modifier.on(UiEventKind.Blur, function(_) focused.value = false, UiEventPhase.Capture);
 	}
 
-	static function setHeaderFlag(context:BuildContext, rootId:WidgetId, state:State<Bool>, value:Bool):Void {
-		if (state.value == value) return;
-		state.update(value);
-		if (!context.updateInPlace || !context.requestPatch(rootId)) state.update(value);
+	/** Calls the close action of the tab `tabKey` in the latest description, if it still has one. */
+	static function closeTab(tabs:Tabs, tabKey:String):Void {
+		for (item in tabs.items) if (item.key == tabKey) {
+			var close = item.onClose;
+			if (close != null) close();
+			return;
+		}
+	}
+
+	function dragged():Bool {
+		return onTabDragStart != null || onTabDragMove != null || onTabDragEnd != null || onTabDragCancel != null;
 	}
 
 	function isEnabled(key:String):Bool {
@@ -452,59 +458,57 @@ class Tabs implements View {
 		return result;
 	}
 
-	function installTabDragHandlers(modifier:RootModifier, tabKey:String, dragState:Null<State<TabDragState>>):Void {
-		if (dragState == null) return;
-		// Only these handlers read the drag state, never a build, so changing it must not invalidate the caches around the tabs.
+	/** The drag is the strip's own bookkeeping, read only by these handlers, so changing it reruns nothing. */
+	static function installTabDragHandlers(modifier:RootModifier, tabKey:String, drag:TabDragState,
+			latest:Void->Tabs):Void {
 		modifier.on(UiEventKind.PointerDown, function(event) {
 			if (event.button != 0) return;
-			var drag = dragState.value;
 			drag.active = true;
 			drag.dragging = false;
 			drag.pointerId = event.pointerId;
 			drag.tabKey = tabKey;
 			drag.startX = event.x;
 			drag.startY = event.y;
-			dragState.update(drag);
 			// Dock targets stay inside the workspace. Logical capture keeps the
 			// drag routed to this tab without grabbing the native window pointer.
 			event.capturePointer(false);
 		});
 		modifier.on(UiEventKind.PointerMove, function(event) {
-			var drag = dragState.value;
 			if (!drag.active || drag.pointerId != event.pointerId || drag.tabKey != tabKey) return;
+			var tabs = latest();
 			var dx = event.x - drag.startX;
 			var dy = event.y - drag.startY;
 			if (!drag.dragging && dx * dx + dy * dy >= 36.0) {
 				drag.dragging = true;
-				dragState.update(drag);
-				if (onTabDragStart != null) onTabDragStart(tabKey, event);
+				var start = tabs.onTabDragStart;
+				if (start != null) start(tabKey, event);
 			}
 			if (drag.dragging) {
-				if (onTabDragMove != null) onTabDragMove(tabKey, event);
+				var move = tabs.onTabDragMove;
+				if (move != null) move(tabKey, event);
 				event.preventDefault();
 			}
 		});
 		modifier.on(UiEventKind.PointerUp, function(event) {
-			var drag = dragState.value;
 			if (!drag.active || drag.pointerId != event.pointerId || drag.tabKey != tabKey) return;
+			var tabs = latest();
+			var end = tabs.onTabDragEnd;
 			if (drag.dragging) {
-				if (onTabDragEnd != null) onTabDragEnd(tabKey, event);
+				if (end != null) end(tabKey, event);
 				event.preventDefault();
 			}
 			drag.clear();
-			dragState.update(drag);
 			event.releasePointer();
 		});
 		modifier.on(UiEventKind.PointerCancel, function(event) {
-			var drag = dragState.value;
 			if (!drag.active || drag.pointerId != event.pointerId || drag.tabKey != tabKey) return;
-			if (drag.dragging && onTabDragCancel != null) onTabDragCancel(tabKey, event);
+			var tabs = latest();
+			var cancel = tabs.onTabDragCancel;
+			if (drag.dragging && cancel != null) cancel(tabKey, event);
 			drag.clear();
-			dragState.update(drag);
 			event.releasePointer();
 		});
 		modifier.on(UiEventKind.KeyDown, function(event) {
-			var drag = dragState.value;
 			if (event.key != UiKey.Escape || !drag.active) return;
 			event.cancelPointerCapture();
 			event.preventDefault();
@@ -534,10 +538,11 @@ private class TabDragState {
 	}
 }
 
+/** The strip the tabs built, as the scroll view's content. */
 private class TabsStripView implements View {
-	final buildStrip:BuildContext->RenderNode;
-	public function new(buildStrip:BuildContext->RenderNode) this.buildStrip = buildStrip;
-	public function build(context:BuildContext):RenderNode return buildStrip(context);
+	final strip:RenderNode;
+	public function new(strip:RenderNode) this.strip = strip;
+	public function build(context:BuildContext):RenderNode return strip;
 }
 
 private class TabsScrollState {
@@ -576,6 +581,14 @@ class TabItem {
 	public var iconView:Null<View>;
 	/** Optional close action; the header reserves a hover-revealed close target. */
 	public var onClose:Null<Void->Void>;
+
+	/** Whether `other` describes this tab with the same inputs: the same views, and a close action or none like this one. */
+	public function sameAs(other:TabItem):Bool {
+		return key == other.key && label == other.label && displayLabel == other.displayLabel
+			&& content == other.content
+			&& enabled == other.enabled && icon == other.icon && badgeCount == other.badgeCount
+			&& iconView == other.iconView && (onClose == null) == (other.onClose == null);
+	}
 
 	/** A tab named `label` showing `content`. Throws when `key` is empty or there is no content. */
 	public function new(key:String, label:String, content:View, enabled:Bool = true,
@@ -636,7 +649,7 @@ class TabsOptions {
 
 /** Ownership of the active tab selection. */
 enum TabsSelectionMode {
-	/** The Tabs widget retains selection between rebuilt views. */
+	/** The strip keeps the user's selection across its parent's builds. */
 	Local;
 	/** The caller's selectedKey is authoritative on every build. */
 	Controlled;
