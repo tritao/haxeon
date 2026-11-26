@@ -10,6 +10,7 @@ import nativekit.ffi.NativeKitTypes;
 
 /** Live, platform-neutral services available to a hosted application. */
 class UiHostContext {
+	/** The fonts the host loaded for the application, which its text styles name. */
 	public final fonts:FontCollection;
 	/** Present only when the desktop host has enabled custom native chrome. */
 	public var windowControls:Null<WindowControls> = null;
@@ -32,8 +33,14 @@ class UiHostContext {
 		distances in logical pixels from each edge of the surface. All zero on a desktop window.
 	**/
 	public var safeLeft(default, null):Float = 0;
+
+	/** The inset from the top edge, below the status bar or a display cutout (see `safeLeft`). */
 	public var safeTop(default, null):Float = 0;
+
+	/** The inset from the right edge (see `safeLeft`). */
 	public var safeRight(default, null):Float = 0;
+
+	/** The inset from the bottom edge, above the navigation bar and the software keyboard (see `safeLeft`). */
 	public var safeBottom(default, null):Float = 0;
 	/** The part of `safeBottom` the software keyboard covers. */
 	public var keyboardBottom(default, null):Float = 0;
@@ -41,6 +48,7 @@ class UiHostContext {
 	public var safeAreaRevision(default, null):Int = 0;
 	/** Set by the application: handles a system Back request and returns true when it consumed it. */
 	public var onBack:Null<Void->Bool> = null;
+	/** The platform event pump the host delivers input and window events through. */
 	public final events:EventPump;
 	/** An application may defer closing while it asks to save or confirm. */
 	public var onCloseRequested:Null<(Void -> Void) -> Void> = null;
@@ -51,9 +59,11 @@ class UiHostContext {
 	/** True only while delivering a frame requested exclusively for caret repaint. */
 	@:allow(haxeon.ui.host.UiHostRuntime)
 	public var repaintOnly(default, null):Bool = false;
+	/** The native renderer the last frame drew with, for an application that makes GPU resources compatible with it; 0 before it. */
 	public var gpuRendererId(default, null):Int = 0;
 
-	public function new(fonts:FontCollection, events:EventPump,
+	/** A context over `fonts` and `events`; `close` closes the window, `scheduleFrame` asks the host for a frame. */
+	internal function new(fonts:FontCollection, events:EventPump,
 			close:Void->Void, scheduleFrame:Void->Void) {
 		this.fonts = fonts;
 		this.events = events;
@@ -72,6 +82,7 @@ class UiHostContext {
 		return applicationZoom;
 	}
 
+	/** Whether the platform has `capability`, one of NativeKit's capability flags. */
 	public function supports(capability:Int64):Bool {
 		return Int64.compare(Int64.and(NativeKit.nk_get_capabilities(), capability),
 			Int64.ofInt(0)) != 0;
@@ -126,17 +137,25 @@ class DesktopUiHostContext extends UiHostContext {
 class WindowControls {
 	final window:WindowHandle;
 	final host:UiHostContext;
+	/** Whether the window is maximized now. */
 	public var maximized(default, null):Bool = false;
+
+	/** Whether the window is fullscreen now. */
 	public var fullscreen(default, null):Bool = false;
+
+	/** Changes whenever `maximized` or `fullscreen` does, so a titlebar can be rebuilt to show the right buttons. */
 	public var revision(default, null):Int = 0;
-	public function new(window:WindowHandle, host:UiHostContext) {
+
+	/** Controls for `window`, closing through `host`'s confirmation flow. */
+	internal function new(window:WindowHandle, host:UiHostContext) {
 		this.window = window;
 		this.host = host;
 		var state = NativeKit.nk_window_get_state(window);
 		check(state.status, "window.state");
 		observe(state.out_state.get_flags());
 	}
-	public function observe(flags:WindowStateFlags):Void {
+	/** Takes the window's new state from a window-state event, and asks for a frame when it changed. */
+	internal function observe(flags:WindowStateFlags):Void {
 		var nextMaximized = flags.contains(WindowStateFlags.Maximized);
 		var nextFullscreen = flags.contains(WindowStateFlags.Fullscreen);
 		if (maximized == nextMaximized && fullscreen == nextFullscreen) return;
@@ -145,11 +164,14 @@ class WindowControls {
 		revision++;
 		host.requestFrame();
 	}
+	/** Minimizes the window. */
 	public function minimize():Void check(NativeKit.nk_window_minimize(window), "window.minimize");
+	/** Maximizes the window, or restores it when it is maximized. */
 	public function toggleMaximize():Void {
 		check(maximized ? NativeKit.nk_window_restore(window) : NativeKit.nk_window_maximize(window),
 			"window.maximize");
 	}
+	/** Asks to close the window, through the application's close confirmation (`UiHostContext.requestClose`). */
 	public function close():Void host.requestClose();
 	static function check(status:Result, operation:String):Void {
 		if (status != Result.Ok) throw new NativeKitError(status, operation, NativeKit.nk_last_error());

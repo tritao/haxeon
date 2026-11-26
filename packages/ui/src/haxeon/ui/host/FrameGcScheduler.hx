@@ -16,16 +16,29 @@ class FrameGcScheduler {
 	/** Pressure is bytes allocated since the last collection over the collector's own trigger size. */
 	public static inline final IdlePressure = 0.5;
 
+	/** The pressure past which the collection runs right after a frame instead of waiting for the host to go idle. */
 	public static inline final ForcePressure = 3.0;
 
+	/** Whether frames hold collection off at all; when false every method does nothing. */
 	public final enabled:Bool;
+
+	/** How many collections ran because the host went idle. */
 	public var idleCollections(default, null):Int = 0;
+
+	/** How many collections ran right after a frame because pressure passed `ForcePressure`. */
 	public var forcedCollections(default, null):Int = 0;
+
+	/** Whether frame boundaries advance incremental marking: asked for, and supported by the collector. */
 	public final incremental:Bool;
+
+	/** How long each incremental marking slice may run, in microseconds. */
 	public final sliceMicros:Float;
+
+	/** How many incremental marking slices ran after frames. */
 	public var incrementalSlices(default, null):Int = 0;
 	var inFrame = false;
 
+	/** A scheduler, `incremental` when the collector supports it, with slices of `sliceMicros` (1000 when out of range). */
 	public function new(enabled:Bool, incremental:Bool = false, sliceMicros:Float = 1000.0) {
 		this.enabled = enabled;
 		this.incremental = enabled && incremental && Gc.incrementalSupported();
@@ -38,6 +51,7 @@ class FrameGcScheduler {
 		return new FrameGcScheduler(setting == null || setting != "0", Sys.getEnv("HL_GC_INCREMENTAL") == "1");
 	}
 
+	/** Turns automatic collection off while a frame renders; a second call before `endFrame` does nothing. */
 	public function beginFrame():Void {
 		if (!enabled || inFrame)
 			return;

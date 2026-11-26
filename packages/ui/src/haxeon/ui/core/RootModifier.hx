@@ -14,29 +14,56 @@ import haxeon.ui.semantics.Semantics;
  * keeps the body.
  */
 class RootModifier {
+	/** Replaces the root's width (`LayoutStyle.width`); null, like every field here, keeps what the body built. */
 	public var width:Null<LayoutAxis> = null;
+
+	/** Replaces the root's height (`LayoutStyle.height`). */
 	public var height:Null<LayoutAxis> = null;
+
+	/** Replaces how the root is placed: in its parent's flow or at an offset (`LayoutStyle.positioning`). */
 	public var positioning:Null<LayoutPositioning> = null;
+
+	/** Replaces the root's horizontal offset when it is positioned (`LayoutStyle.positionX`). */
 	public var positionX:Null<Float> = null;
+
+	/** Replaces the root's vertical offset when it is positioned (`LayoutStyle.positionY`). */
 	public var positionY:Null<Float> = null;
+
+	/** Replaces the root's stacking order among its siblings (`LayoutStyle.zIndex`). */
 	public var zIndex:Null<Int> = null;
+
+	/** Replaces whether the root is laid out and drawn (`LayoutStyle.visible`). */
 	public var visible:Null<Bool> = null;
+
+	/** Replaces whether the root's content is clipped to its parent (`LayoutStyle.clipToParent`). */
 	public var clipToParent:Null<Bool> = null;
 
 	/** Replaces the root's semantics. */
 	public var semantics:Null<Semantics> = null;
 
+	/** Replaces whether the root and its subtree take input (`RenderNode.enabled`). */
 	public var enabled:Null<Bool> = null;
+
+	/** Replaces whether the root can take keyboard focus (`RenderNode.focusable`). */
 	public var focusable:Null<Bool> = null;
+
+	/** Replaces whether the root itself is hit by pointer input, not only its children (`RenderNode.hitTestSelf`). */
 	public var hitTestSelf:Null<Bool> = null;
+
+	/** Replaces the root's place in keyboard focus order (`RenderNode.tabIndex`). */
 	public var tabIndex:Null<Int> = null;
+
+	/** Replaces the command scope the root's subtree resolves shortcuts in (`RenderNode.commandScope`). */
 	public var commandScope:Null<String> = null;
+
+	/** Replaces the pointer shape over the root (`RenderNode.cursor`). */
 	public var cursor:Null<CursorShape> = null;
 
 	final listeners:Array<ModifierListener> = [];
 	final resolvedHandlers:Array<ResolvedLayoutItem->Void> = [];
 	final overlays:Array<RenderNode> = [];
 
+	/** A modifier that changes nothing until its fields are set or its methods called. */
 	public function new() {}
 
 	/** Adds a listener after the root's own, as `RenderNode.on` would. */

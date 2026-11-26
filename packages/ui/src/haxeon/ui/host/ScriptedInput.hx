@@ -18,7 +18,7 @@ import sys.io.File;
     Back request (`backHandler`); `{"type":"resize","width","height"}` sets the window's logical size (fold, unfold).
     `type` is an alias of `kind` for every event.
     Delayed events retain their original deadlines, so overload remains measurable. */
-class ScriptedInput {
+internal class ScriptedInput {
 	/** Where a `back` event goes: the application sets it to `UiHostContext.handleBack`. */
 	public static var backHandler:Null<Void->Bool> = null;
 

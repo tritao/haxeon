@@ -13,7 +13,7 @@ import haxeon.ui.core.UiContext;
 import nativekit.ffi.NativeKitTypes;
 
 /** Connects a borrowed UI context and surface to the platform input pump. */
-class UiSurfaceBinding implements Disposable {
+internal class UiSurfaceBinding implements Disposable {
 	final context:UiContext;
 	final input:NativeInputAdapter;
 	final surface:Surface;
@@ -77,7 +77,7 @@ class UiSurfaceBinding implements Disposable {
 }
 
 /** Reuses the layout frame and render target for every callback on one surface. */
-class UiSurfaceFrame {
+internal class UiSurfaceFrame {
 	public final layout:LayoutFrame;
 	public final dimensions:FrameInfo;
 	final target:Surface;

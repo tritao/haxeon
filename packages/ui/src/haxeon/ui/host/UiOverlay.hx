@@ -76,6 +76,10 @@ class UiOverlay implements Disposable {
 		}
 	}
 
+	/**
+	 * Draws `view` into `frame` for `tick`, building it again only when the view, its state or the frame's size changed,
+	 * and returns the step to submit with the application's own work.
+	 */
 	public function frameStep(view:View, frame:SurfaceFrame, tick:FrameTick):SurfaceFrameStep {
 		if (disposed)
 			throw BindingError.disposed("UiOverlay.frameStep", "The UI overlay has been disposed");
