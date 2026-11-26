@@ -64,10 +64,14 @@ class StaticExtensionTable {
 	/** Each type's own `@:using` extensions, by its qualified name. */
 	final types:Map<String, Array<StaticExtensionOwner>>;
 
+	/** The modules a `using` or `@:using` resolved to: what the table reads of them is their `offeredKey`. */
+	public final resolvedModules:Map<String, Bool>;
+
 	public function new(modules:Map<String, Array<StaticExtensionOwner>>,
 			types:Map<String, Array<StaticExtensionOwner>>, moduleKeys:Map<String, String>, typeKey:String,
-			?aliases:Array<String>) {
+			?aliases:Array<String>, ?resolvedModules:Map<String, Bool>) {
 		this.aliases = aliases == null ? [] : aliases;
+		this.resolvedModules = resolvedModules == null ? [] : resolvedModules;
 		this.modules = modules;
 		this.types = types;
 		this.moduleKeys = moduleKeys;
@@ -115,7 +119,8 @@ class StaticExtensionTable {
 			types:Map<String, Array<StaticExtensionOwner>> = [],
 			moduleKeys:Map<String, String> = [],
 			typeKeys:Array<String> = [],
-			aliases:Array<String> = [];
+			aliases:Array<String> = [],
+			resolved:Map<String, Bool> = [];
 		for (name in names) {
 			var state = states.get(name);
 			if (state == null || state.ast == null)
@@ -124,7 +129,7 @@ class StaticExtensionTable {
 			if (ast.usings != null && ast.usings.length > 0) {
 				var owners:Array<ResolvedOwner> = [];
 				for (used in ast.usings)
-					owners = resolve(states, used.path, ast.packageName, used.span).concat(owners);
+					owners = resolve(states, used.path, ast.packageName, used.span, resolved).concat(owners);
 				modules.set(state.source.path, [for (owner in owners) owner.owner]);
 				moduleKeys.set(name, [for (owner in owners) owner.key].join(";"));
 			}
@@ -137,7 +142,7 @@ class StaticExtensionTable {
 							if (path == null)
 								throw new CompileError(new Diagnostic(DiagnosticCode.LOOKUP_OR_DECLARATION,
 									"dot path expected", entry.span));
-							owners = resolve(states, path, ast.packageName, entry.span).concat(owners);
+							owners = resolve(states, path, ast.packageName, entry.span, resolved).concat(owners);
 						}
 				if (owners.length > 0) {
 					var typeName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, declaration.name);
@@ -150,7 +155,7 @@ class StaticExtensionTable {
 		}
 		typeKeys.sort(Reflect.compare);
 		aliases.sort(Reflect.compare);
-		return new StaticExtensionTable(modules, types, moduleKeys, typeKeys.join(";"), aliases);
+		return new StaticExtensionTable(modules, types, moduleKeys, typeKeys.join(";"), aliases, resolved);
 	}
 
 	/**
@@ -158,8 +163,8 @@ class StaticExtensionTable {
 	 * whose next-to-last part starts upper case) one type of it. An unqualified path is looked for in the using module's package
 	 * first, then at the top level.
 	 */
-	static function resolve(states:Map<String, ModuleState>, path:String, packageName:Null<String>,
-			span:SourceSpan):Array<ResolvedOwner> {
+	static function resolve(states:Map<String, ModuleState>, path:String, packageName:Null<String>, span:SourceSpan,
+			resolved:Map<String, Bool>):Array<ResolvedOwner> {
 		var parts = path.split("."),
 			subType:Null<String> = null,
 			modulePath = path;
@@ -174,6 +179,7 @@ class StaticExtensionTable {
 			module = states.get(modulePath);
 		if (module == null || module.ast == null)
 			throw new CompileError(new Diagnostic(DiagnosticCode.MISSING_MODULE, 'Type not found : $path', span));
+		resolved.set(module.name, true);
 		var ast = module.parsedAst(), owners:Array<ResolvedOwner> = [];
 		for (declaration in declarationsOf(ast))
 			if (subType == null ? !declaration.isPrivate : declaration.name == subType) {
@@ -194,18 +200,23 @@ class StaticExtensionTable {
 		return owners;
 	}
 
-	/**
-	 * What resolving static extensions reads of module `name` (`ast`): its `using`s and its types' `@:using` paths, as written, and
-	 * what a `using` of it finds: each declaration's name, privacy, kind and static functions (`ownerKey`), and its own functions. A
-	 * table made from modules whose keys are the same is the same.
-	 */
-	public static function contributionKey(name:String, ast:AstProgram):String {
+	/** The `using`s of a module and its types' `@:using` paths, as written, with its package they are resolved from. */
+	public static function usingsKey(ast:AstProgram):String {
 		var parts = [ast.packageName == null ? "" : ast.packageName];
 		if (ast.usings != null)
 			for (used in ast.usings)
 				parts.push("using " + used.path);
 		for (path in metadataPaths(ast))
 			parts.push("@:using " + path);
+		return parts.join("\n");
+	}
+
+	/**
+	 * What a `using` of module `name` (`ast`) reads of it: each declaration's name, privacy, kind and static functions as written
+	 * (`ownerKey`), and its own functions.
+	 */
+	public static function offeredKey(name:String, ast:AstProgram):String {
+		var parts:Array<String> = [];
 		for (declaration in declarationsOf(ast))
 			parts.push((declaration.isPrivate ? "private " : "") + (declaration.isAlias == true ? "typedef " : "")
 				+ Std.string(declaration.kind) + " " + ownerKey(declaration.name, declaration.statics, ast));

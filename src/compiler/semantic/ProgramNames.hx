@@ -46,13 +46,18 @@ class ModuleNames {
 	final fields:Array<ModuleField> = [];
 	final discovery:Array<{type:String, prefixes:Array<String>}> = [];
 
-	/** What resolving static extensions reads of the module (`StaticExtensionTable.contributionKey`). */
-	final extensions:String;
+	/** The module's `using`s and its types' `@:using` paths (`StaticExtensionTable.usingsKey`). */
+	final usings:String;
 
+	/** What a `using` of the module reads of it (`StaticExtensionTable.offeredKey`), made the first time it is compared. */
+	var offered:Null<String> = null;
+
+	final moduleName:String;
 	final ast:AstProgram;
 	final entryModule:String;
 
 	public function new(moduleName:String, ast:AstProgram, entryModule:String) {
+		this.moduleName = moduleName;
 		this.ast = ast;
 		this.entryModule = entryModule;
 		var packageName = ast.packageName;
@@ -119,18 +124,31 @@ class ModuleNames {
 				});
 			}
 		}
-		extensions = StaticExtensionTable.contributionKey(moduleName, ast);
+		usings = StaticExtensionTable.usingsKey(ast);
 	}
 
 	/** Whether this was made from the parse `ast` for a program whose entry is `entryModule`. */
 	public function madeFrom(ast:AstProgram, entryModule:String):Bool
 		return this.ast == ast && this.entryModule == entryModule;
 
-	/** Whether two modules give the same names, whatever parses they come from. */
+	/** What a `using` of the module reads of it. */
+	public function offeredKey():String {
+		var known = offered;
+		if (known == null) {
+			known = StaticExtensionTable.offeredKey(moduleName, ast);
+			offered = known;
+		}
+		return known;
+	}
+
+	/**
+	 * Whether two modules give the same names, whatever parses they come from; what a `using` of them reads is compared apart
+	 * (`offeredKey`), only for a module one resolves to.
+	 */
 	public static function same(left:ModuleNames, right:ModuleNames):Bool {
 		if (left == right)
 			return true;
-		if (left.extensions != right.extensions || !sameStrings(left.inferred, right.inferred)
+		if (left.usings != right.usings || !sameStrings(left.inferred, right.inferred)
 			|| !sameStrings(left.inlineStatics, right.inlineStatics) || !sameStrings(left.members, right.members)
 			|| left.aliases.length != right.aliases.length || left.enumCases.length != right.enumCases.length
 			|| left.fields.length != right.fields.length || left.discovery.length != right.discovery.length)
@@ -260,27 +278,27 @@ class ModuleNames {
  * canonicalized again (`SessionState.aliasUniverseRevision`, `ModuleState.canonicalAliasRevision`).
  */
 class ProgramNames {
-	public final sourceTypeAliases:Map<String, String> = [];
-	public final aliasesByModule:Map<String, Array<SourceAlias>> = [];
-	public final enumCasesByType:Map<String, Array<String>> = [];
-	public final inferredDeclarations:Map<String, Bool> = [];
-	public final patternConstants:Map<String, Bool> = [];
+	public final sourceTypeAliases:Map<String, String>;
+	public final aliasesByModule:Map<String, Array<SourceAlias>>;
+	public final enumCasesByType:Map<String, Array<String>>;
+	public final inferredDeclarations:Map<String, Bool>;
+	public final patternConstants:Map<String, Bool>;
 
 	/** Where each module-level variable is stored (`ModuleFields`), by its path as a module member. */
-	public final moduleFieldStorage:Map<String, String> = [];
+	public final moduleFieldStorage:Map<String, String>;
 
 	/** The module-level variables that are also a static of their module's own class. */
-	public final moduleTypeStatics:Map<String, Bool> = [];
+	public final moduleTypeStatics:Map<String, Bool>;
 
-	public final moduleMembers:Map<String, Bool> = [];
+	public final moduleMembers:Map<String, Bool>;
 
 	/** The `@:discoverMethods` prefixes the classes declare, by class; a subclass takes its base's as the build meets it. */
-	public final discoveryPrefixes:Map<String, Array<String>> = [];
+	public final discoveryPrefixes:Map<String, Array<String>>;
 
 	/** Type names that every module sees: dotted ones ("pkg.Type") and plain ones ("Type"), attached to each module's table. */
-	public final dottedSourceAliases:Map<String, String> = [];
+	public final dottedSourceAliases:Map<String, String>;
 
-	public final plainSourceAliases:Map<String, String> = [];
+	public final plainSourceAliases:Map<String, String>;
 
 	/** Where each module's `using` and each type's `@:using` find static extensions. */
 	public final staticExtensions:StaticExtensionTable;
@@ -289,17 +307,49 @@ class ProgramNames {
 	public final universe:String;
 
 	final aliasesByPackage:Map<String, Array<{source:String, declaration:String}>>;
-	final visibleByPackage:Map<String, Map<String, String>> = [];
 
 	/** What this was made from: the program's modules, in order, and their names. */
 	final moduleOrder:Array<String>;
 
 	final contributions:Array<ModuleNames>;
 
-	/** The names of the modules `moduleOrder` (each module's `contributions` at the same place), whose states `states` holds. */
-	public function new(moduleOrder:Array<String>, contributions:Array<ModuleNames>, states:Map<String, ModuleState>) {
+	/**
+	 * The names of the modules `moduleOrder` (each module's `contributions` at the same place), whose states `states` holds; or,
+	 * given `same`, made from modules that give the same names (`madeFrom`), `same`'s tables made from these contributions, so that
+	 * the parses `same` was made from are not kept.
+	 */
+	public function new(moduleOrder:Array<String>, contributions:Array<ModuleNames>, states:Map<String, ModuleState>,
+			?same:ProgramNames) {
 		this.moduleOrder = moduleOrder;
 		this.contributions = contributions;
+		if (same != null) {
+			sourceTypeAliases = same.sourceTypeAliases;
+			aliasesByModule = same.aliasesByModule;
+			enumCasesByType = same.enumCasesByType;
+			inferredDeclarations = same.inferredDeclarations;
+			patternConstants = same.patternConstants;
+			moduleFieldStorage = same.moduleFieldStorage;
+			moduleTypeStatics = same.moduleTypeStatics;
+			moduleMembers = same.moduleMembers;
+			discoveryPrefixes = same.discoveryPrefixes;
+			dottedSourceAliases = same.dottedSourceAliases;
+			plainSourceAliases = same.plainSourceAliases;
+			aliasesByPackage = same.aliasesByPackage;
+			universe = same.universe;
+			staticExtensions = same.staticExtensions;
+			return;
+		}
+		sourceTypeAliases = [];
+		aliasesByModule = [];
+		enumCasesByType = [];
+		inferredDeclarations = [];
+		patternConstants = [];
+		moduleFieldStorage = [];
+		moduleTypeStatics = [];
+		moduleMembers = [];
+		discoveryPrefixes = [];
+		dottedSourceAliases = [];
+		plainSourceAliases = [];
 		for (index in 0...moduleOrder.length)
 			contributions[index].addTo(this, moduleOrder[index]);
 		aliasesByPackage = indexAliasesByPackage(sourceTypeAliases);
@@ -326,14 +376,27 @@ class ProgramNames {
 
 	/**
 	 * Whether these modules, in this order, give the names this was made from: each module's part is the same object, or one made
-	 * from another parse with the same names (a body edit).
+	 * from another parse with the same names (a body edit), and of a module a `using` resolves to, the same statics.
 	 */
 	public function madeFrom(moduleOrder:Array<String>, contributions:Array<ModuleNames>):Bool {
 		if (moduleOrder.length != this.moduleOrder.length)
 			return false;
-		for (index in 0...moduleOrder.length)
-			if (moduleOrder[index] != this.moduleOrder[index]
-				|| !ModuleNames.same(contributions[index], this.contributions[index]))
+		var resolved = staticExtensions.resolvedModules;
+		for (index in 0...moduleOrder.length) {
+			var name = moduleOrder[index], now = contributions[index], before = this.contributions[index];
+			if (name != this.moduleOrder[index])
+				return false;
+			if (now != before
+				&& (!ModuleNames.same(now, before) || resolved.exists(name) && now.offeredKey() != before.offeredKey()))
+				return false;
+		}
+		return true;
+	}
+
+	/** Whether this was made from these very contributions, not only ones that give the same names. */
+	public function madeFromThese(contributions:Array<ModuleNames>):Bool {
+		for (index in 0...contributions.length)
+			if (contributions[index] != this.contributions[index])
 				return false;
 		return true;
 	}
@@ -371,9 +434,10 @@ class ProgramNames {
 
 	/**
 	 * The type names visible from package `packageName` without an import: its own types and its enclosing packages', each by its
-	 * name relative to the package and by its simple name, the nearest package first.
+	 * name relative to the package and by its simple name, the nearest package first. `visibleByPackage` keeps them for a build.
 	 */
-	public function visibleTypes(packageName:String):Map<String, String> {
+	public function visibleTypes(packageName:String,
+			visibleByPackage:Map<String, Map<String, String>>):Map<String, String> {
 		var known = visibleByPackage.get(packageName);
 		if (known != null)
 			return known;

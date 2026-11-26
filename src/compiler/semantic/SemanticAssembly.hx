@@ -1,6 +1,7 @@
 package compiler.semantic;
 
 import compiler.core.DiagnosticCode;
+import compiler.core.InternalError;
 import compiler.core.QualifiedName;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstClass;
@@ -89,6 +90,7 @@ class SemanticAssembly {
 			session.aliasUniverseRevision = facts.revision;
 		}
 		var aliasRevision = session.aliasUniverseRevision;
+		var visibleByPackage:Map<String, Map<String, String>> = [];
 		var reuseModuleContributions = !changesDiscoveredMethods(structuralChanged);
 		// The `@:discoverMethods` prefixes, with those a class takes from its base, which only a module canonicalized again reads:
 		// found the first time one is.
@@ -233,7 +235,7 @@ class SemanticAssembly {
 			}
 			var visiblePackage = ast.packageName;
 			if (visiblePackage != null) {
-				var packageTypes = programNames.visibleTypes(visiblePackage);
+				var packageTypes = programNames.visibleTypes(visiblePackage, visibleByPackage);
 				// A name an import would silently take from this package resolves to a marker the typer reports where it is used.
 				for (name => marker in ImportShadowing.ambiguousNames(ast, importedTypes, packageTypes))
 					aliases.set(name, marker);
@@ -677,18 +679,20 @@ class SemanticAssembly {
 				kept != null && kept.madeFrom(ast, entryModule) ? kept : new ModuleNames(name, ast, entryModule)));
 		}
 		var whole = state.programNames, kept = whole.kept(0);
-		var made = kept != null && kept.madeFrom(order, contributions) ? kept : new ProgramNames(order, contributions,
-			state.modules);
-		if (context.options.checkReuse && made == kept) {
-			var fresh = new ProgramNames(order,
-				[for (name in order) new ModuleNames(name, state.modules.get(name).parsedAst(),
-				entryModule)], state.modules);
-			var difference = made.difference(fresh);
+		if (kept == null || !kept.madeFrom(order, contributions))
+			return whole.put(database, 0, new ProgramNames(order, contributions, state.modules));
+		if (context.options.checkReuse) {
+			var fresh = new ProgramNames(order, [
+				for (name in order)
+					new ModuleNames(name, state.modules.get(name).parsedAst(), entryModule)
+			], state.modules);
+			var difference = kept.difference(fresh);
 			if (difference != null)
-				throw new compiler.core
-					.InternalError("--check-reuse: the kept names every module sees differ from names made afresh in "
-					+ difference);
+				throw new InternalError('--check-reuse: the kept names every module sees differ in $difference');
 		}
+		// Made from other parses that give the same names: the same tables, without the parses.
+		var made = kept.madeFromThese(contributions) ? kept : new ProgramNames(order, contributions, state.modules,
+			kept);
 		return whole.put(database, 0, made);
 	}
 
