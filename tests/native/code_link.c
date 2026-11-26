@@ -1767,6 +1767,11 @@ static void test_patch_runtime( void ) {
 	b_raw(&identity, patch_module_id, 16);
 	b_i32(&identity, 0);
 	b_i32(&identity, 0);
+	// HLI 4 is the only identity: one of another version, which listed stable ids, is refused.
+	identity.d[3] = 3;
+	status = hl_runtime_module_load(b.d, b.len, identity.d, identity.len, &runtime);
+	check(status == HL_RUNTIME_BAD_FORMAT && runtime == NULL, "an identity of another version is refused (%d)", status);
+	identity.d[3] = 4;
 	status = hl_runtime_module_load(b.d, b.len, identity.d, identity.len, &runtime);
 	check(status == HL_RUNTIME_OK, "an HLI 4 module loads (%d)", status);
 	if( status != HL_RUNTIME_OK ) return;
@@ -1779,6 +1784,10 @@ static void test_patch_runtime( void ) {
 	patch = patch_image(0, 1, &point, 1, NULL, 0, NULL);
 	status = hl_runtime_module_apply_hlp(runtime, patch.d, patch.len);
 	check(status == HL_RUNTIME_OK, "the runtime applies a patch of sections (%d)", status);
+	// HLP 12 is the only patch: one of another version is refused before it is linked.
+	patch.d[3] = 11;
+	check(hl_runtime_module_apply_hlp(runtime, patch.d, patch.len) == HL_RUNTIME_BAD_FORMAT, "a patch of another version is refused");
+	patch.d[3] = 12;
 	status = hl_runtime_module_call_i32(runtime, main_id, &result, &exception);
 	check(status == HL_RUNTIME_OK && result == 5, "the patched module returns 5 (got %d)", result);
 	check(hl_runtime_module_function_id(runtime, "Point.helper") == 3, "an added function is found by name");
