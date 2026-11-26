@@ -59,6 +59,22 @@ class IrInlineEnumLayout {
 		this.eligible = eligible;
 	}
 
+	/**
+	 * What the layouts read besides the program's enums and objects, as text: the pointer width, the target, whether the layouts
+	 * are canonical, and the classification objects' value layouts.
+	 */
+	public function inputs():String {
+		var parts = ['$pointerBits $target $canonical'];
+		var classification = classificationObjects;
+		if (classification != null)
+			for (object in classification)
+				if (object.isValue)
+					parts.push(object.name + (object.nativeLayout != null ? " native " : " ")
+						+ [for (field in object.fields) field.name + ":"
+						+ compiler.ir.model.IrTypeIdentity.text(field.type)].join(","));
+		return parts.join("\n");
+	}
+
 	/** Recursive and disproportionately large enum payloads remain boxed. */
 	public function shape(name:String):Null<IrInlineEnumShape> {
 		if (eligible != null && !eligible.exists(name)) return reject(name);

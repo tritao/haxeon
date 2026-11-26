@@ -18,19 +18,27 @@ private typedef EnumUseNode = {
 	var queued:Bool;
 }
 
+/** What the inline enum eligibility decided (`IrInlineEnumEligibility.decision`). */
+private typedef IrInlineEnumDecision = {
+	final allowed:Map<String, Bool>;
+	final reasons:Map<String, String>;
+	final callableDescriptors:Map<String, Map<Int, Bool>>;
+}
+
 /** Conservative first source subset. A rejected enum keeps its nominal storage everywhere in the program. */
 @:nullSafety(Strict)
 class IrInlineEnumEligibility {
-	/** What each function lets escape or keeps in value form (`IrInlineEnumUses`). */
 	/** The escape reach of the reflected layouts, a session's walk (`IrEnumEscapeReach.collectWalked`). */
 	static inline final REFLECTED = "inline-enum-reflected-reach";
 
 	/** The escape reach of the escape reasons, a session's walk (`IrEnumEscapeReach.collectEach`). */
 	static inline final ESCAPES = "inline-enum-escape-reach";
 
-	@:processWide("a contribution memo's key, only ever read")
-	public static final USES =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInlineEnumUses>("inline-enum-uses");
+	/**
+	 * The eligibility, a session's step whose summary of a function is what it lets escape or keeps in value form
+	 * (`IrInlineEnumUses`).
+	 */
+	static inline final STEP = "inline-enum-eligibility";
 
 	public final allowed:Map<String, Bool> = [];
 	public final reasons:Map<String, String> = [];
@@ -55,18 +63,15 @@ class IrInlineEnumEligibility {
 
 	/**
 	 * The enums of `program` that may be lowered to value packets, reading the functions' bodies, encoding a function that has
-	 * none.
+	 * none. In a session the decision is the session's step `STEP` (`decide`), kept while the program's tables and declarations,
+	 * what the layouts read besides them and what each function lets escape are the same; with `--check-reuse` a kept one is
+	 * decided again and compared.
 	 */
 	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>,
 			?builder:IrBodyBuilder, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos) {
 		this.planner = planner;
 		this.stageMemos = stageMemos;
-		// What each function lets escape or keeps in value form, read once per version in a session (`IrInlineEnumUses`); the
-		// reach follows the closures and map stores the records name.
-		var uses = [for (fn in program.functions) IrInlineEnumUses.of(fn, builder, stageMemos)];
 		reflectionReach = new IrEnumEscapeReach(program, _ -> false);
-		for (record in uses)
-			record.follow(reflectionReach);
 		declarations = [for (declaration in program.enums) declaration.name => declaration];
 		objects = [for (object in program.objects) object.name => object];
 		contracts = [for (contract in program.interfaces) contract.name => contract];
@@ -74,7 +79,96 @@ class IrInlineEnumEligibility {
 		names = [for (declaration in program.enums) if (!IrEnumTagStorage.eligible(declaration)) declaration.name];
 		words = (names.length + 31) >> 5;
 		rejected = [for (_ in 0...words) 0];
-		if (names.length == 0) return;
+		if (names.length == 0)
+			return;
+		if (stageMemos == null) {
+			decide(program, reflectableObjects, builder, null);
+			return;
+		}
+		var memo:compiler.ir.reuse.IrWalkMemo<IrInlineEnumUses, IrInlineEnumDecision> = stageMemos.step(STEP,
+			IrInlineEnumUses.same),
+			kept = memo.kept(stageMemos.database, program, program.functions, givenOf(program, reflectableObjects), [],
+				fn -> IrInlineEnumUses.read(fn.encodedBody(builder)));
+		if (kept != null) {
+			take(kept);
+			if (stageMemos.checks
+				&& !sameDecision(new IrInlineEnumEligibility(program, planner, reflectableObjects, builder).decision(),
+				kept))
+				throw new compiler.core
+					.InternalError('--check-reuse: the inline enum eligibility reused a decision that differs from deciding now');
+			return;
+		}
+		memo.begin(stageMemos.database);
+		decide(program, reflectableObjects, builder, memo);
+		memo.end(stageMemos.database, decision());
+	}
+
+	/**
+	 * What the decision reads besides the program's tables and declarations and the functions' uses: the entry point, the
+	 * reflectable objects, whether the program reflects, the classes with a native layout and what the layouts read
+	 * (`IrInlineEnumLayout.inputs`).
+	 */
+	function givenOf(program:IrProgram, reflectableObjects:Null<Array<String>>):Array<String>
+		return [
+			program.entryPoint,
+			(reflectableObjects ?? []).join(","),
+			IrObjectReflection.usedByProgram(program) ? "reflection" : "",
+			[for (object in program.objects) if (object.nativeLayout != null) object.name].join(","),
+			planner.inputs()
+		];
+
+	/** The decision made, copied: what a session's step keeps. */
+	function decision():IrInlineEnumDecision
+		return {
+			allowed: allowed.copy(),
+			reasons: reasons.copy(),
+			callableDescriptors: [for (name => descriptors in callableDescriptors) name => descriptors.copy()]
+		};
+
+	function take(kept:IrInlineEnumDecision):Void {
+		for (name => value in kept.allowed)
+			allowed.set(name, value);
+		for (name => reason in kept.reasons)
+			reasons.set(name, reason);
+		for (name => descriptors in kept.callableDescriptors)
+			callableDescriptors.set(name, descriptors.copy());
+	}
+
+	static function sameDecision(left:IrInlineEnumDecision, right:IrInlineEnumDecision):Bool {
+		if (!sameKeys(left.allowed, right.allowed) || !sameKeys(left.reasons, right.reasons)
+			|| !sameKeys(left.callableDescriptors, right.callableDescriptors))
+			return false;
+		for (name => reason in left.reasons)
+			if (right.reasons.get(name) != reason)
+				return false;
+		for (name => descriptors in left.callableDescriptors) {
+			var other = right.callableDescriptors.get(name);
+			if (other == null || !sameKeys(descriptors, other))
+				return false;
+		}
+		return true;
+	}
+
+	static function sameKeys<K, V>(left:Map<K, V>, right:Map<K, V>):Bool {
+		for (key in left.keys())
+			if (!right.exists(key))
+				return false;
+		for (key in right.keys())
+			if (!left.exists(key))
+				return false;
+		return true;
+	}
+
+	/** Decides which enums are allowed, reading what each function lets escape through `memo` in a session. */
+	function decide(program:IrProgram, reflectableObjects:Null<Array<String>>, builder:Null<IrBodyBuilder>,
+			memo:Null<compiler.ir.reuse.IrWalkMemo<IrInlineEnumUses, IrInlineEnumDecision>>):Void {
+		// The reach follows the closures and map stores the records name.
+		var uses = [
+			for (fn in program.functions)
+				memo != null ? memo.summary(fn) : IrInlineEnumUses.read(fn.encodedBody(builder))
+		];
+		for (record in uses)
+			record.follow(reflectionReach);
 		for (index in 0...names.length) {
 			var name = names[index], node = named(enumNodes, name);
 			nodes[node].bits[index >> 5] |= 1 << (index & 31);
@@ -128,7 +222,7 @@ class IrInlineEnumEligibility {
 		for (field in program.staticFields)
 			containerCallable(field.type);
 		for (declaration in program.enums) if (!IrEnumTagStorage.eligible(declaration)) {
-			if (nativePayload(Enum(declaration.name), []))
+			if (nativePayload(Enum(declaration.name)))
 				block(declaration.name, "canonical native payload layout");
 			else if (planner.shape(declaration.name) == null)
 				block(declaration.name, "recursive or disproportionate layout");
@@ -309,21 +403,40 @@ class IrInlineEnumEligibility {
 		};
 
 	// Native structs need the independent canonical layout, not target-specific pointer offsets.
-	function nativePayload(type:IrType, seen:Array<String>):Bool
+	// A type has one when a payload or value field it reaches, through enums and value objects, is a value object with a native
+	// layout: the enums that reach one are found once (`nativeEnums`), as a walk of each enum's paths would visit them again.
+	function nativePayload(type:IrType):Bool
 		return switch type {
-			case Enum(name):
-				if (seen.contains(name)) false;
-				else {
-					var declaration = declarations.get(name);
-					declaration != null && Lambda.exists(declaration.cases,
-						item -> Lambda.exists(item.params, p -> nativePayload(p, seen.concat([name]))));
-				}
+			case Enum(name): nativeEnumNames().exists(name);
 			case Obj(name): var object = objects.get(name);
 				object != null && object.isValue && (object.nativeLayout != null
-					|| Lambda.exists(object.fields, field -> nativePayload(field.type, seen)));
-			case Nullable(inner): nativePayload(inner, seen);
+					|| Lambda.exists(object.fields, field -> nativePayload(field.type)));
+			case Nullable(inner): nativePayload(inner);
 			default: false;
 		}
+
+	/** The enums whose payloads reach a native layout (`nativePayload`), made on first use. */
+	var nativeEnums:Null<Map<String, Bool>> = null;
+
+	function nativeEnumNames():Map<String, Bool> {
+		var known = nativeEnums;
+		if (known != null)
+			return known;
+		var found:Map<String, Bool> = [];
+		nativeEnums = found;
+		// What an enum reaches grows with what the enums it names reach, until no enum is added.
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (declaration in declarations)
+				if (!found.exists(declaration.name)
+					&& Lambda.exists(declaration.cases, item -> Lambda.exists(item.params, nativePayload))) {
+					found.set(declaration.name, true);
+					changed = true;
+				}
+		}
+		return found;
+	}
 
 	function named(map:Map<String, Int>, name:String):Int {
 		var found = map.get(name);
@@ -421,7 +534,7 @@ class IrInlineEnumEligibility {
 		for (part in parts)
 			switch part {
 				case Enum(name) if (planner.shape(name) != null && EnumRuntimeType.declaration(name) == name
-					&& !nativePayload(Enum(name), [])):
+					&& !nativePayload(Enum(name))):
 					found = true;
 				default:
 					if (hasSelectedEnum(part, [])) return false;
@@ -529,7 +642,7 @@ class IrInlineEnumEligibility {
  * What one function's rows let escape or keep in value form, for the inline enum eligibility (`IrInlineEnumEligibility`), by type
  * ids of the body's table: a list of uses, each a kind, a type and a reason (`REASONS`), kept once each in the order the rows give
  * them; its type descriptors with their uses by kind; and the closures it makes and its map stores, which the escape reach follows.
- * It depends on the body alone, so a session keeps it by the function's version (`IrStageMemos.inlineEnumUses`).
+ * It depends on the body alone, so a session's eligibility reads it again only of a function that is not the object it was.
  */
 @:nullSafety(Strict)
 class IrInlineEnumUses {
@@ -570,24 +683,10 @@ class IrInlineEnumUses {
 
 	function new() {}
 
-	public static function of(fn:IrFunction, builder:Null<IrBodyBuilder>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):IrInlineEnumUses {
-		var version = stageMemos == null ? 0 : fn.version;
-		if (stageMemos == null || version == 0)
-			return read(fn.encodedBody(builder));
-		var memo = stageMemos.contribution(IrInlineEnumEligibility.USES), known = memo.get(version);
-		if (known == null) {
-			known = read(fn.encodedBody(builder));
-			memo.keep(version, known);
-		} else if (stageMemos.checks && !known.same(read(fn.encodedBody(builder))))
-			throw new compiler.core
-				.InternalError('--check-reuse: the inline enum uses reused for ${fn.name} differ from its body');
-		return known;
-	}
-
-	function same(other:IrInlineEnumUses):Bool
-		return events.join(",") == other.events.join(",") && descriptors.join(",") == other.descriptors.join(",")
-			&& closures.join(",") == other.closures.join(",") && mapStores.join(",") == other.mapStores.join(",");
+	public static function same(left:IrInlineEnumUses, right:IrInlineEnumUses):Bool
+		return left == right
+			|| IrTypeIds.sameList(left.events, right.events) && IrTypeIds.sameList(left.descriptors, right.descriptors)
+			&& IrTypeIds.sameList(left.closures, right.closures) && IrTypeIds.sameList(left.mapStores, right.mapStores);
 
 	/** Gives `reach` the closures and map stores of the function. */
 	public function follow(reach:IrEnumEscapeReach):Void {
@@ -624,7 +723,7 @@ class IrInlineEnumUses {
 			default: false;
 		};
 
-	static function read(body:IrBody):IrInlineEnumUses {
+	public static function read(body:IrBody):IrInlineEnumUses {
 		var uses = new IrInlineEnumUses();
 		var descriptors:Null<Map<Int, Int>> = null, nulls:Map<Int, Bool> = [];
 		for (block in 0...body.blockCount()) {
