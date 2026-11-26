@@ -3,8 +3,8 @@ import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
@@ -61,7 +61,7 @@ class TreeExpansionTests {
 		style.height = LayoutAxis.fixed(240);
 		var model = new Items();
 		var tree = new TreeView("tree", model, style);
-		var pane = new RetainedView("pane", _ -> tree);
+		var pane = new TrackedScope("pane", () -> tree);
 		var frame = new LayoutFrame(320, 240);
 		var submit = () -> ui.submitCached(() -> pane, frame, "tree");
 		var root = submit();

@@ -150,9 +150,9 @@ values changes, and updates the existing nodes. This record makes that idea the 
    than 10% on both panels: R used fewer bytes on every changed CNC action. The hybrid closes the telemetry gap and
    does not increase any measured action, so it wins without result builders, lazy parameters, or a new language feature.
 
-   The kept library surface is `haxeon.ui.component.TrackedScope`, `EqualChild<T:Equatable>` and `BoundText`. A scope tracks
-   its reads and re-runs its own body; an equal child is reused only when its declared inputs, own dependencies, style,
-   viewport and interaction state still match. `BoundText` mounts a text node once, schedules a frame on tracked changes,
+   The kept library surface is `haxeon.ui.component.TrackedScope` and `BoundText`. A scope tracks its reads and re-runs
+   its own body; a component is kept when its parent describes it with equal inputs under the same style, viewport and
+   text context. (`EqualChild<T:Equatable>` was deleted once components compared their own inputs.) `BoundText` mounts a text node once, schedules a frame on tracked changes,
    and updates its text and semantics. Requests coalesce, and a failed getter does not suppress a later frame request.
    Ordinary Haxe `if`, `switch`, comprehensions and functions describe structure.
    The keyed run-once `BoundEach` experiment is deleted. At the stage 3 checkpoint, `TrackedScope` ran on
@@ -296,7 +296,7 @@ no builder transform or lazy parameter is involved.
 | `context.state`, `State.update` | tracked component fields or standalone `Signal` |
 | `observeInt/Bool/String`, model revision counters, `cacheKeyHash` | observable fields and tracked reads |
 | `State.updateQuietly` | removed: writes know their readers |
-| `RetainedView`, dock pane and panel caches | migrate incrementally to tracked scopes and bindings; remove caches when no longer needed |
+| `RetainedView`, `RetainedVariants`, dock pane and panel caches | the first two are deleted (components and `TrackedScope` keep equal bodies); remove the dock caches when the dock is ported |
 | `selfUpdating`, `reconcile`, `BuiltNode`, `RenderNode.latest` | native scope foundation implemented in stage 5; delete these after the remaining widget and panel callers are ported |
 | `requestPatch`, patch frames | a frame where only bindings ran |
 | `bindingRevision` | a scope dirtied while hidden runs when shown |
@@ -539,7 +539,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    is marked done.
 
    **Native text and icon leaves.** `Text` and `Icon` have constructor inputs in final fields and emit their terminal
-   render nodes directly. Structural ownership belongs to their enclosing `TrackedScope` / `EqualChild`; changing
+   render nodes directly. Structural ownership belongs to their enclosing component; changing
    leaf text uses `BoundText`. These leaves have no component-owned state and need no additional structural owner.
    Text applies an authored typography override only when at least one font-size, letter-spacing or color value
    is present; explicit zero spacing and transparent color remain authored values. Icon painting uses the existing

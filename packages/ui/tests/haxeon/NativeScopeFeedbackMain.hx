@@ -1,4 +1,3 @@
-import Equatable;
 import haxeon.reactive.Signal;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
@@ -7,17 +6,30 @@ import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.component.BoundText;
-import haxeon.ui.component.EqualChild;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.style.StyleState;
 
-struct FeedbackProps implements Equatable {
-	public var value:Int;
-	public function new(value:Int) this.value = value;
+/** A component the outer scope describes with equal inputs every time, so its body is kept. */
+class FeedbackBody implements ScopeView {
+	final value:Int;
+	final revision:Signal<Int>;
+	public function new(value:Int, revision:Signal<Int>) {
+		this.value = value;
+		this.revision = revision;
+	}
+	public function scopeKey():String return "body";
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, FeedbackBody)) return false;
+		var other:FeedbackBody = cast previous;
+		return value == other.value && revision == other.revision;
+	}
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function buildBody(context:BuildContext):RenderNode return new FeedbackGeometry(revision).build(context);
 }
 
 class FeedbackGeometry implements View {
@@ -54,8 +66,7 @@ class NativeScopeFeedbackMain {
 		var session = LayoutSession.create(), ui = new UiContext(session), revision = new Signal<Int>(0);
 		var view:View = new TrackedScope("feedback", () -> {
 			var value = revision.value;
-			return new EqualChild<FeedbackProps>("body", new FeedbackProps(1),
-				(_, _) -> new FeedbackGeometry(revision));
+			return new FeedbackBody(1, revision);
 		});
 		ui.verifyRetentionEvery = 1;
 		var frame = new LayoutFrame(200, 200);

@@ -1,16 +1,9 @@
-import Equatable;
 import haxeon.reactive.Signal;
 import haxeon.ui.component.BoundText;
-import haxeon.ui.component.EqualChild;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.theme.Theme;
-
-struct LifetimeProps implements Equatable {
-	public var value:Int;
-	public function new(value:Int) this.value = value;
-}
 
 /** Cached mounted text must keep its native dependency owner alive. */
 class BindingLifetimeMain {
@@ -18,10 +11,9 @@ class BindingLifetimeMain {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
 		var value = new Signal<Int>(0);
-		var view = new TrackedScope("lifetime",
-			() -> new EqualChild<LifetimeProps>("stable",
-			new LifetimeProps(1),
-			(_, _) -> new BoundText("text", () -> Std.string(value.value))));
+		// The outer scope describes the same inner body every time, so the inner scope is kept.
+		var text:Void->haxeon.ui.core.View = () -> new BoundText("text", () -> Std.string(value.value));
+		var view = new TrackedScope("lifetime", () -> new TrackedScope("stable", text));
 		context.beginFrame();
 		context.trackReads(() -> view.build(context));
 		store.endFrame();

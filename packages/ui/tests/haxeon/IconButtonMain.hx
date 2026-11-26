@@ -1,11 +1,9 @@
-import Equatable;
 import haxeon.ui.LayoutNode;
-import haxeon.ui.component.EqualChild;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
-import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleState;
@@ -14,15 +12,6 @@ import haxeon.ui.widgets.controls.IconButton;
 
 /** A caller's modifier stays on a native control's root across interaction reruns. */
 class IconButtonMain {
-	static var historyBuilds = 0;
-	static var historyButton:Null<IconButton>;
-
-	static function history(input:HistoryInput, context:BuildContext):View {
-		historyBuilds++;
-		var owner = input.owner;
-		historyButton = new IconButton("history", IconName.Undo, "Undo", () -> owner.calls++);
-		return cast historyButton;
-	}
 	static function main():Int {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
@@ -58,22 +47,22 @@ class IconButtonMain {
 		// Equal inputs retain the mounted control. A new model with the same visible key gives it a new callback.
 		var owner = new HistoryOwner();
 		context.beginFrame();
-		var first = new EqualChild("history", new HistoryInput(owner), history).build(context);
+		var first = new HistoryRow(owner).build(context);
 		store.endFrame();
-		var action:IconButton = cast historyButton;
+		var action:IconButton = cast HistoryRow.button;
 		action.onClick();
 		context.beginFrame();
-		var same = new EqualChild("history", new HistoryInput(owner), history).build(context);
+		var same = new HistoryRow(owner).build(context);
 		store.endFrame();
-		if (same != first || historyBuilds != 1 || owner.calls != 1) return 6;
+		if (same != first || HistoryRow.builds != 1 || owner.calls != 1) return 6;
 		var replacement = new HistoryOwner();
 		context.beginFrame();
-		var changed = new EqualChild("history", new HistoryInput(replacement), history).build(context);
+		var changed = new HistoryRow(replacement).build(context);
 		store.endFrame();
-		action = cast historyButton;
+		action = cast HistoryRow.button;
 		action.onClick();
 		// The new model rebuilds the child; the button's inputs are equal apart from its callback, so its body is kept.
-		if (changed != same || historyBuilds != 2 || owner.calls != 1 || replacement.calls != 1) return 7;
+		if (changed != same || HistoryRow.builds != 2 || owner.calls != 1 || replacement.calls != 1) return 7;
 		context.dispose();
 		return 42;
 	}
@@ -84,8 +73,27 @@ private class HistoryOwner {
 	public function new() {}
 }
 
-private struct HistoryInput implements Equatable {
-	public final owner:HistoryOwner;
+/** A component whose only input is the model its undo button calls. */
+private class HistoryRow implements ScopeView {
+	public static var builds = 0;
+	public static var button:Null<IconButton>;
+	final owner:HistoryOwner;
+
 	public function new(owner:HistoryOwner) this.owner = owner;
-	public function equals(other:HistoryInput):Bool return owner == other.owner;
+
+	public function scopeKey():String return "history";
+
+	public function inputsEqual(previous:ScopeView):Bool {
+		return Std.isOfType(previous, HistoryRow) && (cast previous:HistoryRow).owner == owner;
+	}
+
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+
+	public function buildBody(context:BuildContext):RenderNode {
+		builds++;
+		var model = owner;
+		var undo = new IconButton("history", IconName.Undo, "Undo", () -> model.calls++);
+		button = undo;
+		return undo.build(context);
+	}
 }

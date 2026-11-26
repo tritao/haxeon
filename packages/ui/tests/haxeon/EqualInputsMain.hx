@@ -1,18 +1,32 @@
-import Equatable;
 import haxeon.reactive.Signal;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.component.BoundText;
-import haxeon.ui.component.EqualChild;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
 import haxeon.ui.theme.Theme;
 
-struct Props implements Equatable {
-	public var value:Int;
-	public function new(value:Int) this.value = value;
+/** A component kept while its key and value are equal, whatever builder each description brings. */
+class PropsChild implements ScopeView {
+	final key:String;
+	final value:Int;
+	final make:Void->View;
+	public function new(key:String, value:Int, make:Void->View) {
+		this.key = key;
+		this.value = value;
+		this.make = make;
+	}
+	public function scopeKey():String return key;
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, PropsChild)) return false;
+		var other:PropsChild = cast previous;
+		return key == other.key && value == other.value;
+	}
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function buildBody(context:BuildContext):RenderNode return make().build(context);
 }
 
 class Leaf implements View {
@@ -55,7 +69,7 @@ class LegacyScopeHost implements View {
 	}
 }
 
-@:access(haxeon.ui.core.BuildContext) class EqualChildMain {
+@:access(haxeon.ui.core.BuildContext) class EqualInputsMain {
 	static function main():Int {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
@@ -63,7 +77,7 @@ class LegacyScopeHost implements View {
 		function build(value:Int):RenderNode {
 			context.beginFrame();
 			context.resetObserved();
-			var view = new EqualChild<Props>("child", new Props(value), (_, _) -> new Leaf(source));
+			var view = new PropsChild("child", value, () -> new Leaf(source));
 			var root = context.trackReads(() -> view.build(context));
 			store.endFrame();
 			return root;
@@ -93,8 +107,7 @@ class LegacyScopeHost implements View {
 		var revision = new Signal<Int>(0), value = new Signal<Int>(0);
 		var view = new TrackedScope("retained-binding", () -> {
 			var current = revision.value;
-			return new EqualChild<Props>("stable",
-				new Props(1), (_, _) -> new BoundText("text", () -> Std.string(value.value)));
+			return new PropsChild("stable", 1, () -> new BoundText("text", () -> Std.string(value.value)));
 		});
 		context.beginFrame();
 		var root = context.trackReads(() -> view.build(context));
@@ -123,7 +136,7 @@ class LegacyScopeHost implements View {
 		var source = new Signal<Int>(0), revision = new Signal<Int>(0);
 		var view = new TrackedScope("read-boundary", () -> {
 			var value = revision.value;
-			return new EqualChild<Props>("leaf", new Props(1), (_, _) -> new Leaf(source));
+			return new PropsChild("leaf", 1, () -> new Leaf(source));
 		});
 		context.beginFrame();
 		var host = context.trackReads(() -> new LegacyScopeHost(view).build(context));
@@ -166,9 +179,8 @@ class LegacyScopeHost implements View {
 		var view = new TrackedScope("outer", () -> {
 			var revision = outerRevision.value;
 			if (revision >= 2) return new EmptyReparentBody();
-			return new EqualChild<Props>("stable",
-				new Props(1),
-				(_, _) -> new ReparentContainer(new TrackedScope("inner", () -> new Leaf(source))));
+			return new PropsChild("stable", 1,
+				() -> new ReparentContainer(new TrackedScope("inner", () -> new Leaf(source))));
 		});
 		function mount():RenderNode {
 			context.beginFrame();

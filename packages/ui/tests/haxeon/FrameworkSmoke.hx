@@ -61,6 +61,7 @@ import haxeon.ui.properties.PropertyBinding;
 import haxeon.ui.properties.PropertyEditorRegistry;
 import haxeon.ui.properties.PropertyValue;
 import haxeon.ui.plotting.PlotModel;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.EventDispatcher;
 import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.HitTest;
@@ -5689,10 +5690,12 @@ class FrameworkSmoke {
 
 	static function selfUpdatingLifetimeValid(context:UiContext):Bool {
 		var field = new TextField("builder-lifetime", "document");
-		var view = new haxeon.ui.core.RetainedView("builder-retained", function(_) return field);
+		// The field updates its own root in place, so it sits inside the scope's column rather than being its root.
+		var view = new TrackedScope("builder-retained",
+			function() return new Column("builder-column", [new KeyedView("field", field)]));
 		var frame = new LayoutFrame(240, 80);
 		var root = context.submit(view, frame);
-		var id = root.id;
+		var id = root.children[0].id;
 		// Retained trees must keep patching without rebuilding their widget.
 		context.submit(view, frame);
 		if (!context.buildContext.requestPatch(id)) return false;
@@ -5701,7 +5704,7 @@ class FrameworkSmoke {
 		if (context.buildContext.requestPatch(id)) return false;
 		// A fresh mount with the same key restores a live builder.
 		root = context.submit(view, frame);
-		if (!root.id.equals(id) || !context.buildContext.requestPatch(id)) return false;
+		if (!root.children[0].id.equals(id) || !context.buildContext.requestPatch(id)) return false;
 		context.submit(new Text("unmounted again"), frame);
 		var released = !context.buildContext.requestPatch(id);
 		// A patch asked for just before an unmount is applied in that frame, which touches the widget's state once more, so its

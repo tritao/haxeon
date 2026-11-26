@@ -47,6 +47,12 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 
 	@:allow(haxeon.ui.core.UiContext) var builtEpoch:Int = 0;
 
+	/**
+	 * The self-updating widgets the body built, whose own patches create state no body run records: a kept body retains
+	 * it through them. Null for a body with none, so a ported body pays nothing.
+	 */
+	@:allow(haxeon.ui.core.BuildContext) var updaters:Null<InteractionStateSnapshot> = null;
+
 	/** What the caller adds to the root, applied after each body run; `applied` takes it off again. */
 	var modifier:Null<RootModifier> = null;
 
@@ -236,6 +242,8 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 		pending = false;
 		context.forgetScope(this);
 		context.stateStore.releaseScope(this);
+		if (updaters != null) updaters.dispose();
+		updaters = null;
 		clearDependencies();
 	}
 

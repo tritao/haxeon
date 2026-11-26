@@ -1,4 +1,3 @@
-import Equatable;
 import haxeon.reactive.Signal;
 import haxeon.ui.LayoutChanges;
 import haxeon.ui.LayoutFrame;
@@ -6,7 +5,6 @@ import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.component.BoundText;
-import haxeon.ui.component.EqualChild;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
@@ -94,7 +92,10 @@ import haxeon.ui.widgets.text.Text;
 			return result;
 		}
 		#end
-		for (mode in 0...7) if (runCase(mode) != 42) return mode + 1;
+		for (mode in 0...7) if (runCase(mode) != 42) {
+			Sys.println("mode " + mode + ": " + lastError);
+			return mode + 1;
+		}
 		return 42;
 	}
 }
@@ -115,11 +116,6 @@ import haxeon.ui.widgets.text.Text;
 	}
 }
 
-private struct StableChildInput implements Equatable {
-	public final token:Int;
-	public function new(token:Int) this.token = token;
-}
-
 private class OrderingParent implements View {
 	public final present = new Signal<Bool>(true);
 	public final version = new Signal<Int>(0);
@@ -128,14 +124,15 @@ private class OrderingParent implements View {
 	public var reads = 0;
 	public var reject = false;
 	final child:View;
-	final cached:EqualChild<StableChildInput>;
+	final cached:TrackedScope;
 	final keep:Bool;
 	public function new(mode:Int) {
 		keep = mode >= 3;
 		child = mode % 3 == 0 ? new OrderingLegacyLeaf(this) : mode % 3 == 1 ? new TrackedScope("child",
 			() -> new Text(read())) : new BoundText("child",
 			read);
-		cached = new EqualChild("cached-child", new StableChildInput(1), (_, _) -> child);
+		// One description, built again as itself, so its body is kept while the child it returns is unchanged.
+		cached = new TrackedScope("cached-child", () -> child);
 	}
 	public function read():String {
 		reads++;

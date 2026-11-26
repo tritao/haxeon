@@ -4,8 +4,8 @@ import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
@@ -120,7 +120,7 @@ class TreeSelectionTests {
 		var controlled = new UiContext(null, fonts);
 		controlled.buildContext.environment.reducedMotion = true;
 		var choice = new Signal<Null<String>>(null), notifications = 0;
-		var controlledBuild = function():View return new RetainedView("controlled-tree", function(_) {
+		var controlledBuild = function():View return new TrackedScope("controlled-tree", function() {
 			var next = new TreeView("controlled-items", new Items(), style);
 			next.selectionProvider = function() return choice.value;
 			next.onSelectionChanged = function(key) {
@@ -129,7 +129,7 @@ class TreeSelectionTests {
 			};
 			return next;
 		});
-		// Build the parent each frame; RetainedView itself must observe and invalidate its cached tree.
+		// Build the parent each frame: a new body each time, so the scope runs again and follows the owner.
 		for (desired in ["item-1", "item-8", null, "missing", "item-2"]) {
 			choice.value = desired;
 			var mounted = controlled.submit(controlledBuild(), frame);

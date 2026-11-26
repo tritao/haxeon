@@ -2,12 +2,11 @@ import haxeon.reactive.Signal;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.EventDispatcher;
 import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.RetainedVariants;
-import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.UiEvent;
@@ -99,7 +98,7 @@ class ButtonMain {
 		store.endFrame();
 		if (disabled.enabled || disabled.focusable || !disabled.states.contains(StyleState.Disabled)) return 4;
 		var parentBuilds = 0, parentEnabled = new Signal<Bool>(true);
-		var parent = new RetainedView("cached-button-parent", function(_) {
+		var parent = new TrackedScope("cached-button-parent", function() {
 			parentBuilds++;
 			return new Button("Cached", null, null, "cached-button", parentEnabled.value);
 		});
@@ -129,35 +128,8 @@ class ButtonMain {
 		context.beginFrame();
 		var changedRoot = context.trackReads(function() return parent.build(context));
 		store.endFrame();
-		if (parentBuilds != 2
-			|| changedRoot == cachedRoot || changedRoot.enabled || changedRoot.focusable
-			|| !cachedOwner.disposed) return 11;
-		var variantBuilds = 0;
-		var variant = new RetainedVariants("native-variant", "one", function(_) {
-			variantBuilds++;
-			return new ButtonWithCallerExtra();
-		});
-		context.beginFrame();
-		var variantRoot = context.trackReads(function() return variant.build(context));
-		store.endFrame();
-		var variantBody = variantRoot, outside = variantRoot.children[1];
-		var variantOwner = context.renderScopeAt(variantRoot);
-		if (variantOwner == null || context.interactionRenderScope(outside) != null) return 14;
-		context.interactionStates.set(variantBody.id, StyleState.Hovered);
-		variantOwner.markDirty();
-		context.flushRenderScopes(variantRoot);
-		context.beginFrame();
-		var keptVariant = context.trackReads(function() return variant.build(context));
-		store.endFrame();
-		if (variantBuilds != 1 || keptVariant != context.currentRoot(variantRoot) || keptVariant.children[1] != outside
-			|| keptVariant == variantBody || keptVariant.layout.style.width.value != 150) return 12;
-		outside.detach();
-		context.beginFrame();
-		var rebuiltVariant = context.trackReads(function() return variant.build(context));
-		store.endFrame();
-		// The variant builds its caller again, whose modifier puts the extra back on the button's kept body.
-		if (variantBuilds != 2 || rebuiltVariant.children.length != 2
-			|| rebuiltVariant.children[1] == outside) return 15;
+		// The parent runs again and describes the button with new inputs; the button's own scope builds them.
+		if (parentBuilds != 2 || changedRoot.enabled || changedRoot.focusable) return 11;
 		context.dispose();
 		return 42;
 	}
@@ -170,17 +142,5 @@ private class ButtonDecoration implements View {
 		if (context.inheritedStyle == null) throw "Button child did not inherit computed style";
 		builds++;
 		return context.createNode(context.rootId("decoration"), LayoutVisualKind.Box);
-	}
-}
-
-/** The extra is attached by the component caller, outside the independently replaced body. */
-private class ButtonWithCallerExtra implements View {
-	public function new() {}
-	public function build(context:BuildContext):RenderNode {
-		var extra = context.createNode(context.rootId("outside-body"), LayoutVisualKind.Box);
-		extra.states = StyleState.empty();
-		var modifier = new RootModifier();
-		modifier.add(extra);
-		return context.build(new Button("Variant", null, null, "variant-button"), modifier);
 	}
 }

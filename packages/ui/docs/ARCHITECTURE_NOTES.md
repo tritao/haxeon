@@ -9,8 +9,9 @@ the questions that were settled along the way.
 The model is **declarative build over a retained tree**: authors write builds as if the whole UI were rebuilt each
 frame, and the framework skips what it can prove unchanged.
 
-- Retained subtrees (`RetainedView`, dock caches) are reused while their recorded dependencies match: widget-state
-  values, tracked signal and Observable reads, and the interaction state they were built from.
+- A component (`ScopeView`) keeps its body while its parent describes it with equal inputs and nothing the body read
+  changed; `TrackedScope` makes one from a plain body. The dock's pane and panel caches reuse built subtrees while
+  their recorded dependencies match: widget-state values, tracked reads, and the interaction state they were built from.
 - Self-updating widgets rebuild alone and are reconciled into their existing node (`RenderNode.reconcile`); controller
   edits are announced with `willEditRetained`. A frame with only these is a patch frame and builds no view.
 - Verify mode rebuilds from scratch and compares, so a missed dependency fails the gates instead of showing stale UI.

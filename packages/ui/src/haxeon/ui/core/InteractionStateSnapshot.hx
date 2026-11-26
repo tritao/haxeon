@@ -17,15 +17,13 @@ internal class InteractionStateSnapshot implements Disposable {
 	var masks:Array<StyleState>;
 	/** Widgets left out because they update themselves, with the builds that do it, kept alive with the cached subtree. */
 	var updatingBuilds:Array<SelfUpdatingBuild>;
-	var updatingBuildRevisions:Null<Array<Int>>;
 
-	public function new(root:RenderNode, context:BuildContext, ?boundary:RenderNode, trackBuilds:Bool = false) {
+	public function new(root:RenderNode, context:BuildContext, ?boundary:RenderNode) {
 		if (root == null) throw "Retained interaction snapshots require a render tree";
 		ids = NoIds;
 		values = NoValues;
 		masks = NoValues;
 		updatingBuilds = NoBuilds;
-		updatingBuildRevisions = trackBuilds ? [] : null;
 		capture(root, context, boundary);
 	}
 
@@ -37,7 +35,6 @@ internal class InteractionStateSnapshot implements Disposable {
 				if (updatingBuilds.length == 0) updatingBuilds = [];
 				updatingBuilds.push(build);
 				build.retainSnapshot();
-				if (updatingBuildRevisions != null) updatingBuildRevisions.push(build.buildRevision);
 				// Callers can append independently updating views after the owner's build was captured.
 				var built = build.built;
 				for (child in node.children) {
@@ -71,14 +68,6 @@ internal class InteractionStateSnapshot implements Disposable {
 
 	public function statesChanged(context:BuildContext):Bool {
 		for (entry in updatingBuilds) if (context.updatingStatesChanged(entry)) return true;
-		return false;
-	}
-
-	/** Whether a tracked updater rebuilt after capture. */
-	public function buildsChanged():Bool {
-		if (updatingBuildRevisions == null) return false;
-		for (index in 0...updatingBuilds.length) if (updatingBuilds[index].buildRevision
-			!= updatingBuildRevisions[index]) return true;
 		return false;
 	}
 

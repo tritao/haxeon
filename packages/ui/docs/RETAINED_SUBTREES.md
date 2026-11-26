@@ -31,10 +31,11 @@ Their timeline, action and allocation records are retained; redundant captured b
 
 A frame rebuilds the view by default. Work is skipped in three ways, and one check keeps all of them honest.
 
-**Retained caches** reuse a built subtree: `RetainedView`, and in `DockWorkspace` the pane and panel caches. A cached subtree
-is reused while all of these hold:
+**Retained caches** reuse a built subtree: in `DockWorkspace`, the pane and panel caches. (`RetainedView` and
+`RetainedVariants` were deleted: a component, or a `TrackedScope` around a plain body, keeps its body while its parent
+describes it with equal inputs.) A cached subtree is reused while all of these hold:
 
-- its declared key matches (a `RetainedView` revision, plus style revision and viewport; dock panels opt into tracked retention);
+- its declared key matches (style revision and viewport; dock panels opt into tracked retention);
 - every `Signal`, `State` or compiler-tracked `Observable` field it read is still current (`Dependencies`);
 - state-backed resources it used remain mounted (`stateIdsUsedSince` tracks lifetime, not value revisions);
 - the interaction state of nodes a widget built from interaction state is unchanged (`InteractionStateSnapshot`; hover is

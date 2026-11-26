@@ -11,10 +11,11 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.TextStyle;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.RetainedView;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
@@ -40,6 +41,23 @@ import haxeon.ui.widgets.text.TextField;
 
 /** A control the way a container uses one: built, then given a listener, a style change and an overlay child by its caller. */
 /** Builds a view with a caller's additions: a listener, a placement and an overlay child, passed as a RootModifier. */
+/** Text whose equality can lie: a dishonest probe calls every description equal, so its body keeps a stale label. */
+private class LabelProbe implements ScopeView {
+	final label:String;
+	final honest:Bool;
+	public function new(label:String, honest:Bool) {
+		this.label = label;
+		this.honest = honest;
+	}
+	public function scopeKey():String return "labelled";
+	public function inputsEqual(previous:ScopeView):Bool {
+		return Std.isOfType(previous, LabelProbe) && (!honest || (cast previous:LabelProbe).label == label);
+	}
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function buildBody(context:BuildContext):RenderNode return new haxeon.ui.widgets.text.Text(label)
+		.build(context);
+}
+
 private class DecoratedControl implements View {
 	public var presses = 0;
 	public var builtNode(default, null):Null<RenderNode> = null;
@@ -122,25 +140,6 @@ private class NodeView implements View {
 	}
 }
 
-private class VariantProbe implements View implements Observable {
-	public var variant:String = "a";
-	public var aRevision:Int = 0;
-	public var bRevision:Int = 0;
-	@:unobservable public var aBuilds:Int = 0;
-	@:unobservable public var bBuilds:Int = 0;
-	public var capacity:Int = 4;
-	public function new() {}
-	public function build(context:BuildContext):RenderNode {
-		var selected = variant;
-		return new haxeon.ui.core.RetainedVariants("variant-probe", selected, function(ctx) {
-			var revision = selected == "a" ? aRevision : bRevision;
-			if (selected == "a") aBuilds++;
-			else bBuilds++;
-			return new Text(selected + ":" + revision);
-		}, null, capacity).build(context);
-	}
-}
-
 private class InspectionDecoration extends haxeon.ui.style.Decoration {
 	public static var copies:Int = 0;
 	public static var fail:Bool = false;
@@ -149,72 +148,6 @@ private class InspectionDecoration extends haxeon.ui.style.Decoration {
 		copies++;
 		if (fail) throw "inspection copy failed";
 		return this;
-	}
-}
-
-private class StrictVariantProbe implements View {
-	public var variant:String = "a";
-	public var presses:Int = 0;
-	public var patchAccepted:Bool = false;
-	public var counterBuilds:Int = 0;
-	public function new() {}
-	public function build(context:BuildContext):RenderNode {
-		return new haxeon.ui.core.RetainedVariants("strict-variant-probe",
-			variant,
-			function(_) return new StrictVariantCounter(this),
-			null,
-			2,
-			true).build(context);
-	}
-}
-
-private class SiblingVariantProbe implements View {
-	public function new() {}
-	public function build(context:BuildContext):RenderNode {
-		var root = new RenderNode(context.id("siblings"), LayoutVisualKind.Box);
-		for (name in ["first", "second"]) {
-			var variant = new haxeon.ui.core.RetainedVariants(name, "same", function(ctx) {
-				var id = ctx.id("child");
-				return new StrictVariantLeaf(id);
-			});
-			root.add(variant.build(context));
-		}
-		return root;
-	}
-}
-
-private class StrictVariantLeaf implements View {
-	final id:WidgetId;
-	public function new(id:WidgetId) this.id = id;
-	public function build(context:BuildContext):RenderNode {
-		context.state(id, 0);
-		return new RenderNode(id, LayoutVisualKind.Box);
-	}
-}
-
-private class StrictVariantCounter implements View {
-	final owner:StrictVariantProbe;
-	public function new(owner:StrictVariantProbe) this.owner = owner;
-	public function build(context:BuildContext):RenderNode {
-		var id = context.id("counter");
-		return context.selfUpdating(id, function() {
-			owner.counterBuilds++;
-			var state = context.state(id, 0);
-			var style = new LayoutStyle();
-			style.width = LayoutAxis.fixed(80);
-			style.height = LayoutAxis.fixed(40);
-			var node = new RenderNode(id, LayoutVisualKind.Box, style);
-			var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
-			label.layout.text = Std.string(state.value);
-			node.add(label);
-			node.on(UiEventKind.PointerDown, function(_) {
-				owner.presses++;
-				state.update(state.value + 1);
-				owner.patchAccepted = context.requestPatch(id);
-				if (!owner.patchAccepted) state.update(state.value);
-			});
-			return node;
-		});
 	}
 }
 
@@ -291,14 +224,19 @@ private class MotionRig {
 			new DecoratedControl("slider-host", _ -> slider, decorate),
 			new DecoratedControl("progress-host", _ -> progress, decorate)
 		];
-		view = new RetainedView("motion-panel", function(_) {
+		view = panel();
+	}
+
+	/** The panel as a new description: the reference rig submits a new one each time, so its body always runs again. */
+	function panel():View {
+		return new TrackedScope("motion-panel", function() {
 			panelBuilds++;
 			return new Column("motion-column",
 				[
 					new KeyedView("slider-host", decorated[0]),
 					new KeyedView("progress-host", decorated[1])
 				]);
-		}, patched ? null : function() return Std.string(panelBuilds));
+		});
 	}
 
 	static function decorate(_:BuildContext, modifier:RootModifier):Void {
@@ -307,7 +245,8 @@ private class MotionRig {
 
 	public function submit():RenderNode {
 		frame.deltaSeconds = 0.1;
-		return ui.submitCached(function() return view, frame, patched ? "motion" : "motion:" + submissions++);
+		return ui.submitCached(function() return patched ? view : panel(), frame,
+			patched ? "motion" : "motion:" + submissions++);
 	}
 }
 
@@ -321,7 +260,10 @@ private class Rig {
 	public final checked:Signal<Bool> = new Signal(false);
 	public var toggled = false;
 	public var chosen = "";
+	/** Makes the panel; the reference rig calls it for every frame, so the panel never compares equal and always runs. */
+	final panel:Void->View;
 	final view:View;
+	final restyleInPlace:Bool;
 
 	/**
    * `scrolling` puts the buttons in a scroll view that overflows, with motion on, so the scrollbar fades frame by frame.
@@ -341,7 +283,8 @@ private class Rig {
 			new DecoratedControl("decorated-radio",
 				_ -> new Radio("decorated-radio", "Decorated radio", "d", false, function(_) rig.clicks++))
 		] : [new DecoratedControl("decorated", _ -> new Button("Decorated", null, null, "decorated"))];
-		var panel = new RetainedView("panel", function(_) {
+		this.restyleInPlace = restyleInPlace;
+		panel = () -> new TrackedScope("panel", function() {
 			rig.panelBuilds++;
 			var items:Array<KeyedView> = controls ? [
 				new KeyedView("icon", new IconButton("icon", IconName.Close, "Close", function() rig.clicks++)),
@@ -375,14 +318,14 @@ private class Rig {
 			style.width = LayoutAxis.fixed(200.0);
 			style.height = LayoutAxis.fixed(90.0);
 			return new ScrollView("scroll", column, style, ScrollAxis.Vertical);
-			// The reference never reuses its panel, so everything in it, the scrollbar too, is built from scratch on every frame.
-		}, restyleInPlace ? null : function() return Std.string(rig.panelBuilds));
-		view = panel;
+		});
+		view = panel();
 	}
 
 	public function submit():RenderNode {
 		frame.deltaSeconds = 0.1;
-		return ui.submitCached(function() return view, frame, "panel");
+		// The reference never reuses its panel, so everything in it, the scrollbar too, is built from scratch on every frame.
+		return ui.submitCached(function() return restyleInPlace ? view : panel(), frame, "panel");
 	}
 }
 
@@ -477,10 +420,10 @@ private class TabsRig {
 		ui.buildContext.environment.reducedMotion = true;
 		var first = new haxeon.ui.widgets.controls.Tabs.TabItem("first",
 			"First",
-			new RetainedView("first-page", _ -> new Text("First page")));
+			new TrackedScope("first-page", () -> new Text("First page")));
 		var second = new haxeon.ui.widgets.controls.Tabs.TabItem("second",
 			"Second",
-			new RetainedView("second-page", _ -> new Text("Second page")));
+			new TrackedScope("second-page", () -> new Text("Second page")));
 		var disabled = new haxeon.ui.widgets.controls.Tabs.TabItem("disabled", "Disabled", new Text("Disabled page"),
 			false);
 		first.onClose = () -> closes++;
@@ -491,12 +434,16 @@ private class TabsRig {
 		tabs = new haxeon.ui.widgets.controls.Tabs("local-tabs", [first, disabled, second], "first", _ -> changes++,
 			style);
 		decorated = new DecoratedControl("tabs-host", _ -> tabs);
-		view = new RetainedView("tabs-panel", _ -> {
+		view = panel();
+	}
+	/** The panel as a new description: the reference rig submits a new one each time, so its body always runs again. */
+	function panel():View {
+		return new TrackedScope("tabs-panel", () -> {
 			panelBuilds++;
 			return decorated;
-		}, patched ? null : () -> Std.string(panelBuilds));
+		});
 	}
-	public function submit():RenderNode return ui.submitCached(() -> view,
+	public function submit():RenderNode return ui.submitCached(() -> patched ? view : panel(),
 		frame,
 		patched ? "tabs" : "tabs:" + submissions++);
 }
@@ -542,17 +489,22 @@ private class PopupRig implements View {
 				selections++;
 			}, () -> closes++,
 				index -> active = index, index -> index >= 0 && index < options.length && options[index].enabled, next);
-		view = new RetainedView("popup-panel", _ -> {
+		view = panel();
+	}
+	/** The panel as a new description: the reference rig submits a new one each time, so its body always runs again. */
+	function panel():View {
+		return new TrackedScope("popup-panel", () -> {
 			panelBuilds++;
 			return this;
-		}, patched ? null : () -> Std.string(panelBuilds));
+		});
 	}
 	public function build(context:BuildContext):RenderNode {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(150);
 		style.height = LayoutAxis.fixed(36);
 		style.clipToParent = false;
-		var root = new RenderNode(context.id("popup-anchor"), LayoutVisualKind.Box, style);
+		// The panel scope reserves its root identity for the node this returns.
+		var root = context.createNode(context.rootId("popup-anchor"), LayoutVisualKind.Box, style);
 		root.on(UiEventKind.Scroll, _ -> backgroundWheels++);
 		var menu = popup.build(context, root);
 		result = menu;
@@ -573,7 +525,7 @@ private class PopupRig implements View {
 		if (value == null) throw "Popup is not built";
 		return value;
 	}
-	public function submit():RenderNode return ui.submitCached(() -> view,
+	public function submit():RenderNode return ui.submitCached(() -> patched ? view : panel(),
 		frame,
 		patched ? "popup" : "popup:" + submissions++);
 }
@@ -594,8 +546,9 @@ private class UpdatingResources implements View {
 			rootId = id;
 			return context.selfUpdating(id, () -> {
 				var root = new RenderNode(id, LayoutVisualKind.Box);
-				if (enabled) root.add(new RetainedView("nested",
-					_ -> DecoratedControl.ofNodes("inner", context -> {
+				// The inner updater makes its own root, so the nested scope's root is a column around it.
+				if (enabled) root.add(new TrackedScope("nested", () -> new Column("nested-column",
+					[new KeyedView("inner", DecoratedControl.ofNodes("inner", context -> {
 						var child = context.id("child");
 						childId = child;
 						return context.selfUpdating(child,
@@ -613,71 +566,13 @@ private class UpdatingResources implements View {
 								node.add(label);
 								return node;
 							});
-					})).build(context));
+					}))])).build(context));
 				return root;
 			});
 		});
 }
 
 @:access(haxeon.ui.core.UiContext) @:access(haxeon.ui.core.UiInspector) class RestyleInPlaceTests {
-	static function retainedVariants(fonts:FontCollection):Void {
-		var ui = new UiContext(null, fonts), view = new VariantProbe(), frame = new LayoutFrame(200, 100);
-		var first = ui.submit(view, frame);
-		view.variant = "b";
-		ui.submit(view, frame);
-		view.variant = "a";
-		var restored = ui.submit(view, frame);
-		check(first == restored && view.aBuilds == 1 && view.bBuilds == 1,
-			"A retained variant was rebuilt or lost its root");
-		view.variant = "b";
-		ui.submit(view, frame);
-		view.aRevision++;
-		view.variant = "a";
-		var changed = ui.submit(view, frame);
-		check(view.aBuilds == 2 && changed.layout.text == "a:1", "An inactive variant ignored an observed change");
-		ui.dispose();
-
-		var limited = new VariantProbe(), one = new UiContext(null, fonts), other = new UiContext(null, fonts);
-		limited.capacity = 1;
-		one.submit(limited, frame);
-		other.submit(limited, frame);
-		check(limited.aBuilds == 2, "Different UI contexts shared a retained variant");
-		limited.variant = "b";
-		one.submit(limited, frame);
-		limited.variant = "a";
-		one.submit(limited, frame);
-		check(limited.aBuilds == 3, "A variant outside the capacity was not evicted");
-		other.submit(limited, frame);
-		check(limited.aBuilds == 3, "Eviction in one context affected another context");
-		one.dispose();
-		other.dispose();
-		var siblings = new UiContext(null, fonts);
-		var siblingRoot = siblings.submit(new SiblingVariantProbe(), frame);
-		check(siblingRoot.children[0].id.value != siblingRoot.children[1].id.value,
-			"Sibling variant caches used the same state scope");
-		siblings.dispose();
-
-		var strict = new StrictVariantProbe(), patched = new UiContext(null, fonts);
-		var build:Void->View = function() return strict;
-		var root = patched.submitCached(build, frame, "strict");
-		check(root.children[0].layout.text == "0", "Strict variant did not start from its initial state");
-		patched.pointerDown(10, 10, 0);
-		check(strict.presses == 1, "The updating widget did not receive its pointer event");
-		root = patched.submitCached(build, frame, "strict");
-		check(root.children[0].layout.text == "1",
-			"The quiet updating widget did not patch: text="
-			+ root.children[0].layout.text + " accepted=" + strict.patchAccepted);
-		var changedId = root.id.value;
-		strict.variant = "b";
-		patched.submit(strict, frame);
-		strict.variant = "a";
-		root = patched.submit(strict, frame);
-		check(root.children[0].layout.text == "0",
-			"A changed detached variant restored its old quiet widget state: text="
-			+ root.children[0].layout.text + " builds=" + strict.counterBuilds + " old=" + changedId + " new="
-			+ root.id.value);
-		patched.dispose();
-	}
 	static function inlineAxisSnapshots():Void {
 		var width = haxeon.ui.style.StyleProperty.Width;
 		var height = haxeon.ui.style.StyleProperty.Height;
@@ -939,8 +834,8 @@ private class UpdatingResources implements View {
 		var gauge = new Gauge(), decorated = new DecoratedGauge(gauge);
 		var frame = new LayoutFrame(240.0, 120.0);
 		// Retained, so that only the gauge itself builds again.
-		var view:View = new RetainedView("gauge-panel",
-			function(_) return new Column("gauge-column", [new KeyedView("gauge", decorated)]));
+		var view:View = new TrackedScope("gauge-panel",
+			function() return new Column("gauge-column", [new KeyedView("gauge", decorated)]));
 		var submit = function() return ui.submitCached(function() return view, frame, "gauge");
 		var column = submit();
 		var root = column.children[0];
@@ -1085,7 +980,7 @@ private class UpdatingResources implements View {
 		var field = new TextField("name", "abc");
 		var presses = 0;
 		var decorated = new FieldDecoration(field, function() presses++);
-		var view:View = new RetainedView("field-panel", function(_) return decorated);
+		var view:View = new TrackedScope("field-panel", function() return decorated);
 		var frame = new LayoutFrame(240.0, 60.0);
 		var build = function() return view;
 		var submit = function() return ui.submitCached(build, frame, "field");
@@ -1158,7 +1053,7 @@ private class UpdatingResources implements View {
 			inputs = new ListInputs(480),
 			selected = new haxeon.reactive.Signal<Int>(-1),
 			notifications = 0;
-		var view:View = new RetainedView("resolved-list", context -> {
+		var view:View = new TrackedScope("resolved-list", () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			var requested = inputs.height;
@@ -1228,7 +1123,7 @@ private class UpdatingResources implements View {
 	static function verifyDisabledFocus(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120), input = new EnabledInput();
 		ui.verifyRetentionEvery = 1;
-		var view:View = new RetainedView("focus-disabling", context -> {
+		var view:View = new TrackedScope("focus-disabling", () -> {
 			var button = new Button("Focus",
 				null,
 				() -> {},
@@ -1252,10 +1147,10 @@ private class UpdatingResources implements View {
 		var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120);
 		var flags:haxeon.ui.style.StyleState = haxeon.ui.style.StyleState.Checked;
 		var label = "hovered pressed";
-		var view:View = new RetainedView("flag-verification",
-			_ -> DecoratedControl.ofNodes("flags", context -> {
-				var node = new RenderNode(context.id("flags"),
-					LayoutVisualKind.Box);
+		var view:View = new TrackedScope("flag-verification",
+			() -> DecoratedControl.ofNodes("flags", context -> {
+				// The scope's root: it takes the identity the scope reserved for it.
+				var node = context.createNode(context.rootId("flags"), LayoutVisualKind.Box);
 				node.states = flags;
 				node.semantics = new Semantics(AccessibilityRole.Checkbox, label);
 				return node;
@@ -1273,17 +1168,14 @@ private class UpdatingResources implements View {
 		Sys.println("PASS verification: only pointer flag bits are ignored; checked flags and label text still compare");
 	}
 
-	/** Verify mode must pass with an honest cache key and catch one that misses an input. */
+	/** Verify mode must pass with honest input equality and catch one that misses an input. */
 	static function verifyMode(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts);
 		ui.buildContext.environment.reducedMotion = true;
 		var frame = new LayoutFrame(240.0, 120.0);
 		var label = "first";
 		var honest = true;
-		var view:View = new RetainedView("labelled",
-			function(_) return new haxeon.ui.widgets.text.Text(label),
-			function() return honest ? label : "always the same");
-		var build = function() return view;
+		var build = function():View return new LabelProbe(label, honest);
 		ui.submitCached(build, frame, "verify");
 		check(ui.verifyRetention(build, frame) == null, "An honest cache failed verification");
 		label = "second";
@@ -1308,17 +1200,17 @@ private class UpdatingResources implements View {
 		observedReads(fonts);
 	}
 
-	/** A retained view without a key follows observable fields, including reads nested under another cache. */
+	/** A tracked scope follows observable fields, including reads nested under another scope. */
 	static function observedReads(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts);
 		var frame = new LayoutFrame(240.0, 120.0);
 		var input = new TextInput("first"), builds = 0, frameNumber = 0;
-		var inner:View = new RetainedView("inner", function(context) {
+		var inner:View = new TrackedScope("inner", function() {
 			builds++;
 			return new haxeon.ui.widgets.text.Text(input.title);
 		});
-		// An outer retained view around the inner one must notice the inner read too.
-		var view:View = new RetainedView("outer", function(_) return inner);
+		// An outer scope around the inner one must let the inner read rerun the inner scope.
+		var view:View = new TrackedScope("outer", function() return inner);
 		var build = function() return view;
 		var shown = function():String {
 			var found = "";
@@ -1334,11 +1226,11 @@ private class UpdatingResources implements View {
 		check(ui.verifyRetention(build, frame) == null, "Observed reads left the retained tree stale");
 		ui.dispose();
 		var siblings = new UiContext(null, fonts), shared = new TextInput("a"), leftBuilds = 0, rightBuilds = 0;
-		var left:View = new RetainedView("left", _ -> {
+		var left:View = new TrackedScope("left", () -> {
 			leftBuilds++;
 			return new haxeon.ui.widgets.text.Text(shared.title);
 		});
-		var right:View = new RetainedView("right", _ -> {
+		var right:View = new TrackedScope("right", () -> {
 			rightBuilds++;
 			return new haxeon.ui.widgets.text.Text(shared.title);
 		});
@@ -1354,9 +1246,9 @@ private class UpdatingResources implements View {
 			if (node.layout.text == "b") changedLabels++;
 		});
 		check(leftBuilds == 2 && rightBuilds == 2 && changedLabels == 2,
-			"Sibling retained views did not independently subscribe to the same Observable field");
+			"Sibling scopes did not independently subscribe to the same Observable field");
 		siblings.dispose();
-		Sys.println("PASS observable: a keyless retained view rebuilds exactly when a tracked field changes, through an outer cache");
+		Sys.println("PASS observable: a tracked scope rebuilds exactly when a tracked field changes, through an outer scope");
 		unannouncedEdits(fonts);
 	}
 
@@ -1364,9 +1256,10 @@ private class UpdatingResources implements View {
 	static function unannouncedEdits(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts);
 		var frame = new LayoutFrame(240.0, 120.0);
-		var view:View = new RetainedView("edited",
-			function(_) return new haxeon.ui.widgets.text.Text("label"),
-			function() return "fixed");
+		// The edited text sits inside the scope's column: the scope's own root may only change through a modifier.
+		var view:View = new TrackedScope("edited",
+			function() return new Column("edited-column",
+			[new KeyedView("label", new haxeon.ui.widgets.text.Text("label"))]));
 		var build = function() return view;
 		var reported:Null<String> = null;
 		ui.onRetentionMismatch = function(text) reported = text;
@@ -1506,7 +1399,7 @@ private class UpdatingResources implements View {
 	/** A build reparents a cached subtree; its old membership and topology must still compare as the submitted frame. */
 	static function submittedIndex(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts), builds = 0;
-		var retained = new RetainedView("membership", function(_) {
+		var retained = new TrackedScope("membership", function() {
 			builds++;
 			return new Text("kept child");
 		});
@@ -1701,7 +1594,10 @@ private class UpdatingResources implements View {
 
 	static function editedComposite(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts), gauge = new Gauge();
-		var view:View = new RetainedView("edited-composite", _ -> gauge), frame = new LayoutFrame(200, 100);
+		// A self-updating widget makes its own root, so the scope's root is a column around it.
+		var view:View = new TrackedScope("edited-composite",
+			() -> new Column("edited-column", [new KeyedView("gauge", gauge)])),
+			frame = new LayoutFrame(200, 100);
 		var build = () -> view;
 		ui.submitCached(build, frame, "edited-composite");
 		var label = gauge.labelNode;
@@ -1722,10 +1618,14 @@ private class UpdatingResources implements View {
 			caller = new UpdatingResources(),
 			builds = 0;
 		caller.enabled = true;
-		var view:View = new RetainedView("resource-panel", _ -> {
+		var view:View = new TrackedScope("resource-panel", () -> {
 			builds++;
-			return new DecoratedControl("resource-host", _ -> widget,
-				(context, modifier) -> modifier.add(context.withScope(new Key("caller"), () -> caller.build(context))));
+			// A self-updating widget makes its own root, so the scope's root is a column around it.
+			return new Column("resource-column", [
+				new KeyedView("host", new DecoratedControl("resource-host", _ -> widget,
+					(context,
+					modifier) -> modifier.add(context.withScope(new Key("caller"), () -> caller.build(context)))))
+			]);
 		});
 		var frame = new LayoutFrame(200, 100), key = "resources";
 		var factories = 0;
@@ -1739,7 +1639,14 @@ private class UpdatingResources implements View {
 		submit();
 		check(ui.buildContext.requestPatch(cast widget.rootId), "Composite owner was not rearmed");
 		submit();
-		check(ui.root != null && ui.root.children.length == 3 && ui.root.children[0].id.equals(cast widget.childId),
+		// The panel's column holds the owner, whose first child is the nested scope's column around the inner updater.
+		function owner(root:Null<RenderNode>):RenderNode {
+			if (root == null) throw "Missing resource panel";
+			return root.children[0];
+		}
+		function innerLabel(root:RenderNode):RenderNode return owner(root).children[0].children[0].children[0];
+		check(owner(ui.root).children.length == 3
+			&& owner(ui.root).children[0].children[0].id.equals(cast widget.childId),
 			"A newly materialized retained child displaced its caller decoration");
 		key = "resources-next";
 		submit();
@@ -1755,13 +1662,13 @@ private class UpdatingResources implements View {
 		widget.reading.value++;
 		key = "external-reading";
 		var refreshed = submit();
-		check(builds == 1 && refreshed.children[0].children[0].layout.text == "1:0:1",
+		check(builds == 1 && innerLabel(refreshed).layout.text == "1:0:1",
 			"Tracked nested reads did not patch their updater in place");
 		var value = widget.value;
 		if (value == null) throw "Missing owned state";
 		value.update(7);
 		refreshed = submit();
-		check(builds == 1 && refreshed.children[0].children[0].layout.text == "1:7:1",
+		check(builds == 1 && innerLabel(refreshed).layout.text == "1:7:1",
 			"A tracked state update rebuilt its owning updater or failed to refresh its retained node");
 		check(widget.value == value, "A live state handle changed across patches and complete builds");
 		widget.enabled = false;
@@ -1786,7 +1693,6 @@ private class UpdatingResources implements View {
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();
 		fonts.addDefaultFonts();
-		retainedVariants(fonts);
 		buttonIdentityOwnership(fonts);
 		hoverRouting(fonts);
 		tabsAndPopup(fonts);

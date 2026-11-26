@@ -520,11 +520,7 @@ class BuildContext implements Disposable {
 		entry.epoch = updatingEpoch;
 		registerSelfUpdatingBuild(id.value, entry);
 		var root = buildRegistered(entry, previous);
-		// A retained alternative may still hold the old registration. A complete rebuild also changes its snapshot.
-		if (previous != null) {
-			previous.buildRevision++;
-			previous.releaseSnapshot();
-		}
+		if (previous != null) previous.releaseSnapshot();
 		entry.root = root;
 		// Taken now, before the caller touches the node: later rebuilds are applied as the difference from this.
 		entry.built = root.snapshotBuilt();
@@ -826,7 +822,6 @@ class BuildContext implements Disposable {
 		var root = trackReads(entry.build);
 		if (root.id.value != entry.idValue)
 			throw 'Self-updating root ID ${root.id.value} differs from its registered ID ${entry.idValue}';
-		entry.buildRevision++;
 		var usedStates = stateUsageMarker() == stateMark ? null : stateIdsUsedSince(stateMark,
 			previous == null ? null : previous.stateIds);
 		var hasReads = capture.pendingCount() != dependencyMark;
@@ -1064,18 +1059,6 @@ class BuildContext implements Disposable {
 	/** The scope widgets built now are keyed under; withScopeUnder keys a deeper subtree by it. */
 	public function currentScope():KeyScope return scope;
 
-	/** A variant owns nested completed scopes, never the enclosing scope currently producing that variant. */
-	internal function retainedRootScope(node:RenderNode):Null<RenderScope> {
-		var owner = node.scopeOwner();
-		if (owner == activeRenderScope) return null;
-		while (owner != null) {
-			var parent = owner.parentScope;
-			if (parent == null || parent == activeRenderScope || parent.disposed || parent.root != node) break;
-			owner = parent;
-		}
-		return owner;
-	}
-
 	/**
 	 * Builds `view` with `modifier` added to its root. A component's root belongs to its body, so callers place, flag or
 	 * decorate it this way instead of editing what `build` returned: the modifier is applied after each body run.
@@ -1133,6 +1116,7 @@ class BuildContext implements Disposable {
 			// Equal inputs under an equal context build the same body: keep it, its subscriptions and the instance they
 			// observe. Its handlers call the new description's callbacks through latestOf; the caller's modifier is swapped.
 			stateStore.touchScope(previous.resourceId);
+			if (previous.updaters != null) previous.updaters.retainState(this);
 			previous.keep(component, scope, styleParent, text);
 			// The body's subtree keeps its IDs; the new modifier's children were claimed as the caller built them.
 			var root = previous.root;
@@ -1171,8 +1155,11 @@ class BuildContext implements Disposable {
 	function canReuseScope(previous:RenderScope, component:haxeon.ui.core.RenderScope.ScopeView, rootId:WidgetId,
 			text:Array<ResolvedTextStyle>):Bool {
 		var root = previous.root;
-		// A root this build already claimed is a second mount of one identity, which must be rejected, not kept.
+		// A root this build already claimed is a second mount of one identity, which must be rejected, not kept. A
+		// self-updating widget in the body with a pending update would be dropped as rebuilt by this ancestor: run it.
+		var updaters = previous.updaters;
 		return !bypassRetention && !previous.disposed && !previous.pending && root != null && root.id.equals(rootId)
+			&& (updaters == null || !updaters.statesChanged(this))
 			&& (patching || buildingRenderScope || !claimed.has(root.id.value))
 			&& previous.builtStyleRevision == styleRevision && previous.builtWidth == viewportWidth
 			&& previous.builtHeight == viewportHeight
@@ -1241,6 +1228,7 @@ class BuildContext implements Disposable {
 		buildingRoot = null;
 		var capture = previousObserved == observed ? localObserved : previousObserved;
 		var dependencyMark = capture.dependencyMarker();
+		var registrationMark = updatingRegistrations;
 		scope = owner.capturedScope;
 		styleParent = owner.capturedParent;
 		textStyleStack = owner.capturedText;
@@ -1268,6 +1256,9 @@ class BuildContext implements Disposable {
 			buildingRenderScope = previousBuilding;
 		}
 		var result = readComponentBody(owner.component, capture);
+		var updaters = owner.updaters;
+		if (updaters != null) updaters.dispose();
+		owner.updaters = updatingRegistrations == registrationMark ? null : new InteractionStateSnapshot(result, this);
 		owner.builtStyleRevision = styleRevision;
 		owner.builtWidth = viewportWidth;
 		owner.builtHeight = viewportHeight;
@@ -1323,14 +1314,25 @@ class BuildContext implements Disposable {
 				}
 			}
 		}
-		if (!deferUnmount) for (owner in renderScopes) {
-			if (!owner.disposed && owner.mounted && !owner.attached(submittedRoot)) {
-				// Pending ancestors can adopt cached children; sweep only after structure settles.
-				if (stateStore.frameActive || buildFeedbackRequested
-					|| owner.retainedByParent()) owner.mounted = false;
-				else owner.dispose();
+		if (deferUnmount) return;
+		// Pending ancestors can adopt cached children; sweep only after structure settles.
+		if (stateStore.frameActive || buildFeedbackRequested) {
+			for (owner in renderScopes) if (!owner.disposed && owner.mounted && !owner.attached(submittedRoot))
+				owner.mounted = false;
+			return;
+		}
+		// A detached scope a detached parent still owns goes once that parent is disposed, whatever their storage order.
+		var disposed = true;
+		while (disposed) {
+			disposed = false;
+			for (owner in renderScopes) if (!owner.disposed && owner.mounted && !owner.attached(submittedRoot)
+				&& !owner.retainedByParent()) {
+				owner.dispose();
+				disposed = true;
 			}
 		}
+		for (owner in renderScopes) if (!owner.disposed && owner.mounted && !owner.attached(submittedRoot))
+			owner.mounted = false;
 	}
 
 	/** Remounting a scope can put a retained child earlier in storage; ancestors still run first. */
@@ -1537,9 +1539,6 @@ internal class SelfUpdatingBuild {
 	public var forcePending(get, set):Bool;
 	public var buildsFromHover(get, set):Bool;
 	public var epoch:Int = 0;
-
-	/** Advances for every completed build, including quiet in-place patches. */
-	public var buildRevision:Int = 0;
 
 	/** What the builder last made on `root`, before callers decorated it: rebuilds replace just that (RenderNode.reconcile). */
 	public var built:Null<BuiltNode> = null;

@@ -4,7 +4,7 @@ import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.core.RetainedView;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.collections.TreeView;
@@ -37,7 +37,7 @@ class VirtualScrollTests {
 		var ui = new UiContext(null, fonts);
 		ui.buildContext.environment.reducedMotion = true;
 		var builds = 0;
-		var retained = new RetainedView("pane", _ -> {
+		var retained = new TrackedScope("pane", () -> {
 			builds++;
 			return view;
 		});
@@ -130,7 +130,7 @@ class VirtualScrollTests {
 		var plain = new ScrollView("plain", new Spacer("document", LayoutAxis.fixed(200), LayoutAxis.fixed(10000)),
 			style);
 		var builds = 0;
-		var retained = new RetainedView("plain-pane", _ -> {
+		var retained = new TrackedScope("plain-pane", () -> {
 			builds++;
 			return plain;
 		});
@@ -147,7 +147,7 @@ class VirtualScrollTests {
 		var count = new Signal(10000);
 		var controller = new ScrollController();
 		var current:Null<VirtualList> = null;
-		var shrinking = new RetainedView("shrinking-pane", _ -> {
+		var shrinking = new TrackedScope("shrinking-pane", () -> {
 			var list = new VirtualList("shrinking", count.value, 24, i -> new Text("item-" + i), style, null,
 				controller);
 			current = list;
