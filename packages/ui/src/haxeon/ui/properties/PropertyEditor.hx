@@ -18,6 +18,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Command;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.icons.IconName;
@@ -78,14 +79,12 @@ class PropertyEditor implements View implements Observable {
 
 	/** Counts the edits started and finished, so a host can tell when the editor's state changed. */
 	@:unobservable public var revision(default, null):Int;
-	@:allow(haxeon.ui.properties.PropertyEditorRow) final rowIds:Map<String, WidgetId> = new Map();
-	// The rows' content, a private class of this module, reads the options, the pending edits and the editors it lays out.
+	// The rows' content, a private class of this module, reads the options, the row states and the editors it lays out.
 	@:allow(haxeon.ui.properties)
 	final options:PropertyEditorOptions;
-	final drafts:Map<String, String>;
-	final errors:Map<String, String>;
+	/** Each row's edit state, by descriptor ID: a row depends on what it shows of it. */
 	@:allow(haxeon.ui.properties)
-	final pending:Map<String, PropertyPendingEdit> = new Map();
+	final rows:Map<String, PropertyRowState>;
 
 	/** An editor of `descriptors`, one row each. Throws when `key` is empty. */
 	public function new(key:String,
@@ -97,17 +96,15 @@ class PropertyEditor implements View implements Observable {
 		generation = nextGeneration;
 		this.key = key;
 		this.descriptors = descriptors == null ? [] : descriptors.copy();
-		var ids:Map<String, Bool> = new Map();
+		rows = new Map();
 		for (descriptor in this.descriptors) {
-			if (descriptor == null || ids.exists(descriptor.id)) throw "Property descriptor IDs must be unique";
-			ids.set(descriptor.id, true);
+			if (descriptor == null || rows.exists(descriptor.id)) throw "Property descriptor IDs must be unique";
+			rows.set(descriptor.id, new PropertyRowState());
 		}
 		this.style = style == null ? defaultStyle() : style.copy();
 		this.registry = registry == null ? new PropertyEditorRegistry() : registry;
 		options = new PropertyEditorOptions();
 		revision = 0;
-		drafts = new Map();
-		errors = new Map();
 	}
 
 	/**
@@ -129,17 +126,18 @@ class PropertyEditor implements View implements Observable {
 			descriptor:PropertyDescriptor,
 			next:PropertyValue,
 			?coalesceKey:String):Bool {
-		if (!options.enabled || context == null || descriptor == null || pending.exists(descriptor.id)) return false;
+		if (!options.enabled || context == null || descriptor == null) return false;
+		var row = rowState(descriptor);
+		if (row.pending != null) return false;
 		var commandContext = context.commandContext == null ? new CommandContext() : context.commandContext;
 		var result = new PropertyBinding(descriptor, commandContext, registry).apply(next, coalesceKey);
 		switch result {
 			case Pending(edit):
-				pending.set(descriptor.id, edit);
+				row.pending = edit;
 				revision++;
-				requestRowPatch(context, descriptor.id);
 				edit.onComplete(done -> {
-					if (pending.get(descriptor.id) != edit) return;
-					pending.remove(descriptor.id);
+					if (row.pending != edit) return;
+					row.pending = null;
 					finishValue(context, descriptor, done);
 				});
 				return false;
@@ -150,13 +148,13 @@ class PropertyEditor implements View implements Observable {
 
 	function finishValue(context:BuildContext, descriptor:PropertyDescriptor, result:PropertyEditResult):Bool {
 		revision++;
-		requestRowPatch(context, descriptor.id);
+		var row = rowState(descriptor);
 		switch result {
 			case Rejected(message):
-				errors.set(descriptor.id, message);
+				row.error = message;
 			case Applied | Unchanged:
-				drafts.remove(descriptor.id);
-				errors.remove(descriptor.id);
+				row.draft = null;
+				row.error = null;
 			case Pending(_):
 				throw "Expected a completed edit";
 		}
@@ -176,59 +174,62 @@ class PropertyEditor implements View implements Observable {
 			return;
 		}
 		reset();
-		drafts.remove(descriptor.id);
-		errors.remove(descriptor.id);
+		var row = rowState(descriptor);
+		row.draft = null;
+		row.error = null;
 		revision++;
-		requestRowPatch(context, descriptor.id);
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		if (options.cachedColumn == null || options.cachedShowCategories != options.showCategories) {
-			var children:Array<KeyedView> = [];
-			var categoryKeys:Map<String, Bool> = new Map();
-			for (descriptor in descriptors) {
-				var category = descriptor.category;
-				if (options.showCategories && category.length > 0 && !categoryKeys.exists(category)) {
-					categoryKeys.set(category, true);
-					children.push(new KeyedView("category:" + category, new Text(category)));
-				}
-				children.push(new KeyedView("property:" + descriptor.id, new PropertyEditorRow(this, descriptor)));
+		var children:Array<KeyedView> = [];
+		var categoryKeys:Map<String, Bool> = new Map();
+		for (descriptor in descriptors) {
+			var category = descriptor.category;
+			if (options.showCategories && category.length > 0 && !categoryKeys.exists(category)) {
+				categoryKeys.set(category, true);
+				children.push(new KeyedView("category:" + category, new Text(category)));
 			}
-			options.cachedChildren = children;
-			options.cachedShowCategories = options.showCategories;
-			options.cachedColumn = new Column(key, children, style);
+			// Each build describes the rows with the current options; a row whose inputs are unchanged keeps its body.
+			children.push(new KeyedView("property:" + descriptor.id, new PropertyEditorRow(this, descriptor, options)));
 		}
-		return options.cachedColumn.build(context);
+		return new Column(key, children, style).build(context);
 	}
 
 	function setDraft(descriptor:PropertyDescriptor, value:String):Void {
 		var next = value == null ? "" : value;
-		if (drafts.exists(descriptor.id) && drafts.get(descriptor.id) == next) return;
-		drafts.set(descriptor.id, next);
+		var row = rowState(descriptor);
+		if (row.draft == next) return;
+		row.draft = next;
 		revision++;
 	}
 
 	/** A detached inspector may reuse this editor only if no draft, error, or edit has occurred. */
-	@:allow(haxeon.ui.properties.PropertyInspector) function isPristine():Bool return revision == 0
-		&& !drafts.keys().hasNext() && !errors.keys().hasNext() && !pending.keys().hasNext();
+	@:allow(haxeon.ui.properties.PropertyInspector) function isPristine():Bool {
+		if (revision != 0) return false;
+		for (row in rows) if (row.draft != null || row.error != null || row.pending != null) return false;
+		return true;
+	}
 
-	function draftOrValue(descriptor:PropertyDescriptor, value:PropertyValue):String return drafts.exists(descriptor.id)
-		? drafts.get(descriptor.id) : registry.editableText(value);
+	function draftOrValue(descriptor:PropertyDescriptor, value:PropertyValue):String {
+		var draft = rowState(descriptor).draft;
+		return draft != null ? draft : registry.editableText(value);
+	}
 
 	function commitText(context:BuildContext, descriptor:PropertyDescriptor, text:String):Void {
 		var parsed = registry.parse(descriptor.type, text);
 		if (parsed == null) {
-			if (errors.get(descriptor.id) != "Value is not valid") revision++;
-			errors.set(descriptor.id, "Value is not valid");
-			requestRowPatch(context, descriptor.id);
+			var row = rowState(descriptor);
+			if (row.error != "Value is not valid") revision++;
+			row.error = "Value is not valid";
 			return;
 		}
 		applyValue(context, descriptor, parsed);
 	}
 
-	function requestRowPatch(context:BuildContext, id:String):Void {
-		var row = rowIds.get(id);
-		if (row != null) context.requestPatch(row);
+	@:allow(haxeon.ui.properties) function rowState(descriptor:PropertyDescriptor):PropertyRowState {
+		var row = rows.get(descriptor.id);
+		if (row == null) throw 'Unknown property ${descriptor.id}';
+		return row;
 	}
 
 	/** The row's visible label, which also names its control for assistive technology. */
@@ -236,12 +237,15 @@ class PropertyEditor implements View implements Observable {
 		== null ? descriptor.label : descriptor.label + " (" + descriptor.unit + ")";
 
 	/** The current validation or edit error of the property `id`, or null. */
-	public function errorFor(id:String):Null<String> return errors.get(id);
+	public function errorFor(id:String):Null<String> {
+		var row = rows.get(id);
+		return row == null ? null : row.error;
+	}
 
 	@:allow(haxeon.ui.properties)
 	function editorView(context:BuildContext, descriptor:PropertyDescriptor, value:PropertyValue):View {
 		var editorKey = "editor:" + descriptor.id;
-		var writable = options.enabled && !descriptor.readOnly && !pending.exists(descriptor.id);
+		var writable = options.enabled && !descriptor.readOnly && rowState(descriptor).pending == null;
 		if (isMixed(value)) {
 			if (descriptor.type == PropertyType.Bool
 				|| descriptor.type == PropertyType.Enum) return mixedChoice(context,
@@ -397,25 +401,43 @@ class PropertyEditor implements View implements Observable {
 	}
 }
 
-private class PropertyEditorRow implements View {
+/**
+ * One property's row, as a component: its inputs are the editor options it lays out with, and its body depends on the
+ * property's value and on the error and pending edit of its row state.
+ */
+private class PropertyEditorRow implements ScopeView {
 	final owner:PropertyEditor;
 	final descriptor:PropertyDescriptor;
+	final enabled:Bool;
+	final labelWidth:Float;
+	final stackedRows:Bool;
+	final searchQuery:String;
 
-	public function new(owner:PropertyEditor, descriptor:PropertyDescriptor) {
+	public function new(owner:PropertyEditor, descriptor:PropertyDescriptor, options:PropertyEditorOptions) {
 		this.owner = owner;
 		this.descriptor = descriptor;
+		enabled = options.enabled;
+		labelWidth = options.labelWidth;
+		stackedRows = options.stackedRows;
+		searchQuery = options.searchQuery;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		var id = context.rootId("property-row-root");
-		owner.rowIds.set(descriptor.id, id);
-		return context.selfUpdating(id, function() return buildRow(context, id), false);
+	public function scopeKey():String return descriptor.id;
+
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, PropertyEditorRow)) return false;
+		var other:PropertyEditorRow = cast previous;
+		return owner == other.owner && descriptor == other.descriptor && enabled == other.enabled
+			&& labelWidth == other.labelWidth && stackedRows == other.stackedRows && searchQuery == other.searchQuery;
 	}
 
-	function buildRow(context:BuildContext, id:WidgetId):RenderNode {
+	public function buildBody(context:BuildContext):RenderNode {
 		var value = descriptor.readValue();
-		return new PropertyEditorRowContent(owner, descriptor, value).buildWithId(context, id);
+		return new PropertyEditorRowContent(owner, descriptor, value).buildWithId(context,
+			context.rootId("property-row-root"));
 	}
+
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 }
 
 private class PropertyEditorRowContent implements View {
@@ -505,7 +527,7 @@ private class PropertyEditorRowContent implements View {
 				"Reset " + descriptor.label + " to default",
 				function() owner.resetValue(context, descriptor),
 				null,
-				owner.options.enabled && !owner.pending.exists(descriptor.id));
+				owner.options.enabled && owner.rowState(descriptor).pending == null);
 			children.push(new KeyedView("reset", reset));
 		}
 		var error = owner.errorFor(descriptor.id);
@@ -555,7 +577,16 @@ private class PropertyEditorOptions {
 	public var cachedLabelStyle:Null<LayoutStyle>;
 	public var cachedLabelWidth:Float = 0.0;
 	public var cachedLabelStacked:Bool = false;
-	public var cachedChildren:Null<Array<KeyedView>>;
-	public var cachedShowCategories:Null<Bool>;
-	public var cachedColumn:Null<Column>;
+}
+
+/**
+ * One row's edit state. The draft is what the user typed, which the row's field already shows, so no row depends on it;
+ * a row shows the error and whether an edit is in flight.
+ */
+private class PropertyRowState implements Observable {
+	@:unobservable public var draft:Null<String> = null;
+	public var error:Null<String> = null;
+	public var pending:Null<PropertyPendingEdit> = null;
+
+	public function new() {}
 }

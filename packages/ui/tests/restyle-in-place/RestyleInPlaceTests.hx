@@ -448,49 +448,42 @@ private class TabsRig {
 		patched ? "tabs" : "tabs:" + submissions++);
 }
 
+/** The popup's caller: it owns the chosen and active option, which a host inside its panel reads. */
 private class PopupRig implements View {
 	public final ui:UiContext;
-	public final popup:haxeon.ui.widgets.controls.SelectionPopup;
-	public var result:Null<haxeon.ui.widgets.controls.SelectionPopup.SelectionPopupResult>;
+	public final link = new haxeon.ui.widgets.controls.SelectionPopup.SelectionPopupLink();
 	public var caller:Null<RenderNode>;
 	public var panelBuilds = 0;
-	public var chosen = 0;
-	public var active = 0;
+	public var hostBuilds = 0;
+	public var chosen(get, never):Int;
+	public var active(get, never):Int;
 	public var selections = 0;
 	public var closes = 0;
 	public var presses = 0;
 	public var backgroundWheels = 0;
+	final chosenSignal = new Signal(0);
+	final activeSignal = new Signal(0);
+	final options:Array<haxeon.ui.widgets.controls.Select.SelectOption<Dynamic>>;
 	final view:View;
+	final hostBody:Void->View;
 	final patched:Bool;
 	final frame = new LayoutFrame(240, 240);
 	var submissions = 0;
+	var submitted:Null<RenderNode>;
 	public function new(fonts:FontCollection, patched:Bool) {
 		this.patched = patched;
 		ui = new UiContext(null, fonts);
 		ui.buildContext.updateInPlace = patched;
 		ui.buildContext.environment.reducedMotion = true;
-		var options:Array<haxeon.ui.widgets.controls.Select.SelectOption<Dynamic>> =
-			[for (index in 0...24) new haxeon.ui.widgets.controls.Select.SelectOption<Dynamic>("option-" + index,
+		options = [for (index in 0...24) new haxeon.ui.widgets.controls.Select.SelectOption<Dynamic>("option-" + index,
 			"Option " + index,
 			index,
 			index != 3)];
-		var next = function(index:Int, direction:Int):Int {
-			var candidate = index;
-			for (_ in 0...options.length) {
-				candidate = (candidate + direction + options.length) % options.length;
-				if (options[candidate].enabled) return candidate;
-			}
-			return index;
-		};
-		popup = new haxeon.ui.widgets.controls.SelectionPopup(options,
-			[for (index in 0...24) index], 0, 0, 0, 0, 8, 8, 150, 36, 150, 36, index -> {
-				chosen = index;
-				active = index;
-				selections++;
-			}, () -> closes++,
-				index -> active = index, index -> index >= 0 && index < options.length && options[index].enabled, next);
+		hostBody = () -> new PopupHost(this);
 		view = panel();
 	}
+	function get_chosen():Int return chosenSignal.value;
+	function get_active():Int return activeSignal.value;
 	/** The panel as a new description: the reference rig submits a new one each time, so its body always runs again. */
 	function panel():View {
 		return new TrackedScope("popup-panel", () -> {
@@ -506,28 +499,68 @@ private class PopupRig implements View {
 		// The panel scope reserves its root identity for the node this returns.
 		var root = context.createNode(context.rootId("popup-anchor"), LayoutVisualKind.Box, style);
 		root.on(UiEventKind.Scroll, _ -> backgroundWheels++);
-		var menu = popup.build(context, root);
-		result = menu;
-		menu.node.layout.style.zIndex = 11;
-		menu.node.on(UiEventKind.PointerDown, _ -> presses++);
-		menu.node.onPaint((canvas, _) -> canvas.fillRect(new Rect(1, 1, 2, 2), Color.rgba(0.2, 0.3, 0.4, 1)),
-			"caller-popup");
+		root.onPointerDownOutside(event -> if (event.button == 0) closes++);
+		// The reference rig describes its host afresh too, so that it never keeps a body.
+		root.add(context.build(new TrackedScope("popup-host", patched ? hostBody : () -> hostBody())));
+		return root;
+	}
+	/** The popup's description from the current state, with what this caller adds to its root. */
+	public function describe(context:BuildContext):RenderNode {
+		hostBuilds++;
+		var popup = new haxeon.ui.widgets.controls.SelectionPopup(options, [for (index in 0...24) index],
+			chosenSignal.value, activeSignal.value, 0, 0, 8, 8, 150, 36, 150, 36, link, index -> {
+				chosenSignal.value = index;
+				activeSignal.value = index;
+				selections++;
+			}, () -> closes++, index -> activeSignal.value = index);
 		var overlay = new LayoutStyle();
 		overlay.width = LayoutAxis.fixed(3);
 		overlay.height = LayoutAxis.fixed(3);
 		overlay.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
-		caller = new RenderNode(context.id("popup-caller"), LayoutVisualKind.Box, overlay);
-		menu.node.add(caller);
+		var added = new RenderNode(context.id("popup-caller"), LayoutVisualKind.Box, overlay);
+		caller = added;
+		var modifier = new RootModifier();
+		modifier.zIndex = 11;
+		modifier.on(UiEventKind.PointerDown, _ -> presses++);
+		modifier.add(added);
+		return context.build(popup, modifier);
+	}
+	/** The popup's current root. */
+	public function menu():RenderNode {
+		var root = submitted;
+		if (root == null) throw "Popup is not built";
+		var found:Null<RenderNode> = null;
+		root.walk(node -> if (found == null && node.styleType == "selection-popup") found = node);
+		if (found == null) throw "Popup is not built";
+		return found;
+	}
+	/** The popup's option row at `position`. */
+	public function option(position:Int):RenderNode {
+		var root = submitted;
+		var node = root == null ? null : root.find(link.optionIds[position]);
+		if (node == null) throw "Missing popup option " + position;
+		return node;
+	}
+	public function submit():RenderNode {
+		var root = ui.submitCached(() -> patched ? view : panel(), frame, patched ? "popup" : "popup:" + submissions++);
+		submitted = root;
 		return root;
 	}
-	public function menu():haxeon.ui.widgets.controls.SelectionPopup.SelectionPopupResult {
-		var value = result;
-		if (value == null) throw "Popup is not built";
-		return value;
+}
+
+/** Builds the popup inside its own scope, so state changes rerun this host and the popup but not the panel. */
+private class PopupHost implements View {
+	final rig:PopupRig;
+	public function new(rig:PopupRig) this.rig = rig;
+	public function build(context:BuildContext):RenderNode {
+		var style = new LayoutStyle();
+		style.width = LayoutAxis.grow();
+		style.height = LayoutAxis.grow();
+		style.clipToParent = false;
+		var root = context.createNode(context.rootId("popup-host"), LayoutVisualKind.Box, style);
+		root.add(rig.describe(context));
+		return root;
 	}
-	public function submit():RenderNode return ui.submitCached(() -> patched ? view : panel(),
-		frame,
-		patched ? "popup" : "popup:" + submissions++);
 }
 
 private class UpdatingResources implements View {
@@ -1479,23 +1512,23 @@ private class UpdatingResources implements View {
 		var popup = new PopupRig(fonts, true), rebuilt = new PopupRig(fonts, false);
 		popup.submit();
 		rebuilt.submit();
-		var node = popup.menu().node, added = popup.caller, popupSteps = 0;
+		var popupSteps = 0;
 		function comparePopup():Void {
 			var left = popup.submit(), right = rebuilt.submit();
 			popupSteps++;
-			check(popup.menu().node == node && node.children.indexOf(cast added) >= 0 && node.layout.style.zIndex == 11,
-				"Popup lost its root or caller additions at step " + popupSteps);
+			var node = popup.menu();
+			check(node.children.indexOf(cast popup.caller) >= 0 && node.layout.style.zIndex == 11,
+				"Popup lost its caller additions at step " + popupSteps);
 			check(signature(left) == signature(right),
 				"Popup differs from a full rebuild at step "
 				+ popupSteps + ":\n--- patched\n" + signature(left) + "--- reference\n" + signature(right));
-			check(paintTrace(node).same(paintTrace(rebuilt.menu().node)),
-				"Popup caller paint differs at step " + popupSteps);
+			check(paintTrace(node, 1).same(paintTrace(rebuilt.menu(), 1)), "Popup paint differs at step " + popupSteps);
 			check(popup.active == rebuilt.active && popup.chosen == rebuilt.chosen
 				&& popup.selections == rebuilt.selections && popup.closes == rebuilt.closes
 				&& popup.presses == rebuilt.presses,
 				"Popup callbacks differ at step " + popupSteps);
 		}
-		for (rig in [popup, rebuilt]) rig.ui.focusWidget(rig.menu().optionNodes[0].id);
+		for (rig in [popup, rebuilt]) rig.ui.focusWidget(rig.option(0).id);
 		comparePopup();
 		for (key in [UiKey.Down, UiKey.Down, UiKey.Down, UiKey.End, UiKey.Up, UiKey.Home]) {
 			for (rig in [popup, rebuilt]) {
@@ -1505,7 +1538,7 @@ private class UpdatingResources implements View {
 			comparePopup();
 		}
 		for (rig in [popup, rebuilt]) {
-			var option = rig.menu().optionNodes[4], resolved = option.resolved;
+			var option = rig.option(4), resolved = option.resolved;
 			if (resolved == null) throw "Missing popup option geometry";
 			var bounds = resolved.clippedViewportBounds();
 			rig.ui.pointerDown(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0);
@@ -1515,7 +1548,7 @@ private class UpdatingResources implements View {
 		check(popup.chosen == 4 && popup.selections == 1, "Popup did not select exactly once");
 		check(popup.presses > 0, "Popup did not invoke the caller listener");
 		for (rig in [popup, rebuilt]) {
-			var bounds = rig.menu().node.globalBounds();
+			var bounds = rig.menu().globalBounds();
 			rig.ui.scroll(bounds.x + 5, bounds.y + bounds.height / 2, 0, 60);
 		}
 		comparePopup();
@@ -1524,6 +1557,7 @@ private class UpdatingResources implements View {
 		for (rig in [popup, rebuilt]) rig.ui.key(UiEventKind.KeyDown, UiKey.Escape);
 		comparePopup();
 		check(popup.panelBuilds == 1, "Popup navigation rebuilt its enclosing panel");
+		check(popup.hostBuilds > 1, "Popup navigation did not reach the state's owner");
 		popup.ui.dispose();
 		rebuilt.ui.dispose();
 		Sys.println("PASS tabs/popup: switching retained tabs and navigating, selecting and scrolling a popup keep roots and caller additions and match fresh builds");

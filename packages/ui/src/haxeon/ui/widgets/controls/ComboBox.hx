@@ -157,24 +157,24 @@ class ComboBox<T> implements View {
 			if (active != storedActive) root.onResolved(function(_) activeState.update(active));
 
 			var inputNode:RenderNode = null;
-			var optionNodes:Array<RenderNode> = [];
-			var popupVisibility = new SelectionPopupVisibility();
+			// The open popup's option rows, so the trigger's keys can move focus into the list.
+			var popupLink = context.lazyState(context.id("popup-link"),
+				function() return new SelectionPopupLink()).value;
 			var close = function() {
 				if (openState.value == true) openState.update(false);
 				if (inputNode != null) context.requestFocus(inputNode.id);
 			};
-			var setActive = function(index:Int, reveal:Bool = true) {
+			var setActive = function(index:Int) {
 				if (contains(filteredIndices, index)) {
 					var current:Int = activeState.value;
 					if (index != current) {
 						activeState.update(index);
 						if (!context.updateInPlace) activeState.update(index);
 					}
-					if (reveal) popupVisibility.ensure(index);
 				}
 			};
 			var focusOption = function(index:Int) {
-				if (index >= 0 && index < optionNodes.length) context.requestFocus(optionNodes[index].id);
+				if (index >= 0 && index < popupLink.optionIds.length) context.requestFocus(popupLink.optionIds[index]);
 			};
 			var selectOption = function(index:Int) {
 				if (!enabled || !isEnabledIndex(index)) return;
@@ -348,18 +348,16 @@ class ComboBox<T> implements View {
 				for (option in options) popupOptions.push(cast option);
 				var popup = new SelectionPopup(popupOptions,
 					filteredIndices, value, active, popupRootX, popupRootY, popupTriggerX, popupTriggerY,
-					popupTriggerWidth, popupTriggerHeight, fallbackWidth(), triggerHeightFallback(),
+					popupTriggerWidth, popupTriggerHeight, fallbackWidth(), triggerHeightFallback(), popupLink,
 					function(index:Int) {
 						selectOption(index);
 					}, close, function(index:Int) {
-					setActive(index, false);
-				}, function(index:Int) return isEnabledIndex(index),
-					function(index:Int, direction:Int) return nextEnabled(filteredIndices,
-					index,
-					direction));
-				var popupResult = popup.build(context, root);
-				optionNodes = popupResult.optionNodes;
-				popupVisibility.ensure = popupResult.ensureActiveVisible;
+					setActive(index);
+				});
+				root.add(context.build(popup));
+				root.onPointerDownOutside(function(event) {
+					if (event.button == 0) close();
+				});
 			}
 			root.on(UiEventKind.KeyDown, function(event) {
 				if (event.key == UiKey.Escape && openState.value == true) {

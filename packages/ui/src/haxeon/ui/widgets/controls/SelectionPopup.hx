@@ -10,6 +10,7 @@ import haxeon.ui.Rect;
 import haxeon.ui.TextLayout;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.UiEvent;
@@ -25,34 +26,22 @@ import haxeon.ui.widgets.scroll.ScrollView;
 
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.Select;
-/** Mutable bridge for active-option visibility across rebuilt render trees. */
-internal class SelectionPopupVisibility {
-	public var ensure:Int->Void;
+/** What a popup's caller reads back from its last build: the IDs of its option rows, to move focus to them. */
+internal class SelectionPopupLink {
+	public final optionIds:Array<WidgetId> = [];
 
-	public function new() {
-		ensure = function(_:Int) {};
-	}
+	public function new() {}
 }
 
-/** Result of building a shared selection popup. */
-internal class SelectionPopupResult {
-	public final node:RenderNode;
-	public final optionNodes:Array<RenderNode>;
-	public final ensureActiveVisible:Int->Void;
-
-	public function new(node:RenderNode, optionNodes:Array<RenderNode>, ensureActiveVisible:Int->Void) {
-		this.node = node;
-		this.optionNodes = optionNodes;
-		this.ensureActiveVisible = ensureActiveVisible;
-	}
-}
-
-/** Internal popup/list kernel shared by Select and ComboBox. */
-internal class SelectionPopup {
+/**
+ * The popup list shared by Select and ComboBox, as a controlled component: the caller owns the selected value and the
+ * active option, and moving through the list or choosing an option reports to it.
+ */
+internal class SelectionPopup implements ScopeView {
 	final options:Array<SelectOption<Dynamic>>;
 	final visibleIndices:Array<Int>;
-	public var selectedValue:Dynamic;
-	public var activeIndex(default, null):Int;
+	final selectedValue:Dynamic;
+	final activeIndex:Int;
 	final rootX:Float;
 	final rootY:Float;
 	final triggerX:Float;
@@ -61,11 +50,10 @@ internal class SelectionPopup {
 	final triggerHeight:Float;
 	final fallbackWidth:Float;
 	final fallbackHeight:Float;
+	final link:SelectionPopupLink;
 	final onSelect:Int->Void;
 	final onClose:Void->Void;
 	final onActive:Int->Void;
-	final isEnabled:Int->Bool;
-	final nextEnabled:Int->Int->Int;
 
 	public function new(options:Array<SelectOption<Dynamic>>,
 			visibleIndices:Array<Int>,
@@ -79,11 +67,10 @@ internal class SelectionPopup {
 			triggerHeight:Float,
 			fallbackWidth:Float,
 			fallbackHeight:Float,
+			link:SelectionPopupLink,
 			onSelect:Int->Void,
 			onClose:Void->Void,
-			onActive:Int->Void,
-			isEnabled:Int->Bool,
-			nextEnabled:Int->Int->Int) {
+			onActive:Int->Void) {
 		this.options = options;
 		this.visibleIndices = visibleIndices;
 		this.selectedValue = selectedValue;
@@ -96,49 +83,38 @@ internal class SelectionPopup {
 		this.triggerHeight = triggerHeight;
 		this.fallbackWidth = fallbackWidth;
 		this.fallbackHeight = fallbackHeight;
-		this.onSelect = onSelect == null ? function(_:Int) {}
-			: onSelect;
-		this.onClose = onClose == null ? function() {}
-			: onClose;
-		this.onActive = onActive == null ? function(_:Int) {}
-			: onActive;
-		this.isEnabled = isEnabled == null ? function(_:Int) return true : isEnabled;
-		this.nextEnabled = nextEnabled == null ? function(index:Int, _:Int) return index : nextEnabled;
+		this.link = link;
+		this.onSelect = onSelect;
+		this.onClose = onClose;
+		this.onActive = onActive;
 	}
 
-	public function build(context:BuildContext, root:RenderNode):SelectionPopupResult {
-		var dropdownId = context.id("options");
-		var valueState = context.state(dropdownId, selectedValue);
-		var optionNodes:Array<RenderNode> = [];
-		var visibility = new SelectionPopupVisibility();
-		var request = function() {
-			valueState.update(selectedValue);
-			if (!context.updateInPlace || !context.requestPatch(dropdownId)) valueState.update(selectedValue);
-		};
-		var ensure = function(index:Int) {
-			activeIndex = index;
-			visibility.ensure(index);
-			request();
-		};
-		var dropdown = context.selfUpdating(dropdownId,
-			function() return buildControl(context, dropdownId, optionNodes, visibility, ensure, request),
-			false);
-		root.add(dropdown);
-		root.onPointerDownOutside(function(event) {
-			if (event.button == 0) onClose();
-		});
-		return new SelectionPopupResult(dropdown, optionNodes, ensure);
+	public function scopeKey():String return "options";
+
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, SelectionPopup)) return false;
+		var other:SelectionPopup = cast previous;
+		if (link != other.link || !sameValue(selectedValue, other.selectedValue) || activeIndex != other.activeIndex
+			|| rootX != other.rootX || rootY != other.rootY || triggerX != other.triggerX || triggerY != other.triggerY
+			|| triggerWidth != other.triggerWidth || triggerHeight != other.triggerHeight
+			|| fallbackWidth != other.fallbackWidth || fallbackHeight != other.fallbackHeight
+			|| options.length != other.options.length || visibleIndices.length != other.visibleIndices.length)
+			return false;
+		for (index in 0...options.length) if (options[index] != other.options[index]) return false;
+		for (index in 0...visibleIndices.length) if (visibleIndices[index] != other.visibleIndices[index]) return false;
+		return true;
 	}
 
-	function buildControl(context:BuildContext,
-			dropdownId:WidgetId,
-			optionNodes:Array<RenderNode>,
-			visibility:SelectionPopupVisibility,
-			ensure:Int->Void,
-			request:Void->Void):RenderNode {
-		optionNodes.resize(0);
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+
+	public function buildBody(context:BuildContext):RenderNode {
+		return buildControl(context, context.rootId("selection-popup"));
+	}
+
+	function buildControl(context:BuildContext, dropdownId:WidgetId):RenderNode {
+		var latest = context.latestOf(this);
+		link.optionIds.resize(0);
 		var scrollController:Null<ScrollController> = null;
-		visibility.ensure = function(_:Int) {};
 		var width = triggerWidth > 0.0 ? triggerWidth : fallbackWidth;
 		var height = triggerHeight > 0.0 ? triggerHeight : fallbackHeight;
 		var edge = Math.min(8.0, context.viewportWidth * 0.5);
@@ -238,7 +214,7 @@ internal class SelectionPopup {
 			scroll.showScrollbar = false;
 			scroll.onScroll = ownWheel;
 			dropdown.add(scroll.build(context));
-			visibility.ensure = function(index:Int) {
+			var reveal = function(index:Int) {
 				scrollState.activeIndex = index;
 				scrollState.revealPending = true;
 				if (controller.viewportHeight <= 0.0) return;
@@ -255,7 +231,7 @@ internal class SelectionPopup {
 			};
 			// ScrollView updates metrics on its translated content before this child resolves.
 			optionParent.onResolved(function(_) {
-				if (scrollState.revealPending) visibility.ensure(scrollState.activeIndex);
+				if (scrollState.revealPending) reveal(scrollState.activeIndex);
 			});
 		}
 
@@ -275,10 +251,8 @@ internal class SelectionPopup {
 			optionSemantics.setSize = visibleIndices.length;
 			optionSemantics.positionInSet = position + 1;
 			var optionButton = new Button(option.label, optionStyle, function() {
-				selectedValue = option.value;
-				activeIndex = originalIndex;
-				onSelect(originalIndex);
-				request();
+				var handler = latest().onSelect;
+				if (handler != null) handler(originalIndex);
 			}, option.key, optionEnabled, ButtonVariant.Navigation,
 				optionSelected, ["selection-option"], null, null, null,
 				optionSelected ? SelectionIndicator.check("option-check-" + originalIndex,
@@ -287,7 +261,8 @@ internal class SelectionPopup {
 			var optionModifier = new RootModifier();
 			optionModifier.on(UiEventKind.KeyDown, function(event) {
 				if (event.key == UiKey.Escape) {
-					onClose();
+					var close = latest().onClose;
+					if (close != null) close();
 					event.preventDefault();
 					return;
 				}
@@ -295,22 +270,21 @@ internal class SelectionPopup {
 				if (event.key == UiKey.Home) next = firstEnabledVisible();
 				else if (event.key == UiKey.End) next = lastEnabledVisible();
 				else if (event.key == UiKey.Down
-					|| event.key == UiKey.Right) next = nextEnabled(visibleIndices[optionPosition],
-					1);
+					|| event.key == UiKey.Right) next = nextEnabled(visibleIndices[optionPosition], 1);
 				else if (event.key == UiKey.Up
 					|| event.key == UiKey.Left) next = nextEnabled(visibleIndices[optionPosition],
 					-1);
 				if (next < 0) return;
-				onActive(next);
-				ensure(next);
+				var popup = latest();
+				if (popup.onActive != null) popup.onActive(next);
 				var nextPosition = visiblePosition(next);
-				if (nextPosition >= 0
-					&& nextPosition < optionNodes.length) context.requestFocus(optionNodes[nextPosition].id);
+				if (nextPosition >= 0 && nextPosition < popup.link.optionIds.length)
+					context.requestFocus(popup.link.optionIds[nextPosition]);
 				event.preventDefault();
 			});
 			var optionNode = context.withScope(new haxeon.ui.core.Key("option-" + option.key),
 				function() return context.build(optionButton, optionModifier));
-			optionNodes.push(optionNode);
+			link.optionIds.push(optionNode.id);
 			optionParent.add(optionNode);
 		}
 
@@ -329,6 +303,19 @@ internal class SelectionPopup {
 		}
 		layout.dispose();
 		return Math.ceil(widest) + 26.0 + 9.0 + 8.0;
+	}
+
+	function isEnabled(index:Int):Bool return index >= 0 && index < options.length && options[index].enabled;
+
+	/** The next enabled visible option after `index` in `direction`, wrapping; `index` itself when there is none. */
+	function nextEnabled(index:Int, direction:Int):Int {
+		var position = visiblePosition(index);
+		if (position < 0 || visibleIndices.length == 0) return index;
+		for (_ in 0...visibleIndices.length) {
+			position = (position + direction + visibleIndices.length) % visibleIndices.length;
+			if (isEnabled(visibleIndices[position])) return visibleIndices[position];
+		}
+		return index;
 	}
 
 	function firstEnabledVisible():Int {
