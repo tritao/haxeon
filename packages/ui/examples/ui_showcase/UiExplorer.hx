@@ -723,7 +723,7 @@ class UiExplorer implements Disposable {
 	}
 
 	/** Sends a platform-equivalent editing shortcut to a named showcase editor. */
-	function textCommand(label:String, key:Int):Bool {
+	function textCommand(label:String, key:UiKey):Bool {
 		if (!focusTextEditor(label))
 			return false;
 		var modifiers = #if (mac || ios) UiModifier.Super;

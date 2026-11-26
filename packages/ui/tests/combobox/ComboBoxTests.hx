@@ -7,6 +7,7 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.semantics.AccessibilityAudit;
 import haxeon.ui.semantics.AccessibilityRequest;
+import haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.ComboBox;
 import haxeon.ui.widgets.controls.Select;
@@ -87,11 +88,11 @@ class ComboBoxTests {
 				"Arrow edited the query or selection");
 			check(ui.focus.focusedId.equals(input().id), "Closing did not restore editor focus");
 		}
-		check(ui.accessibilityAction(arrow().id.value, AccessibilityRequest.Expand, null, -1, -1, 1),
+		check(ui.accessibilityAction(arrow().id.value, AccessibilityRequestAction.Expand, null, -1, -1, 1),
 			"Accessible expand failed");
 		build();
 		check(open() && AccessibilityAudit.isValid(root), "Accessible expand did not open a valid tree");
-		check(ui.accessibilityAction(arrow().id.value, AccessibilityRequest.Collapse, null, -1, -1, 1),
+		check(ui.accessibilityAction(arrow().id.value, AccessibilityRequestAction.Collapse, null, -1, -1, 1),
 			"Accessible collapse failed");
 		build();
 		check(!open(), "Accessible collapse reopened the popup");

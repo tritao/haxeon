@@ -152,7 +152,7 @@ class EventDispatcher {
 				0.0,
 				0.0,
 				0,
-				0,
+				UiKey.Unknown,
 				modifiers,
 				null,
 				data,
@@ -196,7 +196,7 @@ class EventDispatcher {
 			0.0,
 			0.0,
 			button,
-			0,
+			UiKey.Unknown,
 			modifiers,
 			null,
 			data,
@@ -226,7 +226,7 @@ class EventDispatcher {
 			0.0,
 			0.0,
 			button,
-			0,
+			UiKey.Unknown,
 			modifiers,
 			null,
 			data,
@@ -273,7 +273,8 @@ class EventDispatcher {
 			var target = path[path.length - 1];
 			updatePathState(path, StyleState.Pressed, false);
 			dispatchPath(path,
-				new UiEvent(UiEventKind.PointerUp, target.id, x, y, 0.0, 0.0, button, 0, modifiers, null, data, 0,
+				new UiEvent(UiEventKind.PointerUp, target.id, x, y, 0.0, 0.0, button, UiKey.Unknown, modifiers, null,
+				data, 0,
 				pointerId));
 		}
 		if (probe != null) {
@@ -285,7 +286,7 @@ class EventDispatcher {
 			&& pressedButton == button && releasePath.length > 0
 			&& releasePath[releasePath.length - 1].id.equals(pressed)) {
 			dispatchPath(releasePath,
-				new UiEvent(UiEventKind.Click, pressed, x, y, 0.0, 0.0, button, 0, modifiers, null, data, 0,
+				new UiEvent(UiEventKind.Click, pressed, x, y, 0.0, 0.0, button, UiKey.Unknown, modifiers, null, data, 0,
 				pointerId));
 		}
 		if (probe != null) {
@@ -318,7 +319,7 @@ class EventDispatcher {
 				0.0,
 				0.0,
 				0,
-				0,
+				UiKey.Unknown,
 				modifiers,
 				null,
 				data,
@@ -333,10 +334,11 @@ class EventDispatcher {
 			modifiers:UiModifier = UiModifier.empty()):Void {
 		var path = hitPath(x, y);
 		if (path.length > 0) dispatchPath(path,
-			new UiEvent(UiEventKind.Scroll, path[path.length - 1].id, x, y, deltaX, deltaY, 0, 0, modifiers));
+			new UiEvent(UiEventKind.Scroll, path[path.length - 1].id, x, y, deltaX, deltaY, 0, UiKey.Unknown,
+			modifiers));
 	}
 
-	internal function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Bool {
+	internal function key(kind:String, key:UiKey, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Bool {
 		var node = focus.focusedNode();
 		if (node == null) {
 			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) {
@@ -408,7 +410,7 @@ class EventDispatcher {
 		return true;
 	}
 
-	function routeCommand(key:Int,
+	function routeCommand(key:UiKey,
 			modifiers:UiModifier,
 			path:Array<RenderNode>,
 			repeated:Bool = false,
@@ -431,7 +433,8 @@ class EventDispatcher {
 		if (node == null) return;
 		var path = HitTest.pathTo(node);
 		if (path.length > 0) dispatchPath(path,
-			new UiEvent(kind, node.id, 0.0, 0.0, 0.0, 0.0, 0, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), text,
+			new UiEvent(kind, node.id, 0.0, 0.0, 0.0, 0.0, 0, UiKey.Unknown, haxeon.ui.core.UiEvent.UiModifier.empty(),
+			text,
 			data));
 	}
 
@@ -446,7 +449,8 @@ class EventDispatcher {
 		var path = HitTest.pathTo(root.find(id));
 		if (path.length == 0) return false;
 		dispatchPath(path,
-			new UiEvent(kind, id, 0.0, 0.0, deltaX, deltaY, 0, 0, haxeon.ui.core.UiEvent.UiModifier.empty(), text,
+			new UiEvent(kind, id, 0.0, 0.0, deltaX, deltaY, 0, UiKey.Unknown, haxeon.ui.core.UiEvent.UiModifier.empty(),
+			text,
 			data));
 		return true;
 	}
@@ -467,7 +471,7 @@ class EventDispatcher {
 						0.0,
 						0.0,
 						0,
-						0,
+						UiKey.Unknown,
 						haxeon.ui.core.UiEvent.UiModifier.empty(),
 						null,
 						null,
@@ -558,7 +562,7 @@ class EventDispatcher {
 				0.0,
 				0.0,
 				0,
-				0,
+				UiKey.Unknown,
 				haxeon.ui.core.UiEvent.UiModifier.empty(),
 				null,
 				null,
@@ -577,7 +581,7 @@ class EventDispatcher {
 				0.0,
 				0.0,
 				0,
-				0,
+				UiKey.Unknown,
 				haxeon.ui.core.UiEvent.UiModifier.empty(),
 				null,
 				null,

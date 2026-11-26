@@ -8,6 +8,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityRequest;
+import haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.Checkbox;
 import haxeon.ui.widgets.controls.Slider;
@@ -64,7 +65,7 @@ class ControlScopesMain {
 		ui.submitCached(build, frame, "panel");
 		if (sliderValue(ui) != 0.5) return 1;
 		var slider = find(ui.root, "slider");
-		if (slider == null || !ui.accessibilityAction(slider.id.value, AccessibilityRequest.Increment, null, -1, -1, 1))
+		if (slider == null || !ui.accessibilityAction(slider.id.value, AccessibilityRequestAction.Increment, null, -1, -1, 1))
 			return 2;
 		if (Math.abs(panel.level - 0.6) > 1e-9) return 3;
 		var before = panel.builds;
@@ -75,7 +76,7 @@ class ControlScopesMain {
 
 		var checkbox = find(ui.root, "checkbox");
 		if (checkbox == null
-			|| !ui.accessibilityAction(checkbox.id.value, AccessibilityRequest.Activate, null, -1, -1, 1))
+			|| !ui.accessibilityAction(checkbox.id.value, AccessibilityRequestAction.Activate, null, -1, -1, 1))
 			return 6;
 		if (!panel.advanced) return 7;
 		ui.submitCached(build, frame, "panel");

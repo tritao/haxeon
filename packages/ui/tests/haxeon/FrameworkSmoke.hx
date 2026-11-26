@@ -75,6 +75,7 @@ import haxeon.ui.core.View;
 import haxeon.ui.core.Shortcut;
 import haxeon.ui.semantics.AccessibilityBridge;
 import haxeon.ui.semantics.AccessibilityRequest;
+import haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.semantics.Semantics.AccessibilityAction;
 import haxeon.ui.semantics.Semantics.AccessibilityRole;
@@ -619,7 +620,7 @@ class FrameworkSmoke {
 		0.0,
 		0.0,
 		button,
-		0,
+		haxeon.ui.core.UiKey.Unknown,
 		haxeon.ui.core.UiEvent.UiModifier.empty(),
 		null,
 		null,
@@ -1040,7 +1041,7 @@ class FrameworkSmoke {
 			clearBounds.y + clearBounds.height / 2.0) || !near(clearIconBounds.x + clearIconBounds.width / 2.0,
 			clearBounds.x + clearBounds.width / 2.0)) return 227;
 		if (!context.accessibilityAction(searchRoot.children[2].id.value,
-			haxeon.ui.semantics.AccessibilityRequest.Activate,
+			haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction.Activate,
 			null,
 			-1,
 			-1,
@@ -1336,10 +1337,10 @@ class FrameworkSmoke {
 			2,
 			-1,
 			-1)) || fieldEditor.compositionStart != -1) return 210;
-		if (!context.accessibilityAction(fieldRoot.id.value, AccessibilityRequest.SetSelection,
+		if (!context.accessibilityAction(fieldRoot.id.value, AccessibilityRequestAction.SetSelection,
 			null, 0, 1, 2) || fieldEditor.selectionStart != 0 || fieldEditor.selectionEnd != 1) return 46;
 		if (!context.accessibilityAction(fieldRoot.id.value,
-			AccessibilityRequest.SetValue, "done", -1, -1, 1) || field.value != "done") return 47;
+			AccessibilityRequestAction.SetValue, "done", -1, -1, 1) || field.value != "done") return 47;
 		fieldRoot = context.submit(field, new LayoutFrame(256.0, 192.0));
 		fieldEditor = cast fieldState.value;
 		if (fieldEditor.layout.selectionRects(new TextPosition(0, 0), new TextPosition(4, 0)).length == 0) return 48;
@@ -1687,7 +1688,8 @@ class FrameworkSmoke {
 		context.key(UiEventKind.KeyDown, UiKey.Right);
 		if (slider.value < 0.59 || slider.value > 0.61 || sliderChanged != slider.value) return 58;
 		if (!context.accessibilityAction(sliderRoot.id.value,
-			AccessibilityRequest.SetValue, "0.8", -1, -1, 1) || slider.value < 0.79 || slider.value > 0.81) return 59;
+			AccessibilityRequestAction.SetValue, "0.8", -1, -1, 1) || slider.value < 0.79
+			|| slider.value > 0.81) return 59;
 		sliderRoot = context.submit(slider, new LayoutFrame(256.0, 192.0));
 		var sliderGeometry:ResolvedLayoutItem = cast sliderRoot.resolved;
 		var sliderY = sliderGeometry.y + sliderGeometry.height * 0.5;
@@ -2159,11 +2161,14 @@ class FrameworkSmoke {
 		context.pointerDown(4.0, 4.0, 0);
 		context.pointerUp(500.0, 500.0, 0);
 		if (clicks != 4) return 8;
-		if (!context.accessibilityAction(initialId.value, 1, null, -1, -1, 1) || clicks != 5) return 28;
-		if (!context.accessibilityAction(initialId.value, 2, null, -1, -1, 1)
+		if (!context.accessibilityAction(initialId.value,
+			haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction.Activate, null, -1, -1, 1)
+			|| clicks != 5) return 28;
+		if (!context.accessibilityAction(initialId.value,
+			haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction.Focus, null, -1, -1, 1)
 			|| context.focus.focusedId == null || !context.focus.focusedId.equals(initialId)
 			|| !context.accessibilityAction(initialId.value,
-			3,
+			haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction.ClearFocus,
 			null,
 			-1,
 			-1,
@@ -2273,7 +2278,8 @@ class FrameworkSmoke {
 		if (context.focus.focusedId != null || context.focusWidget(buttonNode.id)) return 10;
 		context.pointerDown(4.0, 4.0, 0);
 		context.pointerUp(4.0, 4.0, 0);
-		if (clicks != 5 || context.accessibilityAction(buttonNode.id.value, 1, null, -1, -1, 1)) return 11;
+		if (clicks != 5 || context.accessibilityAction(buttonNode.id.value,
+			haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction.Activate, null, -1, -1, 1)) return 11;
 
 		var viewportStyle = new LayoutStyle();
 		viewportStyle.width = LayoutAxis.fixed(256.0);
@@ -2326,7 +2332,7 @@ class FrameworkSmoke {
 		var scrollbarSemantics:Semantics = cast scrollbarThumb.semantics;
 		if (scrollbarSemantics.role != AccessibilityRole.Slider || scrollbarSemantics.numericValue != 320.0
 			|| scrollbarSemantics.numericMaximum != 320.0 || !context.accessibilityAction(scrollbarThumb.id.value,
-			AccessibilityRequest.Decrement,
+			AccessibilityRequestAction.Decrement,
 			null,
 			-1,
 			-1,
@@ -5075,7 +5081,7 @@ class FrameworkSmoke {
 		if (trailingSplit.extent != 144.0) return false;
 		trailingRoot = context.submit(trailingSplit, frame);
 		if (!context.accessibilityAction(trailingRoot.children[1].id.value,
-			AccessibilityRequest.Decrement, null, -1, -1, 2) || trailingSplit.extent != 128.0) return false;
+			AccessibilityRequestAction.Decrement, null, -1, -1, 2) || trailingSplit.extent != 128.0) return false;
 
 		var leadingResizes = 0;
 		var leadingExpansions = 0;
@@ -5125,7 +5131,7 @@ class FrameworkSmoke {
 		if (leadingSplit.extent != 92.0) return false;
 		leadingRoot = context.submit(leadingSplit, frame);
 		if (!context.accessibilityAction(leadingRoot.children[1].id.value,
-			AccessibilityRequest.Decrement, null, -1, -1, 2) || leadingSplit.extent != 76.0) return false;
+			AccessibilityRequestAction.Decrement, null, -1, -1, 2) || leadingSplit.extent != 76.0) return false;
 		return true;
 	}
 
@@ -5538,7 +5544,7 @@ class FrameworkSmoke {
 		if (commandButton == null
 			|| commandButton.semantics == null || commandButton.semantics.label != "Run simulation") return false;
 		if (!uiContext.accessibilityAction(commandButton.id.value,
-			haxeon.ui.semantics.AccessibilityRequest.Activate,
+			haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction.Activate,
 			null,
 			-1,
 			-1,

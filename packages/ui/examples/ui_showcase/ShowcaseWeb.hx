@@ -13,12 +13,12 @@ import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostOptions;
 import nativekit.ffi.NativeKitTypes;
 
-private enum abstract ShowcaseBenchmark(Int) {
-	var None = -1;
-	var Full = 0;
-	var Static = 1;
-	var TextHeavy = 2;
-	var Editing = 3;
+private enum ShowcaseBenchmark:Int {
+	None = -1;
+	Full = 0;
+	Static = 1;
+	TextHeavy = 2;
+	Editing = 3;
 }
 
 private typedef ShowcaseOptions = {
@@ -43,12 +43,13 @@ class ShowcaseWeb implements UiFrameApplication {
 	var startedAt:Null<Float>;
 
 	public static function configure(width:Int, height:Int, mode:Int, visualCase:Int, benchmark:Int):Void {
+		var chosen = ShowcaseBenchmark.fromRaw(benchmark);
 		if (width <= 0 || height <= 0 || mode < 0 || mode > 1 || visualCase < -1 || visualCase > 34
-			|| benchmark < -1 || benchmark > 3 || active != null)
+			|| chosen == null || active != null)
 			throw BindingError.invalidArgument("ShowcaseWeb.configure", "Invalid showcase configuration");
 		configuration = {
-			width: width, height: height, graphics: mode == 1 || benchmark >= 0,
-			visualCase: visualCase, benchmark: cast benchmark
+			width: width, height: height, graphics: mode == 1 || chosen != ShowcaseBenchmark.None,
+			visualCase: visualCase, benchmark: chosen
 		};
 	}
 

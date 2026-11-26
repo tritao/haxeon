@@ -15,6 +15,7 @@ import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.AccessibilityAudit;
 import haxeon.ui.semantics.AccessibilityBridge;
 import haxeon.ui.semantics.AccessibilityRequest;
+import haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.semantics.Semantics.AccessibilityAction;
 import haxeon.ui.semantics.Semantics.AccessibilityOrientation;
@@ -65,7 +66,8 @@ class AccessibilityContract {
 		var firstTabSelected = firstTabRecord.states.contains(AccessibilityState.Selected);
 		if (tabOrientation != expectedTabOrientation || !tabHasSelect || !firstTabSelected) return 1;
 		if (!context.accessibilityAction(secondTabNode.id.value,
-			AccessibilityRequest.Select, null, -1, -1, 1) || tabs.selectedKey != "second" || changes != 1) return 2;
+			AccessibilityRequestAction.Select, null, -1, -1, 1) || tabs.selectedKey != "second"
+			|| changes != 1) return 2;
 		tabsRoot = context.submit(tabs, frame);
 		var selectedTab:Null<Semantics> = cast findAccessibleNode(tabsRoot, AccessibilityRole.Tab, "Second").semantics;
 		if (selectedTab == null || !selectedTab.states.contains(AccessibilityState.Selected)) return 3;
@@ -101,7 +103,7 @@ class AccessibilityContract {
 			|| !dialogSemantics.states.contains(AccessibilityState.Modal)
 			|| !dialogRoot.focusTrap || dialogSnapshot.length == 0
 			|| dialogSnapshot[0].role != AccessibilityRole.Dialog || !context.accessibilityAction(dialogRoot.id.value,
-			AccessibilityRequest.Dismiss,
+			AccessibilityRequestAction.Dismiss,
 			null,
 			-1,
 			-1,
@@ -127,7 +129,7 @@ class AccessibilityContract {
 			|| !menuRootSemantics.states.contains(AccessibilityState.Modal) || !menuRoot.focusTrap || menuItem == null
 			|| !menuItem.actions.contains(AccessibilityAction.Select) || menuItemId == 0
 			|| !context.accessibilityAction(menuItemId,
-			AccessibilityRequest.Select,
+			AccessibilityRequestAction.Select,
 			null,
 			-1,
 			-1,
@@ -194,7 +196,7 @@ class AccessibilityContract {
 		selectRoot = context.submit(select, frame);
 		if (selectRoot.children.length != 1
 			|| context.focus.focusedId == null || !context.focus.focusedId.equals(selectRoot.children[0].id)) return 28;
-		if (!context.accessibilityAction(selectRoot.children[0].id.value, AccessibilityRequest.SetValue,
+		if (!context.accessibilityAction(selectRoot.children[0].id.value, AccessibilityRequestAction.SetValue,
 			"two", -1, -1, 1) || select.value != "two" || selectedSelectValue != "two" || selectChanges != 3) return 29;
 		if (!checkSelectOverlay(context)) return 30;
 		if (!checkSelectOverlap(context)) return 46;
@@ -211,7 +213,7 @@ class AccessibilityContract {
 		if (toggleSemantics.role != AccessibilityRole.Switch
 			|| !toggleSemantics.actions.contains(AccessibilityAction.Toggle)
 			|| !context.accessibilityAction(toggleRoot.id.value,
-			AccessibilityRequest.Toggle,
+			AccessibilityRequestAction.Toggle,
 			null,
 			-1,
 			-1,
@@ -315,14 +317,14 @@ class AccessibilityContract {
 			code)) return 16;
 
 		var requestActions = [
-			AccessibilityRequest.Toggle,
-			AccessibilityRequest.Select,
-			AccessibilityRequest.Deselect,
-			AccessibilityRequest.Expand,
-			AccessibilityRequest.Collapse,
-			AccessibilityRequest.Dismiss,
-			AccessibilityRequest.ShowContextMenu,
-			AccessibilityRequest.ScrollIntoView
+			AccessibilityRequestAction.Toggle,
+			AccessibilityRequestAction.Select,
+			AccessibilityRequestAction.Deselect,
+			AccessibilityRequestAction.Expand,
+			AccessibilityRequestAction.Collapse,
+			AccessibilityRequestAction.Dismiss,
+			AccessibilityRequestAction.ShowContextMenu,
+			AccessibilityRequestAction.ScrollIntoView
 		];
 		var requestCapabilities = [
 			AccessibilityAction.Toggle,
@@ -476,13 +478,13 @@ class AccessibilityContract {
 		if (afterWheel.transform.ty >= beforeWheel - 0.1) return false;
 		var dropdownId = root.children[0].children[1].id;
 		if (!context.accessibilityAction(dropdownId.value,
-			AccessibilityRequest.ScrollForward, null, -1, -1, 1)) return false;
+			AccessibilityRequestAction.ScrollForward, null, -1, -1, 1)) return false;
 		root = context.submit(stack, frame);
 		content = root.children[0].children[1].children[0].children[0];
 		var afterAccessibility:ResolvedLayoutItem = cast content.resolved;
 		if (afterAccessibility.transform.ty >= afterWheel.transform.ty - 0.1) return false;
 		if (!context.accessibilityAction(dropdownId.value,
-			AccessibilityRequest.ScrollBackward, null, -1, -1, 1)) return false;
+			AccessibilityRequestAction.ScrollBackward, null, -1, -1, 1)) return false;
 		root = context.submit(stack, frame);
 		content = root.children[0].children[1].children[0].children[0];
 		var beforeEnd:ResolvedLayoutItem = cast content.resolved;
@@ -548,7 +550,7 @@ class AccessibilityContract {
 		root = context.submit(combo, frame);
 		if (root.children.length != 1) return false;
 		if (!context.accessibilityAction(root.children[0].children[0].id.value,
-			AccessibilityRequest.SetValue,
+			AccessibilityRequestAction.SetValue,
 			"one",
 			-1,
 			-1,
@@ -573,7 +575,7 @@ class AccessibilityContract {
 		input = root.children[0].children[0];
 		if (root.children.length != 1 || context.focus.focusedId == null
 			|| !context.focus.focusedId.equals(input.id) || !AccessibilityAudit.isValid(root)) return false;
-		if (!context.accessibilityAction(input.id.value, AccessibilityRequest.SetValue,
+		if (!context.accessibilityAction(input.id.value, AccessibilityRequestAction.SetValue,
 			"one", -1, -1, 1) || combo.value != "one" || selected != "one" || changes != 2) return false;
 		return true;
 	}

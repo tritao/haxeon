@@ -5,16 +5,16 @@ import Hashable;
 import haxeon.ui.core.UiEvent;
 /** A normalized key/modifier chord used by application commands. */
 struct Shortcut implements Hashable {
-	/** The key code (`UiKey`); never a modifier key alone. */
-	public final key:Int;
+	/** The key; never a modifier key alone. */
+	public final key:UiKey;
 
 	/** The modifier keys held with it: Shift, Control, Alt and Super, without the lock states. */
 	public final modifiers:UiModifier;
 
-	/** The chord `key` with `modifiers`, lock states dropped. Throws when `key` is not positive. */
-	public function new(key:Int, modifiers:UiModifier = UiModifier.empty()) {
-		if (key <= 0)
-			throw "Shortcuts require a positive key";
+	/** The chord `key` with `modifiers`, lock states dropped. Throws when `key` is `Unknown`. */
+	public function new(key:UiKey, modifiers:UiModifier = UiModifier.empty()) {
+		if (key.rawValue() <= 0)
+			throw "Shortcuts require a known key";
 		this.key = key;
 		this.modifiers = normalizeModifiers(modifiers);
 	}
@@ -24,7 +24,7 @@ struct Shortcut implements Hashable {
 		return modifiers & (UiModifier.Shift | UiModifier.Control | UiModifier.Alt | UiModifier.Super);
 
 	/** Whether pressing `key` with `modifiers` is this chord, whatever the lock keys' states. */
-	public function matches(key:Int, modifiers:UiModifier):Bool
+	public function matches(key:UiKey, modifiers:UiModifier):Bool
 		return this.key == key && this.modifiers == normalizeModifiers(modifiers);
 
 	/** Whether `other` is the same chord. */
@@ -33,11 +33,11 @@ struct Shortcut implements Hashable {
 
 	/** A hash agreeing with `equals`. */
 	public function hash():Int
-		return key * 31 + modifiers.rawValue();
+		return key.rawValue() * 31 + modifiers.rawValue();
 
 	/** The chord's key code and modifier bits, for debugging; `label` is the readable form. */
 	public function toString():String
-		return 'Shortcut($key, ${modifiers.rawValue()})';
+		return 'Shortcut(${key.rawValue()}, ${modifiers.rawValue()})';
 
 	/** Text for people, such as "Ctrl+Shift+S". */
 	public function label():String {
@@ -67,13 +67,13 @@ struct Shortcut implements Hashable {
 				case "super": modifiers |= UiModifier.Super;
 				default: return null;
 			}
-		var key = keyFor(parts[parts.length - 1]);
-		return key <= 0 || isModifierKey(key) ? null : new Shortcut(key, modifiers);
+		var key = UiKey.fromRaw(keyFor(parts[parts.length - 1]));
+		return key == null || key == UiKey.Unknown || isModifierKey(key) ? null : new Shortcut(key, modifiers);
 	}
 
 	/** Shift, Control, Alt and Super on either side: pressed alone they are not a shortcut. */
-	public static function isModifierKey(key:Int):Bool
-		return key >= 340 && key <= 347;
+	public static function isModifierKey(key:UiKey):Bool
+		return key.rawValue() >= 340 && key.rawValue() <= 347;
 
 	function modifierNames(stable:Bool):Array<String> {
 		var modifiers = this.modifiers;
@@ -89,8 +89,12 @@ struct Shortcut implements Hashable {
 		return parts;
 	}
 
-	/** Names a key code; letters and digits are themselves, other keys use NAMED_KEYS or "key<code>". */
-	public static function keyName(key:Int, stable:Bool = false):String {
+	/** Names a key; letters and digits are themselves, other keys use NAMED_KEYS or "key<code>". */
+	public static function keyName(key:UiKey, stable:Bool = false):String {
+		return codeName(key.rawValue(), stable);
+	}
+
+	static function codeName(key:Int, stable:Bool):String {
 		if ((key >= "A".code && key <= "Z".code) || (key >= "0".code && key <= "9".code)) {
 			var character = String.fromCharCode(key);
 			return stable ? character.toLowerCase() : character;

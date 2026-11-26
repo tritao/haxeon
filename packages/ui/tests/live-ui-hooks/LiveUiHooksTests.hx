@@ -5,6 +5,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
+import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.CanvasView;
 import haxeon.ui.widgets.KeyedView;
@@ -71,8 +72,8 @@ class LiveUiHooksTests {
 		// Input between release and rebuild finds no target and must not reach the released handlers.
 		click(context);
 		context.scroll(10, 10, 0, 20);
-		context.key("down", 9);
-		context.key("up", 9);
+		context.key("down", UiKey.Tab);
+		context.key("up", UiKey.Tab);
 		context.text("commit", "x");
 		context.pointerLeave();
 		check(oldClicks == 1, "a released handler must not run");

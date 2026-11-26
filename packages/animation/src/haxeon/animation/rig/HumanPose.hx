@@ -16,7 +16,7 @@ class HumanPose {
 	/** The rig whose bones it poses. */
 	public final rig:HumanoidRig;
 	var matrices:Bytes;
-	final corrections:Map<String, Array<Float>> = new Map();
+	final corrections:Map<HumanBone, Array<Float>> = new Map();
 
 	/** restMatrices must be the instance's joint matrices at its rest pose. */
 	public function new(rig:HumanoidRig, restMatrices:Bytes) {

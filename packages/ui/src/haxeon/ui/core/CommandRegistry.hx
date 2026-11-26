@@ -138,7 +138,7 @@ class CommandRegistry implements Observable {
 		return result;
 	}
 
-	function matches(id:String, command:Command, key:Int, modifiers:UiModifier):Bool {
+	function matches(id:String, command:Command, key:UiKey, modifiers:UiModifier):Bool {
 		var custom = customShortcuts.get(id);
 		if (custom == null)
 			return command.matchesShortcut(key, modifiers);
@@ -242,12 +242,12 @@ class CommandRegistry implements Observable {
 	}
 
 	/** Executes the highest-priority enabled command matching a key chord. */
-	public function dispatch(key:Int, modifiers:UiModifier):Bool {
+	public function dispatch(key:UiKey, modifiers:UiModifier):Bool {
 		return dispatchContext(key, modifiers, null).succeeded;
 	}
 
 	/** Dispatches a key chord with context and returns the command outcome. */
-	public function dispatchContext(key:Int, modifiers:UiModifier,
+	public function dispatchContext(key:UiKey, modifiers:UiModifier,
 			context:Null<CommandContext>):CommandResult {
 		return dispatchContextInScopes(key, modifiers, context, null);
 	}
@@ -259,7 +259,7 @@ class CommandRegistry implements Observable {
 	 * An optional filter can leave the winning enabled command's keys to an input
 	 * widget. A filtered command never exposes a lower-priority binding.
 	 */
-	public function dispatchContextInScopes(key:Int, modifiers:UiModifier,
+	public function dispatchContextInScopes(key:UiKey, modifiers:UiModifier,
 			context:Null<CommandContext>, pathScopes:Null<Array<String>>, repeated:Bool = false,
 			?shortcutFilter:String->Bool):CommandResult {
 		var normalized = Shortcut.normalizeModifiers(modifiers);

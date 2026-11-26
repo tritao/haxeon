@@ -558,17 +558,17 @@ class SettingsTests {
 			save,
 			new Shortcut(UiKey.Comma, UiModifier.Control),
 			new Shortcut(UiKey.F10, UiModifier.Alt),
-			new Shortcut(49, UiModifier.Super),
-			new Shortcut(UiKey.PageDown),
-			new Shortcut(123456, UiModifier.Control)
+			new Shortcut(UiKey.Value1, UiModifier.Super),
+			new Shortcut(UiKey.PageDown)
 		]) {
 			var parsed = Shortcut.parse(shortcut.serialize());
 			check(parsed != null && shortcut == parsed, "round trip: " + shortcut.serialize());
 		}
 		check(Shortcut.parse("CTRL+S") != null, "parsing ignores case");
-		for (bad in ["", "ctrl+", "hyper+s", "ctrl+nosuchkey", "f0", "key-3", "ctrl+key340"])
+		for (bad in ["", "ctrl+", "hyper+s", "ctrl+nosuchkey", "f0", "key-3", "ctrl+key340", "ctrl+key123456"])
 			check(Shortcut.parse(bad) == null, "rejected: " + bad);
-		check(Shortcut.isModifierKey(340) && Shortcut.isModifierKey(347) && !Shortcut.isModifierKey(UiKey.S),
+		check(Shortcut.isModifierKey(UiKey.LeftShift) && Shortcut.isModifierKey(UiKey.RightSuper)
+			&& !Shortcut.isModifierKey(UiKey.S),
 			"modifier keys");
 	}
 
@@ -668,9 +668,9 @@ class SettingsTests {
 		check(!panel.press(UiKey.F2, UiModifier.empty()), "keys are ignored until a row records");
 		panel.record("scene.frame");
 		check(panel.recordingId == "scene.frame" && changes == 1, "clicking a shortcut starts recording");
-		check(panel.press(340, UiModifier.Shift) && panel.recordingId == "scene.frame",
+		check(panel.press(UiKey.LeftShift, UiModifier.Shift) && panel.recordingId == "scene.frame",
 			"a modifier alone keeps waiting");
-		check(panel.press(70, UiModifier.Shift | UiModifier.CapsLock) && panel.recordingId == null,
+		check(panel.press(UiKey.F, UiModifier.Shift | UiModifier.CapsLock) && panel.recordingId == null,
 			"a chord is recorded");
 		check(panel.shortcutText("scene.frame") == "Shift+F", "lock keys are not part of the chord");
 

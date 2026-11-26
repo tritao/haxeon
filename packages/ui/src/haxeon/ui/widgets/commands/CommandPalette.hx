@@ -150,7 +150,7 @@ private class CommandPaletteModel implements SearchPickerModel {
 		if (onResult != null) onResult(result);
 		if (result.succeeded && onDismiss != null) onDismiss();
 	}
-	public function navigate(key:Int, modifiers:UiModifier, pageSize:Int):Void {
+	public function navigate(key:UiKey, modifiers:UiModifier, pageSize:Int):Void {
 		if (key == UiKey.Enter) {
 			activate(selectedIndex());
 			return;

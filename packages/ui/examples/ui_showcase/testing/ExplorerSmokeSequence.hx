@@ -23,7 +23,7 @@ class ExplorerSmokeSequence {
 		state.smokeFocusTextField = false;
 		state.smokeSelectManaged = true;
 		state.smokeOpenSelect = false;
-		switch frame % FRAME_COUNT {
+		switch ExplorerSmokeFrame.fromRaw(frame % FRAME_COUNT) {
 			case ExplorerSmokeFrame.Overview: state.selectedPage = "overview";
 			case ExplorerSmokeFrame.Controls: state.selectedPage = "controls";
 			case ExplorerSmokeFrame.Text: state.selectedPage = "text";

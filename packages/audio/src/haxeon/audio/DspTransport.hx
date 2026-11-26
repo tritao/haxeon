@@ -6,11 +6,20 @@ import haxe.Int64;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 
+/** What a score event does. */
+enum DspTransportEventKind:Int {
+	/** Starts note `noteId`. */
+	NoteOn = 0;
+	/** Releases note `noteId`. */
+	NoteOff = 1;
+	/** Changes the tempo to `bpm`. */
+	Tempo = 2;
+}
+
 /** One event of a score section: a note on, a note off or a tempo change. */
 typedef DspTransportEvent = {
 	var frame:Float;
-	/** 0 = note on, 1 = note off, 2 = tempo. */
-	var kind:Int;
+	var kind:DspTransportEventKind;
 	var noteId:Int;
 	var instrument:Null<DspInstrument>;
 	var note:Int;

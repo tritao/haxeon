@@ -84,7 +84,7 @@ class ShortcutsPanel implements View implements Observable {
 	 * Handles a key press while recording. Returns true when the press was
 	 * used: assigned, cancelled with Escape, or a modifier held for a chord.
 	 */
-	public function press(key:Int, modifiers:UiModifier):Bool {
+	public function press(key:UiKey, modifiers:UiModifier):Bool {
 		var id = recordingId;
 		if (id == null)
 			return false;

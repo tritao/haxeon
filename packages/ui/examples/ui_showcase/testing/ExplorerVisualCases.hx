@@ -46,7 +46,8 @@ class ExplorerVisualCases {
 		state.visualTextComposition = false;
 		state.visualPropertyInputs = false;
 		state.selectedPage = "overview";
-		switch caseId {
+		var visualCase = ExplorerVisualCase.fromRaw(caseId);
+		switch visualCase {
 			case ExplorerVisualCase.Overview, ExplorerVisualCase.OverviewCompact:
 				state.selectedPage = "overview";
 			case ExplorerVisualCase.Controls: state.selectedPage = "controls";
@@ -72,7 +73,7 @@ class ExplorerVisualCases {
 			case ExplorerVisualCase.Lists, ExplorerVisualCase.ListsScrolled,
 				ExplorerVisualCase.ListsCompact:
 				state.selectedPage = "lists";
-				if (caseId == ExplorerVisualCase.ListsScrolled)
+				if (visualCase == ExplorerVisualCase.ListsScrolled)
 					state.listController.jumpTo(0.0, 414.0 * UiExplorer.LIST_ROW_HEIGHT);
 			case ExplorerVisualCase.Overlays:
 				state.selectedPage = "overlays";

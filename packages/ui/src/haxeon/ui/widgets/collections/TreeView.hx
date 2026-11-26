@@ -578,7 +578,7 @@ class TreeView implements View {
 
 	function handleNodeKey(context:BuildContext, entry:TreeEntry, event:UiEvent):Void {
 		var menu = onItemContextMenu;
-		if (UiKey.isContextMenuRequest(event.key, event.modifiers) && menu != null) {
+		if (event.isContextMenuRequest() && menu != null) {
 			if (!isSelected(entry.key)) select(entry.key);
 			menu(entry.key, event);
 			event.preventDefault();

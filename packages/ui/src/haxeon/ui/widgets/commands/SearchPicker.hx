@@ -316,7 +316,7 @@ interface SearchPickerModel extends haxeon.ui.widgets.collections.ListView.ListV
 	/** The user changed the search text to `value`. */
 	public function setQuery(value:String):Void;
 	/** Normalized UiKey/UiModifier values; pageSize is the visible row count. */
-	public function navigate(key:Int, modifiers:UiModifier, pageSize:Int):Void;
+	public function navigate(key:UiKey, modifiers:UiModifier, pageSize:Int):Void;
 	/** The user chose the result at `index`. */
 	public function activate(index:Int):Void;
 }

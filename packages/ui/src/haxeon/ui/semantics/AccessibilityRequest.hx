@@ -3,67 +3,13 @@ package haxeon.ui.semantics;
 import haxeon.ui.core.UiEvent;
 
 import haxeon.ui.semantics.Semantics;
+/** What assistive technology asks a node to do; its code is NativeKit's (`nk_accessibility_action`). */
+typedef AccessibilityRequestAction = nativekit.ffi.NativeKitTypes.AccessibilityAction;
+
 /** Decoded platform accessibility request routed to a Haxe semantic target. */
 class AccessibilityRequest {
-	/** Activate the widget, as a click would. */
-	public static inline var Activate = 1;
-
-	/** Move keyboard focus to it. */
-	public static inline var Focus = 2;
-
-	/** Take keyboard focus away from it. */
-	public static inline var ClearFocus = 3;
-
-	/** Replace its value. */
-	public static inline var SetValue = 4;
-
-	/** Change its text selection. */
-	public static inline var SetSelection = 5;
-
-	/** Step its value up. */
-	public static inline var Increment = 6;
-
-	/** Step its value down. */
-	public static inline var Decrement = 7;
-
-	/** Scroll it forward a page. */
-	public static inline var ScrollForward = 8;
-
-	/** Scroll it back a page. */
-	public static inline var ScrollBackward = 9;
-
-	/** Move to its next item. */
-	public static inline var MoveNext = 10;
-
-	/** Move to its previous item. */
-	public static inline var MovePrevious = 11;
-
-	/** Toggle it. */
-	public static inline var Toggle = 12;
-
-	/** Select it. */
-	public static inline var Select = 13;
-
-	/** Deselect it. */
-	public static inline var Deselect = 14;
-
-	/** Expand it. */
-	public static inline var Expand = 15;
-
-	/** Collapse it. */
-	public static inline var Collapse = 16;
-
-	/** Dismiss it. */
-	public static inline var Dismiss = 17;
-
-	/** Open its context menu. */
-	public static inline var ShowContextMenu = 18;
-
-	/** Scroll it into view. */
-	public static inline var ScrollIntoView = 19;
-
-	/** The request's code, one of the constants above. */
-	public final action:Int;
+	/** What it asks for. */
+	public final action:AccessibilityRequestAction;
 
 	/** The action the target must support for the request to apply. */
 	public final capability:AccessibilityAction;
@@ -83,7 +29,7 @@ class AccessibilityRequest {
 	/** How many steps to move, for increments and decrements; one or less means one. */
 	public final granularity:Int;
 
-	function new(action:Int, capability:AccessibilityAction, kind:String, value:Null<String>,
+	function new(action:AccessibilityRequestAction, capability:AccessibilityAction, kind:String, value:Null<String>,
 			selectionStart:Int, selectionEnd:Int, granularity:Int) {
 		this.action = action;
 		this.capability = capability;
@@ -94,9 +40,9 @@ class AccessibilityRequest {
 		this.granularity = granularity;
 	}
 
-	/** Decodes a platform request, or returns null for an unknown `action`. */
-	public static function create(action:Int, value:Null<String>, selectionStart:Int,
-			selectionEnd:Int, granularity:Int):Null<AccessibilityRequest> {
+	/** The request for `action`, with the capability it needs and the event it is delivered as. */
+	public static function create(action:AccessibilityRequestAction, value:Null<String>, selectionStart:Int,
+			selectionEnd:Int, granularity:Int):AccessibilityRequest {
 		var capability:AccessibilityAction;
 		var kind:String;
 		switch (action) {
@@ -136,7 +82,6 @@ class AccessibilityRequest {
 				kind = UiEventKind.Activate;
 			case ScrollIntoView: capability = AccessibilityAction.ScrollIntoView;
 				kind = UiEventKind.Scroll;
-			default: return null;
 		}
 		return new AccessibilityRequest(action, capability, kind, value,
 			selectionStart, selectionEnd, granularity);
@@ -145,8 +90,8 @@ class AccessibilityRequest {
 
 /** Selection/value details attached to a routed accessibility event. */
 class AccessibilityActionData {
-	/** The request's code, one of AccessibilityRequest's constants. */
-	public final action:Int;
+	/** What it asks for. */
+	public final action:AccessibilityRequestAction;
 
 	/** Where the new selection starts, for a selection request. */
 	public final selectionStart:Int;
@@ -158,7 +103,7 @@ class AccessibilityActionData {
 	public final granularity:Int;
 
 	/** The details of request `action`. */
-	public function new(action:Int, selectionStart:Int, selectionEnd:Int, granularity:Int) {
+	public function new(action:AccessibilityRequestAction, selectionStart:Int, selectionEnd:Int, granularity:Int) {
 		this.action = action;
 		this.selectionStart = selectionStart;
 		this.selectionEnd = selectionEnd;

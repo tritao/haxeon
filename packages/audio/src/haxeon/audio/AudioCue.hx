@@ -397,10 +397,6 @@ class AudioCue implements Disposable {
 			|| options.pitchMax < options.pitchMin)
 			throw BindingError.invalidArgument("AudioCue.validateOptions",
 				"Audio cue pitch range must be finite, positive, and ordered");
-		if (options.selection != AudioCueSelection.Random && options.selection != AudioCueSelection.RoundRobin)
-			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue selection strategy is invalid");
-		if (options.overflow != AudioCueOverflow.Drop && options.overflow != AudioCueOverflow.StealOldest)
-			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue overflow policy is invalid");
 	}
 
 	function validatePlayback(effectiveVolume:Float, effectivePitch:Float,

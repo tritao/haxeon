@@ -67,7 +67,7 @@ class ActivationTests {
 		ui.pointerUp(x, y, 0, UiModifier.Control);
 		if (disabled) {
 			check(calls() == 0 && !ui.focusWidget(node.id) && !ui.accessibilityAction(node.id.value,
-				haxeon.ui.semantics.AccessibilityRequest.Activate,
+				haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction.Activate,
 				null,
 				-1,
 				-1,
@@ -75,7 +75,8 @@ class ActivationTests {
 				label + ": disabled control activated");
 		} else {
 			check(calls() == 1, label + ": primary click did not activate exactly once");
-			check(ui.accessibilityAction(node.id.value, haxeon.ui.semantics.AccessibilityRequest.Activate, null, -1, -1,
+			check(ui.accessibilityAction(node.id.value,
+				haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction.Activate, null, -1, -1,
 				1),
 				label + ": accessibility activation failed");
 			check(ui.focusWidget(node.id), label + ": keyboard focus failed");

@@ -275,7 +275,7 @@ class Tabs implements View {
 					if (event.button == 1) requestMenu(event);
 				});
 				buttonModifier.on(UiEventKind.KeyDown, function(event) {
-					if (UiKey.isContextMenuRequest(event.key, event.modifiers)) requestMenu(event);
+					if (event.isContextMenuRequest()) requestMenu(event);
 				});
 			}
 			buttonModifier.on(UiEventKind.KeyDown, function(event) {

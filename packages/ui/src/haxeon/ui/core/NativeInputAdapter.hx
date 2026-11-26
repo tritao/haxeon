@@ -201,8 +201,10 @@ class NativeInputAdapter {
 				true;
 			case AccessibilityAction(eventSource, nodeId, action, value, selectionStart,
 				selectionEnd, granularity) if (eventSource == accessibilitySource):
-				context.accessibilityAction(nodeId, action, value, selectionStart,
-					selectionEnd, granularity);
+				// A code newer than this build names no action, and nothing handles it.
+				var request = haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction.fromRaw(action);
+				if (request != null)
+					context.accessibilityAction(nodeId, request, value, selectionStart, selectionEnd, granularity);
 				true;
 			case Touch(eventSource, pointerId, action, tool, modifiers, x, y, pressure, tiltX, tiltY)
 				if (matches(eventSource)):
@@ -245,7 +247,7 @@ class NativeInputAdapter {
 		var keyCode = key.rawValue();
 		var uiModifiers = UiModifier.fromRaw(modifiers.rawValue());
 		updateKeyModifiers(keyCode, action, uiModifiers);
-		return context.key(kind, keyCode, uiModifiers, scancode);
+		return context.key(kind, key, uiModifiers, scancode);
 	}
 
 	function updateKeyModifiers(key:Int, action:InputAction, modifiers:UiModifier):Void {

@@ -24,9 +24,9 @@ class HumanoidRig {
 				if (joint == null)
 					joint = byLocalName.get(name);
 			if (joint != null)
-				joints.set(bone, joint);
+				joints.set(bone.rawValue(), joint);
 			else if (HumanBone.REQUIRED.indexOf(bone) >= 0)
-				missing.push(bone);
+				missing.push(bone.rawValue());
 		}
 		if (missing.length > 0)
 			throw 'Rig "${mapping.name}" lacks humanoid bones: ${missing.join(", ")}';
@@ -47,11 +47,11 @@ class HumanoidRig {
 
 	/** The asset joint for a standard bone, or -1 when the rig lacks it. */
 	public function joint(bone:HumanBone):Int {
-		var found = joints.get(bone);
+		var found = joints.get(bone.rawValue());
 		return found == null ? -1 : found;
 	}
 
 	/** Whether the asset provides `bone`. */
 	public function has(bone:HumanBone):Bool
-		return joints.exists(bone);
+		return joints.exists(bone.rawValue());
 }

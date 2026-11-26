@@ -1424,10 +1424,10 @@ private class UpdatingResources implements View {
 			&& !haxeon.Equality.equals(metrics,
 			new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 5)),
 			"Text metrics equality ignores a field");
-		check(new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiEvent.UiModifier.Control)
-			== new haxeon.ui.core.Shortcut(65,
-			haxeon.ui.core.UiEvent.UiModifier.Control) && new haxeon.ui.core.Shortcut(65,
-			haxeon.ui.core.UiEvent.UiModifier.Control) != new haxeon.ui.core.Shortcut(65,
+		check(new haxeon.ui.core.Shortcut(haxeon.ui.core.UiKey.A, haxeon.ui.core.UiEvent.UiModifier.Control)
+			== new haxeon.ui.core.Shortcut(haxeon.ui.core.UiKey.A,
+			haxeon.ui.core.UiEvent.UiModifier.Control) && new haxeon.ui.core.Shortcut(haxeon.ui.core.UiKey.A,
+			haxeon.ui.core.UiEvent.UiModifier.Control) != new haxeon.ui.core.Shortcut(haxeon.ui.core.UiKey.A,
 			haxeon.ui.core.UiEvent.UiModifier.Alt),
 			"Shortcut equality is wrong");
 		check(haxeon.ui.style.CustomEffect.EffectParameter.vec2(1.0,

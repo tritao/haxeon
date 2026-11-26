@@ -9,10 +9,11 @@ typedef MessagePackSchemaDefaultValue = {
 	final value:Dynamic;
 }
 
-enum abstract MessagePackSchemaSourceKind(String) {
-	var Struct = "struct";
-	var Class = "class";
-	var NativeValue = "native-value";
+/** What a described type is declared as: its code is the descriptor's `sourceKind`. */
+enum MessagePackSchemaSourceKind:String {
+	Struct = "struct";
+	Class = "class";
+	NativeValue = "native-value";
 }
 
 /** Source declaration facts whose absence on legacy artifacts means unknown. */
@@ -89,8 +90,12 @@ class MessagePackSchema {
 		var descriptor = requireDescriptorValue(hash, type);
 		if (fieldInt(descriptor, "version") != DESCRIPTOR_VERSION)
 			return null;
+		// Validation admitted only known kinds, so the code names one.
+		var sourceKind = MessagePackSchemaSourceKind.fromRaw(fieldString(descriptor, "sourceKind"));
+		if (sourceKind == null)
+			throw new MessagePackError("Writer descriptor has invalid source conformance facts");
 		return {
-			sourceKind: cast fieldString(descriptor, "sourceKind"),
+			sourceKind: sourceKind,
 			interfaces: [for (value in fieldArray(descriptor, "interfaces")) cast value]
 		};
 	}
@@ -147,7 +152,7 @@ class MessagePackSchema {
 		if (descriptorVersion == DESCRIPTOR_VERSION) {
 			var sourceKind = fieldString(value, "sourceKind"),
 				interfaces = fieldArray(value, "interfaces");
-			if (!validSourceKind(sourceKind) || !canonicalInterfaces(interfaces))
+			if (MessagePackSchemaSourceKind.fromRaw(sourceKind) == null || !canonicalInterfaces(interfaces))
 				throw new MessagePackError("Writer descriptor has invalid source conformance facts");
 		}
 		var flat = fieldBool(value, "flat");
@@ -172,9 +177,6 @@ class MessagePackSchema {
 			throw new MessagePackError('Writer descriptor "$type" with hash "$hash" is unavailable');
 		return descriptor;
 	}
-
-	static function validSourceKind(value:String):Bool
-		return value == "struct" || value == "class" || value == "native-value";
 
 	static function canonicalInterfaces(values:Array<Dynamic>):Bool {
 		checkItems(values.length);

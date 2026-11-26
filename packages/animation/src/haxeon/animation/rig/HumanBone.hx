@@ -6,95 +6,95 @@ package haxeon.animation.rig;
  * import, so everything above AnimKit is independent of any asset's naming.
  * The names describe anatomy only; an asset's own hierarchy may differ.
  */
-enum abstract HumanBone(String) from String to String {
+enum HumanBone:String {
 	/** The hips, the root of the skeleton. */
-	var Pelvis = "pelvis";
+	Pelvis = "pelvis";
 
 	/** The lower spine. */
-	var Spine = "spine";
+	Spine = "spine";
 
 	/** The middle spine. */
-	var Spine2 = "spine2";
+	Spine2 = "spine2";
 
 	/** The upper spine. */
-	var Chest = "chest";
+	Chest = "chest";
 
 	/** The neck. */
-	var Neck = "neck";
+	Neck = "neck";
 
 	/** The head. */
-	var Head = "head";
+	Head = "head";
 
 	/** The left shoulder (clavicle). */
-	var ShoulderL = "shoulder.L";
+	ShoulderL = "shoulder.L";
 
 	/** The left upper arm. */
-	var UpperArmL = "upper_arm.L";
+	UpperArmL = "upper_arm.L";
 
 	/** The left forearm. */
-	var ForearmL = "forearm.L";
+	ForearmL = "forearm.L";
 
 	/** The left hand. */
-	var HandL = "hand.L";
+	HandL = "hand.L";
 
 	/** The left index finger's first joint. */
-	var IndexL = "index1.L";
+	IndexL = "index1.L";
 
 	/** The left middle finger's first joint. */
-	var MiddleL = "middle1.L";
+	MiddleL = "middle1.L";
 
 	/** The left little finger's first joint. */
-	var PinkyL = "pinky1.L";
+	PinkyL = "pinky1.L";
 
 	/** The right shoulder (clavicle). */
-	var ShoulderR = "shoulder.R";
+	ShoulderR = "shoulder.R";
 
 	/** The right upper arm. */
-	var UpperArmR = "upper_arm.R";
+	UpperArmR = "upper_arm.R";
 
 	/** The right forearm. */
-	var ForearmR = "forearm.R";
+	ForearmR = "forearm.R";
 
 	/** The right hand. */
-	var HandR = "hand.R";
+	HandR = "hand.R";
 
 	/** The right index finger's first joint. */
-	var IndexR = "index1.R";
+	IndexR = "index1.R";
 
 	/** The right middle finger's first joint. */
-	var MiddleR = "middle1.R";
+	MiddleR = "middle1.R";
 
 	/** The right little finger's first joint. */
-	var PinkyR = "pinky1.R";
+	PinkyR = "pinky1.R";
 
 	/** The left thigh. */
-	var ThighL = "thigh.L";
+	ThighL = "thigh.L";
 
 	/** The left shin. */
-	var ShinL = "shin.L";
+	ShinL = "shin.L";
 
 	/** The left foot. */
-	var FootL = "foot.L";
+	FootL = "foot.L";
 
 	/** The left toes. */
-	var ToeL = "toe.L";
+	ToeL = "toe.L";
 	/** Tip of the left foot, where the toes end. */
-	var ToeTipL = "toe_tip.L";
+	ToeTipL = "toe_tip.L";
 
 	/** The right thigh. */
-	var ThighR = "thigh.R";
+	ThighR = "thigh.R";
 
 	/** The right shin. */
-	var ShinR = "shin.R";
+	ShinR = "shin.R";
 
 	/** The right foot. */
-	var FootR = "foot.R";
+	FootR = "foot.R";
 
 	/** The right toes. */
-	var ToeR = "toe.R";
+	ToeR = "toe.R";
 
 	/** The tip of the right toes. */
-	var ToeTipR = "toe_tip.R";
+	ToeTipR = "toe_tip.R";
 
 	/** Bones every humanoid rig must provide. */
 	public static final REQUIRED:Array<HumanBone> = [

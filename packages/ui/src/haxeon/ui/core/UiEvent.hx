@@ -25,8 +25,8 @@ class UiEvent {
 	/** For pointer events, the mouse button: 0 is the primary one. */
 	public final button:Int;
 
-	/** For key events and `Activate`, the key code (`UiKey`); 0 otherwise. */
-	public final key:Int;
+	/** For key events and `Activate`, the key; `Unknown` otherwise. */
+	public final key:UiKey;
 
 	/** For key events, the key's physical position on the keyboard, whatever its layout. */
 	public final scancode:Int;
@@ -95,7 +95,7 @@ class UiEvent {
 			deltaX:Float = 0.0,
 			deltaY:Float = 0.0,
 			button:Int = 0,
-			key:Int = 0,
+			key:UiKey = UiKey.Unknown,
 			modifiers:UiModifier = UiModifier.empty(),
 			text:Null<String> = null,
 			data:Dynamic = null,
@@ -161,6 +161,10 @@ class UiEvent {
 
 	/** Skips the widget's built-in response to the event, such as a key's default action. */
 	public function preventDefault():Void defaultPrevented = true;
+
+	/** Whether this key asks for a context menu from the keyboard: the Menu key, or Shift+F10. */
+	public function isContextMenuRequest():Bool
+		return key == UiKey.Menu || (key == UiKey.F10 && modifiers.contains(UiModifier.Shift));
 
 	/** Lets the host know the UI used this key while preserving UI default actions. */
 	public function markHandled():Void handled = true;

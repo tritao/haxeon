@@ -29,7 +29,7 @@ private class Results implements SearchPickerModel {
 		selected = 0;
 	}
 	public function activate(index:Int):Void accepted = index;
-	public function navigate(key:Int, modifiers:UiModifier, pageSize:Int):Void {
+	public function navigate(key:UiKey, modifiers:UiModifier, pageSize:Int):Void {
 		if (key == UiKey.Enter) {
 			activate(selected);
 			return;

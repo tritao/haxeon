@@ -1,15 +1,15 @@
 package haxeon.platform;
 
 /** Where a browser app is in its life. */
-enum abstract BrowserAppStatus(Int) {
+enum BrowserAppStatus:Int {
 	/** Running, with no frame presented yet. */
-	var Starting = 0;
+	Starting = 0;
 
 	/** Running, with a frame on screen. */
-	var Presented = 1;
+	Presented = 1;
 
 	/** Finished. */
-	var Stopped = 2;
+	Stopped = 2;
 }
 
 /** Drives the application registered by Runtime.launch from requestAnimationFrame. */

@@ -20,6 +20,7 @@ import nativekit.ffi.NativeKit;
 import haxeon.ui.core.RenderNode.CursorShape as UiCursorShape;
 import haxeon.ui.semantics.AccessibilityBridge;
 import haxeon.ui.semantics.AccessibilityRequest;
+import haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.style.StyleSheet;
@@ -1022,7 +1023,7 @@ class UiContext implements Disposable {
 
 	/** Routes a NativeKit platform accessibility action to the addressed semantic node. */
 	public function accessibilityAction(id:Int,
-			action:Int,
+			action:AccessibilityRequestAction,
 			value:Null<String>,
 			selectionStart:Int,
 			selectionEnd:Int,
@@ -1034,24 +1035,23 @@ class UiContext implements Disposable {
 		if (node == null || node.semantics == null || node.resolved == null || !node.resolved.visible) return false;
 		var semantics:Semantics = cast node.semantics;
 		var request = AccessibilityRequest.create(action, value, selectionStart, selectionEnd, granularity);
-		if (request == null) return false;
 		var enabled = enabledAlongPath(node);
 		var actions = semantics.actions;
 		if (node.focusable && enabled) actions |= haxeon.ui.semantics.Semantics.AccessibilityAction.Focus;
 		if (!enabled) actions = haxeon.ui.semantics.Semantics.AccessibilityAction.empty();
 		if (!actions.contains(request.capability)) return false;
 		var geometry:ResolvedLayoutItem = cast node.resolved;
-		if (action == AccessibilityRequest.Focus) return focusWidget(widgetId);
-		if (action == AccessibilityRequest.ClearFocus) {
+		if (action == AccessibilityRequestAction.Focus) return focusWidget(widgetId);
+		if (action == AccessibilityRequestAction.ClearFocus) {
 			if (focus.focusedId != null && focus.focusedId.equals(widgetId)) clearFocus();
 			return true;
 		}
 		var deltaX = 0.0;
 		var deltaY = 0.0;
-		if (action == AccessibilityRequest.ScrollForward) deltaY = geometry.height;
-		else if (action == AccessibilityRequest.ScrollBackward) deltaY = -geometry.height;
-		if (action == AccessibilityRequest.ScrollForward
-			|| action == AccessibilityRequest.ScrollBackward) return events.targetEvent(UiEventKind.Scroll,
+		if (action == AccessibilityRequestAction.ScrollForward) deltaY = geometry.height;
+		else if (action == AccessibilityRequestAction.ScrollBackward) deltaY = -geometry.height;
+		if (action == AccessibilityRequestAction.ScrollForward
+			|| action == AccessibilityRequestAction.ScrollBackward) return events.targetEvent(UiEventKind.Scroll,
 			widgetId,
 			null,
 			deltaX,
@@ -1185,11 +1185,11 @@ class UiContext implements Disposable {
 	 * Reports a key event (`UiEventKind.KeyDown`, `KeyUp` or `KeyRepeat`) for the focused widget. Returns whether the
 	 * UI used it, so the host can pass on a key it did not.
 	 */
-	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Bool {
+	public function key(kind:String, key:UiKey, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Bool {
 		ensureLive();
 		updateModifiers(modifiers);
 		// NativeKit preserves the keypad key code; UI controls share Enter behavior.
-		if (key == 335) key = UiKey.Enter;
+		if (key == UiKey.KpEnter) key = UiKey.Enter;
 		return events.key(kind, key, modifiers, scancode);
 	}
 
