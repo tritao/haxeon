@@ -1233,8 +1233,9 @@ class FrontendCompilation {
 		if (ownedFunctions != null)
 			for (functionName in ownedFunctions)
 				valid.set(functionName, true);
+		// A helper typed again this build is the copy of the module that asked for it now: an earlier owner's copy is stale.
 		for (cached in state.typedFunctions.keys())
-			if (calledGeneratedHelpers.exists(cached)) {
+			if (calledGeneratedHelpers.exists(cached) && !(typedByName.exists(cached) && owners.get(cached) != name)) {
 				valid.set(cached, true);
 				owners.set(cached, name);
 			}
