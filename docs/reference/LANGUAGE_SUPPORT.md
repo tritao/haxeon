@@ -48,6 +48,10 @@ The current subset includes:
   `Err(Unreadable(BadDigit(_)))` and `Err(OutOfRange(_))` cover `Err`, each payload position split into its values (an
   enum's constructors, `true` and `false`, a closed enum abstract's values; any other type only by `_`). An array or
   structure pattern inside a constructor covers no value for certain.
+- A case with a payload named without a call is its constructor as a function, as in Haxe: `Shape.Circle`, or a bare
+  `Circle` where a function returning its enum is expected or where it is the one case of that name in sight
+  (`[1.0, 2.0].map(Circle)`, `result.mapErr(ConfigError.Unreadable)`). A generic enum's case takes its type arguments
+  from the expected function type.
 - A switch over an enum abstract without a default covers every declared value, as one over an enum covers every
   constructor: a missing value is `E1021`, naming it, and a switch that covers them all returns on every path when its
   arms do. A value outside the declared set (a native code newer than its binding, or a cast) throws at the switch.

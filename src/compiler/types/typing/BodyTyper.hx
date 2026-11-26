@@ -2108,6 +2108,10 @@ class BodyTyper implements BodyTyping {
 						for (value in unqualifiedAbstract.values)
 							if (value.name == name)
 								return EnumAbstractValues.typed(this, unqualifiedAbstract, value, span);
+					var payloadCase = namedPayloadCase(name, expectedType, span);
+					if (payloadCase != null)
+						return enumConstructorFunction(payloadCase.enumName, payloadCase.enumName, payloadCase.index,
+							expectedType, span, scope);
 					var thisType = scope.receiverType();
 					if (thisType == null)
 						throw new CompileError(Diagnostic.unresolved(DiagnosticCode.NAME_OR_MEMBER,
@@ -2150,7 +2154,8 @@ class BodyTyper implements BodyTyping {
 						if (index < 0)
 							fail(DiagnosticCode.NAME_OR_MEMBER, 'Unknown enum case "$name"', span);
 						if (enumDecl.cases[index].params.length > 0)
-							fail(DiagnosticCode.CALL_FORM, 'Enum case "$name" requires constructor arguments', span);
+							return enumConstructorFunction(isEnumAlias ? qualifierName : enumName, enumName, index,
+								expectedType, span, scope);
 						var literalType:CompilerType = isEnumAlias ? qualifiedEnum : enumLiteralType(enumDecl,
 							expectedType,
 							span);
@@ -3060,6 +3065,77 @@ class BodyTyper implements BodyTyping {
 		return found;
 	}
 
+	/**
+	 * The case with a payload a bare `name` picks out as a value: one of the enum the expected function type returns, else
+	 * the one case of that name among the enums this file sees. Null when there is none.
+	 */
+	function namedPayloadCase(name:String, expectedType:Null<CompilerType>,
+			span:SourceSpan):Null<{
+				enumName:String,
+				index:Int
+			}> {
+		var expectedFunction = expectedFunctionType(expectedType),
+			expectedEnum = expectedFunction == null ? null : enumName(expectedFunction.result);
+		if (expectedEnum != null && session.enumDecls.exists(expectedEnum)) {
+			var declaration = session.enumDecls.get(expectedEnum);
+			for (index in 0...declaration.cases.length)
+				if (declaration.cases[index].name == name && declaration.cases[index].params.length > 0)
+					return {enumName: expectedEnum, index: index};
+		}
+		var found:Null<{enumName:String, index:Int}> = null;
+		for (entry in session.enumsInFile(span.file.path)) {
+			var declaration = entry.declaration;
+			for (index in 0...declaration.cases.length) {
+				if (declaration.cases[index].name != name || declaration.cases[index].params.length == 0)
+					continue;
+				if (found != null)
+					fail(DiagnosticCode.NAME_OR_MEMBER, 'Ambiguous enum value "$name"', span);
+				found = {enumName: entry.name, index: index};
+			}
+		}
+		return found;
+	}
+
+	/**
+	 * A case with a payload named without a call: its constructor as a function, as in Haxe (`mapErr(ConfigError.Unreadable)`).
+	 * It is the lambda `(a, b) -> Case(a, b)`, typed against the expected function type, else the case's own payload types;
+	 * a generic enum's case needs the expected type, which alone gives its type arguments. `written` is the enum as the source
+	 * names it (an alias, or the enum itself), through which the lambda's body constructs the case.
+	 */
+	function enumConstructorFunction(written:String, enumName:String, index:Int, expectedType:Null<CompilerType>,
+			span:SourceSpan, scope:Scope):TypedExpression {
+		var declaration = session.enumDecls.required(enumName),
+			enumCase = declaration.cases[index],
+			arguments:Array<AstArgument> = [],
+			passed:Array<AstExpression> = [];
+		for (position in 0...enumCase.params.length) {
+			var local = new TemporaryLocal("__haxeon_payload" + position);
+			arguments.push({
+				name: local.name,
+				type: InferredType,
+				span: span,
+				optional: enumCase.params[position].optional,
+				local: local
+			});
+			passed.push(TemporaryVariable(local, span));
+		}
+		var expected = expectedFunctionType(expectedType) == null ? null : expectedType;
+		if (expected == null) {
+			if (declaration.typeParameters.length > 0)
+				fail(DiagnosticCode.TYPE_CONSTRAINT,
+					'Cannot infer the type arguments of "$written.${enumCase.name}" used as a function; give it an expected function type or call it',
+					span);
+			var instance = TInstance(NominalKind.Enum, enumName, []);
+			expected = TFunction([
+				for (parameter in enumCase.params)
+					enumParameterType(declaration.typeParameters, parameter, instance)
+			], instance, FunctionTypes.ofArguments(arguments));
+		}
+		var call = Call(written + "." + enumCase.name, passed, span);
+		return typeExpression(Lambda(arguments, [Return(call, span)], 'case:$enumName.${enumCase.name}@${span.start}',
+			span), scope, expected);
+	}
+
 	function uniqueEnumLiteral(name:String, span:SourceSpan):Null<TypedExpression> {
 		var enumName:Null<String> = null, index = -1;
 		for (entry in session.enumsInFile(span.file.path)) {
@@ -3199,6 +3275,13 @@ class BodyTyper implements BodyTyping {
 		};
 	}
 
+	/**
+	 * Whether the unguarded `cases` match every value of the enum `type` that its constructor `constructorIndex` makes. It is
+	 * Maranget's usefulness check over the arms' argument patterns, which are rebuilt as trees from their predicates and split
+	 * one position at a time: a position of an enum, Bool or closed enum abstract is covered value by value, any other only by
+	 * a wildcard, and an array or structure pattern covers no value for certain. Null is not among the values; whether one
+	 * must be matched is SwitchNullCoverage's question.
+	 */
 	public function enumCaseCovered(type:CompilerType, constructorIndex:Int,
 			cases:Array<TypedSwitchCoverageCase>):Bool {
 		var argumentTypes = constructorArgumentTypes(type, constructorIndex);
@@ -3324,13 +3407,6 @@ class BodyTyper implements BodyTyping {
 			case TNullable(inner): switchConstantType(inner);
 			default: EnumAbstractValues.switchable(session, subject) ? subject : null;
 		};
-	/**
-	 * Whether the unguarded `cases` match every value of the enum `type` that its constructor `constructorIndex` makes. It is
-	 * Maranget's usefulness check over the arms' argument patterns, which are rebuilt as trees from their predicates and split
-	 * one position at a time: a position of an enum, Bool or closed enum abstract is covered value by value, any other only by
-	 * a wildcard, and an array or structure pattern covers no value for certain. Null is not among the values; whether one
-	 * must be matched is SwitchNullCoverage's question.
-	 */
 
 	/**
 	 * The declared values of a closed enum abstract, keyed as switch cases are (`int:N`, `string:S`), or null when `type`

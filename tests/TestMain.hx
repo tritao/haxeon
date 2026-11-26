@@ -616,6 +616,9 @@ class TestMain {
 			'Enum switch is missing cases: W');
 		expectCompileError('enum I { A; B(x:Int); } enum O { W(i:I); P(v:Int); } enum R<T, E> { G(v:T); F(e:E); } function main():Int { var r:R<Int, O> = G(1); return switch r { case G(_): 1; case F(W(A)): 2; case F(P(_)): 3; }; }',
 			'Enum switch is missing cases: F');
+		// A generic enum's case used as a function takes its type arguments from the expected function type.
+		expectCompileError('enum R<T> { G(v:T); } function main():Int { var f = R.G; return 0; }',
+			'Cannot infer the type arguments of "R.G" used as a function; give it an expected function type or call it');
 		// A capture still matches its pattern, so it neither ends the switch nor binds outside it.
 		expectCompileError('enum E { A(value:Int); B; } function main():Int { var e = A(1); return switch e { case all = A(_): 1; }; }',
 			'Enum switch is missing cases: B');
