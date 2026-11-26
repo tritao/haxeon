@@ -120,13 +120,14 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			refreshing = classesToRefresh(semantic.program.classes, cachedMetadata.classes, selected);
 		}
 		var program = semantic.program;
+		// An enum abstract value may call a class's static, as a constant that is not one does before it is rejected.
+		session.bindNominalDeclarations();
 		for (decl in session.declarations.enumAbstractsInOrder()) {
 			RawRepresentableGenerator.validate(session, bodyTyper, decl);
 			FlagsGenerator.validate(session, bodyTyper, decl);
 			for (value in decl.values)
 				EnumAbstractValues.raw(bodyTyper, decl, value);
 		}
-		session.bindNominalDeclarations();
 		// With the facts of `SemanticAssembly` there is nothing to infer: they are about this same program. They are known before
 		// anything reads a field's type, which can type its initializer (`DeclarationTypeTable`).
 		if (facts == null) {
