@@ -592,7 +592,7 @@ class HxiHaxeEmitter {
 		if (emitFunctions && hasCallbacks)
 			output.add('function __hxi_callback_error_from_native(value:Int):$callbackErrorType return switch value { case 0 | 1 | 2 | 3 | 4 | 5: cast value; default: throw "Unknown native callback error kind"; };\n');
 		if (emitTypes && hasCallbacks)
-			output.add('enum abstract $callbackErrorType(Int) implements RawRepresentable { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
+			output.add('enum $callbackErrorType:Int { None = 0; Exception = 1; WrongThread = 2; PointerContract = 3; AggregateContract = 4; StringContract = 5; }\n');
 		if (emitTypes)
 			for (declaration in opaqueDeclarations)
 				switch declaration {
@@ -776,9 +776,12 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function rawValue():haxe.Int64 return this;\n');
 							output.add('}\n');
 						} else {
+							// A closed set of codes is a raw-value enum; combinable bits stay Flags.
+							var rawEnum = !flags && underlying.haxeType == "Int";
 							output.add(flags
 								? 'enum abstract $projectedName(${underlying.haxeType}) implements Flags {\n'
-								: 'enum abstract $projectedName(${underlying.haxeType}) implements RawRepresentable {\n');
+								: rawEnum ? 'enum $projectedName:Int {\n'
+								: 'enum abstract $projectedName(${underlying.haxeType}) {\n');
 							for (value in values) {
 								emitDocumentation(output, model, '$name.${value.name}', "\t");
 								var projectedValue = projectedEnumValueName(projectedEnum, value.name),
@@ -788,7 +791,8 @@ class HxiHaxeEmitter {
 										haxe.Int64.parseString("2147483647")) > 0 ? haxe.Int64.sub(value.value,
 										haxe.Int64.parseString("4294967296")) : value.value,
 									literal = haxe.Int64.toStr(literalValue);
-								output.add('\tvar $projectedValue = $literal;\n');
+								output.add(rawEnum
+									? '\t$projectedValue = $literal;\n' : '\tvar $projectedValue = $literal;\n');
 							}
 							output.add('}\n');
 						}

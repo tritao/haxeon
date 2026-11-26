@@ -150,11 +150,11 @@ class HxiParserMain {
 				throw "expected parsed flags";
 		}
 		var enumSource = HxiProjection.source(enumerations);
-		expect(enumSource.indexOf("enum abstract Result(Int) implements RawRepresentable") >= 0
+		expect(enumSource.indexOf("enum Result:Int {") >= 0
 			&& enumSource.indexOf("from Int") < 0
 			&& enumSource.indexOf("to Int") < 0
 			&& enumSource.indexOf("public static function decodeResult(value:Int):Result") >= 0
-			&& enumSource.indexOf("var Ok = 0") >= 0
+			&& enumSource.indexOf("\tOk = 0;") >= 0
 			&& enumSource.indexOf("var Both = 3") >= 0
 			&& enumSource.indexOf("extern function __hxi_raw_check(arg0:Result, arg1:Options):Result") >= 0,
 			"enums should retain concise nominal types and integer ABI calls");
@@ -194,7 +194,7 @@ class HxiParserMain {
 		var mixedCaseEnum = parseValidated("mixed-case-enum.hxi",
 			'interface mixed @target("x86_64-linux-gnu") @library("mixed") { enum FixtureResult : i32 { FIXTURE_OK = 0; } extern fn check(value: FixtureResult) -> FixtureResult; }');
 		var mixedCaseSource = HxiProjection.source(mixedCaseEnum);
-		expect(mixedCaseSource.indexOf("enum abstract FixtureResult(Int)") >= 0
+		expect(mixedCaseSource.indexOf("enum FixtureResult:Int {") >= 0
 			&& mixedCaseSource.indexOf("extern function __hxi_raw_check(arg0:FixtureResult):FixtureResult") >= 0,
 			"already mixed-case enum names should retain their spelling in the Haxe projection");
 		var nativeNames = parseValidated("native-names.hxi",
@@ -202,7 +202,7 @@ class HxiParserMain {
 		var nativeProfile = HxiProjectionProfile.parse("native-names.hxmap",
 			'{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
 		var nativeNameSource = HxiProjection.source(nativeNames, null, null, null, nativeProfile);
-		expect(nativeNameSource.indexOf("enum abstract Result(Int)") >= 0
+		expect(nativeNameSource.indexOf("enum Result:Int {") >= 0
 			&& nativeNameSource.indexOf("extern function __hxi_raw_check(arg0:Result):Result") >= 0,
 			"snake-case enum names should project to concise PascalCase");
 		var builtinValueEnums = parseValidated("builtin-enum-values.hxi",
@@ -213,10 +213,10 @@ class HxiParserMain {
 			builtinValueProfile = HxiProjectionProfile.parse("builtin-enum-values.hxmap",
 				'{"interface":"builtin_enum_values","enumValueNames":{"nkgpu_uniform_type":{"NKGPU_UNIFORMTYPE_FLOAT":"Float","NKGPU_UNIFORMTYPE_INT":"Int"}}}'),
 			builtinValueMappedSource = HxiProjection.source(builtinValueEnums, null, null, null, builtinValueProfile);
-		expect(builtinValueSource.indexOf("var Float = 1") >= 0
-			&& builtinValueSource.indexOf("var Int = 5") >= 0
-			&& builtinValueMappedSource.indexOf("var Float = 1") >= 0
-			&& builtinValueMappedSource.indexOf("var Int = 5") >= 0,
+		expect(builtinValueSource.indexOf("\tFloat = 1;") >= 0
+			&& builtinValueSource.indexOf("\tInt = 5;") >= 0
+			&& builtinValueMappedSource.indexOf("\tFloat = 1;") >= 0
+			&& builtinValueMappedSource.indexOf("\tInt = 5;") >= 0,
 			"enum members may share names with built-in Haxe types while projected type names remain distinct");
 		var genericProfile = HxiProjectionProfile.parse("generic.hxmap",
 			'{"interface":"generic","typePrefix":"lib_","enumValuePrefixes":["LIB_"],"functionNames":{"check":"validate"},"fieldNames":{"lib_point":{"color":"shade"}},"constantNames":{"LIB_VERSION":"version"}}');
@@ -224,7 +224,7 @@ class HxiParserMain {
 			'interface generic @target("x86_64-linux-gnu") @library("generic") { const LIB_VERSION = 1; enum lib_color : i32 { LIB_RED = 1; } handle lib_handle : u32; struct lib_point @layout(4, 4) { color: lib_color @offset(0); } extern fn check(value: lib_point) -> lib_handle; }');
 		var genericSource = HxiProjection.source(genericModel, null, null, null, genericProfile),
 			genericNatives = HxiProjection.cNatives(genericModel, null, null, null, genericProfile);
-		expect(genericSource.indexOf("enum abstract Color(Int)") >= 0
+		expect(genericSource.indexOf("enum Color:Int {") >= 0
 			&& genericSource.indexOf("abstract Handle(Int)") >= 0
 			&& genericSource.indexOf("abstract Point(haxe.io.Bytes)") >= 0
 			&& genericSource.indexOf("get_shade():Color") >= 0
@@ -444,7 +444,7 @@ class HxiParserMain {
 		var enumField = parseValidated("enum-field.hxi",
 			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum result : c_int { OK = 0; ERROR = -1; } struct Status @layout(4, 4) { result: result @offset(0); } }');
 		var enumFieldSource = HxiProjection.source(enumField);
-		expect(enumFieldSource.indexOf("enum abstract Result(Int)") >= 0
+		expect(enumFieldSource.indexOf("enum Result:Int {") >= 0
 			&& enumFieldSource.indexOf("function get_result():Result") >= 0,
 			"named enums should retain their nominal type in fixed-layout structure fields");
 		var enumCompiler = newCompiler();
