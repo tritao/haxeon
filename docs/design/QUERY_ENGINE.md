@@ -249,8 +249,8 @@ Everything below keeps results across builds outside the engine. Lines are the f
 | `IrStageMemo`, `IrStageMemos`, `IrStageEntry` | 526 (the file, with `IrLineage` and the contribution memos) | stage and function slot; input version, fact reads, output, summary, helper requests; dropped when the stage's last run did not use it | `IrFunctionStages.run`, the ~25 `IrFunctionPass` stages | a computed kind per stage, keyed by function symbol; done for every per-function stage (slice 3), the inliner keeps `IrStageMemo` until slice 5 |
 | ~~`IrLineage`, `IrFunctionSlots`~~ | (above), 95 | slot → function object and version; a version is never given twice; slots swept when cells exceed twice the functions | every stage (`settle`, `versionOf`), `IrStage` | done (slice 3): a version is the function object's own number (`IrFunction.version`), settling is early cutoff in the stages' kinds |
 | `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests); the passes' facts are done (slice 3: `IrStageFacts`, `IrFactReader` reads it); `IrFacts` stays for the inliner (slice 5), verification (6) and lowering (7) |
-| Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemo.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the requests and enum mentions done (summaries, slice 3), the walk summaries done (`IrWalkMemo`), the enum dispatch's encodings a kind by type id; those read past the encode point left (slice 4) |
-| `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | a kind per walk (`IrWalkMemo`); done for the walks before the encode point (slice 3), the record stays for those past it (4) and `HlPlainBuild` (6) |
+| Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemo.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the requests and enum mentions done (summaries, slice 3), the walk summaries done (`IrWalkMemo`), the enum dispatch's encodings a kind by type id; `lastResult` and the memos the choices and escape reaches read done (slice 4, steps); left: the runtime needs, array types, closure uses, initialization calls and stores (4), the verifier's (6) and the inliner's (5) |
+| `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | a kind per walk (`IrWalkMemo`); done for the walks before the encode point (slice 3) and past it (slice 4, steps); the record stays for `HlPlainBuild` (6) |
 | Reuse code inside passes | ~750 lines naming the above in 49 files; est. 1,000–1,400 with the code around them | — | — | query declarations (est. a third of it); fact reads stay as engine reads |
 | ~~`IrGeneratedFunctions` (structure printers, initializers)~~ | 95 | key and identity of the input objects; swept when untouched | `FrontendCompilation`, `IrProgramAssembler` | done (slice 2): results in the generation kind with their reads |
 | ~~`objectCache`, `canonicalObjectCache` (`SessionState`)~~ | ~40 in `FrontendCompilation` | class name; while the declaration is unchanged | frontend, walks' table copies | done (slice 2): objects by name in a computed kind, one made the same is last build's; the object set stays state (below) |
@@ -327,7 +327,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 | 1 | **Done** (below): engine for per-function stages: a computed kind keyed by function symbol with equality cutoff, contributions and summaries with per-key reads, sweep of computed memos | +400 | `QueryKind.computed` | none; verifying the memos must keep the body edit at today's cost (`IrLineage.start` alone is 2.4% of it) | — |
 | 2 | **Done** (below): IR generation, generated functions, object tables as results | −450 / +250; built −437 / +527 | `IrFunctionVersions`, `IrGeneratedFunctions`, `canonicalObjectCache` (`objectCache` stays as the object set), the INPUT settling of `IrLineage.start`, frontend `IrFunctionMemo` users | 0.1 / 0.1 / 0.1; built 0.03 / 0.02 / not measured (no-op 0.03) | 1 |
 | 3 | Assembly stages before the encode point; **done** (below, two parts): the stage driver for every per-function stage, facts as a kind, the lineage gone; held keys visited only when their facts changed; the walks, requests and mentions before the encode point on the engine | −2,000 / +500; first part built −~700 / +~650 (below) | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage`; first part: `IrLineage`, `IrFunctionSlots`, the stage memos of the per-function stages, the memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05; first part: body edit −0.7%, no-op 0, signature edit +0.5% | 2 |
-| 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4) | −400 / +250 | their whole-program rereads | 0.2 / 1.2 / 0.2 | 3 |
+| 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4); first part built (below) | −400 / +250; first part built −401 / +508 | their whole-program rereads | 0.2 / 1.2 / 0.2; first part 0.11 / 0 / not measured | 3 |
 | 5 | Inliner | −300 / +150 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A | 4 |
 | 6 | Verification and final-IR summaries | −450 / +100 | `IrVerifyMemo`, `IrFunctionMemo`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, plain-build reach record | 0.1 / 0.3 / 0.05 | 5 |
 | 7 | Lowering, debug metadata and encoding as queries; root query | −850 / +300 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts, `HlDebugMetadataCache`, `HlWriterCache` encodings, `PipelineSnapshot`, Wasm module reuse | small; no-op must stay at 0.29 s | B, 6 |
@@ -721,6 +721,61 @@ Lines in `src/`: 433 deleted and 905 added, of which about 110 moved (the table 
 interning, the walks' kind about 200. Less was deleted than estimated because the walks past the encode point keep the record,
 the contribution memos and `lastResult` (slice 4), and the moved steps' callers still build what the walks are given. What the moved memos left behind (`IrContributionMemo`, `lastResult`, `IrWalkRecord`, the
 remaining contribution keys) serves the stages past the encode point and goes with slice 4.
+
+### Slice 4 as built (first part)
+
+The whole-program steps past the encode point that chose from what every function gives them, and the escape reaches, are steps of
+the session's database: the kind of the walks (`IrWalkMemo`), whose summary of a function is now a type of the step's own (`S`,
+compared by the step's `same`). The edge walks share `IrWalkSummary` as before (`IrStageMemos.walk`); a step reads a summary of its
+own (`IrStageMemos.step`), read again only of a function that is not the object it was, and its result holds while none of the
+keys it read changed.
+
+| Step | Its summary of a function |
+|---|---|
+| the closed tag ABI's choice | what the function lets escape (`IrTagEscapeRecord`), now with the types its kind lets escape |
+| the scalar ABI's choice | the function when it may be a candidate, else the functions it takes as closures (`IrScalarChoiceRead`) |
+| the nullable scalar flow's choice | the function, read for the functions that may be a candidate |
+| the inline enum eligibility | what the function lets escape or keeps in value form (`IrInlineEnumUses`) |
+| the enum dispatch's reflection reach (before the encode point) | its closures and map stores |
+| the escape reaches of the closed tags and the eligibility | none (walks given their roots) |
+
+Deleted: `IrStageMemos.lastResult` and `keepResult`; the contribution memos `ESCAPES`, `STORES`, `CLOSURE_NAMES` and `USES`; the
+`IrWalkRecord` paths of every step but the plain build's reach.
+
+Design changes from the plan, with the reasons:
+
+- **A step is the walks' kind, not a kind of its own.** A choice reads each function's declaration and a summary of it as a walk
+  does; what differs is the type of the summary, so the kind takes it as a parameter. A summary that is the whole function (a
+  possible candidate) is the function object itself, so a function made again counts as changed and `--check-reuse` still
+  compares summaries.
+- **The enum dispatch's reach reads every function's stores.** It read only the functions its summaries marked as making a closure
+  or storing into a map, which are exactly those whose stores are not empty, so the marker flag goes.
+- **What the walks compare of an object** (`IrObjectTools.sameShape`) now includes native layouts and scalar storage, which the
+  eligibility's layouts read.
+- **Not a lever of reuse:** whether an enum's payload reaches a native layout walked every path of every enum at each use; it is
+  now a fixpoint over the declarations, found once per eligibility (most of the eligibility's cost on the signature edit).
+
+Found on the way, by the edit replay: a generic method's specialization that only a deleted function called stayed in a warm
+build (the specializations kept are worked out from the units' records before the prune drops a removed function's record), while a
+fresh build did not make it; a source function its module no longer declares is no root of them now.
+
+Measured on the compiler's own sources (perf-guard, one machine, against origin/main): the no-op rebuild 0.780G → 0.780G
+instructions, the body edit 2.232G → 2.121G (−5.0%; the inline enum lowering 33 → 7 ms), the signature edit 18.31G → 18.32G;
+allocation of the body edit 233 → 221 MB, of the signature edit 1,002 → 999 MB; the server's live data 798 → 799 MB. The stage
+benchmark is unchanged (its driver is not touched). The self-compile is byte-identical, warm builds equal fresh ones with and
+without `--check-reuse`, the edit replay and the test driver pass.
+
+The signature edit does not move: every step reads the declarations as one key, which such an edit changes, so each decides again;
+what the native payload fixpoint saved went to deciding again what the held body edit now skips. On it, the eligibility's layouts
+(`IrInlineEnumLayout.shape`, the lane layouts of each enum) are about 2% of the edit, and are a function of the enums and value
+objects alone.
+
+Left for slice 4: the contribution memos the runtime needs, the array types, the closure uses and the initialization calls and
+stores read (each a whole-program step past the encode point whose result also rewrites functions or sets the pass's state), the
+verifier's (slice 6) and the inliner's (slice 5), so `IrContributionMemo` stays; `IrWalkRecord` for the plain build's reach
+(`HlPlainBuild`, slice 6, beside module sections); the fixpoints' candidacy reads (an edit deciding again only the changed
+functions and the readers of a candidacy that flips) and a key per declaration, without which a signature edit decides every step
+again.
 
 ## Prior art
 
