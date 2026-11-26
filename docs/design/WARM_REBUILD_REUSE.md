@@ -41,9 +41,8 @@ makes from the same sources, and its work is proportional to the edit.
   its columns the file's, and it names no file hash. So lines moved above a declaration change no function, and code the
   inliner copied keeps its callee's anchor, so moving the callee changes none of its callers. Lowered code keeps its
   locations so (`HlDebugLocation`); writing the module places each anchor in the build's sources (`SourceAnchors`, from the
-  parse of each file, `SourceFile.declareAnchors`): the line tables, the opcode spans, the function identities and the
-  snapshots they name. The writer keeps each function's encoding while its anchors are where they were (`HlWriterCache`), and
-  a build reuses the last module only while its sources are the same (`CompilationContext.sourcesKey`). A function whose code
+  parse of each file, `SourceFile.declareAnchors`): the line tables, the opcode spans and the snapshots they name. A section
+  is kept while what it reads, its functions' anchors among them, reads the same (`HlSectionCache`), and a build reuses the last module only while its sources are the same (`CompilationContext.sourcesKey`). A function whose code
   holds a line as a value, the `haxe.PosInfos` a call passes, does change. Names the generator gives its own locals are
   numbered within the function (`IrLocalsBuilder.internalName`), not taken from offsets. A live module keeps the code of
   functions an edit removed; their anchors are placed where the session last placed them (`SourceAnchorHistory`). A live

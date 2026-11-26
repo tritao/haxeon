@@ -6,19 +6,17 @@ resolution and remain locked until the call returns. Two patches based on the
 same revision therefore serialize; the first may publish and the second observes
 the new revision and fails as stale.
 
-Before staging, the runtime validates module identity, revision and symbol bases,
-prefix hashes, the complete appended-type delta, stable function identity,
-relocations, register and symbol bounds, opcode operands, and duplicate slots.
+The compiler writes HLP 12 (`HlSectionPatch`), made of module sections, which the runtime first
+links against the link state the loader kept for the module (`hl_module_link_patch`,
+docs/design/MODULE_SECTIONS.md, "As built in slice 4a" and "As built in slice 4b"): every key
+is resolved to its slot, and what the patch adds is staged after the module's tables. What the
+linker staged in the link state is committed with the patch or dropped with it.
+
+Before staging, the runtime validates module identity, revision, the complete appended-type
+delta, register and symbol bounds, opcode operands, and duplicate slots.
 It also validates content-addressed source snapshots before copying them into the
 staged code owner; their lifetime therefore matches active or retired patch JIT code
 that can reference them in debugger stacks.
-The compiler writes HLP 12 (`HlSectionPatch`), made of module sections, which is first
-linked against the link state the loader kept for the module (`hl_module_link_patch`,
-docs/design/MODULE_SECTIONS.md, "As built in slice 4a" and "As built in slice 4b").
-That fills the same tables HLP 11 carries, so the checks above run on it unchanged
-except the prefix hashes, which keys replace. What the linker staged in the link state
-is committed with the patch or dropped with it. HLP 11 is still read, for the runtime
-tests that build it by hand, until it is deleted.
 It then creates combined symbol tables, initializes reserved non-moving type
 slots, builds private function metadata, and JIT-compiles a private code image.
 Any failure frees staged storage and clears reserved type slots while leaving the

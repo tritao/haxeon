@@ -237,7 +237,7 @@ would take the hash lookup.
   recompiled.
 - After a full reload, an object kept from the old generation has the old type pointer, fails the fast path, and is
   read by name. That is correct and slower until the objects are replaced; nothing else in the module depends on it.
-- The nominal virtual identities that HLB 8 and HLP 11 carry stay for interfaces until `INTERFACE_VALUES.md` lands;
+- The nominal virtual identities that modules and patches carry stay for interfaces until `INTERFACE_VALUES.md` lands;
   structures never use them.
 
 ## Typing
@@ -590,6 +590,6 @@ haxeon-e4 agrees with the representation and takes the representation track.
 - **Debug info.** With structure slots physically `dyn`, HashLink register types no longer name the structure. Slice
   2a must make development-mode variable metadata use the logical type from the IR debug bindings, so the debugger
   shows `{name, type}` again. The ci debug-metadata suite is part of its gate.
-- **Already in place for 2a.** `HlPatchReader` and `hlpatch.c` decode `OGetType`. The register allocator shares `dyn`
-  registers by type, so it needs no change. `HlInstruction.GetType` needs `HlRegisters`, `HlOpcodeSchema`,
-  `HlValidator` and a `PatchOpcodeTests` fixture, the same list as `Switch`.
+- **Already in place for 2a.** The loader and the patch linker decode `OGetType`. The register allocator shares `dyn`
+  registers by type, so it needs no change. `HlInstruction.GetType` needs `HlRegisters`, `HlOpcodeSchema` and
+  `HlValidator`, the same list as `Switch`.

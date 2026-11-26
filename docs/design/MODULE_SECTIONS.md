@@ -455,7 +455,7 @@ and nothing stays for compatibility once its replacement has landed.
 | 4a | **Fork: patches made of sections.** The loader keeps the link state of a module it loads to patch (`hl_code_read_patchable`): the key tables, the literal, structural-type and constant tables, and a digest of each function's linked code. HLP 12 carries replaced sections in the HLB 9 encoding, removed section paths, renames, and guards and migrations by key. The patch linker (`hl_module_link_patch`) links the sections against the link state into the runtime's patch, so validation, staging, guards, migrations and the commit stay as they are: a known key keeps its slot, a new key takes the next one, a function whose linked code has the running one's digest is not compiled again, and a redefined class may only fill reserved slots. New debug files are appended. The loader mints stable ids (a function's slot, which a rename keeps). HLI 4 is the module id and revision alone; hosts find a function's id by name (`hl_runtime_module_function_id`). The link state is committed with the patch and restored when the patch fails. HLB 8 and HLP 11 still read, so the compiler does not change | `code-link` gains the patch cases: a body edit, added functions and classes, reserved slots, renames, guards, every refusal, and a refused patch followed by one that applies |
 | 4b | **Compiler: live builds on sections.** A live build writes HLB 9 (its functions with identity relocations), and a patch is the sections whose digests differ from the acknowledged build's, with renames, guards and migrations by key (HLP 12). The `.hli` is HLI 4; the live host, the debugger tests and Android HXR address functions by name. `HlRuntimeIdentity.VERSION` moves, so the first build after the change reloads | the ci hot-reload and debug-metadata suites, vscode-debug, the patch mains, `NominalInterfacePatchMain`, the edit replay, an Android watch run |
 | 4c | **Live pruning** ([LIVE_PRUNING.md](LIVE_PRUNING.md) slice 3): layouts from declarations (declared-method stubs in live layouts only), the published set grows within a module identity, `firstReached` is carried, natives a patch adds are appended by `(lib, name)`, the planner's reach-only causes go, and the live `--check-reuse` builds the same tree fresh and compares sections, first-reach coverage and imports | the new live edits in the driver and perf-guard's live part |
-| 4d | **Deletions** (section 3, "Kept for slice 4"), each checked with a grep that includes `tests/`: the dense whole-module `HlWriter` encoding and `HlWriterCache`, HLP 11 (`HlPatchWriter`'s hashes, symbols and relocations, `HlPatchReader`), the published prefix of `HlSymbolTable` where nothing else uses it, `HlFunctionCache` slots and stable ids, the persistence codecs the section digests replace, `HlRuntimeIdentity`'s id maps; in the fork, HLP 11 and HLI 2 and 3 | the suites of 4b |
+| 4d | **Deletions** (section 3, "Kept for slice 4"), each checked with a grep that includes `tests/`: the dense whole-module `HlWriter` encoding and `HlWriterCache`, HLP 11 (`HlPatchWriter`'s hashes, symbols and relocations, `HlPatchReader`), the published prefix of `HlSymbolTable` where nothing else uses it, `HlFunctionCache` slots and stable ids, the persistence codecs the section digests replace, `HlRuntimeIdentity`'s id maps; in the fork, HLP 11 and HLI 2 and 3. Landed ("As built in slice 4d"); the dense HLB 8 encoding stays for the AOT image | the suites of 4b |
 
 In 4a a patch that adds a native is refused by the patch linker, as the planner already plans a reload for it.
 
@@ -486,6 +486,32 @@ In 4a a patch that adds a native is refused by the patch linker, as the planner 
 - A function's runtime index is the loader's (`HlSectionOutput.linkedIndices`), not the live layout's: the `.functions`
   sidecar and the debugger tests that read slots take the linked numbering, as plain builds already do.
 
+### As built in slice 4d
+
+- **Deleted, compiler** (−1,771 lines net of `src`): `HlWriterCache` (the writer's function, prefix, span-group and
+  compressed-section caches) and the cache parameters of `HlWriter`; `BackendArtifacts.hashLinkBytes`'s dense fallback
+  (`HlArtifact.sections` is never null), the session's writer cache and `HashLinkBackendSession.moduleDifference`; the
+  function identities section every lowering built, and with it `HlDebugMetadataCache`; `HlPatchWriter`, `HlPatchReader`,
+  `HlPatchFormat` and `HlPatch`; the assembler's base counts, `changedSlots` and `addedFunctions`; `HlObjectLayout.previousTypes`
+  and the added fields' string and type indices (a layout names its fields `Class.field`); `HlFunctionCache`'s stable ids,
+  `HlArtifact.functionIds`, the persistent identity's id map and the id carry-over of `compacting` and of a fresh layout. A
+  build reports the functions it changed by name (`changedFunctions`, `PatchSet`, `.live.json`).
+- **Deleted, fork** (−453 lines): `hl_patch_read`'s HLP 11 sections, the prefix hashes and their checks, relocations, the
+  stable ids of a patch's functions, guards, migrations and added functions (a linked patch has slots, which are the stable
+  ids), the lookup of an HLP 11 patch's debug files, and HLI 2 and 3.
+- **Kept, and why.** The dense HLB 8 encoding (`HlWriter.encode`, without a cache) and the fork's HLB 8 reader: the AOT image
+  (`HlcImage`) is a dense stub module whose slots are the C code's, and the tests that lower a program by themselves write it.
+  The dense writer writes the function identities from the module's names (`HlCode.functionNames`), each index its stable id
+  as the loader of sections gives it; that is all the HLB 8 loader reads of them. `HlValidationMarks` keeps the validation
+  marks of the section memo. The assembler's published counts stay: they still decide whether a build is unchanged and
+  whether it adds only globals a patch can carry (`addsOnlyPatchableGlobals`).
+- **Formats.** The function cache state is HFC 2 and the compiler identity HCS 11 (`HlRuntimeIdentity.VERSION`), so a session
+  state from before starts over with a reload.
+- **Tests.** `PatchOpcodeTests` (the `patch-opcodes` case) and `tests/DenseRuntimeIdentity.hx` went with HLP 11; HotReloadMain's
+  type-arena and appended-symbol tests patch live builds; TestMain round-trips HLP 12; DebugMetadataMain checks the dense
+  opcode spans; `HlWriterCacheMain` is `HlValidationMarksMain`; `code_link` checks that the runtime refuses an identity and a
+  patch of another version. Tests −815 lines net.
+
 ### As built in slice 4b
 
 - **Live modules are sections.** A live lowering trusts its cache and records no requests, so its functions have identity
@@ -515,7 +541,7 @@ In 4a a patch that adds a native is refused by the patch linker, as the planner 
   `HlSectionPatch.decode` or the module instead (the replaced sections, the module's types and globals), and InlinePatchMain
   checks that the runtime compiles only the functions whose linked code changed.
 
-**What 4d can delete** now that 4b is in: `HlWriter.encode` of a whole module and `HlWriterCache` (`BackendArtifacts.hashLinkBytes`
+**What 4d was to delete**, as 4b left it ("As built in slice 4d" says what went and what stayed): `HlWriter.encode` of a whole module and `HlWriterCache` (`BackendArtifacts.hashLinkBytes`
 always has sections, so its fallback, the session's `writerCache` and `HashLinkBackendSession.moduleDifference` go;
 `HlLower`'s HLB 8 function-identity debug section, which every lowering still builds); `HlPatchWriter`, `HlPatchReader`,
 `HlPatchFormat` and the HLP 11 tests that build patches by hand (with `tests/DenseRuntimeIdentity.hx`); the assembler's

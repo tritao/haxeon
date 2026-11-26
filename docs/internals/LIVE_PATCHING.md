@@ -38,7 +38,7 @@ table (`HL_PATCH_TYPE_RESERVE`, a non-moving arena). A patch appends to them:
   The IR left is a body that throws null, which a session resumed from the
   recorded history lowers into the slot: it needs no native or constant the
   running module may lack.
-- **Types** (HLP 11): function, abstract, reference, null and packed types, and
+- **Types**: function, abstract, reference, null and packed types, and
   object, struct and virtual types with their layout. So an edit that adds a
   class (plain, a subclass of a loaded class, or an implementation of a loaded
   interface), a new interface or a closure environment patches. The runtime builds the entries in
@@ -50,7 +50,7 @@ table (`HL_PATCH_TYPE_RESERVE`, a non-moving arena). A patch appends to them:
 
 Interface type pointers stay stable within the non-moving table during a patch, including after a new implementing
 class is appended. A full reload creates a new table, so pointer equality alone cannot recognize an old object retained
-across generations. HLB 8 and HLP 11 carry a nominal identity on each virtual type: the qualified interface name and a
+across generations. A module and its patches carry a nominal identity on each virtual type: the qualified interface name and a
 fingerprint of its declared method signatures and inherited interface contracts. Runtime conformance checks use the
 local pointer first, then that identity. Unrelated interfaces with identical methods remain distinct, and an interface
 whose contract changed does not accept an object from the old contract. The identity belongs to the module's type arena;

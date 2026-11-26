@@ -161,7 +161,7 @@ Everything after that switches on the enum; nothing compares target strings.
 
 A compilation session has one backend, `Compiler.backend` (`compiler.compilation.BackendSession`), chosen by the target. The pipeline
 gives the final IR to `backend.assemble`, and the result's `BackendArtifact` is `CompileResult.artifact`: a HashLink build's module,
-function indices, stable function ids, runtime identity (HLI) and patch (HLP), or a Wasm build's module. Callers that know the backend
+module sections, function indices, runtime identity (HLI) and patch (HLP), or a Wasm build's module. Callers that know the backend
 read it with `BackendArtifacts.hashLink` or `BackendArtifacts.wasm`.
 
 - `HashLinkBackendSession` owns the assembler of the last successful build (layout, stable ids, revisions) and the lowered-function
