@@ -18,7 +18,7 @@ import compiler.ir.verify.IrVerifier;
 import compiler.semantic.GeneratedNames;
 
 /**
- * What one function asks the generic owner stage for (`IrGenericOwnerErasure.requestsOf`): a method reference
+ * What one function asks the generic owner stage for (`IrGenericOwnerErasure.requests`): a method reference
  * (`METHOD_REFERENCE`: its receiver type as the one argument, its closure type as the result), an erased operation (`ERASED`: its
  * call's argument and result types) or an erased owner's type test (`TYPE_TEST`: the name alone).
  */
@@ -32,11 +32,6 @@ typedef IrErasureRequest = {
 /** Operations through G<Dynamic> dispatch to the physical owner without changing object identity. */
 @:nullSafety(Strict)
 class IrGenericOwnerErasure {
-	/** The method references, erased operations and type tests each function asks for (`requestsOf`). */
-	@:processWide("a contribution memo's key, only ever read")
-	public static final REQUESTS =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<IrErasureRequest>>("erasure-requests");
-
 	public static inline final METHOD_REFERENCE = 0;
 	public static inline final ERASED = 1;
 	public static inline final TYPE_TEST = 2;
@@ -45,37 +40,24 @@ class IrGenericOwnerErasure {
 	static final NO_REQUESTS:Array<IrErasureRequest> = [];
 
 	/**
-	 * What `fn` asks for, in the order it asks: kept by the session for `fn`'s version with `stageMemos`
-	 * (`IrStageMemos.erasureRequests`), else read now, from the function's body when it is one, without decoding it.
+	 * What `functions` ask for, each request once: in a session, a summary of what each function asks for at `site`, the step
+	 * reading them (`IrContributionSummary`), read again only of a function that changed; else read now, in program order.
 	 */
-	public static function requestsOf(fn:IrFunction,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Array<IrErasureRequest> {
-		var version = stageMemos == null ? 0 : fn.version;
-		if (stageMemos == null || version == 0)
-			return readRequests(fn);
-		var memo = stageMemos.contribution(REQUESTS), known = memo.get(version);
-		if (known == null) {
-			known = readRequests(fn);
-			memo.keep(version, known);
-		} else if (stageMemos.checks && !sameRequests(readRequests(fn), known))
-			throw new InternalError('--check-reuse: the generic owner requests reused for ${fn.name} differ from its code');
-		return known;
+	public static function requests(functions:Array<IrFunction>,
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
+			site:String):Array<IrErasureRequest> {
+		if (stageMemos == null)
+			return [for (fn in functions) for (request in readRequests(fn)) request];
+		var summary:compiler.ir.reuse.IrStageMemo.IrContributionSummary<IrErasureRequest> =
+			stageMemos.summary("erasure-requests:" + site);
+		return summary.collect(stageMemos.database, functions, readRequests, requestText, stageMemos.checks,
+			"generic owner requests");
 	}
 
-	static function sameRequests(left:Array<IrErasureRequest>, right:Array<IrErasureRequest>):Bool {
-		if (left.length != right.length)
-			return false;
-		for (index in 0...left.length) {
-			var a = left[index], b = right[index];
-			if (a.kind != b.kind || a.name != b.name || !IrVerifier.sameType(a.result, b.result)
-				|| a.arguments.length != b.arguments.length)
-				return false;
-			for (position in 0...a.arguments.length)
-				if (!IrVerifier.sameType(a.arguments[position], b.arguments[position]))
-					return false;
-		}
-		return true;
-	}
+	/** What tells two requests apart: their kind, name and signature. */
+	static function requestText(request:IrErasureRequest):String
+		return request.kind + " " + request.name + " " + IrTypeIdentity.listText(request.arguments) + ":"
+			+ IrTypeIdentity.text(request.result);
 
 	static function readRequests(fn:IrFunction):Array<IrErasureRequest> {
 		var found:Null<Array<IrErasureRequest>> = null;
@@ -164,19 +146,19 @@ class IrGenericOwnerErasure {
 			case TESTED: (tested.get(key) ?? []).join("\n");
 			case _: "";
 		};
-		generateTypeTests(facts, functions, objects, stageMemos, tested, derived);
+		var asked = IrGenericOwnerErasure.requests(functions, stageMemos, STAGE);
+		generateTypeTests(facts, functions, asked, objects, tested, derived);
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
-		for (fn in functions)
-			for (request in requestsOf(fn, stageMemos))
-				if (request.kind == ERASED) {
-					var name = request.name,
-						signature = {arguments: request.arguments, result: request.result},
-						previous = requests.get(name);
-					if (previous != null && (!IrVerifier.sameType(previous.result, signature.result)
-						|| !sameTypes(previous.arguments, signature.arguments)))
-						throw new InternalError('Conflicting erased generic operation "$name"');
-					requests.set(name, signature);
-				}
+		for (request in asked)
+			if (request.kind == ERASED) {
+				var name = request.name,
+					signature = {arguments: request.arguments, result: request.result},
+					previous = requests.get(name);
+				if (previous != null && (!IrVerifier.sameType(previous.result, signature.result)
+					|| !sameTypes(previous.arguments, signature.arguments)))
+					throw new InternalError('Conflicting erased generic operation "$name"');
+				requests.set(name, signature);
+			}
 		var byFunction = new IrFunctionIndex(STAGE, functions);
 		var sorted = [for (name => signature in requests) {
 			name: name, signature: signature
@@ -361,14 +343,13 @@ class IrGenericOwnerErasure {
 	}
 
 	/** Regenerate type tests from the current layouts, including layouts added by an incremental edit. */
-	static function generateTypeTests(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>, tested:Map<String, Array<String>>,
-			derived:IrDerivedHelpers):Void {
+	static function generateTypeTests(facts:ProgramFacts, functions:Array<IrFunction>, asked:Array<IrErasureRequest>,
+			objects:Array<IrObject>,
+			tested:Map<String, Array<String>>, derived:IrDerivedHelpers):Void {
 		var requests:Map<String, Bool> = [];
-		for (fn in functions)
-			for (request in requestsOf(fn, stageMemos))
-				if (request.kind == TYPE_TEST)
-					requests.set(request.name, true);
+		for (request in asked)
+			if (request.kind == TYPE_TEST)
+				requests.set(request.name, true);
 		var names = [for (name in requests.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {

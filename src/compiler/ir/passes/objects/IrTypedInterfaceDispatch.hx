@@ -34,11 +34,6 @@ typedef IrTypedInterfaceRequest = {
 /** Closed-world typed entry points for value interface calls and specialized generic contracts. */
 @:nullSafety(Strict)
 class IrTypedInterfaceDispatch {
-	/** The typed interface dispatchers each function calls (`generate`). */
-	@:processWide("a contribution memo's key, only ever read")
-	public static final REQUESTS =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<IrTypedInterfaceRequest>>("interface-requests");
-
 	public static inline final PREFIX = "$typed-interface:";
 	public static inline final ADAPTER_PREFIX = "$typed-interface-entry:";
 
@@ -123,44 +118,29 @@ class IrTypedInterfaceDispatch {
 		return PREFIX + interfaceName + ":" + method + ":" + compiler.core.TextDigest.sha256(signature).substr(0, 32);
 	}
 
-	/**
-	 * The dispatchers `fn` calls or takes as a method value, as requests of a name and signature, in the order it names them: kept
-	 * by the session for `fn`'s version with `stageMemos` (`IrStageMemos.interfaceRequests`), else read now.
-	 */
-	static function requestsOf(fn:IrFunction,
-			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Array<IrTypedInterfaceRequest> {
-		var version = stageMemos == null ? 0 : fn.version;
-		if (stageMemos == null || version == 0)
-			return readRequests(fn);
-		var memo = stageMemos.contribution(REQUESTS), known = memo.get(version);
-		if (known == null) {
-			known = readRequests(fn);
-			memo.keep(version, known);
-		} else if (stageMemos.checks) {
-			var now = readRequests(fn), same = now.length == known.length;
-			for (index in 0...now.length)
-				if (same && !sameRequest(now[index], known[index]))
-					same = false;
-			if (!same)
-				throw new InternalError('--check-reuse: the typed interface requests reused for ${fn.name} differ from its code');
-		}
-		return known;
-	}
-
 	@:processWide("a shared empty list of requests, only ever read")
 	static final NO_REQUESTS:Array<IrTypedInterfaceRequest> = [];
 
-	static function sameRequest(left:IrTypedInterfaceRequest, right:IrTypedInterfaceRequest):Bool {
-		if (left.name != right.name || left.arguments.length != right.arguments.length
-			|| !IrVerifier.sameType(left.result, right.result))
-			return false;
-		for (index in 0...left.arguments.length)
-			if (!IrVerifier.sameType(left.arguments[index], right.arguments[index]))
-				return false;
-		return true;
+	/**
+	 * The dispatchers `functions` call or take as a method value, each request of a name and signature once: in a session, a
+	 * summary of what each function asks for at `site` (`IrContributionSummary`), read again only of a function that changed;
+	 * else read now, in program order.
+	 */
+	static function requests(functions:Array<IrFunction>, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
+			site:String):Array<IrTypedInterfaceRequest> {
+		if (stageMemos == null)
+			return [for (fn in functions) for (request in readRequests(fn)) request];
+		var summary:compiler.ir.reuse.IrStageMemo.IrContributionSummary<IrTypedInterfaceRequest> =
+			stageMemos.summary("interface-requests:" + site);
+		return summary.collect(stageMemos.database, functions, readRequests, requestText, stageMemos.checks,
+			"typed interface requests");
 	}
 
-	/** Reads the dispatcher requests of `fn` (`requestsOf`). A function read past the encode point is its body; one before it, its objects. */
+	static function requestText(request:IrTypedInterfaceRequest):String
+		return request.name + " " + IrTypeIdentity.listText(request.arguments) + ":"
+			+ IrTypeIdentity.text(request.result);
+
+	/** Reads the dispatcher requests of `fn` (`requests`). A function read past the encode point is its body; one before it, its objects. */
 	static function readRequests(fn:IrFunction):Array<IrTypedInterfaceRequest> {
 		var found:Null<Array<IrTypedInterfaceRequest>> = null;
 		function request(name:String, arguments:Array<IrType>, result:IrType):Void {
@@ -207,8 +187,9 @@ class IrTypedInterfaceDispatch {
 		return found == null ? NO_REQUESTS : found;
 	}
 
+	/** The dispatchers `functions` ask for; `site` names the place in the pipeline it runs at (`requests`). */
 	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>,
-			interfaces:Array<IrInterface>, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
+			interfaces:Array<IrInterface>, site:String, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Void {
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		function request(name:String, signature:{arguments:Array<IrType>, result:IrType}):Void {
 			var previous = requests.get(name);
@@ -220,9 +201,8 @@ class IrTypedInterfaceDispatch {
 				throw new InternalError('Conflicting typed interface dispatch "$name"');
 			requests.set(name, signature);
 		}
-		for (fn in functions)
-			for (found in requestsOf(fn, stageMemos))
-				request(found.name, {arguments: found.arguments, result: found.result});
+		for (found in IrTypedInterfaceDispatch.requests(functions, stageMemos, site))
+			request(found.name, {arguments: found.arguments, result: found.result});
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			byInterface:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
 			byFunction = new IrFunctionIndex("typed-interface-dispatch", functions),

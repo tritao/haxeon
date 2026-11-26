@@ -25,12 +25,17 @@ class QuerySummary extends QueryKindBase {
 	/** How many contributions name each key. */
 	final counts:Array<Int> = [];
 
-	/** By contributor, its contribution, the run that gave it, and the revision it was given at (0 for none). */
+	/**
+	 * By contributor, its contribution, the run that gave it, the revision it was given at (0 for none), and what it was given from
+	 * (`holdsFrom`).
+	 */
 	final contributions:Array<Null<Array<Int>>> = [];
 
 	final givenIn:Array<Int> = [];
 
 	final givenAt:Array<Int> = [];
+
+	final givenFrom:Array<Int> = [];
 
 	var contributors = 0;
 	var run = 0;
@@ -62,19 +67,21 @@ class QuerySummary extends QueryKindBase {
 
 	/**
 	 * Gives `contributor`'s contribution: the keys it names, never changed once given. The same array as last run is the same
-	 * contribution.
+	 * contribution. `from`, when not 0, names what it was made of (`holdsFrom`).
 	 */
-	public function contribute(database:QueryDatabase, contributor:Int, keys:Array<Int>):Void {
+	public function contribute(database:QueryDatabase, contributor:Int, keys:Array<Int>, from = 0):Void {
 		if (!opened)
 			throw new InternalError("summary " + kindName + " takes contributions only while open");
 		if (contributor >= givenIn.length) {
 			var length = contributor + 1 + (contributor >> 1);
 			QueryRead.extend(givenIn, length);
 			QueryRead.extend(givenAt, length);
+			QueryRead.extend(givenFrom, length);
 			contributions.resize(length);
 		}
 		markGiven(contributor);
 		givenAt[contributor] = database.revision;
+		givenFrom[contributor] = from;
 		var old = contributions[contributor];
 		if (old == keys)
 			return;
@@ -106,6 +113,23 @@ class QuerySummary extends QueryKindBase {
 		return true;
 	}
 
+	/**
+	 * Keeps `contributor`'s contribution in this run, as if given again, when it was given from `from` (`contribute`), a number
+	 * that names what it is made of, such as the version of the function it was read from (`IrFunction.version`).
+	 */
+	public function holdsFrom(database:QueryDatabase, contributor:Int, from:Int):Bool {
+		if (!opened)
+			throw new InternalError("summary " + kindName + " takes contributions only while open");
+		if (from == 0 || contributor >= givenFrom.length || givenFrom[contributor] != from || givenAt[contributor] == 0)
+			return false;
+		markGiven(contributor);
+		return true;
+	}
+
+	/** The contribution `contributor` gave last, or null. */
+	public function contribution(contributor:Int):Null<Array<Int>>
+		return contributor < contributions.length ? contributions[contributor] : null;
+
 	inline function markGiven(contributor:Int):Void {
 		if (givenIn[contributor] == run)
 			throw new InternalError("summary " + kindName + " is given contributor " + contributor
@@ -124,6 +148,7 @@ class QuerySummary extends QueryKindBase {
 				if (old != null && givenIn[contributor] != run) {
 					contributions[contributor] = null;
 					givenAt[contributor] = 0;
+					givenFrom[contributor] = 0;
 					contributors--;
 					replace(database.revision, old, null);
 				}

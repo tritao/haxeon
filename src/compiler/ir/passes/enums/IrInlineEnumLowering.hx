@@ -227,7 +227,8 @@ class IrInlineEnumLowering {
 		// The functions lowered here call their typed dispatchers already (`lower`); the others did before.
 		var dispatched = result.functions.length;
 		result.functions = result.functions.concat(made);
-		IrTypedInterfaceDispatch.generate(result.functions, result.objects, result.interfaces, stageMemos);
+		IrTypedInterfaceDispatch.generate(result.functions, result.objects, result.interfaces, "inline-enum-lowering",
+			stageMemos);
 		made = made.concat(result.functions.slice(dispatched + made.length));
 		// Lane-array reflection bridges use the logical enum adapter even when this source has no escape.
 		var escapes = IrInlineEnumEscapes.functions(result.enums, table, planner, lowered.derive);

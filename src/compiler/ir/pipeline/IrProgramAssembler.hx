@@ -789,7 +789,7 @@ class IrProgramAssembler {
 		program.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions,
 			objects == null ? [] : objects,
 			staticFields == null ? [] : staticFields, natives == null ? [] : natives,
-			interfaces == null ? [] : interfaces, cNatives == null ? [] : cNatives, stageMemos);
+			interfaces == null ? [] : interfaces, cNatives == null ? [] : cNatives, "runtime-surface", stageMemos);
 		program.staticFields = staticFields == null ? [] : staticFields;
 		program.natives.push({
 			name: "__exit",

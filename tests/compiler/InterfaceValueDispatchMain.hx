@@ -89,10 +89,10 @@ class InterfaceValueDispatchMain {
 		}
 		if (oldMethods != 3 || methods != 1 || calls != 2
 			|| closures != 2) throw "Wrong direct/bound value-interface normalization";
-		IrTypedInterfaceDispatch.generate(rewritten, [value, owner], interfaces);
+		IrTypedInterfaceDispatch.generate(rewritten, [value, owner], interfaces, "test");
 		var length = rewritten.length;
 		if (length != original.length + 4) throw "Direct and bound calls did not share their dispatchers";
-		IrTypedInterfaceDispatch.generate(rewritten, [value, owner], interfaces);
+		IrTypedInterfaceDispatch.generate(rewritten, [value, owner], interfaces, "test");
 		if (rewritten.length != length) throw "Repeated dispatcher generation duplicated definitions";
 		var p = new IrProgram("main");
 		p.objects = [value, owner];
@@ -136,7 +136,7 @@ class InterfaceValueDispatchMain {
 			Std.string(error).indexOf("Invalid private typed interface entry") >= 0;
 		if (!badRejected) throw "Unchecked typed method ABI was accepted";
 		// Candidate discovery must be fresh even when an existing dispatcher has the same signature.
-		IrTypedInterfaceDispatch.generate(rewritten, [value], interfaces);
+		IrTypedInterfaceDispatch.generate(rewritten, [value], interfaces, "test");
 		for (fn in rewritten) if (StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.PREFIX))
 			for (block in fn.blocks) for (located in block.instructions)
 			switch located.value {
@@ -146,7 +146,7 @@ class InterfaceValueDispatchMain {
 				: throw "Regeneration retained a removed implementation";
 			default:
 		}
-		IrTypedInterfaceDispatch.generate(rewritten, [value, owner], interfaces);
+		IrTypedInterfaceDispatch.generate(rewritten, [value, owner], interfaces, "test");
 		var index = -1;
 		for (i in 0...rewritten.length) if (StringTools.startsWith(rewritten[i].name, IrTypedInterfaceDispatch.PREFIX))
 			{
@@ -157,7 +157,7 @@ class InterfaceValueDispatchMain {
 		var existing = rewritten[index];
 		rewritten[index] = new IrFunction(existing.name, existing.arguments, Bool, existing.blocks, Ordinary);
 		var rejected = false;
-		try IrTypedInterfaceDispatch.generate(rewritten, [value, owner], interfaces) catch (error:Dynamic) {
+		try IrTypedInterfaceDispatch.generate(rewritten, [value, owner], interfaces, "test") catch (error:Dynamic) {
 			rejected = Std.string(error).indexOf("Conflicting typed interface dispatch") >= 0;
 		}
 		if (!rejected) throw "Stale dispatcher signature was accepted";

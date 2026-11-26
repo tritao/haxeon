@@ -12,10 +12,6 @@ import compiler.types.typing.EnumRuntimeType;
 /** Select concrete runtime descriptors from current and cached IR, never from an erased template. */
 @:nullSafety(Strict)
 class IrEnumRuntimeSpecializations {
-	/** The specialized enums each function names (`materialize`). */
-	@:processWide("a contribution memo's key, only ever read")
-	public static final MENTIONS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<String>>("enum-mentions");
-
 	@:processWide("a shared empty list of enum names, only ever read")
 	static final NONE:Array<String> = [];
 
@@ -35,25 +31,24 @@ class IrEnumRuntimeSpecializations {
 		}
 
 	/**
-	 * The specialized enums `fn` names in its signature, values and type values, in the order it names them: kept by the session for
-	 * `fn`'s version with `stageMemos` (`IrStageMemos.enumMentions`), else read now.
+	 * The specialized enums `functions` name in their signatures, values and type values: in a session, a summary of what each
+	 * names at `site` (`IrContributionSummary`), read again only of a function that changed; else read now.
 	 */
-	static function mentionsOf(fn:IrFunction, stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>,
-			shared:Array<Bool>):Array<String> {
-		var version = stageMemos == null ? 0 : fn.version;
-		if (stageMemos == null || version == 0)
-			return readMentions(fn, shared);
-		var memo = stageMemos.contribution(MENTIONS), known = memo.get(version);
-		if (known == null) {
-			known = readMentions(fn, null);
-			memo.keep(version, known);
-		} else if (stageMemos.checks && readMentions(fn, null).join(",") != known.join(","))
-			throw new InternalError('--check-reuse: the enum specializations reused for ${fn.name} differ from its code');
-		return known;
+	static function mentionsOf(functions:Array<IrFunction>, site:String,
+			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>):Array<String> {
+		if (stageMemos == null) {
+			var shared:Array<Bool> = [];
+			return [for (fn in functions) for (name in readMentions(fn, shared)) name];
+		}
+		var summary:compiler.ir.reuse.IrStageMemo.IrContributionSummary<String> =
+			stageMemos.summary("enum-mentions:" + site);
+		return summary.collect(stageMemos.database, functions, fn -> readMentions(fn, null), name -> name,
+			stageMemos.checks,
+			"enum specializations");
 	}
 
 	/**
-	 * Reads `mentionsOf`. A function past the encode point is read as its body, each type once; one before it, as its objects. With
+	 * What `fn` names (`mentionsOf`), in the order it names them. A function past the encode point is read as its body, each type once; one before it, as its objects. With
 	 * `shared`, by type id, a type an earlier body visited is not visited again: what is read is then only what that union
 	 * lacks, for a caller that keeps no contribution.
 	 */
@@ -105,7 +100,8 @@ class IrEnumRuntimeSpecializations {
 
 	public static function materialize(enums:Array<IrEnum>, functions:Array<IrFunction>, objects:Array<IrObject>,
 			staticFields:Array<IrStaticField>, natives:Array<IrNative>, interfaces:Array<IrInterface>,
-			cNatives:Array<IrCNative>, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Array<IrEnum> {
+			cNatives:Array<IrCNative>, site:String,
+			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):Array<IrEnum> {
 		var declarations:Map<String, IrEnum> = [for (item in enums) item.name => item],
 			required:Map<String, Bool> = [],
 			pending:Array<String> = [];
@@ -123,10 +119,8 @@ class IrEnumRuntimeSpecializations {
 				visit(result);
 			default:
 		}
-		var shared:Array<Bool> = [];
-		for (fn in functions)
-			for (name in mentionsOf(fn, stageMemos, shared))
-				require(name);
+		for (name in mentionsOf(functions, site, stageMemos))
+			require(name);
 		for (declaration in enums) if (EnumRuntimeType.declaration(declaration.name) == declaration.name)
 			for (constructor in declaration.cases) for (parameter in constructor.params) visit(parameter);
 		for (object in objects) for (field in object.fields) visit(field.type);

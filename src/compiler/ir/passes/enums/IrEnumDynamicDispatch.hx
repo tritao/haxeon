@@ -108,14 +108,10 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	var dropped:Map<String, Bool> = [];
 
 	/**
-	 * What the helpers of each enum type are named by (`helperName`), by the type's key; worked out from the type alone, so a
-	 * session keeps it (`ENCODINGS`).
+	 * What the helpers of each enum type are named by (`helperName`), by the type's key: worked out from the type alone, so a
+	 * session keeps it across builds (`IrStageMemos.typeEncodings`).
 	 */
-	final encodings:Map<String, String>;
-
-	@:processWide("a kept result's key, only ever read")
-	static final ENCODINGS =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Map<String, String>>("enum-dispatch-encodings");
+	final encodings:Map<String, String> = [];
 
 	/** The box and view helpers, in the order of `requested`. */
 	final made:Array<IrFunction> = [];
@@ -131,8 +127,10 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	function helperName(prefix:String, type:IrType, ?id:String):String {
 		var typeKey = id == null ? key(type) : id, known = encodings.get(typeKey);
 		if (known == null) {
-			known = encoded(type);
-			encodings.set(typeKey, known);
+			var session = stageMemos,
+				made = session == null ? encoded(type) : session.typeEncoding(type, encoded);
+			encodings.set(typeKey, made);
+			return prefix + made;
 		}
 		return prefix + known;
 	}
@@ -147,13 +145,6 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 		this.reflectableObjects = reflectableObjects;
 		this.unreached = unreached;
 		this.stageMemos = stageMemos;
-		var kept = stageMemos == null ? null : stageMemos.lastResult(ENCODINGS);
-		if (kept == null) {
-			kept = [];
-			if (stageMemos != null)
-				stageMemos.keepResult(ENCODINGS, kept);
-		}
-		encodings = kept;
 	}
 
 	public static function rewrite(functions:Array<IrFunction>, ?reflectionProgram:IrProgram,

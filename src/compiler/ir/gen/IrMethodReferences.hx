@@ -64,16 +64,15 @@ class IrMethodReferences {
 	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>,
 			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos, ?helpers:IrDerivedHelpers):Void {
 		var requests:Map<String, {receiver:IrType, closure:IrType}> = [];
-		for (fn in functions)
-			for (request in IrGenericOwnerErasure.requestsOf(fn, stageMemos))
-				if (request.kind == IrGenericOwnerErasure.METHOD_REFERENCE) {
-					var name = request.name, receiver = request.arguments[0], previous = requests.get(name);
-					if (previous != null
-						&& (!IrVerifier.sameType(previous.receiver, receiver)
-						|| !IrVerifier.sameType(previous.closure, request.result)))
-						throw new InternalError('Conflicting method reference "$name"');
-					requests.set(name, {receiver: receiver, closure: request.result});
-				}
+		for (request in IrGenericOwnerErasure.requests(functions, stageMemos, STAGE))
+			if (request.kind == IrGenericOwnerErasure.METHOD_REFERENCE) {
+				var name = request.name, receiver = request.arguments[0], previous = requests.get(name);
+				if (previous != null
+					&& (!IrVerifier.sameType(previous.receiver, receiver)
+					|| !IrVerifier.sameType(previous.closure, request.result)))
+					throw new InternalError('Conflicting method reference "$name"');
+				requests.set(name, {receiver: receiver, closure: request.result});
+			}
 		var derived = helpers ?? new IrDerivedHelpers(STAGE),
 			byName = [for (object in objects) object.name => object],
 			byFunction = new IrFunctionIndex(STAGE, functions),

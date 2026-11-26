@@ -129,6 +129,9 @@ class IrStageMemos {
 	 */
 	var helpers:Null<compiler.query.ComputedQueryKind<IrFunction>> = null;
 
+	/** The contribution summaries the steps registered (`summary`), by name. */
+	final summaries:Map<String, IrContributionSummary<Dynamic>> = [];
+
 	/** The contribution memos the stages registered (`contribution`), by name, each begun with every build. */
 	final contributions:Map<String, IrContributionMemo<Dynamic>> = [];
 
@@ -215,6 +218,16 @@ class IrStageMemos {
 	public inline function nextVersion():Int
 		return IrFunction.newVersion();
 
+	/** The session's contribution summary `name` (`IrContributionSummary`), registered the first time a step asks for it. */
+	public function summary<T>(name:String):IrContributionSummary<T> {
+		var known = summaries.get(name);
+		if (known == null) {
+			known = new IrContributionSummary<Dynamic>(database.register(new compiler.query.QuerySummary(name)));
+			summaries.set(name, known);
+		}
+		return cast known;
+	}
+
 	/** The session's memo of `key`, registered the first time a stage asks for it. */
 	public function contribution<T>(key:IrContributionKey<T>):IrContributionMemo<T> {
 		var memo = contributions.get(key.name);
@@ -236,6 +249,22 @@ class IrStageMemos {
 	/** Keeps `value` as the result under `key` (`lastResult`). */
 	public function keepResult<T>(key:IrContributionKey<T>, value:T):Void
 		results.set(key.name, value);
+
+	/** What helpers are named by, by the id of the type they are made for (`typeEncoding`), swept with the build. */
+	var typeEncodings:Null<compiler.query.ComputedQueryKind<String>> = null;
+
+	/**
+	 * What `encode` makes of `type` for the helpers named by it (`IrEnumDynamicDispatch`): kept across builds by the type's id
+	 * (`IrTypeIds`), as it is worked out from the type alone.
+	 */
+	public function typeEncoding(type:compiler.ir.model.Ir.IrType, encode:compiler.ir.model.Ir.IrType->String):String {
+		var kind = typeEncodings;
+		if (kind == null)
+			typeEncodings = kind = database.register(new compiler.query.ComputedQueryKind<String>("ir-type-encodings",
+				(left, right) -> left == right));
+		var id = compiler.ir.model.IrTypeIds.id(type), known = kind.kept(id);
+		return kind.put(database, id, known == null ? encode(type) : known);
+	}
 
 	/** Last build's helper `name`, or null. */
 	public function helper(name:String):Null<IrFunction> {
@@ -262,7 +291,11 @@ class IrStageMemos {
 		var kind = helpers;
 		if (kind != null)
 			kind.clear();
+		var encodings = typeEncodings;
+		if (encodings != null)
+			encodings.clear();
 		memos.clear();
+		summaries.clear();
 		contributions.clear();
 		results.clear();
 	}
@@ -431,6 +464,70 @@ class IrStageQueries {
 		requests = [];
 		parts.clear();
 		functionsByKey = [];
+	}
+}
+
+/**
+ * What a whole-program step reads of each function, as a summary of the session's database (`QuerySummary`): each function, by its
+ * name's number, contributes the items it names (the dispatchers it calls, the enums it mentions), each interned to a key by its
+ * text, and the step reads the items some function names (`collect`). A function given as the same object as last run keeps its
+ * contribution without being read (`QuerySummary.holdsFrom`, by `IrFunction.version`), so a run costs a compare per function and the
+ * reading of those that changed. A step that runs at two places in the pipeline has a summary for each, as their functions differ.
+ */
+@:nullSafety(Strict)
+class IrContributionSummary<T> {
+	final keys:compiler.query.QuerySummary;
+
+	/** The items' keys by text, and the items by key: a key is never given to another item. */
+	final ids:Map<String, Int> = [];
+
+	final items:Array<T> = [];
+
+	public function new(keys:compiler.query.QuerySummary)
+		this.keys = keys;
+
+	/**
+	 * The items some function of `functions` names, each once, in the order of their keys: `read` gives what one function names, in
+	 * the order it names them, and `text` an item's identity. With `checks` a kept contribution is read again and compared. The
+	 * order is not the program's, so a caller orders what it makes of them itself.
+	 */
+	public function collect(database:compiler.query.QueryDatabase, functions:Array<IrFunction>,
+			read:IrFunction->Array<T>,
+			text:T->String, checks:Bool, what:String):Array<T> {
+		var summary = keys;
+		summary.open(database);
+		for (fn in functions) {
+			var key = fn.symbol.functionKey();
+			if (summary.holdsFrom(database, key, fn.version)) {
+				if (checks && !sameKeys(summary.contribution(key), keysOf(read(fn), text)))
+					throw new compiler.core
+						.InternalError('--check-reuse: the $what reused for ${fn.name} differ from its code');
+				continue;
+			}
+			summary.contribute(database, key, keysOf(read(fn), text), fn.version);
+		}
+		summary.close(database);
+		return [for (key in summary.keys(database)) items[key]];
+	}
+
+	function keysOf(named:Array<T>, text:T->String):Array<Int>
+		return [for (item in named) {
+			var identity = text(item), known = ids.get(identity);
+			if (known == null) {
+				known = items.length;
+				items.push(item);
+				ids.set(identity, known);
+			}
+			known;
+		}];
+
+	static function sameKeys(left:Null<Array<Int>>, right:Array<Int>):Bool {
+		if (left == null || left.length != right.length)
+			return false;
+		for (index in 0...right.length)
+			if (left[index] != right[index])
+				return false;
+		return true;
 	}
 }
 

@@ -359,7 +359,7 @@ class IrPipeline {
 
 	static function typedInterfaceGenerate(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		IrTypedInterfaceDispatch.generate(assembly.functions, assembly.objects, assembly.interfaces,
-			context.stageMemos);
+			"typed-interface-generate", context.stageMemos);
 		return assembly;
 	}
 
@@ -415,7 +415,7 @@ class IrPipeline {
 		enumInput.cNatives = cNatives == null ? [] : cNatives;
 		enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, assembly.functions,
 			enumInput.objects, enumInput.staticFields, enumInput.natives, enumInput.interfaces, enumInput.cNatives,
-			context.stageMemos);
+			"enum-specializations", context.stageMemos);
 		assembly.enumInput = enumInput;
 		return assembly;
 	}
