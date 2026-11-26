@@ -218,6 +218,7 @@ class WarmRebuildReuseMain {
 		afterValidation(failures);
 		linesInsertedAbove(failures);
 		specializationOfAnEditedStructure(failures);
+		helpersOfAnEditedDeclaration(failures);
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
@@ -522,6 +523,93 @@ class WarmRebuildReuseMain {
 				failures.push('after an edit of a structure a generic class is specialized for${check ? ", checked" : ""}: '
 					+ Std.string(error));
 			}
+	}
+
+	/**
+	 * A generated helper is typed from a declaration its requester need not name: `Type.enumEq` on a `Tree` compares its `Leaf`
+	 * payload with `Leaf`'s helper, and `==` on a `Box` compares its `Value` field with `Value`'s. Editing the inner declaration
+	 * leaves the requester's module alone, yet a fresh build types both helpers from the edited declaration, so the warm one must.
+	 */
+	static function helpersOfAnEditedDeclaration(failures:Array<String>):Void {
+		var cases = [
+			{
+				label: "Type.enumEq after an enum its argument's payload names gains a constructor",
+				files: [
+					"Leaf.hx" => "enum Leaf { X; Y; }",
+					"Tree.hx" => "enum Tree { P(leaf:Leaf); Q; }",
+					"Same.hx"
+						=> "class Same { public static function trees(x:Tree, y:Tree):Bool return Type.enumEq(x, y); }",
+					"Main.hx" => "class Main { static function main():Int return Same.trees(P(X), P(Y)) ? 1 : 42; }"
+				],
+				edit: [
+					"Leaf.hx" => "enum Leaf { X; Y; Z(i:Int); }",
+					"Main.hx"
+						=> "class Main { static function main():Int return Same.trees(P(Z(1)), P(Z(2))) ? 1 : 42; }"
+				]
+			},
+			{
+				label: "== on an enum after an enum its payload names gains a constructor",
+				files: [
+					"Leaf.hx" => "enum Leaf implements Equatable { X; Y; }",
+					"Tree.hx" => "enum Tree implements Equatable { P(leaf:Leaf); Q; }",
+					"Same.hx" => "class Same { public static function trees(x:Tree, y:Tree):Bool return x == y; }",
+					"Main.hx" => "class Main { static function main():Int return Same.trees(P(X), P(Y)) ? 1 : 42; }"
+				],
+				edit: [
+					"Leaf.hx" => "enum Leaf implements Equatable { X; Y; Z(i:Int); }",
+					"Main.hx"
+						=> "class Main { static function main():Int return Same.trees(P(Z(1)), P(Z(2))) ? 1 : 42; }"
+				]
+			},
+			{
+				label: "a hash of an enum after an enum its payload names gains a constructor",
+				files: [
+					"Leaf.hx" => "enum Leaf implements Hashable { X; Y; }",
+					"Tree.hx" => "enum Tree implements Hashable { P(leaf:Leaf); Q; }",
+					"Same.hx"
+						=> "class Same { public static function hash(x:Tree):Int return haxeon.Hashing.hash(x); }",
+					"Main.hx"
+						=> "class Main { static function main():Int return Same.hash(P(X)) != Same.hash(P(Y)) ? 42 : 1; }"
+				],
+				edit: [
+					"Leaf.hx" => "enum Leaf implements Hashable { X; Y; Z(i:Int); }",
+					"Main.hx"
+						=> "class Main { static function main():Int return Same.hash(P(Z(1))) != Same.hash(P(Z(2))) ? 42 : 1; }"
+				]
+			},
+			{
+				label: "== on a struct after an enum its field names gains a constructor",
+				files: [
+					"Value.hx" => "enum Value implements Equatable { Empty; Item(n:Int); }",
+					"Box.hx"
+						=> "struct Box implements Equatable { public final value:Value; public function new(value:Value) this.value = value; }",
+					"Same.hx" => "class Same { public static function boxes(x:Box, y:Box):Bool return x == y; }",
+					"Main.hx"
+						=> "class Main { static function main():Int return Same.boxes(new Box(Item(1)), new Box(Item(2))) ? 1 : 42; }"
+				],
+				edit: [
+					"Value.hx" => "enum Value implements Equatable { Empty; Item(n:Int); Pair(a:Int, b:Int); }",
+					"Main.hx"
+						=> "class Main { static function main():Int return Same.boxes(new Box(Pair(1, 1)), new Box(Pair(1, 2))) ? 1 : 42; }"
+				]
+			}
+		];
+		for (scenario in cases)
+			for (check in [false, true])
+				try {
+					var files = [for (path => text in scenario.files) path => text], compiler = newCompiler(files);
+					compiler.options = new CompileOptions({checkReuse: check});
+					compiler.compile("Main");
+					var warm = rebuild(compiler, files,
+						files -> for (path => text in scenario.edit) files.set(path, text)),
+						fresh = newCompiler(files).compile("Main");
+					var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
+						freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+					if (warmBytes.compare(freshBytes) != 0)
+						throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
+				} catch (error:Dynamic) {
+					failures.push('${scenario.label}${check ? ", checked" : ""}: ${Std.string(error)}');
+				}
 	}
 
 	/** The specialized classes of the last typed program and the types the generic owners are named for, sorted. */

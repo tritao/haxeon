@@ -24,16 +24,7 @@ class EnumInterfaceAdapter {
 		type = session.monomorphs.closeReached(type);
 		interfaceType = session.monomorphs.closeReached(interfaceType);
 		var key = name(type, interfaceType);
-		// The adapter is made from the enum's methods and the interface, as the program has them: asking for it reads both.
-		var recorder = session.declarations.reads;
-		if (recorder != null)
-			for (declared in [type, interfaceType])
-				switch declared {
-					case TInstance(_, owner, _):
-						recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Members, owner);
-					default:
-				}
-		session.output.requests.add(EnumInterfaceAdapterHelper(key, {
+		session.requestHelper(EnumInterfaceAdapterHelper(key, {
 			type: type,
 			interfaceType: interfaceType,
 			origin: session.currentContext.name,
@@ -45,7 +36,8 @@ class EnumInterfaceAdapter {
 	public static function generate(session:TypingSession):Array<TypedClass> {
 		var names = [for (key in session.programOutput.requests.enumInterfaceAdapters.keys()) key];
 		names.sort(Reflect.compare);
-		return [for (key in names) build(session, key)];
+		// An adapter is a class: its unit is its constructor's (`HelperRequests.unitOf`).
+		return [for (key in names) session.typeHelper(key + ".new", () -> build(session, key))];
 	}
 
 	static function build(session:TypingSession, key:String):TypedClass {

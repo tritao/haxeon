@@ -93,6 +93,20 @@ class HelperRequests {
 
 	public function new() {}
 
+	/**
+	 * The unit whose reads are what helper `request` read (`TypingSession.requestHelper`): the helper function, or an interface
+	 * adapter's constructor, the adapter being a class. A codec has none: one codec serves every root that reaches its type, so
+	 * the code asking for a codec reads the wire shapes the codecs are made from itself (`WireCodecGenerator.readWireShape`).
+	 */
+	public static function unitOf(request:HelperRequest):Null<String>
+		return switch request {
+			case ValueEqualityHelper(name, _), EnumEqualityHelper(name, _), HashHelper(name, _): name;
+			case EnumMethodHelper(name, _), FlagsHelper(name, _), RawRepresentableHelper(name, _): name;
+			case DynamicStructureHelper(name, _): name;
+			case EnumInterfaceAdapterHelper(name, _): name + ".new";
+			case WireCodecHelper(_, _), JsonCodecHelper(_, _): null;
+		};
+
 	/** How many helpers have been requested; the generation loop runs until this stops growing. */
 	public function count():Int
 		return entries.length;

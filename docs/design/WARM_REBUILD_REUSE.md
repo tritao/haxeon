@@ -88,7 +88,12 @@ and no edge between declarations is kept by hand.
 - **Coarse rule, as reads.** An inferred declaration's signature names its own unit, so a reader is typed again when
   anything the declaration read changed (`LAZY_DECLARATION_TYPING.md`, "Coarse rule first"). A caller of a generic
   function reads the specialization's unit, so it is typed again, and requests the specialization again, when the generic
-  body or anything the specialization read changed.
+  body or anything the specialization read changed. A generated helper (an equality, hash, enum method or interface
+  adapter, a `Flags` or `RawRepresentable` member, a copy from `Dynamic` to a structure) is a unit as well, recording what
+  making it read, and the code asking for it reads its unit (`TypingSession.requestHelper`): a helper is made only from
+  requests, so an edit to a declaration it is made from (an enum constructor added under a `Type.enumEq`) types its requesters
+  again, which ask for it again. A wire codec serves every root reaching its type, so its requester reads the wire shapes
+  the codecs are made from itself.
 - **Soundness.** A missing read keeps a stale body: `--check-reuse` and the edit replay (`tests/integration/test-edit-replay.py`)
   are the checks. A failed build may move a print, never a unit's record; prints only move forward, so the units typed
   before it are typed again.

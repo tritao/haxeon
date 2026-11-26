@@ -23,7 +23,7 @@ class DynamicStructureGenerator {
 	/** Requests the helper converting a `Dynamic` value to `target` for `origin`, and returns its name. */
 	public static function request(session:TypingSession, target:CompilerType, origin:String, span:SourceSpan):String {
 		var helper = name(target);
-		session.output.requests.add(DynamicStructureHelper(helper, {type: target, origin: origin, span: span}));
+		session.requestHelper(DynamicStructureHelper(helper, {type: target, origin: origin, span: span}));
 		return helper;
 	}
 
@@ -42,7 +42,7 @@ class DynamicStructureGenerator {
 				var request = session.programOutput.requests.dynamicStructures.get(helper);
 				if (request == null)
 					throw new InternalError('Missing dynamic structure request "$helper"');
-				var context = session.enterHelperBody(request.origin, "$dynamic-structure");
+				var context = session.enterHelperBody(helper, request.origin, "$dynamic-structure");
 				try {
 					var span = session.helperSpan(request.type, request.span),
 						fn:TypedFunction = {

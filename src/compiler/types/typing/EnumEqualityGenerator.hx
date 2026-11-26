@@ -43,7 +43,7 @@ class EnumEqualityGenerator {
 
 	static function requestNamed(session:TypingSession, name:String, type:CompilerType, origin:String,
 			span:SourceSpan):Void {
-		session.output.requests.add(EnumEqualityHelper(name, {type: type, origin: origin, span: span}));
+		session.requestHelper(EnumEqualityHelper(name, {type: type, origin: origin, span: span}));
 	}
 
 	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {
@@ -60,7 +60,7 @@ class EnumEqualityGenerator {
 				var request = session.programOutput.requests.enumEqualities.get(name);
 				if (request == null)
 					throw new InternalError('Missing enum equality request "$name"');
-				var context = session.enterHelperBody(request.origin, "$enum-equality");
+				var context = session.enterHelperBody(name, request.origin, "$enum-equality");
 				try {
 					var reflective = name == session.helperNames.named(REFLECTIVE_PREFIX, request.type),
 						custom = reflective ? null : EnumConformanceMethods.method(session, request.type, "equals");

@@ -27,7 +27,7 @@ class HashGenerator {
 			span:SourceSpan):CompilerType {
 		type = session.monomorphs.closeReached(type);
 		var name = session.helperNames.named(HASH_PREFIX, type);
-		session.output.requests.add(HashHelper(name, {type: type, origin: origin, span: span}));
+		session.requestHelper(HashHelper(name, {type: type, origin: origin, span: span}));
 		return type;
 	}
 
@@ -43,7 +43,7 @@ class HashGenerator {
 				var requested = session.programOutput.requests.hashes.get(name);
 				if (requested == null)
 					throw new InternalError('Missing hash-generation request "$name"');
-				var context = session.enterHelperBody(requested.origin, "$hash");
+				var context = session.enterHelperBody(name, requested.origin, "$hash");
 				try {
 					generated.set(name, hashFunction(session, requested));
 					var custom = EnumConformanceMethods.method(session, requested.type, "hash");

@@ -40,17 +40,7 @@ class EnumConformanceMethods {
 			span:SourceSpan):CompilerType {
 		type = session.monomorphs.closeReached(type);
 		var key = name(type, method);
-		session.output.requests.add(EnumMethodHelper(key, {type: type, method: method, origin: origin, span: span}));
-		// The helper is typed from the enum's method as the program has it: asking for it reads that method.
-		switch type {
-			case TInstance(NominalKind.Enum, owner, _):
-				var recorder = session.declarations.reads;
-				if (recorder != null) {
-					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Signature, owner + "." + method);
-					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Body, owner + "." + method);
-				}
-			default:
-		}
+		session.requestHelper(EnumMethodHelper(key, {type: type, method: method, origin: origin, span: span}));
 		return type;
 	}
 
@@ -64,9 +54,11 @@ class EnumConformanceMethods {
 			for (key in pending) {
 				var requested = session.programOutput.requests.enumMethods.get(key);
 				if (requested == null) throw new InternalError('Missing enum method request "$key"');
-				var implementation = method(session, requested.type, requested.method);
-				if (implementation == null) throw new InternalError('Missing enum method implementation "$key"');
-				generated.set(key, typeMethod(session, typer, requested.type, implementation, requested.origin));
+				generated.set(key, session.typeHelper(key, () -> {
+					var implementation = method(session, requested.type, requested.method);
+					if (implementation == null) throw new InternalError('Missing enum method implementation "$key"');
+					typeMethod(session, typer, requested.type, implementation, requested.origin);
+				}));
 			}
 		}
 		var keys = [for (key in generated.keys()) key];
@@ -78,6 +70,9 @@ class EnumConformanceMethods {
 			origin:String):TypedFunction {
 		return switch type {
 			case TInstance(NominalKind.Enum, owner, arguments):
+				// Typed from the enum's method as the program has it.
+				session.readSignature(owner + "." + method.name);
+				session.readBody(owner + "." + method.name);
 				var declaration = session.enumDecls.get(owner), substitutions:Map<String, CompilerType> = [];
 				if (declaration == null) throw new InternalError('Missing enum declaration "$owner"');
 				for (index in 0...declaration.typeParameters.length)

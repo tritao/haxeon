@@ -54,7 +54,7 @@ class RawRepresentableGenerator {
 		if (method != "rawValue" && method != "fromRaw" && method != "toString")
 			throw new InternalError('Unknown synthesized raw member "$method"');
 		var helper = name(owner, method);
-		session.output.requests.add(RawRepresentableHelper(helper, {
+		session.requestHelper(RawRepresentableHelper(helper, {
 			owner: owner,
 			method: method,
 			origin: session.generatedFunctionOrigin(),
@@ -106,95 +106,105 @@ class RawRepresentableGenerator {
 		pending.sort(Reflect.compare);
 		var result:Array<TypedFunction> = [];
 		for (helper in pending) {
-			var request = session.programOutput.requests.rawRepresentables.get(helper),
-				declaration = session.enumAbstractDecls.get(request.owner);
-			if (declaration == null || !conforms(session, declaration))
-				throw new InternalError('Missing RawRepresentable declaration "${request.owner}"');
-			var raw = typer.lowerType(declaration.underlying, declaration.span),
-				nominal:CompilerType = TAbstract(declaration.name, [], raw),
-				span = declaration.span,
-				inputType = request.method == "fromRaw" ? raw : nominal,
-				input = new TypedExpression(TLocal("value"), inputType, span),
-				outputType:CompilerType = switch request.method {
-					case "rawValue": raw;
-					case "toString": TString;
-					default: TNullable(nominal);
-				},
-					statements:Array<TypedStatement> = [];
-			if (request.method == "rawValue")
-				statements.push(TReturn(new TypedExpression(TAbiCast(input), raw, span), span));
-			else if (request.method == "toString")
-				statements = nameStatements(typer, declaration, raw, new TypedExpression(TAbiCast(input), raw, span),
-					span);
-			else {
-				var present = new TypedExpression(TNullableWrap(new TypedExpression(TAbiCast(input), nominal, span)),
-					outputType, span),
-					missing = TReturn(new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
-						outputType, span), span),
-					cases:Array<compiler.types.TypedAst.TypedSwitchCase> = [],
-					seen:Map<Int, Bool> = [];
-				for (value in declaration.values) {
-					var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
-					if (constant == null)
-						throw new InternalError("Nonconstant raw value after conformance validation");
-					switch raw {
-						case TInt:
-							var code = switch constant.expression {
-								case TIntLiteral(value): value;
-								default: throw new InternalError("Noninteger raw constant");
-							};
-							if (seen.exists(code))
-								continue;
-							seen.set(code, true);
-							cases.push({
-								arms: [{
-									value: constant,
-									subjectBinding: null,
-									arrayPattern: null,
-									isCatchAll: false,
-									guard: null,
-									enumName: null,
-									constructorIndex: -1,
-									bindings: [],
-									predicates: [],
-									span: span
-								}],
-								statements: [TReturn(present, span)]
-							});
-						default:
-							statements.push(TIf(new TypedExpression(TEqual(input, constant), TBool, span),
-								[TReturn(present, span)], [], span));
-					}
-				}
-				switch raw {
-					case TInt:
-						statements.push(TSwitch(input, cases, [missing], true, span));
-					default:
-						statements.push(missing);
-				}
-			}
-
-			var fn:TypedFunction = {
-				name: helper,
-				role: ProviderFunction(nominal, compiler.core.Provides.ProviderOperations
-					.detailed(compiler.core.Provides.ProviderOperation.RawRepresentable, request.method)),
-				origin: request.origin,
-				originKind: Helper,
-				owner: null,
-				isStatic: true,
-				isConstructor: false,
-				// A name lookup has a branch per value: keep it one call, not a copy at every string conversion.
-				isInline: request.method != "toString",
-				arguments: [{name: "value", type: inputType}],
-				result: outputType,
-				statements: statements,
-				cells: [],
-				cellCaptures: [],
-				span: span
-			};
+			var fn = session.typeHelper(helper, () -> member(session, typer, helper));
 			generated.set(helper, fn);
 			result.push(fn);
 		}
 		return result;
+	}
+
+	/** The member `helper` a `RawRepresentable` abstract was asked for. */
+	static function member(session:TypingSession, typer:BodyTyper, helper:String):TypedFunction {
+		var request:HelperRequests.MemberHelperRequest = session.programOutput.requests.rawRepresentables.get(helper),
+			declaration = session.enumAbstractDecls.get(request.owner);
+		if (declaration == null || !conforms(session, declaration))
+			throw new InternalError('Missing RawRepresentable declaration "${request.owner}"');
+		var raw = typer.lowerType(declaration.underlying, declaration.span),
+			nominal:CompilerType = TAbstract(declaration.name, [], raw),
+			span = declaration.span,
+			inputType = request.method == "fromRaw" ? raw : nominal,
+			input = new TypedExpression(TLocal("value"), inputType, span),
+			outputType:CompilerType = switch request.method {
+				case "rawValue": raw;
+				case "toString": TString;
+				default: TNullable(nominal);
+			},
+				statements:Array<TypedStatement> = [];
+		if (request.method == "rawValue")
+			statements.push(TReturn(new TypedExpression(TAbiCast(input), raw, span), span));
+		else if (request.method == "toString")
+			statements = nameStatements(typer, declaration, raw,
+				new TypedExpression(TAbiCast(input), raw, span),
+				span);
+		else {
+			var present =
+				new TypedExpression(TNullableWrap(new TypedExpression(TAbiCast(input), nominal, span)),
+				outputType, span),
+				missing =
+					TReturn(new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
+					outputType, span), span),
+				cases:Array<compiler.types.TypedAst.TypedSwitchCase> = [],
+				seen:Map<Int, Bool> = [];
+			for (value in declaration.values) {
+				var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration,
+					value));
+				if (constant == null)
+					throw new InternalError("Nonconstant raw value after conformance validation");
+				switch raw {
+					case TInt:
+						var code = switch constant.expression {
+							case TIntLiteral(value): value;
+							default: throw new InternalError("Noninteger raw constant");
+						};
+						if (seen.exists(code))
+							continue;
+						seen.set(code, true);
+						cases.push({
+							arms: [{
+								value: constant,
+								subjectBinding: null,
+								arrayPattern: null,
+								isCatchAll: false,
+								guard: null,
+								enumName: null,
+								constructorIndex: -1,
+								bindings: [],
+								predicates: [],
+								span: span
+							}],
+							statements: [TReturn(present, span)]
+						});
+					default:
+						statements.push(TIf(new TypedExpression(TEqual(input, constant), TBool, span),
+							[TReturn(present, span)], [], span));
+				}
+			}
+			switch raw {
+				case TInt:
+					statements.push(TSwitch(input, cases, [missing], true, span));
+				default:
+					statements.push(missing);
+			}
+		}
+
+		var fn:TypedFunction = {
+			name: helper,
+			role: ProviderFunction(nominal, compiler.core.Provides.ProviderOperations
+				.detailed(compiler.core.Provides.ProviderOperation.RawRepresentable, request.method)),
+			origin: request.origin,
+			originKind: Helper,
+			owner: null,
+			isStatic: true,
+			isConstructor: false,
+			// A name lookup has a branch per value: keep it one call, not a copy at every string conversion.
+			isInline: request.method != "toString",
+			arguments: [{name: "value", type: inputType}],
+			result: outputType,
+			statements: statements,
+			cells: [],
+			cellCaptures: [],
+			span: span
+		};
+		return fn;
 	}
 }

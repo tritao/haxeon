@@ -939,13 +939,49 @@ class TypingSession {
 		return enter(name, typeSubstitutions, ownerOverride, sourceFunctionName, true);
 
 	/**
-	 * Enters the body of `origin`, the code a generated helper was first requested from, to type the helper as that code sees it;
-	 * `ownerless` is the owner when `origin` has none. Every build types its helpers again from the program's requests, so this
-	 * is no unit of `origin`'s: it neither counts as typing `origin` nor records reads for it, which would replace what `origin`
-	 * read in a build that keeps its body.
+	 * Asks for a generated helper (`HelperRequests`). A helper is typed only from requests, so the code asking reads the helper's
+	 * unit: when what the helper read changes, the code is typed again and asks for it again, as a fresh build does.
 	 */
-	public function enterHelperBody(origin:String, ownerless:String):TypingContext
-		return enter(origin, null, parentPath(origin) ?? ownerless, null, false);
+	public function requestHelper(request:HelperRequests.HelperRequest):Bool {
+		var unit = HelperRequests.unitOf(request);
+		if (unit != null)
+			readUnit(unit);
+		return output.requests.add(request);
+	}
+
+	/**
+	 * Enters the body of `origin`, the code generated helper `helper` was first requested from, to type the helper as that code
+	 * sees it; `ownerless` is the owner when `origin` has none. It is no unit of `origin`'s, which would replace what `origin` read
+	 * in a build that keeps its body: what it reads is the helper's unit's (`typeHelper`).
+	 */
+	public function enterHelperBody(helper:String, origin:String, ownerless:String):TypingContext {
+		var body = enter(origin, null, parentPath(origin) ?? ownerless, null, false);
+		body.recordsReads = beginHelperReads(helper);
+		return body;
+	}
+
+	/** Makes generated helper `helper` with `make`, recording what it reads as the helper's unit (`requestHelper`). */
+	public function typeHelper<T>(helper:String, make:() -> T):T {
+		var recording = beginHelperReads(helper);
+		try {
+			var made = make();
+			if (recording)
+				reads().end();
+			return made;
+		} catch (error:haxe.Exception) {
+			if (recording)
+				reads().end();
+			throw error;
+		}
+	}
+
+	function beginHelperReads(helper:String):Bool {
+		var recorder = reads();
+		if (recorder == null)
+			return false;
+		recorder.begin(helper);
+		return true;
+	}
 
 	function enter(name:String, typeSubstitutions:Null<Map<String, CompilerType>>, ownerOverride:Null<String>,
 			sourceFunctionName:Null<String>, unit:Bool):TypingContext {

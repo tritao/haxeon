@@ -93,7 +93,7 @@ class WireCodecGenerator {
 				'$format does not support type "$type" in the current wire profile', span);
 		}
 		var key = typeKey(type), request:WireCodecRequest = {type: type, origin: origin, span: span};
-		var added = session.output.requests.add(json ? JsonCodecHelper(key, request) : WireCodecHelper(key, request));
+		var added = session.requestHelper(json ? JsonCodecHelper(key, request) : WireCodecHelper(key, request));
 		// Helpers are emitted after the requesting unit's read sink has closed.
 		var reads = session.declarations.reads;
 		if (added && reads != null && reads.recording)

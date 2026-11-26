@@ -28,7 +28,7 @@ class ValueEqualityGenerator {
 			span:SourceSpan):CompilerType {
 		type = session.monomorphs.closeReached(type);
 		var name = session.helperNames.named(PREFIX, type);
-		session.output.requests.add(ValueEqualityHelper(name, {type: type, origin: origin, span: span}));
+		session.requestHelper(ValueEqualityHelper(name, {type: type, origin: origin, span: span}));
 		return type;
 	}
 
@@ -59,7 +59,7 @@ class ValueEqualityGenerator {
 				if (requested == null)
 					throw new InternalError('Missing value equality request "$name"');
 				// Helpers can originate in a lambda after its typing context has already been popped.
-				var context = session.enterHelperBody(requested.origin, "$value-equality");
+				var context = session.enterHelperBody(name, requested.origin, "$value-equality");
 				try {
 					generated.set(name, compareFunction(session, requested, compare));
 					session.leaveBody(context);
