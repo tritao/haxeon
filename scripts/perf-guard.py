@@ -823,11 +823,15 @@ LIVE_STAGES = ("watch", "client", "compile", "pickup", "apply")
 
 
 class LiveApp:
-    """One app of the live part: where its project comes from, the file its edits change, its n-th body edit and its signature
-    edit (each an (old, new) pair of text), and what runs the watch."""
+    """One app of the live part: where its project comes from, the file its edits change, the text its body edits write (`text`:
+    the n-th text, the 0th the project's own), its signature edit (an (old, new) pair of text), and what runs the watch."""
 
-    def __init__(self, name, prepare, path, body, signature, prefix=()):
-        self.name, self.prepare, self.path, self.body, self.signature, self.prefix = name, prepare, path, body, signature, prefix
+    def __init__(self, name, prepare, path, text, signature, prefix=()):
+        self.name, self.prepare, self.path, self.text, self.signature, self.prefix = name, prepare, path, text, signature, prefix
+
+    def body(self, index, start=0):
+        """The index-th body edit of a session, as an (old, new) pair of text, whose first one writes the text after `start`."""
+        return (self.text(0 if index == 0 else start + index), self.text(start + index + 1))
 
 
 def live_apps(work):
@@ -848,13 +852,13 @@ def live_apps(work):
             raise SystemExit(f"perf-guard: haxeon create failed for the live ui app (exit {status}); log: {log.name}")
 
     apps = [LiveApp("small", small, os.path.join("src", "model", "Counter.hx"),
-                    lambda index: ("return 1;" if index == 0 else f"return {index + 1};", f"return {index + 2};"),
+                    lambda index: f"return {index + 1};",
                     (os.path.join("src", "model", "Report.hx"), "static function label(value:Int):String",
                      "static function label(value:Int, ?suffix:String):String"))]
     if shutil.which("xvfb-run"):
         check_ui_submodules()
         apps.append(LiveApp("ui", ui, os.path.join("src", "Main.hx"),
-                            lambda index: ("times')" if index == 0 else f"times ({index})')", f"times ({index + 1})')"),
+                            lambda index: "times')" if index == 0 else f"times ({index})')",
                             (os.path.join("src", "Main.hx"), "static function options():UiHostOptions",
                              "static function options(?width:Int):UiHostOptions"), ("xvfb-run", "-a")))
     else:
@@ -1068,7 +1072,10 @@ def measure_live_growth(app, work, env, mode, owners=False):
     census (`write-done`, which collects first; pages only unless `owners`), which would weigh on the timed session's walls.
     The census counts the live blocks, not the pages they leave mapped, so it does not move with the collector's fragmentation
     or the machine. A live session must keep about what a plain one keeps: the history of a revision it can no longer patch
-    from is garbage. With `owners`, prints the owners of the last census's live data."""
+    from is garbage. The session resumes the history the timed session recorded, so its edits write texts that session did not:
+    an edit back to a text the history has adds no string, so it leaves the symbol tables it shares with the publications kept
+    to take back unchanged (`HlSymbolTable.fork`), and the copy of them each of those holds would be made only after the warm
+    edits, as growth. With `owners`, prints the owners of the last census's live data."""
     # A server of its own, started with the census on, and only its log in the session directory.
     session = os.path.join(work, "session")
     stop_workers(session)
@@ -1084,7 +1091,7 @@ def measure_live_growth(app, work, env, mode, owners=False):
     try:
         watch.wait(watch.running, 1800, "start the app")
         for index in range(LIVE_GROWTH_EDITS):
-            old, new = app.body(index)
+            old, new = app.body(index, LIVE_WARM_EDITS + LIVE_BODY_EDITS)
             watch.edit(app.path, old, new)
     finally:
         watch.stop()

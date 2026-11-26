@@ -52,14 +52,15 @@
 			"why": "Live data growth over the growth session's edits after those that fill the session, from the same census. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack is two and a half of the census's 0.1 MB steps."
 		},
 		"aot_ui_server_live_bytes": {
-			"value": 481925530,
+			"value": 483812966,
 			"tolerance": 0.001,
-			"why": "The server's live data after the growth session's last edit: what a live session keeps. From the heap census that ends each build (`write-done`, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The slack is about five of those steps."
+			"why": "The server's live data after the growth session's last edit: what a live session keeps. From the heap census that ends each build (`write-done`, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. It includes the copy of the string and global tables each publication kept to take back holds, which the growth session's edits all make. The slack is about five of those steps.",
+			"raise_reason": "module sections as the default (d0d30ce1c): 460.4 -> 461.4 MB census live once the growth session fills the publications' table copies; sharing those tables instead of copying them is in progress"
 		},
 		"aot_ui_server_live_growth_bytes": {
-			"value": 2202010,
+			"value": 0,
 			"tolerance_abs": 524288,
-			"why": "Live data growth over the growth session's edits after those that fill the session, from the same census. A live session must keep about what a plain one keeps; growth here is history kept per revision. The growth session resumes the history the timed session recorded, and keeps about 0.7 MB more with each of its last three edits. The slack is five of the census's 0.1 MB steps."
+			"why": "Live data growth over the growth session's edits after those that fill the session, from the same census. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack is five of the census's 0.1 MB steps."
 		}
 	}
 }
