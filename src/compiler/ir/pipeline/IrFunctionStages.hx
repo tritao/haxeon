@@ -78,7 +78,7 @@ class IrFunctionStages {
 			checks = memos.checks,
 			partKeys = part == null ? null : stage.part(part),
 			keys:Array<Int> = [];
-		memos.stageFacts.run(database, partName(name, part), pass);
+		var facts = memos.stageFacts, space = facts.run(database, partName(name, part), pass);
 		keys.resize(count);
 		for (index in 0...count) {
 			var fn = functions[index],
@@ -88,13 +88,22 @@ class IrFunctionStages {
 			summaries[index] = stage.summary(key, fn, pass, checks, name);
 		}
 		pass.prepare(functions, summaries, new IrFunctionIndex(name, functions));
-		var reader = new IrFactReader(pass, memos.stageFacts, database),
+		// A held key whose memo was verified in the stage's last run and read no fact that changed since is taken without verifying
+		// it: the run brings the facts its memos read up to date first, and marks the readers of those that changed.
+		facts.markReaders(database, space, stage);
+		var reader = new IrFactReader(pass, facts, database),
 			output:Array<IrFunction> = [],
-			since = IrFunction.versionsGiven();
+			since = IrFunction.versionsGiven(),
+			previous = facts.previousRun(space),
+			run = facts.runOf(space);
 		output.resize(count);
 		for (index in 0...count) {
 			var fn = functions[index], key = keys[index], same = stage.madeFrom(key, fn.version);
-			if (same && kind.current(database, key)) {
+			if (same && previous != 0 && kind.verifiedIn(key) == previous && stage.unchanged(key, run))
+				kind.hold(database, key);
+			else if (!same || !kind.current(database, key))
+				same = false;
+			if (same) {
 				output[index] = kind.value(key);
 				stage.replay(key, pass);
 				if (checks)
@@ -108,8 +117,10 @@ class IrFunctionStages {
 				made.freezeBody(builder);
 			// Only what the stage makes again of the same input is compared with what it made before: of another input it is all
 			// but never the same.
-			output[index] = same ? kind.end(database, key, made) : kind.endChanged(database, key, made);
+			output[index] = stage.madeFrom(key, fn.version) ? kind.end(database, key, made) : kind.endChanged(database,
+				key, made);
 			stage.made(key, fn.version, summaries[index], reader.requests());
+			stage.readersOf(key, facts);
 		}
 		var result = pass.finish(output);
 		// What `finish` added before the encode point (the helpers the rewrites asked for) is last build's when made the same. What

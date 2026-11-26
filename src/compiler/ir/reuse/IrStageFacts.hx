@@ -1,6 +1,7 @@
 package compiler.ir.reuse;
 
 import compiler.ir.pipeline.IrFunctionPass.IrFactSource;
+import compiler.ir.reuse.IrStageMemo.IrStageQueries;
 import compiler.query.QueryDatabase;
 import compiler.query.QueryKind.QueryKindBase;
 import compiler.query.QueryKind.QueryRead;
@@ -42,8 +43,28 @@ class IrStageFacts extends QueryKindBase {
 	final values:Array<Int> = [];
 	final computedIn:Array<Int> = [];
 
-	/** The revision of the database each space's run started in. */
+	/** The revision of the database each space's run started in, and the run's before it. */
 	final runRevisions:Array<Int> = [];
+
+	final previousRuns:Array<Int> = [];
+
+	/** By space, its facts. */
+	final spaceFacts:Array<Array<Int>> = [];
+
+	/**
+	 * By fact, the keys of its stage's kind whose memos read it (`addReader`): a list of edges from `readerHead` (the edge plus one,
+	 * 0 for none) through `edgeNext`. A run that finds the fact changed marks them (`markReaders`) and drops the list, which the
+	 * keys computed again give again; a reader computed again while the fact held adds its edge again, so the lists are compacted,
+	 * without repeats and without keys whose memo is gone, once they outgrow what they held after the last compaction.
+	 */
+	final readerHead:Array<Int> = [];
+
+	var edgeReader:Array<Int> = [];
+	var edgeNext:Array<Int> = [];
+	var edgesKept = 0;
+
+	/** By space, the stage kind whose keys read its facts (`markReaders`). */
+	final readerKinds:Array<Null<IrStageQueries>> = [];
 
 	final free:Array<Int> = [];
 	var lastRun = 0;
@@ -73,12 +94,16 @@ class IrStageFacts extends QueryKindBase {
 			sources.push(null);
 			runs.push(0);
 			runRevisions.push(0);
+			previousRuns.push(0);
+			spaceFacts.push([]);
+			readerKinds.push(null);
 			spaces.set(stage, space);
 		}
 		sources[space] = source;
 		source.space = space;
 		runs[space] = ++lastRun;
 		if (database != null) {
+			previousRuns[space] = runRevisions[space];
 			if (runRevisions[space] == database.revision)
 				database.advance();
 			runRevisions[space] = database.revision;
@@ -102,6 +127,7 @@ class IrStageFacts extends QueryKindBase {
 			keys.push(key);
 			values.push(0);
 			computedIn.push(0);
+			readerHead.push(0);
 			if (made >= verifiedAt.length) {
 				// Lengthened by half again: a build that names many new facts must not copy the columns once per fact.
 				var length = made + 1 + (made >> 1);
@@ -116,7 +142,9 @@ class IrStageFacts extends QueryKindBase {
 			computedIn[made] = 0;
 			verifiedAt[made] = 0;
 			changes[made] = 0;
+			readerHead[made] = 0;
 		}
+		spaceFacts[space].push(made);
 		table.set(key, made);
 		return made;
 	}
@@ -159,6 +187,84 @@ class IrStageFacts extends QueryKindBase {
 			changes[id] = revision;
 		}
 		verifiedAt[id] = revision;
+	}
+
+	/** The revision the run of `space` before the one under way started in, 0 for none. */
+	public inline function previousRun(space:Int):Int
+		return previousRuns[space];
+
+	/** The run of `space` under way (`run`), a number no other run of any space has. */
+	public inline function runOf(space:Int):Int
+		return runs[space];
+
+	/** Records that the memo of `key` in the kind of the stage whose space has fact `id` read it (`markReaders`). */
+	public function addReader(id:Int, key:Int):Void {
+		var head = readerHead[id];
+		if (head != 0 && edgeReader[head - 1] == key)
+			return;
+		edgeReader.push(key);
+		edgeNext.push(head - 1);
+		readerHead[id] = edgeReader.length;
+	}
+
+	/**
+	 * Brings every fact of `space` that a memo of `stage` read up to date, at the start of the space's run, and marks the readers of
+	 * each that changed (`IrStageQueries.changed`): the keys of `stage` whose memos may not hold, which the run verifies, while
+	 * it takes the others as they are.
+	 */
+	public function markReaders(database:QueryDatabase, space:Int, stage:IrStageQueries):Void {
+		readerKinds[space] = stage;
+		var revision = database.revision, run = runs[space];
+		for (id in spaceFacts[space]) {
+			var head = readerHead[id];
+			if (head == 0)
+				continue;
+			bring(database, id);
+			if (changes[id] != revision)
+				continue;
+			readerHead[id] = 0;
+			var edge = head - 1;
+			while (edge >= 0) {
+				stage.changed(edgeReader[edge], run);
+				edge = edgeNext[edge];
+			}
+		}
+		if (edgeReader.length > 2 * edgesKept + 65536)
+			compactReaders();
+	}
+
+	function compactReaders():Void {
+		var readers:Array<Int> = [], next:Array<Int> = [], seen:Array<Int> = [];
+		for (id in 0...readerHead.length) {
+			var edge = readerHead[id] - 1, head = 0, space = spaceOf[id], stage = space < 0 ? null : readerKinds[space];
+			while (edge >= 0) {
+				var key = edgeReader[edge];
+				if (key >= seen.length)
+					QueryRead.extend(seen, key + 1 + (key >> 1));
+				if (seen[key] != id + 1 && stage != null && stage.functions.verifiedIn(key) != 0) {
+					seen[key] = id + 1;
+					readers.push(key);
+					next.push(head - 1);
+					head = readers.length;
+				}
+				edge = edgeNext[edge];
+			}
+			readerHead[id] = head;
+		}
+		edgeReader = readers;
+		edgeNext = next;
+		edgesKept = readers.length;
+	}
+
+	/** Drops every reader, for a compile that keeps no session (`IrStageMemos.clear`). */
+	public function clearReaders():Void {
+		for (id in 0...readerHead.length)
+			readerHead[id] = 0;
+		edgeReader = [];
+		edgeNext = [];
+		edgesKept = 0;
+		for (space in 0...readerKinds.length)
+			readerKinds[space] = null;
 	}
 
 	/** A number for `text`, the same every time it is asked for in the session and different for another text. */
@@ -204,12 +310,19 @@ class IrStageFacts extends QueryKindBase {
 			}
 			ids[space][kinds[id]].remove(keys[id]);
 			spaceOf[id] = -1;
+			readerHead[id] = 0;
 			keys[id] = "";
 			verifiedAt[id] = 0;
 			free.push(id);
 			dropped++;
 		}
 		if (dropped > 0) {
+			for (facts in spaceFacts)
+				facts.resize(0);
+			for (id in 0...spaceOf.length)
+				if (spaceOf[id] >= 0)
+					spaceFacts[spaceOf[id]].push(id);
+			compactReaders();
 			var stale = [for (text => number in interned) if (!kept.exists(number)) text];
 			for (text in stale)
 				interned.remove(text);

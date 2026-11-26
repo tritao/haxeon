@@ -258,6 +258,7 @@ class IrStageMemos {
 	public function clear():Void {
 		for (stage in queries)
 			stage.clear();
+		stageFacts.clearReaders();
 		var kind = helpers;
 		if (kind != null)
 			kind.clear();
@@ -287,6 +288,15 @@ class IrStageQueries {
 	var asks:Array<Int> = [];
 
 	var requests:Map<Int, Array<IrStageRequest>> = [];
+
+	/**
+	 * By key, the run of the stage that found a fact its memo read changed (`IrStageFacts.markReaders`), or `ALWAYS` for a memo that
+	 * read more than facts: such a key is verified when the stage runs; any other whose memo was verified in the stage's last run
+	 * is taken as it is (`unchanged`), so a held key costs no verification of each fact it read.
+	 */
+	var visit:Array<Int> = [];
+
+	static inline final ALWAYS = -1;
 
 	/**
 	 * A stage that runs once per part of the program (once per value array element type, `IrValueArrayProgramRewrite`) keys each
@@ -358,6 +368,7 @@ class IrStageQueries {
 			var length = key + 1 + (key >> 1);
 			compiler.query.QueryKind.QueryRead.extend(inputs, length);
 			compiler.query.QueryKind.QueryRead.extend(summaries, length);
+			compiler.query.QueryKind.QueryRead.extend(visit, length);
 		}
 		inputs[key] = input;
 		summaries[key] = summary;
@@ -370,6 +381,28 @@ class IrStageQueries {
 			asks[key] = 0;
 			requests.remove(key);
 		}
+	}
+
+	/** Marks `key` as one whose memo read a fact that changed in `run` (`IrStageFacts.markReaders`). */
+	public inline function changed(key:Int, run:Int):Void
+		if (key < visit.length && visit[key] != ALWAYS)
+			visit[key] = run;
+
+	/** Whether no fact `key`'s memo read changed in `run`, and it read nothing else. */
+	public inline function unchanged(key:Int, run:Int):Bool
+		return key < visit.length && visit[key] != run && visit[key] != ALWAYS;
+
+	/** Records, of `key`'s memo just computed (`made`), that it read each fact it read (`IrStageFacts.addReader`). */
+	public function readersOf(key:Int, facts:IrStageFacts):Void {
+		var kind = functions, only = true, index = facts.index;
+		for (position in 0...kind.readsMade(key)) {
+			var read = kind.readMade(key, position);
+			if (compiler.query.QueryKind.QueryRead.kind(read) == index)
+				facts.addReader(compiler.query.QueryKind.QueryRead.key(read), key);
+			else
+				only = false;
+		}
+		visit[key] = only ? 0 : ALWAYS;
 	}
 
 	/** Asks `pass` again for the helpers `key`'s memo asked for, in order. */
@@ -393,6 +426,7 @@ class IrStageQueries {
 		functions.clear();
 		inputs = [];
 		summaries = [];
+		visit = [];
 		asks = [];
 		requests = [];
 		parts.clear();

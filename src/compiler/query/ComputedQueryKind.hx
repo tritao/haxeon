@@ -136,6 +136,27 @@ class ComputedQueryKind<V> extends QueryKindBase {
 		return held;
 	}
 
+	/** The revision `key`'s memo was last verified or computed at, 0 for none. */
+	public inline function verifiedIn(key:Int):Int
+		return key < verifiedAt.length ? verifiedAt[key] : 0;
+
+	/**
+	 * Takes `key`'s memo as verified at the database's revision without reading what it read: for a stage that knows none of its
+	 * reads changed since the memo was last verified (`IrFunctionStages.run`, which visits only the keys whose reads changed).
+	 */
+	public inline function hold(database:QueryDatabase, key:Int):Void {
+		var revision = database.revision;
+		verifiedAt[key] = revision;
+		usedAt = revision;
+	}
+
+	/** How many reads `key`'s memo has, and its read at `position`, in the order they were made (`QueryRead`). */
+	public inline function readsMade(key:Int):Int
+		return readCount[key];
+
+	public inline function readMade(key:Int, position:Int):Int
+		return pool[readStart[key] + position];
+
 	/** The value of `key`'s memo, as `current` or `end` left it. */
 	public inline function value(key:Int):V
 		return values[key];
