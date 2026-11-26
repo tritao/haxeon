@@ -11,6 +11,7 @@ compile server, and building a small project from a cold start.
                                                    minutes, for a change to the IR, the backends or the typer
     scripts/perf-guard.py --machine-independent    on a machine other than the baselines' (CI): fail only on the metrics any
                                                    machine measures alike; compare and print instructions and times
+    scripts/perf-guard.py --live-owners            also print the live part's live data by owner (a full census: slower)
 
 A baseline never moves up by itself: a metric that got worse within its tolerance is not written, so a series of updates
 cannot ratchet it, and one raised on purpose carries why. A metric written as an improvement drops the raise reason it had.
@@ -817,6 +818,7 @@ LIVE_BODY_EDITS = 5
 LIVE_EDIT_GAP_SECONDS = 2.0
 LIVE_GROWTH_EDITS = 10
 LIVE_GROWTH_WARM_EDITS = 4
+LIVE_OWNERS = 20
 LIVE_STAGES = ("watch", "client", "compile", "pickup", "apply")
 
 
@@ -1015,7 +1017,7 @@ def live_report(lines, prefix):
     return fields
 
 
-def measure_live_app(app, work, env, mode):
+def measure_live_app(app, work, env, mode, owners=False):
     """The timed session of one app, then the session that follows the server's live data; returns their metrics, named after
     the app and `mode` (the server program)."""
     project = live_project(work, app)
@@ -1057,22 +1059,28 @@ def measure_live_app(app, work, env, mode):
     metrics = {f"{name}_body_edit_ms": round(middle["total"]), f"{name}_signature_edit_ms": round(signature["total"]),
                f"{app.name}_body_edit_functions": middle["functions"],
                f"{app.name}_signature_edit_functions": signature["functions"]}
-    metrics.update(measure_live_growth(app, work, env, mode))
+    metrics.update(measure_live_growth(app, work, env, mode, owners))
     return metrics
 
 
-def measure_live_growth(app, work, env, mode):
-    """The server's live data over LIVE_GROWTH_EDITS body edits, in a session of its own: every build there ends with a full
-    collection and logs what stayed alive (compiler.tools.CompilerMemoryLog), which would weigh on the timed session's walls.
-    A live session must keep about what a plain one keeps: the history of a revision it can no longer patch from is garbage."""
-    # A server of its own, started with the log on.
-    stop_workers(os.path.join(work, "session"))
+def measure_live_growth(app, work, env, mode, owners=False):
+    """The server's live data over LIVE_GROWTH_EDITS body edits, in a session of its own: every build there ends with a heap
+    census (`write-done`, which collects first; pages only unless `owners`), which would weigh on the timed session's walls.
+    The census counts the live blocks, not the pages they leave mapped, so it does not move with the collector's fragmentation
+    or the machine. A live session must keep about what a plain one keeps: the history of a revision it can no longer patch
+    from is garbage. With `owners`, prints the owners of the last census's live data."""
+    # A server of its own, started with the census on, and only its log in the session directory.
+    session = os.path.join(work, "session")
+    stop_workers(session)
+    for name in os.listdir(session):
+        if name.endswith(".log"):
+            os.remove(os.path.join(session, name))
     project = live_project(work, app)
     app.prepare(project)
-    memory_log = os.path.join(work, f"{app.name}-memory.log")
-    if os.path.exists(memory_log):
-        os.remove(memory_log)
-    watch = LiveWatch(app, project, work, dict(env, HAXEON_COMPILER_MEMORY_LOG=memory_log))
+    census = dict(env, HAXEON_PEAK_CENSUS="write-done")
+    if not owners:
+        census["HL_GC_CENSUS_PAGES_ONLY"] = "1"
+    watch = LiveWatch(app, project, work, census)
     try:
         watch.wait(watch.running, 1800, "start the app")
         for index in range(LIVE_GROWTH_EDITS):
@@ -1080,16 +1088,38 @@ def measure_live_growth(app, work, env, mode):
             watch.edit(app.path, old, new)
     finally:
         watch.stop()
-    # The live host's build logs there too, from a server of its own.
-    output = os.path.join(project, "build", "host", "main.hl")
-    with open(memory_log) as source:
-        live = [round(float(word.split("=", 1)[1]) * 1073741824) for line in source if line.startswith(output + " ")
-                for word in line.split() if word.startswith("live-after-major=")]
+        stop_workers(session)
+    # The live host's build has a server of its own, which builds once; the app's server logs a census per build.
+    logs = {}
+    for name in sorted(os.listdir(session)):
+        if name.endswith(".log"):
+            with open(os.path.join(session, name)) as source:
+                logs[name] = source.read().splitlines()
+    builds = 1 + LIVE_GROWTH_EDITS
+    found = [lines for lines in logs.values()
+             if sum(1 for line in lines if line.startswith("census write-done total ")) == builds]
+    if len(found) != 1:
+        raise SystemExit(f"perf-guard: no single server of the live {app.name} session logged a census for each of its "
+                         f"{builds} builds; logs in {session}")
+    live, mapped = [], []
+    for line in found[0]:
+        # `census write-done total mapped M MB resident R MB live L MB ...`
+        if line.startswith("census write-done total "):
+            words = line.split()
+            live.append(round(float(words[words.index("live") + 1]) * 1048576))
+            mapped.append(float(words[words.index("mapped") + 1]))
     # The first build and the edits that fill the session are left out: its caches, and the publications it keeps to take back
     # (CompilerPublication.RETRACTABLE), each with a snapshot of the session.
     settled = live[1 + LIVE_GROWTH_WARM_EDITS:]
     print(f"perf-guard: live {mode} {app.name:5} server live data after each edit "
-          + " ".join(f"{value / 1048576.0:.0f}" for value in live[1:]) + " MB")
+          + " ".join(f"{value / 1048576.0:.1f}" for value in live[1:]) + " MB; mapped pages "
+          + " ".join(f"{value:.0f}" for value in mapped[1:]) + " MB (not compared)")
+    if owners:
+        # The owner lines that follow the last census's total.
+        last = max(index for index, line in enumerate(found[0]) if line.startswith("census write-done total "))
+        top = [line.split(None, 3)[3] for line in found[0][last:] if line.startswith("census write-done owner ")][:LIVE_OWNERS]
+        print(f"perf-guard: live {mode} {app.name:5} live data by owner after the last edit (MB, blocks, owner):\n  "
+              + "\n  ".join(top))
     return {f"{mode}_{app.name}_server_live_bytes": settled[-1],
             f"{mode}_{app.name}_server_live_growth_bytes": settled[-1] - settled[0]}
 
@@ -1116,8 +1146,8 @@ def live_server_memory(session):
     return f"{program}: peak {peak} MB, resident {resident} MB"
 
 
-def measure_live_edits(out):
-    """The live part (the comment above LIVE_BASELINE), with haxeon-aot current."""
+def measure_live_edits(out, owners=False):
+    """The live part (the comment above LIVE_BASELINE), with haxeon-aot current; with `owners`, the live data by owner too."""
     work = os.path.join(out, "live")
     # Kept between runs, as a user's is: it holds the server program the CLI builds once for the checkout's compiler.
     session = os.path.join(work, "session")
@@ -1129,7 +1159,7 @@ def measure_live_edits(out):
     for app in live_apps(work):
         stop_workers(session)
         try:
-            metrics.update(measure_live_app(app, work, env, mode))
+            metrics.update(measure_live_app(app, work, env, mode, owners))
         finally:
             stop_workers(session)
     return metrics
@@ -1229,6 +1259,7 @@ def main(arguments):
     update = "--update" in arguments
     quick = "--quick" in arguments
     machine_independent = "--machine-independent" in arguments
+    owners = "--live-owners" in arguments
     parts = ["self-compile", "incremental", "small-project", "live"]
     raises = {}
     for argument in arguments:
@@ -1241,7 +1272,7 @@ def main(arguments):
             if not reason.strip():
                 raise SystemExit(f"perf-guard: --raise={name} needs a reason: --raise={name}=REASON")
             raises[name] = reason.strip()
-        elif argument not in ("--update", "--quick", "--machine-independent"):
+        elif argument not in ("--update", "--quick", "--machine-independent", "--live-owners"):
             raise SystemExit(__doc__)
     if machine_independent and (update or raises):
         raise SystemExit("perf-guard: --machine-independent measures on a machine other than the baselines'; "
@@ -1261,13 +1292,13 @@ def main(arguments):
     try:
         if "incremental" in parts or "small-project" in parts or "live" in parts:
             built_aot = build_aot(hl, out)
-        return measure_parts(hl, out, parts, update, raises, machine_independent)
+        return measure_parts(hl, out, parts, update, raises, machine_independent, owners)
     finally:
         if built_aot:
             remove_aot(hl)
 
 
-def measure_parts(hl, out, parts, update, raises, machine_independent):
+def measure_parts(hl, out, parts, update, raises, machine_independent, owners=False):
     """Measures `parts` and compares them with the baselines (compare); returns the exit status."""
     failures, improvements, raised, excused, compared = [], [], [], [], {}
 
@@ -1315,7 +1346,7 @@ def measure_parts(hl, out, parts, update, raises, machine_independent):
     if "small-project" in parts:
         gather(compare(SMALL_PROJECT_BASELINE, measure_small_project(hl, out), update, raises, compared, machine_independent))
     if "live" in parts:
-        gather(compare(LIVE_BASELINE, measure_live_edits(out), update, raises, compared, machine_independent))
+        gather(compare(LIVE_BASELINE, measure_live_edits(out, owners), update, raises, compared, machine_independent))
     summary("primary", PRIMARY, compared)
     summary("regression guards", REGRESSION_GUARDS, compared)
     unmeasured = sorted(set(raises) - {name for _, name in compared})
@@ -1333,6 +1364,8 @@ def measure_parts(hl, out, parts, update, raises, machine_independent):
     if failures:
         print(f"perf-guard: FAILED: {', '.join(failures)} regressed beyond tolerance (docs/DEVELOPMENT.md, Performance guard); "
               "a cost taken on purpose is written with --raise=METRIC=REASON")
+        if not owners and any(name.startswith("aot_") and "_server_live_" in name for name in failures):
+            print("perf-guard: scripts/perf-guard.py --only=live --live-owners prints what the live data is by owner")
         return 1
     if unmeasured:
         return 1

@@ -42,27 +42,24 @@
 			"why": "The edited function, its callers and the adapter: deterministic."
 		},
 		"aot_small_server_live_bytes": {
-			"value": 36507222,
-			"tolerance": 0.03,
-			"why": "The server's live data after the growth session's last edit (a full collection ends each build): what a live session keeps.",
-			"raise_reason": "The baseline was measured on a tree without recorded reads: at its own commit 0d4357594 the small session measures 33.3 MB on this machine. Since then two 1 MiB steps, bisected with the small growth session on the VM server: b62b5a39c (strict null safety in compiler.ir.passes.arrays, most likely its value-array accessor records, which now keep their names; not traced to one structure) 48.3 -> 49.4 MB, and 5ac1f3be1 (purity inference keeps each function's dependencies with the declaration facts it read, which a body edit reuses) 49.4 -> 50.5 MB. 540848a15 (recorded reads) itself lowered it, 63.4 -> 62.3 MB. Releasing the IR of the functions a live patch drops does not change it: the small session's edits drop none; then ac8a1069b gives ObjectMap keyValueIterator, which nests V in {key, value}, so JsonPrinter's ObjectMap<Dynamic, Bool>, in every program's graph, is a specialized owner whose typed body and IR the session keeps: 33.3 -> 35.4 MB (2 MiB, bisected on haxeon-aot); a commit between 8de70024e and f0ca8de9f had taken 1 MiB back from the 34.4 MB baseline. Then 1cb103dd0 (positions relative to their declaration): one step of the metric's 0.001 GB rounding (it reads mapped GC pages from the server log, 1,073,742 bytes per step), from the anchor tables and relative debug caches the change keeps"
+			"value": 12058624,
+			"tolerance_abs": 262144,
+			"why": "The server's live data after the growth session's last edit: what a live session keeps. From the heap census that ends each build (`write-done`, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The slack is two and a half of those steps."
 		},
 		"aot_small_server_live_growth_bytes": {
 			"value": 0,
-			"tolerance_abs": 4194304,
-			"why": "Live data growth over the growth session's edits after those that fill the session. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack absorbs the collector's page rounding."
+			"tolerance_abs": 262144,
+			"why": "Live data growth over the growth session's edits after those that fill the session, from the same census. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack is two and a half of the census's 0.1 MB steps."
 		},
 		"aot_ui_server_live_bytes": {
-			"value": 936789410,
-			"tolerance": 0.03,
-			"why": "The server's live data after the growth session's last edit (a full collection ends each build): what a live session keeps.",
-			"raise_reason": "the query engine's stage columns (engine slices 3 and 4): a census of the live UI session showed +14.9 MB live net at 3f873bcf3; compacted to columns by slot, the census shows 468.8 -> 458.0 MB live, so this is CI's 948114031 at 3f873bcf3 lowered by that 10.8 MB, since the metric reads mapped GC pages, which differ by machine (this machine: 928.8 -> 903.0 MB)"
+			"value": 481925530,
+			"tolerance": 0.001,
+			"why": "The server's live data after the growth session's last edit: what a live session keeps. From the heap census that ends each build (`write-done`, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The slack is about five of those steps."
 		},
 		"aot_ui_server_live_growth_bytes": {
-			"value": 4294967,
-			"tolerance_abs": 16777216,
-			"why": "Live data growth over the growth session's edits after those that fill the session. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack absorbs the collector's page rounding.",
-			"raise_reason": "A heap census of the ui growth session's builds 6 and 11 (VM server) is flat now that a live patch lets go of the IR of the functions it drops: -0.1 MB, no IrFunction or IrBlock added, where e015e48d4 adds 6.2 MB, 8,205 IrBlocks and 515 IrBodies of dropped functions decoded each build. The metric is the collector's footprint after a full collection, which moves by about 10 MB between runs on this machine: +4.3 MB at 0d4357594, +11.8 MB at e015e48d4, +6.4 MB and this +4.3 MB with the dropped functions released."
+			"value": 2202010,
+			"tolerance_abs": 524288,
+			"why": "Live data growth over the growth session's edits after those that fill the session, from the same census. A live session must keep about what a plain one keeps; growth here is history kept per revision. The growth session resumes the history the timed session recorded, and keeps about 0.7 MB more with each of its last three edits. The slack is five of the census's 0.1 MB steps."
 		}
 	}
 }

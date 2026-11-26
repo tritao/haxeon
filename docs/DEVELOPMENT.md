@@ -126,7 +126,11 @@ The live part runs `haxeon run --watch` as a user does, on `tests/perf/live-proj
 running app's `patch-applied` event (the watch-events file), and split into the watch's settle, the CLI's work before the request,
 the compile up to the published patch, the host's pickup and the runtime's apply. It gates the median body edit and the signature
 edit with a wide tolerance (wall varies with load; it catches a wait added on the path), the functions each patch carries, and, from
-a second session whose builds each end with a full collection, the server's live data after the edits and its growth over them.
+a second session whose builds each end with a heap census (`HAXEON_PEAK_CENSUS=write-done`, pages only), the server's live data
+after the edits and its growth over them. The census counts the bytes of the live blocks, which repeat to its 0.1 MB step from run
+to run and machine to machine, so they are gated tightly; the pages the collector keeps mapped move with fragmentation and the
+machine, and are printed beside them, not compared. `--live-owners` runs that session with the full census and prints the live
+data by owner after its last edit, to tell what a regression kept.
 The first run builds haxeon-ui's native libraries, which takes minutes; later runs keep them. The ui app builds NativeKit and
 haxeon-ui's own native libraries, whose submodules `bootstrap-tools.sh` does not fetch; the guard checks that they are at their
 pins before it starts, and names the command that puts them there. In a fresh worktree, before the guard:
