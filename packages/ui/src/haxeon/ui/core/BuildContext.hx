@@ -1125,16 +1125,33 @@ class BuildContext implements Disposable {
 		// Widget IDs occupy the positive 31-bit namespace. Native owners use the
 		// negative half, so a stateful body can use its own root ID independently.
 		var identity = resolveId("scope");
-		var resourceId = stateStore.beginScope();
 		var rootId = pendingScopeRootId == null ? identity : pendingScopeRootId;
 		pendingScopeRootId = null;
 		var text = textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy();
+		var previous = mountedScopes.get(identity.value);
+		if (previous != null && canReuseScope(previous, component, rootId, text)) {
+			// Equal inputs under an equal context build the same body: keep it, its subscriptions and the instance they
+			// observe. Its handlers call the new description's callbacks through latestOf; the caller's modifier is swapped.
+			stateStore.touchScope(previous.resourceId);
+			previous.keep(component, scope, styleParent, text);
+			// The body's subtree keeps its IDs; the new modifier's children were claimed as the caller built them.
+			var root = previous.root;
+			// Swapping the modifier edits a submitted root: announce it so the frame compares it with what was shown.
+			if (previous.hasModifier() || modifier != null) willEditRetained(root);
+			previous.setModifier(null);
+			root.detach();
+			claimRetainedTree(root);
+			previous.setModifier(modifier);
+			return root;
+		}
+		var resourceId = stateStore.beginScope();
 		var owner = new RenderScope(resourceId, identity.value, this, component, scope, styleParent, text);
 		owner.parentScope = activeRenderScope;
 		renderScopes.push(owner);
 		try {
 			owner.mount(rootId);
 			stateStore.installScope(owner);
+			mountedScopes.set(identity.value, owner);
 			if (modifier != null) owner.setModifier(modifier);
 		} catch (error:Dynamic) {
 			owner.dispose();
@@ -1146,6 +1163,52 @@ class BuildContext implements Disposable {
 			throw error;
 		}
 		return owner.root;
+	}
+
+	/** The latest mounted scope of each component identity, for keeping a body whose inputs are equal. */
+	final mountedScopes:Map<Int, RenderScope> = new Map();
+
+	function canReuseScope(previous:RenderScope, component:haxeon.ui.core.RenderScope.ScopeView, rootId:WidgetId,
+			text:Array<ResolvedTextStyle>):Bool {
+		var root = previous.root;
+		// A root this build already claimed is a second mount of one identity, which must be rejected, not kept.
+		return !bypassRetention && !previous.disposed && !previous.pending && root != null && root.id.equals(rootId)
+			&& (patching || buildingRenderScope || !claimed.has(root.id.value))
+			&& previous.builtStyleRevision == styleRevision && previous.builtWidth == viewportWidth
+			&& previous.builtHeight == viewportHeight
+			&& !StyleDiff.compare(previous.capturedParent, styleParent).changed
+			&& sameTextStack(previous.capturedText, text) && component.inputsEqual(previous.latest);
+	}
+
+	static function sameTextStack(left:Array<ResolvedTextStyle>, right:Array<ResolvedTextStyle>):Bool {
+		if (left == right) return true;
+		if (left.length != right.length) return false;
+		for (index in 0...left.length) {
+			var a = left[index], b = right[index];
+			if (a != b && (a.textStyle != b.textStyle || a.paragraphStyle != b.paragraphStyle
+				|| a.textColor != b.textColor)) return false;
+		}
+		return true;
+	}
+
+	@:allow(haxeon.ui.core.RenderScope) function forgetScope(owner:RenderScope):Void {
+		if (mountedScopes.get(owner.identityId) == owner) mountedScopes.remove(owner.identityId);
+	}
+
+	/** The instance mounted for a root `mountComponent` returned: an equal description keeps the earlier one. */
+	public function mountedComponent(root:RenderNode):Null<haxeon.ui.core.RenderScope.ScopeView> {
+		var owner = root.scopeOwner();
+		return owner == null ? null : owner.component;
+	}
+
+	/**
+	 * For a component's body: the newest description of `component`, as handlers that outlive this run must read callbacks.
+	 * A parent run with equal inputs keeps the body and only records its new description.
+	 */
+	public function latestOf<T:haxeon.ui.core.RenderScope.ScopeView>(component:T):Void->T {
+		var owner = activeRenderScope;
+		if (owner == null || owner.component != component) return () -> component;
+		return () -> cast owner.latest;
 	}
 
 	@:allow(haxeon.ui.component.TrackedScope) function deferRootIdentity():Null<WidgetId> {
@@ -1205,6 +1268,9 @@ class BuildContext implements Disposable {
 			buildingRenderScope = previousBuilding;
 		}
 		var result = readComponentBody(owner.component, capture);
+		owner.builtStyleRevision = styleRevision;
+		owner.builtWidth = viewportWidth;
+		owner.builtHeight = viewportHeight;
 		for (index in dependencyMark...capture.pendingCount()) owner.trackField(capture.pendingSourceAt(index),
 			capture.pendingFieldBitAt(index));
 		var ownedIds = stateStore.usageMarker() == marker ? null : stateStore.usedIdsSince(marker,
@@ -1306,6 +1372,7 @@ class BuildContext implements Disposable {
 	function clearRenderScopes():Void {
 		for (owner in renderScopes) owner.dispose();
 		renderScopes.resize(0);
+		mountedScopes.clear();
 	}
 
 	function adoptRenderScopes(node:RenderNode, parent:Null<RenderScope>):Void {

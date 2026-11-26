@@ -196,6 +196,8 @@ class LayoutSessionSmoke {
 		if (controls != 42) throw "Caller-owned control scopes failed at stage " + controls;
 		var modified = RootModifierMain.run();
 		if (modified != 42) throw "Root modifiers failed at stage " + modified;
+		var skip = ScopeSkipMain.run();
+		if (skip != 42) throw "Equal component inputs failed to skip at stage " + skip;
 		var session = LayoutSession.create();
 		session.verifyTransactions = true;
 		for (mode in 0...3) {

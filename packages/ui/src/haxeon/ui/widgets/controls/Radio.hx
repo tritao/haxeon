@@ -65,7 +65,7 @@ class Radio implements ScopeView {
 		if (!Std.isOfType(previous, Radio)) return false;
 		var other:Radio = cast previous;
 		return key == other.key && label == other.label && value == other.value && selected == other.selected
-			&& enabled == other.enabled && hasSelectHandler == other.hasSelectHandler && onSelect == other.onSelect
+			&& enabled == other.enabled && hasSelectHandler == other.hasSelectHandler
 			&& haxeon.Diff.mask(style, other.style) == 0;
 	}
 
@@ -171,8 +171,9 @@ class Radio implements ScopeView {
 			text.layout.textStyle.withLetterSpacing(computed.getNumber(StyleProperty.LetterSpacing));
 		node.add(text);
 		if (enabled && hasSelectHandler) {
+			var latest = context.latestOf(this);
 			var select = function(_:UiEvent) {
-				onSelect(value);
+				latest().onSelect(value);
 			};
 			node.onActivate(select);
 		}

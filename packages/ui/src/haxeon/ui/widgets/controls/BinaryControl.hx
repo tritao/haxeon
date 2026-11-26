@@ -72,14 +72,20 @@ class BinaryControl implements ScopeView implements Observable {
 		var other:BinaryControl = cast previous;
 		return key == other.key && label == other.label && accessibilityLabel == other.accessibilityLabel
 			&& checked == other.checked && indeterminate == other.indeterminate && enabled == other.enabled
-			&& onChange == other.onChange && toggle == other.toggle && haxeon.Diff.mask(style, other.style) == 0;
+			&& (onChange == null) == (other.onChange == null) && toggle == other.toggle
+			&& haxeon.Diff.mask(style, other.style) == 0;
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		// The enclosing scope reads `checked` too, so activation reruns it: callers commonly keep the flag in a plain
-		// field and branch on it, as in a "show advanced" switch, and that read is not tracked.
-		if (onChange != null) readChecked();
-		return context.mountComponent(this);
+		var root = context.mountComponent(this);
+		// The enclosing scope reads the live control's `checked` too, so activation reruns it: callers commonly keep the
+		// flag in a plain field and branch on it, as in a "show advanced" switch, and that read is not tracked. An equal
+		// description keeps the mounted instance, which is the one activation writes.
+		if (onChange != null) {
+			var live:Null<BinaryControl> = cast context.mountedComponent(root);
+			(live == null ? this : live).readChecked();
+		}
+		return root;
 	}
 
 	function readChecked():Bool return checked;
@@ -208,6 +214,7 @@ class BinaryControl implements ScopeView implements Observable {
 			labelNode.layout.textStyle.withLetterSpacing(computed.getNumber(StyleProperty.LetterSpacing));
 		node.add(labelNode);
 
+		var latest = context.latestOf(this);
 		var activate = function(event:UiEvent) {
 			if (!enabled) return;
 			indeterminate = false;
@@ -215,7 +222,8 @@ class BinaryControl implements ScopeView implements Observable {
 			semantics.value = checked ? "true" : "false";
 			if (checked) semantics.states |= AccessibilityState.Checked;
 			else semantics.states = semantics.states.remove(AccessibilityState.Checked);
-			if (onChange != null) onChange(checked);
+			var handler = latest().onChange;
+			if (handler != null) handler(checked);
 		};
 		node.onActivate(activate);
 		return node;

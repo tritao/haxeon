@@ -66,6 +66,7 @@ import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.HitTest;
 import haxeon.ui.core.InteractionStateStore;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.State;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.UiContext;
@@ -1866,6 +1867,15 @@ class FrameworkSmoke {
 		var committedText = "";
 		var editSeen = false;
 
+		// The coordinate probe is the caller's listener on the button, so it is passed as a modifier.
+		var buttonLocalX = -1.0;
+		var buttonProbe = new RootModifier();
+		buttonProbe.on(UiEventKind.PointerDown, function(event) {
+			if (Std.isOfType(event.data, String) && event.data == "coordinate-test") {
+				buttonLocalX = event.localX;
+				event.preventDefault();
+			}
+		});
 		function makeView(buttonEnabled:Bool = true):Column {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(256.0);
@@ -1875,7 +1885,7 @@ class FrameworkSmoke {
 			}, null, buttonEnabled);
 			return new Column("main",
 				[
-					new KeyedView("increment", button),
+					new KeyedView("increment", new ModifiedView(button, buttonProbe)),
 					new KeyedView("next", new Button("Next")),
 					new KeyedView("status", new Text("Ready", null, Color.rgba(1.0, 1.0, 1.0, 1.0)))
 				],
@@ -1911,16 +1921,9 @@ class FrameworkSmoke {
 			4.0) || context.isDirty()) return 3;
 		if (context.dirtyFlags != UiDirtyFlag.None) return 221;
 		var rootLocalX = -1.0;
-		var buttonLocalX = -1.0;
 		root.on(UiEventKind.PointerDown, function(event) {
 			if (event.data == "coordinate-test") rootLocalX = event.localX;
 		}, UiEventPhase.Capture);
-		buttonNode.on(UiEventKind.PointerDown, function(event) {
-			if (event.data == "coordinate-test") {
-				buttonLocalX = event.localX;
-				event.preventDefault();
-			}
-		});
 		var coordinatePoint = new Point(6.0, 7.0);
 		var coordinateGlobal = buttonNode.localToGlobal(coordinatePoint);
 		context.pointerDown(coordinateGlobal.x,
@@ -3048,7 +3051,8 @@ class FrameworkSmoke {
 		context.pointerDown(closeBounds.x + 12, closeBounds.y + 12, 0);
 		context.pointerUp(closeBounds.x + 12, closeBounds.y + 12, 0);
 		if (closes != 1 || closeSelections != 0 || closeDrags != 0
-			|| closeTabs.selectedKey != "keep") throw "Closing an inactive tab must not select it or start a drag";
+			|| closeTabs.selectedKey != "keep")
+			throw 'Closing an inactive tab must not select it or start a drag: closes=$closes selections=$closeSelections drags=$closeDrags selected=${closeTabs.selectedKey}';
 		var tabBody = closeRow.children[0].globalBounds();
 		context.pointerDown(tabBody.x + 2, tabBody.y + 2, 2);
 		closeRoot = context.submit(closeTabs, tabsFrame);
@@ -3900,7 +3904,10 @@ class FrameworkSmoke {
 			|| themedRoot.computedStyle.getNumber(StyleProperty.BorderWidth)
 			!= 1.0) throw "Focused primary buttons must retain their fill and show a contrasting border";
 		themedRoot = context.submit(themedButton, themedFrame);
-		if (!frameMetricsValid(context, true)) throw "Repeated themed frame cache hits (check 237)";
+		// Equal inputs keep the button's body, so the repeated frame resolves nothing that misses the style cache.
+		var repeatedMetrics:Null<UiFrameMetrics> = context.frameMetrics;
+		if (repeatedMetrics == null || repeatedMetrics.nodeCount != 2
+			|| repeatedMetrics.styleCacheMisses != 0) throw "Repeated themed frame cache hits (check 237)";
 		if (!frameInvalidationValid(context, false, false)) return 238;
 		var themedLabelGeometry:ResolvedLayoutItem = cast themedRoot.children[0].resolved;
 		var themedX = themedLabelGeometry.x + themedLabelGeometry.width * 0.5;
@@ -7098,6 +7105,19 @@ private class ExternalScrollbarSmoke implements View {
 			return host;
 		});
 	}
+}
+
+/** Builds `view` with a caller's modifier. */
+private class ModifiedView implements View {
+	final view:View;
+	final modifier:RootModifier;
+
+	public function new(view:View, modifier:RootModifier) {
+		this.view = view;
+		this.modifier = modifier;
+	}
+
+	public function build(context:BuildContext):RenderNode return context.build(view, modifier);
 }
 
 private class DecoratedButtonSmoke implements View {

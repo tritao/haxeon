@@ -56,7 +56,7 @@ class IconButton implements ScopeView {
 		var other:IconButton = cast previous;
 		return key == other.key && haxeon.Equality.equals(icon, other.icon) && label == other.label
 			&& haxeon.Diff.mask(style,
-			other.style) == 0 && enabled == other.enabled && onClick == other.onClick;
+			other.style) == 0 && enabled == other.enabled && (onClick == null) == (other.onClick == null);
 	}
 
 	public function buildBody(context:BuildContext):RenderNode return buildButton(context,
@@ -83,8 +83,10 @@ class IconButton implements ScopeView {
 		if (!enabled) semantics.states |= AccessibilityState.Disabled;
 		node.semantics = semantics;
 		if (enabled && onClick != null) {
+			var latest = context.latestOf(this);
 			var activate = function(_:UiEvent) {
-				onClick();
+				var handler = latest().onClick;
+				if (handler != null) handler();
 			};
 			node.onActivate(activate);
 		}

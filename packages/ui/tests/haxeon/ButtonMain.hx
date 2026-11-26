@@ -155,7 +155,9 @@ class ButtonMain {
 		context.beginFrame();
 		var rebuiltVariant = context.trackReads(function() return variant.build(context));
 		store.endFrame();
-		if (variantBuilds != 2 || rebuiltVariant == keptVariant || rebuiltVariant.children.length != 2) return 15;
+		// The variant builds its caller again, whose modifier puts the extra back on the button's kept body.
+		if (variantBuilds != 2 || rebuiltVariant.children.length != 2
+			|| rebuiltVariant.children[1] == outside) return 15;
 		context.dispose();
 		return 42;
 	}

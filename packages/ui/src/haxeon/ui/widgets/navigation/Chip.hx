@@ -49,7 +49,8 @@ class Chip implements ScopeView {
 	public function inputsEqual(previous:ScopeView):Bool {
 		if (!Std.isOfType(previous, Chip)) return false;
 		var other:Chip = cast previous;
-		return key == other.key && label == other.label && onClick == other.onClick && active == other.active
+		return key == other.key && label == other.label && (onClick == null) == (other.onClick == null)
+			&& active == other.active
 			&& sameTrailing(trailing, other.trailing) && haxeon.Diff.mask(style, other.style) == 0;
 	}
 
@@ -86,7 +87,13 @@ class Chip implements ScopeView {
 		semantics.actions = AccessibilityAction.Activate;
 		if (active) semantics.states |= AccessibilityState.Selected;
 		node.semantics = semantics;
-		if (onClick != null) node.onActivate(function(_:UiEvent) onClick());
+		if (onClick != null) {
+			var latest = context.latestOf(this);
+			node.onActivate(function(_:UiEvent) {
+				var handler = latest().onClick;
+				if (handler != null) handler();
+			});
+		}
 
 		var foreground = active ? NavUi.white : NavUi.text;
 		node.add(NavUi.label(context, "label", label, 14.0, foreground));

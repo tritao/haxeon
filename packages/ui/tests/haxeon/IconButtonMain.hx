@@ -55,7 +55,7 @@ class IconButtonMain {
 		if (disabled.enabled || disabled.focusable
 			|| disabled.semantics == null || !disabled.semantics.states.contains(AccessibilityState.Disabled)
 			|| !disabled.states.contains(StyleState.Disabled)) return 5;
-		// Equal inputs retain the mounted control. A new model with the same visible key replaces its callback.
+		// Equal inputs retain the mounted control. A new model with the same visible key gives it a new callback.
 		var owner = new HistoryOwner();
 		context.beginFrame();
 		var first = new EqualChild("history", new HistoryInput(owner), history).build(context);
@@ -72,7 +72,8 @@ class IconButtonMain {
 		store.endFrame();
 		action = cast historyButton;
 		action.onClick();
-		if (changed == same || historyBuilds != 2 || owner.calls != 1 || replacement.calls != 1) return 7;
+		// The new model rebuilds the child; the button's inputs are equal apart from its callback, so its body is kept.
+		if (changed != same || historyBuilds != 2 || owner.calls != 1 || replacement.calls != 1) return 7;
 		context.dispose();
 		return 42;
 	}

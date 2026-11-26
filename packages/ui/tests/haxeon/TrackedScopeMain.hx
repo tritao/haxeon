@@ -3,6 +3,7 @@ import haxeon.ui.LayoutNode;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
 import haxeon.ui.theme.Theme;
@@ -36,11 +37,12 @@ class TrackedScopeMain {
 			runs++;
 			return new ScopeLeaf();
 		});
-		var root = context.trackReads(() -> scope.build(context));
+		var decoration = context.createNode(context.rootId("decoration"), LayoutVisualKind.Box);
+		var modifier = new RootModifier();
+		modifier.add(decoration);
+		var root = context.trackReads(() -> context.build(scope, modifier));
 		store.endFrame();
 		if (runs != 1 || !read.hasFieldReaders(0)) return 1;
-		var decoration = context.createNode(context.rootId("decoration"), LayoutVisualKind.Box);
-		root.add(decoration);
 		unrelated.value = 1;
 		if (context.hasPendingRenderScopes() || runs != 1) return 2;
 		var instances = new Map<Int, RenderNode>();
@@ -104,19 +106,20 @@ class TrackedScopeMain {
 		if (ScopeResourceLeaf.released != 2) return 12;
 		var replacementSource = new Signal<Int>(0), replacementRuns = 0;
 		var rejectReplacement = false;
-		var replacement = new TrackedScope("replacement", () -> {
+		// Each description has a new body, so a parent run builds it again rather than keeping the equal one.
+		function replacement():TrackedScope return new TrackedScope("replacement", () -> {
 			var value = replacementSource.value;
 			if (rejectReplacement) throw "expected replacement failure";
 			replacementRuns++;
 			return new ScopeLeaf();
 		});
 		context.beginFrame();
-		var replacementRoot = context.trackReads(() -> replacement.build(context));
+		var replacementRoot = context.trackReads(() -> replacement().build(context));
 		store.endFrame();
 		context.beginFrame();
 		rejectReplacement = true;
 		var failedReplacement = false;
-		try context.trackReads(() -> replacement.build(context)) catch (_:Dynamic) failedReplacement = true;
+		try context.trackReads(() -> replacement().build(context)) catch (_:Dynamic) failedReplacement = true;
 		store.endFrame();
 		rejectReplacement = false;
 		if (!failedReplacement || !replacementSource.hasFieldReaders(0)) return 21;
@@ -124,7 +127,7 @@ class TrackedScopeMain {
 		context.flushRenderScopes(replacementRoot);
 		if (replacementRuns != 2) return 22;
 		context.beginFrame();
-		replacementRoot = context.trackReads(() -> replacement.build(context));
+		replacementRoot = context.trackReads(() -> replacement().build(context));
 		store.endFrame();
 		replacementSource.value = 2;
 		context.flushRenderScopes(replacementRoot);

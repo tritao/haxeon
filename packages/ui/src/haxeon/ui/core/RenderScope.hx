@@ -19,10 +19,21 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 	var boundary:ScopeRootBoundary;
 	@:allow(haxeon.ui.core.BuildContext) var parentScope:Null<RenderScope>;
 
+	/** The instance whose body is mounted: its reads are this scope's subscriptions. */
 	public final component:ScopeView;
-	public final capturedScope:KeyScope;
-	public final capturedParent:Null<ComputedStyle>;
-	public final capturedText:Array<ResolvedTextStyle>;
+
+	/** The newest equal description of it, whose callbacks a kept body calls. */
+	public var latest(default, null):ScopeView;
+
+	public var capturedScope(default, null):KeyScope;
+	public var capturedParent(default, null):Null<ComputedStyle>;
+	public var capturedText(default, null):Array<ResolvedTextStyle>;
+
+	/** The style revision and viewport the body last ran with: a parent's equal description reuses it only under these. */
+	@:allow(haxeon.ui.core.BuildContext) var builtStyleRevision:Int = 0;
+
+	@:allow(haxeon.ui.core.BuildContext) var builtWidth:Float = 0.0;
+	@:allow(haxeon.ui.core.BuildContext) var builtHeight:Float = 0.0;
 
 	final context:BuildContext;
 
@@ -55,6 +66,7 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 		this.identityId = identityId;
 		this.context = context;
 		this.component = component;
+		latest = component;
 		capturedScope = scope;
 		capturedParent = parent;
 		capturedText = text;
@@ -169,6 +181,8 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 		return change;
 	}
 
+	@:allow(haxeon.ui.core.BuildContext) function hasModifier():Bool return modifier != null;
+
 	/** Replaces the caller's modifier, keeping the body. */
 	@:allow(haxeon.ui.core.BuildContext) function setModifier(next:Null<RootModifier>):Void {
 		if (applied != null) applied.remove();
@@ -207,10 +221,20 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 		context.requestBindingFrame();
 	}
 
+	/** Keeps the body for a parent run that described this component with equal inputs, under its context. */
+	@:allow(haxeon.ui.core.BuildContext) function keep(description:ScopeView, scope:KeyScope,
+			parent:Null<ComputedStyle>, text:Array<ResolvedTextStyle>):Void {
+		latest = description;
+		capturedScope = scope;
+		capturedParent = parent;
+		capturedText = text;
+	}
+
 	public function dispose():Void {
 		if (disposed) return;
 		disposed = true;
 		pending = false;
+		context.forgetScope(this);
 		context.stateStore.releaseScope(this);
 		clearDependencies();
 	}

@@ -86,7 +86,7 @@ class Slider implements ScopeView implements Observable {
 		var other:Slider = cast previous;
 		return key == other.key && accessibleName == other.accessibleName && value == other.value
 			&& minimum == other.minimum && maximum == other.maximum && step == other.step && enabled == other.enabled
-			&& onChange == other.onChange && haxeon.Diff.mask(style, other.style) == 0;
+			&& (onChange == null) == (other.onChange == null) && haxeon.Diff.mask(style, other.style) == 0;
 	}
 
 	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
@@ -118,6 +118,7 @@ class Slider implements ScopeView implements Observable {
 		node.semantics = semantics;
 
 		var drag = context.lazyState(context.id("drag"), function() return new SliderDrag()).value;
+		var latest = context.latestOf(this);
 		var setValue = function(next:Float) {
 			if (!enabled || !finite(next)) return false;
 			var bounded = clamp(next, minimum, maximum);
@@ -125,7 +126,8 @@ class Slider implements ScopeView implements Observable {
 			bounded = clamp(snapped, minimum, maximum);
 			if (bounded == value) return false;
 			value = bounded;
-			if (onChange != null) onChange(value);
+			var handler = latest().onChange;
+			if (handler != null) handler(value);
 			return true;
 		};
 		var valueAtPointer = function(event:UiEvent) {

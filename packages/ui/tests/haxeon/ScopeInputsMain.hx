@@ -4,7 +4,7 @@ import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.IconButton;
 
-/** Final component inputs include action ownership, authored style, and accessible presentation. */
+/** Final component inputs include whether there is an action, authored style and accessible presentation. */
 class ScopeInputsMain {
 	static var invoked = 0;
 	static function action():Void invoked++;
@@ -15,7 +15,9 @@ class ScopeInputsMain {
 		var left = new Button("Save", null, activate, "save");
 		var equal = new Button("Save", null, activate, "save");
 		if (!left.inputsEqual(equal) || !equal.inputsEqual(left)) return 1;
-		if (left.inputsEqual(new Button("Save", null, alternate, "save"))) return 2;
+		// A new callback alone keeps the body, which calls callbacks through the latest description; only presence counts.
+		if (!left.inputsEqual(new Button("Save", null, alternate, "save"))) return 2;
+		if (left.inputsEqual(new Button("Save", null, null, "save"))) return 14;
 		if (left.inputsEqual(new Button("Save", null, activate, "save", false))) return 3;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(90);
@@ -43,7 +45,7 @@ class ScopeInputsMain {
 		var icon = new IconButton("save-icon", IconName.Check, "Save", activate);
 		var equalIcon = new IconButton("save-icon", IconName.Check, "Save", activate);
 		if (!icon.inputsEqual(equalIcon) || left.inputsEqual(icon) || icon.inputsEqual(left)) return 7;
-		if (icon.inputsEqual(new IconButton("save-icon", IconName.Check, "Save", alternate))) return 8;
+		if (!icon.inputsEqual(new IconButton("save-icon", IconName.Check, "Save", alternate))) return 8;
 		#if !wasm
 		var before = hl.Gc.totalAllocated();
 		#end

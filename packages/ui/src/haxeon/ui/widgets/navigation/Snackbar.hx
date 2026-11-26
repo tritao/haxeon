@@ -42,7 +42,8 @@ class Snackbar implements ScopeView {
 	public function inputsEqual(previous:ScopeView):Bool {
 		if (!Std.isOfType(previous, Snackbar)) return false;
 		var other:Snackbar = cast previous;
-		return key == other.key && text == other.text && actionLabel == other.actionLabel && onAction == other.onAction
+		return key == other.key && text == other.text && actionLabel == other.actionLabel
+			&& (onAction == null) == (other.onAction == null)
 			&& haxeon.Diff.mask(style, other.style) == 0;
 	}
 
@@ -81,8 +82,13 @@ class Snackbar implements ScopeView {
 				var buttonSemantics = new Semantics(AccessibilityRole.Button, actionLabel);
 				buttonSemantics.actions = AccessibilityAction.Activate;
 				button.semantics = buttonSemantics;
-				var action = onAction;
-				if (action != null) button.onActivate(function(_:UiEvent) action());
+				if (onAction != null) {
+					var latest = context.latestOf(this);
+					button.onActivate(function(_:UiEvent) {
+						var handler = latest().onAction;
+						if (handler != null) handler();
+					});
+				}
 				button.add(NavUi.label(context, "label", actionLabel, 14.0, NavUi.rgb(0x9db4ff)));
 				return button;
 			});

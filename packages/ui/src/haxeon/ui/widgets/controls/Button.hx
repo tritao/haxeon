@@ -133,7 +133,8 @@ class Button implements ScopeView {
 			other.leadingIcon) && leadingView == other.leadingView && trailingView == other.trailingView
 			&& haxeon.Equality.equals(trailingIcon,
 			other.trailingIcon) && iconSize == other.iconSize && Semantics.same(semanticDescription,
-			other.semanticDescription) && onClick == other.onClick && onClickEvent == other.onClickEvent;
+			other.semanticDescription) && (onClick == null) == (other.onClick == null)
+			&& (onClickEvent == null) == (other.onClickEvent == null);
 	}
 
 	public function buildBody(context:BuildContext):RenderNode return buildButton(context, context.rootId("button"));
@@ -162,7 +163,14 @@ class Button implements ScopeView {
 		node.focusable = enabled;
 		node.enabled = enabled;
 		node.semantics = semanticDescription;
-		if (enabled && activation != null) node.onActivate(activation);
+		if (enabled && activation != null) {
+			// An equal description from a later parent run keeps this body: call its callback, not the one built here.
+			var latest = context.latestOf(this);
+			node.onActivate(function(event:UiEvent) {
+				var handler = latest().activation;
+				if (handler != null) handler(event);
+			});
+		}
 		var foreground = context.theme.buttonLabelColor(enabled,
 			resolvedStyle.background,
 			variant == ButtonVariant.Primary ? context.theme.tokens.textOnAccent : context.theme.tokens.textPrimary);
