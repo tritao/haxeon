@@ -9,8 +9,14 @@ import nativekit.ffi.NativeKitTypes.Result;
 class GraphicsImageRef implements Disposable {
 	private var value:GraphicsImage;
 	private var disposed:Bool;
+
+	/** Its width, in pixels. */
 	public final width:Int;
+
+	/** Its height, in pixels. */
 	public final height:Int;
+
+	/** The graphics API it belongs to. */
 	public final api:GraphicsApi;
 
 	private function new(value:GraphicsImage, width:Int, height:Int, api:GraphicsApi) {
@@ -64,6 +70,7 @@ class GraphicsImageRef implements Disposable {
 		disposed = true;
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

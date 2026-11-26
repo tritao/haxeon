@@ -9,6 +9,7 @@ import nativekit.ffi.NativeKitTypes.Handle;
 
 /** The managed owner of NativeKit's native event queue. */
 class EventPump {
+	/** The asynchronous requests answered through this pump. */
 	public final requests:Requests;
 	final listeners:Array<PlatformEvent->Void> = [];
 	final sourceListeners:Map<Int, Array<SourceRoute>> = [];

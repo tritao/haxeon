@@ -19,10 +19,12 @@ class ResourceCache implements Disposable {
 		this.value = owned.borrow();
 	}
 
+	/** An empty cache. */
 	public static function create():ResourceCache {
 		return new ResourceCache(NativeKit.nk_resource_cache_create_checked());
 	}
 
+	/** Loads `resource` now, or returns it from the cache. */
 	public function load(resource:Resource):ResourceAsset {
 		ensureLive();
 		if (resource == null)
@@ -31,6 +33,7 @@ class ResourceCache implements Disposable {
 		return new ResourceAsset(owned);
 	}
 
+	/** Starts loading `resource`; a ResourceAssetReady or ResourceAssetLoadFailed event follows. */
 	public function loadAsync(resource:Resource):ResourceCacheLoad {
 		ensureLive();
 		if (resource == null)
@@ -39,6 +42,7 @@ class ResourceCache implements Disposable {
 		return new ResourceCacheLoad(new ResourceAsset(result.out_asset), result.out_request);
 	}
 
+	/** The cached asset for `uri`. Throws when there is none. */
 	public function find(uri:String):ResourceAsset {
 		ensureLive();
 		if (uri == null || uri.length == 0)
@@ -47,6 +51,7 @@ class ResourceCache implements Disposable {
 		return new ResourceAsset(owned);
 	}
 
+	/** Drops the asset for `uri`. */
 	public function remove(uri:String):Void {
 		ensureLive();
 		if (uri == null || uri.length == 0)
@@ -54,11 +59,13 @@ class ResourceCache implements Disposable {
 		NativeKit.nk_resource_cache_remove_checked(value, uri);
 	}
 
+	/** Drops every asset. */
 	public function clear():Void {
 		ensureLive();
 		NativeKit.nk_resource_cache_clear_checked(value);
 	}
 
+	/** How many assets it holds. */
 	public function count():Int {
 		ensureLive();
 		return NativeKit.nk_resource_cache_get_count_checked(value);
@@ -73,6 +80,7 @@ class ResourceCache implements Disposable {
 			throw new NativeKitError(status, "resource.cache.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

@@ -6,6 +6,7 @@ import haxeon.platform.event.EventPump;
 class EventLoop {
 	final events:EventPump;
 
+	/** A loop over `events`. */
 	public function new(events:EventPump) {
 		this.events = events;
 	}

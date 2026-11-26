@@ -8,21 +8,49 @@ import nativekit.ffi.NativeKitTypes.TextInputType;
 
 /** Managed IME state. Text positions use NativeKit's document coordinate convention. */
 class TextInputState {
+	/** The text around the selection the input method may read. */
 	public var text:String;
+
+	/** Where `text` starts in the document, in code points. */
 	public var textStart:Int = 0;
+
+	/** The whole document's length, in code points. */
 	public var documentLength:Int;
+
+	/** Where the selection starts, in document code points. */
 	public var selectionStart:Int;
+
+	/** Where it ends. */
 	public var selectionEnd:Int;
+
+	/** Where the composition starts, or null for none. */
 	public var compositionStart:Null<Int> = null;
+
+	/** Where it ends, or null for none. */
 	public var compositionEnd:Null<Int> = null;
+
+	/** What kind of text it is, such as email or a number. */
 	public var inputType:TextInputType = TextInputType.Text;
+
+	/** Input hints, such as no autocorrection. */
 	public var flags:TextInputFlags = TextInputFlags.empty();
+
+	/** What the return key does. */
 	public var action:TextInputAction = TextInputAction.Default;
+
+	/** The caret's x, in surface-local logical pixels. */
 	public var cursorX:Float = 0;
+
+	/** The caret's y. */
 	public var cursorY:Float = 0;
+
+	/** The caret's width. */
 	public var cursorWidth:Float = 0;
+
+	/** The caret's height. */
 	public var cursorHeight:Float = 0;
 
+	/** The state of `text` with the given selection. */
 	public function new(text:String, documentLength:Int, selectionStart:Int, selectionEnd:Int) {
 		this.text = text;
 		this.documentLength = documentLength;

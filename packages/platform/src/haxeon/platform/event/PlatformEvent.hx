@@ -19,78 +19,212 @@ import nativekit.ffi.NativeKitTypes.TouchAction;
 import nativekit.ffi.NativeKitTypes.TouchTool;
 import nativekit.ffi.NativeKitTypes.WindowStateFlags;
 
+/** Everything NativeKit reports, decoded into managed values. */
 enum PlatformEvent {
+	/** No event. */
 	None;
+
+	/** Text read from the clipboard for `request`. */
 	ClipboardText(request:haxe.Int64, result:Result, text:String);
+
+	/** File paths read from the clipboard for `request`. */
 	ClipboardFiles(request:haxe.Int64, result:Result, paths:Array<String>);
+
+	/** Text dropped on a window. */
 	DropText(source:Handle, text:String);
+
+	/** Files dropped on a window. */
 	DropFiles(source:Handle, paths:Array<String>);
+
+	/** A message dialog closed with `button`. */
 	DialogMessage(request:haxe.Int64, result:Result, button:MessageResult, checkboxChecked:Bool);
+
+	/** A web view finished loading `url`. */
 	WebViewNavigated(source:Handle, url:String);
+
+	/** A web view's page posted a message. */
 	WebViewMessage(source:Handle, json:String);
+
+	/** A web view's page changed its title. */
 	WebViewTitleChanged(source:Handle, title:String);
+
+	/** A script evaluated in a web view returned `json`. */
 	WebViewEvaluation(source:Handle, request:haxe.Int64, result:Result, json:String);
+
+	/** A web view failed to load a page. */
 	WebViewNavigationFailed(source:Handle, category:NavigationError, message:String);
+
+	/** A web view's page wants to load `url`; the host allows or blocks it. */
 	WebViewNavigationRequest(source:Handle, request:haxe.Int64, url:String);
+
+	/** The user activated a notification, or one of its actions. */
 	NotificationActivated(request:haxe.Int64, action:String);
+
+	/** A notification could not be shown. */
 	NotificationFailed(request:haxe.Int64, message:String);
+
+	/** A native task reported progress. */
 	TaskProgress(source:Handle, data:haxe.io.Bytes);
+
+	/** A native task finished. */
 	TaskComplete(source:Handle, result:Result, data:haxe.io.Bytes);
+
+	/** A native task failed. */
 	TaskFailed(source:Handle, result:Result, data:haxe.io.Bytes);
+
+	/** A native task was cancelled. */
 	TaskCancelled(source:Handle, result:Result, data:haxe.io.Bytes);
+
+	/** An HTTP response's status and headers arrived. */
 	HttpHeaders(source:Handle, request:haxe.Int64, result:Result, response:HttpResponse);
+
+	/** More of an HTTP response's body can be read. */
 	HttpDataAvailable(source:Handle, request:haxe.Int64);
+
+	/** An HTTP request's progress. */
 	HttpProgressEvent(source:Handle, request:haxe.Int64, downloaded:haxe.Int64,
 		downloadTotal:haxe.Int64, uploaded:haxe.Int64, uploadTotal:haxe.Int64);
+
+	/** An HTTP request finished. */
 	HttpComplete(source:Handle, request:haxe.Int64, result:Result, response:HttpResponse);
+
+	/** A native event with no typed case. */
 	Raw(kind:EventKind, source:Handle, request:haxe.Int64, result:Result,
 		flags:Int, dataCount:Int, data:haxe.io.Bytes);
+
+	/** The user asked to close a window. */
 	WindowClose(source:Handle);
+
+	/** A window's size changed, in logical pixels. */
 	WindowResize(source:Handle, width:Int, height:Int);
+
+	/** A window moved. */
 	WindowMove(source:Handle, x:Int, y:Int);
+
+	/** A window's framebuffer size changed, in pixels. */
 	WindowFramebufferResize(source:Handle, width:Int, height:Int);
+
+	/** A window's content scale changed. */
 	WindowScaleChanged(source:Handle, scale:Float);
+
+	/** A window was minimized, maximized, focused or the like. */
 	WindowStateChanged(source:Handle, stateFlags:WindowStateFlags);
+
+	/** A key was pressed, repeated or released. */
 	Key(source:Handle, key:Key, scancode:Int, action:InputAction, modifiers:Modifiers);
+
+	/** A character was typed. */
 	TextInput(source:Handle, codepoint:Int);
+
+	/** The input method edited the focused text. */
 	TextEdit(source:Handle, edit:PlatformTextEdit);
+
+	/** Assistive technology asked a node for an action. */
 	AccessibilityAction(source:Handle, nodeId:Int, action:Int, value:Null<String>,
 		selectionStart:Int, selectionEnd:Int, granularity:Int);
+
+	/** The pointer moved. */
 	PointerMove(source:Handle, x:Float, y:Float);
+
+	/** A pointer button was pressed or released. */
 	PointerButton(source:Handle, button:PointerButton, action:InputAction,
 		modifiers:Modifiers, x:Float, y:Float);
+
+	/** The wheel or trackpad scrolled. */
 	PointerScroll(source:Handle, x:Float, y:Float);
+
+	/** The pointer entered or left a window. */
 	PointerEnter(source:Handle, entered:Bool);
+
+	/** A touch or pen contact began, moved or ended. */
 	Touch(source:Handle, pointerId:Int, action:TouchAction, tool:TouchTool,
 		modifiers:Modifiers, x:Float, y:Float, pressure:Float, tiltX:Float, tiltY:Float);
+
+	/** A joystick axis moved. */
 	JoystickAxis(source:Handle, axis:Int, value:Float);
+
+	/** A joystick button changed. */
 	JoystickButton(source:Handle, button:Int, pressed:Bool);
+
+	/** A joystick hat changed. */
 	JoystickHat(source:Handle, hat:Int, value:JoystickHatFlags);
+
+	/** A gamepad axis moved. */
 	GamepadAxis(source:Handle, axis:GamepadAxis, value:Float);
+
+	/** A gamepad button changed. */
 	GamepadButton(source:Handle, button:GamepadButton, pressed:Bool);
+
+	/** A surface can be drawn to. */
 	SurfaceReady(source:Handle);
+
+	/** A surface's size changed. */
 	SurfaceResize(source:Handle, width:Int, height:Int, framebufferWidth:Int, framebufferHeight:Int);
+
+	/** A surface's drawing context was lost. */
 	SurfaceLost(source:Handle);
+
+	/** A submitted surface frame finished. */
 	SurfaceFrameComplete(source:Handle, frameToken:haxe.Int64, result:Result);
+
+	/** Resources a request picked, opened or received. */
 	Resources(kind:EventKind, request:haxe.Int64, result:Result, accepted:Bool, items:Array<Resource>);
+
+	/** Content shared to the app. */
 	ShareReceived(text:Null<String>, subject:Null<String>, items:Array<Resource>);
+
+	/** Resources dropped on a window. */
 	ResourceDrop(source:Handle, x:Float, y:Float, text:Null<String>, items:Array<Resource>);
+
+	/** A resource save finished. */
 	ResourceCommit(request:haxe.Int64, result:Result, downloadInitiated:Bool);
+
+	/** A resource cache asset loaded. */
 	ResourceAssetReady(source:Handle, request:haxe.Int64);
+
+	/** A resource cache asset failed to load. */
 	ResourceAssetLoadFailed(source:Handle, request:haxe.Int64, result:Result);
+
+	/** An audio clip loaded. */
 	AudioClipReady(source:Handle, request:haxe.Int64);
+
+	/** An audio clip failed to load. */
 	AudioClipLoadFailed(source:Handle, request:haxe.Int64, result:Result);
+
+	/** An audio voice finished loading. */
 	AudioVoiceReady(source:Handle);
+
+	/** An audio voice failed to load. */
 	AudioVoiceLoadFailed(source:Handle, result:Result);
+
+	/** An audio voice reached its end. */
 	AudioVoiceComplete(source:Handle);
+
+	/** An audio voice was stopped to make room for another. */
 	AudioVoiceStolen(source:Handle);
+
+	/** An audio voice went silent to make room, keeping its place. */
 	AudioVoiceVirtualized(source:Handle);
+
+	/** A virtualized audio voice became audible again. */
 	AudioVoiceResumed(source:Handle);
+
+	/** A streaming audio voice failed to read its source. */
 	AudioVoiceStreamFailed(source:Handle, result:Result);
+
+	/** The audio device started. */
 	AudioDeviceStarted;
+
+	/** The audio device stopped. */
 	AudioDeviceStopped;
+
+	/** The audio device's output route changed. */
 	AudioDeviceRerouted;
+
+	/** Another app or a call interrupted audio. */
 	AudioDeviceInterruptionBegan;
+
+	/** The audio interruption ended. */
 	AudioDeviceInterruptionEnded;
 
 }

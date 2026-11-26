@@ -31,6 +31,7 @@ class FileWatch implements Disposable {
 	final excluded:Array<String> = [];
 	var disposed:Bool = false;
 
+	/** Whether every registration is being watched. */
 	public var ready(get, never):Bool;
 
 	/** Throws NativeKitError when the platform cannot watch files. */
@@ -99,6 +100,7 @@ class FileWatch implements Disposable {
 	public function exclusions():Array<String>
 		return excluded.copy();
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

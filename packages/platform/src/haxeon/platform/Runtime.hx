@@ -10,6 +10,8 @@ import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 /** Owns one initialized NativeKit generation and all windows created through it. */
 class Runtime implements Disposable {
 	final windows = new DisposalRegistry();
+
+	/** The event pump every window and request reports to. */
 	public final events:EventPump;
 	var disposed:Bool = false;
 	var disposing:Bool = false;
@@ -22,12 +24,15 @@ class Runtime implements Disposable {
 		events = new EventPump();
 	}
 
+	/** Starts NativeKit, configured by `options`. */
 	public static function start(?options:RuntimeOptions):Runtime
 		return startNative((options == null ? new RuntimeOptions() : options).nativeValue());
 
+	/** Opens a window. */
 	public function createWindow(options:WindowOptions):Window
 		return createWindowNative(options.nativeValue());
 
+	/** Starts NativeKit from a generated init record. */
 	public static function startNative(?options:InitOptions):Runtime {
 		var configured = options;
 		if (configured == null) {
@@ -39,6 +44,7 @@ class Runtime implements Disposable {
 		return new Runtime();
 	}
 
+	/** Opens a window from a generated options record. */
 	public function createWindowNative(options:NativeWindowOptions):Window {
 		ensureLive();
 		var owned = NativeKit.nk_window_create_checked(options);
@@ -109,6 +115,7 @@ class Runtime implements Disposable {
 		events.runtimeShutdown();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

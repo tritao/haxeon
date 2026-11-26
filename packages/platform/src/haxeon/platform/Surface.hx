@@ -51,6 +51,7 @@ class Surface implements Disposable {
 	public function ownsEventSource(source:Handle):Bool
 		return !disposed && source.rawValue() == value.rawValue();
 
+	/** The native surface, for packages that draw to it and for interop. */
 	public function nativeHandle():SurfaceHandle {
 		ensureLive();
 		return value;
@@ -220,6 +221,7 @@ class Surface implements Disposable {
 		dispose();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

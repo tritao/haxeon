@@ -1,8 +1,14 @@
 package haxeon.platform;
 
+/** Where a browser app is in its life. */
 enum abstract BrowserAppStatus(Int) {
+	/** Running, with no frame presented yet. */
 	var Starting = 0;
+
+	/** Running, with a frame on screen. */
 	var Presented = 1;
+
+	/** Finished. */
 	var Stopped = 2;
 }
 
@@ -20,6 +26,7 @@ class BrowserHost {
 	static function attach(launch:AppLaunch):Void
 		active = launch;
 
+	/** Runs one animation frame of the app. */
 	public static function tick():BrowserAppStatus
 		return advance(null);
 

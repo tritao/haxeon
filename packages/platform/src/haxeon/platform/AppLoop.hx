@@ -31,6 +31,7 @@ class AppLoop implements Disposable {
 	var disposalRequested = false;
 	var failure:Null<haxe.Exception>;
 
+	/** Whether a frame has reached the screen yet. */
 	public var firstFramePresented(default, null) = false;
 
 	@:allow(haxeon.platform.Runtime)

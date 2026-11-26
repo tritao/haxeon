@@ -6,15 +6,24 @@ import nativekit.ffi.NativeKitTypes.MessageKind;
 
 /** Message text, presentation kind, and buttons for a native dialog. */
 class MessageDialogOptions {
+	/** What the dialog says. */
 	public var message:String;
+
+	/** Its title, or null. */
 	public var title:Null<String> = null;
+
+	/** Its icon and tone: information, warning or error. */
 	public var kind:MessageKind = cast 0;
+
+	/** Which buttons it offers. */
 	public var buttons:MessageButtons = cast 0;
 
+	/** A dialog saying `message`. */
 	public function new(message:String) {
 		this.message = message;
 	}
 
+	/** The generated ABI record for these options, for the `Native` interop entry points. */
 	public function nativeValue():NativeMessageDialogOptions {
 		var value = new NativeMessageDialogOptions();
 		value.struct_size = NativeMessageDialogOptions.byteSize();

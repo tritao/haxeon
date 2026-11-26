@@ -14,6 +14,7 @@ class AppLaunch implements Disposable {
 		this.loop = loop;
 	}
 
+	/** Runs one loop iteration. Returns false once the app has stopped and its last frame finished. */
 	public function tick():Bool {
 		if (disposed) return false;
 		var active = false;
@@ -35,6 +36,7 @@ class AppLaunch implements Disposable {
 		return active;
 	}
 
+	/** Whether a frame has reached the screen yet. */
 	public function firstFramePresented():Bool
 		return loop.firstFramePresented;
 

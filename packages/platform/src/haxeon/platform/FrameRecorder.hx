@@ -6,11 +6,13 @@ class FrameRecorder {
 	final onPresented:Null<SurfaceFrameTiming->Float->Void>;
 	final pending:Array<{timing:SurfaceFrameTiming, notify:Null<Float->Void>}> = [];
 
+	/** A recorder calling `onSubmitted` as frames are submitted and `onPresented` when they reach the screen. */
 	public function new(?onSubmitted:SurfaceFrameTiming->Void, ?onPresented:SurfaceFrameTiming->Float->Void) {
 		this.onSubmitted = onSubmitted;
 		this.onPresented = onPresented;
 	}
 
+	/** Starts timing a frame of `surface` whose callback ran at `callbackSeconds`. */
 	public function begin(surface:Surface, callbackSeconds:Float):SurfaceFrameTiming
 		return surface.captureFrameTiming(callbackSeconds);
 
@@ -23,6 +25,7 @@ class FrameRecorder {
 		if (onSubmitted != null) onSubmitted(timing);
 	}
 
+	/** Delivers the presentation times the backend has reported since the last call. */
 	public function collect():Void {
 		var index = pending.length - 1;
 		while (index >= 0) {

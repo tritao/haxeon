@@ -21,16 +21,19 @@ class Task implements Disposable {
 		return new Task(value);
 	}
 
+	/** The native task, for interop. */
 	public function nativeHandle():TaskHandle {
 		ensureLive();
 		return value;
 	}
 
+	/** Asks the task to stop. */
 	public function cancel():Void {
 		ensureLive();
 		check(NativeKit.nk_task_cancel(value), "task.cancel");
 	}
 
+	/** Whether it is running, yielded, completed, failed or cancelled. */
 	public function state():TaskState {
 		ensureLive();
 		return NativeKit.nk_task_get_state_checked(value);
@@ -42,6 +45,7 @@ class Task implements Disposable {
 		disposed = true;
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool return disposed;
 
 	function ensureLive():Void if (disposed) throw BindingError.disposed("Task.ensureLive", "Task has been disposed");

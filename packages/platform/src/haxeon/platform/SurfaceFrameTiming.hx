@@ -4,8 +4,13 @@ import haxe.Int64;
 
 /** Timing for one surface callback. All timestamps use monotonic seconds. */
 class SurfaceFrameTiming {
+	/** The backend's id for the frame, or null when it reports no presentation feedback. */
 	public final frameId:Null<Int64>;
+
+	/** When the frame callback ran. */
 	public final callbackSeconds:Float;
+
+	/** When drawing was submitted, or null until `markSubmitted`. */
 	public var submittedSeconds(default, null):Null<Float>;
 
 	final surface:Surface;

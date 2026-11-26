@@ -21,6 +21,7 @@ class ResourceAsset implements Disposable {
 		this.value = owned.borrow();
 	}
 
+	/** The native asset, for packages that read it. */
 	public function nativeHandle():ResourceAssetHandle {
 		ensureLive();
 		return value;
@@ -75,6 +76,7 @@ class ResourceAsset implements Disposable {
 			throw new NativeKitError(status, "resource.asset.dispose", NativeKit.nk_last_error());
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

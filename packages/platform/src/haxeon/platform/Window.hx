@@ -36,6 +36,7 @@ class Window implements Disposable {
 		this.events = events;
 	}
 
+	/** The native window, for packages that host content in it and for interop. */
 	public function nativeHandle():WindowHandle {
 		ensureLive();
 		return value;
@@ -90,9 +91,11 @@ class Window implements Disposable {
 		NativeKit.nk_window_set_decoration_regions_checked(value, regions);
 	}
 
+	/** Adds a drawing surface, disposed with the window. */
 	public function createSurface(options:SurfaceOptions):Surface
 		return createSurfaceNative(options.nativeValue());
 
+	/** Adds a surface from a generated options record. */
 	public function createSurfaceNative(options:NativeSurfaceOptions):Surface {
 		ensureCanCreate();
 		var surface = Surface.adopt(NativeKit.nk_surface_create_checked(new Handle(value.rawValue()), options), events);
@@ -100,9 +103,11 @@ class Window implements Disposable {
 		return surface;
 	}
 
+	/** Adds a web view, disposed with the window. */
 	public function createWebView(options:WebViewOptions):WebView
 		return createWebViewNative(options.nativeValue());
 
+	/** Adds a web view from a generated options record. */
 	public function createWebViewNative(options:NativeWebViewOptions):WebView {
 		ensureCanCreate();
 		var webview = new WebView(NativeKit.nk_webview_create_checked(new Handle(value.rawValue()), options));
@@ -133,6 +138,7 @@ class Window implements Disposable {
 		if (owner != null) owner.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

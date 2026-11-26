@@ -12,6 +12,7 @@ class DisposalRegistration {
 		this.action = action;
 	}
 
+	/** Removes the registration without running its callback. */
 	public function detach():Void {
 		if (owner != null) owner.remove(this);
 		owner = null;

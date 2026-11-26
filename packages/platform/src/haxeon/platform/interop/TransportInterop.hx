@@ -16,6 +16,7 @@ import nativekit.ffi.NativeKitTypes.TransportOptions;
 
 /** Small Haxe façade over NativeKit's asynchronous transports. */
 class TransportInterop {
+	/** TCP transport options for `host` and `port`, with the defaults the other calls use. */
 	public static function options(port:Int, ?host:String = "127.0.0.1"):TransportOptions {
 		if (port <= 0 || port > 65535)
 			throw BindingError.invalidArgument("TransportInterop.options",
@@ -36,6 +37,7 @@ class TransportInterop {
 		return value;
 	}
 
+	/** Listens for TCP connections on `host` and `port`. */
 	public static function listen(port:Int, ?host:String = "127.0.0.1"):OwnedListenerHandle {
 		var value = options(port, host);
 		value.flags = TransportFlags.ReuseAddress;
@@ -45,6 +47,7 @@ class TransportInterop {
 		return result.out_listener;
 	}
 
+	/** Opens a TCP connection to `host` and `port`. */
 	public static function connect(host:String, port:Int):OwnedTransportHandle {
 		var value = options(port, host);
 		var result = NativeKit.nk_transport_connect(value);
@@ -89,12 +92,14 @@ class TransportInterop {
 		return Bytes.view(buffer, 0, Int64.toInt(result.out_received));
 	}
 
+	/** Queues `bytes` for sending. Throws when the transport refuses them. */
 	public static function send(transport:TransportHandle, bytes:Bytes):Void {
 		if (bytes == null)
 			throw BindingError.invalidArgument("TransportInterop.send", "NativeKit transport cannot send null bytes");
 		NativeKit.nk_transport_send_checked(transport, bytes);
 	}
 
+	/** Queues `bytes` and returns the result instead of throwing. */
 	public static function sendStatus(transport:TransportHandle, bytes:Bytes):Result {
 		if (bytes == null)
 			throw BindingError.invalidArgument("TransportInterop.sendStatus",
@@ -102,6 +107,7 @@ class TransportInterop {
 		return NativeKit.nk_transport_send(transport, bytes);
 	}
 
+	/** How much is queued to send, and the queue's capacity. */
 	public static function sendQueue(transport:TransportHandle):TransportSendQueue {
 		var result = NativeKit.nk_transport_get_send_queue(transport);
 		if (result.status != Result.Ok)
@@ -118,6 +124,7 @@ class TransportInterop {
 		return result.status == Result.Ok ? Int64.toInt(result.out_process_id) : 0;
 	}
 
+	/** Reads up to `capacity` bytes received so far; empty when nothing is waiting. */
 	public static function receive(transport:TransportHandle, ?capacity:Int = 64 * 1024):Bytes {
 		if (capacity <= 0)
 			throw BindingError.invalidArgument("TransportInterop.receive",
@@ -132,6 +139,7 @@ class TransportInterop {
 		return count == 0 ? Bytes.alloc(0) : Bytes.view(buffer, 0, count);
 	}
 
+	/** Closes the transport. */
 	public static function close(transport:TransportHandle):Void
 		NativeKit.nk_transport_close_checked(transport);
 }

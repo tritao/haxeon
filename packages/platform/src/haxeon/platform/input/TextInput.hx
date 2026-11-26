@@ -10,10 +10,12 @@ import nativekit.ffi.NativeKitTypes.Result;
 
 /** Synchronizes managed text-input state and visibility with the platform IME. */
 class TextInput {
+	/** Tells the input method about the focused text in `surface`. */
 	public static function update(surface:Surface, state:TextInputState):Void {
 		NativeKit.nk_surface_set_text_input_state_checked(surfaceTarget(surface), checkedState(state).nativeValue());
 	}
 
+	/** Tells the input method about the focused text in `window`. */
 	public static function updateWindow(window:Window, state:TextInputState):Void {
 		if (window == null) throw BindingError.invalidArgument("TextInput.updateWindow", "Window cannot be null");
 		NativeKit.nk_surface_set_text_input_state_checked(new Handle(window.nativeHandle().rawValue()),
@@ -32,14 +34,17 @@ class TextInput {
 			compositionStart, compositionEnd, selectionRects, compositionRects);
 	}
 
+	/** Shows or hides the input method for `surface`. */
 	public static function setActive(surface:Surface, active:Bool):Void
 		NativeKit.nk_surface_set_text_input_active_checked(surfaceTarget(surface), active);
 
+	/** Shows or hides the input method for `window`. */
 	public static function setWindowActive(window:Window, active:Bool):Void {
 		if (window == null) throw BindingError.invalidArgument("TextInput.setWindowActive", "Window cannot be null");
 		NativeKit.nk_surface_set_text_input_active_checked(new Handle(window.nativeHandle().rawValue()), active);
 	}
 
+	/** Like `setActive`, returning the backend's result instead of throwing. */
 	public static function setActiveResult(surface:Surface, active:Bool):Result
 		return NativeKit.nk_surface_set_text_input_active(surfaceTarget(surface), active);
 

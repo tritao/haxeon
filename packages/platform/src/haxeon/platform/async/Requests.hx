@@ -28,6 +28,7 @@ class Requests {
 	@:allow(haxeon.platform.event.EventPump)
 	private function new() {}
 
+	/** Reads the clipboard's text. */
 	public function readClipboardText():Future<String> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_clipboard_read_text_checked(), function(value, _) switch value {
@@ -36,6 +37,7 @@ class Requests {
 		});
 	}
 
+	/** Reads the clipboard's file paths. */
 	public function readClipboardFiles():Future<Array<String>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_clipboard_read_files_checked(), function(value, _) switch value {
@@ -44,6 +46,7 @@ class Requests {
 		});
 	}
 
+	/** Reads the clipboard's resources. */
 	public function readClipboardResources():Future<Array<Resource>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_clipboard_read_resources_checked(), function(value, _) switch value {
@@ -52,6 +55,7 @@ class Requests {
 		});
 	}
 
+	/** Asks the user to pick resources to open. */
 	public function openResource(parent:Window, options:FileDialogOptions):Future<Array<Resource>> {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.openResource",
@@ -60,6 +64,7 @@ class Requests {
 			options.nativeValue()));
 	}
 
+	/** Asks the user where to save. */
 	public function saveResource(parent:Window, options:FileDialogOptions):Future<Array<Resource>> {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.saveResource",
@@ -68,6 +73,7 @@ class Requests {
 			options.nativeValue()));
 	}
 
+	/** Asks the user to pick a directory. */
 	public function selectResourceDirectory(parent:Window, options:FileDialogOptions):Future<Array<Resource>> {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.selectResourceDirectory",
@@ -86,6 +92,7 @@ class Requests {
 		});
 	}
 
+	/** Shows a message dialog and resolves with the button chosen. */
 	public function messageDialog(parent:Window, options:MessageDialogOptions):Future<MessageResult> {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.messageDialog",
@@ -98,6 +105,7 @@ class Requests {
 		}, function() NativeKit.nk_dialog_cancel_checked(request));
 	}
 
+	/** Runs `script` in a web view and resolves with its result as JSON. */
 	public function evaluateWebView(webview:WebView, script:String):Future<String> {
 		ensureLive();
 		if (webview == null || script == null) throw BindingError.invalidArgument("Requests.evaluateWebView",
@@ -206,6 +214,7 @@ class Requests {
 		if (failure != null) throw failure;
 	}
 
+	/** How many requests have not completed. */
 	public function pending():Int {
 		var count = 0;
 		for (_ in entries) count++;

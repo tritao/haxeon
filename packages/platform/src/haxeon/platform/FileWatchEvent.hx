@@ -1,5 +1,6 @@
 package haxeon.platform;
 
+/** What a file watch reports. */
 enum FileWatchEvent {
 	/** A file or directory changed. */
 	Changed(change:FileWatchChange);

@@ -9,11 +9,19 @@ import nativekit.ffi.NativeKitTypes.Result;
 
 /** Describes a URI-backed NativeKit resource for NativeKit APIs. */
 class Resource {
+	/** What may be done with it, such as reading or writing. */
 	public final flags:ResourceFlags;
+
+	/** Where it is. */
 	public final uri:String;
+
+	/** Its media type, or null. */
 	public final mimeType:Null<String>;
+
+	/** A name to show for it, or null. */
 	public final displayName:Null<String>;
 
+	/** A resource at `uri`, readable unless `flags` say otherwise. */
 	public function new(uri:String, ?mimeType:String, ?displayName:String,
 			?flags:ResourceFlags) {
 		if (uri == null || uri.length == 0)

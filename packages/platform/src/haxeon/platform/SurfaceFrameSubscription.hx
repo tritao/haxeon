@@ -21,6 +21,7 @@ class SurfaceFrameSubscription implements Disposable {
 		surface.detach(this);
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 

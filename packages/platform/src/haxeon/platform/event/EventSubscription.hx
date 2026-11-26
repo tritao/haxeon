@@ -31,6 +31,7 @@ class EventSubscription implements Disposable {
 		owner = null;
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed || events.isDisposed();
 }

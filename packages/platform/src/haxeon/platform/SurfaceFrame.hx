@@ -47,6 +47,7 @@ class SurfaceFrame {
 		finished = true;
 	}
 
+	/** Whether it has been presented or cancelled. */
 	public function isFinished():Bool
 		return finished;
 
@@ -92,6 +93,7 @@ class SurfaceFrame {
 		return value;
 	}
 
+	/** Whether it is a frame of `surface`. */
 	public function belongsTo(surface:Surface):Bool
 		return this.surface == surface;
 

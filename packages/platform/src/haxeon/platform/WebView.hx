@@ -2,7 +2,6 @@ package haxeon.platform;
 
 import haxeon.platform.DisposalRegistration;
 import haxeon.platform.NativeKitError;
-import haxeon.platform.WebViewOptions;
 import haxeon.platform.Window;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Handle;
@@ -23,37 +22,41 @@ class WebView implements Disposable {
 		this.value = owned.borrow();
 	}
 
-	public static function create(parent:Window, options:WebViewOptions):WebView
-		return parent.createWebView(options);
-
+	/** A web view in the native window `parent`, from a generated options record; the caller disposes it. */
 	public static function createNative(parent:Handle, options:NativeWebViewOptions):WebView
 		return new WebView(NativeKit.nk_webview_create_checked(parent, options));
 
+	/** Shows or hides it. */
 	public function show(visible:Bool):Void {
 		ensureLive();
 		check(NativeKit.nk_webview_show(value, visible), "webview.show");
 	}
 
+	/** Moves and resizes it within its window. */
 	public function setBounds(x:Int, y:Int, width:Int, height:Int):Void {
 		ensureLive();
 		check(NativeKit.nk_webview_set_bounds(value, x, y, width, height), "webview.setBounds");
 	}
 
+	/** Loads `html`, resolving relative URLs against `baseUrl`. */
 	public function setHtml(html:String, ?baseUrl:String):Void {
 		ensureLive();
 		check(NativeKit.nk_webview_set_html(value, html, baseUrl), "webview.setHtml");
 	}
 
+	/** Loads `url`. */
 	public function navigate(url:String):Void {
 		ensureLive();
 		check(NativeKit.nk_webview_navigate(value, url), "webview.navigate");
 	}
 
+	/** Reloads the page. */
 	public function reload():Void {
 		ensureLive();
 		check(NativeKit.nk_webview_reload(value), "webview.reload");
 	}
 
+	/** The native web view, for interop. */
 	public function nativeHandle():WebViewHandle {
 		ensureLive();
 		return value;
@@ -67,6 +70,7 @@ class WebView implements Disposable {
 		if (owner != null) owner.detach();
 	}
 
+	/** Whether it has been disposed. */
 	public function isDisposed():Bool
 		return disposed;
 
