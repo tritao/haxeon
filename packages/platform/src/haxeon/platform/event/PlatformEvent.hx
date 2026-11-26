@@ -120,7 +120,8 @@ enum PlatformEvent {
 	TextEdit(source:Handle, edit:PlatformTextEdit);
 
 	/** Assistive technology asked a node for an action. */
-	AccessibilityAction(source:Handle, nodeId:Int, action:Int, value:Null<String>,
+	AccessibilityAction(source:Handle, nodeId:Int, action:nativekit.ffi.NativeKitTypes.AccessibilityAction,
+		value:Null<String>,
 		selectionStart:Int, selectionEnd:Int, granularity:Int);
 
 	/** The pointer moved. */

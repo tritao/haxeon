@@ -2,6 +2,7 @@ package haxeon.platform.event;
 
 import haxeon.platform.BindingError;
 import haxeon.platform.input.TextEdit as PlatformTextEdit;
+import nativekit.ffi.NativeKitTypes.AccessibilityAction as NativeAccessibilityAction;
 import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.GamepadAxisEvent;
 import nativekit.ffi.NativeKitTypes.GamepadButtonEvent;
@@ -39,13 +40,13 @@ internal class InputEventDecoder {
 		case EventKind.AccessibilityAction:
 			EventBytes.requireMinimumSize(c.data, 32);
 			var nodeId = EventBytes.readU32(c.data, 0);
-			var action = EventBytes.readU32(c.data, 4);
+			var code = EventBytes.readU32(c.data, 4);
 			var valueOffset = EventBytes.readU32(c.data, 8);
 			var valueLength = EventBytes.readU32(c.data, 12);
 			var selectionStart = EventBytes.readU32(c.data, 16);
 			var selectionEnd = EventBytes.readU32(c.data, 20);
 			var granularity = EventBytes.readU32(c.data, 24);
-			if (nodeId <= 0 || action < 1 || action > 11 || EventBytes.readU32(c.data, 28) != 0)
+			if (nodeId <= 0 || EventBytes.readU32(c.data, 28) != 0)
 				throw BindingError.invalidData("InputEventDecoder.decode",
 					"NativeKit accessibility action payload has invalid fields");
 			var value = EventBytes.readUtf8Slice(c.data, valueOffset, valueLength, 32);
@@ -53,8 +54,10 @@ internal class InputEventDecoder {
 				&& (valueOffset + valueLength >= c.data.length || c.data.get(valueOffset + valueLength) != 0))
 				throw BindingError.invalidData("InputEventDecoder.decode",
 					"NativeKit accessibility action value is not NUL-terminated");
-			AccessibilityAction(c.source, nodeId, action, value, selectionStart,
-				selectionEnd, granularity);
+			// An action newer than this binding has no case: the event stays a Raw one, which nothing handles.
+			var action = NativeAccessibilityAction.fromRaw(code);
+			action == null ? null : AccessibilityAction(c.source, nodeId, action, value, selectionStart, selectionEnd,
+				granularity);
 		case EventKind.PointerMove: EventBytes.requireSize(c.data, 16);
 			var v:PointerMoveEvent = c.data;
 			PointerMove(c.source, v.get_x(), v.get_y());

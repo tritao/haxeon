@@ -124,10 +124,19 @@ class NativeKitEventDecoderTests {
 			handle(15), zero, Result.Ok, 0, 0, accessibilityPayload);
 		var accessibilityOk = switch NativeEvent.decodeSnapshot(accessibilityContext) {
 			case AccessibilityAction(source, nodeId, action, value, selectionStart, selectionEnd, granularity):
-				source.rawValue == 15 && nodeId == 77 && action == 1 && value == "ok" && selectionStart == -1
+				source.rawValue == 15 && nodeId == 77 && action == NativeKitTypes.AccessibilityAction.Activate
+					&& value == "ok" && selectionStart == -1
 					&& selectionEnd == -1 && granularity == 1;
 			case _: false;
 		};
+		// An action code newer than the binding keeps the event, as a Raw one.
+		var newerAccessibilityPayload = accessibilityPayload.sub(0, accessibilityPayload.length);
+		putU32(newerAccessibilityPayload, 4, 999);
+		var newerAccessibilityOk = switch NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AccessibilityAction,
+			handle(15), zero, Result.Ok, 0, 0, newerAccessibilityPayload)) {
+				case Raw(kind, _, _, _, _, _, _): kind == EventKind.AccessibilityAction;
+				case _: false;
+			};
 		var unterminatedAccessibility = accessibilityPayload.sub(0, 34);
 		var unterminatedAccessibilityContext = new EventSnapshot(EventKind.AccessibilityAction,
 			handle(15), zero, Result.Ok, 0, 0, unterminatedAccessibility);
@@ -265,7 +274,8 @@ class NativeKitEventDecoderTests {
 		if (!resourcesOk) throw "resource completion decoding failed";
 		if (!resourceCacheEventsOk) throw "resource cache event decoding failed";
 		return decodedResourceIsReusable() && unknownRejected && rawOk && nonMatch && editOk && extraButtonsOk
-			&& invalidButtonRejected && typedKeyOk && typedHatOk && typedNavigationOk && accessibilityOk && taskOk
+			&& invalidButtonRejected && typedKeyOk && typedHatOk && typedNavigationOk && accessibilityOk
+			&& newerAccessibilityOk && taskOk
 			&& audioOk
 			&& audioReadyOk && audioFailedOk
 			&& audioClipReadyOk && audioClipFailedOk
