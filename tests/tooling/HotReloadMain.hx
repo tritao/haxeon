@@ -70,7 +70,7 @@ class HotReloadMain {
 			readIndex = requireFunctionId(initial, "Probe.read"),
 			exceptionIndex = requireFunctionId(initial, "ExceptionProbe.probe"),
 			workIndex = requireFunctionId(initial, "Worker.run");
-		var loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+		var loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 			initial.artifact.hashLink().runtimeIdentity);
 		if (Runtime.callInt(loaded, valueIndex) != 42)
 			throw "initial generation did not return 42";
@@ -412,9 +412,9 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value; } function fail():Int { throw new Box(1); } function main():Int { return read(make()); }");
 		var initial = compiler.compile("Main"),
-			loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+			loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 				initial.artifact.hashLink().runtimeIdentity);
-		var retained = Runtime.retainObject(loaded, initial.artifact.hashLink().functionIds.get("Main.make"));
+		var retained = Runtime.retainObject(loaded, Runtime.requireFunctionId(loaded, "Main.make"));
 		var retirement = Runtime.retirementStatus(loaded);
 		if (retirement.ownedNativeRoots == 0 || !retirement.has(OwnedNativeRoots))
 			throw "loaded module globals were not attributed to their native owner";
@@ -425,7 +425,7 @@ class HotReloadMain {
 		if (retirement.registryReaders != 0 || retirement.has(RegistryReaders))
 			throw "retirement status leaked an inactive registry reader";
 		try {
-			Runtime.callInt(loaded, initial.artifact.hashLink().functionIds.get("Main.fail"));
+			Runtime.callInt(loaded, Runtime.requireFunctionId(loaded, "Main.fail"));
 			throw "module exception unexpectedly returned";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.Exception)
@@ -437,7 +437,7 @@ class HotReloadMain {
 		Runtime.patchSet(loaded,
 			new PatchSet(initial.revision, changed.revision, changed.artifact.hashLink().patchBytes,
 			changed.changedFunctions));
-		if (Runtime.callIntObject(loaded, initial.artifact.hashLink().functionIds.get("Main.read"), retained) != 42)
+		if (Runtime.callIntObject(loaded, Runtime.requireFunctionId(loaded, "Main.read"), retained) != 42)
 			throw "patched code could not consume a retained object with the same layout";
 		retained.release();
 		Runtime.dispose(loaded);
@@ -448,9 +448,9 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"function value():Int { return 40; } function make():() -> Int { return value; } function main():Int { return value(); }");
 		var initial = compiler.compile("Main"),
-			loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+			loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 				initial.artifact.hashLink().runtimeIdentity);
-		var makeId = initial.artifact.hashLink().functionIds.get("Main.make");
+		var makeId = Runtime.requireFunctionId(loaded, "Main.make");
 		var initialClosure = Runtime.retainClosure(loaded, makeId);
 		if (Runtime.callRetainedClosureInt(initialClosure) != 40)
 			throw "initial static closure returned the wrong value";
@@ -500,10 +500,10 @@ class HotReloadMain {
 				+ Std.random(1000000);
 		FileSystem.createDirectory(directory);
 		var prefix = directory + "/jit-support-lifetime";
-		File.saveBytes(prefix + "-owner.hl", HlWriter.encode(ownerResult.artifact.hashLink().module).flatten());
+		File.saveBytes(prefix + "-owner.hl", ownerResult.artifact.hashLink().hashLinkBytes().flatten());
 		File.saveBytes(prefix + "-owner.hli", ownerResult.artifact.hashLink().runtimeIdentity);
 		File.saveContent(prefix + "-owner.id", Std.string(ownerResult.artifact.hashLink().functionIds.get("main")));
-		File.saveBytes(prefix + "-survivor.hl", HlWriter.encode(survivorResult.artifact.hashLink().module).flatten());
+		File.saveBytes(prefix + "-survivor.hl", survivorResult.artifact.hashLink().hashLinkBytes().flatten());
 		File.saveBytes(prefix + "-survivor.hli", survivorResult.artifact.hashLink().runtimeIdentity);
 		File.saveContent(prefix + "-survivor.id",
 			Std.string(survivorResult.artifact.hashLink().functionIds.get("main")));
@@ -523,7 +523,7 @@ class HotReloadMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", "function main():Int { return 42; }");
 		var result = compiler.compile("Main"),
-			bytes = HlWriter.encode(result.artifact.hashLink().module).flatten(),
+			bytes = result.artifact.hashLink().hashLinkBytes().flatten(),
 			mainId = result.artifact.hashLink().functionIds.get("main");
 		for (i in 0...100) {
 			runDisposableGeneration(bytes, result.artifact.hashLink().runtimeIdentity, mainId);
@@ -607,7 +607,7 @@ class HotReloadMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", unused);
 		var first = compiler.compile("Main");
-		var loaded = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+		var loaded = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 			first.artifact.hashLink().runtimeIdentity);
 		if (!first.artifact.hashLink().functionIds.exists("Spare.read")
 			|| !first.artifact.hashLink().functionIds.exists("Spare.more"))
@@ -623,7 +623,7 @@ class HotReloadMain {
 				new PatchSet(baseRevision, changed.revision, changed.artifact.hashLink().patchBytes,
 				changed.changedFunctions));
 			baseRevision = changed.revision;
-			if (Runtime.callInt(loaded, changed.artifact.hashLink().functionIds.get("main")) != 42)
+			if (Runtime.callInt(loaded, Runtime.requireFunctionId(loaded, "main")) != 42)
 				throw 'step $step: the patched module does not run the edited program';
 		}
 		Runtime.dispose(loaded);
@@ -687,7 +687,7 @@ class HotReloadMain {
 			compiler.update("Main.hx", fixture.before);
 			var initial = compiler.compile("Main"),
 				mainId = initial.artifact.hashLink().functionIds.get("main");
-			var loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+			var loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 				initial.artifact.hashLink().runtimeIdentity);
 			compiler.update("Main.hx", fixture.after);
 			var changed = compiler.compile("Main");
@@ -711,7 +711,7 @@ class HotReloadMain {
 		var initial = compiler.compile("Main"),
 			mainId = initial.artifact.hashLink().functionIds.get("main"),
 			helperId = initial.artifact.hashLink().functionIds.get("Main.helper"),
-			loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+			loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 				initial.artifact.hashLink().runtimeIdentity);
 		compiler.acknowledgePublication(initial.revision);
 		var state = compiler.exportIdentityState();

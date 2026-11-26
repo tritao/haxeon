@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -19,9 +18,9 @@ class NativeClosurePatchMain {
 			+ "; } } function main():Int { return Calc.run(); }";
 		compiler.update("Main.hx", program(1));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+			live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 				first.artifact.hashLink().runtimeIdentity),
-			mainId = first.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		if (Runtime.callInt(live, mainId) != 5)
 			throw "The native-closure program did not run correctly before the edit";
 		compiler.update("Main.hx", program(2));

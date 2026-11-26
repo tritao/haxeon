@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -37,9 +36,9 @@ class AddedLambdaPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program("", "x * scale"));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			mainId = build.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		var before = Runtime.callInt(live, mainId);
 		if (before != 4141)
 			throw 'The program returned $before instead of 4141 before the edit';
@@ -56,9 +55,9 @@ class AddedLambdaPatchMain {
 		var after = Runtime.callInt(live, mainId);
 		if (after != 4248)
 			throw 'The patched module returned $after instead of 4248';
-		var fresh = Runtime.load(HlWriter.encode(changed.artifact.hashLink().module).flatten(),
+		var fresh = Runtime.load(changed.artifact.hashLink().hashLinkBytes().flatten(),
 			changed.artifact.hashLink().runtimeIdentity);
-		var clean = Runtime.callInt(fresh, changed.artifact.hashLink().functionIds.get("main"));
+		var clean = Runtime.callInt(fresh, Runtime.requireFunctionId(fresh, "main"));
 		Runtime.dispose(fresh);
 		if (clean != 4848)
 			throw 'The full module returned $clean instead of 4848';

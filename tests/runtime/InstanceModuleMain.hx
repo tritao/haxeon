@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import sys.io.File;
 
 class InstanceModuleMain {
@@ -12,7 +11,7 @@ class InstanceModuleMain {
 		if (!result.artifact.hashLink().functionIndices.exists("Box.new")
 			|| !result.artifact.hashLink().functionIndices.exists("Box.get"))
 			throw "Incremental compiler did not retain instance methods";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], result.artifact.hashLink().hashLinkBytes().flatten());
 		Sys.println("PASS: incremental instance class compiled");
 	}
 }

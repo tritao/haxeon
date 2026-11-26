@@ -15,9 +15,9 @@ class StaticInitOrderMain {
 		compiler.update("Consumer.hx",
 			"import Provider; class Consumer { public static var value:Int = Provider.value + 2; } function main():Int { return Consumer.value; }");
 		var result = compiler.compile("Consumer"),
-			live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+			live = Runtime.load(result.artifact.hashLink().hashLinkBytes().flatten(),
 				result.artifact.hashLink().runtimeIdentity);
-		var value = Runtime.callInt(live, result.artifact.hashLink().functionIds.get("main"));
+		var value = Runtime.callInt(live, Runtime.requireFunctionId(live, "main"));
 		if (value != 42)
 			throw "Static initializers did not run a provider before its consumer";
 		Runtime.dispose(live);
@@ -38,9 +38,9 @@ class StaticInitOrderMain {
 		];
 		if (helpers.length < 10)
 			throw "Static initialization was not split into bounded functions";
-		live = Runtime.load(HlWriter.encode(chunked.artifact.hashLink().module).flatten(),
+		live = Runtime.load(chunked.artifact.hashLink().hashLinkBytes().flatten(),
 			chunked.artifact.hashLink().runtimeIdentity);
-		if (Runtime.callInt(live, chunked.artifact.hashLink().functionIds.get("main")) != 82)
+		if (Runtime.callInt(live, Runtime.requireFunctionId(live, "main")) != 82)
 			throw "Static initializer order changed across chunks";
 		Runtime.dispose(live);
 		// A class runs after the classes its static initialization reaches, as in Haxe (StaticInitializationOrder); within a
@@ -71,9 +71,9 @@ class StaticInitOrderMain {
 			compiler = new Compiler();
 			compiler.update("Main.hx", test.source);
 			var ordered = compiler.compile("Main");
-			live = Runtime.load(HlWriter.encode(ordered.artifact.hashLink().module).flatten(),
+			live = Runtime.load(ordered.artifact.hashLink().hashLinkBytes().flatten(),
 				ordered.artifact.hashLink().runtimeIdentity);
-			var value = Runtime.callInt(live, ordered.artifact.hashLink().functionIds.get("main"));
+			var value = Runtime.callInt(live, Runtime.requireFunctionId(live, "main"));
 			if (value != test.expected)
 				throw 'Static initialization order differs from Haxe ($description): $value, expected ${test.expected}';
 			Runtime.dispose(live);
@@ -113,9 +113,9 @@ class StaticInitOrderMain {
 				|| writes.indexOf("browser.Browser.categories") < 0
 				|| writes.indexOf("catalog.Catalog.categories") > writes.indexOf("browser.Browser.categories"))
 				throw 'Cross-module comprehension initialized before its provider (incremental=$incremental): $writes';
-			live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+			live = Runtime.load(result.artifact.hashLink().hashLinkBytes().flatten(),
 				result.artifact.hashLink().runtimeIdentity);
-			if (Runtime.callInt(live, result.artifact.hashLink().functionIds.get("main")) != (incremental ? 3 : 2))
+			if (Runtime.callInt(live, Runtime.requireFunctionId(live, "main")) != (incremental ? 3 : 2))
 				throw "Cross-module comprehension produced the wrong categories";
 			Runtime.dispose(live);
 			for (target in [Wasm32, WasmGc]) {
@@ -129,7 +129,7 @@ class StaticInitOrderMain {
 			'class Missing { public static final values:Array<Int> = null; } class Consumer { public static final count:Int = Missing.values.length; } function main():Int return Consumer.count;');
 		var nullResult = compiler.compile("Main");
 		var failed = runBytecode(SuiteOutput.path("static-init-null.hl"),
-			HlWriter.encode(nullResult.artifact.hashLink().module).flatten());
+			nullResult.artifact.hashLink().hashLinkBytes().flatten());
 		if (failed.status == 0 || failed.output.indexOf('Cannot dereference null static "Missing.values"') < 0)
 			throw "Null static dereference at startup did not report an error: " + failed.output;
 		Sys.println("PASS: static initializers run in Haxe's order");

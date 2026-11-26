@@ -5,7 +5,6 @@ import compiler.Compiler.CompileResult;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.core.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 import sys.io.File;
@@ -124,7 +123,7 @@ class EnumTypedefConstructorMain {
 
 	static function execute(result:CompileResult, expected:Int):Void {
 		var path = "out/enum-typedef-constructor.hl";
-		File.saveBytes(path, HlWriter.encode(result.artifact.hashLink().module).flatten());
+		File.saveBytes(path, result.artifact.hashLink().hashLinkBytes().flatten());
 		var child = new sys.io.Process(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [path]);
 		var output = child.stdout.readAll().toString() + child.stderr.readAll().toString();
 		var status = child.exitCode();

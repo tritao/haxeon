@@ -1,6 +1,5 @@
 import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler; // @formatter:off: the DAP tests address this file by line
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -18,8 +17,8 @@ class DapHotReloadProbe {
 			"function value():Int {\n  var result = 42;\n  if (true) {\n    var scoped = result + 100;\n    result = scoped - 99;\n    scoped = scoped + 0;\n  }\n  result = result - 1;\n  try {\n    throw \"patched-probe\";\n  } catch (error:Int) {\n    result = 0;\n  } catch (error:String) {\n    result = result + 0;\n  }\n  return result;\n}");
 		compiler.update("Main.hx", "function main():Int { return Value.value(); }");
 		var initial = compiler.compile("Main");
-		var functionIndex = BackendArtifacts.hashLink(initial.artifact).functionIds.get("Value.value");
-		var loaded = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(initial.artifact).module).flatten(), BackendArtifacts.hashLink(initial.artifact).runtimeIdentity);
+		var loaded = Runtime.load(BackendArtifacts.hashLinkBytes(BackendArtifacts.hashLink(initial.artifact)).flatten(), BackendArtifacts.hashLink(initial.artifact).runtimeIdentity);
+		var functionIndex = Runtime.requireFunctionId(loaded, "Value.value");
 		checkpoint("loaded");
 		var initialValue = Runtime.callInt(loaded, functionIndex);
 

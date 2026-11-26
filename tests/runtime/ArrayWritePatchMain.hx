@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -16,9 +15,9 @@ class ArrayWritePatchMain {
 			+ "; return slots[1] + slots.length; } } function main():Int { return Slots.run(); }";
 		compiler.update("Main.hx", program(9));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+			live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 				first.artifact.hashLink().runtimeIdentity),
-			mainId = first.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		if (Runtime.callInt(live, mainId) != 12)
 			throw "The array-write program did not run correctly before the edit";
 		compiler.update("Main.hx", program(20));
@@ -39,9 +38,9 @@ class ArrayWritePatchMain {
 			(value:Int) -> 'import haxe.io.Bytes; function main():Int {var a=[0,0,0];a.resize(0);var b=Bytes.alloc(1);a.push($value);b.set(0,a[0]);return b.get(0);}';
 		fastCompiler.update("Main.hx", fastProgram(9));
 		var initialFast = fastCompiler.compile("Main");
-		var fastLive = Runtime.load(HlWriter.encode(initialFast.artifact.hashLink().module).flatten(),
+		var fastLive = Runtime.load(initialFast.artifact.hashLink().hashLinkBytes().flatten(),
 			initialFast.artifact.hashLink().runtimeIdentity);
-		var fastMain = initialFast.artifact.hashLink().functionIds.get("main");
+		var fastMain = Runtime.requireFunctionId(fastLive, "main");
 		if (Runtime.callInt(fastLive, fastMain) != 9)
 			throw "Initial inline runtime operations failed";
 		fastCompiler.update("Main.hx", fastProgram(42));

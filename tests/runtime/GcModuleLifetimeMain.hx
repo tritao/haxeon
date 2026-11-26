@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import hl.Gc;
 import runtime.Runtime;
 
@@ -19,11 +18,11 @@ class GcModuleLifetimeMain {
 		throw "module collection did not complete";
 	}
 
-	static function generation(bytes:haxe.io.Bytes, identity:haxe.io.Bytes, make:Int) {
+	static function generation(bytes:haxe.io.Bytes, identity:haxe.io.Bytes, make:String) {
 		if (BoundaryGc.step(0.001) || !BoundaryGc.pending())
 			throw "expected pending module load";
 		var loaded = Runtime.load(bytes, identity);
-		var retained = Runtime.retainClosure(loaded, make);
+		var retained = Runtime.retainClosure(loaded, Runtime.requireFunctionId(loaded, make));
 		if (Runtime.callRetainedClosureInt(retained) != 42)
 			throw "new module capture";
 		finish();
@@ -46,12 +45,12 @@ class GcModuleLifetimeMain {
 		compiler.update("Main.hx",
 			"function make():() -> Int { var values = [40, 2]; return function() return values[0] + values[1]; } function main():Int { return 42; }");
 		var compiled = compiler.compile("Main");
-		var bytes = HlWriter.encode(compiled.artifact.hashLink().module).flatten();
+		var bytes = compiled.artifact.hashLink().hashLinkBytes().flatten();
 		Gc.enable(false);
 		ballast = new hl.NativeArray<Dynamic>(2000000);
 		for (i in 0...12) {
 			generation(bytes, compiled.artifact.hashLink().runtimeIdentity,
-				compiled.artifact.hashLink().functionIds.get("Main.make"));
+				"Main.make");
 			Gc.major();
 			if (Runtime.retryRetirements() != 0)
 				throw 'module retirement blocked after generation $i';

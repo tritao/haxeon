@@ -1,6 +1,5 @@
 import compiler.Compiler;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -14,9 +13,9 @@ class ProfilerHotReloadTarget {
 			"function work():Int { var result = 42; if (true) { var scoped = result + 100; result = scoped - 99; scoped = scoped + 0; } result = result - 1; try { throw \"profile\"; } catch (error:Int) { result = 0; } catch (error:String) { result = result + 0; } return result; }");
 		compiler.update("Main.hx", "function main():Int return Work.work();");
 		var initial = compiler.compile("Main"),
-			workId = BackendArtifacts.hashLink(initial.artifact).functionIds.get("Work.work"),
-			loaded = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(initial.artifact).module).flatten(),
-				BackendArtifacts.hashLink(initial.artifact).runtimeIdentity);
+			loaded = Runtime.load(BackendArtifacts.hashLinkBytes(BackendArtifacts.hashLink(initial.artifact)).flatten(),
+				BackendArtifacts.hashLink(initial.artifact).runtimeIdentity),
+			workId = Runtime.requireFunctionId(loaded, "Work.work");
 		Sys.sleep(2.0);
 		runFor(loaded, workId, beforePatch);
 		compiler.update("Work.hx",

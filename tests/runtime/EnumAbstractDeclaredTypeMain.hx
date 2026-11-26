@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.Runtime;
 
 /**
@@ -37,10 +36,10 @@ class EnumAbstractDeclaredTypeMain {
 			+ "function callNotEqualRight():Int return notEqualRight(20);\n"
 			+ "function main():Int return callSwitchLeft() + callSwitchRight() + callEqualLeft() + callNotEqualRight() + passLeft() + passRight() + localLeft() + localRight() + returned() + switchCall() + fields() + switchField() + switchMember();");
 		var result = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+			live = Runtime.load(result.artifact.hashLink().hashLinkBytes().flatten(),
 				result.artifact.hashLink().runtimeIdentity);
 		function call(name:String, expected:Int):Void {
-			var actual = Runtime.callInt(live, result.artifact.hashLink().functionIds.get("Main." + name));
+			var actual = Runtime.callInt(live, Runtime.requireFunctionId(live, "Main." + name));
 			if (actual != expected)
 				throw '$name returned $actual, expected $expected';
 		}

@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.Runtime;
 
 /** Exercises string map value iteration and a nested capture that depends on it. */
@@ -19,9 +18,9 @@ class MapValuesMain {
 			+ 'var action = function() return options[selectedIndex]; return action(); }; '
 			+ 'return choose() == "One" ? 0 : 2; } }');
 		var result = compiler.compile("Main");
-		var live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+		var live = Runtime.load(result.artifact.hashLink().hashLinkBytes().flatten(),
 			result.artifact.hashLink().runtimeIdentity);
-		var code = Runtime.callInt(live, result.artifact.hashLink().functionIds.get("Main.main"));
+		var code = Runtime.callInt(live, Runtime.requireFunctionId(live, "Main.main"));
 		Runtime.dispose(live);
 		if (code != 0)
 			throw 'Map value iteration or nested capture failed: $code';

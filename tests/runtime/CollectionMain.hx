@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.types.Type.CompilerType;
 import sys.io.File;
 
@@ -24,6 +23,6 @@ class CollectionMain {
 		compiler.update("Main.hx",
 			"class IntArray { public var storage:hl.Bytes; public var length:Int; public function new() { array_int_init(this); } public function push(value:Int):Void { array_int_push(this, value); } public function get(index:Int):Int { return array_int_get(this, index); } } function main():Int { var values = new IntArray(); values.push(41); return values.get(0) + values.length; }");
 		var result = compiler.compile("Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], result.artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

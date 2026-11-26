@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -160,12 +159,13 @@ class LambdaRenumberPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", source);
 		var build = compiler.compile("Main");
+		var live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
+			build.artifact.hashLink().runtimeIdentity);
 		var session = {
 			compiler: compiler,
 			build: build,
-			live: Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
-				build.artifact.hashLink().runtimeIdentity),
-			mainId: build.artifact.hashLink().functionIds.get("main")
+			live: live,
+			mainId: Runtime.requireFunctionId(live, "main")
 		};
 		var value = Runtime.callInt(session.live, session.mainId);
 		if (value != expected)
@@ -191,9 +191,9 @@ class LambdaRenumberPatchMain {
 		var now = Runtime.callInt(session.live, session.mainId);
 		if (now != stored)
 			throw '$label: stored handlers return $now instead of $stored';
-		var clean = Runtime.load(HlWriter.encode(changed.artifact.hashLink().module).flatten(),
+		var clean = Runtime.load(changed.artifact.hashLink().hashLinkBytes().flatten(),
 			changed.artifact.hashLink().runtimeIdentity);
-		var value = Runtime.callInt(clean, changed.artifact.hashLink().functionIds.get("main"));
+		var value = Runtime.callInt(clean, Runtime.requireFunctionId(clean, "main"));
 		Runtime.dispose(clean);
 		if (value != fresh)
 			throw '$label: the full module returned $value instead of $fresh';

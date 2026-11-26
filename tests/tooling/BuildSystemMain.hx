@@ -1606,14 +1606,12 @@ class BuildSystemMain {
 			"--live",
 			"--build-mode=development",
 			"--define=android",
-			"--baseline-output=" + module + ".hcs",
-			"--entry-id-output=" + module + ".entry"
+			"--baseline-output=" + module + ".hcs"
 		])
 			expect(androidArguments.indexOf(expected) >= 0, 'an Android compile request should pass $expected');
 		expect(androidBuild.outputs.indexOf(module + ".hcs") >= 0
-			&& androidBuild.outputs.indexOf(module + ".entry") >= 0
 			&& androidBuild.outputs.indexOf(module + ".hli") >= 0,
-			"an Android build declares its baseline, entry ID and runtime identity");
+			"an Android build declares its baseline and runtime identity");
 		expect(!Lambda.exists(androidArguments, argument -> StringTools.startsWith(argument, "--baseline=")),
 			"a build compiles against no baseline");
 		var baseline = module + ".hcs", edit = androidCompile(baseline);

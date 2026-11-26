@@ -86,7 +86,6 @@ class AndroidWatch {
 			".hli",
 			".hlp",
 			".hcs",
-			".entry",
 			".live.json",
 			".live.patch.json",
 			".live.stamp",
@@ -105,8 +104,7 @@ class AndroidWatch {
 		}
 		var description:Dynamic = Json.parse(File.getContent(output + ".live.json"));
 		if (description.requiresReload == true) {
-			var bundle = reloadBundle(File.getBytes(output), File.getBytes(output + ".hli"),
-				Std.parseInt(StringTools.trim(File.getContent(output + ".entry"))));
+			var bundle = reloadBundle(File.getBytes(output), File.getBytes(output + ".hli"));
 			Sys.println('compiled Android reload revision ${description.revision} (${bundle.length} bytes)');
 			return {kind: "reload", payload: bundle, baseline: output + ".hcs"};
 		}
@@ -136,15 +134,14 @@ class AndroidWatch {
 		}
 	}
 
-	/** HXR v1: magic, version, then little-endian HLB and HLI lengths and the main stable ID, then the HLB and the HLI. */
-	public static function reloadBundle(module:Bytes, identity:Bytes, entry:Int):Bytes {
+	/** HXR 2: magic, version, then the little-endian HLB and HLI lengths, then the HLB and the HLI. The host finds `main` by name. */
+	public static function reloadBundle(module:Bytes, identity:Bytes):Bytes {
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HXR");
-		output.writeByte(1);
+		output.writeByte(2);
 		output.writeInt32(module.length);
 		output.writeInt32(identity.length);
-		output.writeInt32(entry);
 		output.write(module);
 		output.write(identity);
 		return output.getBytes();

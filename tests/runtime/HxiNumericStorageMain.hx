@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -133,7 +132,7 @@ function main():Int {
 		for (fn in result.ir.functions)
 			if (fn.name.indexOf("BatchBuffer.") >= 0)
 				throw "Unused buffer helpers must not reach the final program";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], result.artifact.hashLink().hashLinkBytes().flatten());
 		// A later compile can demand a previously unused buffer and its methods.
 		var replacement = Sys.args().indexOf("--replace-program") >= 0;
 		// The replacement adds a static variable, which a running module cannot take, so it reloads: added methods alone
@@ -173,8 +172,8 @@ function main():Int {
 				default:
 			}
 		File.saveBytes(Sys.args()[0] + ".incremental.hl",
-			HlWriter.encode(incremental.artifact.hashLink().module).flatten());
+			incremental.artifact.hashLink().hashLinkBytes().flatten());
 		if (replacement)
-			File.saveBytes(Sys.args()[0], HlWriter.encode(incremental.artifact.hashLink().module).flatten());
+			File.saveBytes(Sys.args()[0], incremental.artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

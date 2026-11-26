@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -18,9 +17,9 @@ class LiveOptionalScalarMain {
 			compiler.options = new CompileOptions({inlining: inlining});
 			compiler.update("Main.hx", source(1));
 			var first = compiler.compile("Main"),
-				live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+				live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 					first.artifact.hashLink().runtimeIdentity),
-				id = first.artifact.hashLink().functionIds.get("main");
+				id = Runtime.requireFunctionId(live, "main");
 			if (Runtime.callInt(live, id) != 41) throw "initial optional scalar call failed";
 			compiler.update("Main.hx", source(2));
 			var next = compiler.compile("Main");

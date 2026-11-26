@@ -3,7 +3,6 @@ import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlType;
-import compiler.hl.HlWriter;
 import compiler.hl.persistence.HlTypeDefStateCodec;
 import sys.io.File;
 
@@ -57,7 +56,7 @@ class ValueStructMain {
 		var nativeResult = nativeValue.compile("Main");
 		if ([for (object in nativeResult.ir.objects) if (object.name == "Point") object].length != 0)
 			throw "C-represented values must not produce HashLink object declarations";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], result.artifact.hashLink().hashLinkBytes().flatten());
 	}
 
 	static function expectCompileError(source:String, expected:String):Void {

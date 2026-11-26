@@ -15,7 +15,7 @@ class CompilerArguments {
 		"--output", "--api-json", "--api-source", "--target", "--build-mode", "--entry", "--ir-output",
 		"--inputs-output", "--baseline",
 		"--baseline-output",
-		"--entry-id-output", "--root", "--sources-file", "--package-root", "--ffi-header", "--ffi-library",
+		"--root", "--sources-file", "--package-root", "--ffi-header", "--ffi-library",
 		"--ffi-interface",
 		"--ffi-projection", "--define", "--dump-function", "--session", "--verbosity", "--diagnostic-format", "--color",
 		"--diagnostic-directory", "--stdlib", "--wasm-memory-base", "--wasm-memory-contract", "--export",
@@ -33,7 +33,6 @@ class CompilerArguments {
 			inputsOutput:Null<String> = null,
 			baseline:Null<String> = null,
 			baselineOutput:Null<String> = null,
-			entryIdOutput:Null<String> = null,
 			entry = "compiler.tools.HaxeonCompiler",
 			entryGiven = false,
 			dumpFunction = -1,
@@ -91,8 +90,6 @@ class CompilerArguments {
 				baseline = value(argument, "--baseline=");
 			else if (StringTools.startsWith(argument, "--baseline-output="))
 				baselineOutput = value(argument, "--baseline-output=");
-			else if (StringTools.startsWith(argument, "--entry-id-output="))
-				entryIdOutput = value(argument, "--entry-id-output=");
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(value(argument, "--root="));
 			else if (StringTools.startsWith(argument, "--stdlib="))
@@ -189,7 +186,7 @@ class CompilerArguments {
 		if (live && backend != HashLink)
 			throw new UsageError("--live requires --target=hl");
 		if (noOutput
-			&& (live || baselineOutput != null || entryIdOutput != null
+			&& (live || baselineOutput != null
 			|| irOutput != null
 			|| inputsOutput != null || ffiHeader != null))
 			throw new UsageError("--no-output builds nothing, so it takes no option that writes a build's file or a live publication");
@@ -202,8 +199,8 @@ class CompilerArguments {
 			entry = compiler.modules.ModuleReachability.NO_ENTRY;
 		if (baseline != null && !live)
 			throw new UsageError("--baseline requires --live");
-		if ((baselineOutput != null || entryIdOutput != null) && backend != HashLink)
-			throw new UsageError("--baseline-output and --entry-id-output require --target=hl");
+		if (baselineOutput != null && backend != HashLink)
+			throw new UsageError("--baseline-output requires --target=hl");
 		if (buildMode != "release" && buildMode != "development")
 			throw new UsageError('Unknown compiler build mode "$buildMode". Valid: development, release');
 		if (live && buildModeExplicit && buildMode != "development")
@@ -239,7 +236,6 @@ class CompilerArguments {
 			inputsOutput: inputsOutput,
 			baseline: baseline,
 			baselineOutput: baselineOutput,
-			entryIdOutput: entryIdOutput,
 			entry: entry,
 			dumpFunction: dumpFunction,
 			importMemory: importMemory,

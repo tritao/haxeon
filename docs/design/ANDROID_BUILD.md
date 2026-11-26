@@ -30,7 +30,7 @@ Android part of the SDK. `haxeon dev package` copies the staged
 
 The CLI builds `build/android-arm64/app.hl` and its live sidecars, writes the
 data-only native package fragment at `build/generated/android/haxeon.cmake`,
-and copies `app.hl`, `app.hli`, `app.entry` and `app.hcs` into the generated
+and copies `app.hl`, `app.hli` and `app.hcs` into the generated
 asset directory. It also writes `inputs.properties` in that directory's parent
 for Gradle's configuration, with the asset and AAR paths and the `[app]`
 metadata.

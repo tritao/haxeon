@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -30,10 +29,10 @@ class NominalInterfacePatchMain {
 		compiler.update("Contract.hx", contract(1));
 		compiler.update("Main.hx", source(false, 1));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+			live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 				first.artifact.hashLink().runtimeIdentity);
-		var retained = Runtime.retainObject(live, first.artifact.hashLink().functionIds.get("Main.make"));
-		if (Runtime.callIntObject(live, first.artifact.hashLink().functionIds.get("Main.probe"), retained) != 42)
+		var retained = Runtime.retainObject(live, Runtime.requireFunctionId(live, "Main.make"));
+		if (Runtime.callIntObject(live, Runtime.requireFunctionId(live, "Main.probe"), retained) != 42)
 			throw "Initial conformance failed";
 		compiler.update("Contract.hx", contract(2));
 		compiler.update("Main.hx", source(false, 2));
@@ -43,7 +42,7 @@ class NominalInterfacePatchMain {
 		Runtime.patchSet(live,
 			new PatchSet(first.revision, changed.revision, changed.artifact.hashLink().patchBytes,
 			changed.changedFunctions));
-		if (Runtime.callIntObject(live, changed.artifact.hashLink().functionIds.get("Main.probe"), retained) != 42)
+		if (Runtime.callIntObject(live, Runtime.requireFunctionId(live, "Main.probe"), retained) != 42)
 			throw "Pre-patch object lost conformance";
 		compiler.update("Main.hx", source(true, 2));
 		var appended = compiler.compile("Main");
@@ -52,19 +51,19 @@ class NominalInterfacePatchMain {
 		Runtime.patchSet(live,
 			new PatchSet(changed.revision, appended.revision, appended.artifact.hashLink().patchBytes,
 			appended.changedFunctions));
-		if (Runtime.callIntObject(live, appended.artifact.hashLink().functionIds.get("Main.probe"), retained) != 42
-			|| Runtime.callInt(live, appended.artifact.hashLink().functionIds.get("main")) != 42)
+		if (Runtime.callIntObject(live, Runtime.requireFunctionId(live, "Main.probe"), retained) != 42
+			|| Runtime.callInt(live, Runtime.requireFunctionId(live, "main")) != 42)
 			throw "Appending an implementation changed interface identity";
 		Runtime.dispose(live);
 		var freshCompiler = configuredCompiler();
 		freshCompiler.update("Contract.hx", contract(3));
 		freshCompiler.update("Main.hx", source(true, 3));
 		var fresh = freshCompiler.compile("Main"),
-			reloaded = Runtime.load(HlWriter.encode(fresh.artifact.hashLink().module).flatten(),
+			reloaded = Runtime.load(fresh.artifact.hashLink().hashLinkBytes().flatten(),
 				fresh.artifact.hashLink().runtimeIdentity);
 		hl.Gc.major();
 		Runtime.retryRetirements();
-		var result = Runtime.callIntObject(reloaded, fresh.artifact.hashLink().functionIds.get("Main.probe"), retained);
+		var result = Runtime.callIntObject(reloaded, Runtime.requireFunctionId(reloaded, "Main.probe"), retained);
 		if (result != 42) throw "Old object lost conformance after reload: " + result;
 		var changedCompiler = configuredCompiler();
 		changedCompiler.update("Contract.hx", contract(4).split("score():Int").join("score(extra:Int):Int"));
@@ -72,9 +71,9 @@ class NominalInterfacePatchMain {
 			source(true, 4).split("score():Int").join("score(extra:Int):Int").split(".score()").join(".score(0)")
 			+ "function reject(value:Dynamic):Int return Std.isOfType(value,Reader)?1:42;\n");
 		var incompatible = changedCompiler.compile("Main"),
-			replacement = Runtime.load(HlWriter.encode(incompatible.artifact.hashLink().module).flatten(),
+			replacement = Runtime.load(incompatible.artifact.hashLink().hashLinkBytes().flatten(),
 				incompatible.artifact.hashLink().runtimeIdentity);
-		if (Runtime.callIntObject(replacement, incompatible.artifact.hashLink().functionIds.get("Main.reject"),
+		if (Runtime.callIntObject(replacement, Runtime.requireFunctionId(replacement, "Main.reject"),
 			retained) != 42)
 			throw "An incompatible reloaded interface accepted the old object";
 		retained.release();

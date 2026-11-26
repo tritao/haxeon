@@ -11,7 +11,7 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 
 /**
  * An Android module's baseline and the edits compiled against it (docs/design/ANDROID_BUILD.md): the build writes the identity
- * state (`--baseline-output`) and the stable ID of `main` (`--entry-id-output`); an edit compiled with `--baseline` patches or
+ * state (`--baseline-output`), and the host finds `main` by name; an edit compiled with `--baseline` patches or
  * reloads the module that state describes, building on the session when the session wrote it and loading it otherwise.
  */
 class AndroidBaselineMain {
@@ -28,7 +28,6 @@ class AndroidBaselineMain {
 				"--live",
 				"--output=" + output,
 				"--baseline-output=" + output + ".hcs",
-				"--entry-id-output=" + output + ".entry",
 				main
 			];
 			if (from != null)
@@ -46,8 +45,6 @@ class AndroidBaselineMain {
 		File.saveContent(main, "function main():Void trace(value());\nfunction value():Int return 1;\n");
 		var session = new CompilerSession(), built = compile(module, session);
 		expect(FileSystem.exists(baseline), "a build writes its baseline");
-		expect(File.getContent(module + ".entry") == Std.string(built.artifact.hashLink().functionIds.get("main")),
-			"a build writes the stable ID of main");
 
 		// A body edit against the baseline the session wrote builds on the session and patches the module.
 		File.saveContent(main, "function main():Void trace(value());\nfunction value():Int return 2;\n");
@@ -80,18 +77,6 @@ class AndroidBaselineMain {
 			"function main():Void trace(value(2));\nfunction value(scale:Int):Float return scale * 1.5;\n");
 		var reload = compile(edit, baseline, session);
 		expect(reload.requiresReload && description(edit).requiresReload == true, "a structural edit is a reload");
-		expect(File.getContent(edit + ".entry") == Std.string(reload.artifact.hashLink().functionIds.get("main")),
-			"a reload carries the stable ID of its main");
-
-		// The host calls main by its ID, with no arguments and no result.
-		File.saveContent(main, "function main():Int return 0;\n");
-		var rejected:Null<String> = null;
-		try
-			compile(root + "/wrong.hl", new CompilerSession())
-		catch (error:Dynamic)
-			rejected = Std.string(error);
-		expect(rejected != null && rejected.indexOf("main():Void") >= 0, "an entry the host cannot call is refused");
-		expect(!FileSystem.exists(root + "/wrong.hl"), "a refused module is not written");
 
 		var unlive = false;
 		try

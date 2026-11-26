@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.types.Type.CompilerType;
 import sys.io.File;
 
@@ -11,6 +10,6 @@ class StringMain {
 		compiler.update("Main.hx",
 			'function main():Int { var text = "hello " + "world"; trace(text); var found = text.indexOf("world"); var piece = text.substring(6); if (piece == "world") return text.length + found + piece.length + 20; return 0; }');
 		var result = compiler.compile("Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], result.artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

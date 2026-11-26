@@ -1,7 +1,6 @@
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.Runtime;
 import sys.thread.Mutex;
@@ -22,10 +21,10 @@ function main():Int {
 	compiler.update("Probe.hx",
 		"class Box { public static function answer():Int return 42; } function main():Int return Box.answer() + Helper.answer(0);");
 	var build = compiler.compile("Probe");
-	var id = BackendArtifacts.hashLink(build.artifact).functionIds.get("main");
-	if (id == null) throw "compiled entry has no stable function ID";
-	var module = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(build.artifact).module).flatten(),
+	var module = Runtime.load(BackendArtifacts.hashLinkBytes(BackendArtifacts.hashLink(build.artifact)).flatten(),
 		BackendArtifacts.hashLink(build.artifact).runtimeIdentity);
+	var id = Runtime.functionId(module, "main");
+	if (id == null) throw "compiled entry has no stable function ID";
 	var answer = Runtime.callInt(module, id);
 	Runtime.dispose(module);
 	compiler.acknowledgePublication(build.revision);
@@ -57,10 +56,10 @@ function main():Int {
 	if (completion.error != null) throw completion.error;
 	var next = completion.build;
 	if (next == null) throw "incremental thread produced no compile result";
-	var nextId = BackendArtifacts.hashLink(next.artifact).functionIds.get("main");
-	if (nextId == null) throw "incremental entry lost its function ID";
-	var replacement = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(next.artifact).module).flatten(),
+	var replacement = Runtime.load(BackendArtifacts.hashLinkBytes(BackendArtifacts.hashLink(next.artifact)).flatten(),
 		BackendArtifacts.hashLink(next.artifact).runtimeIdentity);
+	var nextId = Runtime.functionId(replacement, "main");
+	if (nextId == null) throw "incremental entry lost its function ID";
 	var updated = Runtime.callInt(replacement, nextId);
 	Runtime.dispose(replacement);
 	if (updated != 43) throw "incremental guest code did not update";

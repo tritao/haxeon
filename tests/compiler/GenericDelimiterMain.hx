@@ -28,7 +28,7 @@ class GenericDelimiterMain {
 					revision == 1 ? StringTools.replace(source, ">=", "> =") : revision == 2
 					? StringTools.replace(source, "42", "43") : source);
 				var result = compiler.compile("Main"),
-					value = execute(HlWriter.encode(result.artifact.hashLink().module).flatten());
+					value = execute(result.artifact.hashLink().hashLinkBytes().flatten());
 				if (value != (revision == 2 ? 43 : 42))
 					throw 'Generic delimiter returned $value (revision=$revision): $source';
 			}

@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -92,12 +91,13 @@ class GeneratedFunctionRenumberingMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", source);
 		var build = compiler.compile("Main");
+		var live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
+			build.artifact.hashLink().runtimeIdentity);
 		return {
 			compiler: compiler,
 			build: build,
-			live: Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
-				build.artifact.hashLink().runtimeIdentity),
-			mainId: build.artifact.hashLink().functionIds.get("main")
+			live: live,
+			mainId: Runtime.requireFunctionId(live, "main")
 		};
 	}
 

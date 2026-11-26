@@ -9,25 +9,28 @@ import haxe.io.Bytes;
 typedef ReplProgram = {
 	final bytes:Bytes;
 	final identity:Bytes;
-	final stableId:Int;
+
+	/** The function that evaluates the expression, which a host finds by name in the module it loads (`Runtime.functionId`). */
+	final entry:String;
 }
 
 /** Compiles ephemeral expressions against a persistent compiler snapshot. */
 class Repl {
 	final compiler:Compiler;
 
+	static inline final ENTRY = "main";
+
 	public function new(compiler:Compiler)
 		this.compiler = compiler;
 
 	public function compileInt(expression:String):ReplProgram {
-		var result = BackendArtifacts.hashLink(compiler.compileExpressionInt(expression).artifact),
-			stableId = result.functionIds.get("main");
-		if (stableId == null)
-			throw new InternalError("REPL compilation did not produce a stable entry function");
+		var result = BackendArtifacts.hashLink(compiler.compileExpressionInt(expression).artifact);
+		if (!result.functionIndices.exists(ENTRY))
+			throw new InternalError("REPL compilation did not produce its entry function");
 		return {
 			bytes: BackendArtifacts.hashLinkBytes(result).flatten(),
 			identity: result.runtimeIdentity,
-			stableId: stableId
+			entry: ENTRY
 		};
 	}
 }

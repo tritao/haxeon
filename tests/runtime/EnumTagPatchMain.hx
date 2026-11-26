@@ -96,10 +96,10 @@ class EnumTagPatchMain {
 		sys.FileSystem.deleteFile(invalidPath);
 		if (status == 0 || (output + error).indexOf("Invalid scalar enum cache global") < 0)
 			throw "VM did not reject a forged scalar enum cache global: " + output + error;
-		var live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+		var live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 			first.artifact.hashLink().runtimeIdentity);
-		var retained = Runtime.retainObject(live, first.artifact.hashLink().functionIds.get("Main.make"));
-		if (Runtime.callIntObject(live, first.artifact.hashLink().functionIds.get("Main.probe"), retained) != 41)
+		var retained = Runtime.retainObject(live, Runtime.requireFunctionId(live, "Main.make"));
+		if (Runtime.callIntObject(live, Runtime.requireFunctionId(live, "Main.probe"), retained) != 41)
 			throw "Initial enum tag metadata failed";
 		compiler.update("Main.hx", source(42));
 		var changed = compiler.compile("Main");
@@ -109,11 +109,11 @@ class EnumTagPatchMain {
 			new PatchSet(first.revision, changed.revision, changed.artifact.hashLink().patchBytes,
 			changed.changedFunctions));
 		hl.Gc.major();
-		if (Runtime.callIntObject(live, changed.artifact.hashLink().functionIds.get("Main.probe"), retained) != 42)
+		if (Runtime.callIntObject(live, Runtime.requireFunctionId(live, "Main.probe"), retained) != 42)
 			throw "A retained object lost scalar enum metadata after patching";
-		var fresh = Runtime.load(HlWriter.encode(changed.artifact.hashLink().module).flatten(),
+		var fresh = Runtime.load(changed.artifact.hashLink().hashLinkBytes().flatten(),
 			changed.artifact.hashLink().runtimeIdentity);
-		if (Runtime.callInt(fresh, changed.artifact.hashLink().functionIds.get("main")) != 42)
+		if (Runtime.callInt(fresh, Runtime.requireFunctionId(fresh, "main")) != 42)
 			throw "Reloaded enum tag metadata failed";
 		retained.release();
 		Runtime.dispose(live);

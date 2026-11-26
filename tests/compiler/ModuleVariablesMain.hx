@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.core.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
 import runtime.Runtime;
 
 /**
@@ -53,8 +52,8 @@ class ModuleVariablesMain {
 		var result = try compiled(sources).compile("Main") catch (error:CompileError)
 			throw '$label failed to compile: ${error.diagnostic.format()}',
 			build = result.artifact.hashLink(),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			value = Runtime.callInt(live, build.functionIds.get("main"));
+			live = Runtime.load(BackendArtifacts.hashLinkBytes(build).flatten(), build.runtimeIdentity),
+			value = Runtime.callInt(live, Runtime.requireFunctionId(live, "main"));
 		Runtime.dispose(live);
 		if (value != expected)
 			throw '$label: main returned $value instead of $expected';

@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
-import compiler.hl.HlWriter;
 import sys.io.File;
 
 class NullableEnumPatternMain {
@@ -14,7 +13,7 @@ class NullableEnumPatternMain {
 			var result = compiler.compile("Main"),
 				build = incremental ? "incremental" : "clean";
 			var path = SuiteOutput.path('nullable-enum-pattern-$build.hl');
-			File.saveBytes(path, HlWriter.encode(result.artifact.hashLink().module).flatten());
+			File.saveBytes(path, result.artifact.hashLink().hashLinkBytes().flatten());
 			var child = new sys.io.Process(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [path]);
 			var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 				code = child.exitCode();

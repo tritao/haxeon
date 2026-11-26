@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -66,9 +65,9 @@ class LiveSignaturePatchMain {
 		compiler.options = new CompileOptions({inlining: inlining});
 		compiler.update("Main.hx", program(1));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			mainId = build.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		// The kept point sums 3, a new one 5, the stored scaler doubles 4, and scale(1) is 2.
 		expect(Runtime.callInt(live, mainId), 305082, "before the edits");
 
@@ -96,12 +95,12 @@ class LiveSignaturePatchMain {
 		if (!reloaded.requiresReload)
 			throw 'Adding an enum must reload';
 		var retired =
-			[for (name in (reloaded.artifact.hashLink().functionIds:Map<String, Int>).keys())
+			[for (name in (reloaded.artifact.hashLink().functionIndices:Map<String, Int>).keys())
 			if (name.indexOf("~retired") >= 0) name];
 		if (retired.length > 0)
 			throw 'A reload kept the retired functions ${retired.join(", ")}';
 		var again = compiler.compile("Main");
-		var kept = [for (name in (again.artifact.hashLink().functionIds:Map<String, Int>).keys())
+		var kept = [for (name in (again.artifact.hashLink().functionIndices:Map<String, Int>).keys())
 			if (name.indexOf("~retired") >= 0) name];
 		if (kept.length > 0)
 			throw 'The build after a reload still names the retired functions ${kept.join(", ")}';
@@ -130,9 +129,9 @@ class LiveSignaturePatchMain {
 	}
 
 	static function runFresh(build:Dynamic):Int {
-		var fresh = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(build.artifact).module).flatten(),
+		var fresh = Runtime.load(BackendArtifacts.hashLinkBytes(BackendArtifacts.hashLink(build.artifact)).flatten(),
 			BackendArtifacts.hashLink(build.artifact).runtimeIdentity);
-		var value = Runtime.callInt(fresh, BackendArtifacts.hashLink(build.artifact).functionIds.get("main"));
+		var value = Runtime.callInt(fresh, Runtime.requireFunctionId(fresh, "main"));
 		Runtime.dispose(fresh);
 		return value;
 	}

@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.Runtime;
 import sys.io.File;
@@ -15,7 +14,7 @@ class LoadedArrayCastMain {
 		for (incremental in [false, true]) {
 			compiler.update("Main.hx", incremental ? StringTools.replace(source, "return 42;", "return 43;") : source);
 			var result = compiler.compile("Main"),
-				bytes = HlWriter.encode(result.artifact.hashLink().module).flatten();
+				bytes = result.artifact.hashLink().hashLinkBytes().flatten();
 			var expected = incremental ? 43 : 42;
 			var path = "out/loaded-array-cast-" + (incremental ? "incremental" : "clean") + ".hl";
 			File.saveBytes(path, bytes);
@@ -28,7 +27,7 @@ class LoadedArrayCastMain {
 			// Repeated loads exercise independent module descriptors in one host.
 			for (_ in 0...2) {
 				var live = Runtime.load(bytes, result.artifact.hashLink().runtimeIdentity);
-				var code = Runtime.callInt(live, result.artifact.hashLink().functionIds.get("main"));
+				var code = Runtime.callInt(live, Runtime.requireFunctionId(live, "main"));
 				Runtime.dispose(live);
 				if (code != expected)
 					throw 'Loaded array cast returned $code (incremental=$incremental)';

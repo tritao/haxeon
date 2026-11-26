@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -26,9 +25,9 @@ class AddedStaticCallerMain {
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", program("", "plural(keys.length, \"Item\")"));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			mainId = build.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		if (Runtime.callInt(live, mainId) != 14)
 			throw "The program did not run correctly before the edit";
 		compiler.update("Main.hx", program("  static function closeLabel(keys:Array<String>):String {\n"
@@ -58,9 +57,9 @@ class AddedStaticCallerMain {
 		result = Runtime.callInt(live, mainId);
 		if (result != 14)
 			throw 'After removing the function the patched module returned $result instead of 14';
-		var fresh = Runtime.load(HlWriter.encode(undone.artifact.hashLink().module).flatten(),
+		var fresh = Runtime.load(undone.artifact.hashLink().hashLinkBytes().flatten(),
 			undone.artifact.hashLink().runtimeIdentity);
-		result = Runtime.callInt(fresh, undone.artifact.hashLink().functionIds.get("main"));
+		result = Runtime.callInt(fresh, Runtime.requireFunctionId(fresh, "main"));
 		Runtime.dispose(fresh);
 		if (result != 14)
 			throw 'After removing the function the full module returned $result instead of 14';

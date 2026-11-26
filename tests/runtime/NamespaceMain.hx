@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import sys.io.File;
 
 class NamespaceMain {
@@ -16,6 +15,6 @@ class NamespaceMain {
 		if (!result.artifact.hashLink().functionIndices.exists("left.Item.new")
 			|| !result.artifact.hashLink().functionIndices.exists("right.Item.new"))
 			throw "qualified nominal declarations collided";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], result.artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

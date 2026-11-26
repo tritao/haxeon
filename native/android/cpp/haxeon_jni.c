@@ -55,25 +55,12 @@ static int read_asset(AAssetManager *assets, const char *name, unsigned char **b
     return 1;
 }
 
-static int read_entry_id(AAssetManager *assets, int *entry_id) {
-    unsigned char *bytes = NULL;
-    int size = 0;
-    if (!read_asset(assets, "app.entry", &bytes, &size) || size == 0) {
-        free(bytes);
-        return 0;
-    }
-
-    long value = 0;
-    for (int i = 0; i < size; ++i) {
-        if (bytes[i] < '0' || bytes[i] > '9' || value > (INT_MAX - (bytes[i] - '0')) / 10) {
-            free(bytes);
-            return 0;
-        }
-        value = value * 10 + (bytes[i] - '0');
-    }
-    free(bytes);
-    *entry_id = (int)value;
-    return 1;
+/* The app's entry, `main():Void`, which the host calls by the stable id the module gives it, or -1 when it has none. */
+static int entry_of(hl_runtime_module *runtime) {
+    int id = hl_runtime_module_function_id(runtime, "main");
+    if (id < 0)
+        __android_log_print(ANDROID_LOG_ERROR, HAXEON_LOG_TAG, "the module has no main function");
+    return id;
 }
 
 static void begin_runtime(void) {
@@ -104,17 +91,16 @@ static void report_exception(vdynamic *exception, const char *operation) {
 
 int haxeon_app_run(AAssetManager *assets) {
     unsigned char *bytes = NULL, *identity = NULL;
-    int size = 0, identity_size = 0, entry_id = -1;
+    int size = 0, identity_size = 0;
     int stack_marker = 0;
     bool registered = false;
 
     if (assets == NULL || !read_asset(assets, "app.hl", &bytes, &size)
-        || !read_asset(assets, "app.hli", &identity, &identity_size)
-        || !read_entry_id(assets, &entry_id)) {
+        || !read_asset(assets, "app.hli", &identity, &identity_size)) {
         free(bytes);
         free(identity);
         __android_log_print(ANDROID_LOG_ERROR, HAXEON_LOG_TAG,
-            "missing app.hl, app.hli, or app.entry asset");
+            "missing app.hl or app.hli asset");
         return 2;
     }
 
@@ -144,7 +130,7 @@ int haxeon_app_run(AAssetManager *assets) {
     }
 
     runtime_module = loaded;
-    runtime_entry_id = entry_id;
+    runtime_entry_id = entry_of(loaded);
     __android_log_print(ANDROID_LOG_INFO, HAXEON_LOG_TAG,
         "loaded app.hl (%d bytes), entry stable ID %d", size, runtime_entry_id);
     vdynamic *exception = NULL;
@@ -216,21 +202,19 @@ Java_org_haxeon_android_MainActivity_nativeApplyReload(JNIEnv *env, jclass clazz
         return HL_RUNTIME_JIT_FAILED;
     (*env)->GetByteArrayRegion(env, bundle_array, 0, length, (jbyte*)bundle);
 
-    /* HXR v1: magic, version, little-endian HLB/HLI lengths, entry stable ID. */
-    if (length < 16 || memcmp(bundle, "HXR", 3) != 0 || bundle[3] != 1) {
+    /* HXR 2: magic, version, little-endian HLB/HLI lengths; the entry is found by name in the module. */
+    if (length < 12 || memcmp(bundle, "HXR", 3) != 0 || bundle[3] != 2) {
         free(bundle);
         return HL_RUNTIME_BAD_FORMAT;
     }
     uint32_t module_size = read_u32_le(bundle + 4);
     uint32_t identity_size = read_u32_le(bundle + 8);
-    uint32_t entry_value = read_u32_le(bundle + 12);
     if (module_size == 0 || module_size > HAXEON_MAX_ARTIFACT_SIZE
-        || identity_size < 28 || identity_size > HAXEON_MAX_ARTIFACT_SIZE
-        || entry_value > INT_MAX) {
+        || identity_size < 28 || identity_size > HAXEON_MAX_ARTIFACT_SIZE) {
         free(bundle);
         return HL_RUNTIME_BAD_FORMAT;
     }
-    size_t payload_offset = 16;
+    size_t payload_offset = 12;
     if ((size_t)module_size > (size_t)length - payload_offset) {
         free(bundle);
         return HL_RUNTIME_BAD_FORMAT;
@@ -254,7 +238,7 @@ Java_org_haxeon_android_MainActivity_nativeApplyReload(JNIEnv *env, jclass clazz
     bool registered = register_current_thread(&stack_marker);
     hl_runtime_module *old_runtime = runtime_module;
     hl_runtime_module *loaded = NULL;
-    hl_runtime_status status = hl_runtime_module_load(bundle + 16, (int)module_size,
+    hl_runtime_status status = hl_runtime_module_load(bundle + 12, (int)module_size,
         identity, (int)identity_size, &loaded);
     if (status != HL_RUNTIME_OK || loaded == NULL) {
         __android_log_print(ANDROID_LOG_ERROR, HAXEON_LOG_TAG,
@@ -266,8 +250,9 @@ Java_org_haxeon_android_MainActivity_nativeApplyReload(JNIEnv *env, jclass clazz
         return status;
     }
 
+    int entry_id = entry_of(loaded);
     vdynamic *exception = NULL;
-    status = hl_runtime_module_call_void(loaded, (int)entry_value, &exception);
+    status = hl_runtime_module_call_void(loaded, entry_id, &exception);
     if (status != HL_RUNTIME_OK) {
         report_exception(exception, "reloaded app.main");
         hl_runtime_status release_status = hl_runtime_module_release(loaded);
@@ -297,7 +282,7 @@ Java_org_haxeon_android_MainActivity_nativeApplyReload(JNIEnv *env, jclass clazz
     }
 
     runtime_module = loaded;
-    runtime_entry_id = (int)entry_value;
+    runtime_entry_id = entry_id;
     hl_runtime_failed_retirements_retry();
     __android_log_print(ANDROID_LOG_INFO, HAXEON_LOG_TAG,
         "reloaded HLB/HLI module; runtime revision is now %d",

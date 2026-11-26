@@ -1489,7 +1489,7 @@ class HaxeonCli {
 		var path = requested == null ? Path.join([generated, "inputs.properties"]) : requested,
 			assets = Path.join([generated, "assets"]);
 		ensureDirectory(assets);
-		for (suffix in ["", ".hli", ".entry", ".hcs"])
+		for (suffix in ["", ".hli", ".hcs"])
 			File.copy(module + suffix, Path.join([assets, suffix == "" ? "app.hl" : "app" + suffix]));
 		ensureDirectory(Path.directory(path));
 		File.saveContent(path, property("generated", generated) + property("id", app.id) + property("name",

@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import sys.io.File;
 
 class ImportMain {
@@ -10,6 +9,6 @@ class ImportMain {
 		compiler.update("editor/Main.hx",
 			"package editor; import editor.util.Math; function main():Int { return Math.add(20, 22); }");
 		var result = compiler.compile("editor.Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], result.artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

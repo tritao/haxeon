@@ -3,7 +3,6 @@ import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.backend.wasm.WasmBackend;
-import compiler.hl.HlWriter;
 import compiler.ir.tools.IrInterpreter;
 import compiler.tools.CompilerDriver;
 
@@ -28,7 +27,7 @@ class NominalInterfaceTypeMain {
 				if (temp == null) temp = "out";
 				var path = temp + "/nominal-interface-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
 				sys.io.File.saveBytes(path,
-					target == "hl" ? HlWriter.encode(result.artifact.hashLink().module).flatten()
+					target == "hl" ? result.artifact.hashLink().hashLinkBytes().flatten()
 					: new WasmBackend().compile(result.ir, {
 						target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true
 					}).bytes);

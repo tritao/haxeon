@@ -147,6 +147,14 @@ class Runtime {
 		return id < 0 ? null : id;
 	}
 
+	/** The stable id of the function named `name` in `module`; a module without one is a `BadFunction` error. */
+	public static function requireFunctionId(module:LoadedModule, name:String):Int {
+		var id = functionId(module, name);
+		if (id == null)
+			throw new RuntimeError(RuntimeStatus.BadFunction, 'The module has no function named $name');
+		return id;
+	}
+
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int
 		return invoke(module, stableIndex, 0, function(handle) return RuntimeNative.call_i32(handle, stableIndex));
 

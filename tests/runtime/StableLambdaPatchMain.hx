@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -29,9 +28,9 @@ class StableLambdaPatchMain {
 			+ "function main():Int { return Ui.first() * 100 + Ui.second(); }\n";
 		compiler.update("Main.hx", program("", "", 2));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			mainId = build.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		if (Runtime.callInt(live, mainId) != 209)
 			throw "The program did not run correctly before the edits";
 		var edits = [

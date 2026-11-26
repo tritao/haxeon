@@ -38,7 +38,7 @@ class HaxeonProjectBuild {
 		];
 	}
 
-	/** Where an Android build writes its module, with `.hli`, `.entry` and `.hcs` beside it. */
+	/** Where an Android build writes its module, with `.hli` and `.hcs` beside it. */
 	public static function androidModulePath(project:ResolvedProject, target:Target):String
 		return new TargetLayout(new BuildEnvironment(project.root, outputDirectory(project, false),
 			BuildProfile.Release,

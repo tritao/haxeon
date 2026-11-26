@@ -10,7 +10,7 @@ class ReplMain {
 		compiler.compile("Main");
 		var program = new Repl(compiler).compileInt("Math.add(20, 22)"),
 			loaded = Runtime.load(program.bytes, program.identity);
-		if (Runtime.callInt(loaded, program.stableId) != 42)
+		if (Runtime.callInt(loaded, Runtime.requireFunctionId(loaded, program.entry)) != 42)
 			throw "REPL expression returned the wrong result";
 		Runtime.dispose(loaded);
 		if (compiler.modules.exists("__repl__"))

@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import hl.Gc;
 import runtime.LoadedModule;
 import runtime.RetainedValue;
@@ -12,10 +11,10 @@ import runtime.Runtime;
 	are loaded at once than there are slots, the extra ones share pages and wait for each other.
 **/
 class GcOwnerRetirementMain {
-	static function load(bytes:haxe.io.Bytes, identity:haxe.io.Bytes, make:Int, loaded:Array<LoadedModule>,
+	static function load(bytes:haxe.io.Bytes, identity:haxe.io.Bytes, make:String, loaded:Array<LoadedModule>,
 			retained:Array<RetainedValue>) {
 		var module = Runtime.load(bytes, identity);
-		var closure = Runtime.retainClosure(module, make);
+		var closure = Runtime.retainClosure(module, Runtime.requireFunctionId(module, make));
 		if (Runtime.callRetainedClosureInt(closure) != 42)
 			throw "new module capture";
 		loaded.push(module);
@@ -34,13 +33,13 @@ class GcOwnerRetirementMain {
 function makeBox():Box { return new Box(42); }
 function make():() -> Int { var values = [40, 2]; return function() return values[0] + values[1]; } function main():Int { return 42; }");
 		var compiled = compiler.compile("Main");
-		var bytes = HlWriter.encode(compiled.artifact.hashLink().module).flatten();
-		var make = compiled.artifact.hashLink().functionIds.get("Main.make");
+		var bytes = compiled.artifact.hashLink().hashLinkBytes().flatten();
+		var make = "Main.make";
 
 		// A plain object of the module is a block of the module like any other, however the JIT allocated it.
 		for (generation in 0...3) {
 			var module = Runtime.load(bytes, compiled.artifact.hashLink().runtimeIdentity);
-			var box = Runtime.retainObject(module, compiled.artifact.hashLink().functionIds.get("Main.makeBox"));
+			var box = Runtime.retainObject(module, Runtime.requireFunctionId(module, "Main.makeBox"));
 			Runtime.dispose(module);
 			collect();
 			if (Runtime.retryRetirements() == 0)

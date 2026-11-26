@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -23,9 +22,9 @@ class PatchUnwindMain {
 			+ "function main():Int { return probe(); }\n";
 		compiler.update("Main.hx", program("boom"));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+			live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 				first.artifact.hashLink().runtimeIdentity),
-			mainId = first.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		var before = Runtime.callInt(live, mainId);
 		if (before != 7)
 			throw 'The exception stack is incomplete before any patch: $before';

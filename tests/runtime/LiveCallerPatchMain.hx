@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.hl.HlFunction;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -24,9 +23,9 @@ class LiveCallerPatchMain {
 			"class Other {\n  public static function twice(v:Int):Int return Main.scale(v) + Main.scale(v);\n}\n");
 		compiler.update("Main.hx", source(0));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			mainId = build.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		// twice(5) = 10 + 10, scale(1) = 2.
 		expect(Runtime.callInt(live, mainId), 20 * 1000 + 2, "before the edits");
 		for (version in 1...callee.length) {
@@ -90,9 +89,9 @@ class LiveCallerPatchMain {
 		return callee[version] + "function main():Int return Other.twice(5) * 1000 + scale(1);\n";
 
 	static function fresh(build:Dynamic):Int {
-		var module = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(build.artifact).module).flatten(),
+		var module = Runtime.load(BackendArtifacts.hashLinkBytes(BackendArtifacts.hashLink(build.artifact)).flatten(),
 			BackendArtifacts.hashLink(build.artifact).runtimeIdentity);
-		var value = Runtime.callInt(module, BackendArtifacts.hashLink(build.artifact).functionIds.get("main"));
+		var value = Runtime.callInt(module, Runtime.requireFunctionId(module, "main"));
 		Runtime.dispose(module);
 		return value;
 	}

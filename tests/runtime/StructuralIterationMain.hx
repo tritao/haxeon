@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.Runtime;
 import sys.io.File;
@@ -46,9 +45,9 @@ class StructuralIterationMain {
 						debugNames: true
 					}).bytes);
 			}
-			var live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+			var live = Runtime.load(result.artifact.hashLink().hashLinkBytes().flatten(),
 				result.artifact.hashLink().runtimeIdentity);
-			var value = Runtime.callInt(live, result.artifact.hashLink().functionIds.get("main"));
+			var value = Runtime.callInt(live, Runtime.requireFunctionId(live, "main"));
 			Runtime.dispose(live);
 			var expected = incremental ? 43 : 42;
 			if (value != expected)

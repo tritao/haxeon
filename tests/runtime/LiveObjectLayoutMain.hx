@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.abi.PatchPlanner.AbiChange;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.LoadedModule;
 import runtime.PatchSet;
@@ -151,11 +150,11 @@ class LiveObjectLayoutMain {
 		var compiler = compiler();
 		compiler.update("Main.hx", original());
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			main = build.artifact.hashLink().functionIds.get("main"),
-			fresh = build.artifact.hashLink().functionIds.get("Main.fresh"),
-			reflected = build.artifact.hashLink().functionIds.get("Main.reflected");
+			main = Runtime.requireFunctionId(live, "main"),
+			fresh = Runtime.requireFunctionId(live, "Main.fresh"),
+			reflected = Runtime.requireFunctionId(live, "Main.reflected");
 		expect("the first tick", Runtime.callInt(live, main), 106);
 		expect("the second tick", Runtime.callInt(live, main), 107);
 		expect("the field before it exists", Runtime.callInt(live, reflected), -1);
@@ -218,10 +217,10 @@ class LiveObjectLayoutMain {
 		var compiler = compiler();
 		compiler.update("Main.hx", boxes(true, false, withItems, "  return 0;\n"));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			main = build.artifact.hashLink().functionIds.get("main"),
-			later = build.artifact.hashLink().functionIds.get("Main.later");
+			main = Runtime.requireFunctionId(live, "main"),
+			later = Runtime.requireFunctionId(live, "Main.later");
 		expect("the first push", Runtime.callInt(live, main), 2);
 		expect("the second push", Runtime.callInt(live, main), 3);
 		var revision = patch(compiler, live, build.revision,
@@ -288,23 +287,23 @@ class LiveObjectLayoutMain {
 		var compiler = compiler();
 		compiler.update("Main.hx", without);
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			rounds = build.artifact.hashLink().functionIds.get("Main.rounds");
-		expect("starting the worker", Runtime.callInt(live, build.artifact.hashLink().functionIds.get("Main.start")),
+			rounds = Runtime.requireFunctionId(live, "Main.rounds");
+		expect("starting the worker", Runtime.callInt(live, Runtime.requireFunctionId(live, "Main.start")),
 			0);
 		var revision = build.revision;
 		for (cycle in 0...5) {
 			var before = Runtime.callInt(live, rounds);
 			revision = patch(compiler, live, revision, with, 'adding a field while a thread runs (cycle $cycle)');
 			// Let the worker check objects the migration reached and ones the new constructor made.
-			waitForRounds(live, build.artifact.hashLink().functionIds, before + 20);
+			waitForRounds(live, before + 20);
 			revision = patch(compiler, live, revision, without,
 				'removing the field while a thread runs (cycle $cycle)');
 		}
-		var unsetMade = Runtime.callInt(live, build.artifact.hashLink().functionIds.get("Main.unsetMade"));
+		var unsetMade = Runtime.callInt(live, Runtime.requireFunctionId(live, "Main.unsetMade"));
 		expect("checks of objects made before a patch that found the added field unset",
-			Runtime.callInt(live, build.artifact.hashLink().functionIds.get("Main.finish")),
+			Runtime.callInt(live, Runtime.requireFunctionId(live, "Main.finish")),
 			0);
 		// A thread stopped inside old code finishes it after the commit: a construction it was in the middle of makes an object
 		// without the added field, one per patch at most for this worker (see docs/internals/LIVE_PATCHING.md, "Threads").
@@ -314,12 +313,13 @@ class LiveObjectLayoutMain {
 	}
 
 	/** Waits until the worker of `migratesWhileThreadsRun` has done `count` rounds, failing if it stops or takes over 10 s. */
-	static function waitForRounds(live:LoadedModule, ids:Map<String, Int>, count:Int):Void {
+	static function waitForRounds(live:LoadedModule, count:Int):Void {
 		var startedAt = Sys.time();
 		while (true) {
-			var done = Runtime.callInt(live, ids.get("Main.rounds"));
+			var done = Runtime.callInt(live, Runtime.requireFunctionId(live, "Main.rounds"));
 			if (done < 0)
-				throw 'the worker stopped: ' + Runtime.callString(live, ids.get("Main.failure"));
+				throw 'the worker stopped: ' + Runtime.callString(live,
+					Runtime.requireFunctionId(live, "Main.failure"));
 			if (done >= count)
 				return;
 			if (Sys.time() - startedAt > 10)

@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -12,9 +11,9 @@ class GdbPatchCoreMain {
 		compiler.update("CrashPoint.hx", "function run():Int { PatchCrash.fault(0); return 42; }");
 		compiler.update("Main.hx", "function main():Int { return CrashPoint.run(); }");
 		var initial = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+			live = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 				initial.artifact.hashLink().runtimeIdentity),
-			runId = initial.artifact.hashLink().functionIds.get("CrashPoint.run");
+			runId = Runtime.requireFunctionId(live, "CrashPoint.run");
 		if (Runtime.callInt(live, runId) != 42)
 			throw "initial crash probe returned the wrong value";
 		var generationOneSource = [for (_ in 0...8) ""].join("\n")

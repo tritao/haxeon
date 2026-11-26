@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -21,9 +20,9 @@ class AddedFunctionPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program("", ""));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			mainId = build.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		if (Runtime.callInt(live, mainId) != 2)
 			throw "The program did not run correctly before the edits";
 		var edits = [
@@ -53,9 +52,9 @@ class AddedFunctionPatchMain {
 			if (result != edit.expected)
 				throw 'After ${edit.label} the patched module returned $result instead of ${edit.expected}';
 			// A rejected patch falls back to loading the same build's full module, which must run on its own.
-			var fresh = Runtime.load(HlWriter.encode(changed.artifact.hashLink().module).flatten(),
+			var fresh = Runtime.load(changed.artifact.hashLink().hashLinkBytes().flatten(),
 				changed.artifact.hashLink().runtimeIdentity),
-				reloaded = Runtime.callInt(fresh, changed.artifact.hashLink().functionIds.get("main"));
+				reloaded = Runtime.callInt(fresh, Runtime.requireFunctionId(fresh, "main"));
 			Runtime.dispose(fresh);
 			if (reloaded != edit.expected)
 				throw 'After ${edit.label} the full module returned $reloaded instead of ${edit.expected}';

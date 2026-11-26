@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlCode.HlTypeDef;
-import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchReader;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -37,9 +36,9 @@ class AddedClassPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program("", "keys.length", "(x:Int) -> x + offset", ""));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 				build.artifact.hashLink().runtimeIdentity),
-			mainId = build.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		// 3 * 1000 + 15 * 10 + 6
 		var before = Runtime.callInt(live, mainId);
 		if (before != 3156)
@@ -117,9 +116,9 @@ class AddedClassPatchMain {
 		after = Runtime.callInt(live, mainId);
 		if (after != expected)
 			throw 'After editing an added class the patched module returned $after instead of $expected';
-		var fresh = Runtime.load(HlWriter.encode(edited.artifact.hashLink().module).flatten(),
+		var fresh = Runtime.load(edited.artifact.hashLink().hashLinkBytes().flatten(),
 			edited.artifact.hashLink().runtimeIdentity);
-		var clean = Runtime.callInt(fresh, edited.artifact.hashLink().functionIds.get("main"));
+		var clean = Runtime.callInt(fresh, Runtime.requireFunctionId(fresh, "main"));
 		Runtime.dispose(fresh);
 		// A fresh module runs the same code: the stored lambda did not change.
 		if (clean != expected)

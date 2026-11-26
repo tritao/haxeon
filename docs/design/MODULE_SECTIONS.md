@@ -476,8 +476,12 @@ In 4a a patch that adds a native is refused by the patch linker, as the planner 
   native), and `.live.json` no longer lists function ids. Then (4b step 2) every build's `.hli` is HLI 4, the module id, the
   revision and the initializer's name: on a dense HLB 8 live module the loader takes the ids from its identity section, so
   this held before sections. The runtime tests that build HLB 8 modules and HLP 11 patches by hand bind their ids with HLI 3
-  (`tests/DenseRuntimeIdentity.hx`) until 4d. Left: Android HXR (`native/android/cpp/haxeon_jni.c`,
-  `src/tools/AndroidWatch.hx`), `CompilerDriver`'s `functionIds.get("main")` and the REPL's.
+  (`tests/DenseRuntimeIdentity.hx`) until 4d. Then (4b step 3) the rest went to names: the Android host finds `main` by name
+  after each load (`haxeon_jni.c`), so `--entry-id-output`, the `.entry` sidecar and the `app.entry` asset went and HXR 2 is
+  the module and its identity alone (`AndroidWatch.reloadBundle`); the REPL names its entry (`ReplProgram.entry`); and the
+  tests that call a loaded module find each function by name in it (`Runtime.requireFunctionId`) and load what a build writes
+  (`BackendArtifacts.hashLinkBytes`), so they hold for modules of sections. `functionIds` stays the compiler's ids, by which
+  it reports changed functions, until 4d.
 - A function's runtime index is the loader's (`HlSectionOutput.linkedIndices`), not the live layout's: the `.functions`
   sidecar and the debugger tests that read slots take the linked numbering, as plain builds already do.
 

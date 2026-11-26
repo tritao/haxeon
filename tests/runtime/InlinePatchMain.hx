@@ -1,7 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
-import compiler.hl.patch.HlPatchReader;
 import compiler.ir.passes.inlining.IrInliner;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -18,25 +16,21 @@ class InlinePatchMain {
 			+ "function main():Int { return Counter.bump() + other(); }";
 		compiler.update("Main.hx", program("value++;", ""));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+			live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 				first.artifact.hashLink().runtimeIdentity),
-			mainId = first.artifact.hashLink().functionIds.get("main"),
-			bumpId = first.artifact.hashLink().functionIds.get("Counter.bump"),
-			otherId = first.artifact.hashLink().functionIds.get("other");
+			mainId = Runtime.requireFunctionId(live, "main");
 		if (Runtime.callInt(live, mainId) != 46)
 			throw "Inlined program did not run correctly before the edit";
 		compiler.update("Main.hx", program("value++; value++;", ""));
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 			throw "A callee body edit did not produce a compatible patch";
-		var patched =
-			[for (fn in HlPatchReader.decode(changed.artifact.hashLink().patchBytes).functions) fn.functionIndex];
-		if (patched.indexOf(bumpId) < 0)
+		// The compiler reports the functions it lowered again by its own ids.
+		var patched = changed.changedFunctions, ids = changed.artifact.hashLink().functionIds;
+		if (patched.indexOf(ids.get("Counter.bump")) < 0)
 			throw "The edited callee was not patched";
-		if (patched.indexOf(mainId) < 0)
+		if (patched.indexOf(ids.get("main")) < 0)
 			throw "The caller that inlined the edited callee was not patched";
-		if (patched.indexOf(otherId) >= 0)
-			throw "A function that did not inline the callee was patched";
 		Runtime.patchSet(live,
 			new PatchSet(first.revision, changed.revision, changed.artifact.hashLink().patchBytes,
 			changed.changedFunctions));

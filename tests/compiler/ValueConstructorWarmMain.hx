@@ -61,9 +61,9 @@ class ValueConstructorWarmMain {
 		var initial = live.compile('Main');
 		var module = runtime.Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 			initial.artifact.hashLink().runtimeIdentity);
-		var id = initial.artifact.hashLink().functionIds.get('Main.main');
+		var id = runtime.Runtime.functionId(module, 'Main.main');
 		if (id == null)
-			id = initial.artifact.hashLink().functionIds.get('main');
+			id = runtime.Runtime.functionId(module, 'main');
 		if (id == null)
 			throw 'missing live entry';
 		var initialResult = runtime.Runtime.callInt(module, id);

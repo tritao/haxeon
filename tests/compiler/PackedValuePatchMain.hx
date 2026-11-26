@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlType;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 import runtime.PatchSet;
@@ -38,11 +37,11 @@ class PackedValuePatchMain {
 			}
 		if (!packed)
 			throw 'the fixture has no packed type';
-		var live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+		var live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 			first.artifact.hashLink().runtimeIdentity);
 		try {
-			var id = first.artifact.hashLink().functionIds.get('Main.main');
-			if (id == null || Runtime.callInt(live, id) != 40)
+			var id = Runtime.requireFunctionId(live, 'Main.main');
+			if (Runtime.callInt(live, id) != 40)
 				throw 'wrong initial value';
 			compiler.update('Point.hx', StringTools.replace(point, 'this.value=value;', 'this.value=value+2;'));
 			compiler.addSourceRoot('stdlib');

@@ -36,7 +36,7 @@ try {
     $Generated = Join-Path $AndroidProjectDir "build/generated/android"
     & $Cli build --target android --project $AndroidProjectDir --gradle-inputs (Join-Path $Generated "inputs.properties")
     if ($LASTEXITCODE -ne 0) { throw "Android build for Gradle failed with $LASTEXITCODE" }
-    foreach ($File in @("assets/app.hl", "assets/app.hli", "assets/app.entry", "assets/app.hcs", "inputs.properties", "haxeon.cmake")) {
+    foreach ($File in @("assets/app.hl", "assets/app.hli", "assets/app.hcs", "inputs.properties", "haxeon.cmake")) {
         if (-not (Test-Path (Join-Path $Generated $File))) { throw "Android output $File was not created" }
     }
 

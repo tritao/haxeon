@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.Runtime;
 
@@ -125,10 +124,10 @@ class StringEscapesMain {
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", source);
 		var result = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+			live = Runtime.load(result.artifact.hashLink().hashLinkBytes().flatten(),
 				result.artifact.hashLink().runtimeIdentity);
 		for (index in 0...cases.length) {
-			var actual = Runtime.callInt(live, result.artifact.hashLink().functionIds.get('Main.case$index'));
+			var actual = Runtime.callInt(live, Runtime.requireFunctionId(live, 'Main.case$index'));
 			if (actual != cases[index].expected)
 				throw '${cases[index].body} produced $actual, expected ${cases[index].expected}';
 		}

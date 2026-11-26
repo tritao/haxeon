@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -19,9 +18,9 @@ class TypedInterfacePatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", source(false, 0));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+			live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 				first.artifact.hashLink().runtimeIdentity),
-			main = first.artifact.hashLink().functionIds.get("main");
+			main = Runtime.requireFunctionId(live, "main");
 		if (Runtime.callInt(live, main) != 2) throw "Initial typed class entry failed";
 		compiler.update("Main.hx", source(true, 9));
 		var appended = compiler.compile("Main");

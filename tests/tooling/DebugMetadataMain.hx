@@ -227,8 +227,8 @@ class DebugMetadataMain {
 		if (sections.length != 1 || sections[0].version != 1
 			|| !sections[0].payload.equals(HlWriter.encodeSourceSnapshots(snapshots)))
 			throw "Compiler did not emit the canonical source snapshot section";
-		if (HlWriter.encode(result.artifact.hashLink().module).flatten()
-			.compare(HlWriter.encode(result.artifact.hashLink().module).flatten()) != 0)
+		if (result.artifact.hashLink().hashLinkBytes().flatten()
+			.compare(result.artifact.hashLink().hashLinkBytes().flatten()) != 0)
 			throw "HLB source snapshot encoding is not deterministic";
 		var stableBySlot:Map<Int, Int> =
 			[for (fn in result.artifact.hashLink().module.functions) fn.functionIndex => fn.functionIndex],

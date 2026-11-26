@@ -211,8 +211,7 @@ class CompilerServer {
 			"irOutput",
 			"inputsOutput",
 			"ffiHeader",
-			"baselineOutput",
-			"entryIdOutput"
+			"baselineOutput"
 		]) {
 			var destination:Null<String> = Reflect.field(request, field);
 			if (destination == null)

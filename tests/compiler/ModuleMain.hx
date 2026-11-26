@@ -181,7 +181,7 @@ class ModuleMain {
 		if (buildA.artifact.hashLink().functionIndices.get("main")
 			== buildB.artifact.hashLink().functionIndices.get("main"))
 			throw "Test did not exercise distinct backend native layouts";
-		File.saveBytes(output, HlWriter.encode(compacted.artifact.hashLink().module).flatten());
+		File.saveBytes(output, compacted.artifact.hashLink().hashLinkBytes().flatten());
 
 		var missing = new Compiler();
 		missing.update("Main.hx", "function main():Int { return Missing.value(); }");

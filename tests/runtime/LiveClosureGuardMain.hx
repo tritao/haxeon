@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -151,8 +150,8 @@ class LiveClosureGuardMain {
 			mention(error.message, "Ui.handlers[0]", "the refusal without the rebuild hooks");
 		}
 		Runtime.patchSetRebuilding(session.live, patch,
-			BackendArtifacts.hashLink(changed.artifact).functionIds.get("Main.liveRelease"),
-			BackendArtifacts.hashLink(changed.artifact).functionIds.get("Main.liveRebuild"),
+			Runtime.requireFunctionId(session.live, "Main.liveRelease"),
+			Runtime.requireFunctionId(session.live, "Main.liveRebuild"),
 			(_, error) -> throw 'a rebuild hook threw: $error');
 		expect(Runtime.callInt(session.live, session.mainId), 10, "the rebuilt UI's handlers after the edit");
 		Runtime.dispose(session.live);
@@ -180,8 +179,8 @@ class LiveClosureGuardMain {
 			Runtime.patchSetRebuilding(session.live,
 				new PatchSet(session.build.revision, changed.revision,
 				BackendArtifacts.hashLink(changed.artifact).patchBytes, changed.changedFunctions),
-				BackendArtifacts.hashLink(changed.artifact).functionIds.get("Main.liveRelease"),
-				BackendArtifacts.hashLink(changed.artifact).functionIds.get("Main.liveRebuild"),
+				Runtime.requireFunctionId(session.live, "Main.liveRelease"),
+				Runtime.requireFunctionId(session.live, "Main.liveRebuild"),
 				(rebuilding, error) -> hookErrors.push((rebuilding ? "rebuild: " : "release: ") + error));
 			throw 'the patch applied though the UI still held the deleted handler';
 		} catch (error:RuntimeError) {
@@ -238,8 +237,8 @@ class LiveClosureGuardMain {
 		if (patch.hasGuards())
 			throw 'editing a handler body produced a patch with guards';
 		Runtime.patchSetRebuilding(session.live, patch,
-			BackendArtifacts.hashLink(changed.artifact).functionIds.get("Main.liveRelease"),
-			BackendArtifacts.hashLink(changed.artifact).functionIds.get("Main.liveRebuild"),
+			Runtime.requireFunctionId(session.live, "Main.liveRelease"),
+			Runtime.requireFunctionId(session.live, "Main.liveRebuild"),
 			(_, error) -> throw 'a rebuild hook threw: $error');
 		expect(Runtime.callInt(session.live, session.mainId), 100 + 6, "no release, one rebuild, and the new body");
 		Runtime.dispose(session.live);
@@ -385,9 +384,9 @@ class LiveClosureGuardMain {
 				+ "function finish():Int {\n  Work.stop = true;\n  while (!Work.finished) Sys.sleep(0.001);\n  return Work.result;\n}\n"
 				+ "function main():Int return 0;\n";
 		var session = start(program(true), true);
-		var finish:Int = BackendArtifacts.hashLink(session.build.artifact).functionIds.get("Main.finish");
+		var finish:Int = Runtime.requireFunctionId(session.live, "Main.finish");
 		expect(Runtime.callInt(session.live,
-			BackendArtifacts.hashLink(session.build.artifact).functionIds.get("Main.start")), 0, "starting the thread");
+			Runtime.requireFunctionId(session.live, "Main.start")), 0, "starting the thread");
 		var changed = compileEdit(session, program(false), "the handler a thread holds deleted");
 		var edit = new PatchSet(session.build.revision, changed.revision,
 			BackendArtifacts.hashLink(changed.artifact).patchBytes, changed.changedFunctions);
@@ -442,12 +441,13 @@ class LiveClosureGuardMain {
 		}
 		compiler.update("Main.hx", source);
 		var build = compiler.compile("Main");
+		var live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
+			build.artifact.hashLink().runtimeIdentity);
 		return {
 			compiler: compiler,
 			build: build,
-			live: Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
-				build.artifact.hashLink().runtimeIdentity),
-			mainId: build.artifact.hashLink().functionIds.get("main")
+			live: live,
+			mainId: Runtime.requireFunctionId(live, "main")
 		};
 	}
 

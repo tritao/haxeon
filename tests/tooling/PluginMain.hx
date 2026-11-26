@@ -2,7 +2,6 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.core.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
 import runtime.LoadedPlugin;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -23,22 +22,22 @@ class PluginMain {
 		var mainSource = loadFixture(compiler, "Main.hx", "pragtical/app/Main.hx");
 
 		var first = compiler.compile("Main");
-		File.saveBytes(output, HlWriter.encode(first.artifact.hashLink().module).flatten());
+		File.saveBytes(output, first.artifact.hashLink().hashLinkBytes().flatten());
 		if (first.metrics.modules != 6 || first.requiresReload || first.artifact.hashLink().patchBytes != null)
 			throw "Initial plugin workload did not compile as a stable module";
 		var disposedModules = 0,
-			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+			live = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 				first.artifact.hashLink().runtimeIdentity),
 			domain = new RuntimeDomain("search", function(module:Dynamic):Void {
 				disposedModules++;
 				Runtime.dispose(cast module);
 			}),
-				firstPlugin = loadedPlugin(live, first.artifact.hashLink().functionIds);
+				firstPlugin = loadedPlugin(live);
 		domain.activateWithModule(firstPlugin, live);
 		compiler.acknowledgePublication(first.revision);
-		if (call(live, first.artifact.hashLink().functionIds, "Main.documentCount") != 1
-			|| call(live, first.artifact.hashLink().functionIds, "Main.callbackCount") != 1
-			|| call(live, first.artifact.hashLink().functionIds, "Main.runCommand") != 5)
+		if (call(live, "Main.documentCount") != 1
+			|| call(live, "Main.callbackCount") != 1
+			|| call(live, "Main.runCommand") != 5)
 			throw "Initial plugin did not open a document and execute its command callback";
 
 		var patchedSource = StringTools.replace(pluginSource, "state.cursor + 1", "state.cursor + 2");
@@ -63,8 +62,8 @@ class PluginMain {
 			new PatchSet(first.revision, bodyEdit.revision, bodyEdit.artifact.hashLink().patchBytes,
 			bodyEdit.changedFunctions));
 		compiler.acknowledgePublication(bodyEdit.revision);
-		var patchedCommand = call(live, bodyEdit.artifact.hashLink().functionIds, "Main.runCommand"),
-			patchedCursor = call(live, bodyEdit.artifact.hashLink().functionIds, "Main.cursor");
+		var patchedCommand = call(live, "Main.runCommand"),
+			patchedCursor = call(live, "Main.cursor");
 		if (patchedCommand != 7 || patchedCursor != 7)
 			throw 'Body patch did not preserve plugin state or update callback behavior ($patchedCommand/$patchedCursor)';
 		try {
@@ -97,7 +96,7 @@ class PluginMain {
 			compiler.compile("Main");
 			throw "Invalid plugin edit unexpectedly compiled";
 		} catch (error:CompileError) {}
-		if (call(live, bodyEdit.artifact.hashLink().functionIds, "Main.cursor") != 7)
+		if (call(live, "Main.cursor") != 7)
 			throw "Invalid plugin edit replaced the last good generation";
 		compiler.update("pragtical/plugins/SearchPlugin.hx", patchedSource);
 
@@ -114,16 +113,15 @@ class PluginMain {
 			"throw \"activation failed\";");
 		compiler.update("Main.hx", activationFailureSource);
 		var activationFailure = compiler.compile("Main"),
-			activationCandidate = Runtime.load(HlWriter.encode(activationFailure.artifact.hashLink().module).flatten(),
+			activationCandidate = Runtime.load(activationFailure.artifact.hashLink().hashLinkBytes().flatten(),
 				activationFailure.artifact.hashLink().runtimeIdentity);
 		try {
-			domain.reloadWithModule(loadedPlugin(activationCandidate,
-				activationFailure.artifact.hashLink().functionIds),
+			domain.reloadWithModule(loadedPlugin(activationCandidate),
 				activationCandidate);
 			throw "Plugin activation failure unexpectedly published";
 		} catch (_:Dynamic) {}
 		if (!domain.active || domain.generation != 1 || disposedModules != 1
-			|| call(live, bodyEdit.artifact.hashLink().functionIds, "Main.cursor") != 7)
+			|| call(live, "Main.cursor") != 7)
 			throw "Plugin activation failure did not recover the previous generation";
 		compiler.rejectPublication(activationFailure.revision);
 
@@ -131,31 +129,31 @@ class PluginMain {
 			"throw \"restore failed\";");
 		compiler.update("Main.hx", restoreFailureSource);
 		var restoreFailure = compiler.compile("Main"),
-			restoreCandidate = Runtime.load(HlWriter.encode(restoreFailure.artifact.hashLink().module).flatten(),
+			restoreCandidate = Runtime.load(restoreFailure.artifact.hashLink().hashLinkBytes().flatten(),
 				restoreFailure.artifact.hashLink().runtimeIdentity);
 		try {
-			domain.reloadWithModule(loadedPlugin(restoreCandidate, restoreFailure.artifact.hashLink().functionIds),
+			domain.reloadWithModule(loadedPlugin(restoreCandidate),
 				restoreCandidate);
 			throw "Plugin restore failure unexpectedly published";
 		} catch (_:Dynamic) {}
 		if (!domain.active || domain.generation != 1 || disposedModules != 2
-			|| call(live, bodyEdit.artifact.hashLink().functionIds, "Main.cursor") != 7)
+			|| call(live, "Main.cursor") != 7)
 			throw "Plugin restore failure did not retire its callbacks and recover";
 		compiler.rejectPublication(restoreFailure.revision);
 		compiler.update("Main.hx", mainSource);
 		var structural = compiler.compile("Main");
 		if (!structural.requiresReload || structural.artifact.hashLink().patchBytes != null)
 			throw "Plugin editor-layout edit did not require a domain reload";
-		var replacement = Runtime.load(HlWriter.encode(structural.artifact.hashLink().module).flatten(),
+		var replacement = Runtime.load(structural.artifact.hashLink().hashLinkBytes().flatten(),
 			structural.artifact.hashLink().runtimeIdentity),
-			replacementPlugin = loadedPlugin(replacement, structural.artifact.hashLink().functionIds);
+			replacementPlugin = loadedPlugin(replacement);
 		domain.reloadWithModule(replacementPlugin, replacement);
 		compiler.acknowledgePublication(structural.revision);
 		if (domain.generation != 2
 			|| replacementPlugin.restoredState != "cursor:7"
-			|| call(replacement, structural.artifact.hashLink().functionIds, "Main.cursor") != 7
-			|| call(replacement, structural.artifact.hashLink().functionIds, "Main.documentCount") != 1
-			|| call(replacement, structural.artifact.hashLink().functionIds, "Main.callbackCount") != 1
+			|| call(replacement, "Main.cursor") != 7
+			|| call(replacement, "Main.documentCount") != 1
+			|| call(replacement, "Main.callbackCount") != 1
 			|| disposedModules != 3)
 			throw "Structural reload did not restore observable editor/plugin state";
 
@@ -169,7 +167,7 @@ class PluginMain {
 			afterReloadPatch.artifact.hashLink().patchBytes,
 			afterReloadPatch.changedFunctions));
 		compiler.acknowledgePublication(afterReloadPatch.revision);
-		if (call(replacement, afterReloadPatch.artifact.hashLink().functionIds, "Main.runCommand") != 10)
+		if (call(replacement, "Main.runCommand") != 10)
 			throw "Post-reload patch did not retain restored state";
 		domain.deactivate();
 		if (domain.active || disposedModules != 4)
@@ -183,10 +181,11 @@ class PluginMain {
 		return source;
 	}
 
-	static function loadedPlugin(module:Dynamic, ids:Map<String, Int>):LoadedPlugin
-		return new LoadedPlugin(cast module, ids.get("Main.activate"), ids.get("Main.deactivate"),
-			ids.get("Main.saveState"), ids.get("Main.restoreState"));
+	static function loadedPlugin(module:Dynamic):LoadedPlugin
+		return new LoadedPlugin(cast module, Runtime.functionId(cast module, "Main.activate"),
+			Runtime.functionId(cast module, "Main.deactivate"), Runtime.functionId(cast module, "Main.saveState"),
+			Runtime.functionId(cast module, "Main.restoreState"));
 
-	static function call(module:Dynamic, ids:Map<String, Int>, name:String):Int
-		return Runtime.callInt(cast module, ids.get(name));
+	static function call(module:Dynamic, name:String):Int
+		return Runtime.callInt(cast module, Runtime.requireFunctionId(cast module, name));
 }

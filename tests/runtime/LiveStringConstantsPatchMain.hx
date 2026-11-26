@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.abi.PatchPlanner.AbiChange;
-import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchReader;
 import compiler.types.Type.CompilerType;
 import runtime.PatchSet;
@@ -36,9 +35,9 @@ class LiveStringConstantsPatchMain {
 		var build = compiler.compile("Main");
 		if (build.artifact.hashLink().module.constants.length < 2)
 			throw 'A live module should hold its literals as constants, got ${build.artifact.hashLink().module.constants.length}';
-		var live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+		var live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 			build.artifact.hashLink().runtimeIdentity),
-			mainId = build.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		expect(Runtime.callInt(live, mainId) == 2000,
 			"The live module allocated while evaluating its literals, or computed the wrong total");
 		var edits = [
@@ -86,9 +85,9 @@ class LiveStringConstantsPatchMain {
 			expect(result == edit.expected,
 				'After ${edit.label} the patched module returned $result instead of ${edit.expected}');
 			// A rejected patch falls back to loading the same build's full module, which must run on its own.
-			var fresh = Runtime.load(HlWriter.encode(changed.artifact.hashLink().module).flatten(),
+			var fresh = Runtime.load(changed.artifact.hashLink().hashLinkBytes().flatten(),
 				changed.artifact.hashLink().runtimeIdentity),
-				reloaded = Runtime.callInt(fresh, changed.artifact.hashLink().functionIds.get("main"));
+				reloaded = Runtime.callInt(fresh, Runtime.requireFunctionId(fresh, "main"));
 			Runtime.dispose(fresh);
 			expect(reloaded == edit.expected,
 				'After ${edit.label} the full module returned $reloaded instead of ${edit.expected}');

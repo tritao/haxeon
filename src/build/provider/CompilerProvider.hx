@@ -40,7 +40,7 @@ class CompilerProvider {
 			compilerInputs = CompilerInputs.of(project, context.layout),
 			sourcePaths = compilerInputs.sources,
 			// An Android module runs in the debug host, which patches it: it is always built live, with the baseline the patches
-			// are compiled against (`.hcs`) and the stable ID the host calls `main` by (`.entry`).
+			// are compiled against (`.hcs`); the host finds `main` by name.
 			android = context.environment.target.isAndroid(),
 			live = !context.checkOnly && (context.live || android),
 			target = aheadOfTime ? "hlc" : compilerInputs.target,
@@ -132,7 +132,6 @@ class CompilerProvider {
 			arguments.push("--live");
 		if (android && !context.checkOnly) {
 			arguments.push("--baseline-output=" + output + ".hcs");
-			arguments.push("--entry-id-output=" + output + ".entry");
 		}
 		var baseline = context.baseline;
 		if (baseline != null) {
@@ -212,10 +211,8 @@ class CompilerProvider {
 			outputs.push(output + ".hli");
 			outputs.push(output + ".live.json");
 		}
-		if (android && !context.checkOnly) {
+		if (android && !context.checkOnly)
 			outputs.push(output + ".hcs");
-			outputs.push(output + ".entry");
-		}
 		return new ExecutionAction(actionId, dependencies, inputs, outputs,
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',
 			Compiler(command, argumentsWithLauncher, directory, environment, invoke), false);

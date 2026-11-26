@@ -174,7 +174,7 @@ Haxeon's Android host as a library: a prebuilt AAR in the SDK (`platforms/androi
 desktop runners link the SDK's prebuilt `libhaxeon-app`. An AAR is how Android libraries are distributed, and building the
 host from sources on first use would ship its sources and make the first build need the NDK and take minutes. Native code builds through `externalNativeBuild` with the same
 generated `haxeon.cmake`, once per ABI, with the NDK's CMake toolchain. The module and its live-editing files
-(`app.hl`, `.hli`, `.entry`, `.hcs`) are generated assets. The Gradle project inside the Haxeon checkout becomes the
+(`app.hl`, `.hli`, `.hcs`) are generated assets; the host finds `main` by name. The Gradle project inside the Haxeon checkout becomes the
 app template. The SDK builds the host AAR from `native/android` when the Android toolchain is available.
 
 ## Web runner

@@ -36,7 +36,7 @@ mkdir -p "$android_project"
 # Preparing the generated assets needs no Android toolchain.
 generated="$android_project/build/generated/android"
 "$cli" build --target android --project "$android_project" --gradle-inputs "$generated/inputs.properties"
-for artifact in app.hl app.hli app.entry app.hcs; do
+for artifact in app.hl app.hli app.hcs; do
 	test -s "$generated/assets/$artifact"
 done
 grep -qF "id=com.example.android_project" "$generated/inputs.properties"

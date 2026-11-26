@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -184,7 +183,7 @@ class StdlibMain {
 			throw 'core source binding "$symbol" was not emitted';
 		for (symbol in bytesSymbols.keys())
 			throw 'haxe.io.Bytes source binding "$symbol" was not emitted';
-		File.saveBytes(output, HlWriter.encode(result.artifact.hashLink().module).flatten());
+		File.saveBytes(output, result.artifact.hashLink().hashLinkBytes().flatten());
 
 		var invalid = new Compiler();
 		CompilerIntrinsics.register(invalid);

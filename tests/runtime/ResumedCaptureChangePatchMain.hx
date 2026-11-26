@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -44,9 +43,9 @@ class ResumedCaptureChangePatchMain {
 		compiler.update("Main.hx", capturing("return x + firstStyle.value;"));
 		var build = compiler.compile("Main");
 		compiler.acknowledgePublication(build.revision);
-		var live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+		var live = Runtime.load(build.artifact.hashLink().hashLinkBytes().flatten(),
 			build.artifact.hashLink().runtimeIdentity),
-			mainId = build.artifact.hashLink().functionIds.get("main");
+			mainId = Runtime.requireFunctionId(live, "main");
 		var before = Runtime.callInt(live, mainId);
 		if (before != 15)
 			throw 'The program returned $before instead of 15 before the edit';
