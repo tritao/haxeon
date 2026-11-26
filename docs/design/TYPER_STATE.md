@@ -1,6 +1,6 @@
 # The typer's per-build state as results
 
-Status: proposed. Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
+Status: accepted (pieces 1, 2 and 5 first; piece 4 with engine slices 6 and 7). Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
 
 ## Why
 
@@ -64,8 +64,7 @@ Pieces 1, 2 and 5 are independent and small to medium; 3 needs a recorded read a
 with slices 6/7. Expected together: the no-op from 0.585G to roughly 0.25–0.3G and the body edit by about 0.25G, an
 estimate from the phase times above, to be measured per piece.
 
-## Open questions
+## Decided
 
-- Piece 4 here or with engine slices 6/7: the object tables are the same data, so landing them twice would be waste.
-- Whether piece 1 should key by module parse (simplest, matches how ASTs are replaced) or by declaration (finer, but a
-  module's re-parse replaces all its `AstFunction` nodes anyway, so likely no gain).
+- Piece 4 lands with engine slices 6 and 7, which hold the same object tables.
+- Piece 1 keys by module parse: a module's re-parse replaces all its `AstFunction` nodes, so a finer key would gain nothing.

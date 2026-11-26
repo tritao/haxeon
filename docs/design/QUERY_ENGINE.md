@@ -224,7 +224,7 @@ Each step is byte-identical on the self-compile and the program suites, and keep
    - **3d: prints as queries over the sources** (large; with M4c). `DeclarationPrints` compares canonical forms module by
      module; as derived queries over the `sources` inputs, a print's facts would be computed on demand, and naming a type
      would read an input of its own, the type's kind, instead of the partial-read rule.
-   - **3e: the typer's per-build state as results** (proposed, [TYPER_STATE.md](TYPER_STATE.md)): the registries and key
+   - **3e: the typer's per-build state as results** (accepted, [TYPER_STATE.md](TYPER_STATE.md)): the registries and key
      maps `TypingSession` rebuilds every build as summaries over per-unit contributions; the no-op floor's typer part.
 4. **Every other reuse mechanism, in pipeline order from the front** (below). A stage gets reuse only if its input is the
    same memo as last build, so the chain starts at IR generation's per-function cache (`ModuleState.irFunctions`) and each
