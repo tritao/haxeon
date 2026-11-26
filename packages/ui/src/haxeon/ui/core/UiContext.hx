@@ -2,7 +2,6 @@ package haxeon.ui.core;
 
 import haxeon.ui.style.Density;
 import haxeon.reactive.ReactiveRuntime;
-import haxeon.ui.debug.RenderCost;
 import haxeon.platform.Surface;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegion as NativeWindowDecorationRegion;
 import nativekit.ffi.NativeKitTypes;
@@ -26,14 +25,11 @@ import haxeon.ui.theme.Theme;
 import haxeon.ui.style.StyleSheet;
 import haxeon.ui.gestures.GestureArena;
 import haxeon.ui.animation.AnimationScheduler;
-import haxeon.ui.debug.AccessibilityAudit;
-import haxeon.ui.debug.AccessibilityIssue;
-import haxeon.ui.debug.AllocationProbe;
-import haxeon.ui.debug.UiFrameMetrics;
-import haxeon.ui.debug.UiInspector;
-import haxeon.ui.debug.UiNodeSnapshot;
-import haxeon.ui.debug.UiStyleInvalidationMetrics;
-import haxeon.ui.debug.UiStyleInvalidationMetrics.UiStyleInvalidationFrame;
+import haxeon.ui.semantics.AccessibilityAudit;
+import haxeon.ui.core.UiFrameMetrics;
+import haxeon.ui.core.UiInspector;
+import haxeon.ui.core.TreeDiff;
+import haxeon.ui.core.TreeDiff.TreeDiffFrame;
 
 import haxeon.ui.core.Command;
 import haxeon.ui.core.RenderNode;
@@ -42,7 +38,7 @@ import haxeon.ui.core.UiEvent;
 class UiContext implements Disposable {
 	final session:LayoutSession;
 	final layoutChanges:LayoutChanges = new LayoutChanges();
-	final comparisonFrame:UiStyleInvalidationFrame;
+	final comparisonFrame:TreeDiffFrame;
 
 	/** The state widgets keep between builds (`BuildContext.state`), by widget and scope. */
 	public final stateStore:StateStore;
@@ -197,7 +193,7 @@ class UiContext implements Disposable {
 			null,
 			interactionStates,
 			commands);
-		comparisonFrame = new UiStyleInvalidationFrame(buildContext, layoutChanges, submittedTopology);
+		comparisonFrame = new TreeDiffFrame(buildContext, layoutChanges, submittedTopology);
 		buildContext.setCommandContext(commandContext);
 		if (fonts != null) this.session.setFonts(fonts);
 		focus = new FocusManager();
@@ -580,7 +576,7 @@ class UiContext implements Disposable {
 		layoutChanges.clear();
 		comparisonFrame.topology = submittedTopology;
 		comparisonFrame.preserveRevisions = false;
-		var styleInvalidation = UiStyleInvalidationMetrics.compare(root,
+		var styleInvalidation = TreeDiff.compare(root,
 			next,
 			previousNodesById,
 			currentNodesById,
@@ -677,7 +673,7 @@ class UiContext implements Disposable {
 			// a requested pass; fail explicitly if callbacks cannot converge.
 			if (layoutPass >= 7) throw "UI layout feedback did not converge after 8 passes";
 			buildContext.takeRetainedEdits(currentNodesById);
-			UiStyleInvalidationMetrics.collectLayoutEdits(currentNodesById, buildContext.patchedPriors(),
+			TreeDiff.collectLayoutEdits(currentNodesById, buildContext.patchedPriors(),
 				layoutChanges);
 			buildContext.endPatchFrame();
 			resolved = session.submit(next.layout, frame, layoutChanges, verifying);
@@ -688,7 +684,7 @@ class UiContext implements Disposable {
 		var nativeLayoutEndAllocatedAt = AllocationProbe.now();
 		if (layoutPass > 0) {
 			comparisonFrame.preserveRevisions = true;
-			styleInvalidation = UiStyleInvalidationMetrics.compare(root,
+			styleInvalidation = TreeDiff.compare(root,
 				next,
 				previousNodesById,
 				currentNodesById,

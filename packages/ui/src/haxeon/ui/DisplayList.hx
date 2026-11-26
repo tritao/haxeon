@@ -1,7 +1,7 @@
 package haxeon.ui;
 
 import NativeKitUI;
-import haxeon.ui.debug.RenderCost;
+import haxeon.ui.core.UiFrameMetrics;
 
 /** Typed retained display list. Resources referenced by the list stay alive natively until it is cleared or replaced. */
 class DisplayList implements Disposable {

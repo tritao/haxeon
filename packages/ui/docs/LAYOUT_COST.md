@@ -140,7 +140,7 @@ A patch contains updated 264-byte node records, removed IDs, and ordered child l
 owns the root. New IDs carry their input records and nonempty child lists. Unchanged records and child lists are absent.
 The header validates exact metadata lengths, final node count and a reserved zero before applying anything.
 
-**One dirty classification.** `UiStyleInvalidationMetrics.compare` and `RenderNode.syncRevisions` still decide what changed,
+**One dirty classification.** `TreeDiff.compare` and `RenderNode.syncRevisions` still decide what changed,
 including generated `Diff.mask` style differences, text, intrinsic content, hit policy and retained scene
 revisions. `LayoutChanges` is reusable transport scratch populated from those decisions, not another style cache or
 fingerprint. The encoder walks for membership, order, validation and intrinsic registration, but validates and writes input

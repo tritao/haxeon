@@ -10,8 +10,8 @@ import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.core.HitTest;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
+import haxeon.ui.core.UiInspector;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.debug.UiNodeSnapshot;
 import haxeon.ui.widgets.CanvasView;
 import haxeon.ui.widgets.layout.Stack;
 

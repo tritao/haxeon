@@ -1,13 +1,13 @@
-package haxeon.ui.debug;
+package haxeon.ui.core;
 
+import haxeon.ui.IntIndex;
 import haxeon.ui.LayoutChanges;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.RenderTreeTopology;
 import haxeon.ui.style.ComputedStyle;
 
 /** Per-submit style invalidation counts, compared by stable render-node ID. */
-class UiStyleInvalidationMetrics {
+class TreeDiff {
 	public var styleChangedNodes(default, null):Int;
 	public var styleUnchangedNodes(default, null):Int;
 	public var invalidationFlags(default, null):UiDirtyFlag;
@@ -43,7 +43,7 @@ class UiStyleInvalidationMetrics {
 	/** Classifies current nodes against their prior submitted inputs. */
 	internal static function compare(previous:Null<RenderNode>, current:Null<RenderNode>,
 			?previousById:Map<Int, RenderNode>, ?currentById:Map<Int, RenderNode>,
-			?priorOverrides:Map<Int, RenderNode>, ?frame:UiStyleInvalidationFrame):UiStyleInvalidationMetrics {
+			?priorOverrides:Map<Int, RenderNode>, ?frame:TreeDiffFrame):TreeDiff {
 		var previousIndex = previousById == null ? new Map<Int, RenderNode>():previousById;
 		var currentIndex = currentById == null ? new Map<Int, RenderNode>():currentById;
 		if (frame == null) {
@@ -56,7 +56,7 @@ class UiStyleInvalidationMetrics {
 			for (id => node in priorOverrides)
 				previousIndex.set(id, node);
 
-		var result = new UiStyleInvalidationMetrics(0, 0, UiDirtyFlag.empty(), 0, 0, 0, 0, 0, 0,
+		var result = new TreeDiff(0, 0, UiDirtyFlag.empty(), 0, 0, 0, 0, 0, 0,
 			previous == null && current != null, false);
 		var matched = current == null ? 0 : compareNode(current, previousIndex, currentIndex, frame, result);
 		// Every visited prior was matched by ID; a smaller count means a node was removed.
@@ -70,7 +70,7 @@ class UiStyleInvalidationMetrics {
 
 	/** A direct walk avoids a visitor environment and boxed captured counters on every frame. */
 	static function compareNode(node:RenderNode, previousIndex:Map<Int, RenderNode>, currentIndex:Map<Int, RenderNode>,
-			frame:Null<UiStyleInvalidationFrame>, result:UiStyleInvalidationMetrics):Int {
+			frame:Null<TreeDiffFrame>, result:TreeDiff):Int {
 		currentIndex.set(node.id.value, node);
 		var prior = previousIndex.get(node.id.value);
 		var content = node.layout.intrinsicContent;
@@ -140,7 +140,7 @@ class UiStyleInvalidationMetrics {
 }
 
 /** Reused comparison inputs keep the frame visitor's capture fixed as the native boundary gains data. */
-internal class UiStyleInvalidationFrame {
+internal class TreeDiffFrame {
 	public final context:BuildContext;
 	public final changes:LayoutChanges;
 	internal var topology:RenderTreeTopology;
@@ -150,5 +150,55 @@ internal class UiStyleInvalidationFrame {
 		this.context = context;
 		this.changes = changes;
 		this.topology = topology;
+	}
+}
+
+/** Exact topology of a published frame. Rebuilding reparents retained nodes, so their old parent/children cannot be read live. */
+internal class RenderTreeTopology {
+	final indices:IntIndex = new IntIndex();
+	final parents:Array<Int> = [];
+	final offsets:Array<Int> = [];
+	final counts:Array<Int> = [];
+	final children:Array<Int> = [];
+
+	public function new() {}
+
+	public function clear():Void {
+		indices.clear();
+		parents.resize(0);
+		offsets.resize(0);
+		counts.resize(0);
+		children.resize(0);
+	}
+
+	public function append(node:RenderNode):Void {
+		indices.set(node.id.value, parents.length);
+		parents.push(node.parent == null ? 0 : node.parent.id.value);
+		offsets.push(children.length);
+		counts.push(node.children.length);
+		for (child in node.children) children.push(child.id.value);
+	}
+
+	public function parent(id:Int):Int {
+		var index = indices.get(id);
+		return index < 0 ? 0 : parents[index];
+	}
+
+	/** Original child slot when a retained builder has already reparented the live child into its new root. */
+	public function childPosition(parent:Int, child:Int):Int {
+		var index = indices.get(parent);
+		if (index < 0) return -1;
+		var offset = offsets[index];
+		for (slot in 0...counts[index]) if (children[offset + slot] == child) return slot;
+		return -1;
+	}
+
+	public function sameChildren(node:RenderNode):Bool {
+		var index = indices.get(node.id.value);
+		if (index < 0 || counts[index] != node.children.length) return false;
+		var offset = offsets[index];
+		for (child in 0...node.children.length)
+			if (children[offset + child] != node.children[child].id.value) return false;
+		return true;
 	}
 }

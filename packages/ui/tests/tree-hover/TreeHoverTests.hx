@@ -34,7 +34,7 @@ private class Files implements TreeViewModel {
 @:access(haxeon.ui.core.RenderNode)
 class TreeHoverTests {
 	static function hoverUpdates(ui:UiContext):Int {
-		var metrics:haxeon.ui.debug.UiFrameMetrics = cast ui.frameMetrics;
+		var metrics:haxeon.ui.core.UiFrameMetrics = cast ui.frameMetrics;
 		return metrics.hoverPaintUpdatedNodes;
 	}
 	static function commands(node:RenderNode):Int {

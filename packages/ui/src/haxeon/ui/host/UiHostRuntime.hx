@@ -8,7 +8,7 @@ import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
 import haxeon.ui.Renderer;
 import haxeon.ui.UiResult.UiError;
-import haxeon.ui.debug.AllocationProbe;
+import haxeon.ui.core.UiFrameMetrics;
 import haxeon.ui.host.UiApplication;
 import haxeon.ui.style.Density;
 import nativekit.ffi.NativeKitTypes;

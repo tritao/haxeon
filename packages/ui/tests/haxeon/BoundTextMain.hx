@@ -4,7 +4,7 @@ import haxeon.ui.component.BoundText;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.StateStore;
-import haxeon.ui.debug.UiStyleInvalidationMetrics;
+import haxeon.ui.core.TreeDiff;
 import haxeon.ui.theme.Theme;
 
 class BoundTextMain {
@@ -33,7 +33,7 @@ class BoundTextMain {
 		context.consumeBindingFrameRequest();
 		if (node.layout.text != "two" || node.semantics == null || node.semantics.label != "two"
 			|| reads != 2) return 2;
-		var changes = UiStyleInvalidationMetrics.compare(node, node);
+		var changes = TreeDiff.compare(node, node);
 		if (!changes.invalidationFlags.contains(UiDirtyFlag.NeedsTextLayout)
 			|| !changes.invalidationFlags.contains(UiDirtyFlag.NeedsLayout)
 			|| !changes.invalidationFlags.contains(UiDirtyFlag.NeedsPaint)

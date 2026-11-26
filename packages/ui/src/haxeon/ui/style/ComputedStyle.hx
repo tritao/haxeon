@@ -203,7 +203,7 @@ class ComputedStyle {
 				values[property.slot].inspectForRead(), sourceAt(property.slot)));
 		return result;
 	}
-	@:allow(haxeon.ui.debug.UiInspector)
+	@:allow(haxeon.ui.core.UiInspector)
 	function copyInspectionValues():Void {
 		for (property in StyleProperty.all())
 			if (property.copiedOnRead && isSet(property.slot)) values[property.slot].inspectForRead();

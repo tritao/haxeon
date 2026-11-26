@@ -1,5 +1,7 @@
-package haxeon.ui.debug;
+package haxeon.ui.semantics;
 
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.Checkbox;
 import haxeon.ui.widgets.controls.ComboBox;
@@ -12,10 +14,6 @@ import haxeon.ui.widgets.overlays.Dialog;
 import haxeon.ui.widgets.overlays.Menu;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
-
-
-import haxeon.ui.core.RenderNode;
-import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.text.Utf8Text;
 
 /** Small deterministic audit for common accessibility mistakes in resolved trees. */
@@ -164,5 +162,18 @@ class AccessibilityAudit {
 				return false;
 		}
 		return true;
+	}
+}
+
+/** One actionable accessibility audit finding. */
+class AccessibilityIssue {
+	public final nodeId:Int;
+	public final code:String;
+	public final message:String;
+
+	public function new(nodeId:Int, code:String, message:String) {
+		this.nodeId = nodeId;
+		this.code = code;
+		this.message = message;
 	}
 }

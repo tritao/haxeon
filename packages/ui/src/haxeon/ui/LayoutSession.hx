@@ -8,7 +8,7 @@ import haxeon.platform.SurfaceFrame;
 import haxeon.platform.SurfaceFrameStep;
 import haxeon.ui.LayoutContent;
 import haxeon.ui.LayoutNode;
-import haxeon.ui.debug.RenderCost;
+import haxeon.ui.core.UiFrameMetrics;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 

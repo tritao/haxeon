@@ -2,7 +2,7 @@ package haxeon.ui.core;
 
 import haxeon.ui.style.StyleState;
 import haxeon.reactive.ReactiveRuntime;
-import haxeon.ui.debug.RenderCost;
+import haxeon.ui.core.UiFrameMetrics;
 import haxeon.ui.Color;
 import haxeon.ui.Paint;
 import haxeon.ui.TextLayout;
@@ -22,6 +22,7 @@ import haxeon.ui.semantics.Semantics;
 
 import haxeon.ui.core.Key;
 import haxeon.ui.core.TextStyleOverride;
+import haxeon.ui.core.TreeDiff;
 import haxeon.ui.core.UiEvent;
 /** One Haxe-owned node joins visual layout, interaction, focus, and state identity. */
 class RenderNode {
@@ -785,8 +786,7 @@ class RenderNode {
 	}
 
 	/** Copies retained scene revisions into the native layout transaction payload. */
-	@:allow(haxeon.ui.core.UiContext) @:allow(haxeon.ui.debug
-		.UiStyleInvalidationMetrics) function syncSceneRevisions():Void {
+	@:allow(haxeon.ui.core.UiContext) @:allow(haxeon.ui.core.TreeDiff) function syncSceneRevisions():Void {
 		layout.contentRevision = contentRevision;
 		layout.geometryRevision = geometryRevision;
 		layout.compositeRevision = compositeRevision;
@@ -930,7 +930,7 @@ class RenderNode {
 	 * layer still submits a complete layout transaction, but downstream work
 	 * can now distinguish content, geometry, and composition changes.
 	 */
-	@:allow(haxeon.ui.debug.UiStyleInvalidationMetrics) function syncRevisions(previous:Null<RenderNode>,
+	@:allow(haxeon.ui.core.TreeDiff) function syncRevisions(previous:Null<RenderNode>,
 			diff:StyleDiff,
 			accumulate:Bool = false):Void {
 		var preserved = accumulate ? invalidationFlags : UiDirtyFlag.None;

@@ -21,6 +21,7 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.LiveTextBinding;
 import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.TextStyleOverride;
+import haxeon.ui.core.TreeDiff;
 import haxeon.ui.core.WidgetId;
 /** Frame-local identity scopes backed by a persistent UiContext state store. */
 class BuildContext implements Disposable {

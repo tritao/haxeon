@@ -615,7 +615,7 @@ private class UpdatingResources implements View {
 		});
 }
 
-@:access(haxeon.ui.core.UiContext) @:access(haxeon.ui.debug.UiInspector) class RestyleInPlaceTests {
+@:access(haxeon.ui.core.UiContext) @:access(haxeon.ui.core.UiInspector) class RestyleInPlaceTests {
 	static function retainedVariants(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts), view = new VariantProbe(), frame = new LayoutFrame(200, 100);
 		var first = ui.submit(view, frame);
@@ -715,26 +715,26 @@ private class UpdatingResources implements View {
 		constructed.setDecorations(haxeon.ui.style.Decoration.DecorationChain.of([new InspectionDecoration()]), null);
 		node.computedStyle = constructed;
 		InspectionDecoration.copies = 0;
-		var snapshots = haxeon.ui.debug.UiInspector.snapshot(node, null);
+		var snapshots = haxeon.ui.core.UiInspector.snapshot(node, null);
 		var snapshotCopies = InspectionDecoration.copies;
 		check(snapshots.length == 1 && snapshots[0].styleEntries.length == 3 && snapshotCopies == 1,
 			"A public inspection snapshot lost style entries");
 		InspectionDecoration.copies = 0;
-		check(haxeon.ui.debug.UiInspector.dump(node, null) == haxeon.ui.debug.UiInspector.formatDump(snapshots,
+		check(haxeon.ui.core.UiInspector.dump(node, null) == haxeon.ui.core.UiInspector.formatDump(snapshots,
 			haxeon.ui.style.StyleState.empty()),
 			"A tree dump changed when unused inspection data was skipped");
 		check(InspectionDecoration.copies == snapshotCopies, "A tree dump skipped an inspection copy hook");
 		InspectionDecoration.fail = true;
 		var snapshotFailed = false, dumpFailed = false;
-		try haxeon.ui.debug.UiInspector.snapshot(node, null) catch (_:Dynamic) snapshotFailed = true;
-		try haxeon.ui.debug.UiInspector.dump(node, null) catch (_:Dynamic) dumpFailed = true;
+		try haxeon.ui.core.UiInspector.snapshot(node, null) catch (_:Dynamic) snapshotFailed = true;
+		try haxeon.ui.core.UiInspector.dump(node, null) catch (_:Dynamic) dumpFailed = true;
 		InspectionDecoration.fail = false;
 		check(snapshotFailed && dumpFailed, "A tree dump swallowed an inspection copy failure");
 		var undisturbed = new haxeon.ui.style.ComputedStyle();
 		undisturbed.setAxis(width, LayoutAxis.fixed(23), null);
 		node.computedStyle = undisturbed;
-		haxeon.ui.debug.UiInspector.dump(node, null);
-		var detailed = haxeon.ui.debug.UiInspector.snapshot(node, null);
+		haxeon.ui.core.UiInspector.dump(node, null);
+		var detailed = haxeon.ui.core.UiInspector.snapshot(node, null);
 		var detailedAxis:LayoutAxis = cast detailed[0].styleEntries[0].value;
 		check(detailedAxis.value == 23, "Detailed inspection lost its axis value");
 	}

@@ -5,7 +5,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.debug.AccessibilityAudit;
+import haxeon.ui.semantics.AccessibilityAudit;
 import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.ComboBox;
