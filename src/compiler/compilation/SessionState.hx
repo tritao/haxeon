@@ -60,8 +60,23 @@ class SessionState {
 
 	public var semanticProgram:Null<SemanticProgram> = null;
 
-	/** The purity and no-return facts of the last canonical program (`SemanticAssembly`), while it is made of the same modules. */
-	public var programFacts:Null<compiler.semantic.ProgramFacts.InferredProgramFacts> = null;
+	/**
+	 * The purity and never-returns answers over the last canonical program (`SemanticAssembly`). Every copy shares them: they are
+	 * brought up to date from whatever program they were last over, and the facts they move only move forward.
+	 */
+	public var purity(default, null):compiler.semantic.ProgramPurity;
+
+	/**
+	 * When the units of `unitsCheckedIn`'s modules were last checked against what they read, as a count of the facts' changes
+	 * (`DeclarationFacts.changeCount`): each was current then or typed after, so only a fact changed since can have changed one
+	 * (`DeclarationFacts.unitsReading`). `unitsCheckedIn` is null before any check.
+	 */
+	public var unitsCheckedAt:Int = 0;
+
+	public var unitsCheckedIn:Null<Map<String, Bool>> = null;
+
+	/** The units that check found changed: one a build does not type again (an initializer whose field is gone) stays changed. */
+	public var unitsPending:Array<Int> = [];
 
 	/**
 	 * The names every module's canonicalization resolves against, as `SemanticAssembly` keys them, and the build revision they took
@@ -174,7 +189,7 @@ class SessionState {
 		objects = [];
 		lastTypedProgram = null;
 		semanticProgram = null;
-		programFacts = null;
+		purity.clear();
 		inlineCache = new IrInlineCache();
 		stageMemos.clear();
 		pipelineSnapshot = null;
@@ -235,6 +250,7 @@ class SessionState {
 	 */
 	public function releaseIncrementalRecords():Void {
 		declarationFacts.clear();
+		purity.clear();
 		for (state in modules) {
 			state.signatureFingerprints = [];
 			state.interfaceFingerprints = [];
@@ -259,6 +275,7 @@ class SessionState {
 		if (sharing == null) {
 			queries = new QueryDatabase();
 			declarationFacts = new compiler.semantic.DeclarationFacts(queries);
+			purity = new compiler.semantic.ProgramPurity(declarationFacts);
 			inputs = new BuildInputs(queries);
 			var symbolName = (id:Int) -> IrSymbol.at(id).name;
 			var generation = queries.register(new ComputedQueryKind<IrFunction>("ir-generation",
@@ -284,6 +301,7 @@ class SessionState {
 		} else {
 			queries = sharing.queries;
 			declarationFacts = sharing.declarationFacts;
+			purity = sharing.purity;
 			inputs = sharing.inputs;
 			irGeneration = sharing.irGeneration;
 			irObjects = sharing.irObjects;
@@ -315,7 +333,9 @@ class SessionState {
 		result.objects = objects.copy();
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
-		result.programFacts = programFacts;
+		result.unitsCheckedAt = unitsCheckedAt;
+		result.unitsCheckedIn = unitsCheckedIn;
+		result.unitsPending = unitsPending;
 		result.aliasUniverse = aliasUniverse;
 		result.aliasUniverseRevision = aliasUniverseRevision;
 		result.publishedAbi = publishedAbi;

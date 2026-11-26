@@ -135,12 +135,13 @@ class InterfaceFieldAccessors {
 	}
 
 	/**
-	 * Adds hidden accessors to the implementing classes and returns them. A base class can supply an accessor. Missing members
-	 * are left to the interface check.
+	 * Adds hidden accessors to the implementing classes and returns them, each with the class it replaced its owner with. A base
+	 * class can supply an accessor. Missing members are left to the interface check.
 	 */
 	public static function add(classes:Array<AstClass>, interfaces:Array<AstInterface>):Array<{
 		owner:String,
-		method:AstFunction
+		method:AstFunction,
+		declaration:AstClass
 	}> {
 		var indexOf:Map<String, Int> = [],
 			interfaceByName:Map<String, AstInterface> =
@@ -149,7 +150,7 @@ class InterfaceFieldAccessors {
 			indexOf.set(classes[index].name, index);
 		if (!hasStorageAccessors(interfaces))
 			return [];
-		var added:Array<{owner:String, method:AstFunction}> = [], done:Map<String, Bool> = [];
+		var added:Array<{owner:String, method:AstFunction, declaration:AstClass}> = [], done:Map<String, Bool> = [];
 		function hasMethod(className:Null<String>, name:String):Bool {
 			var seen:Map<String, Bool> = [];
 			while (className != null && !seen.exists(className)) {
@@ -205,7 +206,7 @@ class InterfaceFieldAccessors {
 				return;
 			classes[index] = withMethods(declaration, methods);
 			for (method in methods)
-				added.push({owner: className, method: method});
+				added.push({owner: className, method: method, declaration: classes[index]});
 		}
 		for (declaration in classes.copy())
 			visit(declaration.name);

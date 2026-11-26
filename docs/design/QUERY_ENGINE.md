@@ -156,6 +156,13 @@ The prune's walk is the first such step that plain and live builds share ([LIVE_
 Fixpoint passes (`IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`) record their candidacy reads as
 engine reads. An edit re-decides the changed functions and the readers of any candidacy that flips (ADR 0003 decision 4).
 
+The frontend's purity fixpoint is kept outside the engine, with reverse edges of its own (`ProgramPurity`). The engine
+verifies a memo by walking its reads, so finding the few results that read a change still visits every result; a greatest
+fixpoint over cycles is not a memo's value either, since the engine takes results that read each other as one component
+that changed together. So the session keeps what each walked function depends on with the reverse of those edges, the facts
+log their changes (`DeclarationFacts.changesSince`), and a Bloom filter per module (`ReadFilter`) finds the functions that
+read a change. The unit invalidation finds the units to check the same way (`DeclarationFacts.unitsReading`).
+
 ## Lifetime and memory
 
 - The database lives with the session (compile server, language server). A one-shot compile uses the same engine with
@@ -196,8 +203,8 @@ Each step is byte-identical on the self-compile and the program suites, and keep
    reads, become recorded dependencies. This proves the engine on the typer's existing rule. In slices:
    - **3a (done): reads and their verification on the engine.** The facts are the database's first kind
      (`DeclarationFacts extends RecordedQueryKind`), so a fact's id is its read. The typer's `DeclarationReads` and the
-     purity inference's dependency memo record in the engine's frames, and a unit's reads, the facts' dependencies and the
-     kind rule are verified by the engine's walk. Unit records stayed in `ModuleState.unitReads` until 3b, so a rejected
+     purity inference's walks (`ProgramPurity`) record in the engine's frames, and a unit's reads, the facts' dependencies and
+     the kind rule are verified by the engine's walk. Unit records stayed in `ModuleState.unitReads` until 3b, so a rejected
      build's records rolled back with its modules.
    - **3b (done): unit records in the database.** What a unit read is its `Unit` fact's result (`UnitReads`, with the module
      whose state holds the unit's body), written in the build's transaction and committed when the build is taken, so

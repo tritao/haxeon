@@ -17,7 +17,6 @@ import compiler.core.CancellationToken;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
 import compiler.semantic.Invalidation.InvalidationKind;
 import compiler.semantic.Invalidation.InvalidationReason;
-import compiler.semantic.ProgramFacts.InferredProgramFacts;
 import compiler.semantic.DeclarationFacts.FactAspect;
 import compiler.semantic.DeclarationFacts.UnitReads;
 
@@ -536,9 +535,10 @@ class SemanticAssembly {
 		// A class without a constructor has its base class's: give it one, so it is typed, tracked and invalidated like any other.
 		// Its signature is its base constructor's, so its signature fact goes through that one.
 		// The functions made from other declarations, which appear and go with them, in a module no edit touched.
-		var derived:Array<String> = [];
+		var derived:Array<String> = [], derivedClasses:Map<String, AstClass> = [];
 		for (constructor in ImplicitConstructors.add(classes)) {
 			var qualified = constructor.owner + ".new";
+			derivedClasses.set(constructor.owner, constructor.declaration);
 			functions.push(AstFunctions.withName(constructor.method, qualified));
 			derived.push(qualified);
 			facts.setDependencies(facts.id(FactAspect.Signature, qualified),
@@ -548,6 +548,7 @@ class SemanticAssembly {
 		// and invalidated as its own methods. An accessor's signature is the interface variable's, which the class's members name.
 		for (accessor in InterfaceFieldAccessors.add(classes, interfaces)) {
 			var qualified = accessor.owner + "." + accessor.method.name;
+			derivedClasses.set(accessor.owner, accessor.declaration);
 			functions.push(AstFunctions.withName(accessor.method, qualified));
 			owners.set(qualified, owners.get(accessor.owner + ".new"));
 			derived.push(qualified);
@@ -555,27 +556,12 @@ class SemanticAssembly {
 				[facts.id(FactAspect.Members, accessor.owner)]);
 		}
 
-		// Purity and no-return are whole-program facts, inferred from the canonical program: when they are inferred again, each
-		// answer a typed body read (`FactAspect.Purity`, `FactAspect.NoReturn`) that differs moves, and its readers are typed again.
-		var contributions = [
-			for (moduleName in names)
-				if (modules.exists(moduleName)) modules.get(moduleName).canonicalAllFunctions
-		];
-		var previousFacts = context.state.programFacts, inferred = previousFacts;
-		if (inferred == null || !sameContributions(inferred.contributions, contributions)) {
-			inferred = inferProgramFacts(contributions, classes, interfaces, enums, abstracts, typeAliases,
-				programFunctions, facts,
-				previousFacts == null ? null : previousFacts.dependencies);
-			context.state.programFacts = inferred;
-			// `--check-reuse`: what the bodies whose facts held were taken to depend on gives what walking every body gives.
-			if (context.options.checkReuse && previousFacts != null)
-				checkPurity(inferred,
-					inferProgramFacts(contributions, classes, interfaces, enums, abstracts, typeAliases,
-					programFunctions,
-					facts, null));
-			if (previousFacts != null)
-				moveAnswers(facts, previousFacts, inferred);
-		}
+		// Purity and no-return are whole-program facts over the canonical program, kept up to date with it: each answer a typed body
+		// read (`FactAspect.Purity`, `FactAspect.NoReturn`) that moves moves its readers, which are typed again.
+		var purity = context.state.purity;
+		purity.update(modules, names, derivedClasses, derived, owners);
+		if (context.options.checkReuse)
+			checkPurity(purity, classes, interfaces, enums, abstracts, typeAliases, programFunctions);
 
 		var invalid:Map<String, Bool> = [],
 			invalidationReasons:Map<String, Array<InvalidationReason>> = [],
@@ -587,33 +573,68 @@ class SemanticAssembly {
 			if (state.lastGoodRevision != 0)
 				initialBuild = false;
 		}
+		// Once units were typed in great number (the first build), what they read is filtered again before an edit needs it.
+		facts.refreshReaders();
 		if (initialBuild) {
 			for (fn in functions)
 				invalidate(invalid, invalidationReasons, fn.name, SourceRevision, owners.get(fn.name));
+			context.state.unitsCheckedAt = facts.changeCount;
+			context.state.unitsCheckedIn = [for (moduleName in names) moduleName => true];
+			context.state.unitsPending = [];
 		} else if (facts.changedInBuild()) {
 			// A unit is typed again when a fact it read, or one that fact goes through, changed after it was typed. When no fact
 			// changed in this build, every unit is current. Only the build's modules' units are checked: another module's bodies are
-			// not part of this program, and are checked when a build has it again.
+			// not part of this program, and are checked when a build has it again. Every unit was current when the units of the
+			// modules last checked were, so only those that read a fact changed since can have changed (`unitsReading`).
 			var inBuild:Map<String, Bool> = [for (moduleName in names) moduleName => true];
-			for (id in 0...facts.resultLimit) {
+			var checkedIn = context.state.unitsCheckedIn, sinceChecked = checkedIn != null;
+			if (checkedIn != null)
+				for (moduleName in names)
+					if (!checkedIn.exists(moduleName))
+						sinceChecked = false;
+			// A unit found changed and not typed again since (an initializer whose field is gone) is changed still.
+			var candidates = sinceChecked ? facts.unitsReading(context.state.unitsCheckedAt) : null,
+				pending = context.state.unitsPending;
+			if (candidates != null && pending.length > 0) {
+				var listed:Map<Int, Bool> = [for (id in candidates) id => true];
+				for (id in pending)
+					if (!listed.exists(id))
+						candidates.push(id);
+				candidates.sort((left, right) -> left - right);
+			}
+			var changedUnits:Array<Int> = [];
+			if (context.options.checkReuse && candidates != null)
+				checkUnitsReading(facts, candidates, inBuild);
+			function check(id:Int):Void {
 				var record = facts.unitRecord(id);
 				if (record == null || !inBuild.exists(record.module))
-					continue;
+					return;
 				var state = modules.get(record.module);
 				if (state == null)
-					continue;
+					return;
 				var changed = facts.firstChanged(record);
 				if (changed < 0)
-					continue;
+					return;
 				var unit = facts.name(id);
 				// A unit the program no longer has keeps no record.
 				if (!unitExists(unit, owners, state)) {
 					facts.removeUnit(id);
-					continue;
+					return;
 				}
+				changedUnits.push(id);
 				var reason = readReason(unit, facts.aspect(changed), facts.name(changed));
 				invalidate(invalid, invalidationReasons, unit, reason.kind, facts.name(changed), null, reason.via);
 			}
+			if (candidates != null) {
+				for (id in candidates)
+					check(id);
+			} else {
+				for (id in 0...facts.resultLimit)
+					check(id);
+			}
+			context.state.unitsCheckedAt = facts.changeCount;
+			context.state.unitsCheckedIn = inBuild;
+			context.state.unitsPending = changedUnits;
 			// A function a change to another declaration made (an implicit constructor, an interface variable's accessor) and
 			// never typed has nothing to be current with. Any other function is new only in a module that changed, which is typed
 			// again as a whole (below).
@@ -711,8 +732,8 @@ class SemanticAssembly {
 			entrySpan: context.state.executableEntrySpan(entryModule),
 			inferredDeclarations: inferredDeclarations,
 			facts: {
-				pure: inferred.facts.pure,
-				noReturn: inferred.facts.noReturn
+				pure: purity.pure,
+				noReturn: purity.noReturn
 			},
 			aliasSetupMs: aliasesPreparedAt - startedAt,
 			canonicalizationMs: canonicalizedAt - aliasesPreparedAt,
@@ -725,93 +746,35 @@ class SemanticAssembly {
 	}
 
 	/**
-	 * Purity and no-return over the canonical program, made of `contributions` (see `InferredProgramFacts`), over the typer's own
-	 * signature table: purity inferred over any other scope can disagree with what typing relied on, and every cached body then
-	 * looks drifted on every edit.
+	 * `--check-reuse`: the purity and never-returns answers kept across builds are what inference anew finds over the canonical
+	 * program, over the typer's own signature table: purity inferred over any other scope can disagree with what typing relied on.
 	 */
-	static function inferProgramFacts(contributions:Array<Array<AstFunction>>, classes:Array<AstClass>,
+	static function checkPurity(purity:ProgramPurity, classes:Array<AstClass>,
 			interfaces:Array<compiler.syntax.Ast.AstInterface>, enums:Array<compiler.syntax.Ast.AstEnum>,
 			abstracts:Array<compiler.syntax.Ast.AstAbstract>, aliases:Array<compiler.syntax.Ast.AstTypeAlias>,
-			programFunctions:Array<AstFunction>, declarationFacts:DeclarationFacts,
-			previous:Null<compiler.types.analysis.PurityInference.PurityDependencies>):InferredProgramFacts {
-		var purityScopeClasses:Map<String, AstClass> = [for (classDecl in classes) classDecl.name => classDecl];
-		var purityScopeInterfaces:Map<String, compiler.syntax.Ast.AstInterface> =
-			[for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
-		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> =
-			[for (enumDecl in enums) enumDecl.name => enumDecl];
-		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> =
-			[for (decl in abstracts) decl.name => decl];
-		var purityScopeSignatures:Map<String, AstFunction> = [];
-		SemanticProgram.fillSignatures(interfaces, classes, abstracts, programFunctions, purityScopeSignatures, null);
-		// The typer's own seed (`TypingSession.isDeclaredPure`): with any other, a body that asked about a generated helper the
-		// typer counts as pure (a flags or raw-value enum helper) looks drifted on every edit.
-		var isAnnotatedPure = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
-			.isDeclaredPure(candidate, purityScopeSignatures, purityScopeClasses);
-		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
-			.isTypeName(candidate, purityScopeClasses,
-			purityScopeInterfaces, purityScopeEnums, purityScopeAbstracts);
-		var dependencies = new compiler.types.analysis.PurityInference.PurityDependencies(declarationFacts);
-		return {
-			contributions: contributions,
-			dependencies: dependencies,
-			facts: {
-				pure: compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses,
-					purityScopeAbstracts, [for (alias in aliases) alias.name => alias], purityScopeEnums,
-					isAnnotatedPure, isTypeName, previous, dependencies),
-				noReturn: compiler.types.analysis.NoReturnDeclarations.declared(purityScopeSignatures)
-			},
-			isAnnotatedPure: isAnnotatedPure
-		};
+			programFunctions:Array<AstFunction>):Void {
+		var signatures:Map<String, AstFunction> = [];
+		SemanticProgram.fillSignatures(interfaces, classes, abstracts, programFunctions, signatures, null);
+		purity.check(signatures, [for (decl in classes) decl.name => decl],
+			[for (decl in interfaces) decl.name => decl],
+			[for (decl in enums) decl.name => decl], [for (decl in abstracts) decl.name => decl],
+			[for (decl in aliases) decl.name => decl]);
 	}
 
-	/**
-	 * Moves the purity and never-returns answers typed bodies read (`FactAspect.Purity`, `FactAspect.NoReturn`) that `current`
-	 * gives otherwise than `previous`.
-	 */
-	static function moveAnswers(facts:DeclarationFacts, previous:InferredProgramFacts,
-			current:InferredProgramFacts):Void {
-		facts.forEach(FactAspect.Purity, (id, name) -> {
-			if ((previous.facts.pure.exists(name) || previous.isAnnotatedPure(name)) != (current.facts.pure.exists(name)
-				|| current.isAnnotatedPure(name)))
-				facts.changed(id);
-		});
-		facts.forEach(FactAspect.NoReturn, (id, name) -> {
-			if (previous.facts.noReturn.exists(name) != current.facts.noReturn.exists(name))
-				facts.changed(id);
-		});
-	}
-
-	/** `--check-reuse`: `reused`, inferred taking unchanged bodies' dependencies, says what `fresh`, inferred anew, says. */
-	static function checkPurity(reused:InferredProgramFacts, fresh:InferredProgramFacts):Void {
-		var left = reused.facts.pure, right = fresh.facts.pure;
-		for (name in left.keys())
-			if (!right.exists(name))
+	/** `--check-reuse`: every unit of the build that read a fact changed after it was typed is among `candidates`, or pending. */
+	static function checkUnitsReading(facts:DeclarationFacts, candidates:Array<Int>, inBuild:Map<String, Bool>):Void {
+		var found:Map<Int, Bool> = [for (id in candidates) id => true];
+		for (id in 0...facts.resultLimit) {
+			var record = facts.unitRecord(id);
+			if (record == null || !inBuild.exists(record.module) || found.exists(id))
+				continue;
+			var changed = facts.firstChanged(record);
+			if (changed >= 0)
 				throw new compiler.core
-					.InternalError('--check-reuse: purity inference reused dependencies that make $name pure');
-		for (name in right.keys())
-			if (!left.exists(name))
-				throw new compiler.core
-					.InternalError('--check-reuse: purity inference reused dependencies that leave $name impure');
-		for (name => dependency in fresh.dependencies.entries) {
-			var kept = reused.dependencies.entries.get(name);
-			if (kept == null || !sameDependencies(kept.dependencies, dependency.dependencies))
-				throw new compiler.core
-					.InternalError('--check-reuse: purity inference reused what $name depends on, which differs');
+					.InternalError('--check-reuse: unit ${facts.name(id)} read ${facts.name(changed)} '
+					+ '(${facts.aspect(changed)}, changed at ${facts.changedRevision(changed)}, typed at ${record.revision}), '
+					+ "which changed but which the changes since the last check do not lead to");
 		}
-	}
-
-	static function sameDependencies(left:Null<Map<String, Bool>>, right:Null<Map<String, Bool>>):Bool {
-		if (left == null || right == null)
-			return left == right;
-		var count = 0;
-		for (name in left.keys()) {
-			if (!right.exists(name))
-				return false;
-			count++;
-		}
-		for (_ in right.keys())
-			count--;
-		return count == 0;
 	}
 
 	/** A module's canonical declarations as its state holds them, which `DeclarationPrints` compares. */
@@ -891,16 +854,6 @@ class SemanticAssembly {
 			case Purity | NoReturn: {kind: PurityDependency, via: null};
 			case Snapshot: {kind: SourceRevision, via: "default-argument"};
 		};
-
-	/** Whether two programs are made of the same module contributions, in the same order. */
-	static function sameContributions(previous:Array<Array<AstFunction>>, current:Array<Array<AstFunction>>):Bool {
-		if (previous.length != current.length)
-			return false;
-		for (index in 0...current.length)
-			if (previous[index] != current[index])
-				return false;
-		return true;
-	}
 
 	static function addSourceAlias(target:Map<String, String>, moduleAliases:Array<{
 		sourceName:String,

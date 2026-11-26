@@ -146,6 +146,11 @@ class DeclarationFacts extends compiler.query.RecordedQueryKind {
 		dependencies = [];
 		expanded = [];
 		clearKeys();
+		logStart += changeLog.length + 1;
+		changeLog = [];
+		unitReaders.clear();
+		unitGroups = [];
+		unitGroupCount = 0;
 	}
 
 	/** Starts a build: facts changed from here on change at the new revision. */
@@ -184,14 +189,87 @@ class DeclarationFacts extends compiler.query.RecordedQueryKind {
 
 	/** Records that fact `id`'s print changed in this build. */
 	public function changed(id:Int):Void {
+		logChange(id);
 		printChangedAt[id] = revision;
 		lastChange = revision;
 	}
 
 	/** Records that the type whose `Shape` fact is `id` may be of another kind from this build on (`kindChangedAt`). */
 	public function kindChanged(id:Int):Void {
+		logChange(id);
 		kindChangedAt[id] = revision;
 		lastChange = revision;
+	}
+
+	// Each change of a fact's print or kind, in order: what changed after a point (`changeCount`), found without walking every
+	// fact. The oldest are dropped; `logStart` counts the changes before the first one kept.
+	var changeLog:Array<Int> = [];
+	var logStart = 0;
+
+	static inline final LOG_LIMIT = 4096;
+
+	function logChange(id:Int):Void {
+		if (changeLog.length >= LOG_LIMIT) {
+			var dropped = LOG_LIMIT >> 1;
+			for (index in dropped...changeLog.length)
+				changeLog[index - dropped] = changeLog[index];
+			changeLog.resize(changeLog.length - dropped);
+			logStart += dropped;
+		}
+		changeLog.push(id);
+	}
+
+	/** How many changes there were: the point `changesSince` takes, from which later changes are found. */
+	public var changeCount(get, never):Int;
+
+	inline function get_changeCount():Int
+		return logStart + changeLog.length;
+
+	/**
+	 * The facts that changed after point `since` (`changeCount`), each once, with every fact that goes through one of them
+	 * (`setDependencies`); null when the changes that far back are no longer known.
+	 */
+	public function changesSince(since:Int):Null<Array<Int>> {
+		if (since < logStart)
+			return null;
+		var seen:Map<Int, Bool> = [], found:Array<Int> = [], through = false;
+		for (index in since - logStart...changeLog.length) {
+			var id = changeLog[index];
+			if (seen.exists(id))
+				continue;
+			seen.set(id, true);
+			found.push(id);
+			var aspect:FactAspect = cast aspects[id];
+			if (aspect == Shape || aspect == Signature || aspect == Members)
+				through = true;
+		}
+		if (!through)
+			return found;
+		// Only shapes, signatures and members are gone through (a type's shape, an implicit constructor's base signature, an
+		// accessor's class): their readers are found from every fact's dependencies, which an edit to a declaration needs.
+		var readers:Map<Int, Array<Int>> = [];
+		for (id in 0...dependencies.length) {
+			var targets = dependencies[id];
+			if (targets == null || aspects[id] == (FactAspect.Unit:Int))
+				continue;
+			for (target in targets) {
+				var list = readers.get(target);
+				if (list == null)
+					readers.set(target, list = []);
+				list.push(id);
+			}
+		}
+		var index = 0;
+		while (index < found.length) {
+			var list = readers.get(found[index++]);
+			if (list != null)
+				for (reader in list)
+					if (!seen.exists(reader)) {
+						seen.set(reader, true);
+						found.push(reader);
+					}
+		}
+		return found;
 	}
 
 	var lastChange = 0;
@@ -225,8 +303,81 @@ class DeclarationFacts extends compiler.query.RecordedQueryKind {
 		return id < expanded.length && expanded[id];
 
 	/** Records what unit fact `id` read when this build typed it, in the build's transaction. */
-	public inline function recordUnit(id:Int, reads:UnitReads):Void
+	public function recordUnit(id:Int, reads:UnitReads):Void {
+		var before = unitRecord(id);
+		unitReaders.add(unitGroup(reads.module), id, reads.reads, before != null && before.module == reads.module);
 		write(id, reads);
+	}
+
+	/** Which units may have read a fact, by the module whose state holds them (`unitGroups`). */
+	final unitReaders = new compiler.query.ReadFilter();
+
+	var unitGroups:Map<String, Int> = [];
+	var unitGroupCount = 0;
+
+	function unitGroup(module:String):Int {
+		var known = unitGroups.get(module);
+		if (known == null) {
+			known = unitGroupCount++;
+			unitGroups.set(module, known);
+		}
+		return known;
+	}
+
+	/** Builds the filters of what units read again once they took many more reads than they were built for (`ReadFilter.full`). */
+	public function refreshReaders():Void
+		if (unitReaders.full)
+			unitReaders.rebuild(names.length, visit -> forEachResult((key, result) -> {
+				var reads:UnitReads = cast result;
+				visit(unitGroup(reads.module), key, reads.reads);
+			}));
+
+	/**
+	 * The units that may have read a fact that changed after point `since` (`changeCount`), themselves or through what they read (a
+	 * unit reading another), in fact order: among them is every unit `firstChanged` finds changed, if each was current at `since`
+	 * or typed after. Null when the changes that far back are no longer known.
+	 */
+	public function unitsReading(since:Int):Null<Array<Int>> {
+		var changes = changesSince(since);
+		if (changes == null)
+			return null;
+		refreshReaders();
+		var changed:Map<Int, Bool> = [for (id in changes) id => true], found:Map<Int, Bool> = [], start = 0;
+		// A unit that read a change changed itself, for the units that read it.
+		while (start < changes.length) {
+			var end = changes.length;
+			for (group in 0...unitReaders.groups) {
+				var hit = false;
+				for (index in start...end)
+					if (unitReaders.mayRead(group, changes[index])) {
+						hit = true;
+						break;
+					}
+				if (hit)
+					for (unit in unitReaders.membersOf(group)) {
+						var record = unitRecord(unit);
+						if (found.exists(unit) || record == null || !readsAny(record.reads, changed))
+							continue;
+						found.set(unit, true);
+						if (!changed.exists(unit)) {
+							changed.set(unit, true);
+							changes.push(unit);
+						}
+					}
+			}
+			start = end;
+		}
+		var units = [for (unit in found.keys()) unit];
+		units.sort((left, right) -> left - right);
+		return units;
+	}
+
+	static function readsAny(reads:Array<Int>, keys:Map<Int, Bool>):Bool {
+		for (read in reads)
+			if (keys.exists(read))
+				return true;
+		return false;
+	}
 
 	/** Drops the record of unit fact `id`, whose unit is gone, in the build's transaction. */
 	public inline function removeUnit(id:Int):Void

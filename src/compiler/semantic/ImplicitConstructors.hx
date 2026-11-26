@@ -24,15 +24,25 @@ typedef ProvidedConstructor = {
  */
 class ImplicitConstructors {
 	/**
-	 * Adds the missing constructors to `classes` (canonical, qualified names), returning the ones added so the caller can
-	 * register them wherever it tracks functions. `classes` entries are replaced, never mutated: they may be shared with
-	 * cached module contributions.
+	 * Adds the missing constructors to `classes` (canonical, qualified names), returning the ones added, each with the class it
+	 * replaced its owner with, so the caller can register them wherever it tracks functions. `classes` entries are replaced, never
+	 * mutated: they may be shared with cached module contributions.
 	 */
-	public static function add(classes:Array<AstClass>):Array<{owner:String, base:String, method:AstFunction}> {
+	public static function add(classes:Array<AstClass>):Array<{
+		owner:String,
+		base:String,
+		method:AstFunction,
+		declaration:AstClass
+	}> {
 		var indexOf:Map<String, Int> = [];
 		for (index in 0...classes.length)
 			indexOf.set(classes[index].name, index);
-		var added:Array<{owner:String, base:String, method:AstFunction}> = [],
+		var added:Array<{
+			owner:String,
+			base:String,
+			method:AstFunction,
+			declaration:AstClass
+		}> = [],
 			resolved:Map<String, Bool> = [],
 			visiting:Map<String, Bool> = [],
 			provided:Map<String, ProvidedConstructor> = [];
@@ -55,7 +65,7 @@ class ImplicitConstructors {
 					if (base != null) {
 						var method = forwardingConstructor(declaration, base);
 						classes[index] = withMethod(declaration, method);
-						added.push({owner: className, base: baseName, method: method});
+						added.push({owner: className, base: baseName, method: method, declaration: classes[index]});
 						result = {arguments: method.arguments, typeParameters: declaration.typeParameters};
 					} else if (hasInstanceInitializers(declaration))
 						// Typing supplies a constructor that runs the initializers.

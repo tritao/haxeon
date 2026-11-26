@@ -76,9 +76,20 @@ and no edge between declarations is kept by hand.
   signature names the enum. A function reads the members of every type its own signature names.
 - **Revisions.** Every build has a revision. A fact keeps the revision its print last changed at; a unit keeps the
   revision it was typed at and the facts it read. A unit is current while no fact it read, or that one of those goes
-  through, changed after it was typed: invalidation checks each unit's reads, with the latest change of each fact found
-  once per build (facts that go through each other are one component), and keeps no reverse index to rebuild. A build in
-  which no fact changed checks nothing.
+  through, changed after it was typed, with the latest change of each fact found once per build (facts that go through each
+  other are one component). Invalidation checks only the units that may have read a fact changed since the last check
+  (`DeclarationFacts.unitsReading`): the facts log their changes, and each module has a Bloom filter of what its units read
+  (`ReadFilter`), so the units of the modules whose filter may hold a change are checked, and a unit that read one leads to
+  the units reading it; so are the units the last check found changed, of which one no build types again (an initializer
+  whose field is gone) stays changed. A filter only grows, so it holds every record a rollback can restore; the filters are built again once
+  they took twice the reads they were built with. A build whose modules were not all in the last check, or whose changes the
+  log no longer reaches, checks every unit. A build in which no fact changed checks nothing.
+- **Purity and never-returns answers** are kept with the session (`ProgramPurity`), as the greatest fixpoint over each
+  walked function's dependencies, and brought up to date in proportion to the edit: the functions of the modules made again
+  and those that read a changed fact are walked again, and when what one depends on comes out otherwise the fixpoint is
+  settled again over the functions that can reach it. Only the answers that moved move their facts (`FactAspect.Purity`,
+  `FactAspect.NoReturn`). `--check-reuse` compares them, and what each function was found to depend on, with
+  `PurityInference.infer` run anew.
 - **Where reads are recorded.** At the typer's lookups: the declaration tables (`DeclarationIndex`, the signature tables),
   name resolution, the declaration types (`DeclarationTypes`), purity and never-returns answers, inline constants and
   default arguments. A cached answer is recorded on every use, not only when it is computed. A read outside a unit (program

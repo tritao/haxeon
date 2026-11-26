@@ -4,7 +4,10 @@ import compiler.semantic.DeclarationFacts;
 import compiler.semantic.DeclarationFacts.FactAspect;
 import compiler.syntax.Ast;
 
-/** What one inference found a function (or a constructor) depends on, with the facts it read to find it (`PurityDependencies`). */
+/**
+ * What a function (or a constructor) was found to depend on, null for a direct effect, with the declaration facts its walk read
+ * (`DeclarationFacts`): its own signature and body, and what it asked of the rest of the program (`PurityInference.record`).
+ */
 class PurityDependencyEntry extends compiler.query.RecordedQueryKind.RecordedResult {
 	public final dependencies:Null<Map<String, Bool>>;
 
@@ -12,19 +15,6 @@ class PurityDependencyEntry extends compiler.query.RecordedQueryKind.RecordedRes
 		super(revision, reads);
 		this.dependencies = dependencies;
 	}
-}
-
-/**
- * The dependencies an inference found, by function, each with the declaration facts its walk read (`DeclarationFacts`): its own
- * signature and body, and what it asked of the rest of the program. The next inference takes an entry whose facts are unchanged
- * instead of walking the body again; an edit to one body walks that body alone.
- */
-class PurityDependencies {
-	public final facts:DeclarationFacts;
-	public final entries:Map<String, PurityDependencyEntry> = [];
-
-	public function new(facts:DeclarationFacts)
-		this.facts = facts;
 }
 
 /**
@@ -55,7 +45,7 @@ class PurityInference {
 	 */
 	final overrideFamilies:Map<String, Array<String>>;
 
-	/** The facts of the walk being recorded (`memoized`), which records its reads in a frame of their database; null otherwise. */
+	/** The facts of the walk being recorded (`record`), which records its reads in a frame of their database; null otherwise. */
 	var recordedFacts:Null<DeclarationFacts> = null;
 
 	/** Records that the walk read fact `aspect` of `name`, when one is being recorded. */
@@ -74,19 +64,11 @@ class PurityInference {
 	}
 
 	/**
-	 * What `compute` finds for `key`, a function or a constructor fact: last inference's (`previous`) while every fact it read is
-	 * unchanged, else computed with its reads recorded, from the facts of `own` (pairs of an aspect and a name) on. Kept in `next`.
+	 * What `compute` finds for a function or a constructor fact, with what it read recorded in `table`'s database, from the facts of
+	 * `own` (pairs of an aspect and a name) on.
 	 */
-	function memoized(key:String, own:Array<Dynamic>, previous:Null<PurityDependencies>, next:Null<PurityDependencies>,
-			compute:() -> Null<Map<String, Bool>>):Null<Map<String, Bool>> {
-		if (next == null)
-			return compute();
-		var table = next.facts, prior = previous == null ? null : previous.entries.get(key);
-		if (prior != null && previous != null && previous.facts == table
-			&& table.currentSince(prior.reads, prior.revision)) {
-			next.entries.set(key, prior);
-			return prior.dependencies;
-		}
+	public function record(table:DeclarationFacts, own:Array<Dynamic>,
+			compute:() -> Null<Map<String, Bool>>):PurityDependencyEntry {
 		var outer = recordedFacts;
 		recordedFacts = table;
 		table.database.beginRecording();
@@ -104,8 +86,7 @@ class PurityInference {
 		}
 		var list = table.database.endRecording();
 		recordedFacts = outer;
-		next.entries.set(key, new PurityDependencyEntry(table.revision, list, found));
-		return found;
+		return new PurityDependencyEntry(table.revision, list, found);
 	}
 
 	function new(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>, enums:Map<String, AstEnum>,
@@ -264,69 +245,94 @@ class PurityInference {
 			isAnnotatedPure:String->Bool, isTypeName:String->Bool):PurityInference
 		return new PurityInference(signatures, classes, enums, isAnnotatedPure, isTypeName);
 
+	/** What inference takes a function for (`roleOf`): a candidate, published when pure. */
+	public static inline final CANDIDATE = 1;
+
+	/** An abstract's operator or conversion: inference is used only when all of them are pure. */
+	public static inline final OPERATOR = 2;
+
+	/** A class's `toString`, which `+` on a value of the class runs (`TO_STRING`). */
+	public static inline final STRING = 4;
+
 	/**
-	 * Returns inferred-pure static and module function keys. With `next`, what each body depends on is recorded there with the
-	 * facts its walk read, and taken from `previous` while they are unchanged (`PurityDependencies`).
+	 * What inference makes of function `name` (`fn`): whether it is a candidate (`CANDIDATE`), an operator (`OPERATOR`) or a string
+	 * conversion (`STRING`), each walked for what it depends on; 0 for none of them, or an extern or a function pure by annotation.
+	 */
+	public function roleOf(name:String, fn:AstFunction, abstracts:Map<String, AstAbstract>):Int {
+		if (fn.isExtern == true || isAnnotatedPure(name))
+			return 0;
+		var owner = compiler.core.QualifiedName.parent(name), role = isCandidate(name) ? CANDIDATE : 0;
+		if (isOperatorMethod(fn, owner, abstracts))
+			role |= OPERATOR;
+		if (!fn.isStatic && fn.name == "toString" && owner != null && classes.exists(owner))
+			role |= STRING;
+		return role;
+	}
+
+	/** Whether value-class method `name` (`fn`) writes nothing of its receiver (`ReceiverMutationInference`). */
+	public static function readOnlyReceiver(name:String, fn:AstFunction, classes:Map<String, AstClass>,
+			abstracts:Map<String, AstAbstract>, aliases:Map<String, AstTypeAlias>):Bool {
+		var owner = compiler.core.QualifiedName.parent(name),
+			declaration = owner == null ? null : classes.get(owner);
+		return declaration != null && !fn.isStatic && isValueClass(declaration)
+			&& ReceiverMutationInference.isReadOnly(declaration, fn,
+			type -> isScalarValue(type, abstracts, aliases, 0));
+	}
+
+	/**
+	 * What construction of class `name` (`declaration`, constructed by `fn`, null for none) depends on, null when it has an effect;
+	 * `@:pure` on the constructor says making one has no effect anyone can see (haxe.Exception's, which reads the call stack).
+	 */
+	public function constructionDependencies(name:String, declaration:AstClass,
+			fn:Null<AstFunction>):Null<Map<String, Bool>> {
+		if (fn != null && PurityAnnotations.hasPureMetadata(fn.metadata)) {
+			var none:Map<String, Bool> = [];
+			return none;
+		}
+		return constructorDependencies(fn, name, declaration);
+	}
+
+	/**
+	 * Returns inferred-pure static and module function keys, inferred anew: what `compiler.semantic.ProgramPurity` keeps up to date
+	 * across builds, and what it is checked against. With `found`, what each function was found to depend on (null for a direct
+	 * effect) is put there, by its key.
 	 */
 	public static function infer(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>,
 			abstracts:Map<String, AstAbstract>, aliases:Map<String, AstTypeAlias>,
 			enums:Map<String, AstEnum>, isAnnotatedPure:String->Bool, isTypeName:String->Bool,
-			?previous:PurityDependencies, ?next:PurityDependencies):Map<String, Bool> {
+			?found:Map<String, Null<Map<String, Bool>>>):Map<String, Bool> {
 		var inference = new PurityInference(signatures, classes, enums, isAnnotatedPure, isTypeName),
 			dependencies:Map<String, Map<String, Bool>> = [],
 			receiverFacts:Map<String, Bool> = [],
 			operatorMethods:Array<String> = [],
 			stringMethods:Array<String> = [];
 		// Receiver writes are a separate property from global purity and its abstract-operator restrictions.
-		for (name => fn in signatures) {
-			var owner = compiler.core.QualifiedName.parent(name),
-				declaration = owner == null ? null : classes.get(owner);
-			if (declaration != null && !fn.isStatic && isValueClass(declaration)
-				&& ReceiverMutationInference.isReadOnly(declaration, fn,
-				type -> isScalarValue(type, abstracts, aliases, 0)))
+		for (name => fn in signatures)
+			if (readOnlyReceiver(name, fn, classes, abstracts, aliases))
 				receiverFacts.set(ReceiverMutationInference.PREFIX + name, true);
-		}
 		// A constructor writes its fresh receiver, but that is not an observable effect if it cannot
 		// escape and all initialization and called functions are pure. Keep these facts inside the
 		// same dependency fixpoint as ordinary functions; only synthetic construction facts are published.
 		for (name => declaration in classes) {
 			var key = inference.freshConstructorKey(name), fn = signatures.get(name + ".new");
 			if (key == null || (fn != null && fn.isExtern == true)) continue;
-			// `@:pure` on a constructor says making one has no effect anyone can see (haxe.Exception's, which reads the
-			// call stack), so constructing it, or a subclass that adds none, keeps flow facts.
-			if (fn != null && PurityAnnotations.hasPureMetadata(fn.metadata)) {
-				dependencies.set(key, []);
-				continue;
-			}
-			var found = inference.memoized(key,
-				[
-					FactAspect.Shape,
-					name,
-					FactAspect.Members,
-					name,
-					FactAspect.Signature,
-					name + ".new",
-					FactAspect.Body,
-					name + ".new"
-				], previous, next, () -> inference.constructorDependencies(fn, name, declaration));
-			if (found != null) dependencies.set(key, found);
+			var needs = inference.constructionDependencies(name, declaration, fn);
+			if (found != null) found.set(key, needs);
+			if (needs != null) dependencies.set(key, needs);
 		}
 		for (name => fn in signatures) {
-			if (fn.isExtern == true || isAnnotatedPure(name))
+			var role = inference.roleOf(name, fn, abstracts);
+			if (role == 0)
 				continue;
-			var owner = compiler.core.QualifiedName.parent(name),
-				operatorMethod = isOperatorMethod(fn, owner, abstracts),
-				stringConversion = !fn.isStatic && fn.name == "toString" && owner != null && classes.exists(owner);
-			if (operatorMethod)
+			if (role & OPERATOR != 0)
 				operatorMethods.push(name);
-			if (stringConversion)
+			if (role & STRING != 0)
 				stringMethods.push(name);
-			if (!operatorMethod && !stringConversion && !inference.isCandidate(name))
-				continue;
-			var found = inference.memoized(name, [FactAspect.Signature, name, FactAspect.Body, name], previous, next,
-				() -> inference.dependenciesOf(fn, name));
+			var needs = inference.dependenciesOf(fn, name);
 			if (found != null)
-				dependencies.set(name, found);
+				found.set(name, needs);
+			if (needs != null)
+				dependencies.set(name, needs);
 		}
 		for (name in operatorMethods)
 			if (!dependencies.exists(name))
@@ -368,7 +374,7 @@ class PurityInference {
 			&& StringTools.fastCodeAt(key, start + 2) == "t".code
 			&& StringTools.fastCodeAt(key, start + 3) == "_".code;
 
-	static function isValueClass(declaration:AstClass):Bool {
+	public static function isValueClass(declaration:AstClass):Bool {
 		if (declaration.isStruct == true) return true;
 		for (metadata in declaration.metadata) if (metadata.name == "value") return true;
 		return false;
@@ -378,7 +384,7 @@ class PurityInference {
 	 * Whether `type` holds a value with no identity: Int, Float, Bool or String, through typedefs and abstracts over one
 	 * (an enum abstract, a raw-value enum). A copy of it is never a way to write what it was copied from.
 	 */
-	static function isScalarValue(type:Null<AstType>, abstracts:Map<String, AstAbstract>,
+	public static function isScalarValue(type:Null<AstType>, abstracts:Map<String, AstAbstract>,
 			aliases:Map<String, AstTypeAlias>, depth:Int):Bool {
 		if (depth > 16)
 			return false;
@@ -393,7 +399,8 @@ class PurityInference {
 		};
 	}
 
-	static function isOperatorMethod(fn:AstFunction, owner:Null<String>, abstracts:Map<String, AstAbstract>):Bool {
+	public static function isOperatorMethod(fn:AstFunction, owner:Null<String>,
+			abstracts:Map<String, AstAbstract>):Bool {
 		if (owner == null || !abstracts.exists(owner) || fn.metadata == null)
 			return false;
 		for (entry in fn.metadata)
@@ -413,7 +420,7 @@ class PurityInference {
 	 * theirs is too. Injecting those keys here lets the ordinary fixpoint in `infer` decide it,
 	 * exactly as it already does for an ordinary callee.
 	 */
-	function dependenciesOf(fn:AstFunction, name:String):Null<Map<String, Bool>> {
+	public function dependenciesOf(fn:AstFunction, name:String):Null<Map<String, Bool>> {
 		var walker = new PurityWalker(this, name);
 		walker.declare("this");
 		for (argument in fn.arguments) {

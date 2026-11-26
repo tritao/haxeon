@@ -67,6 +67,20 @@ class RecordedQueryKind extends QueryKindBase {
 	inline function get_resultLimit():Int
 		return results.length;
 
+	/** Calls `each` with every result held: each key's as written so far, then each that undoing a write would restore. */
+	public function forEachResult(each:(key:Int, result:RecordedResult) -> Void):Void {
+		for (key in 0...results.length) {
+			var held = results[key];
+			if (held != null)
+				each(key, held);
+		}
+		for (index in 0...undoResults.length) {
+			var held = undoResults[index];
+			if (held != null)
+				each(undoKeys[index], held);
+		}
+	}
+
 	/** Sets `key`'s result, or removes it (null), in the transaction of the build in progress. */
 	public function write(key:Int, result:Null<RecordedResult>):Void {
 		while (results.length <= key)

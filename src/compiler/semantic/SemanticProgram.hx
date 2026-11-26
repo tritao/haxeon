@@ -421,7 +421,7 @@ class SemanticProgram {
 			signatures.set(fn.name, fn);
 	}
 
-	static function withOwnerTypeParameters(method:AstFunction, ownerParameters:Array<String>):AstFunction {
+	public static function withOwnerTypeParameters(method:AstFunction, ownerParameters:Array<String>):AstFunction {
 		var parameters = ownerParameters.copy(),
 			methodParameters = method.typeParameters;
 		if (methodParameters != null)
