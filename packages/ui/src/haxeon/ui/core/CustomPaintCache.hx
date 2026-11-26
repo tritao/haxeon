@@ -8,7 +8,7 @@ import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.core.RenderNode;
 
 /** The retained display lists of custom painters, by node id, and their bindings in the layout session. */
-class CustomPaintCache {
+internal class CustomPaintCache {
 	final entries:Map<Int, PaintEntry> = new Map();
 	final stale:Array<Int> = [];
 

@@ -8,14 +8,31 @@ import haxeon.ui.style.ComputedStyle;
 
 /** Per-submit style invalidation counts, compared by stable render-node ID. */
 class TreeDiff {
+	/** Nodes whose resolved style changed. */
 	public var styleChangedNodes(default, null):Int;
+
+	/** Nodes whose resolved style stayed the same. */
 	public var styleUnchangedNodes(default, null):Int;
+
+	/** What the changes invalidated, combined over every node. */
 	public var invalidationFlags(default, null):UiDirtyFlag;
+
+	/** Nodes whose layout had to be recomputed. */
 	public var layoutInvalidatedNodes(default, null):Int;
+
+	/** Nodes whose text had to be laid out again. */
 	public var textLayoutInvalidatedNodes(default, null):Int;
+
+	/** Nodes that had to be repainted. */
 	public var paintInvalidatedNodes(default, null):Int;
+
+	/** Nodes whose compositing changed. */
 	public var compositeInvalidatedNodes(default, null):Int;
+
+	/** Nodes whose accessibility information changed. */
 	public var semanticsInvalidatedNodes(default, null):Int;
+
+	/** Nodes whose hit-testing geometry changed. */
 	public var hitGeometryInvalidatedNodes(default, null):Int;
 	/** Whether the retained node topology changed since the previous submit. */
 	public var treeChanged(default, null):Bool;

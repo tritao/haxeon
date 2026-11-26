@@ -25,6 +25,11 @@ class UiInspector {
 		append(node, node.parent == null ? 0 : node.parent.id.value, 0, focused, null, null, result, false);
 		return result[0];
 	}
+
+	/**
+	 * Records every node under `root`, in tree order, with style details; `focused`, `hovered` and `pressed` mark
+	 * interaction state.
+	 */
 	public static function snapshot(root:Null<RenderNode>, focused:Null<WidgetId>,
 			hovered:Null<WidgetId> = null, pressed:Null<WidgetId> = null):Array<UiNodeSnapshot> {
 		return collect(root, focused, hovered, pressed, true);
@@ -41,6 +46,7 @@ class UiInspector {
 		return result;
 	}
 
+	/** The tree under `root` as indented text, one line per node, leaving out `ignoredInteractionStates`. */
 	public static function dump(root:Null<RenderNode>, focused:Null<WidgetId>,
 			ignoredInteractionStates:StyleState = StyleState.empty()):String {
 		// Dumps do not use inspection entries or rule provenance. Keep the full public snapshot unchanged.
@@ -264,7 +270,7 @@ class UiInspector {
 }
 
 /** Grouped effect diagnostics carried by a node inspection snapshot. */
-class UiNodeEffectInfo {
+internal class UiNodeEffectInfo {
 	public final effectDescriptions:Array<String>;
 	public final backdropEffectDescriptions:Array<String>;
 	public final backdropEffectPasses:Int;
@@ -288,23 +294,58 @@ class UiNodeEffectInfo {
 
 /** Stable headless inspection record for one resolved Haxe render node. */
 class UiNodeSnapshot {
+	/** The node's id. */
 	public final id:Int;
+
+	/** Its parent's id, or zero for the root. */
 	public final parentId:Int;
+
+	/** How deep it is; the root is zero. */
 	public final depth:Int;
+
+	/** What it draws: a box, text, an image and so on. */
 	public final visualKind:LayoutVisualKind;
+
+	/** Its laid-out bounds. */
 	public final bounds:Rect;
+
+	/** The area it is clipped to. */
 	public final clipBounds:Rect;
+
+	/** Its content area, inside padding. */
 	public final contentBounds:Rect;
+
+	/** Whether it is shown. */
 	public final visible:Bool;
+
+	/** Whether it reacts to input. */
 	public final enabled:Bool;
+
+	/** Whether it can take focus. */
 	public final focusable:Bool;
+
+	/** Whether it has focus. */
 	public final focused:Bool;
+
+	/** Whether the pointer is over it. */
 	public final hovered:Bool;
+
+	/** Whether it is being pressed. */
 	public final pressed:Bool;
+
+	/** Its interaction states, as style rules see them. */
 	public final interactionStates:StyleState;
+
+	/** The style type it matches rules by, or null. */
 	public final styleType:Null<String>;
+
+	/** Its resolved style, or null. */
 	public final computedStyle:Null<ComputedStyle>;
+
+	/** Each resolved property with the rule it came from. */
 	public final styleEntries:Array<StyleInspectionEntry>;
+
+	/** The style rules that matched it. */
 	public final matchingStyleRules:Array<StyleSource>;
 	/** True when opacity, effects, backdrop effects, or a mask require isolation. */
 	public final causesIsolation:Bool;
@@ -328,15 +369,25 @@ class UiNodeSnapshot {
 	public final estimatedIntermediateTargets:Int;
 	/** Logical RGBA bytes estimated for the node's intermediate targets. */
 	public final estimatedRenderTargetBytes:Float;
+
+	/** Its stacking order among siblings. */
 	public final zIndex:Int;
 	/** The semantic role, or null for a node without semantics. */
 	public final role:Null<AccessibilityRole>;
+
+	/** Its accessibility states. */
 	public final semanticStates:AccessibilityState;
+
+	/** Its accessible name, or null. */
 	public final label:Null<String>;
+
+	/** Its accessible value, or null. */
 	public final value:Null<String>;
+
+	/** The accessibility actions it supports. */
 	public final actions:AccessibilityAction;
 
-	public function new(id:Int, parentId:Int, depth:Int, visualKind:LayoutVisualKind, bounds:Rect,
+	internal function new(id:Int, parentId:Int, depth:Int, visualKind:LayoutVisualKind, bounds:Rect,
 			clipBounds:Rect, contentBounds:Rect, visible:Bool, enabled:Bool,
 			focusable:Bool, focused:Bool, hovered:Bool, pressed:Bool, zIndex:Int, role:Null<AccessibilityRole>,
 			semanticStates:AccessibilityState, label:Null<String>, value:Null<String>, actions:AccessibilityAction,
