@@ -237,3 +237,48 @@ class StyleSelector {
 		return result;
 	}
 }
+
+/** Which rules of a theme sheet and an application sheet match a widget on hover, indexed by widget type. */
+class HoverRuleIndex {
+	/** The style revision the types were collected at. */
+	var revision:Int = -1;
+
+	/** The widget types of the rules that match on hover; any type, when one of them names none. */
+	final types:Map<String, Bool> = new Map();
+
+	var anyType:Bool = false;
+
+	public function new() {}
+
+	/** Whether a rule of `theme` or `application` matches this identity on hover; `revision` names the sheets' state. */
+	public function matches(theme:StyleSheet, application:StyleSheet, revision:Int, type:String, key:Null<String>,
+			id:Null<String>, classes:Array<String>, tags:Array<String>):Bool {
+		// Most types no hover rule names: answered from the types the current sheets name, without building a target.
+		if (this.revision != revision) {
+			this.revision = revision;
+			types.clear();
+			anyType = false;
+			collect(theme);
+			collect(application);
+		}
+		if (!anyType && !types.exists(type)) return false;
+		return sheetMatches(theme, type, key, id, classes, tags)
+			|| sheetMatches(application, type, key, id, classes, tags);
+	}
+
+	function collect(sheet:StyleSheet):Void {
+		for (rule in sheet.rules) if (rule.selector.stateMask.contains(StyleState.Hovered)) {
+			var type = rule.selector.widgetType;
+			if (type == null) anyType = true;
+			else types.set(type, true);
+		}
+	}
+
+	static function sheetMatches(sheet:StyleSheet, type:String, key:Null<String>, id:Null<String>,
+			classes:Array<String>,
+			tags:Array<String>):Bool {
+		for (rule in sheet.rules) if (rule.selector.stateMask.contains(StyleState.Hovered)
+			&& rule.selector.matchesIdentity(type, key, id, classes, tags)) return true;
+		return false;
+	}
+}

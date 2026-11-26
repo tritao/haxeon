@@ -246,14 +246,8 @@ class BuildContext implements Disposable {
 		if (parent == null || build == null) throw "A style parent and build callback are required";
 		var previous = styleParent;
 		styleParent = parent;
-		try {
-			var result = build();
-			styleParent = previous;
-			return result;
-		} catch (error:Dynamic) {
-			styleParent = previous;
-			throw error;
-		}
+		defer styleParent = previous;
+		return build();
 	}
 
 	/** Resolves one node against the active inherited style and current layers. */
@@ -279,43 +273,12 @@ class BuildContext implements Disposable {
 
 	/** Conservative guard for retained hover. Conditional rules are included even when inactive. */
 	public function hasHoverStyle(node:RenderNode):Bool {
-		if (node.styleType == null) return false;
-		// Most node types no hover rule names: answered from the types the current sheets name, without building a target.
-		var revision = styleRevision;
-		if (hoverTypesRevision != revision) {
-			hoverTypesRevision = revision;
-			hoverTypes.clear();
-			hoverAnyType = false;
-			collectHoverTypes(theme.styles);
-			collectHoverTypes(styleSheet);
-		}
-		if (!hoverAnyType && !hoverTypes.exists(node.styleType)) return false;
-		return sheetHasHoverRule(theme.styles, node) || sheetHasHoverRule(styleSheet, node);
+		var type = node.styleType;
+		return type != null && hoverRules.matches(theme.styles, styleSheet, styleRevision, type, node.styleKey,
+			node.styleId, node.styleClasses, node.styleTags);
 	}
 
-	/** The style revision `hoverTypes` was collected at, and the widget types of the rules that match on hover (any, if one names none). */
-	var hoverTypesRevision:Int = -1;
-
-	final hoverTypes:Map<String, Bool> = new Map();
-	var hoverAnyType:Bool = false;
-
-	function collectHoverTypes(sheet:haxeon.ui.style.StyleSheet):Void {
-		for (rule in sheet.rules) if (rule.selector.stateMask.contains(haxeon.ui.style.StyleState.Hovered)) {
-			var type = rule.selector.widgetType;
-			if (type == null) hoverAnyType = true;
-			else hoverTypes.set(type, true);
-		}
-	}
-
-	static function sheetHasHoverRule(sheet:haxeon.ui.style.StyleSheet, node:RenderNode):Bool {
-		for (rule in sheet.rules) if (rule.selector.stateMask.contains(haxeon.ui.style.StyleState.Hovered)
-			&& rule.selector.matchesIdentity(node.styleType,
-			node.styleKey,
-			node.styleId,
-			node.styleClasses,
-			node.styleTags)) return true;
-		return false;
-	}
+	final hoverRules = new HoverRuleIndex();
 
 	/** Revision fingerprint used to classify style work before the next submission. */
 	public var styleRevision(get, never):Int;
@@ -464,14 +427,8 @@ class BuildContext implements Disposable {
 	public function withTextStyle<T>(override:TextStyleOverride, build:Void->T):T {
 		if (override == null || build == null) throw "A text style scope requires a style and callback";
 		textStyleStack.push(resolveTextStyle(override));
-		try {
-			var result = build();
-			textStyleStack.pop();
-			return result;
-		} catch (error:Dynamic) {
-			textStyleStack.pop();
-			throw error;
-		}
+		defer textStyleStack.pop();
+		return build();
 	}
 
 	/** Reserve the body's identity before any child builds or interaction/style reads. */
@@ -776,25 +733,25 @@ class BuildContext implements Disposable {
 			entry.pending = false;
 			entry.reactivePending = false;
 			entry.forcePending = false;
-			var savedScope = scope, savedParent = styleParent, savedStack = textStyleStack;
-			scope = entry.scope;
-			styleParent = entry.styleParent;
-			// withTextStyle balances every push, including when the builder throws.
-			textStyleStack = entry.textStyleStack;
-			patching = true;
-			try {
+			{
+				var savedScope = scope, savedParent = styleParent, savedStack = textStyleStack;
+				scope = entry.scope;
+				styleParent = entry.styleParent;
+				// withTextStyle balances every push, including when the builder throws.
+				textStyleStack = entry.textStyleStack;
+				patching = true;
+				defer {
+					patching = false;
+					scope = savedScope;
+					styleParent = savedParent;
+					textStyleStack = savedStack;
+				}
 				var fresh = buildUpdating(entry);
 				// The frame comparison walks the tree it is given, which now holds the result, so hand it what was replaced:
 				// the old nodes below the root, and for the root a stand-in of how it was (or the root itself, if replaced).
 				var inPlace = old.canReconcile(fresh);
 				// The root of the whole tree has nothing to be put into: the next full build makes a new one.
-				if (!inPlace && old.parent == null) {
-					patching = false;
-					scope = savedScope;
-					styleParent = savedParent;
-					textStyleStack = savedStack;
-					continue;
-				}
+				if (!inPlace && old.parent == null) continue;
 				recordPriors(old, old, inPlace);
 				if (inPlace) {
 					var before = old.reconcile(fresh, entry.built, topology);
@@ -805,17 +762,7 @@ class BuildContext implements Disposable {
 					entry.root = fresh;
 					entry.built = fresh.snapshotBuilt();
 				}
-			} catch (error:Dynamic) {
-				patching = false;
-				scope = savedScope;
-				styleParent = savedParent;
-				textStyleStack = savedStack;
-				throw error;
 			}
-			patching = false;
-			scope = savedScope;
-			styleParent = savedParent;
-			textStyleStack = savedStack;
 			var patched = onPatched;
 			if (patched != null && entry.root != null) patched(entry.root);
 		}
@@ -869,46 +816,40 @@ class BuildContext implements Disposable {
 		var dependencyMark = capture.dependencyMarker();
 		var registrationMark = updatingRegistrations;
 		var previous = entry.dependencies == null ? prior : entry.dependencies;
-		try {
-			var root = trackReads(entry.build);
-			if (root.id.value != entry.idValue)
-				throw 'Self-updating root ID ${root.id.value} differs from its registered ID ${entry.idValue}';
-			entry.buildRevision++;
-			var usedStates = stateUsageMarker() == stateMark ? null : stateIdsUsedSince(stateMark,
-				previous == null ? null : previous.stateIds);
-			var hasReads = capture.pendingCount() != dependencyMark;
-			var children = updatingRegistrations == registrationMark ? null : new InteractionStateSnapshot(root, this,
-				root);
-			var reads = hasReads || previous != null && previous.observed != null ? dependenciesSince(dependencyMark,
-				previous == null ? null : previous.observed) : null;
-			if (usedStates != null || reads != null || children != null || previous != null) {
-				var dependencies = entry.dependencies == null ? new UpdatingDependencies() : entry.dependencies;
-				var allStates = children == null ? usedStates : children.appendStateIds(usedStates,
-					previous == null ? null : previous.allStateIds);
-				if (!stateStore.frameActive && entry.root != null && !haxeon.Equality.equals(dependencies.allStateIds,
-					allStates)) {
-					requestBuildFeedback();
-				}
-				dependencies.stateIds = usedStates;
-				dependencies.observed = reads;
-				var oldChildren = dependencies.children;
-				dependencies.children = children;
-				if (oldChildren != null && oldChildren != children) oldChildren.dispose();
-				dependencies.allStateIds = allStates;
-				entry.dependencies = dependencies;
-			}
+		defer {
 			stateStore.finishUsage(stateMark);
 			capture.truncate(dependencyMark);
 			activeObserved = previousObserved;
 			activeUpdatingBuild = previousUpdater;
-			return root;
-		} catch (error:Dynamic) {
-			stateStore.finishUsage(stateMark);
-			capture.truncate(dependencyMark);
-			activeObserved = previousObserved;
-			activeUpdatingBuild = previousUpdater;
-			throw error;
 		}
+		var root = trackReads(entry.build);
+		if (root.id.value != entry.idValue)
+			throw 'Self-updating root ID ${root.id.value} differs from its registered ID ${entry.idValue}';
+		entry.buildRevision++;
+		var usedStates = stateUsageMarker() == stateMark ? null : stateIdsUsedSince(stateMark,
+			previous == null ? null : previous.stateIds);
+		var hasReads = capture.pendingCount() != dependencyMark;
+		var children = updatingRegistrations == registrationMark ? null : new InteractionStateSnapshot(root, this,
+			root);
+		var reads = hasReads || previous != null && previous.observed != null ? dependenciesSince(dependencyMark,
+			previous == null ? null : previous.observed) : null;
+		if (usedStates != null || reads != null || children != null || previous != null) {
+			var dependencies = entry.dependencies == null ? new UpdatingDependencies() : entry.dependencies;
+			var allStates = children == null ? usedStates : children.appendStateIds(usedStates,
+				previous == null ? null : previous.allStateIds);
+			if (!stateStore.frameActive && entry.root != null && !haxeon.Equality.equals(dependencies.allStateIds,
+				allStates)) {
+				requestBuildFeedback();
+			}
+			dependencies.stateIds = usedStates;
+			dependencies.observed = reads;
+			var oldChildren = dependencies.children;
+			dependencies.children = children;
+			if (oldChildren != null && oldChildren != children) oldChildren.dispose();
+			dependencies.allStateIds = allStates;
+			entry.dependencies = dependencies;
+		}
+		return root;
 	}
 
 	internal function updatingStatesChanged(entry:SelfUpdatingBuild):Bool {
@@ -1138,35 +1079,30 @@ class BuildContext implements Disposable {
 	public function mountComponent(component:haxeon.ui.core.RenderScope.ScopeView):RenderNode {
 		var previousScope = scope;
 		scope = scope.child(new Key(component.scopeKey()));
+		defer scope = previousScope;
+		// Widget IDs occupy the positive 31-bit namespace. Native owners use the
+		// negative half, so a stateful body can use its own root ID independently.
+		var identity = resolveId("scope");
+		var resourceId = stateStore.beginScope();
+		var rootId = pendingScopeRootId == null ? identity : pendingScopeRootId;
+		pendingScopeRootId = null;
+		var text = textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy();
+		var owner = new RenderScope(resourceId, identity.value, this, component, scope, styleParent, text);
+		owner.parentScope = activeRenderScope;
+		renderScopes.push(owner);
 		try {
-			// Widget IDs occupy the positive 31-bit namespace. Native owners use the
-			// negative half, so a stateful body can use its own root ID independently.
-			var identity = resolveId("scope");
-			var resourceId = stateStore.beginScope();
-			var rootId = pendingScopeRootId == null ? identity : pendingScopeRootId;
-			pendingScopeRootId = null;
-			var text = textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy();
-			var owner = new RenderScope(resourceId, identity.value, this, component, scope, styleParent, text);
-			owner.parentScope = activeRenderScope;
-			renderScopes.push(owner);
-			try {
-				owner.mount(rootId);
-				stateStore.installScope(owner);
-			} catch (error:Dynamic) {
-				owner.dispose();
-				renderScopes.remove(owner);
-				// A failed description did not replace the mounted instance. Its distinct
-				// lifetime ticket must still be touched before the frame's resource sweep.
-				for (previous in renderScopes) if (!previous.disposed
-					&& previous.mounted && previous.sameSlot(owner)) stateStore.touchScope(previous.resourceId);
-				throw error;
-			}
-			scope = previousScope;
-			return owner.root;
+			owner.mount(rootId);
+			stateStore.installScope(owner);
 		} catch (error:Dynamic) {
-			scope = previousScope;
+			owner.dispose();
+			renderScopes.remove(owner);
+			// A failed description did not replace the mounted instance. Its distinct
+			// lifetime ticket must still be touched before the frame's resource sweep.
+			for (previous in renderScopes) if (!previous.disposed
+				&& previous.mounted && previous.sameSlot(owner)) stateStore.touchScope(previous.resourceId);
 			throw error;
 		}
+		return owner.root;
 	}
 
 	@:allow(haxeon.ui.component.TrackedScope) function deferRootIdentity():Null<WidgetId> {
@@ -1205,15 +1141,14 @@ class BuildContext implements Disposable {
 		activeObserved = capture;
 		activeRenderScope = owner;
 		activeUpdatingBuild = null;
-		try {
-			var result = readComponentBody(owner.component, capture);
-			for (index in dependencyMark...capture.pendingCount()) owner.trackField(capture.pendingSourceAt(index),
-				capture.pendingFieldBitAt(index));
-			var ownedIds = stateStore.usageMarker() == marker ? null : stateStore.usedIdsSince(marker,
-				stateStore.ownedStateIds(ResourceId.scope(owner.resourceId)));
-			stateStore.setOwnedStates(ResourceId.scope(owner.resourceId), ownedIds);
-			stateStore.finishUsage(marker);
-			stateStore.retain(ownedIds, false);
+		var completed = false;
+		defer {
+			if (!completed) {
+				// Failed bodies must keep the reads that can make the next attempt succeed.
+				for (index in dependencyMark...capture.pendingCount()) owner.trackField(capture.pendingSourceAt(index),
+					capture.pendingFieldBitAt(index));
+				stateStore.finishUsage(marker);
+			}
 			capture.truncate(dependencyMark);
 			activeObserved = previousObserved;
 			activeRenderScope = previous;
@@ -1225,38 +1160,24 @@ class BuildContext implements Disposable {
 			activeBuildRootId = previousBuildId;
 			buildingRoot = previousBuildingRoot;
 			buildingRenderScope = previousBuilding;
-			return result;
-		} catch (error:Dynamic) {
-			// Failed bodies must keep the reads that can make the next attempt succeed.
-			for (index in dependencyMark...capture.pendingCount()) owner.trackField(capture.pendingSourceAt(index),
-				capture.pendingFieldBitAt(index));
-			stateStore.finishUsage(marker);
-			capture.truncate(dependencyMark);
-			activeObserved = previousObserved;
-			activeRenderScope = previous;
-			activeUpdatingBuild = previousUpdater;
-			scope = previousScope;
-			styleParent = previousParent;
-			textStyleStack = previousText;
-			pendingScopeRootId = previousRoot;
-			activeBuildRootId = previousBuildId;
-			buildingRoot = previousBuildingRoot;
-			buildingRenderScope = previousBuilding;
-			throw error;
 		}
+		var result = readComponentBody(owner.component, capture);
+		for (index in dependencyMark...capture.pendingCount()) owner.trackField(capture.pendingSourceAt(index),
+			capture.pendingFieldBitAt(index));
+		var ownedIds = stateStore.usageMarker() == marker ? null : stateStore.usedIdsSince(marker,
+			stateStore.ownedStateIds(ResourceId.scope(owner.resourceId)));
+		stateStore.setOwnedStates(ResourceId.scope(owner.resourceId), ownedIds);
+		stateStore.finishUsage(marker);
+		completed = true;
+		stateStore.retain(ownedIds, false);
+		return result;
 	}
 
 	/** Keep tracking cleanup local to the direct call, including a throwing body. */
 	function readComponentBody(component:haxeon.ui.core.RenderScope.ScopeView, capture:Dependencies):RenderNode {
 		var frame = ReactiveRuntime.enterTracking(capture);
-		try {
-			var result = component.buildBody(this);
-			ReactiveRuntime.leaveTracking(frame);
-			return result;
-		} catch (error:Dynamic) {
-			ReactiveRuntime.leaveTracking(frame);
-			throw error;
-		}
+		defer ReactiveRuntime.leaveTracking(frame);
+		return component.buildBody(this);
 	}
 
 	/** Resource liveness follows the current mounted tree, including bodies rerun outside a full build. */
@@ -1274,37 +1195,32 @@ class BuildContext implements Disposable {
 	internal function flushRenderScopes(submittedRoot:Null<RenderNode>, deferUnmount:Bool = false):Void {
 		var previous = buildingRenderScope;
 		buildingRenderScope = true;
-		try {
-			var progressed = true;
-			while (progressed) {
-				progressed = false;
-				var index = 0;
-				while (index < renderScopes.length) {
-					var owner = renderScopes[index++];
-					if (owner.disposed) continue;
-					if (stateStore.scopeOwner(owner.resourceId) != owner) {
-						owner.dispose();
-						progressed = true;
-					} else if (owner.mounted && owner.attached(submittedRoot)
-						&& owner.pending && !hasPendingScopeAncestor(owner)
-						&& !hasPendingUpdatingAncestor(owner.root)) {
-						owner.refresh();
-						progressed = true;
-					}
+		defer buildingRenderScope = previous;
+		var progressed = true;
+		while (progressed) {
+			progressed = false;
+			var index = 0;
+			while (index < renderScopes.length) {
+				var owner = renderScopes[index++];
+				if (owner.disposed) continue;
+				if (stateStore.scopeOwner(owner.resourceId) != owner) {
+					owner.dispose();
+					progressed = true;
+				} else if (owner.mounted && owner.attached(submittedRoot)
+					&& owner.pending && !hasPendingScopeAncestor(owner)
+					&& !hasPendingUpdatingAncestor(owner.root)) {
+					owner.refresh();
+					progressed = true;
 				}
 			}
-			if (!deferUnmount) for (owner in renderScopes) {
-				if (!owner.disposed && owner.mounted && !owner.attached(submittedRoot)) {
-					// Pending ancestors can adopt cached children; sweep only after structure settles.
-					if (stateStore.frameActive || buildFeedbackRequested
-						|| owner.retainedByParent()) owner.mounted = false;
-					else owner.dispose();
-				}
+		}
+		if (!deferUnmount) for (owner in renderScopes) {
+			if (!owner.disposed && owner.mounted && !owner.attached(submittedRoot)) {
+				// Pending ancestors can adopt cached children; sweep only after structure settles.
+				if (stateStore.frameActive || buildFeedbackRequested
+					|| owner.retainedByParent()) owner.mounted = false;
+				else owner.dispose();
 			}
-			buildingRenderScope = previous;
-		} catch (error:Dynamic) {
-			buildingRenderScope = previous;
-			throw error;
 		}
 	}
 
@@ -1381,14 +1297,8 @@ class BuildContext implements Disposable {
 		if (base == null || key == null || build == null) throw "A scoped build requires a scope, a key and a callback";
 		var previous = scope;
 		scope = base.child(key);
-		try {
-			var result = build();
-			scope = previous;
-			return result;
-		} catch (error:Dynamic) {
-			scope = previous;
-			throw error;
-		}
+		defer scope = previous;
+		return build();
 	}
 
 	/** The state the widget `id` keeps across builds, made with `initial` on its first build. */

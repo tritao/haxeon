@@ -511,12 +511,10 @@ class UiContext implements Disposable {
 		}
 		var localPatchPending = (buildContext.hasPendingPatches
 			|| buildContext.hasPendingRenderScopes()) && !rootReactiveDirty;
-		var bindingOnly = cacheKey != null && root != null && submittedBuildKey == cacheKey
-			&& !rootReactiveDirty && buildContext.bindingRequestRevision != submittedBindingRequestRevision
-			&& interactionStates.revision == submittedInteractionRevision && buildContext.styleRevision
-			== submittedStyleRevision && submittedFrameWidth == frame.width && submittedFrameHeight == frame.height
-			&& animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision
-			&& buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
+		var bindingOnly = cacheKey != null && sameSubmittedInputs(cacheKey, frame) && !rootReactiveDirty
+			&& buildContext.bindingRequestRevision != submittedBindingRequestRevision
+			&& interactionStates.revision == submittedInteractionRevision
+			&& buildContext.styleRevision == submittedStyleRevision;
 		var patchOnly = !reuse && (localPatchPending || bindingOnly) && (!reconcileNewFocus || cacheKey != null);
 		if (!patchOnly
 			&& !reuse && reconcileNewFocus && cacheKey != null
@@ -1206,12 +1204,16 @@ class UiContext implements Disposable {
 
 	/** True when nothing but pointer state moved since the submitted frame, so retained output may be updated instead of rebuilt. */
 	function steadyForInteractionReuse(cacheKey:String, frame:LayoutFrame):Bool {
-		return root != null && submittedBuildKey == cacheKey
-			&& !buildContext.rootDependenciesDirty() && submittedStyleRevision == buildContext.styleRevision
-			&& submittedFrameWidth == frame.width && submittedFrameHeight == frame.height
-			&& animations.rebuildingCount == 0
-			&& animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision
-			&& buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
+		return sameSubmittedInputs(cacheKey, frame) && !buildContext.rootDependenciesDirty()
+			&& submittedStyleRevision == buildContext.styleRevision && animations.rebuildingCount == 0;
+	}
+
+	/** Whether the submitted frame was built for `cacheKey` at this size, with the same animations, gestures and styles. */
+	function sameSubmittedInputs(cacheKey:String, frame:LayoutFrame):Bool {
+		return root != null && submittedBuildKey == cacheKey && submittedFrameWidth == frame.width
+			&& submittedFrameHeight == frame.height && animations.revision == submittedAnimationRevision
+			&& gestures.revision == submittedGestureRevision && buildContext.theme == submittedTheme
+			&& buildContext.styleSheet == submittedStyleSheet;
 	}
 
 	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
@@ -1222,8 +1224,7 @@ class UiContext implements Disposable {
 			|| buildContext.bindingRequestRevision != submittedBindingRequestRevision) return -1;
 		var changes = interactionStates.changes();
 		for (change in changes) {
-			if (((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue())
-				!= 0) return -1;
+			if (!change.hoverOnly()) return -1;
 			var node = currentNodesById.get(change.id);
 			if (node == null || (node.recordsInteraction && buildContext.hoverRebuilds(node))) return -1;
 		}
@@ -1273,8 +1274,7 @@ class UiContext implements Disposable {
 		patchFramePaintNodes.resize(0);
 		for (change in changes) {
 			var node:RenderNode = cast currentNodesById.get(change.id);
-			var hoverOnly = ((change.before.rawValue()
-				^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+			var hoverOnly = change.hoverOnly();
 			if (queueNativeInteraction(node, hoverOnly)) continue;
 			var owner = buildContext.updatingOwner(node);
 			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
@@ -1289,8 +1289,7 @@ class UiContext implements Disposable {
 		for (change in interactionStates.changes()) {
 			var node = currentNodesById.get(change.id);
 			if (node == null) continue;
-			var hoverOnly = ((change.before.rawValue()
-				^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+			var hoverOnly = change.hoverOnly();
 			if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) rebuild = true;
 			else if (node.hasPaintHandler()) {
 				// Layout is already submitted; only the custom list depends on this paint-only routed change.
@@ -1335,8 +1334,7 @@ class UiContext implements Disposable {
 			if (node == null) continue;
 			var owner = buildContext.interactionRenderScope(node);
 			if (owner == null || owner.builtEpoch == buildContext.retainedEditEpoch) continue;
-			var hoverOnly = ((change.before.rawValue()
-				^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+			var hoverOnly = change.hoverOnly();
 			queueNativeInteraction(node, hoverOnly);
 			if (owner.pending) queued = true;
 		}
@@ -1348,8 +1346,7 @@ class UiContext implements Disposable {
 		for (change in interactionStates.changes()) {
 			var node = currentNodesById.get(change.id);
 			if (node == null) continue;
-			var hoverOnly = ((change.before.rawValue()
-				^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+			var hoverOnly = change.hoverOnly();
 			if (queueNativeInteraction(node, hoverOnly)) continue;
 			var owner = buildContext.updatingOwner(node);
 			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
@@ -1368,12 +1365,8 @@ class UiContext implements Disposable {
 	}
 
 	function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame):Bool {
-		return root != null && submittedBuildKey == cacheKey
-			&& dirtyFlagsWithoutRootReads() == UiDirtyFlag.None && !buildContext.rootDependenciesDirty()
-			&& !buildContext.hasPendingPatches && submittedFrameWidth == frame.width
-			&& submittedFrameHeight == frame.height
-			&& animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision
-			&& buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
+		return sameSubmittedInputs(cacheKey, frame) && dirtyFlagsWithoutRootReads() == UiDirtyFlag.None
+			&& !buildContext.rootDependenciesDirty() && !buildContext.hasPendingPatches;
 	}
 
 	static function sameGeometry(left:ResolvedLayoutItem, right:ResolvedLayoutItem):Bool {
