@@ -105,6 +105,9 @@ class RuntimeType {
 	/** The class whose statics turn a thrown value into what a catch clause tests (`TypedCatchSubject`). */
 	public static inline final EXCEPTION = "haxe.Exception";
 
+	/** What a switch over a closed set throws for a value none of its cases name (`BodyTyper.unmatchedValue`). */
+	public static inline final UNMATCHED_VALUE = "haxeon.UnmatchedValue";
+
 	/** `haxe.Exception.caught(value)`: the thrown exception, or a `haxe.ValueException` wrapping any other value. */
 	public static inline final EXCEPTION_CAUGHT = "haxe.Exception.caught";
 

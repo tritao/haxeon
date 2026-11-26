@@ -33,7 +33,7 @@ The current subset includes:
   code is the case name, and codes are compile-time constants, unique in the enum. The code is the value's
   representation, so native and wire boundaries cost nothing. Conversion is explicit: `rawValue` gives the code, and
   `E.fromRaw(code)` the case or `null`. In its methods `this` is the enum value, and a `switch` over it covers every case,
-  with an implicit default that throws for a code this build does not know. It declares methods and static members as
+  with an implicit default that throws a `haxeon.UnmatchedValue` for a code this build does not know. It declares methods and static members as
   any enum does, but no type parameters or per-case constants.
 - A raw-value enum or a `Flags` enum abstract prints its names wherever it becomes a String:
   concatenation, interpolation, `Std.string` and `toString()` (`Button`, `Access[Read | Write]`; an undeclared raw value

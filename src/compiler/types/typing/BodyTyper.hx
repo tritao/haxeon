@@ -3280,6 +3280,20 @@ class BodyTyper implements BodyTyping {
 	 * The declared values of a closed enum abstract, keyed as switch cases are (`int:N`, `string:S`), or null when `type`
 	 * is not one. Flags combine their values, so their switches have no fixed set to cover.
 	 */
+	/**
+	 * What a switch over a closed `type` throws for a value none of its cases name: an `UnmatchedValue` when the standard
+	 * library has it, else its message, as a catch tests a thrown value through `haxe.Exception` only when there is one.
+	 */
+	public function unmatchedValue(type:CompilerType, span:SourceSpan):TypedExpression {
+		var message =
+			new TypedExpression(TStringLiteral('Unmatched ${compiler.semantic.SemanticSignature.display(type)} value'),
+			TString, span);
+		if (!session.classDecls.exists(RuntimeType.UNMATCHED_VALUE))
+			return message;
+		return new TypedExpression(TNew(RuntimeType.UNMATCHED_VALUE, [message], true),
+			TInstance(NominalKind.Class, RuntimeType.UNMATCHED_VALUE, []), span);
+	}
+
 	/** What a switch over `type` that leaves out `missing` reports: a raw-value enum's are cases, as any enum's. */
 	public function missingEnumAbstractValues(type:CompilerType, missing:Array<String>):String {
 		var raw = switch type {

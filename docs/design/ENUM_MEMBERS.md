@@ -119,7 +119,7 @@ enum PixelFormat:Int {
 - **Members** are those of any enum: methods, static methods and static fields. Per-case constants come later.
 - **A code this build does not know never reaches a case.** A value read from native code or the wire may carry a code
   newer than the binding. It keeps its representation, as every native value does, and a `switch` over the enum has an
-  implicit default that throws for it, so no arm runs for a code that is not its own. Code that dispatches on codes from
+  implicit default that throws a `haxeon.UnmatchedValue` (a `haxe.Exception`, since it is a bug) for it, so no arm runs for a code that is not its own. Code that dispatches on codes from
   outside, such as the platform event decoder, checks with `fromRaw` and reports an unknown one explicitly (`Raw`)
   instead of failing.
 - **No `RawRepresentable` interface.** Only its own tests used it as a bound; a generic need later is met by interfaces

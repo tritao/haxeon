@@ -1321,7 +1321,7 @@ class StatementTyper {
 		// A switch over a closed enum abstract covers every declared value, as one over an enum covers every constructor.
 		// Its implicit default throws, so a value outside the declared set fails at the switch rather than skipping it. As
 		// over an enum, a nullable subject need not match null: a null its arms leave throws "Null access".
-		var unmatchedEnumAbstract:Null<String> = null;
+		var unmatchedEnumAbstract:Null<TypedExpression> = null;
 		if (!hasDefault && !seenCases.exists("$catchall")) {
 			var values = bodyTyper.closedEnumAbstractValues(typedExpression.type);
 			if (values != null) {
@@ -1330,8 +1330,7 @@ class StatementTyper {
 				if (missing.length > 0)
 					fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
 						bodyTyper.missingEnumAbstractValues(typedExpression.type, missing), span);
-				unmatchedEnumAbstract =
-					'Unmatched ${compiler.semantic.SemanticSignature.display(typedExpression.type)} value';
+				unmatchedEnumAbstract = bodyTyper.unmatchedValue(typedExpression.type, span);
 				var nullArm = SwitchNullCoverage.nullAccessArm(typedExpression, seenCases, span);
 				if (nullArm != null) {
 					typedCases.push({arms: [nullArm], statements: [TThrow(SwitchNullCoverage.nullAccess(span), span)]});
@@ -1343,7 +1342,7 @@ class StatementTyper {
 			typedDefault = bodyTyper.typeStatements(defaultBranch, defaultScope, result),
 			continuing:Array<Scope> = [];
 		if (unmatchedEnumAbstract != null) {
-			typedDefault = [TThrow(new TypedExpression(TStringLiteral(unmatchedEnumAbstract), TString, span), span)];
+			typedDefault = [TThrow(unmatchedEnumAbstract, span)];
 			hasDefault = true;
 		}
 		for (i in 0...typedCases.length)

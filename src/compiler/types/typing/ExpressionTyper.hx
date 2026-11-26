@@ -2773,10 +2773,7 @@ class ExpressionTyper {
 		if (missing.length > 0)
 			fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
 				bodyTyper.missingEnumAbstractValues(subject, missing), span);
-		var message =
-			new TypedExpression(TStringLiteral('Unmatched ${compiler.semantic.SemanticSignature.display(subject)} value'),
-			TString, span);
-		return new TypedExpression(TThrowExpression(message), TNever, span);
+		return new TypedExpression(TThrowExpression(bodyTyper.unmatchedValue(subject, span)), TNever, span);
 	}
 
 	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool,

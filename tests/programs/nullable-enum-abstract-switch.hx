@@ -102,11 +102,12 @@ function main():Int {
 		return 8;
 	if (thrown(() -> bare(9)) != "Unmatched Null<Kind> value")
 		return 9;
+	// A value outside the cases is a bug: what the switch throws is a haxe.Exception that says so.
 	var unmatched = false;
 	try
 		kind(9)
-	catch (error:Dynamic)
-		unmatched = Std.string(error).indexOf("Unmatched") >= 0;
+	catch (error:haxeon.UnmatchedValue)
+		unmatched = error.message.indexOf("Unmatched") >= 0;
 	if (!unmatched)
 		return 6;
 	return 42;

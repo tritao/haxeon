@@ -76,7 +76,10 @@ class DependencyScanner {
 				scanExpression(iterable, dependencies, typeParameters);
 				for (x in b)
 					scanStatement(x, dependencies, typeParameters);
-			case Switch(expression, cases, defaultBranch, _, _):
+			case Switch(expression, cases, defaultBranch, hasDefault, _):
+				// A switch without a default may cover a closed set, whose implicit default throws an UnmatchedValue.
+				if (!hasDefault)
+					dependencies.optional.set(compiler.runtime.RuntimeType.UNMATCHED_VALUE, true);
 				scanExpression(expression, dependencies, typeParameters);
 				for (switchCase in cases) {
 					for (pattern in switchCase.patterns)
@@ -138,6 +141,8 @@ class DependencyScanner {
 				scanAnnotation(type, dependencies, typeParameters);
 				scanExpression(value, dependencies, typeParameters);
 			case SwitchExpression(subject, cases, fallback, _):
+				if (fallback == null)
+					dependencies.optional.set(compiler.runtime.RuntimeType.UNMATCHED_VALUE, true);
 				scanExpression(subject, dependencies, typeParameters);
 				for (switchCase in cases) {
 					for (pattern in switchCase.patterns)

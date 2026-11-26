@@ -138,6 +138,9 @@ interface BodyTyping {
 	/** The values of a closed enum abstract keyed as switch cases are (with `null` for a nullable one), or null when the subject is not one. */
 	function closedEnumAbstractValues(type:CompilerType):Null<Array<{name:String, key:String}>>;
 
+	/** What a switch over a closed `type` throws for a value none of its cases name. */
+	function unmatchedValue(type:CompilerType, span:SourceSpan):TypedExpression;
+
 	/** What a switch over `type` that leaves out `missing` reports. */
 	function missingEnumAbstractValues(type:CompilerType, missing:Array<String>):String;
 
