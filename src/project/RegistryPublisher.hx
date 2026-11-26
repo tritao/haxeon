@@ -133,10 +133,20 @@ class RegistryPublisher {
 		return files;
 	}
 
+	/** Whether `path` is below or at an excluded path, where a `*` segment of a pattern stands for any one segment. */
 	static function excluded(path:String, exclude:Array<String>):Bool {
+		var segments = path.split("/");
 		for (pattern in exclude) {
-			var prefix = Path.removeTrailingSlashes(Path.normalize(pattern));
-			if (path == prefix || StringTools.startsWith(path, prefix + "/"))
+			var parts = Path.removeTrailingSlashes(Path.normalize(pattern)).split("/");
+			if (parts.length > segments.length)
+				continue;
+			var matches = true;
+			for (index in 0...parts.length)
+				if (parts[index] != "*" && parts[index] != segments[index]) {
+					matches = false;
+					break;
+				}
+			if (matches)
 				return true;
 		}
 		return false;

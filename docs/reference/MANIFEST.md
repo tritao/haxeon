@@ -106,7 +106,7 @@ Paths are relative to the manifest's directory.
 | `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program, which builds to a module the VM runs; an app builds through its runner projects ([Build](cli/build-run.md#build)). |
 | `format` | table | tabs, 120 columns | `indent` (`"tabs"` or `"spaces"`), `indentWidth`, `lineWidth` ([Formatter](cli/test-quality.md#fmt)). |
 | `compatibility` | table | | `haxeon` (a version range), `targets`, `runtimeAbi`, `nativeRequirements`, `features`. |
-| `publish` | `false` or table | published whole | How the package is published into a registry: `false` keeps it out of the registry; `exclude` lists files and directories left out (tests, vendored code that does not build), `vendor` maps a path in the published package to a directory outside it that is copied in (`{ nativekit = "../../shared/nativekit" }`). |
+| `publish` | `false` or table | published whole | How the package is published into a registry: `false` keeps it out of the registry; `exclude` lists files and directories left out (tests, vendored code that does not build), where a `*` segment matches any one (`vendor/*/tests`), `vendor` maps a path in the published package to a directory outside it that is copied in (`{ nativekit = "../../shared/nativekit" }`). |
 | `instrument` | table | everything | What `--profile=instrument` probes ([PROFILING.md](PROFILING.md)). |
 
 A dependency written as a source table can include `platforms = ["linux", "macos", "windows"]` to limit it to those builds.

@@ -38,6 +38,12 @@ class ReleasePackage {
 	/** Files that publishing by rename leaves beside a program a process still ran (cmake/haxeon-replace.cmake, haxeon-publish.cmake). */
 	static final PUBLISHING_LEFTOVER = ~/\.(new|old|replaced)-[0-9a-z]+$/;
 
+	/**
+	 * The longest path a release may hold, its own directory's name included. Windows limits a path's length (MAX_PATH), and
+	 * the directory a release is unpacked in takes the rest.
+	 */
+	static final LONGEST_PATH = 170;
+
 	/** The jobs the live hosts' builds run, as a build's default. */
 	static inline final BUILD_JOBS = 4;
 
@@ -129,6 +135,7 @@ class ReleasePackage {
 		for (file in ["LICENSE", "NOTICE", "README.md"])
 			if (FileSystem.exists(Path.join([home, file])))
 				cmake(home, ["-E", "copy", Path.join([home, file]), root]);
+		requireShortPaths(output, name);
 		var commit = ProcessRunner.capture("git", ["-C", home, "rev-parse", "--short=12", "HEAD"]);
 		File.saveContent(Path.join([root, HaxeonSdk.MANIFEST]),
 			HaxeonSdk.releaseManifest(version, commit.status == 0 ? StringTools.trim(commit.output) : "unknown",
@@ -146,6 +153,24 @@ class ReleasePackage {
 			return status;
 		Sys.println('Archived ${Path.join([output, file])}');
 		return 0;
+	}
+
+	/** Fails on the paths below `name` in `output` longer than a release may hold, so Windows can unpack and read it. */
+	static function requireShortPaths(output:String, name:String):Void {
+		var long:Array<String> = [];
+		function walk(relative:String):Void
+			for (entry in FileSystem.readDirectory(Path.join([output, relative]))) {
+				var path = relative + "/" + entry;
+				if (FileSystem.isDirectory(Path.join([output, path])))
+					walk(path);
+				else if (path.length > LONGEST_PATH)
+					long.push(path);
+			}
+		walk(name);
+		if (long.length > 0)
+			throw new InternalError('These release paths are longer than $LONGEST_PATH characters, which Windows may not reach '
+				+ 'once unpacked; leave them out with their package\'s publish.exclude, or shorten them:\n  '
+				+ long.join("\n  "));
 	}
 
 	/**

@@ -16,13 +16,9 @@
 			"nativekit/tests",
 			"nativekit/examples",
 			"nativekit/docs",
-			"nativekit/vendor/daisysp/tests",
-			"nativekit/vendor/miniaudio/examples",
-			"nativekit/vendor/miniaudio/extras",
-			"nativekit/vendor/miniaudio/tests",
-			"nativekit/vendor/signalsmith-basics/tests",
-			"nativekit/vendor/sokol/tests",
-			"nativekit/vendor/tinysoundfont/examples"
+			"nativekit/vendor/*/tests",
+			"nativekit/vendor/*/examples",
+			"nativekit/vendor/miniaudio/extras"
 		]
 	},
 	"target": "host"

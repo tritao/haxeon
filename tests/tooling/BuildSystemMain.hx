@@ -1833,8 +1833,9 @@ class BuildSystemMain {
 			bar = Path.join([root, "packages", "bar"]),
 			app = Path.join([root, "app"]);
 		writePackage(foo,
-			'{"package":{"name":"repo-foo"},"dependencies":{"repo-bar":{"path":"../bar"}},"publish":{"exclude":["tests"]}}',
-			["src/Foo.hx", "tests/FooTest.hx"]);
+			'{"package":{"name":"repo-foo"},"dependencies":{"repo-bar":{"path":"../bar"}},'
+			+ '"publish":{"exclude":["tests","vendor/*/tests"]}}',
+			["src/Foo.hx", "tests/FooTest.hx", "vendor/lib/src/Lib.hx", "vendor/lib/tests/LibTest.hx"]);
 		writePackage(bar, '{"package":{"name":"repo-bar"}}', ["src/Bar.hx"]);
 		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":"^0.3"}}', []);
 		ensureDirectory(registry);
@@ -1870,8 +1871,10 @@ class BuildSystemMain {
 		RegistryPublisher.publish(Path.join([bar, "haxeon.json"]), release, "bar", "0.3.0", directories);
 		RegistryPublisher.publish(Path.join([foo, "haxeon.json"]), release, "foo", "0.3.0", directories);
 		expect(FileSystem.exists(Path.join([release, "foo", "0.3.0", "src", "Foo.hx"]))
-			&& !FileSystem.exists(Path.join([release, "foo", "0.3.0", "tests"])),
-			"publishing should copy the package less its publish.exclude");
+			&& !FileSystem.exists(Path.join([release, "foo", "0.3.0", "tests"]))
+			&& FileSystem.exists(Path.join([release, "foo", "0.3.0", "vendor", "lib", "src", "Lib.hx"]))
+			&& !FileSystem.exists(Path.join([release, "foo", "0.3.0", "vendor", "lib", "tests"])),
+			"publishing should copy the package less its publish.exclude, a * segment matching any one");
 		var fromRelease = new PackageResolver(new RegistrySourceAcquirer(Path.join([root, "cache"]),
 			release)).resolve(manifest);
 		expect(fromRelease.lockfile.get("foo").checksum != null
