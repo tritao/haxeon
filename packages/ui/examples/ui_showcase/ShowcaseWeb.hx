@@ -27,7 +27,6 @@ private typedef ShowcaseOptions = {
 	final graphics:Bool;
 	final visualCase:Int;
 	final benchmark:ShowcaseBenchmark;
-	final lightTheme:Bool;
 }
 
 /** The UI Explorer and Graphics Lab share a window, fonts, and frame transaction. */
@@ -43,19 +42,19 @@ class ShowcaseWeb implements UiFrameApplication {
 	var renderCount = 0;
 	var startedAt:Null<Float>;
 
-	public static function configure(width:Int, height:Int, mode:Int, visualCase:Int, benchmark:Int, light:Int):Void {
+	public static function configure(width:Int, height:Int, mode:Int, visualCase:Int, benchmark:Int):Void {
 		if (width <= 0 || height <= 0 || mode < 0 || mode > 1 || visualCase < -1 || visualCase > 34
-			|| benchmark < -1 || benchmark > 3 || light < 0 || light > 1 || active != null)
+			|| benchmark < -1 || benchmark > 3 || active != null)
 			throw BindingError.invalidArgument("ShowcaseWeb.configure", "Invalid showcase configuration");
 		configuration = {
 			width: width, height: height, graphics: mode == 1 || benchmark >= 0,
-			visualCase: visualCase, benchmark: cast benchmark, lightTheme: light == 1
+			visualCase: visualCase, benchmark: cast benchmark
 		};
 	}
 
 	public static function main():Void {
 		var config = configuration ?? {
-			width:1200, height:800, graphics:false, visualCase:-1, benchmark:None, lightTheme:true
+			width:1200, height:800, graphics:false, visualCase:-1, benchmark:None
 		};
 		var options = new UiHostOptions();
 		options.title = "Haxeon UI Explorer";
@@ -88,12 +87,10 @@ class ShowcaseWeb implements UiFrameApplication {
 		explorer = new UiExplorer(host.fonts, "WEBGL2 · WASM", openGraphics, false, null, null, null, false);
 		var opened = false;
 		defer if (!opened) dispose();
-		// A visual case sets its own theme.
-		if (config.visualCase < 0) explorer.setLightTheme(config.lightTheme);
-		// The page's start page, as `--page=<id>` (web_shell.html passes its `page` query).
+		// The start options web_shell.html takes from its URL and the browser; a visual case then sets its own state.
 		for (argument in Sys.args())
-			if (StringTools.startsWith(argument, "--page=") && !explorer.openPage(argument.substr(7)))
-				throw BindingError.invalidArgument("ShowcaseWeb", 'The UI Explorer has no page ${argument.substr(7)}');
+			if (!explorer.applyStartOption(argument))
+				throw BindingError.invalidArgument("ShowcaseWeb", 'Unknown or invalid argument $argument');
 		if (config.visualCase >= 0 && !explorer.setVisualCase(config.visualCase))
 			throw BindingError.invalidArgument("ShowcaseWeb", "UI Explorer rejected the visual case");
 		if (config.graphics) openGraphics();

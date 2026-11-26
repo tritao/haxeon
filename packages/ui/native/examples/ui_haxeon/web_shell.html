@@ -38,9 +38,12 @@
     const visualWidth = Math.max(1, Number(query.get("width") || 1200));
     const visualHeight = Math.max(1, Number(query.get("height") || 800));
     const visualTime = Math.max(0, Number(query.get("time") || 0));
-    // The embedding page names its theme; opened directly, the explorer follows the browser's.
-    const lightTheme = query.has("theme") ? query.get("theme") !== "dark"
-      : !matchMedia("(prefers-color-scheme: dark)").matches;
+    // The explorer's start options, as the desktop build's arguments: its page, and its theme, which an embedding page
+    // names and which otherwise follows the browser's.
+    const startArguments = [
+      "--theme=" + (query.get("theme") ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")),
+      ...(query.has("page") ? ["--page=" + query.get("page")] : [])
+    ];
     if (visual) {
       document.body.style.padding = "0";
       canvas.width = visualWidth;
@@ -479,9 +482,7 @@
         .then(module => {
           const instantiateStarted = performance.now();
           return HaxeonWasmHost.instantiate(module,
-              // The explorer's start page, as the desktop build's --page option.
-              {emscripten: Module, memory: hostMemory, contract: memoryContract, wrap: timeHostCall,
-                args: query.has("page") ? ["--page=" + query.get("page")] : []})
+              {emscripten: Module, memory: hostMemory, contract: memoryContract, wrap: timeHostCall, args: startArguments})
             .then(started => {
               benchmarkGuestInstantiateMs = performance.now() - instantiateStarted;
               return started.instance;
@@ -500,7 +501,7 @@
               return;
             }
             guest["ShowcaseWeb.configure"](visualWidth, visualHeight,
-              uiVisualCase === null && visual ? 1 : 0, uiVisualCase ?? -1, benchmark ? benchmarkScenario : -1, lightTheme ? 1 : 0);
+              uiVisualCase === null && visual ? 1 : 0, uiVisualCase ?? -1, benchmark ? benchmarkScenario : -1);
             guest.main();
           } catch (error) {
             setResult(25, guestFailureMessage("Haxeon guest main failed: " + error.message, 25, 0));

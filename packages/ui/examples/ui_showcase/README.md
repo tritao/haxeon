@@ -45,9 +45,9 @@ and exits, which is useful for headless captures and focused resize/regression
 checks. Case 33 is the Decorations page.
 
 `--page=<id>` starts on a catalog page (`controls`, `text`, `layout`, … as in
-`ExplorerCatalog.hx`). The WebGL host takes it from its URL, as
-`nativekit_ui_haxeon.html?page=controls`, and its theme as `?theme=dark` or
-`?theme=light`, following the browser's preference without one.
+`ExplorerCatalog.hx`), and `--theme=light` or `--theme=dark` in that theme. The
+WebGL host takes both from its URL, as `nativekit_ui_haxeon.html?page=controls&theme=dark`,
+and follows the browser's preference without a theme.
 
 The WebGL host starts in the UI Explorer. The visual suite captures both the
 Graphics Lab and deterministic UI Explorer states: overview, dark/light and

@@ -262,6 +262,24 @@ class UiExplorer implements Disposable {
 		return true;
 	}
 
+	/**
+	 * Applies one of the start options both builds take as arguments, `--page=<id>` (a catalog page) and
+	 * `--theme=light|dark`; false for any other argument or an unknown page or theme.
+	 */
+	public function applyStartOption(argument:String):Bool {
+		if (StringTools.startsWith(argument, "--page="))
+			return openPage(argument.substr(7));
+		return switch argument {
+			case "--theme=light":
+				setLightTheme(true);
+				true;
+			case "--theme=dark":
+				setLightTheme(false);
+				true;
+			case _: false;
+		}
+	}
+
 	public function setVisualCase(caseId:Int):Bool {
 		return ExplorerVisualCases.apply(this, caseId);
 	}
