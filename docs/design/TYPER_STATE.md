@@ -1,6 +1,6 @@
 # The typer's per-build state as results
 
-Status: accepted (pieces 1, 2 and 5 first; piece 4 with engine slices 6 and 7). Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
+Status: accepted (pieces 1, 2 and 5 first; piece 4 with engine slices 6 and 7); pieces 1 and 5 are built ("As built", below), piece 2 is not yet. Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
 
 ## Why
 
@@ -74,19 +74,23 @@ estimate from the phase times above, to be measured per piece.
 ### Piece 1: declaration keys by module
 
 Each module's canonical declarations (`ModuleState.canonicalClasses`, `canonicalAbstracts`, `canonicalEnums`,
-`canonicalInterfaces`, `canonicalProgramFunctions`) give a `ModuleDeclarationKeys`: the key of each function they hold and of
-those whose signature the source leaves to the body, with `leavesSignatureToInference` called once per function. It is kept in
-the session's database (`SessionState.declarationKeys`, a computed kind by module id, put every build by
-`FrontendCompilation.keptDeclarations`): a module whose canonical arrays are the ones its keys were made from puts the same object
-again, so only a module canonicalized again pays. The key is the canonicalization rather than the parse: a module canonicalized
-again (its alias revision moved) has new function objects even when its parse is kept.
+`canonicalInterfaces`, `canonicalProgramFunctions`) give a `ModuleDeclarationKeys`, kept in the session's database
+(`SessionState.declarationKeys`, a computed kind by module id, put every build by `FrontendCompilation.keptDeclarations`): a
+module whose canonical arrays are the ones its keys were made from puts the same object again, so only a module canonicalized
+again pays. The key is the canonicalization rather than the parse: a module canonicalized again (its alias revision moved) has
+new function objects even when its parse is kept. What is kept is small: the canonical arrays, which the module holds anyway,
+and one flag per function, `leavesSignatureToInference` of it, computed once. A function's key (its owner's name and its own)
+is made the first time a build looks the function up (`ModuleDeclarationKeys.find`, a walk of the module's declarations), and
+the build keeps it in a map of its own, which the table forgets once the program is typed (`DeclarationTypeTable.endTyping`): the
+semantic program keeps the last table. A module's functions are found through the file most of them name. A first version
+kept a map of keys per module, which added 1.8 MB of live data on the UI app's server.
 
-The table (`DeclarationKeys`, owned by `DeclarationTypeTable`) finds a function's keys through the file its span names, then in
-a small map of its own for the functions the semantic program made itself: an abstract's methods with the owner's type
-parameters, implicit constructors, interface accessors, a function given its new body (`replaceBodies`), and the typer's
-aliases. Those are found by walking the program's declarations and skipping each one whose methods array is a module's own: a
-class `replaceBodies` refreshed is another object, but keeps the methods array it did not change, so 603 classes cost one
-comparison each and about 75 functions get keys of their own.
+The table (`DeclarationKeys`, owned by `DeclarationTypeTable`) finds a function's module through the file its span names; the
+functions the semantic program made itself (an abstract's methods with the owner's type parameters, implicit constructors,
+interface accessors, a function given its new body by `replaceBodies`) and the typer's aliases get keys of their own. Those are
+found by walking the program's declarations and skipping each one whose methods array is a module's own: a class
+`replaceBodies` refreshed is another object, but keeps the methods array it did not change, so 603 classes cost one comparison
+each and about 75 functions get keys of their own.
 
 Two things went with it. Seeding is by read: a function this build does not type gets the signature an earlier build gave it
 when it is first read, from the module that owns its key (`DeclarationTypeTable.seed`), instead of every signature of every
@@ -103,21 +107,23 @@ Main-thread instructions did not move (no-op 0.606 → 0.605G, body edit 1.538 �
 
 ### Piece 5: the names every module sees
 
-What `SemanticAssembly` built before canonicalizing (the alias setup: source type aliases by spelling, module and package, the
-enums' cases, module-level members and their storage, pattern constants, inferred declarations, `@:discoverMethods` prefixes,
-the alias universe and the static-extension table) is `ProgramNames`, made from each module's `ModuleNames`. A module's
+What `SemanticAssembly` built before canonicalizing (the alias setup: source type aliases by spelling and module, the enums'
+cases, module-level members and their storage, pattern constants, inferred declarations, `@:discoverMethods` prefixes, the
+alias universe and the static-extension table) is `ProgramNames`, made from each module's `ModuleNames`. A module's
 `ModuleNames` is made once per parse (and entry module) and kept by module id (`SessionState.moduleNames`); `ProgramNames` is
 kept at one key (`SessionState.programNames`) and made again only when a module's names differ from those it was made from,
-compared by content where the object is another one (a body edit parses again, with the same names). What a `using` reads of a
-module is part of its names (`StaticExtensionTable.contributionKey`: its `using`s, its types' `@:using`, and each declaration's
-name, privacy, kind and static functions as written), so the table is kept with the rest.
+compared by content where the object is another one (a body edit parses again, with the same names); it then takes the same
+tables without the old parses. What a `using` reads of a module is compared too, only for a module the static-extension table
+resolved a `using` to (`StaticExtensionTable.offeredKey`, its declarations and static functions as written, made the first
+time it is compared). What only a module canonicalized again reads (the dotted and plain aliases, the aliases by package and the
+types each package sees) is indexed in the build that first canonicalizes one (`ProgramNameIndex`), and the prefixes a subclass
+inherits are found then too.
 
 Changed from the plan: the tables are one summary made whole when a module's names change, not tables updated per
 contribution. A module's names change only with its declarations, and every such change already canonicalizes every module
 again (the alias universe moves); per-key updates would cost more code than the rebuild they save. The alias universe's
 revision stays the per-state one of 8bca2e7f0 (`SessionState.aliasUniverseRevision`), compared once per build against the kept
 universe, so a build that reverts a declaration a rejected build added keeps the revision its modules were canonicalized at.
-The prefixes a subclass inherits are found only when a module is canonicalized again.
 
 These kinds and the declaration keys hold values a build puts from its own state, which the engine's rollback did not touch
 when it undid no result (a build that fails while typing writes none). Such a kind is now made `ofState`: a rollback to a
@@ -126,7 +132,36 @@ publication each holds what the state returned to held, or nothing (`TyperStateM
 
 `--check-reuse` makes the names afresh from every module and compares them with the kept ones (`ProgramNames.difference`).
 
-Measured (edit-cost session, after piece 1): `alias-setup` of the no-op 10.0 → 0.2 ms, `frontend` 18.7 → 12.1 ms (body edit
-22.8 → 14.5 ms); main-thread instructions of the no-op 0.605 → 0.561G (−7.3%) and of the body edit 1.540 → 1.494G (−3.0%);
-allocation of the no-op 66.1 → 62.2 MB and of the body edit 164.5 → 160.1 MB. A cold build's alias setup grows 11 → 25 ms: it
-makes every module's names, the static functions' signatures among them.
+A module's names are kept as a digest of their parts (`ModuleNameParts`), which are made again from the parse when the whole
+is made, and checked against names made afresh under `--check-reuse`.
+
+Measured (edit-cost session, after piece 1, before the per-build index): `alias-setup` of the no-op 10.0 → 0.2 ms, `frontend`
+18.7 → 12.1 ms (body edit 22.8 → 14.5 ms); main-thread instructions of the no-op 0.605 → 0.561G (−7.3%) and of the body edit
+1.540 → 1.494G (−3.0%); allocation of the no-op 66.1 → 62.2 MB and of the body edit 164.5 → 160.1 MB. Making the index per
+build costs the body edit about 4 ms and 17M instructions (it canonicalizes the edited module again) and saves its tables on
+every build in between.
+
+### Pieces 1 and 5 together
+
+Against 182e4bf3d, perf-guard on one machine: no-op 0.585 → 0.542G main-thread instructions (−7.4%), body edit 1.523 →
+1.489G (−2.2%), signature edit 17.36 → 16.90G (−2.6%); allocation of the no-op 66.5 → 61.1 MB and of the body edit 176.9 →
+172.4 MB; the incremental session's live data 792.7 → 791.6 MB. The edit-cost session's phases: `setup` 16.3 → 8–10 ms,
+`frontend` 24.5 → 11.6 ms (`alias-setup` 13 → 0.2 ms), `generated` unchanged (about 23 ms, piece 2). A cold alias setup is
+11 → 13 ms. The small project is unchanged (instructions and allocation within 0.7% of origin/main measured the same day).
+
+Live data: the UI app's server holds 0.7 MB more after the live edits (census 439.8 → 440.5 MB, `aot_ui_server_live_bytes`
++0.16%): the names every module sees (0.85 MB, `ProgramNames`) are new, the old table's map of keys (0.95 MB) is gone, and the
+keys the last table looked up (0.73 MB, `DeclarationKey` and its map) are still there: something in that session looks them
+up after the program is typed, which the compile server on the compiler's own sources does not; not found yet.
+
+### Piece 2: not built yet
+
+Measured on the same session after pieces 1 and 5 (`generated` about 24 ms on a no-op): `keepAnonymousUnits` 10–12 ms (every
+unit of the previous program's `anonymousUnits` looked up and its types discovered again), the two `registerProgramTypes` calls
+14 ms over the classes, interfaces, enums and natives (all of them, kept or not; the functions are only the build's own, about 100,
+0.7 ms), of which registering anonymous types 6 ms, generic owners 4 ms and enum representations 1.5 ms; the generators and the
+drain of generic owners about 10 ms, part of which is piece 3's 26 specializations. Replaying a kept unit's recorded discoveries
+into a new `TypingSession` would cost about what walking its types costs now, so the piece needs the registries
+(`TypingSession.anonymousTypes`, `EnumRepresentations`, the generic-owner requests) to outlive the session as summaries over
+the units' contributions, with their order (the program lists enum representations and owners in discovery order) a result of
+the summary rather than of the walk.
