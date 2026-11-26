@@ -8,10 +8,10 @@
 			"raise_reason": "the commits bisected for aot_build_instructions: ac8a1069b's KeyValueIterable typing of Map and Array for every program and d76d07a0f's collection after each compile's response, counted because the measurement runs until the server exits (VM not bisected separately)"
 		},
 		"vm_build_allocated_bytes": {
-			"value": 69317256,
+			"value": 71122960,
 			"tolerance": 0.02,
 			"why": "What the compile server on the VM allocated for the build (its worker allocations): deterministic for a given compiler and project.",
-			"raise_reason": "the query engine's stage columns (engine slices 3 and 4), compacted to columns by slot: 70789440 -> 69317256, still above the 68115360 before slice 3"
+			"raise_reason": "The small project's build writes module sections (MODULE_SECTIONS.md slice 2b): requests recorded per function and each section's tables collected and encoded; before that, the query engine's stage columns (engine slices 3 and 4), compacted to columns by slot: 70789440 -> 69317256, still above the 68115360 before slice 3"
 		},
 		"vm_check_instructions": {
 			"value": 10345595459,
@@ -36,9 +36,10 @@
 			"raise_reason": "ac8a1069b types Map and Array as KeyValueIterables for every program (+40M, with its allocation); d76d07a0f's full collection after each compile's response, off the build's path (wall unchanged), counted because the measurement runs until the server exits (+63M: main without it measures 1.564G); 4ff774d3e's API model grows the AOT image every process start pays (+14M); 07b95ac10 took back 9M (bisected over 25 commits from ccd159f11)"
 		},
 		"aot_build_allocated_bytes": {
-			"value": 42624448,
+			"value": 43631136,
 			"tolerance": 0.02,
-			"why": "What the compile server with haxeon-aot allocated for the build (its worker allocations): deterministic for a given compiler and project."
+			"why": "What the compile server with haxeon-aot allocated for the build (its worker allocations): deterministic for a given compiler and project.",
+			"raise_reason": "The small project's build writes module sections (MODULE_SECTIONS.md slice 2b): requests recorded per function and each section's tables collected and encoded"
 		},
 		"aot_check_instructions": {
 			"value": 1396909540,
