@@ -5,8 +5,9 @@ static void realtime_bytes_finalize( void *value ) {
 	if( bytes->owner != NULL ) {
 		hl_remove_root(&bytes->owner);
 		bytes->owner = NULL;
-	} else {
+	} else if( bytes->data != NULL ) {
 		free(bytes->data);
+		hl_gc_external_bytes(-(int64)bytes->length);
 	}
 	if( bytes->roots != NULL ) {
 		hl_remove_root(&bytes->roots);
@@ -15,6 +16,8 @@ static void realtime_bytes_finalize( void *value ) {
 	bytes->data = NULL;
 }
 
+/* The data is counted with hl_gc_external_bytes. Only the finalizer may free bytes->data; no other native code may,
+ * or the counter drifts. */
 static realtime_bytes *realtime_bytes_make( int length ) {
 	if( length < 0 ) hl_error("Negative byte length");
 	realtime_bytes *bytes = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
@@ -27,6 +30,8 @@ static realtime_bytes *realtime_bytes_make( int length ) {
 	bytes->roots = NULL;
 	bytes->data = length == 0 ? NULL : (vbyte *)calloc((size_t)length, 1);
 	if( length > 0 && bytes->data == NULL ) hl_error("Could not allocate bytes");
+	// The data lives outside the heap, so the collector counts it to know when the wrapper's garbage is worth a collection.
+	if( length > 0 ) hl_gc_external_bytes(length);
 	return bytes;
 }
 

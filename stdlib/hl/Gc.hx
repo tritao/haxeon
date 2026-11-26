@@ -21,6 +21,8 @@ extern class Gc {
 	@:hlNative("std", "gc_last_pause_micros") public static function lastPauseMicros():Float;
 	@:hlNative("std", "gc_max_pause_micros") public static function maxPauseMicros():Float;
 	@:hlNative("std", "gc_heap_bytes") public static function heapBytes():Float;
+	/** The bytes outside the heap that live heap objects own, such as Bytes data; they count toward starting a collection. */
+	@:hlNative("std", "gc_external_live_bytes") public static function externalBytes():Float;
 	@:hlNative("std", "gc_allocated_since_collection") public static function allocatedSinceCollection():Float;
 	/** Actual automatic collection threshold, including the allocation floor. */
 	@:hlNative("std", "gc_trigger_bytes") public static function triggerBytes():Float;
@@ -82,6 +84,9 @@ class Gc {
 		return 0.0;
 
 	public static function heapBytes():Float
+		return 0.0;
+
+	public static function externalBytes():Float
 		return 0.0;
 
 	public static function allocatedSinceCollection():Float

@@ -533,6 +533,8 @@ class TestCatalog {
 				"imported nominal class executed"),
 			mainCase("runtime", "static-import", "StaticImportMain", "static-import.hl", 42,
 				"imports of static members and module functions executed"),
+			mainCase("runtime", "bytes-collection", "BytesCollectionMain", "bytes-collection.hl", 42,
+				"dropped Bytes start collections by their data outside the heap, and collected data is no longer counted"),
 			mainCase("runtime", "namespace", "NamespaceMain", "namespace.hl", 42,
 				"qualified nominal namespaces executed"),
 			mainCase("runtime", "module-sub-type", "ModuleSubTypeMain", "module-sub-type.hl", 42,
