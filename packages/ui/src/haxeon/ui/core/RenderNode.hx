@@ -746,7 +746,8 @@ class RenderNode {
 		return this;
 	}
 
-	@:allow(haxeon.ui.core.UiContext) function hasPaintHandler():Bool return paintHandlers != null
+	@:allow(haxeon.ui.core.UiContext) @:allow(haxeon.ui.core
+		.CustomPaintCache) function hasPaintHandler():Bool return paintHandlers != null
 		|| decorations != null || hasStyleDecorations();
 
 	/** Normalize styled boxes before comparing or submitting native layout. */
@@ -792,7 +793,7 @@ class RenderNode {
 	}
 
 	/** Returns the complete opt-in fingerprint for safe retained paint reuse. */
-	@:allow(haxeon.ui.core.UiContext) function retainedPaintKey():Null<String> {
+	@:allow(haxeon.ui.core.CustomPaintCache) function retainedPaintKey():Null<String> {
 		if (paintKeyResolved) return paintKey;
 		paintKeyResolved = true;
 		paintKey = null;
@@ -821,7 +822,7 @@ class RenderNode {
 	}
 
 	/** Fingerprint for local compositor metadata; transforms are native placement. */
-	@:allow(haxeon.ui.core.UiContext) function retainedCompositeKey():Null<String> {
+	@:allow(haxeon.ui.core.CustomPaintCache) function retainedCompositeKey():Null<String> {
 		if (!hasCompositePaint()) return null;
 		var style = computedStyle == null ? new ComputedStyle() : computedStyle;
 		var effects = style.getEffectsReadOnly(StyleProperty.Effects);
@@ -846,7 +847,7 @@ class RenderNode {
 			item);
 	}
 
-	@:allow(haxeon.ui.core.UiContext) function paintContent(canvas:Canvas):Bool {
+	@:allow(haxeon.ui.core.CustomPaintCache) function paintContent(canvas:Canvas):Bool {
 		if (resolved == null || !resolved.visible || !hasPaintHandler()) return false;
 		var started = RenderCost.time(), encodedBefore = RenderCost.encode;
 		var style = computedStyle;
@@ -863,7 +864,7 @@ class RenderNode {
 		return true;
 	}
 
-	@:allow(haxeon.ui.core.UiContext) function hasCompositePaint():Bool {
+	@:allow(haxeon.ui.core.CustomPaintCache) function hasCompositePaint():Bool {
 		if (computedStyle == null || resolved == null || !resolved.visible || !hasPaintHandler()) return false;
 		var style = computedStyle;
 		var opacity = style.getNumber(StyleProperty.Opacity);
@@ -876,7 +877,7 @@ class RenderNode {
 	}
 
 	/** Emits only the framework-owned layer metadata; it has no draw commands. */
-	@:allow(haxeon.ui.core.UiContext) function paintComposite(canvas:Canvas):Bool {
+	@:allow(haxeon.ui.core.CustomPaintCache) function paintComposite(canvas:Canvas):Bool {
 		if (!hasCompositePaint()) return false;
 		var style = computedStyle == null ? new ComputedStyle() : computedStyle;
 		var opacity = style.getNumber(StyleProperty.Opacity);

@@ -12,7 +12,6 @@ import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutChanges;
 import haxeon.ui.IntIndex;
 import haxeon.ui.Canvas;
-import haxeon.ui.DisplayList;
 import haxeon.ui.Renderer;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.Rect;
@@ -141,19 +140,7 @@ class UiContext implements Disposable {
 	var visitGeometryChanged = 0;
 	var visitGeometryReused = 0;
 	var disposed:Bool;
-	final stalePaintNodes:Array<Int> = [];
-	var customCanvases:Map<Int, Canvas>;
-	var customLists:Map<Int, DisplayList>;
-	var customGeometries:Map<Int, ResolvedLayoutItem>;
-	var customPaintKeys:Map<Int, String>;
-	var customContentRevisions:Map<Int, Int>;
-	var customListHasCommands:Map<Int, Bool>;
-	var customPaintBound:Map<Int, Bool>;
-	var customCompositeCanvases:Map<Int, Canvas>;
-	var customCompositeLists:Map<Int, DisplayList>;
-	var customCompositeKeys:Map<Int, String>;
-	var customCompositeGeometries:Map<Int, ResolvedLayoutItem>;
-	var customCompositeBound:Map<Int, Bool>;
+	final customPaint = new CustomPaintCache();
 	final previousNodesById:Map<Int, RenderNode>;
 	final currentNodesById:Map<Int, RenderNode>;
 	final submittedNodes:Array<RenderNode> = [];
@@ -243,18 +230,6 @@ class UiContext implements Disposable {
 			pendingFocus = id;
 			pendingFocusLabel = buildContext.deferredFocusLabel;
 		});
-		customCanvases = new Map();
-		customLists = new Map();
-		customGeometries = new Map();
-		customPaintKeys = new Map();
-		customContentRevisions = new Map();
-		customListHasCommands = new Map();
-		customPaintBound = new Map();
-		customCompositeCanvases = new Map();
-		customCompositeLists = new Map();
-		customCompositeKeys = new Map();
-		customCompositeGeometries = new Map();
-		customCompositeBound = new Map();
 		previousNodesById = new Map();
 		currentNodesById = new Map();
 		resolvedById = new IntIndex();
@@ -928,8 +903,7 @@ class UiContext implements Disposable {
 		gestures.setRoot(null);
 		buildContext.releaseRetained();
 		// The painters may be new code: paint every node again instead of reusing its list by key.
-		customPaintKeys.clear();
-		customCompositeKeys.clear();
+		customPaint.forgetKeys();
 	}
 
 	/** How far the last frame submission got before it stopped, for a crash report: 0 when it completed. */
@@ -946,15 +920,6 @@ class UiContext implements Disposable {
 		}
 		accessibilityBridge.coordinateScale = platformCoordinateScale;
 		accessibilityBridge.update(root, focus.focusedId);
-	}
-
-	/** Matches the render traversal's eligibility checks without a second node map. */
-	function hasCurrentCustomPaint(nodeId:Int):Bool {
-		var node = currentNodesById.get(nodeId);
-		if (node == null || !node.hasPaintHandler() || node.resolved == null) return false;
-		var geometry = node.resolved;
-		return geometry.width > 0.0
-			&& geometry.height > 0.0 && geometry.clipBounds.width > 0.0 && geometry.clipBounds.height > 0.0;
 	}
 
 	/** Builds, lays out and draws the UI into `surface` for `frame`. */
@@ -977,146 +942,11 @@ class UiContext implements Disposable {
 		ensureLive();
 		if (root == null) throw "Submit a view before rendering the UI context";
 		diagnosticStage = 21;
-		var paintedNodes = 0;
-		var paintSkippedNodes = 0;
-		var emptyPaintNodes = 0;
 		diagnosticStage = 22;
-		for (node in submittedPaintNodes) {
-			var nodeId = node.id.value;
-			if (node.resolved != null && node.cachePolicy != CachePolicy.None) session.setCachePolicy(node.id.value,
-				node.cachePolicy);
-			if (!node.hasPaintHandler() || node.resolved == null) {
-				clearCustomPaintBindings(node.id.value);
-				continue;
-			}
-			if (node.resolved.visible && (node.resolved.width <= 0.0 || node.resolved.height <= 0.0)) emptyPaintNodes++;
-			// A hidden painter records nothing; do not cache that empty result as its content.
-			// Keep any existing local list so it can be rebound when the node becomes visible.
-			if (!node.resolved.visible || node.resolved.width <= 0.0 || node.resolved.height <= 0.0
-				|| node.resolved.clipBounds.width <= 0.0 || node.resolved.clipBounds.height <= 0.0) {
-				clearCustomPaintBindings(nodeId);
-				continue;
-			}
-			var displayList = customLists.get(nodeId);
-			var contentReused = displayList != null && canReuseCustomPaint(node);
-			if (contentReused) {
-				if (customListHasCommands.get(nodeId) == true) {
-					if (customPaintBound.get(nodeId) != true) {
-						session.setCustomPaint(nodeId, displayList);
-						customPaintBound.set(nodeId, true);
-					}
-					if (node.cachePolicy != CachePolicy.None) session.setCustomPaintCachePolicy(nodeId,
-						node.cachePolicy);
-				}
-			} else {
-				var canvas = customCanvases.get(nodeId);
-				if (canvas == null) {
-					canvas = new Canvas();
-					canvas.retainRectangles = true;
-					customCanvases.set(nodeId, canvas);
-				}
-				canvas.reset();
-				var geometry:ResolvedLayoutItem = cast node.resolved;
-				var inspectionStarted = onInspectionPaint == null || node == inspectionNode ? 0.0 : Sys.time();
-				canvas.withState(function(target) {
-					target.resetTransform();
-					// Custom painters own only node-local pixels. Native layout and
-					// compositing apply the resolved position, transform, and ancestor
-					// clips when the retained list is embedded.
-					target.clip(new Rect(0.0, 0.0, geometry.width, geometry.height));
-					node.paintContent(target);
-				});
-				if (displayList == null) {
-					displayList = DisplayList.create();
-					customLists.set(nodeId, displayList);
-				}
-				canvas.update(displayList);
-				if (onInspectionPaint != null && node != inspectionNode) onInspectionPaint(nodeId,
-					Sys.time() - inspectionStarted);
-				var hasCommands = displayList.info().commandCount > 0;
-				customListHasCommands.set(nodeId, hasCommands);
-				if (hasCommands) {
-					session.setCustomPaint(nodeId, displayList);
-					customPaintBound.set(nodeId, true);
-				} else {
-					session.clearCustomPaint(nodeId);
-					customPaintBound.set(nodeId, false);
-				}
-				if (hasCommands && node.cachePolicy != CachePolicy.None) session.setCustomPaintCachePolicy(nodeId,
-					node.cachePolicy);
-				customGeometries.set(nodeId, geometry);
-				customPaintKeys.set(nodeId, node.retainedPaintKey());
-				customContentRevisions.set(nodeId, node.paintRevision);
-				paintedNodes++;
-			}
-
-			var compositeList = customCompositeLists.get(nodeId);
-			if (node.hasCompositePaint() && customListHasCommands.get(nodeId) == true) {
-				var compositeRebuilt = false;
-				if (compositeList == null || !canReuseCustomComposite(node)) {
-					compositeRebuilt = true;
-					var compositeCanvas = customCompositeCanvases.get(nodeId);
-					if (compositeCanvas == null) {
-						compositeCanvas = new Canvas();
-						customCompositeCanvases.set(nodeId, compositeCanvas);
-					}
-					compositeCanvas.reset();
-					node.paintComposite(compositeCanvas);
-					if (compositeList == null) {
-						compositeList = DisplayList.create();
-						customCompositeLists.set(nodeId, compositeList);
-					}
-					compositeCanvas.update(compositeList);
-					customCompositeKeys.set(nodeId, node.retainedCompositeKey());
-					customCompositeGeometries.set(nodeId, cast node.resolved);
-				}
-				if (compositeList != null && compositeList.info().commandCount > 0) {
-					if (compositeRebuilt
-						|| customCompositeBound.get(nodeId) != true) session.setCustomPaintComposite(nodeId,
-						compositeList);
-					customCompositeBound.set(nodeId, true);
-				} else if (customCompositeBound.get(nodeId) == true) {
-					session.clearCustomPaintComposite(nodeId);
-					customCompositeBound.set(nodeId, false);
-				}
-			} else if (customCompositeBound.get(nodeId) == true) {
-				session.clearCustomPaintComposite(nodeId);
-				customCompositeBound.set(nodeId, false);
-			}
-			if (contentReused) paintSkippedNodes++;
-		}
-		diagnosticStage = 23;
-		var stale = stalePaintNodes;
-		stale.resize(0);
-		for (nodeId in customLists.keys()) if (!hasCurrentCustomPaint(nodeId)) stale.push(nodeId);
-		for (nodeId in customCompositeLists.keys()) if (!customLists.exists(nodeId)
-			&& !hasCurrentCustomPaint(nodeId)) stale.push(nodeId);
-		for (nodeId in stale) {
-			clearCustomPaintBindings(nodeId);
-			var canvas = customCanvases.get(nodeId);
-			if (canvas != null) {
-				canvas.reset();
-				canvas.releaseRetained();
-			}
-			var displayList = customLists.get(nodeId);
-			if (displayList != null) displayList.dispose();
-			customCanvases.remove(nodeId);
-			customLists.remove(nodeId);
-			customGeometries.remove(nodeId);
-			customPaintKeys.remove(nodeId);
-			customContentRevisions.remove(nodeId);
-			customPaintBound.remove(nodeId);
-			var compositeCanvas = customCompositeCanvases.get(nodeId);
-			if (compositeCanvas != null) compositeCanvas.reset();
-			var compositeList = customCompositeLists.get(nodeId);
-			if (compositeList != null) compositeList.dispose();
-			customCompositeCanvases.remove(nodeId);
-			customCompositeLists.remove(nodeId);
-			customCompositeKeys.remove(nodeId);
-			customCompositeGeometries.remove(nodeId);
-			customCompositeBound.remove(nodeId);
-			customListHasCommands.remove(nodeId);
-		}
+		customPaint.update(session, submittedPaintNodes, currentNodesById, onInspectionPaint, inspectionNode);
+		var paintedNodes = customPaint.painted;
+		var paintSkippedNodes = customPaint.skipped;
+		var emptyPaintNodes = customPaint.empty;
 		diagnosticStage = 24;
 		var nativeRenderStartedAt = Sys.time();
 		var nativeRenderStartAllocatedAt = AllocationProbe.now();
@@ -1468,7 +1298,7 @@ class UiContext implements Disposable {
 			if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) rebuild = true;
 			else if (node.hasPaintHandler()) {
 				// Layout is already submitted; only the custom list depends on this paint-only routed change.
-				customPaintKeys.remove(node.id.value);
+				customPaint.invalidate(node.id.value);
 			}
 		}
 		return rebuild;
@@ -1548,41 +1378,6 @@ class UiContext implements Disposable {
 			&& submittedFrameHeight == frame.height
 			&& animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision
 			&& buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
-	}
-
-	function canReuseCustomPaint(node:RenderNode):Bool {
-		var nodeId = node.id.value;
-		var key = node.retainedPaintKey();
-		if (key == null || !customPaintKeys.exists(nodeId)
-			|| !customListHasCommands.exists(nodeId) || customPaintKeys.get(nodeId) != key) return false;
-		if (customContentRevisions.get(nodeId) != node.paintRevision) return false;
-		var previousGeometry = customGeometries.get(nodeId);
-		if (previousGeometry == null || node.resolved == null || !samePaintGeometry(previousGeometry,
-			node.resolved)) return false;
-		return true;
-	}
-
-	function canReuseCustomComposite(node:RenderNode):Bool {
-		var nodeId = node.id.value;
-		if (!customCompositeLists.exists(nodeId)
-			|| customCompositeKeys.get(nodeId) != node.retainedCompositeKey()) return false;
-		var previousGeometry = customCompositeGeometries.get(nodeId);
-		return previousGeometry != null && node.resolved != null && samePaintGeometry(previousGeometry, node.resolved);
-	}
-
-	/** Local custom display lists only depend on the size of their paint plane. */
-	static function samePaintGeometry(left:ResolvedLayoutItem,
-			right:ResolvedLayoutItem):Bool return left.width == right.width && left.height == right.height;
-
-	function clearCustomPaintBindings(nodeId:Int):Void {
-		if (customPaintBound.get(nodeId) == true) {
-			session.clearCustomPaint(nodeId);
-			customPaintBound.set(nodeId, false);
-		}
-		if (customCompositeBound.get(nodeId) == true) {
-			session.clearCustomPaintComposite(nodeId);
-			customCompositeBound.set(nodeId, false);
-		}
 	}
 
 	static function sameGeometry(left:ResolvedLayoutItem, right:ResolvedLayoutItem):Bool {
@@ -1750,34 +1545,7 @@ class UiContext implements Disposable {
 		if (disposed) return;
 		pendingFocus = null;
 		focusBeforeWindowBlur = null;
-		session.clearCustomPaints();
-		for (nodeId in customCanvases.keys()) {
-			var canvas = customCanvases.get(nodeId);
-			if (canvas != null) {
-				canvas.reset();
-				canvas.releaseRetained();
-			}
-		}
-		for (nodeId in customLists.keys()) {
-			var displayList = customLists.get(nodeId);
-			if (displayList != null) displayList.dispose();
-		}
-		for (nodeId in customCompositeLists.keys()) {
-			var displayList = customCompositeLists.get(nodeId);
-			if (displayList != null) displayList.dispose();
-		}
-		customCanvases = new Map();
-		customLists = new Map();
-		customGeometries = new Map();
-		customPaintKeys = new Map();
-		customContentRevisions = new Map();
-		customListHasCommands = new Map();
-		customPaintBound = new Map();
-		customCompositeCanvases = new Map();
-		customCompositeLists = new Map();
-		customCompositeKeys = new Map();
-		customCompositeGeometries = new Map();
-		customCompositeBound = new Map();
+		customPaint.dispose(session);
 		events.setHitTestProvider(null);
 		retainedHitTestProvider = null;
 		retainedHitPath = null;
