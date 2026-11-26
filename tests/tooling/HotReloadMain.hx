@@ -26,14 +26,6 @@ import sys.FileSystem;
 import sys.io.File;
 
 class HotReloadMain {
-	/** The compiler's id of function `name`, which it reports the functions a build changed by. */
-	static function compilerId(result:CompileResult, name:String):Int {
-		var id = result.artifact.hashLink().functionIds.get(name);
-		if (id == null)
-			throw 'compiled module is missing function $name';
-		return id;
-	}
-
 	static function main():Void {
 		testPatchContract();
 		testDecodedIrLifetime();
@@ -104,12 +96,8 @@ class HotReloadMain {
 			if (error.status != RuntimeStatus.BadFormat)
 				throw error;
 		}
-		var compilerIndex = compilerId(changed, "Value.value");
 		// Inlined callers also need regeneration when Value.value changes.
-		if (changed.changedFunctions.length != 3
-			|| changed.changedFunctions.indexOf(compilerIndex) < 0
-			|| changed.changedFunctions.indexOf(compilerId(initial, "Probe.read")) < 0
-			|| changed.changedFunctions.indexOf(compilerId(initial, "main")) < 0)
+		if (changed.changedFunctions.join(",") != "Probe.read,Value.value,main")
 			throw 'compiler reported unexpected changed functions: ${changed.changedFunctions}';
 		// A section the loader cannot read refuses the whole patch, which leaves the module as it was.
 		var unreadable = decoded.content.replaced[0].bytes.sub(0, decoded.content.replaced[0].bytes.length);
@@ -202,10 +190,7 @@ class HotReloadMain {
 		compiler.update("Value.hx", "function value():Int { return 46; }");
 		compiler.update("Probe.hx", "function read():Int { var result = Value.value(); return result; }");
 		var pair = compiler.compile("Main");
-		if (pair.changedFunctions.length != 3
-			|| pair.changedFunctions.indexOf(compilerId(initial, "Value.value")) < 0
-			|| pair.changedFunctions.indexOf(compilerId(initial, "Probe.read")) < 0
-			|| pair.changedFunctions.indexOf(compilerId(initial, "main")) < 0)
+		if (pair.changedFunctions.join(",") != "Probe.read,Value.value,main")
 			throw "two-function edit did not produce an atomic pair";
 		Runtime.patchSet(loaded,
 			new PatchSet(liveRevision, pair.revision, pair.artifact.hashLink().patchBytes, pair.changedFunctions));
@@ -307,7 +292,7 @@ class HotReloadMain {
 
 		try {
 			Runtime.patchSet(loaded,
-				new PatchSet(liveRevision, liveRevision + 1, haxe.io.Bytes.ofString("not HLP"), [valueIndex]));
+				new PatchSet(liveRevision, liveRevision + 1, haxe.io.Bytes.ofString("not HLP"), ["Value.value"]));
 			throw "malformed patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)
@@ -554,12 +539,12 @@ class HotReloadMain {
 	}
 
 	static function testPatchContract():Void {
-		var ids = [7], patch = new PatchSet(1, 2, haxe.io.Bytes.ofString("HLP"), ids);
-		ids[0] = 9;
-		if (patch.changedFunctions[0] != 7)
+		var names = ["main"], patch = new PatchSet(1, 2, haxe.io.Bytes.ofString("HLP"), names);
+		names[0] = "other";
+		if (patch.changedFunctions[0] != "main")
 			throw "patch contract retained caller-owned function identities";
 		try {
-			new PatchSet(2, 2, haxe.io.Bytes.ofString("HLP"), [7]);
+			new PatchSet(2, 2, haxe.io.Bytes.ofString("HLP"), ["main"]);
 			throw "patch contract accepted a non-advancing revision";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadArgument)
@@ -583,8 +568,8 @@ class HotReloadMain {
 		var first = compiler.compile("Main");
 		var loaded = Runtime.load(first.artifact.hashLink().hashLinkBytes().flatten(),
 			first.artifact.hashLink().runtimeIdentity);
-		if (!first.artifact.hashLink().functionIds.exists("Spare.read")
-			|| !first.artifact.hashLink().functionIds.exists("Spare.more"))
+		if (!first.artifact.hashLink().functionIndices.exists("Spare.read")
+			|| !first.artifact.hashLink().functionIndices.exists("Spare.more"))
 			throw "a live module must keep the methods of a class nothing uses";
 		var step = 0, baseRevision = first.revision;
 		for (source in [used, unused, used, unused]) {
@@ -683,8 +668,6 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"function helper():Int { return 1; } function main():Int { return 40 + helper() - 1; }");
 		var initial = compiler.compile("Main"),
-			mainId = initial.artifact.hashLink().functionIds.get("main"),
-			helperId = initial.artifact.hashLink().functionIds.get("Main.helper"),
 			loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 				initial.artifact.hashLink().runtimeIdentity),
 			runningMain = Runtime.requireFunctionId(loaded, "main");
@@ -704,8 +687,8 @@ class HotReloadMain {
 		var changed = resumed.compile("Main");
 		if (changed.revision != initial.revision + 1
 			|| changed.changedFunctions.length != 1
-			|| changed.changedFunctions.indexOf(mainId) < 0
-			|| changed.changedFunctions.indexOf(helperId) >= 0
+			|| changed.changedFunctions.indexOf("main") < 0
+			|| changed.changedFunctions.indexOf("Main.helper") >= 0
 			|| changed.artifact.hashLink().patchBytes == null)
 			throw 'Restarted compiler did not emit the revision-2 patch of main alone: ${changed.changedFunctions}';
 		Runtime.patchSet(loaded,

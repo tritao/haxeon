@@ -339,10 +339,8 @@ class WarmRebuildReuseMain {
 					if (StringTools.contains(name, "Guard.parse"))
 						throw 'an edit above the try expressions generated $name again: ${warm.regenerated}';
 				if (live) {
-					var ids = warm.artifact.hashLink().functionIds;
-					for (name in ids.keys())
-						if (StringTools.contains(name, "Guard.parse")
-							&& warm.changedFunctions.indexOf(ids.get(name)) >= 0)
+					for (name in warm.changedFunctions)
+						if (StringTools.contains(name, "Guard.parse"))
 							throw 'the patch carries $name';
 				} else {
 					var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
@@ -459,14 +457,12 @@ class WarmRebuildReuseMain {
 						if (warm.regenerated.indexOf(name) < 0)
 							throw '$name holds its line as a value but was not generated again: ${warm.regenerated}';
 					if (live) {
-						var ids = warm.artifact.hashLink().functionIds;
-						for (name in ids.keys())
+						for (name in warm.changedFunctions)
 							for (kept in edit.kept)
-								if ((name == kept || StringTools.contains(name, kept + ":"))
-									&& warm.changedFunctions.indexOf(ids.get(name)) >= 0)
+								if (name == kept || StringTools.contains(name, kept + ":"))
 									throw 'the patch carries $name';
 						for (name in edit.changed)
-							if (warm.changedFunctions.indexOf(ids.get(name)) < 0)
+							if (warm.changedFunctions.indexOf(name) < 0)
 								throw 'the patch does not carry $name, whose line changed';
 					}
 					if (!live) {

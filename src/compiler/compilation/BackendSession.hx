@@ -24,7 +24,7 @@ typedef BackendAssemblyResult = {
 	final reloadReasons:Array<AbiChange>;
 
 	/** The function slots a patch replaces. */
-	final changedFunctions:Array<Int>;
+	final changedFunctions:Array<String>;
 
 	final requiresReload:Bool;
 

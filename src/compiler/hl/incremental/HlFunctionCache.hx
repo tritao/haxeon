@@ -1,7 +1,6 @@
 package compiler.hl.incremental;
 
 import compiler.core.InternalError;
-import compiler.hl.HlWriter;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrBuilder;
@@ -14,12 +13,6 @@ typedef HlCachedFunctionState = {
 	final bytes:haxe.io.Bytes;
 }
 
-/** Persistent stable runtime identity associated with a function name. */
-typedef HlStableFunctionState = {
-	final name:String;
-	final id:Int;
-}
-
 /** Cached semantic signature used to classify function changes. */
 typedef HlFunctionSignatureState = {
 	final name:String;
@@ -29,55 +22,33 @@ typedef HlFunctionSignatureState = {
 /** Complete persistable state of append-only function slots and bodies. */
 typedef HlFunctionCacheState = {
 	final slots:Array<String>;
-	final stableIds:Array<HlStableFunctionState>;
 	final signatures:Array<HlFunctionSignatureState>;
 	final functions:Array<HlCachedFunctionState>;
-	final nextStableId:Int;
 }
 
 /**
- * Owns append-only user-function slots and stable runtime IDs.
- * Removed names retain their slots until an explicit assembler compaction.
+ * Owns append-only user-function slots. Removed names retain their slots until an explicit assembler compaction. The runtime's
+ * stable ids are the loader's: each function's slot, which a rename keeps.
  */
 class HlFunctionCache {
-	public static inline final MAX_STABLE_ID:Int = 0x1FFFFFFF;
-	public static inline final INIT_STABLE_ID:Int = MAX_STABLE_ID;
-
 	public final userSlots:Map<String, Int> = [];
-	public final stableIds:Map<String, Int> = [];
 	public final slots:Array<String> = [];
 	public final functions:Map<String, IrFunction> = [];
 
-	var nextStableId:Int = 0x10000;
-
-	public function new(?existingStableIds:Map<String, Int>) {
-		if (existingStableIds != null)
-			for (name => id in existingStableIds) {
-				validateStableId(name, id);
-				stableIds.set(name, id);
-				if (id != INIT_STABLE_ID && id >= nextStableId)
-					nextStableId = id + 1;
-			}
-	}
+	public function new() {}
 
 	public function copy():HlFunctionCache {
 		var result = new HlFunctionCache();
 		for (name => slot in userSlots)
 			result.userSlots.set(name, slot);
-		for (name => id in stableIds)
-			result.stableIds.set(name, id);
 		for (name in slots)
 			result.slots.push(name);
 		for (name => fn in functions)
 			result.functions.set(name, fn);
-		result.nextStableId = nextStableId;
 		return result;
 	}
 
 	public function exportState():HlFunctionCacheState {
-		var ids:Array<HlStableFunctionState> = [for (name => id in stableIds) {
-			name: name, id: id
-		}];
 		var signatureState:Array<HlFunctionSignatureState> = [for (name => fn in functions) {
 			name: name, signature: signature(fn)
 		}];
@@ -85,35 +56,20 @@ class HlFunctionCache {
 			{
 				name: name, bytes: IrFunctionStateCodec.encode(fn)
 			}];
-		ids.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		signatureState.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		functionState.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		return {
 			slots: slots.copy(),
-			stableIds: ids,
 			signatures: signatureState,
-			functions: functionState,
-			nextStableId: nextStableId
+			functions: functionState
 		};
 	}
 
 	public static function fromState(state:HlFunctionCacheState):HlFunctionCache {
-		if (state.nextStableId < 0x10000 || state.nextStableId >= INIT_STABLE_ID)
-			throw new InternalError("Invalid next stable function ID");
-		var result = new HlFunctionCache(),
-			names:Map<String, Bool> = [],
-			ids:Map<Int, Bool> = [];
-		for (entry in state.stableIds) {
-			if (entry.name.length == 0 || names.exists(entry.name) || ids.exists(entry.id))
-				throw new InternalError("Invalid stable function identity state");
-			validateStableId(entry.name, entry.id);
-			names.set(entry.name, true);
-			ids.set(entry.id, true);
-			result.stableIds.set(entry.name, entry.id);
-		}
+		var result = new HlFunctionCache();
 		for (slot in 0...state.slots.length) {
 			var name = state.slots[slot];
-			if (!names.exists(name) || result.userSlots.exists(name))
+			if (name.length == 0 || result.userSlots.exists(name))
 				throw new InternalError("Invalid function slot state");
 			result.slots.push(name);
 			result.userSlots.set(name, slot);
@@ -138,7 +94,6 @@ class HlFunctionCache {
 		for (name in result.slots)
 			if (!result.functions.exists(name) || !signed.exists(name))
 				throw new InternalError("Incomplete function cache state");
-		result.nextStableId = state.nextStableId;
 		return result;
 	}
 
@@ -146,15 +101,6 @@ class HlFunctionCache {
 		for (fn in incoming) {
 			if (!userSlots.exists(fn.name)) {
 				userSlots.set(fn.name, slots.length);
-				if (!stableIds.exists(fn.name)) {
-					if (fn.name == "__init")
-						stableIds.set(fn.name, INIT_STABLE_ID);
-					else {
-						if (nextStableId >= INIT_STABLE_ID)
-							throw new InternalError("Stable function ID space exhausted");
-						stableIds.set(fn.name, nextStableId++);
-					}
-				}
 				slots.push(fn.name);
 			}
 			functions.set(fn.name, fn);
@@ -169,31 +115,27 @@ class HlFunctionCache {
 
 	/**
 	 * Renames functions, all at once: each key of `names` that the cache knows takes the value as its name, keeping its slot,
-	 * stable ID, code and signature. A name nothing is renamed away from must not be taken.
+	 * code and signature. A name nothing is renamed away from must not be taken.
 	 */
 	public function rename(names:Map<String, String>):Void {
 		var moved:Array<{from:String, to:String}> = [];
 		for (from => to in names)
-			if (from != to && (userSlots.exists(from) || stableIds.exists(from)))
+			if (from != to && userSlots.exists(from))
 				moved.push({from: from, to: to});
 		if (moved.length == 0)
 			return;
 		var sources:Map<String, Bool> = [for (entry in moved) entry.from => true];
 		for (entry in moved)
-			if (!sources.exists(entry.to) && (userSlots.exists(entry.to) || stableIds.exists(entry.to)))
+			if (!sources.exists(entry.to) && userSlots.exists(entry.to))
 				throw new InternalError('Cannot rename function ${entry.from} to ${entry.to}, which exists');
 		var slotsOf:Map<String, Int> = [],
-			idsOf:Map<String, Int> = [],
 			bodies:Map<String, IrFunction> = [];
 		for (entry in moved) {
 			if (userSlots.exists(entry.from))
 				slotsOf.set(entry.from, userSlots.get(entry.from));
-			if (stableIds.exists(entry.from))
-				idsOf.set(entry.from, stableIds.get(entry.from));
 			if (functions.exists(entry.from))
 				bodies.set(entry.from, functions.get(entry.from));
 			userSlots.remove(entry.from);
-			stableIds.remove(entry.from);
 			functions.remove(entry.from);
 		}
 		for (entry in moved) {
@@ -202,8 +144,6 @@ class HlFunctionCache {
 				userSlots.set(entry.to, slot);
 				slots[slot] = entry.to;
 			}
-			if (idsOf.exists(entry.from))
-				stableIds.set(entry.to, idsOf.get(entry.from));
 			var body = bodies.get(entry.from);
 			if (body != null)
 				functions.set(entry.to, body.withBlocks(body.blocks, null, null, null, entry.to));
@@ -240,7 +180,7 @@ class HlFunctionCache {
 	}
 
 	/**
-	 * Forgets the functions `isRetired` names: their slots, code and stable IDs. Only a fresh module may drop them, since the
+	 * Forgets the functions `isRetired` names: their slots and code. Only a fresh module may drop them, since the
 	 * slots of the functions after them move. Returns whether any went.
 	 */
 	public function dropRetired(isRetired:String->Bool):Bool {
@@ -250,7 +190,6 @@ class HlFunctionCache {
 		for (name in slots)
 			if (isRetired(name)) {
 				userSlots.remove(name);
-				stableIds.remove(name);
 				functions.remove(name);
 			}
 		slots.resize(0);
@@ -259,12 +198,6 @@ class HlFunctionCache {
 			slots.push(name);
 		}
 		return true;
-	}
-
-	static function validateStableId(name:String, id:Int):Void {
-		if (id < 0 || id > MAX_STABLE_ID || (id == INIT_STABLE_ID && name != "__init")
-			|| (name == "__init" && id != INIT_STABLE_ID))
-			throw new InternalError('Invalid stable function ID for "$name"');
 	}
 
 	public function ordered():Array<IrFunction>

@@ -50,12 +50,9 @@ class ModuleMain {
 			if (error.message != "Native registrations are frozen after the first compilation")
 				throw error;
 		}
-		var mathId = first.artifact.hashLink().functionIds.get("Math.add");
 		var twentyIndex = first.artifact.hashLink().module.ints.indexOf(20);
 		compiler.update("Aardvark.hx", "function helper(x:Int):Int { return x + 7; }");
 		var added = compiler.compile("Main");
-		if (added.artifact.hashLink().functionIds.get("Math.add") != mathId)
-			throw "Adding a function changed the stable Math.add identity";
 		if (added.artifact.hashLink().module.ints.indexOf(20) != twentyIndex)
 			throw "Adding a constant renumbered an existing constant";
 		var firstBytes = HlWriter.encodeFunction(functionNamed(added.artifact.hashLink().module, "Math.add")),
@@ -78,10 +75,8 @@ class ModuleMain {
 			throw "Edited function IR was not regenerated";
 		// Typing and IR regeneration touch only the edited function, and the caller that inlined it.
 		var expectedChanged = 2;
-		if (result.changedFunctions.length != expectedChanged
-			|| result.changedFunctions.indexOf(result.artifact.hashLink().functionIds.get("Math.add")) < 0
-			|| result.changedFunctions.indexOf(result.artifact.hashLink().functionIds.get("main")) < 0)
-			throw 'Wrong changed stable functions: ${result.changedFunctions}';
+		if (result.changedFunctions.join(",") != "Math.add,main")
+			throw 'Wrong changed functions: ${result.changedFunctions}';
 		if (result.artifact.hashLink().patchBytes == null)
 			throw "Compatible body edit did not emit HLP bytes";
 		if (result.metrics.changedFunctions != expectedChanged
@@ -137,16 +132,12 @@ class ModuleMain {
 		compiler.update("Main.hx",
 			"import Temp; function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
 		var withOld = compiler.compile("Main"),
-			oldIndex = withOld.artifact.hashLink().functionIndices.get("Temp.oldValue"),
-			oldId = withOld.artifact.hashLink().functionIds.get("Temp.oldValue");
+			oldIndex = withOld.artifact.hashLink().functionIndices.get("Temp.oldValue");
 		compiler.update("Temp.hx", "function freshValue():Int { return 4; }");
 		var removed = compiler.compile("Main");
 		if (removed.artifact.hashLink().functionIndices.get("Temp.oldValue") != oldIndex
 			|| removed.artifact.hashLink().functionIndices.get("Temp.freshValue") <= oldIndex)
 			throw "Removed function slot was not retained as a tombstone";
-		if (removed.artifact.hashLink().functionIds.get("Temp.oldValue") != oldId
-			|| removed.artifact.hashLink().functionIds.get("Temp.freshValue") == oldId)
-			throw "Function removal reused or changed a stable identity";
 		// A removed function keeps its slot and last body, which the new code no longer calls, so the removal patches.
 		if (removed.requiresReload)
 			throw "Removing a function required reload";
@@ -156,25 +147,14 @@ class ModuleMain {
 		var compacted = compiler.compact("Main");
 		if (compacted.artifact.hashLink().functionIndices.exists("Temp.oldValue"))
 			throw "Compact build retained tombstone";
-		if (compacted.artifact.hashLink().functionIds.get("Math.add") != mathId)
-			throw "Compaction changed a live function identity";
 		var resumed = new Compiler(compiler.exportIdentityState());
 		resumed.update("Math.hx", "function add(a:Int, b:Int):Int { return a + b; }");
 		resumed.update("Main.hx", "function main():Int { return Math.add(20, 22); }");
 		var resumedBuild = resumed.compile("Main");
-		if (resumedBuild.artifact.hashLink().functionIds.get("Math.add") != mathId
+		if (!resumedBuild.artifact.hashLink().functionIndices.exists("Math.add")
 			|| resumedBuild.artifact.hashLink().runtimeIdentity.sub(4,
 			16).compare(compacted.artifact.hashLink().runtimeIdentity.sub(4, 16)) != 0)
 			throw "Serialized compiler identity did not survive restart";
-		var layoutA = new Compiler(), layoutB = new Compiler();
-		layoutA.registerNative("clock", "std", "sys_time", [], TFloat);
-		layoutB.registerNative("clock", "std", "sys_time", [], TFloat);
-		layoutB.registerNative("print", "haxeon_runtime", "__sys_print", [TString], TVoid);
-		layoutA.update("Main.hx", "function main():Int { return 1; }");
-		layoutB.update("Main.hx", "function main():Int { return 1; }");
-		var buildA = layoutA.compile("Main"), buildB = layoutB.compile("Main");
-		if (buildA.artifact.hashLink().functionIds.get("main") != buildB.artifact.hashLink().functionIds.get("main"))
-			throw "Native layout changed persistent user-function identity";
 		File.saveBytes(output, compacted.artifact.hashLink().hashLinkBytes().flatten());
 
 		var missing = new Compiler();
@@ -220,32 +200,32 @@ class ModuleMain {
 		var lambdaCompiler = new Compiler();
 		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 42; }; return f(); }");
 		// A lambda is named by where it is written (LambdaName); the test only needs the one lambda in main.
-		function lambdaIdIn(ids:Map<String, Int>):Null<Int> {
-			for (name => id in ids)
+		function lambdaIn(indices:Map<String, Int>):Null<String> {
+			for (name in indices.keys())
 				if (StringTools.startsWith(name, "$lambda:main:main#"))
-					return id;
+					return name;
 			return null;
 		}
 		var lambdaFirst = lambdaCompiler.compile("Main"),
-			lambdaId = lambdaIdIn(lambdaFirst.artifact.hashLink().functionIds);
-		if (lambdaId == null)
-			throw "Generated lambda did not receive a stable function identity";
+			lambdaName = lambdaIn(lambdaFirst.artifact.hashLink().functionIndices);
+		if (lambdaName == null)
+			throw "The lambda did not become a function of the module";
 		var lambdaUnchanged = lambdaCompiler.compile("Main");
 		if (lambdaUnchanged.changedFunctions.length != 0)
 			throw "Unchanged lambda build reported changes";
 		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 41 + 1; }; return f(); }");
 		var lambdaBody = lambdaCompiler.compile("Main");
-		if (lambdaIdIn(lambdaBody.artifact.hashLink().functionIds) != lambdaId || lambdaBody.retyped.length != 2)
+		if (lambdaIn(lambdaBody.artifact.hashLink().functionIndices) != lambdaName || lambdaBody.retyped.length != 2)
 			throw "Lambda body edit did not preserve or regenerate its generated function";
 		var capturedCompiler = new Compiler();
 		capturedCompiler.update("Main.hx",
 			"function main():Int { var offset = 21; var f = (value:Int) -> { return value + offset; }; return f(21); }");
 		var capturedFirst = capturedCompiler.compile("Main"),
-			capturedLambdaId:Null<Int> = null;
-		for (name => id in capturedFirst.artifact.hashLink().functionIds)
+			capturedLambda:Null<String> = null;
+		for (name in capturedFirst.artifact.hashLink().functionIndices.keys())
 			if (StringTools.startsWith(name, "$lambda:"))
-				capturedLambdaId = id;
-		if (capturedLambdaId == null || capturedFirst.ir.objects.length == 0)
+				capturedLambda = name;
+		if (capturedLambda == null || capturedFirst.ir.objects.length == 0)
 			throw "Captured lambda did not retain its generated environment type";
 		var capturedUnchanged = capturedCompiler.compile("Main");
 		if (capturedUnchanged.changedFunctions.length != 0)

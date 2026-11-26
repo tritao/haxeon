@@ -71,7 +71,8 @@ typedef HlAssemblyResult = {
 	final module:HlCode;
 	final unchanged:Bool;
 	final baseRevision:Int;
-	final changedFunctions:Array<Int>;
+	/** The functions this build lowered again that the running module has, by name, sorted. */
+	final changedFunctions:Array<String>;
 
 	/**
 	 * Functions this build drops that closures the running program stored may still reach, with what happened to each: the
@@ -221,8 +222,8 @@ class HlModuleAssembler {
 	/** Methods HashLink's runtime finds by name in the prototype, which a direct call cannot stand in for. */
 	static final runtimeMethods:Array<String> = ["__string", "__compare", "__cast", "__get_field"];
 
-	public function new(?stableIds:Map<String, Int>)
-		cache = new HlFunctionCache(stableIds);
+	public function new()
+		cache = new HlFunctionCache();
 
 	public function copy():HlModuleAssembler {
 		var result = new HlModuleAssembler();
@@ -366,8 +367,6 @@ class HlModuleAssembler {
 					renamed.set(to, true);
 					renames.push({from: from, to: to});
 				}
-			for (name in cache.stableIds.keys())
-				names.set(name, step.apply(name));
 			cache.rename(names);
 			renameLowered(names);
 			recordRenames(renames.concat(symbols.renameTypes(step)));
@@ -1029,12 +1028,12 @@ class HlModuleAssembler {
 			} else
 				objectLayout = planned.layout;
 		}
-		var changed:Array<Int> = [];
+		var changed:Array<String> = [];
 		if (initialized)
 			for (name in regenerated)
-				if (layout.exists(name) && cache.stableIds.exists(name))
-					changed.push(cache.stableIds.get(name));
-		changed.sort(function(a, b) return a - b);
+				if (cache.userSlots.exists(name) && layout.exists(name))
+					changed.push(name);
+		changed.sort(Reflect.compare);
 		var addsFunctions = initialized && !reload && cache.slots.length > publishedSlots;
 		if (livePatching == (loweredCache != null))
 			throw new InternalError('a ${livePatching ? "live" : "plain"} build must use ${livePatching ? "only" : "a"} ${livePatching ? "the published functions" : "lowered cache"}');

@@ -2,14 +2,14 @@ package runtime;
 
 import haxe.io.Bytes;
 
-/** Validated patch artifact and the stable function IDs it is expected to replace. */
+/** Validated patch artifact and the functions it is expected to replace, by name. */
 class PatchSet {
 	public final baseRevision:Int;
 	public final revision:Int;
 	public final bytes:Bytes;
-	public final changedFunctions:Array<Int>;
+	public final changedFunctions:Array<String>;
 
-	public function new(baseRevision:Int, revision:Int, bytes:Bytes, changedFunctions:Array<Int>) {
+	public function new(baseRevision:Int, revision:Int, bytes:Bytes, changedFunctions:Array<String>) {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Patch revisions must advance from a non-negative base");
 		if (bytes == null || bytes.length == 0 || changedFunctions == null || changedFunctions.length == 0)

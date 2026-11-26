@@ -66,9 +66,8 @@ class LiveCallerPatchMain {
 		var assembly = assembler.assemble(after, ["Main.scale"], Patch);
 		if (assembly.requiresReload)
 			throw 'the assembler reloaded: ${assembly.layoutReasons.join(", ")}';
-		var twiceId = assembler.cache.stableIds.get("Other.twice"),
-			scaleSlot = assembly.functionIndices.get("Main.scale");
-		if (assembly.changedFunctions.indexOf(twiceId) < 0)
+		var scaleSlot = assembly.functionIndices.get("Main.scale");
+		if (assembly.changedFunctions.indexOf("Other.twice") < 0)
 			throw 'Other.twice calls the slot Main.scale left, but the patch does not compile it again';
 		var twiceSlot = assembly.functionIndices.get("Other.twice"), calls = 0;
 		for (fn in assembly.module.functions)

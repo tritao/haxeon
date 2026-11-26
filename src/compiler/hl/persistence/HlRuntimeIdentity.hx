@@ -10,7 +10,6 @@ import haxe.io.BytesOutput;
 /** Compiler identity and acknowledged publication baseline restored across sessions. */
 typedef HlPersistentIdentity = {
 	final moduleId:Bytes;
-	final stableIds:Map<String, Int>;
 	final typeState:Null<Bytes>;
 	final publishedAbi:Null<RuntimeAbiDescriptor>;
 	final publicationTracking:Bool;
@@ -22,12 +21,13 @@ typedef HlPersistentIdentity = {
 
 /** Encodes runtime manifests and persistent compiler identity state. */
 class HlRuntimeIdentity {
-	/** Version 10: live modules are module sections, whose slots and stable ids the loader gives.
+	/** Version 11: the loader gives functions their stable ids, so the state keeps none.
+	 * Version 10: live modules are module sections, whose slots and stable ids the loader gives.
 	 * Version 9: virtual types retain their nominal interface identities.
 	 * Version 8: objects carry an unnamed field per implemented interface to cache its virtual, so earlier type tables cannot be patched.
 	 * Version 7: Strings are HashLink String objects.
 	 */
-	public static inline final VERSION = 10;
+	public static inline final VERSION = 11;
 
 	/**
 	 * HLI 4: the module id, the revision and the name of the module's initializer. The loader gives every function its stable id
@@ -68,7 +68,7 @@ class HlRuntimeIdentity {
 		return out.getBytes();
 	}
 
-	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes,
+	public static function encodePersistent(moduleId:Bytes, ?typeState:Bytes,
 			?publishedAbi:RuntimeAbiDescriptor,
 			?publicationTracking:Bool = false, ?acknowledgedRevision:Int = 0, ?acknowledgedAbi:RuntimeAbiDescriptor,
 			?assemblerState:Bytes,
@@ -80,22 +80,11 @@ class HlRuntimeIdentity {
 			|| (acknowledgedRevision > 0 && (acknowledgedAbi == null || assemblerState == null))
 			|| (acknowledgedRevision == 0 && assemblerState != null))
 			throw new InternalError("Invalid acknowledged publication state");
-		var names = [for (name in stableIds.keys()) name];
-		names.sort(Reflect.compare);
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		out.writeString("HCS");
 		out.writeByte(VERSION);
 		out.write(moduleId);
-		out.writeInt32(names.length);
-		for (name in names) {
-			var bytes = Bytes.ofString(name);
-			if (!stableIds.exists(name))
-				throw new InternalError('Missing persistent function identity for "$name"');
-			out.writeInt32(stableIds.get(name));
-			out.writeInt32(bytes.length);
-			out.write(bytes);
-		}
 		var types = typeState == null ? Bytes.alloc(0) : typeState;
 		out.writeInt32(types.length);
 		out.write(types);
@@ -125,20 +114,7 @@ class HlRuntimeIdentity {
 			var version = input.readByte();
 			if (version != VERSION)
 				throw new InternalError("Invalid compiler identity state");
-			var moduleId = input.read(16),
-				count = input.readInt32(),
-				stableIds:Map<String, Int> = [];
-			if (count < 0 || count > 0x100000)
-				throw new InternalError("Invalid compiler identity count");
-			for (_ in 0...count) {
-				var id = input.readInt32(), length = input.readInt32();
-				if (id < 0 || length < 0 || length > 0x100000)
-					throw new InternalError("Invalid compiler identity entry");
-				var name = input.readString(length);
-				if (stableIds.exists(name))
-					throw new InternalError("Duplicate compiler identity name");
-				stableIds.set(name, id);
-			}
+			var moduleId = input.read(16);
 			var typeLength = input.readInt32();
 			if (typeLength < 0 || typeLength > 0x10000000 || typeLength > bytes.length - input.position)
 				throw new InternalError("Invalid compiler type identity state");
@@ -181,7 +157,6 @@ class HlRuntimeIdentity {
 				throw new InternalError("Trailing compiler identity data");
 			return {
 				moduleId: moduleId,
-				stableIds: stableIds,
 				typeState: typeState,
 				publishedAbi: publishedAbi,
 				publicationTracking: publicationTracking,

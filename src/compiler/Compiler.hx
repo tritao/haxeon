@@ -63,7 +63,8 @@ typedef CompileResult = {
 	final retyped:Array<String>;
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
-	final changedFunctions:Array<Int>;
+	/** The functions a live build lowered again that the running module has, by name. */
+	final changedFunctions:Array<String>;
 	final requiresReload:Bool;
 	final reloadReasons:Array<AbiChange>;
 
@@ -292,13 +293,7 @@ class Compiler {
 			moduleId = identity.moduleId;
 			var assemblerState = identity.assemblerState;
 			var assembler = assemblerState == null
-				? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(assemblerState);
-			for (name => id in identity.stableIds)
-				if (assembler.cache.stableIds.get(name) != id)
-					throw new InternalError("Assembler stable identities do not match compiler state");
-			for (name => id in assembler.cache.stableIds)
-				if (identity.stableIds.get(name) != id)
-					throw new InternalError("Assembler stable identities do not match compiler state");
+				? new HlModuleAssembler() : HlAssemblerStateCodec.decode(assemblerState);
 			state = new SessionState(new TypeRegistry(identity.typeState),
 				new GenericSpecializationRegistry(identity.specializationState), new HashLinkBackendSession(assembler));
 			state.publishedAbi = identity.publishedAbi;
@@ -327,8 +322,8 @@ class Compiler {
 		var assembler = hashLink == null ? null : hashLink.assembler,
 			assemblerState = persistence.tracking && persistence.revision > 0
 				&& assembler != null ? HlAssemblerStateCodec.encode(assembler) : null;
-		return HlRuntimeIdentity.encodePersistent(moduleId, assembler == null ? [] : assembler.cache.stableIds,
-			state.types.exportState(), state.publishedAbi, persistence.tracking, persistence.revision,
+		return HlRuntimeIdentity.encodePersistent(moduleId, state.types.exportState(), state.publishedAbi,
+			persistence.tracking, persistence.revision,
 			persistence.abi, assemblerState, state.genericSpecializations.exportState());
 	}
 
@@ -701,7 +696,6 @@ class Compiler {
 					case HashLinkBuild(build): HashLinkBuild({
 						module: build.module,
 						functionIndices: build.functionIndices,
-						functionIds: build.functionIds,
 						runtimeIdentity: build.runtimeIdentity,
 						patchBytes: null,
 						sections: build.sections

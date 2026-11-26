@@ -9,7 +9,7 @@ typedef LiveDescription = {
 	/** Why the compiler could not publish a patch, as "code entity" lines. */
 	final reloadReasons:Array<String>;
 	final patchAvailable:Bool;
-	final changedFunctions:Array<Int>;
+	final changedFunctions:Array<String>;
 }
 
 /** Publication compatibility is checked before the live host invokes the runtime patcher. */

@@ -563,9 +563,6 @@ class AbiMatrixMain {
 		var cleanAbi = RuntimeAbiCodec.encode(RuntimeAbi.describe(cleanResult.ir));
 		if (incrementalAbi.compare(cleanAbi) != 0)
 			throw "Incremental and clean compilation produced different runtime ABI";
-		for (name => cleanId in cleanResult.artifact.hashLink().functionIds)
-			if (incrementalResult.artifact.hashLink().functionIds.get(name) != cleanId)
-				throw 'Incremental and clean compilation assigned different stable ID to $name';
-		Sys.println("PASS: incremental edit agrees with clean ABI and stable identities");
+		Sys.println("PASS: incremental edit agrees with clean ABI");
 	}
 }

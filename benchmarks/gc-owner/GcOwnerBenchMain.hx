@@ -98,7 +98,7 @@ function main():Int { return 0; }";
 			var compiled = compiler.compile("Main");
 			var module = Runtime.load(BackendArtifacts.hashLink(compiled.artifact).sections.flatten(),
 				BackendArtifacts.hashLink(compiled.artifact).runtimeIdentity);
-			var run = BackendArtifacts.hashLink(compiled.artifact).functionIds.get("Main.run");
+			var run = Runtime.requireFunctionId(module, "Main.run");
 			var c0 = GcStats.collections(),
 				m0 = GcStats.markMicros(),
 				a0 = GcStats.totalAllocated();

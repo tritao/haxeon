@@ -4,7 +4,6 @@ import compiler.core.PeakProbe;
 import compiler.core.PhaseCollections;
 import compiler.core.AllocationMeter;
 import compiler.abi.LambdaAlignment;
-import compiler.abi.RetiredName;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
@@ -26,7 +25,7 @@ import compiler.hl.persistence.HlRuntimeIdentity;
 
 /**
  * The HashLink backend of a compilation session. It owns what the next HashLink build starts from: the assembler of the last
- * successful build (its layout, stable function ids and revision history, which live patches address) and the lowered functions
+ * successful build (its layout and revision history, which live patches address) and the lowered functions
  * of the last plain build. A build assembles on the candidate's copy (`forCandidate`), so a failed build leaves both as they were.
  */
 class HashLinkBackendSession implements BackendSession {
@@ -64,9 +63,9 @@ class HashLinkBackendSession implements BackendSession {
 		return candidate;
 	}
 
-	/** A session that assembles a fresh layout with the same stable function ids (`Compiler.compact`). */
+	/** A session that assembles a fresh layout (`Compiler.compact`). */
 	public function compacting():HashLinkBackendSession
-		return new HashLinkBackendSession(new HlModuleAssembler(assembler.cache.stableIds), loweredCache);
+		return new HashLinkBackendSession(new HlModuleAssembler(), loweredCache);
 
 	/** What the assembly reads besides the IR: an assembly made in an equal environment from an equal IR is the same module. */
 	public function environmentKey(context:CompilationContext):String
@@ -275,15 +274,11 @@ class HashLinkBackendSession implements BackendSession {
 			written.written, declarations, modules);
 		var allocationAfterPatch = AllocationMeter.sample();
 		assembler = candidateAssembler;
-		// The compiler's own ids of a live build's functions, which it reports changed functions by; a host finds a function's
-		// runtime id by name (`hl_runtime_module_function_id`).
-		var stableIds = context.livePatching ? candidateAssembler.cache.stableIds : functionIndices;
 		compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices, sections);
 		return {
 			artifact: HashLinkBuild({
 				module: assembly.module,
 				functionIndices: CompilationContext.copyIndices(functionIndices),
-				functionIds: CompilationContext.copyIndices(stableIds),
 				runtimeIdentity: HlRuntimeIdentity.encode(context.moduleId, assembly.revision,
 					functionIndices.exists(HlRuntimeIdentity.INITIALIZER)),
 				patchBytes: patchBytes,
@@ -329,16 +324,11 @@ class HashLinkBackendSession implements BackendSession {
 	}
 
 	/**
-	 * A fresh layout for the same module identity. It keeps the stable function ids and continues the revision count: the
-	 * module it replaces is still running, and a revision number that starts over would look like an older build of it.
-	 * Retired functions (`RetiredName`) are left behind: only closures of the running module call them, and the
-	 * fresh module replaces it, so keeping their IDs would only let them pile up across reloads.
+	 * A fresh layout for the same module identity. It continues the revision count: the module it replaces is still running, and
+	 * a revision number that starts over would look like an older build of it.
 	 */
 	static function freshLayout(previous:HlModuleAssembler):HlModuleAssembler {
-		var ids = CompilationContext.copyIndices(previous.cache.stableIds);
-		for (name in [for (name in ids.keys()) if (RetiredName.is(name)) name])
-			ids.remove(name);
-		var fresh = new HlModuleAssembler(ids);
+		var fresh = new HlModuleAssembler();
 		fresh.continueRevisions(previous.lastRevision());
 		return fresh;
 	}

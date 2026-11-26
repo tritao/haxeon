@@ -12,12 +12,6 @@ typedef HlArtifact = {
 	/** Function indices in the emitted module, which may differ from incremental slots. */
 	final functionIndices:Map<String, Int>;
 
-	/**
-	 * Function ids: a plain build's are its function indices; a live build's are the compiler's own, by which it reports the
-	 * functions a patch changes. A host finds a function's runtime id by name (`hl_runtime_module_function_id`).
-	 */
-	final functionIds:Map<String, Int>;
-
 	/** HLI 4: the module identity, the revision and the initializer's name. */
 	final runtimeIdentity:Bytes;
 

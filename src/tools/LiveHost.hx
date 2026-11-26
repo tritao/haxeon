@@ -367,7 +367,7 @@ class LiveHost {
 			reloadReasons: reasons == null
 				? [] : [for (reason in reasons) Std.string(reason.code) + " " + Std.string(reason.entityId)],
 			patchAvailable: value.patchAvailable,
-			changedFunctions: [for (id in changed)(id: Int)]
+			changedFunctions: [for (name in changed) Std.string(name)]
 		};
 	}
 

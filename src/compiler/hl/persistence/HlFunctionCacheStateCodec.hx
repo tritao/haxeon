@@ -12,20 +12,17 @@ import haxe.io.BytesOutput;
 class HlFunctionCacheStateCodec {
 	static inline final MAX_ITEMS = 0x100000;
 
+	/** 2: the loader gives functions their stable ids, so the state keeps none. */
+	static inline final VERSION = 2;
+
 	public static function encode(state:HlFunctionCacheState):Bytes {
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		out.writeString("HFC");
-		out.writeByte(1);
-		out.writeInt32(state.nextStableId);
+		out.writeByte(VERSION);
 		writeCount(out, state.slots.length);
 		for (name in state.slots)
 			IrTypeCodec.writeString(out, name);
-		writeCount(out, state.stableIds.length);
-		for (entry in state.stableIds) {
-			IrTypeCodec.writeString(out, entry.name);
-			out.writeInt32(entry.id);
-		}
 		writeCount(out, state.signatures.length);
 		for (entry in state.signatures) {
 			IrTypeCodec.writeString(out, entry.name);
@@ -43,16 +40,12 @@ class HlFunctionCacheStateCodec {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		try {
-			if (input.readString(3) != "HFC" || input.readByte() != 1)
+			if (input.readString(3) != "HFC" || input.readByte() != VERSION)
 				throw new InternalError("Invalid function cache state");
-			var next = input.readInt32(),
-				slots = [
-					for (_ in 0...readCount(input))
-						IrTypeCodec.readString(input, bytes.length)
-				],
-				ids = [];
-			for (_ in 0...readCount(input))
-				ids.push({name: IrTypeCodec.readString(input, bytes.length), id: input.readInt32()});
+			var slots = [
+				for (_ in 0...readCount(input))
+					IrTypeCodec.readString(input, bytes.length)
+			];
 			var signatures = [];
 			for (_ in 0...readCount(input))
 				signatures.push({
@@ -69,10 +62,8 @@ class HlFunctionCacheStateCodec {
 				throw new InternalError("Trailing function cache state data");
 			return {
 				slots: slots,
-				stableIds: ids,
 				signatures: signatures,
-				functions: functions,
-				nextStableId: next
+				functions: functions
 			};
 		} catch (error:haxe.io.Eof)
 			throw new InternalError("Truncated function cache state");

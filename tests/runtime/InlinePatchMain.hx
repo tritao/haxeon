@@ -25,11 +25,11 @@ class InlinePatchMain {
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 			throw "A callee body edit did not produce a compatible patch";
-		// The compiler reports the functions it lowered again by its own ids.
-		var patched = changed.changedFunctions, ids = changed.artifact.hashLink().functionIds;
-		if (patched.indexOf(ids.get("Counter.bump")) < 0)
+		// The compiler reports the functions it lowered again by name.
+		var patched = changed.changedFunctions;
+		if (patched.indexOf("Counter.bump") < 0)
 			throw "The edited callee was not patched";
-		if (patched.indexOf(ids.get("main")) < 0)
+		if (patched.indexOf("main") < 0)
 			throw "The caller that inlined the edited callee was not patched";
 		var compiled = Runtime.patchJitCount(live);
 		Runtime.patchSet(live,
