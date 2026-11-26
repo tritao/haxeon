@@ -173,11 +173,11 @@ class ModuleDeclarationKeys {
 class DeclarationKeys {
 	final modules = new ObjectMap<SourceFile, ModuleDeclarationKeys>();
 
-	/**
-	 * The key of each function looked up so far, `none` for one without; and of the functions no module's keys hold: those the
-	 * semantic program made, and the copies the typer aliases (`alias`).
-	 */
-	final resolved = new ObjectMap<AstFunction, DeclarationKey>();
+	/** The keys of the functions no module's keys hold: those the semantic program made, and the copies the typer aliases (`alias`). */
+	final own = new ObjectMap<AstFunction, DeclarationKey>();
+
+	/** The keys of the functions of the modules looked up so far, `none` for one without (`forgetLookups`). */
+	var lookedUp = new ObjectMap<AstFunction, DeclarationKey>();
 
 	final none = new DeclarationKey(null, null);
 
@@ -187,7 +187,7 @@ class DeclarationKeys {
 			if (file != null)
 				modules.set(file, module);
 			for (entry in module.elsewhere)
-				resolved.set(entry.fn, entry.key);
+				own.set(entry.fn, entry.key);
 		}
 		var program = semantic.program;
 		for (decl in program.classes) {
@@ -237,17 +237,24 @@ class DeclarationKeys {
 	public function alias(copy:AstFunction, original:AstFunction):Void {
 		var found = resolve(original);
 		if (found.key != null)
-			resolved.set(copy, found);
+			own.set(copy, found);
 	}
+
+	/** Forgets the keys looked up in the modules, once the program is typed: a later lookup finds them again. */
+	public function forgetLookups():Void
+		lookedUp = new ObjectMap();
 
 	/** The keys of `fn`, found in the module its span's file is the first time it is looked up. */
 	function resolve(fn:AstFunction):DeclarationKey {
-		var known = resolved.get(fn);
+		var known = lookedUp.get(fn);
+		if (known != null)
+			return known;
+		known = own.get(fn);
 		if (known != null)
 			return known;
 		var module = modules.get(fn.span.file), found = module == null ? null : module.find(fn);
 		known = found == null ? none : found;
-		resolved.set(fn, known);
+		lookedUp.set(fn, known);
 		return known;
 	}
 
@@ -303,7 +310,9 @@ class DeclarationKeys {
 	}
 
 	function addMissing(fn:AstFunction, name:String, inferable:Bool):Void
-		if (key(fn) == null)
-			resolved.set(fn,
+		if (key(fn) == null) {
+			lookedUp.remove(fn);
+			own.set(fn,
 				new DeclarationKey(name, inferable && AstFunctions.leavesSignatureToInference(fn) ? name : null));
+		}
 }

@@ -581,7 +581,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var typedRuntimeDependencies = assembler.runtimeDependencies();
 		var allocationAfterFinalize = AllocationMeter.sample();
 		var inferredSignatures = requiredTypes().typedSignatures();
-		requiredTypes().endSeeding();
+		requiredTypes().endTyping();
 		return {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
