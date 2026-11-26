@@ -1444,7 +1444,7 @@ static const unsigned char patch_module_id[16] = { 1,2,3,4,5,6,7,8,9,10,11,12,13
 
 enum {
 	POINT_BASE, POINT_BODY, POINT_ADDED, POINT_CLASS, POINT_FIELD, POINT_RENAMED, POINT_GUARDED,
-	POINT_MISSING_IMPORT, POINT_NATIVE, POINT_SIGNATURE, POINT_ENUM, POINT_LAYOUT
+	POINT_MISSING_IMPORT, POINT_NATIVE, POINT_SIGNATURE, POINT_ENUM, POINT_LAYOUT, POINT_TYPE_RENAMED
 };
 
 static unit *patch_main_section( void ) {
@@ -1468,10 +1468,17 @@ static unit *patch_point_section( int variant ) {
 	int tpoint, tvalue, file, ttake, textra = -1;
 	if( variant == POINT_FIELD ) { point.field_names[1] = "y"; point.field_types[1] = i32; }
 	if( variant == POINT_LAYOUT ) point.field_types[0] = f64;
-	tpoint = t_obj(u, &point);
 	tvalue = t_fun(u, 0, no_args, i32);
 	ttake = t_fun(u, 1, &i32, i32);
 	if( variant == POINT_CLASS ) textra = t_obj(u, &extra);
+	if( variant == POINT_TYPE_RENAMED ) {
+		// Point is keyed by another name now, with its definition as it was; the key it freed names a new class.
+		obj_def fresh = { OWNED, "Point", HOBJ, "lib.Fresh", -1, 0, 1, { "v" }, { i32 } };
+		point.key = "Moved";
+		tpoint = t_obj(u, &point);
+		textra = t_obj(u, &fresh);
+	} else
+		tpoint = t_obj(u, &point);
 	if( variant == POINT_ENUM ) {
 		const char *names[] = { "A" };
 		int params[] = { -1 };
@@ -1480,7 +1487,7 @@ static unit *patch_point_section( int variant ) {
 	file = debug_file(u, "lib/Point.hx");
 	{
 		// A rename keeps the old body in the old slot under the retired key; the new Point.value comes last, in a new slot.
-		int regs[] = { i32, variant == POINT_CLASS ? textra : tpoint };
+		int regs[] = { i32, variant == POINT_CLASS || variant == POINT_TYPE_RENAMED ? textra : tpoint };
 		unit_fn *f = fn_begin(u, variant == POINT_RENAMED ? "Point.value~retired" : "Point.value", tvalue, 2, regs);
 		switch( variant ) {
 		case POINT_BODY:
@@ -1494,6 +1501,7 @@ static unit *patch_point_section( int variant ) {
 			op(u, f, file, 10, OCall0, 2, 0, 2);
 			break;
 		case POINT_CLASS:
+		case POINT_TYPE_RENAMED:
 			op(u, f, file, 10, ONew, 1, 1);
 			op(u, f, file, 11, OInt, 2, 0, lit_int(u, 7));
 			op(u, f, file, 12, OSetField, 3, 1, 0, 0);
@@ -1688,6 +1696,27 @@ static void test_patch_rename( void ) {
 	if( failures == 0 ) printf("ok: patches of sections: a renamed slot keeps its code\n");
 }
 
+/* A type key renamed, as a lambda's environment is with its lambda: the type keeps its slot, and the key it freed is a new class. */
+static void test_patch_type_rename( void ) {
+	hl_module *m = patch_load();
+	unit *point;
+	test_rename rename = { "lib.Point", "Point", "Moved" }, unknown = { "lib.Point", "Nothing", "Something" };
+	const char *error;
+	int types;
+	if( m == NULL ) return;
+	types = m->code->ntypes;
+	point = patch_point_section(POINT_TYPE_RENAMED);
+	error = patch_apply(m, 0, 1, &point, 1, &rename, 1, NULL);
+	check(error == NULL, "a renamed type patches: %s", error ? error : "");
+	check(patch_call(m, 0) == 7, "the module makes the class under the freed key (got %d)", patch_call(m, 0));
+	check(m->code->ntypes == types + 1, "the renamed type keeps its slot and only the new class is added (%d types, was %d)", m->code->ntypes, types);
+	// A rename of a key the module does not have is refused.
+	point = patch_point_section(POINT_BODY);
+	error = patch_apply(m, 1, 2, &point, 1, &unknown, 1, NULL);
+	check(error != NULL && strstr(error, "no function, type or global keyed by") != NULL, "an unknown rename is refused: %s", error ? error : "");
+	if( failures == 0 ) printf("ok: patches of sections: a renamed type keeps its slot\n");
+}
+
 static void test_patch_refusals( void ) {
 	hl_module *m = patch_load();
 	struct { int variant; const char *parts[3]; } cases[] = {
@@ -1807,6 +1836,7 @@ int main( int argc, char **argv ) {
 	test_corruption();
 	test_patch_edits();
 	test_patch_rename();
+	test_patch_type_rename();
 	test_patch_refusals();
 	test_patch_runtime();
 	if( failures ) {

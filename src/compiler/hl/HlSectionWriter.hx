@@ -27,6 +27,9 @@ typedef HlSectionOutput = {
 	/** What the next build keeps its sections from. */
 	final cache:HlSectionCache;
 
+	/** The sections in file order, each with its bytes and digest: what a live patch replaces when they changed. */
+	final written:Array<HlWrittenSection>;
+
 	/**
 	 * How many sections the module has, how many of them this build encoded (it kept the others), and how many of those came
 	 * out other than they were.
@@ -35,6 +38,13 @@ typedef HlSectionOutput = {
 
 	final encoded:Int;
 	final changed:Int;
+}
+
+/** A section as a build wrote it: its module path, its bytes and their digest (`HlSectionEntry`), as 16 hexadecimal digits. */
+typedef HlWrittenSection = {
+	final path:String;
+	final bytes:Bytes;
+	final digest:String;
 }
 
 /**
@@ -102,11 +112,15 @@ class HlSectionWriter {
 	 * (HlLz4), or null to store them as they are; without the HashLink natives they are stored as they are. A section of
 	 * `previous` (the last build's) whose encoding would read the same is kept. `checkReuse` encodes the kept sections again to
 	 * check they are the same, and links the result as the loader does (`HlStaticLink`). Without `memoize`, for a compile no
-	 * later build follows, the sections' reads are not taken and the cache returned keeps none.
+	 * later build follows, the sections' reads are not taken and the cache returned keeps none. `patchable`, for a module a live
+	 * host patches: its shared section defines the String object and declares every native of the layout whether or not its
+	 * code uses them, since the String constants a patch adds are made of it and the runtime makes them only of the types the
+	 * running module has, and a patch can call a native only the running module declares.
 	 */
 	public static function write(code:HlCode, modules:Map<String, Int>, declarations:DeclarationOwners,
-			?compression:Int, checkReuse:Bool = false, ?previous:HlSectionCache, memoize:Bool = true):HlSectionOutput {
-		var writer = new HlSectionWriter(code, compression),
+			?compression:Int, checkReuse:Bool = false, ?previous:HlSectionCache, memoize:Bool = true,
+			patchable:Bool = false):HlSectionOutput {
+		var writer = new HlSectionWriter(code, compression, patchable),
 			cache = HlSectionCache.following(previous, writer.format(), modules, declarations);
 		HlValidator.validate(code, cache.validation, checkReuse);
 		cache.validation.retainFunctions(code.functions);
@@ -157,6 +171,10 @@ class HlSectionWriter {
 
 	static inline final STRUCTURE_PRINTER = "$anon:";
 
+	/** The section `name` is keyed in: the module that declares what it is named after, or the shared section. */
+	public static function homeOf(name:String, declarations:DeclarationOwners, modules:Map<String, Int>):String
+		return declaringModule(name, declarations, modules) ?? SHARED_SECTION;
+
 	/** Where the declaration part of a generated name ends: its type arguments, its layout, a lambda's place. */
 	static inline function endsDeclaration(code:Int):Bool
 		return code == "[".code || code == "<".code || code == "{".code || code == "(".code || code == "#".code
@@ -172,6 +190,12 @@ class HlSectionWriter {
 	final functionLocal = new HlSectionIndices();
 
 	final compression:Null<Int>;
+
+	/** The String object's type, which a patchable module's shared section defines (`write`), or -1. */
+	final definedString:Int;
+
+	/** A module a live host patches, whose shared section declares every native of the layout (`write`). */
+	final patchable:Bool;
 	final hasDebug:Bool;
 	final spans:Bool;
 
@@ -217,13 +241,22 @@ class HlSectionWriter {
 	final local = new HlSectionIndices();
 	var tables:HlSectionTables = new HlSectionTables();
 
-	function new(code:HlCode, compression:Null<Int>) {
+	function new(code:HlCode, compression:Null<Int>, patchable:Bool) {
 		this.code = code;
 		var relocated = code.relocations;
 		if (relocated == null)
 			throw new InternalError("A module of sections is written from a sectioned build's lowering");
 		relocations = relocated;
 		this.compression = compression;
+		this.patchable = patchable;
+		var string = -1;
+		if (patchable)
+			for (index in 0...code.types.length)
+				switch code.types[index] {
+					case Object(name, _, _, _, _, _) if (code.strings[name] == "String"): string = index;
+					default:
+				}
+		definedString = string;
 		var debug = false;
 		for (fn in code.functions)
 			if (fn.debugLocations.length > 0)
@@ -314,7 +347,7 @@ class HlSectionWriter {
 			switch types[index] {
 				case Object(name, _, _, _, _, _) | Structure(name, _, _, _, _):
 					HlSymbolTable.isSharedDefinition(code.strings[name])
-						? SHARED_DEFINITION : sectionOf(code.strings[name]);
+						? SHARED_DEFINITION : sectionOf(typeKey(index));
 				case Enum(name, _, _) | Virtual(name, _): sectionOf(code.strings[name]);
 				default: STRUCTURAL;
 			}];
@@ -380,7 +413,7 @@ class HlSectionWriter {
 	function typeKey(index:Int):String
 		return switch code.types[index] {
 			case Object(name, _, _, _, _, _) | Structure(name, _, _, _, _) | Enum(name, _, _) | Virtual(name, _):
-				code.strings[name];
+				code.typeKeys.get(index) ?? code.strings[name];
 			case EnumTag(boxed, _): "enum-tag:" + typeKey(boxed);
 			default: throw new InternalError('HashLink type $index has no key');
 		};
@@ -391,7 +424,7 @@ class HlSectionWriter {
 			return name;
 		if (valueOfGlobal[global] < 0)
 			throw new InternalError('HashLink global $global has no key');
-		return "$class:" + typeKey(valueOfGlobal[global]);
+		return HlSymbolTable.CLASS_VALUE + typeKey(valueOfGlobal[global]);
 	}
 
 	function hasGlobalKey(global:Int):Bool
@@ -649,6 +682,12 @@ class HlSectionWriter {
 		}
 		for (type in ownedTypes)
 			useType(type);
+		if (patchable && paths[id] == SHARED_SECTION) {
+			if (definedString >= 0)
+				useType(definedString);
+			for (native in code.natives)
+				useFunction(native.functionIndex);
+		}
 		for (global in ownedGlobals)
 			useType(code.globals[global]);
 		var sources = code.sources, found = tables.uses;
@@ -905,6 +944,7 @@ class HlSectionWriter {
 					chain: relocations.chain,
 					functions: [for (position in owned) code.functions[position]],
 					ownedTypes: ownedTypes[id],
+					ownedDefinitions: [for (type in ownedTypes[id]) code.types[type]],
 					ownedGlobals: ownedGlobals[id],
 					imports: tables.functionImports,
 					importTypes: [for (functionIndex in tables.functionImports)
@@ -953,6 +993,11 @@ class HlSectionWriter {
 			bytes: head.output.finish(),
 			linkedIndices: linked,
 			cache: cache.next(entries),
+			written: [for (id in 0...paths.length) {
+				path: paths[id],
+				bytes: written[id].bytes,
+				digest: written[id].digest()
+			}],
 			sections: paths.length,
 			encoded: encoded,
 			changed: changed
@@ -977,6 +1022,10 @@ class HlSectionWriter {
 			if (code.functions[position] != collected.functions[index] || relocations.moves[position])
 				return false;
 		}
+		// A live build can redefine a type in its slot (a reserved slot named, a reserved type defined).
+		for (index in 0...ownedTypes.length)
+			if (!HlSymbolTable.sameType(code.types[ownedTypes[index]], collected.ownedDefinitions[index]))
+				return false;
 		for (index in 0...collected.imports.length) {
 			var position = functionPositions[collected.imports[index]];
 			if (position < 0 || functionType(position) != collected.importTypes[index])
@@ -1401,6 +1450,9 @@ private class HlSectionEntry {
 
 	public final digestHigh:Int;
 
+	public function digest():String
+		return StringTools.hex(digestHigh, 8) + StringTools.hex(digestLow, 8);
+
 	function new(own:HlSectionReads, named:HlSectionReads, collected:HlCollected, bytes:Bytes, digestLow:Int,
 			digestHigh:Int) {
 		this.own = own;
@@ -1436,6 +1488,10 @@ private typedef HlCollected = {
 	final chain:Int;
 	final functions:Array<HlFunction>;
 	final ownedTypes:Array<Int>;
+
+	/** The definitions of `ownedTypes`, as the objects they were. */
+	final ownedDefinitions:Array<HlTypeDef>;
+
 	final ownedGlobals:Array<Int>;
 	final imports:Array<Int>;
 	final importTypes:Array<Int>;

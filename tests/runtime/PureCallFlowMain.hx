@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -22,7 +21,7 @@ class PureCallFlowMain {
 			+ "}\n"
 			+ "function main():Int return !invalid({lower: 3.0, upper: 50.0}) && invalid({lower: 0.5, upper: null})\n"
 			+ "  && invalid({lower: null, upper: 500.0}) && !invalid(null) ? 42 : 1;");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], compiler.compile("Main").artifact.hashLink().hashLinkBytes().flatten());
 		Sys.println("PASS: @:pure calls preserve nullable field refinements");
 	}
 }

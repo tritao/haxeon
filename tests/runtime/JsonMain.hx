@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -33,6 +32,6 @@ class JsonMain {
 			+ "  var again = Json.stringify({ x: shared, y: shared });\n"
 			+ "  return again.length == 25 ? 42 : 8;\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], compiler.compile("Main").artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

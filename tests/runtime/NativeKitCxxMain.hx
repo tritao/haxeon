@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -18,6 +17,6 @@ class NativeKitCxxMain {
 		compiler.update("NativeKitDisplayListFunctions.hx", File.getContent(functionsPath));
 		compiler.update("Main.hx",
 			'import NativeKitDisplayList; import DisplayList; import NativeKitDisplayListFunctions; function main():Int { var list = DisplayList.fromNative(NativeKitDisplayListFunctions.haxeon_display_list_acquire()); list.reset(); return list.size() == 0 ? 42 : 1; }');
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
+		File.saveBytes(output, compiler.compile("Main").artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

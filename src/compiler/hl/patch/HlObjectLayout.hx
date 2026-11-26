@@ -20,6 +20,11 @@ typedef HlAddedField = {
 typedef HlMigration = {
 	final type:Int;
 	final slot:Int;
+
+	/** The class and its initializer by name, which a patch of sections names them by. */
+	final className:String;
+
+	final initializer:String;
 }
 
 /**

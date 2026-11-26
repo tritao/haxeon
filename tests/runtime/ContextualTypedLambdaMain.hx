@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -55,7 +54,7 @@ class ContextualTypedLambdaMain {
 		// A formerly valid dependency changing its parameter type must reject.
 		rejected(compiler, source.split("consume(40,").join("consume(\"forty\","));
 		compiler.update("Main.hx", source);
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], compiler.compile("Main").artifact.hashLink().hashLinkBytes().flatten());
 		Sys.println("PASS: annotated callback context, generic results, optional parameters and incremental rejection");
 	}
 }

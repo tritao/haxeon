@@ -6,11 +6,11 @@ See the [live patching reference](../reference/LIVE_PATCHING.md) for edit and re
 Haxeon treats hot replacement as a transaction, not a best-effort reload:
 
 - Every live module has a 128-bit identity.
-- Functions receive persistent stable IDs independent of bytecode ordering.
+- A live module is a module of sections (HLB 9), and a patch is the sections whose bytes changed (HLP 12), which name
+  everything by key: the loader links them against the link state it kept for the running module, so a known key keeps
+  its slot and a new one takes the next ([MODULE_SECTIONS.md](../design/MODULE_SECTIONS.md), "As built in slice 4b").
+- The loader gives each function its stable ID, its slot, which a rename keeps; hosts find a function's ID by name.
 - Patches carry an expected base revision and replacement revisions.
-- Symbol tables are verified by prefix length and content hash.
-- Patch call sites use stable-target relocations rather than stale bytecode
-  function-table indices.
 - All replacements are validated and JIT-compiled before publication.
 - Multi-function patches become visible atomically.
 - Failed staging is discarded without changing the live program.
@@ -108,7 +108,7 @@ changes or deletes its function. Keeping the old body behind it would let the ap
 patch never does that silently:
 
 - A function whose signature changed gets an adapter (above).
-- A function the build drops, and a changed function no adapter can bridge, is a **guard** of the patch (HLP section 9,
+- A function the build drops, and a changed function no adapter can bridge, is a **guard** of the patch (by key in HLP 12,
   `HlModuleAssembler.dropGuards`): functions and lambdas the last build had and this one lacks, lambdas a rename retires
   among them. With every other thread stopped and before anything commits, the runtime looks for live closures to each
   guard in one heap scan (`check_patch_guards` in hlpatch.c): GC closures by their code address, and the closures the
@@ -244,8 +244,8 @@ place, so the edit patches instead of reloading.
 
 A live build (`--live`) gives every class that can take fields later `Compiler.liveFieldReserve` (4) **reserved
 slots**: unnamed `Dynamic` fields after the class's own fields and interface caches. Every instance is allocated with
-them, zeroed. A patch that adds a field gives it the class's first free slot: the patch names the slot and gives it the
-field's type (HLP section 7), and code addresses it like any field.
+them, zeroed. A patch that adds a field gives it the class's first free slot: the patch's section names the slot in
+the class's definition and gives it the field's type, and code addresses it like any field.
 
 Nothing moves, which is what makes this safe:
 
@@ -280,7 +280,7 @@ state. A declaration initializer depends on none of that, so Haxeon runs it, whi
 `var items:Array<T> = []` from starting as `null`.
 
 The compiler generates `Class.__liveinit` for each published class with initialized fields the running module lacks
-(`IrProgramAssembler.liveInitializersFrom`). The patch names it as the class's **migration** (HLP section 8); after the
+(`IrProgramAssembler.liveInitializersFrom`). The patch names it as the class's **migration** (by key in HLP 12); after the
 commit, and before any other code runs, the runtime collects the live instances of the class and its subclasses with
 one full mark (`hl_gc_live_instances`) and calls the function on each (`migrate_patch_instances` in hlpatch.c). Bases
 migrate before subclasses. An initializer that throws leaves its instance's field at the zero value; the patch stays
@@ -345,8 +345,8 @@ Added methods have no prototype slot, so reflection and dynamic calls do not fin
 `vendor/hashlink/src/hlpatch.c` validates the rewrites (each must name a reserved slot of an existing object type, with a
 type that fits a pointer), stages them before the JIT compiles the patch (the JIT picks write barriers by field type),
 builds each class's next field lookup, publishes the lookups at commit, and puts the slots back if the patch fails. The
-patch's type prefix hash covers the definitions the running module has, before the rewrite; the compiler hashes the
-published definitions it replaces (`HlPatchWriter.baseTypeDefinitions`).
+patch linker finds the rewrites by comparing the class a section defines with the running one: only reserved slots
+named and typed may differ (`hl_module_link_patch`).
 
 ## Artifact builds and live sessions
 

@@ -11,24 +11,24 @@ import haxe.io.BytesOutput;
 
 /** Versioned physical backend baseline used to resume patch construction. */
 class HlAssemblerStateCodec {
+	/** 6: the digests of the module's sections, which a live patch compares the next build's with. */
+	static inline final VERSION = 6;
+
 	public static function encode(assembler:HlModuleAssembler):Bytes {
 		var state = assembler.exportState(), output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HAS");
-		output.writeByte(5);
+		output.writeByte(VERSION);
 		output.writeByte(state.initialized ? 1 : 0);
 		output.writeInt32(state.revision);
 		output.writeInt32(state.publishedInts);
 		output.writeInt32(state.publishedFloats);
 		output.writeInt32(state.publishedStrings);
 		output.writeInt32(state.publishedTypes);
-		// Version 4 records the globals published, which literal globals made a patch-visible symbol table.
-		// The field is optional only for decoded older baselines; an exported state always has it.
 		output.writeInt32(state.publishedGlobals == null ? 0 : state.publishedGlobals);
 		writeSection(output, state.symbols);
 		writeSection(output, state.cache);
 		writeNatives(output, state.runtimeNatives);
-		// Version 3 records the C dispatch natives; earlier baselines placed them after the function slots.
 		var dispatch = state.dispatchNatives;
 		output.writeByte(dispatch == null ? 0 : 1);
 		if (dispatch != null) {
@@ -36,11 +36,15 @@ class HlAssemblerStateCodec {
 			for (name in dispatch)
 				IrTypeCodec.writeString(output, name);
 		}
-		// Version 5 records the retired fields.
 		var retired = state.retiredFields == null ? [] : state.retiredFields;
 		output.writeInt32(retired.length);
 		for (name in retired)
 			IrTypeCodec.writeString(output, name);
+		output.writeInt32(state.sections.length);
+		for (section in state.sections) {
+			IrTypeCodec.writeString(output, section.path);
+			IrTypeCodec.writeString(output, section.digest);
+		}
 		return output.getBytes();
 	}
 
@@ -51,7 +55,7 @@ class HlAssemblerStateCodec {
 			if (input.readString(3) != "HAS")
 				throw new InternalError("Invalid HashLink assembler state");
 			var version = input.readByte();
-			if (version < 1 || version > 5)
+			if (version != VERSION)
 				throw new InternalError("Unsupported HashLink assembler state version");
 			var initialized = input.readByte();
 			if (initialized != 0 && initialized != 1)
@@ -63,13 +67,16 @@ class HlAssemblerStateCodec {
 				publishedFloats: input.readInt32(),
 				publishedStrings: input.readInt32(),
 				publishedTypes: input.readInt32(),
-				publishedGlobals: version >= 4 ? input.readInt32() : null,
+				publishedGlobals: input.readInt32(),
 				symbols: readSection(input, bytes.length),
 				cache: readSection(input, bytes.length),
-				runtimeNatives: version >= 2 ? readNatives(input, bytes.length) : null,
-				dispatchNatives: version >= 3 ? readDispatchNatives(input, bytes.length) : null,
-				retiredFields: version >= 5
-					? [for (_ in 0...readCount(input)) IrTypeCodec.readString(input, bytes.length)] : null
+				runtimeNatives: readNatives(input, bytes.length),
+				dispatchNatives: readDispatchNatives(input, bytes.length),
+				retiredFields: [for (_ in 0...readCount(input)) IrTypeCodec.readString(input, bytes.length)],
+				sections: [for (_ in 0...readCount(input)) {
+					path: IrTypeCodec.readString(input, bytes.length),
+					digest: IrTypeCodec.readString(input, bytes.length)
+				}]
 			};
 			if (input.position != bytes.length)
 				throw new InternalError("Trailing HashLink assembler state data");

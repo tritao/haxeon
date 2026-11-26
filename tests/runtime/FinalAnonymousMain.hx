@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -35,6 +34,6 @@ class FinalAnonymousMain {
 		compiler.update("Main.hx",
 			'typedef Frame = { final x:Float; }
 	function main():Int { var value:Frame = {x: 2.0}; return value.x == 2.0 ? 42 : 1; }');
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
+		File.saveBytes(Sys.args()[0], compiler.compile("Main").artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

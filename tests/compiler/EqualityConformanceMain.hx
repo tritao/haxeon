@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
 
 /** Explicit value equality must never silently compare an unsupported type by identity. */
 class EqualityConformanceMain {
@@ -68,8 +67,8 @@ class EqualityConformanceMain {
 				throw 'Expected custom == E1025, got ${diagnostic == null ? "success" : diagnostic.diagnostic.message}';
 		}
 		warm.update("Id.hx", operatorSource(false));
-		var warmBytes = HlWriter.encode(warm.compile("Main").artifact.hashLink().module).flatten();
-		var coldBytes = HlWriter.encode(operatorCompiler(false).compile("Main").artifact.hashLink().module).flatten();
+		var warmBytes = warm.compile("Main").artifact.hashLink().hashLinkBytes().flatten();
+		var coldBytes = operatorCompiler(false).compile("Main").artifact.hashLink().hashLinkBytes().flatten();
 		if (warmBytes.compare(coldBytes) != 0)
 			throw "Warm and cold modules differ after removing custom ==";
 	}

@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -82,6 +81,6 @@ function main():Int {
 	return 42;
 }
 ');
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
+		File.saveBytes(output, compiler.compile("Main").artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

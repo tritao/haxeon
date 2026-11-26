@@ -6,7 +6,7 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.hl.HlWriter;
 import compiler.hl.lower.HlLower;
-import compiler.hl.patch.HlPatchReader;
+import compiler.hl.patch.HlSectionPatch;
 import compiler.ir.passes.inlining.IrInliner;
 import compiler.semantic.DeclarationFacts.FactAspect;
 import compiler.types.Type.CompilerType;
@@ -50,19 +50,15 @@ class ModuleMain {
 			if (error.message != "Native registrations are frozen after the first compilation")
 				throw error;
 		}
-		var mathIndex = first.artifact.hashLink().functionIndices.get("Math.add"),
-			mathId = first.artifact.hashLink().functionIds.get("Math.add");
+		var mathId = first.artifact.hashLink().functionIds.get("Math.add");
 		var twentyIndex = first.artifact.hashLink().module.ints.indexOf(20);
 		compiler.update("Aardvark.hx", "function helper(x:Int):Int { return x + 7; }");
 		var added = compiler.compile("Main");
-		if (added.artifact.hashLink().functionIndices.get("Math.add") != mathIndex)
-			throw "Adding an earlier module renumbered Math.add";
 		if (added.artifact.hashLink().functionIds.get("Math.add") != mathId)
 			throw "Adding a function changed the stable Math.add identity";
 		if (added.artifact.hashLink().module.ints.indexOf(20) != twentyIndex)
 			throw "Adding a constant renumbered an existing constant";
-		var firstBytes = HlWriter.encodeFunction(functionByIndex(added.artifact.hashLink().module.functions,
-			mathIndex)),
+		var firstBytes = HlWriter.encodeFunction(functionNamed(added.artifact.hashLink().module, "Math.add")),
 			unchangedMain = compiler.modules.get("Main"),
 			addIr = compiler.modules.get("Math").irFunctions.get("Math.add");
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { var sum = a + b; return sum; }");
@@ -91,16 +87,17 @@ class ModuleMain {
 		if (result.metrics.changedFunctions != expectedChanged
 			|| result.metrics.patchBytes != result.artifact.hashLink().patchBytes.length)
 			throw "Compile metrics did not describe the compatible patch";
-		var decodedPatch = HlPatchReader.decode(result.artifact.hashLink().patchBytes);
-		var patchedIndices = [for (patched in decodedPatch.functions) patched.functionIndex];
-		if (decodedPatch.functions.length != expectedChanged || patchedIndices.indexOf(mathId) < 0)
-			throw "Compiler HLP did not contain exactly the changed function and the callers that inlined it";
+		var replaced = [
+			for (section in HlSectionPatch.decode(result.artifact.hashLink().patchBytes).content.replaced) section.path
+		];
+		// `main` is named after no declaration, so it is in the shared section.
+		if (replaced.join(",") != "Math,$shared")
+			throw 'Compiler HLP did not replace exactly the sections of the changed function and its inlining caller: $replaced';
 		if (result.requiresReload)
 			throw "Body edit unexpectedly requires reload";
 		if (compiler.modules.get("Unused").parseVersion != 0 || compiler.modules.get("Unused").typeVersion != 0)
 			throw 'Unreachable module had unexpected work: parse=${compiler.modules.get("Unused").parseVersion}, type=${compiler.modules.get("Unused").typeVersion}';
-		var secondBytes = HlWriter.encodeFunction(functionByIndex(result.artifact.hashLink().module.functions,
-			mathIndex));
+		var secondBytes = HlWriter.encodeFunction(functionNamed(result.artifact.hashLink().module, "Math.add"));
 		if (firstBytes.compare(secondBytes) != 0)
 			throw "Equivalent incremental builds were not deterministic";
 		var committedIdentity = compiler.exportIdentityState(),
@@ -178,9 +175,6 @@ class ModuleMain {
 		var buildA = layoutA.compile("Main"), buildB = layoutB.compile("Main");
 		if (buildA.artifact.hashLink().functionIds.get("main") != buildB.artifact.hashLink().functionIds.get("main"))
 			throw "Native layout changed persistent user-function identity";
-		if (buildA.artifact.hashLink().functionIndices.get("main")
-			== buildB.artifact.hashLink().functionIndices.get("main"))
-			throw "Test did not exercise distinct backend native layouts";
 		File.saveBytes(output, compacted.artifact.hashLink().hashLinkBytes().flatten());
 
 		var missing = new Compiler();
@@ -265,9 +259,9 @@ class ModuleMain {
 		var methodBuild = methodCompiler.compile("Main");
 		if (methodBuild.artifact.hashLink().patchBytes == null)
 			throw "Dynamic method body edit did not emit HLP bytes";
-		if (HlPatchReader.decode(methodBuild.artifact.hashLink().patchBytes).functions.length == 0)
+		if (HlSectionPatch.decode(methodBuild.artifact.hashLink().patchBytes).content.replaced.length == 0)
 			throw "Dynamic method HLP patch was empty";
-		// A call relocation only exists while the call does, so keep the inliner out of this check.
+		// A section names the functions it calls by key; keep the inliner out of this check, so the call stays.
 		var callManyCompiler = new Compiler();
 		callManyCompiler.options = new CompileOptions({inlining: false});
 		callManyCompiler.update("Main.hx",
@@ -276,12 +270,11 @@ class ModuleMain {
 		callManyCompiler.update("Main.hx",
 			"function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(11, 20, 12); }");
 		var callManyBuild = callManyCompiler.compile("Main"),
-			callManyPatch = HlPatchReader.decode(callManyBuild.artifact.hashLink().patchBytes),
-			callManyRelocations = 0;
-		for (fn in callManyPatch.functions)
-			callManyRelocations += fn.relocations.length;
-		if (callManyRelocations != 1)
-			throw "OCallN stable relocation was not emitted";
+			callManyPatch = HlSectionPatch.decode(callManyBuild.artifact.hashLink().patchBytes).content;
+		// `main` is in the shared section; Main's carries the edited file's source snapshot and the spans that hash it.
+		if ([for (section in callManyPatch.replaced) section.path].join(",") != "Main,$shared"
+			|| callManyPatch.renames.length != 0)
+			throw 'A body edit of an OCallN caller replaced other sections than its own and its file\'s: ${[for (section in callManyPatch.replaced) section.path]}';
 		var validationCompiler = new Compiler();
 		validationCompiler.registerNative("clock", "std", "sys_time", [], TFloat);
 		validationCompiler.update("Main.hx", "function main():Int { return 42; }");
@@ -436,10 +429,10 @@ class ModuleMain {
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 
-	static function functionByIndex(functions:Array<compiler.hl.HlFunction>, index:Int):compiler.hl.HlFunction {
-		for (fn in functions)
-			if (fn.functionIndex == index)
-				return fn;
-		throw 'Missing function index $index';
+	static function functionNamed(module:compiler.hl.HlCode, name:String):compiler.hl.HlFunction {
+		var position = module.functionNames.indexOf(name);
+		if (position < 0)
+			throw 'Missing function $name';
+		return module.functions[position];
 	}
 }

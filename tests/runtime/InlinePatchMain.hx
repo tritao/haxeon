@@ -31,9 +31,13 @@ class InlinePatchMain {
 			throw "The edited callee was not patched";
 		if (patched.indexOf(ids.get("main")) < 0)
 			throw "The caller that inlined the edited callee was not patched";
+		var compiled = Runtime.patchJitCount(live);
 		Runtime.patchSet(live,
 			new PatchSet(first.revision, changed.revision, changed.artifact.hashLink().patchBytes,
 			changed.changedFunctions));
+		// The runtime compiles only the functions whose linked code changed: other is lowered again to the same code.
+		if (Runtime.patchJitCount(live) - compiled != 2)
+			throw 'The patch compiled ${Runtime.patchJitCount(live) - compiled} functions, not the callee and its inlining caller';
 		// bump ran once before the edit (41); now twice per call: 41 -> 43, plus other().
 		if (Runtime.callInt(live, mainId) != 48)
 			throw "The inlined caller kept the old callee body after the patch";

@@ -22,11 +22,12 @@ typedef HlPersistentIdentity = {
 
 /** Encodes runtime manifests and persistent compiler identity state. */
 class HlRuntimeIdentity {
-	/** Version 9: virtual types retain their nominal interface identities.
+	/** Version 10: live modules are module sections, whose slots and stable ids the loader gives.
+	 * Version 9: virtual types retain their nominal interface identities.
 	 * Version 8: objects carry an unnamed field per implemented interface to cache its virtual, so earlier type tables cannot be patched.
 	 * Version 7: Strings are HashLink String objects.
 	 */
-	public static inline final VERSION = 9;
+	public static inline final VERSION = 10;
 
 	/**
 	 * HLI 4: the module id, the revision and the name of the module's initializer. The loader gives every function its stable id

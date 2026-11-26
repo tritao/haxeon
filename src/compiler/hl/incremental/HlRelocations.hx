@@ -22,7 +22,8 @@ class HlRelocations {
 	/** By position, whether some index the function's code uses is another in this build's tables (`fill`). */
 	public final moves:Array<Bool>;
 
-	final answers:HlRequestAnswers;
+	/** The answers the build's requests got, which say where moved indices are; null for identity relocations (`identity`). */
+	final answers:Null<HlRequestAnswers>;
 
 	/**
 	 * The run of builds whose tables this build's extend (`HlLoweredTables.chain`): an index of a table names the same entry in
@@ -31,7 +32,7 @@ class HlRelocations {
 	public final chain:Int;
 
 	public function new(lowered:Array<HlLoweredFunction>, functionIndices:Array<Int>, functionTypes:Array<Int>,
-			moves:Array<Bool>, answers:HlRequestAnswers, chain:Int) {
+			moves:Array<Bool>, answers:Null<HlRequestAnswers>, chain:Int) {
 		this.chain = chain;
 		this.lowered = lowered;
 		this.functionIndices = functionIndices;
@@ -40,9 +41,26 @@ class HlRelocations {
 		this.answers = answers;
 	}
 
+	/**
+	 * The relocations of a live build's functions: the live tables only grow within a module identity and never renumber, so each
+	 * function keeps its slot and every index its code uses, and one run of builds (`chain`) lasts while the layout does.
+	 */
+	public static function identity(lowered:Array<HlLoweredFunction>, chain:Int):HlRelocations {
+		var indices:Array<Int> = [], types:Array<Int> = [], moves:Array<Bool> = [];
+		for (entry in lowered) {
+			indices.push(entry.fn.functionIndex);
+			types.push(entry.fn.type);
+			moves.push(false);
+		}
+		return new HlRelocations(lowered, indices, types, moves, null, chain);
+	}
+
 	/** Fills `remap` with where this build's tables hold each index the function at `position` uses. */
 	public function fill(position:Int, remap:HlRemap):Void {
-		var conflict = HlLink.fill(lowered[position], answers, remap);
+		var known = answers;
+		if (known == null)
+			throw new InternalError('HashLink sections: ${lowered[position].name} has identity relocations');
+		var conflict = HlLink.fill(lowered[position], known, remap);
 		if (conflict != null)
 			throw new InternalError('HashLink sections: ${lowered[position].name} was kept although $conflict');
 	}

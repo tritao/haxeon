@@ -13,7 +13,6 @@ import compiler.core.InternalError;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlPlainBuild;
-import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.core.CancellationToken;
 import haxe.io.Bytes;
@@ -286,52 +285,48 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAfterSnapshots = AllocationMeter.sample();
 		if (token != null)
 			token.check();
-		// The assembler can also fall back to a fresh module on its own (a new runtime native moves every
-		// slot), and a patch is only meaningful against the layout the running module has.
-		var patchBytes = reloadReasons.length > 0
-			|| assembly.requiresReload
-			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId,
-			assembly.changedSlots,
-			stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision,
-			assembly.revision, assembly.baseInts,
-			assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions,
-			assembly.baseGlobals, assembly.objectLayout, [for (guard in assembly.guards)
-			if (candidateAssembler.cache.stableIds.exists(guard.name)) {
-				stableId: candidateAssembler.cache.stableIds.get(guard.name) ?? 0,
-				description: guard.description
-			}], candidateAssembler.symbols.namedGlobals());
+		var allocationBeforeSections = AllocationMeter.sample();
+		// Every HashLink build is written as module sections, which the loader links and numbers itself: a function's index is its
+		// index there. A plain build keeps its sections in the lowered cache, a live one with the published functions; a compile that
+		// keeps no session memoizes none for a next build.
+		var modules = [for (name => state in context.state.modules) name => state.source.contentHash()],
+			declarations = context.state.declarationOwners,
+			kept = candidateAssembler.loweredCache,
+			previousSections = context.livePatching ? candidateAssembler.liveSections() : kept == null
+				? null : kept.sections,
+			written = compiler.hl.HlSectionWriter.write(assembly.module, modules, declarations, compiler.hl.HlLz4.FAST,
+				context.options.checkReuse, previousSections, context.livePatching || context.options.keepSession,
+				context.livePatching);
+		if (kept != null)
+			kept.sections = written.cache;
+		candidateAssembler.wroteSections(written.cache, written.written);
+		if (freshModule != null) {
+			var afresh = compiler.hl.HlSectionWriter.write(freshModule, modules, declarations, compiler.hl.HlLz4.FAST,
+				false,
+				null, false);
+			if (!afresh.bytes.equals(written.bytes))
+				throw new InternalError('--check-reuse: the sections of a build with ${candidateAssembler.reusedFunctions} functions kept from the last build differ from the sections of one lowered afresh');
+		}
+		var sectionsEncoded = written.encoded + " of " + written.sections + " (" + written.changed + " changed)",
+			sections = written.bytes,
+			functionIndices:Map<String, Int> = [];
+		for (name => index in assembly.functionIndices) {
+			var linked = index < written.linkedIndices.length ? written.linkedIndices[index] : -1;
+			if (linked >= 0)
+				functionIndices.set(name, linked);
+		}
+		var allocationBeforePatch = AllocationMeter.sample();
+		// The assembler can also fall back to a fresh module on its own (a new runtime native moves every slot), and a patch is
+		// only meaningful against the layout the running module has.
+		var patchBytes = reloadReasons.length > 0 || assembly.requiresReload
+			|| assembly.changedFunctions.length == 0 ? null : sectionPatch(context, assembly,
+			baseAssembler.sectionDigests,
+			written.written, declarations, modules);
 		var allocationAfterPatch = AllocationMeter.sample();
 		assembler = candidateAssembler;
-		var stableIds = candidateAssembler.cache.stableIds,
-			functionIndices = assembly.functionIndices,
-			sections:Null<haxeon.io.SegmentedBytes> = null,
-			sectionsEncoded:Null<String> = null;
-		if (!context.livePatching) {
-			// A plain build is written as module sections, which the loader links and numbers itself, and a function's stable id is
-			// its index there. A compile that keeps no session memoizes no section for a next build.
-			var modules = [for (name => state in context.state.modules) name => state.source.contentHash()],
-				kept = candidateAssembler.loweredCache,
-				written = compiler.hl.HlSectionWriter.write(assembly.module, modules, context.state.declarationOwners,
-					compiler.hl.HlLz4.FAST, context.options.checkReuse, kept == null ? null : kept.sections,
-					context.options.keepSession);
-			if (kept != null)
-				kept.sections = written.cache;
-			if (freshModule != null) {
-				var afresh = compiler.hl.HlSectionWriter.write(freshModule, modules, context.state.declarationOwners,
-					compiler.hl.HlLz4.FAST, false, null, false);
-				if (!afresh.bytes.equals(written.bytes))
-					throw new InternalError('--check-reuse: the sections of a build with ${candidateAssembler.reusedFunctions} functions kept from the last build differ from the sections of one lowered afresh');
-			}
-			sectionsEncoded = written.encoded + " of " + written.sections + " (" + written.changed + " changed)";
-			sections = written.bytes;
-			functionIndices = [];
-			for (name => index in assembly.functionIndices) {
-				var linked = index < written.linkedIndices.length ? written.linkedIndices[index] : -1;
-				if (linked >= 0)
-					functionIndices.set(name, linked);
-			}
-			stableIds = functionIndices;
-		}
+		// The compiler's own ids of a live build's functions, which it reports changed functions by; a host finds a function's
+		// runtime id by name (`hl_runtime_module_function_id`).
+		var stableIds = context.livePatching ? candidateAssembler.cache.stableIds : functionIndices;
 		compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices, sections);
 		return {
 			artifact: HashLinkBuild({
@@ -376,7 +371,8 @@ class HashLinkBackendSession implements BackendSession {
 				AllocationMeter.delta("assembler-copy", allocationAfterAbi, allocationAfterCopy),
 				AllocationMeter.delta("backend-assembly", allocationAfterCopy, allocationAfterAssembly),
 				AllocationMeter.delta("source-snapshots", allocationAfterAssembly, allocationAfterSnapshots),
-				AllocationMeter.delta("patch", allocationAfterSnapshots, allocationAfterPatch)
+				AllocationMeter.delta("sections", allocationBeforeSections, allocationBeforePatch),
+				AllocationMeter.delta("patch", allocationBeforePatch, allocationAfterPatch)
 			].concat(assembly.allocationPhases)
 		};
 	}
@@ -396,12 +392,40 @@ class HashLinkBackendSession implements BackendSession {
 		return fresh;
 	}
 
-	static function stableIdsBySlot(source:HlModuleAssembler, layout:Map<String, Int>):Map<Int, Int> {
-		var result:Map<Int, Int> = [];
-		for (name => id in source.cache.stableIds)
-			if (layout.exists(name))
-				result.set(layout.get(name), id);
-		return result;
+	/**
+	 * HLP 12 from the running module's sections (`acknowledged`, their digests by path) to `written`: the sections whose bytes
+	 * changed, the paths the build no longer has, and the renames, guards and migrations, each keyed by the section of its name.
+	 */
+	static function sectionPatch(context:CompilationContext,
+			assembly:compiler.hl.incremental.HlModuleAssembler.HlAssemblyResult,
+			acknowledged:Map<String, String>, written:Array<compiler.hl.HlSectionWriter.HlWrittenSection>,
+			declarations:compiler.semantic.DeclarationOwners, modules:Map<String, Int>):Bytes {
+		inline function key(name:String):compiler.hl.patch.HlSectionPatch.HlSectionKey
+			return {module: compiler.hl.HlSectionWriter.homeOf(name, declarations, modules), member: name};
+		var present:Map<String, Bool> = [for (section in written) section.path => true],
+			removed = [for (path in acknowledged.keys()) if (!present.exists(path)) path],
+			layout = assembly.objectLayout;
+		removed.sort(Reflect.compare);
+		return compiler.hl.patch.HlSectionPatch.encode(context.moduleId, assembly.baseRevision, assembly.revision,
+			{replaced: [for (section in written) if (acknowledged.get(section.path) != section.digest) {
+				path: section.path,
+				bytes: section.bytes
+			}],
+			removed: removed,
+			renames: [for (rename in assembly.renames) {
+		// A class value is in the section of its class.
+		module: key(StringTools.startsWith(rename.from, compiler.hl.incremental.HlSymbolTable.CLASS_VALUE)
+			? rename.from.substr(compiler.hl.incremental.HlSymbolTable.CLASS_VALUE.length) : rename.from).module,
+			from: rename.from,
+			to: rename.to}],
+			guards: [for (guard in assembly.guards) {
+				key: key(guard.name),
+				description: guard.description
+			}],
+			migrations: layout == null ? [] : [for (migration in layout.migrations) {
+				type: key(migration.className),
+				initializer: key(migration.initializer)
+			}]});
 	}
 
 	/** Records the files `code`'s debug locations are placed in (`placedFiles`). */

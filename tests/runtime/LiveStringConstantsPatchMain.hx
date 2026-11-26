@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.abi.PatchPlanner.AbiChange;
-import compiler.hl.patch.HlPatchReader;
 import compiler.types.Type.CompilerType;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -74,10 +73,9 @@ class LiveStringConstantsPatchMain {
 						throw '${edit.label} changed the layout of global $name';
 					default:
 				}
-			var decoded = HlPatchReader.decode(changed.artifact.hashLink().patchBytes);
-			expect(decoded.globals.length == edit.newGlobals
-				&& decoded.baseGlobals == (edit.newGlobals == 0 ? 0 : build.artifact.hashLink().module.globals.length),
-				'${edit.label} should carry ${edit.newGlobals} new globals after ${build.artifact.hashLink().module.globals.length}, got ${decoded.globals.length} after ${decoded.baseGlobals}');
+			var globals = changed.artifact.hashLink().module.globals.length
+				- build.artifact.hashLink().module.globals.length;
+			expect(globals == edit.newGlobals, '${edit.label} should add ${edit.newGlobals} globals, not $globals');
 			Runtime.patchSet(live,
 				new PatchSet(build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
 				changed.changedFunctions));

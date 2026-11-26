@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlCode.HlTypeDef;
-import compiler.hl.patch.HlPatchReader;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -67,8 +66,9 @@ class AddedClassPatchMain {
 			throw 'Adding classes required a reload (requiresReload ${changed.requiresReload}, patch ${changed.artifact.hashLink().patchBytes != null}): '
 				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ");
 		var objects = 0, virtuals = 0;
-		for (type in HlPatchReader.decode(changed.artifact.hashLink().patchBytes).types)
-			switch type {
+		var types = changed.artifact.hashLink().module.types;
+		for (index in build.artifact.hashLink().module.types.length...types.length)
+			switch types[index] {
 				case Object(_, _, _, _, _, _): objects++;
 				case Virtual(_, _): virtuals++;
 				default:

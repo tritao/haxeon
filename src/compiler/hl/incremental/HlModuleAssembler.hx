@@ -50,6 +50,9 @@ typedef HlAssemblerState = {
 
 	/** `HlModuleAssembler.retiredFields`, as `Class.field` names. Absent in older baselines, which retired none. */
 	@:optional final retiredFields:Array<String>;
+
+	/** `HlModuleAssembler.sectionDigests`, as path and digest pairs. */
+	final sections:Array<{path:String, digest:String}>;
 }
 
 /** What `HlModuleAssembler.planObjects` found: the changes a patch cannot make, or the layout the patch changes (null for none). */
@@ -81,6 +84,13 @@ typedef HlAssemblyResult = {
 	 * patch applies only when no live closure refers to them (`HlPatchWriter`, guards).
 	 */
 	final guards:Array<{name:String, description:String}>;
+
+	/**
+	 * What of the running module this build gives other names, as their names were and are: a lambda its siblings renumbered
+	 * (`renameLambdas`) with its environment and the environment's class value, and a function whose signature changed
+	 * (`moveChangedSignatures`).
+	 */
+	final renames:Array<{from:String, to:String}>;
 
 	final functionIndices:Map<String, Int>;
 	final requiresReload:Bool;
@@ -138,8 +148,26 @@ class HlModuleAssembler {
 	var publishedTypes = 0;
 	var publishedGlobals = 0;
 
-	/** The functions of the published module, as live patching keeps them: trusted by name, with no requests (see `HlLower.trustCache`). */
+	/**
+	 * The functions of the published module, as live patching keeps them: trusted by name, with no requests (see
+	 * `HlLower.trustCache`), with the sections the last live build wrote (`HlLoweredCache.sections`).
+	 */
 	var published = new HlLoweredCache();
+
+	/**
+	 * The run of live builds whose tables extend one another's with nothing in them renamed (`HlRelocations.chain`): a fresh
+	 * layout and a rename start another, so that a section is kept without collecting it only while what it names reads the same.
+	 */
+	var liveChain = 0;
+
+	/**
+	 * The digest of each section of the module this assembler last published, by path (`HlSectionWriter`): a live patch replaces
+	 * the sections whose digests the next build changes. Empty before the first module of sections.
+	 */
+	public var sectionDigests(default, null):Map<String, String> = [];
+
+	/** The renames since the last assembly (`HlAssemblyResult.renames`). */
+	var pendingRenames:Array<{from:String, to:String}> = [];
 
 	var runtimeNatives:Array<IrNative> = [];
 
@@ -227,6 +255,9 @@ class HlModuleAssembler {
 		result.publishedTypes = publishedTypes;
 		result.publishedGlobals = publishedGlobals;
 		result.published = published.copy();
+		result.liveChain = liveChain;
+		result.sectionDigests = sectionDigests.copy();
+		result.pendingRenames = pendingRenames.copy();
 		result.livePatching = livePatching;
 		result.keepsLowered = keepsLowered;
 		result.runtimeNatives = runtimeNatives.copy();
@@ -239,6 +270,18 @@ class HlModuleAssembler {
 		result.renamed = renamed.copy();
 		result.programNames = programNames == null ? null : [for (name in programNames.keys()) name => true];
 		return result;
+	}
+
+	/** The sections the last live build wrote, which the next keeps those it writes alike from; null after a fresh layout. */
+	public function liveSections():Null<compiler.hl.HlSectionWriter.HlSectionCache>
+		return livePatching ? published.sections : null;
+
+	/** Records the sections the module this assembler assembled was written as (`sectionDigests`, `liveSections`). */
+	public function wroteSections(cache:compiler.hl.HlSectionWriter.HlSectionCache,
+			written:Array<compiler.hl.HlSectionWriter.HlWrittenSection>):Void {
+		if (livePatching)
+			published.sections = cache;
+		sectionDigests = [for (section in written) section.path => section.digest];
 	}
 
 	/** Whether this assembler has published a module, so an object it published can take added fields. */
@@ -270,7 +313,8 @@ class HlModuleAssembler {
 			cache: HlFunctionCacheStateCodec.encode(cache.exportState()),
 			runtimeNatives: runtimeNatives.copy(),
 			dispatchNatives: dispatchNatives == null ? null : dispatchNatives.copy(),
-			retiredFields: [for (name in retiredFields.keys()) name]
+			retiredFields: [for (name in retiredFields.keys()) name],
+			sections: [for (path => digest in sectionDigests) {path: path, digest: digest}]
 		};
 
 	public static function fromState(state:HlAssemblerState):HlModuleAssembler {
@@ -286,6 +330,8 @@ class HlModuleAssembler {
 		if (state.retiredFields != null)
 			for (name in state.retiredFields)
 				result.retiredFields.set(name, true);
+		for (section in state.sections)
+			result.sectionDigests.set(section.path, section.digest);
 		if (state.revision < 0
 			|| state.publishedInts < 0
 			|| state.publishedFloats < 0
@@ -330,20 +376,41 @@ class HlModuleAssembler {
 	 */
 	public function renameLambdas(steps:Array<NameRewrite>):Void
 		for (step in steps) {
-			var names:Map<String, String> = [];
+			var names:Map<String, String> = [], renames:Array<{from:String, to:String}> = [];
 			for (name in cache.slots)
 				names.set(name, step.apply(name));
 			for (from => to in names)
-				if (from != to)
+				if (from != to) {
 					renamed.set(to, true);
+					renames.push({from: from, to: to});
+				}
 			for (name in cache.stableIds.keys())
 				names.set(name, step.apply(name));
 			cache.rename(names);
 			renameLowered(names);
-			symbols.renameTypes(step);
+			recordRenames(renames.concat(symbols.renameTypes(step)));
+			liveChain++;
 			if (programNames != null)
 				programNames = step.keys(programNames);
 		}
+
+	/**
+	 * Records renames made together, as the running module will know them: renames since the last assembly compose, so a
+	 * patch, which applies its renames all at once to the running module's names, renames each once.
+	 */
+	function recordRenames(renames:Array<{from:String, to:String}>):Void {
+		var earlier = pendingRenames, composed = [for (rename in earlier) rename], byTarget:Map<String, Int> = [];
+		for (index in 0...earlier.length)
+			byTarget.set(earlier[index].to, index);
+		for (rename in renames) {
+			var index = byTarget.get(rename.from);
+			if (index == null)
+				composed.push(rename);
+			else
+				composed[index] = {from: earlier[index].from, to: rename.to};
+		}
+		pendingRenames = [for (rename in composed) if (rename.from != rename.to) rename];
+	}
 
 	/**
 	 * The functions a rename (`renameLambdas`) gave other names since the last assembly. Their code, and the code that calls
@@ -407,6 +474,7 @@ class HlModuleAssembler {
 			return {moved: moved, adapted: adapted, guards: guards};
 		cache.rename(renames);
 		renameLowered(renames);
+		recordRenames([for (name in moved) {from: name, to: renames.get(name)}]);
 		// The old slot, and the slots earlier moves left, keep closures the running program made. Each takes an adapter that
 		// calls the function's new code with the old arguments (`signatureAdapter`), so they all reach the latest code in one
 		// step. A slot no adapter can bridge keeps its old code, and the patch applies only when no stored closure is left to
@@ -602,6 +670,7 @@ class HlModuleAssembler {
 	function discardPublishedSymbols():Void {
 		symbols = new HlSymbolTable();
 		published = new HlLoweredCache();
+		liveChain++;
 		publishedInts = 0;
 		publishedFloats = 0;
 		publishedStrings = 0;
@@ -679,7 +748,12 @@ class HlModuleAssembler {
 			var initializer = object.name + "." + IrProgramAssembler.LIVE_INITIALIZER,
 				slot = slots.get(initializer);
 			if (functions.exists(initializer) && slot != null)
-				layout.migrations.push({type: published.index, slot: slot});
+				layout.migrations.push({
+					type: published.index,
+					slot: slot,
+					className: object.name,
+					initializer: initializer
+				});
 		}
 		// Bases first, so a subclass's initializers see the fields of its base initialized.
 		layout.migrations.sort(function(a, b) return baseDepth(a.type) - baseDepth(b.type));
@@ -1006,8 +1080,10 @@ class HlModuleAssembler {
 		if (keepsProgram)
 			lastProgram = ordered;
 		if (livePatching) {
-			if (!reuseLowered)
+			if (!reuseLowered) {
 				published = new HlLoweredCache();
+				liveChain++;
+			}
 			liveCache = published;
 		}
 		var relowered = regenerated.copy(), listedForLowering = [for (name in regenerated) name => true];
@@ -1018,7 +1094,7 @@ class HlModuleAssembler {
 			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata,
 			livePatching || keepsLowered ? liveCache : null, irVerified,
 			livePatching,
-			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources),
+			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources, liveChain),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;
@@ -1044,6 +1120,8 @@ class HlModuleAssembler {
 		// can only reach a revision without a patch by reloading.
 		var baseRevision = revision;
 		programNames = [for (fn in program.functions) fn.name => true];
+		var renames = reload ? [] : pendingRenames;
+		pendingRenames = [];
 		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0
 			&& objectLayout == null && baseInts == publishedInts
 			&& baseFloats == publishedFloats && baseStrings == publishedStrings && baseTypes == publishedTypes
@@ -1059,6 +1137,7 @@ class HlModuleAssembler {
 			changedSlots: changedSlots,
 			addedFunctions: addedFunctions,
 			guards: reload ? [] : guards,
+			renames: renames,
 			functionIndices: layout,
 			requiresReload: reload,
 			layoutReasons: layoutReasons,

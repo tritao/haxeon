@@ -12,19 +12,19 @@ typedef HlArtifact = {
 	/** Function indices in the emitted module, which may differ from incremental slots. */
 	final functionIndices:Map<String, Int>;
 
-	/** Stable function ids, which outlive slots and layouts and are what a patch or a host addresses a function by. */
+	/**
+	 * Function ids: a plain build's are its function indices; a live build's are the compiler's own, by which it reports the
+	 * functions a patch changes. A host finds a function's runtime id by name (`hl_runtime_module_function_id`).
+	 */
 	final functionIds:Map<String, Int>;
 
-	/** HLI: the module identity, revision and stable ids bound to the module's function slots. */
+	/** HLI 4: the module identity, the revision and the initializer's name. */
 	final runtimeIdentity:Bytes;
 
-	/** HLP: the patch from the build's base revision to this one, or null when the build is not delivered as a patch. */
+	/** HLP 12: the patch from the build's base revision to this one, or null when the build is not delivered as a patch. */
 	final patchBytes:Null<Bytes>;
 
-	/**
-	 * A plain build's module as HLB 9 module sections (`HlSectionWriter`), whose function indices are the ones the loader's link
-	 * gives; null for a live build, which writes `module` as one dense HLB 8 module.
-	 */
+	/** The module as HLB 9 module sections (`HlSectionWriter`), whose function indices are the ones the loader's link gives. */
 	final sections:Null<haxeon.io.SegmentedBytes>;
 }
 

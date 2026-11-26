@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlCode;
-import compiler.hl.patch.HlPatchReader;
 import compiler.runtime.CompilerIntrinsics;
 
 /**
@@ -31,10 +30,11 @@ class AddedFunctionLayoutMain {
 		for (name => slot in natives(before))
 			if (natives(after.artifact.hashLink().module).get(name) != slot)
 				throw 'Adding a function moved native $name from slot $slot to ${natives(after.artifact.hashLink().module).get(name)}';
-		var added = HlPatchReader.decode(after.artifact.hashLink().patchBytes).addedFunctions;
-		if (added.length != 1 || added[0].functionIndex != before.natives.length + before.functions.length)
-			throw 'The added function does not take the next free slot ${before.natives.length + before.functions.length}: '
-				+ [for (function_ in added) '${function_.name}@${function_.functionIndex}'].join(", ");
+		var module = after.artifact.hashLink().module,
+			slot = module.functions[module.functionNames.indexOf("Main.helper")].functionIndex;
+		if (module.functions.length != before.functions.length + 1
+			|| slot != before.natives.length + before.functions.length)
+			throw 'The added function does not take the next free slot ${before.natives.length + before.functions.length}: $slot';
 		Sys.println("PASS: added functions take the next free slot and leave natives in place");
 	}
 

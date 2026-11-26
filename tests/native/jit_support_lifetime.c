@@ -42,21 +42,6 @@ static int read_file( const char *path, test_bytes *out ) {
 	return 1;
 }
 
-static int read_function_id( const char *prefix, int *out ) {
-	char *path = append_suffix(prefix,".id");
-	FILE *file;
-	int result;
-	int ok;
-	if( path == NULL ) return 0;
-	file = fopen(path,"rb");
-	free(path);
-	if( file == NULL ) return 0;
-	ok = fscanf(file,"%d",&result) == 1 && result >= 0;
-	fclose(file);
-	if( ok ) *out = result;
-	return ok;
-}
-
 static int call_i32( hl_runtime_module *module, int function_id, int expected, const char *label ) {
 	vdynamic *exception = NULL;
 	int result = 0;
@@ -74,14 +59,17 @@ static hl_runtime_module *load_fixture( const char *prefix, const char *label, i
 	test_bytes code = {NULL,0}, identity = {NULL,0};
 	hl_runtime_module *module = NULL;
 	hl_runtime_status status;
-	if( code_path == NULL || identity_path == NULL || !read_file(code_path,&code) || !read_file(identity_path,&identity)
-		|| !read_function_id(prefix,function_id) ) {
+	if( code_path == NULL || identity_path == NULL || !read_file(code_path,&code) || !read_file(identity_path,&identity) ) {
 		fprintf(stderr,"%s: could not read fixture files for %s\n",label,prefix);
 		goto done;
 	}
 	status = hl_runtime_module_load(code.data,code.length,identity.data,identity.length,&module);
 	if( status != HL_RUNTIME_OK ) {
 		fprintf(stderr,"%s: module load failed with status %d\n",label,(int)status);
+		module = NULL;
+	} else if( (*function_id = hl_runtime_module_function_id(module,"main")) < 0 ) {
+		fprintf(stderr,"%s: the module has no main function\n",label);
+		hl_runtime_module_release(module);
 		module = NULL;
 	}
 done:

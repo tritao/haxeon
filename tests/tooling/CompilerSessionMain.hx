@@ -374,10 +374,9 @@ class CompilerSessionMain {
 	}
 
 	static function functionByName(result:CompileResult, name:String):compiler.hl.HlFunction {
-		var index = result.artifact.hashLink().functionIndices.get(name);
-		for (fn in result.artifact.hashLink().module.functions)
-			if (fn.functionIndex == index)
-				return fn;
-		throw 'Missing lowered function "$name"';
+		var module = result.artifact.hashLink().module, position = module.functionNames.indexOf(name);
+		if (position < 0)
+			throw 'Missing lowered function "$name"';
+		return module.functions[position];
 	}
 }

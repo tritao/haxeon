@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.types.Type.CompilerType;
 import sys.FileSystem;
@@ -77,7 +76,7 @@ function main():Int {
  return 42;
 }');
 		var path = "out/bytes-ascii-edge.hl";
-		File.saveBytes(path, HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
+		File.saveBytes(path, compiler.compile("Main").artifact.hashLink().hashLinkBytes().flatten());
 		var status = Sys.command(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [path]);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile(nativePath);

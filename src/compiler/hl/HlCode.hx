@@ -33,6 +33,12 @@ class HlCode {
 	/** The name of each function, by its position in `functions`: what a module of sections keys it by (`HlSectionWriter`). */
 	public var functionNames:Array<String> = [];
 
+	/**
+	 * The key of each object a live rename gave another name than its definition keeps, by type index (`HlSymbolTable.renamedTypeKeys`);
+	 * every other type is keyed by its definition's name.
+	 */
+	public var typeKeys:Map<Int, String> = [];
+
 	/** The name of each global, by index, or null for one the symbol tables name by what it belongs to (a class value). */
 	public var globalNames:Array<Null<String>> = [];
 

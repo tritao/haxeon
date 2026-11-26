@@ -21,35 +21,46 @@ class PatchSet {
 	}
 
 	/**
-	 * Whether the patch carries guards: functions it drops that stored closures may still reach (HLP section 9, written by
-	 * `HlPatchWriter`). Only such a patch needs the app to let go of its UI first (`Runtime.patchSetRebuilding`). Reads the
-	 * section headers alone; an artifact it cannot read counts as guarded, the safe answer.
+	 * Whether the patch carries guards: functions it drops that stored closures may still reach (HLP 12, written by
+	 * `HlSectionPatch`). Only such a patch needs the app to let go of its UI first (`Runtime.patchSetRebuilding`). Steps over
+	 * the sections, removed paths and renames to the guard count; an artifact it cannot read counts as guarded, the safe answer.
 	 */
 	public function hasGuards():Bool {
 		var length:Int = bytes.length;
 		// Magic "HLP", version, 16-byte module ID.
-		if (length < 20 || bytes.get(0) != "H".code || bytes.get(1) != "L".code || bytes.get(2) != "P".code)
+		if (length < 20 || bytes.get(0) != "H".code || bytes.get(1) != "L".code || bytes.get(2) != "P".code
+			|| bytes.get(3) != SECTIONS_VERSION)
 			return true;
 		var cursor:Array<Int> = [20];
 		readIndex(cursor); // base revision
 		readIndex(cursor); // revision
-		var sections:Int = readIndex(cursor);
-		for (_ in 0...sections) {
-			if (cursor[0] < 0 || cursor[0] >= length)
+		for (_ in 0...readIndex(cursor)) {
+			skipText(cursor);
+			if (cursor[0] < 0 || cursor[0] + 4 > length)
 				return true;
-			var tag:Int = bytes.get(cursor[0]);
-			cursor[0]++;
-			var size:Int = readIndex(cursor);
-			if (tag == GUARDS)
-				return true;
+			var size = bytes.getInt32(cursor[0]);
 			if (size < 0)
 				return true;
-			cursor[0] += size;
+			cursor[0] += 4 + size;
 		}
-		return cursor[0] < 0 || cursor[0] > length;
+		for (_ in 0...readIndex(cursor))
+			skipText(cursor);
+		for (_ in 0...readIndex(cursor) * 3)
+			skipText(cursor);
+		var guards = readIndex(cursor);
+		return guards != 0 || cursor[0] < 0 || cursor[0] > length;
 	}
 
-	static inline final GUARDS:Int = 9;
+	static inline final SECTIONS_VERSION:Int = 12;
+
+	/** Steps over a length-prefixed text at `cursor[0]`; -1 past the end. */
+	function skipText(cursor:Array<Int>):Void {
+		var size = readIndex(cursor);
+		if (size < 0 || cursor[0] < 0)
+			cursor[0] = -1;
+		else
+			cursor[0] += size;
+	}
 
 	/** HLP's variable-length index (`HlPatchReader.readIndex`), read at `cursor[0]`, which it advances; -1 past the end. */
 	function readIndex(cursor:Array<Int>):Int {

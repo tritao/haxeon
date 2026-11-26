@@ -4,8 +4,9 @@ Status: designed 2026-11-25; the open questions are decided (section 9). Slices 
 fork's loader links sections, every plain HashLink build writes them (slice 2b made them the default and removed the dense
 plain path, "As built in slice 2b"), every reader of modules reads them, and a warm build keeps every section whose encoding
 would read the same and its functions as they were lowered, with no link or replay (section 3, "As built in slice 3a", "As
-built in slice 3b"). Slice 4 is planned in four parts (section 8, "Slice 4 plan"); 4a has landed: the fork links patches made
-of sections ("As built in slice 4a"). Live builds stay on HLB 8 until 4b. The user's decision: per-module sections and
+built in slice 3b"). Slice 4 is planned in four parts (section 8, "Slice 4 plan"); 4a and 4b have landed: the fork links patches
+made of sections ("As built in slice 4a"), and every HashLink build, live ones too, writes sections and patches by section
+("As built in slice 4b"). The user's decision: per-module sections and
 load-time linking replace "stable output indices" ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3,
 [QUERY_ENGINE.md](QUERY_ENGINE.md) row B). Plain output needs the fork's VM: stock HashLink does not read HLB 9, which the
 user accepted.
@@ -321,7 +322,7 @@ None of these can come from a correct compiler. The compiler-side linker (see 5)
 
 - **The default.** Every plain HashLink build writes sections: the session's (`HashLinkBackendSession`, whenever the build is
   not live), the CLI's one-shot build, `haxeon run` and the stateless `HlBackend`, which has no modules and so writes one
-  shared section. A live build writes dense HLB 8 until slice 4. With no dense plain path left, `--module-sections`,
+  shared section. A live build wrote dense HLB 8 until slice 4b. With no dense plain path left, `--module-sections`,
   `CompileOptions.moduleSections`, `HlModuleAssembler.moduleSections`, the test driver's `--module-sections` and the
   `driver-sections` suite went rather than being inverted (`driver-checked` runs the same builds). Plain output needs the
   fork's VM; the fork still reads HLB 8 and stock-Haxe bytecode.
@@ -458,7 +459,7 @@ and nothing stays for compatibility once its replacement has landed.
 
 In 4a a patch that adds a native is refused by the patch linker, as the planner already plans a reload for it.
 
-**What 4b touches**, found while building 4a:
+**What 4b touches**, found while building 4a (built as "As built in slice 4b" says):
 
 - `HlSectionWriter` writes only a relocatable module (`HlCode.relocations`). A live module's functions keep the indices of
   the append-only live tables, which never renumber within a module identity, so its relocations are the identity: each
@@ -484,6 +485,47 @@ In 4a a patch that adds a native is refused by the patch linker, as the planner 
   it reports changed functions, until 4d.
 - A function's runtime index is the loader's (`HlSectionOutput.linkedIndices`), not the live layout's: the `.functions`
   sidecar and the debugger tests that read slots take the linked numbering, as plain builds already do.
+
+### As built in slice 4b
+
+- **Live modules are sections.** A live lowering trusts its cache and records no requests, so its functions have identity
+  relocations (`HlRelocations.identity`): each keeps its slot and every index it uses, as the live tables only grow within a
+  layout. The run of builds (`chain`) is the assembler's (`HlModuleAssembler.liveChain`): a fresh layout or a rename starts
+  another, so a section is kept without collecting it only while nothing it names was renamed; and since a live build can
+  redefine a type in its slot (a reserved slot named), a kept section's owned definitions must read the same too. The
+  section memo lives with the published functions (`HlLoweredCache.sections` of `published`), so it follows the
+  assembler, which a refused publication takes back. `.functions` and `functionIndices` are the loader's numbering;
+  `functionIds` stays the compiler's ids, which only `changedFunctions` speaks in.
+- **What the running module must have.** A patch's String constants are made of the String object and a patch may call only
+  the natives the running module declares (4c appends natives), so a patchable module's shared section defines String and
+  declares every native of the layout whether its code uses them or not (`HlSectionWriter.write`, `patchable`).
+- **The patch** (`HlSectionPatch`, HLP 12) is the sections whose digests differ from the ones the assembler recorded for the
+  module it published (`HlModuleAssembler.sectionDigests`, kept in the assembler state, HAS 6), the paths it no longer has,
+  and renames, guards and migrations by key (`HashLinkBackendSession.sectionPatch`). A key's module is its name's home
+  (`HlSectionWriter.homeOf`). Renames are the functions `moveChangedSignatures` retires and the lambdas `renameLambdas`
+  renumbers, with their closure environments and the environments' class values (`HlSymbolTable.renameTypes`): a renamed
+  environment keeps its definition, and so its name, while a module of sections keys it by the name it has now
+  (`HlCode.typeKeys`), so the name it freed can key the environment of the lambda that took the old name. Renames made in
+  several steps before one build compose into one per name (`HlModuleAssembler.recordRenames`), since the runtime applies
+  a patch's renames all at once. The fork renames a function, a type or a global key (`apply_renames`). Reserved-slot
+  fills need nothing: the section's class names the slot.
+- **Identity.** `HlRuntimeIdentity.VERSION` is 10, so a session's state from before reloads. `PatchSet.hasGuards` reads
+  HLP 12.
+- **Tests** load what a build writes and find functions by name; those that read HLP 11 from the compiler read
+  `HlSectionPatch.decode` or the module instead (the replaced sections, the module's types and globals), and InlinePatchMain
+  checks that the runtime compiles only the functions whose linked code changed.
+
+**What 4d can delete** now that 4b is in: `HlWriter.encode` of a whole module and `HlWriterCache` (`BackendArtifacts.hashLinkBytes`
+always has sections, so its fallback, the session's `writerCache` and `HashLinkBackendSession.moduleDifference` go;
+`HlLower`'s HLB 8 function-identity debug section, which every lowering still builds); `HlPatchWriter`, `HlPatchReader`,
+`HlPatchFormat` and the HLP 11 tests that build patches by hand (with `tests/DenseRuntimeIdentity.hx`); the assembler's
+patch bookkeeping that only HLP 11 read (`baseInts`..`baseGlobals`, `changedSlots`, `addedFunctions`,
+`HlObjectLayout.previousTypes` and the fields' string and type indices, `HlPatchWriter.isObjectValueGlobal` in
+`addsOnlyPatchableGlobals`); `HlFunctionCache`'s stable ids once `changedFunctions` is reported by name (the PatchSet and
+`.live.json` contract), and with them `functionIds`, `HlRuntimeIdentity`'s id maps in the persistent state and
+`compacting`'s id carry-over; the published-prefix counts of `HlSymbolTable` where only the patch hashes read them; in the
+fork, HLP 11 (`hl_patch_read` past version 12, the prefix hashes, the symbols section, relocations and added functions)
+and HLI 2 and 3.
 
 ### As built in slice 4a
 

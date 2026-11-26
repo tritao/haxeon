@@ -1,6 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -18,6 +17,6 @@ class CxxOwnedMain {
 		compiler.update("CxxOwnedFixtureFunctions.hx",
 			File.getContent(projectionDirectory + "/CxxOwnedFixtureFunctions.hx"));
 		compiler.update("Main.hx", File.getContent(Sys.getCwd() + "/tests/runtime/CxxOwnedProgram.hx"));
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
+		File.saveBytes(output, compiler.compile("Main").artifact.hashLink().hashLinkBytes().flatten());
 	}
 }

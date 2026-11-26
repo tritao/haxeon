@@ -97,6 +97,12 @@ class HlLower {
 	 */
 	final relocatable:Bool;
 
+	/**
+	 * The run of live builds this one belongs to (`HlRelocations.chain`): a live build's functions keep their slots and indices,
+	 * so they have identity relocations, and its sections are kept from the last build of the run.
+	 */
+	final liveChain:Int;
+
 	/** The answers the requests get in this build's tables. */
 	var answers:Null<compiler.hl.incremental.HlRequestAnswers> = null;
 
@@ -162,7 +168,7 @@ class HlLower {
 			developmentMetadata:Bool = true,
 			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
 			trustCache:Bool = false, ?frozen:String->Bool, checkReuse:Bool = false,
-			?sources:compiler.core.SourceAnchor.SourceAnchors):MeasuredHlCode {
+			?sources:compiler.core.SourceAnchor.SourceAnchors, liveChain:Int = 0):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -191,7 +197,8 @@ class HlLower {
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
 			lowerer = new HlLower(program, symbols, indices, stableIds, affected, runtimeNatives, debugCache,
-				fieldReserve, developmentMetadata, loweredCache, trustCache, frozen, checkReuse, sources, !trustCache),
+				fieldReserve, developmentMetadata, loweredCache, trustCache, frozen, checkReuse, sources, !trustCache,
+				liveChain),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
@@ -243,7 +250,8 @@ class HlLower {
 			developmentMetadata:Bool = true, ?loweredCache:compiler.hl.incremental.HlLoweredCache,
 			trustCache:Bool = false,
 			?frozen:String->Bool, checkReuse:Bool = false, ?sources:compiler.core.SourceAnchor.SourceAnchors,
-			relocatable:Bool = false) {
+			relocatable:Bool = false, liveChain:Int = 0) {
+		this.liveChain = liveChain;
 		this.frozen = frozen;
 		this.relocatable = relocatable;
 		this.symbols = symbols;
@@ -575,6 +583,7 @@ class HlLower {
 					verifyKept(fn, kept.fn);
 				code.functions.push(kept.fn);
 				entries.set(fn.name, kept);
+				relocated.push(kept);
 			} else {
 				// A function whose IR is the one an earlier build lowered, and whose outside facts still hold, is kept as that build
 				// made it: its requests are asked of this build's tables, which then hold what it names (`HlCode.relocations`).
@@ -607,9 +616,10 @@ class HlLower {
 					}
 					var lowered = lowerFunction(loweringBody(fn));
 					if (trustCache) {
+						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], [], []);
 						code.functions.push(lowered);
-						entries.set(fn.name,
-							new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], [], []));
+						entries.set(fn.name, entry);
+						relocated.push(entry);
 					} else if (relocatable) {
 						// The function's requests were recorded from its start.
 						var keys = recordedKeys;
@@ -707,10 +717,14 @@ class HlLower {
 		code.globals = symbols.globalTable();
 		code.functionNames = [for (fn in program.functions) fn.name];
 		code.globalNames = symbols.globalNames();
+		if (trustCache)
+			code.typeKeys = symbols.renamedTypeKeys();
 		if (relocatable)
 			code.relocations = new compiler.hl.incremental.HlRelocations(relocated,
 				[for (fn in program.functions) requireFunction(fn.name)], relocatedTypes, relocatedMoves, current,
 				chain);
+		else if (trustCache)
+			code.relocations = compiler.hl.incremental.HlRelocations.identity(relocated, liveChain);
 		var finalizedAt = Sys.time() * 1000.0;
 		var allocationAfterFinalize = AllocationMeter.sample();
 		allocationPhases = [

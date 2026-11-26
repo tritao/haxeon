@@ -906,9 +906,23 @@ class HlSymbolTable {
 	 * discards the table (`HlModuleAssembler.discardPublishedSymbols`), so the stale names only show in tools that print
 	 * type names.
 	 */
-	public function renameTypes(rewrite:NameRewrite):Void {
+	public function renameTypes(rewrite:NameRewrite):Array<{from:String, to:String}> {
 		if (rewrite.isEmpty())
-			return;
+			return [];
+		var renamed:Array<{from:String, to:String}> = [];
+		for (name => index in objectIndices) {
+			var next = rewrite.apply(name);
+			if (next == name)
+				continue;
+			renamed.push({from: name, to: next});
+			// A module of sections keys an object's class value by the object's key (`HlSectionWriter.globalKey`).
+			switch types[index] {
+				case Object(_, _, global, _, _, _) | Structure(_, global, _, _, _) if (global > 0):
+					renamed.push({from: CLASS_VALUE + name, to: CLASS_VALUE + next});
+				default:
+			}
+		}
+		renamed.sort((left, right) -> Reflect.compare(left.from, right.from));
 		ensureWritable();
 		typeIndices = rewrite.keys(typeIndices);
 		typeIndex = [];
@@ -921,6 +935,25 @@ class HlSymbolTable {
 		for (key => value in pendingTypes)
 			pending.set(rewrite.apply(key), value);
 		pendingTypes = pending;
+		return renamed;
+	}
+
+	/** The key prefix of an object's class value global in a module of sections (`HlSectionWriter.globalKey`). */
+	public static inline final CLASS_VALUE = "$class:";
+
+	/**
+	 * The objects a rename (`renameTypes`) gave names other than the ones their definitions keep, by type index: a module of
+	 * sections keys them by the name they have now, so the name the rename freed can key the type a build interns afresh.
+	 */
+	public function renamedTypeKeys():Map<Int, String> {
+		var keys:Map<Int, String> = [];
+		for (name => index in objectIndices)
+			switch types[index] {
+				case Object(defined, _, _, _, _, _) | Structure(defined, _, _, _, _) if (string(defined) != name):
+					keys.set(index, name);
+				default:
+			}
+		return keys;
 	}
 
 	/** The published definition of object `name`, or null when no published type has that name. */

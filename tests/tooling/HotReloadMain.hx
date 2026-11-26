@@ -8,12 +8,12 @@ import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
-import compiler.hl.HlOpcode;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.patch.HlPatchReader;
 import compiler.hl.patch.HlPatchWriter;
+import compiler.hl.patch.HlSectionPatch;
 import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
@@ -28,7 +28,8 @@ import sys.FileSystem;
 import sys.io.File;
 
 class HotReloadMain {
-	static function requireFunctionId(result:CompileResult, name:String):Int {
+	/** The compiler's id of function `name`, which it reports the functions a build changed by. */
+	static function compilerId(result:CompileResult, name:String):Int {
 		var id = result.artifact.hashLink().functionIds.get(name);
 		if (id == null)
 			throw 'compiled module is missing function $name';
@@ -66,12 +67,12 @@ class HotReloadMain {
 		var initial = compiler.compile("Main");
 		var liveRevision = initial.revision;
 
-		var valueIndex = requireFunctionId(initial, "Value.value"),
-			readIndex = requireFunctionId(initial, "Probe.read"),
-			exceptionIndex = requireFunctionId(initial, "ExceptionProbe.probe"),
-			workIndex = requireFunctionId(initial, "Worker.run");
 		var loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
 			initial.artifact.hashLink().runtimeIdentity);
+		var valueIndex = Runtime.requireFunctionId(loaded, "Value.value"),
+			readIndex = Runtime.requireFunctionId(loaded, "Probe.read"),
+			exceptionIndex = Runtime.requireFunctionId(loaded, "ExceptionProbe.probe"),
+			workIndex = Runtime.requireFunctionId(loaded, "Worker.run");
 		if (Runtime.callInt(loaded, valueIndex) != 42)
 			throw "initial generation did not return 42";
 		var initialLocation = Runtime.jitLocation(loaded, valueIndex);
@@ -88,31 +89,16 @@ class HotReloadMain {
 		compiler.update("Value.hx",
 			"function value():Int { var ratio:Float = 2.75; var label:String = \"patched source\"; var result = 0; while (result < 43) { result = result + 1; } return (result * 2) >> 1; }");
 		var changed = compiler.compile("Main");
-		var decoded = HlPatchReader.decode(changed.artifact.hashLink().patchBytes);
+		var decoded = HlSectionPatch.decode(changed.artifact.hashLink().patchBytes);
 		if (decoded.moduleId.compare(initial.artifact.hashLink().runtimeIdentity.sub(4, 16)) != 0)
 			throw "HLP module identity does not match its load manifest";
-		if (decoded.baseInts != initial.artifact.hashLink().module.ints.length || decoded.ints.indexOf(43) < 0)
-			throw "HLP did not encode the integer symbol delta";
-		if (decoded.baseFloats != initial.artifact.hashLink().module.floats.length || decoded.floats.length != 1
-			|| decoded.floats[0] != 2.75)
-			throw "HLP did not encode the source float symbol delta";
-		if (decoded.baseStrings != initial.artifact.hashLink().module.strings.length
-			|| decoded.strings.indexOf("patched source") < 0)
-			throw "HLP did not encode the source string symbol delta";
-		if (decoded.debugFiles.indexOf("Value.hx") < 0 || decoded.functions.length != changed.changedFunctions.length)
-			throw "HLP did not preserve opcode-indexed source debug metadata";
-		for (fn in decoded.functions) {
-			if (fn.debug.length != fn.instructions.length)
-				throw "HLP lost opcode-indexed source locations";
-			for (location in fn.debug)
-				if (location.file < 0 || location.file >= decoded.debugFiles.length || location.line < 1)
-					throw "HLP contains an invalid source debug location";
-		}
+		// Value.value and the two callers that inlined it, each in its home's section: `main` is named after no declaration.
+		var replaced = [for (section in decoded.content.replaced) section.path];
+		if (replaced.join(",") != "Probe,Value,$shared" || decoded.content.removed.length != 0)
+			throw 'HLP did not replace exactly the sections of the edited function and its inlining callers: $replaced';
 		var nativeDecoded = Runtime.inspectPatch(changed.artifact.hashLink().patchBytes);
-		if (nativeDecoded.baseRevision != decoded.baseRevision
-			|| nativeDecoded.revision != decoded.revision
-			|| nativeDecoded.functionCount != decoded.functions.length)
-			throw 'native and Haxe HLP decoders disagree: ${nativeDecoded.baseRevision}/${nativeDecoded.revision}/${nativeDecoded.functionCount} vs ${decoded.baseRevision}/${decoded.revision}/${decoded.functions.length}';
+		if (nativeDecoded.baseRevision != decoded.baseRevision || nativeDecoded.revision != decoded.revision)
+			throw 'native and Haxe HLP decoders disagree: ${nativeDecoded.baseRevision}/${nativeDecoded.revision} vs ${decoded.baseRevision}/${decoded.revision}';
 		try {
 			Runtime.inspectPatch(changed.artifact.hashLink().patchBytes.sub(0,
 				changed.artifact.hashLink().patchBytes.length - 1));
@@ -121,20 +107,26 @@ class HotReloadMain {
 			if (error.status != RuntimeStatus.BadFormat)
 				throw error;
 		}
-		var compilerIndex = changed.artifact.hashLink().functionIds.get("Value.value");
+		var compilerIndex = compilerId(changed, "Value.value");
 		// Inlined callers also need regeneration when Value.value changes.
 		if (changed.changedFunctions.length != 3
 			|| changed.changedFunctions.indexOf(compilerIndex) < 0
-			|| changed.changedFunctions.indexOf(readIndex) < 0
-			|| changed.changedFunctions.indexOf(requireFunctionId(initial, "main")) < 0)
+			|| changed.changedFunctions.indexOf(compilerId(initial, "Probe.read")) < 0
+			|| changed.changedFunctions.indexOf(compilerId(initial, "main")) < 0)
 			throw 'compiler reported unexpected changed functions: ${changed.changedFunctions}';
-		var corruptHash = changed.artifact.hashLink().patchBytes.sub(0, changed.artifact.hashLink().patchBytes.length),
-			hashPosition = skipIndex(corruptHash, 24);
-		corruptHash.set(hashPosition, corruptHash.get(hashPosition) ^ 1);
+		// A section the loader cannot read refuses the whole patch, which leaves the module as it was.
+		var unreadable = decoded.content.replaced[0].bytes.sub(0, decoded.content.replaced[0].bytes.length);
+		unreadable.set(0, 9);
+		var corrupt = HlSectionPatch.encode(decoded.moduleId, decoded.baseRevision, decoded.revision, {
+			replaced: [{path: decoded.content.replaced[0].path, bytes: unreadable}],
+			removed: [],
+			renames: [],
+			guards: [],
+			migrations: []
+		});
 		try {
-			Runtime.patchSet(loaded,
-				new PatchSet(liveRevision, changed.revision, corruptHash, changed.changedFunctions));
-			throw "mismatched symbol prefix unexpectedly succeeded";
+			Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, corrupt, changed.changedFunctions));
+			throw "a patch with an unreadable section unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.Incompatible)
 				throw error;
@@ -163,24 +155,25 @@ class HotReloadMain {
 		compiler.update("ExceptionProbe.hx",
 			"function probe():Int { try { throw \"probe\"; } catch (error:Int) { return 0; } catch (error:String) { return 42; } }");
 		var exceptionPatch = compiler.compile("Main"),
-			exceptionDecoded = HlPatchReader.decode(exceptionPatch.artifact.hashLink().patchBytes),
+			exceptionModule = exceptionPatch.artifact.hashLink().module,
 			hasTrap = false,
 			hasThrow = false,
 			hasSafeCast = false,
 			hasRethrow = false,
 			hasType = false;
-		for (fn in exceptionDecoded.functions)
-			for (instruction in fn.instructions) {
-				if (instruction.opcode == HlOpcode.Trap)
-					hasTrap = true;
-				if (instruction.opcode == HlOpcode.Throw)
-					hasThrow = true;
-				if (instruction.opcode == HlOpcode.SafeCast)
-					hasSafeCast = true;
-				if (instruction.opcode == HlOpcode.Rethrow)
-					hasRethrow = true;
-				if (instruction.opcode == HlOpcode.Type)
-					hasType = true;
+		if ([for (section in HlSectionPatch.decode(exceptionPatch.artifact.hashLink().patchBytes).content.replaced)
+			section.path]
+			.indexOf("ExceptionProbe") < 0)
+			throw "typed exception HLP did not replace the edited section";
+		for (instruction in exceptionModule.functions[exceptionModule.functionNames.indexOf("ExceptionProbe.probe")]
+			.opcodes)
+			switch instruction {
+				case Trap(_, _, _): hasTrap = true;
+				case Throw(_): hasThrow = true;
+				case SafeCast(_, _): hasSafeCast = true;
+				case Rethrow(_): hasRethrow = true;
+				case LoadType(_, _): hasType = true;
+				default:
 			}
 		if (!hasTrap || !hasThrow || !hasSafeCast || !hasRethrow || !hasType)
 			throw "typed exception HLP omitted trap, throw, type, cast, or rethrow opcodes";
@@ -213,17 +206,10 @@ class HotReloadMain {
 		compiler.update("Probe.hx", "function read():Int { var result = Value.value(); return result; }");
 		var pair = compiler.compile("Main");
 		if (pair.changedFunctions.length != 3
-			|| pair.changedFunctions.indexOf(valueIndex) < 0
-			|| pair.changedFunctions.indexOf(readIndex) < 0
-			|| pair.changedFunctions.indexOf(requireFunctionId(initial, "main")) < 0)
+			|| pair.changedFunctions.indexOf(compilerId(initial, "Value.value")) < 0
+			|| pair.changedFunctions.indexOf(compilerId(initial, "Probe.read")) < 0
+			|| pair.changedFunctions.indexOf(compilerId(initial, "main")) < 0)
 			throw "two-function edit did not produce an atomic pair";
-		var pairDecoded = HlPatchReader.decode(pair.artifact.hashLink().patchBytes),
-			hasRelocation = false;
-		for (patchedFunction in pairDecoded.functions)
-			if (patchedFunction.relocations.length > 0)
-				hasRelocation = true;
-		if (!hasRelocation)
-			throw "patched calls were not encoded as stable-ID relocations";
 		Runtime.patchSet(loaded,
 			new PatchSet(liveRevision, pair.revision, pair.artifact.hashLink().patchBytes, pair.changedFunctions));
 		liveRevision = pair.revision;
@@ -502,11 +488,8 @@ class HotReloadMain {
 		var prefix = directory + "/jit-support-lifetime";
 		File.saveBytes(prefix + "-owner.hl", ownerResult.artifact.hashLink().hashLinkBytes().flatten());
 		File.saveBytes(prefix + "-owner.hli", ownerResult.artifact.hashLink().runtimeIdentity);
-		File.saveContent(prefix + "-owner.id", Std.string(ownerResult.artifact.hashLink().functionIds.get("main")));
 		File.saveBytes(prefix + "-survivor.hl", survivorResult.artifact.hashLink().hashLinkBytes().flatten());
 		File.saveBytes(prefix + "-survivor.hli", survivorResult.artifact.hashLink().runtimeIdentity);
-		File.saveContent(prefix + "-survivor.id",
-			Std.string(survivorResult.artifact.hashLink().functionIds.get("main")));
 		var test = Sys.getEnv("HAXEON_SDK") + "/bin/haxeon-jit-support-lifetime";
 		#if windows
 		test += ".exe";
@@ -524,17 +507,17 @@ class HotReloadMain {
 		compiler.update("Main.hx", "function main():Int { return 42; }");
 		var result = compiler.compile("Main"),
 			bytes = result.artifact.hashLink().hashLinkBytes().flatten(),
-			mainId = result.artifact.hashLink().functionIds.get("main");
+			identity = result.artifact.hashLink().runtimeIdentity;
 		for (i in 0...100) {
-			runDisposableGeneration(bytes, result.artifact.hashLink().runtimeIdentity, mainId);
+			runDisposableGeneration(bytes, identity);
 			if (Runtime.retryRetirements() != 0)
 				throw 'physical module retirement remained blocked at iteration $i';
 		}
 	}
 
-	static function runDisposableGeneration(bytes:haxe.io.Bytes, identity:haxe.io.Bytes, mainId:Int):Void {
+	static function runDisposableGeneration(bytes:haxe.io.Bytes, identity:haxe.io.Bytes):Void {
 		var loaded = Runtime.load(bytes, identity);
-		if (Runtime.callInt(loaded, mainId) != 42)
+		if (Runtime.callInt(loaded, Runtime.requireFunctionId(loaded, "main")) != 42)
 			throw "disposable generation returned the wrong value";
 		Runtime.dispose(loaded);
 	}
@@ -685,10 +668,10 @@ class HotReloadMain {
 		for (fixture in fixtures) {
 			var compiler = new Compiler();
 			compiler.update("Main.hx", fixture.before);
-			var initial = compiler.compile("Main"),
-				mainId = initial.artifact.hashLink().functionIds.get("main");
+			var initial = compiler.compile("Main");
 			var loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
-				initial.artifact.hashLink().runtimeIdentity);
+				initial.artifact.hashLink().runtimeIdentity),
+				mainId = Runtime.requireFunctionId(loaded, "main");
 			compiler.update("Main.hx", fixture.after);
 			var changed = compiler.compile("Main");
 			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null
@@ -712,7 +695,8 @@ class HotReloadMain {
 			mainId = initial.artifact.hashLink().functionIds.get("main"),
 			helperId = initial.artifact.hashLink().functionIds.get("Main.helper"),
 			loaded = Runtime.load(initial.artifact.hashLink().hashLinkBytes().flatten(),
-				initial.artifact.hashLink().runtimeIdentity);
+				initial.artifact.hashLink().runtimeIdentity),
+			runningMain = Runtime.requireFunctionId(loaded, "main");
 		compiler.acknowledgePublication(initial.revision);
 		var state = compiler.exportIdentityState();
 		if (state.compare(compiler.exportIdentityState()) != 0)
@@ -737,7 +721,7 @@ class HotReloadMain {
 			new PatchSet(initial.revision, changed.revision, changed.artifact.hashLink().patchBytes,
 			changed.changedFunctions));
 		resumed.acknowledgePublication(changed.revision);
-		if (Runtime.callInt(loaded, mainId) != 42)
+		if (Runtime.callInt(loaded, runningMain) != 42)
 			throw "Surviving runtime did not execute the restarted compiler patch";
 		Runtime.dispose(loaded);
 	}
@@ -763,21 +747,16 @@ class HotReloadMain {
 		for (_ in 0...100)
 			HlAssemblerStateCodec.decode(assemblerBytes);
 		probeCompiler("assembler");
-		// Version 1 omitted import ordering, so an initialized baseline cannot safely resume.
-		var state = assembler.exportState(),
-			legacySections = 4 + state.symbols.length + 4 + state.cache.length,
-			legacyBytes = haxe.io.Bytes.alloc(25 + legacySections);
-		// Version 4 added publishedGlobals after the version 1 header.
-		legacyBytes.blit(0, assemblerBytes, 0, 25);
-		legacyBytes.blit(25, assemblerBytes, 29, legacySections);
-		legacyBytes.set(3, 1);
+		// A baseline of another version has no section digests to patch against, so it does not resume.
+		var legacyBytes = assemblerBytes.sub(0, assemblerBytes.length);
+		legacyBytes.set(3, 5);
 		var legacyRejected = false;
 		try
 			HlAssemblerStateCodec.decode(legacyBytes)
 		catch (error:Dynamic)
-			legacyRejected = Std.string(error).indexOf("native-import ordering") >= 0;
+			legacyRejected = Std.string(error).indexOf("Unsupported HashLink assembler state version") >= 0;
 		if (!legacyRejected)
-			throw "Legacy assembler baseline was accepted without import ordering";
+			throw "An assembler baseline of another version was accepted";
 		var uninterruptedAssembler = assembler.copy(),
 			restoredAssembler = HlAssemblerStateCodec.decode(assemblerBytes),
 			editedCompiler = new Compiler();
@@ -796,10 +775,14 @@ class HotReloadMain {
 			|| uninterrupted.baseTypes != restored.baseTypes
 			|| uninterrupted.changedFunctions.join(",") != restored.changedFunctions.join(",")
 			|| uninterrupted.changedSlots.join(",") != restored.changedSlots.join(",")
-			|| HlWriter.encode(uninterrupted.module).flatten().compare(HlWriter.encode(restored.module).flatten()) != 0)
+			|| encodedFunctions(uninterrupted.module) != encodedFunctions(restored.module)
+			|| Std.string(uninterrupted.module.types) != Std.string(restored.module.types))
 			throw "Restored assembler output disagreed with uninterrupted assembly";
 		probeCompiler("mutated restored assembler");
 	}
+
+	static function encodedFunctions(module:compiler.hl.HlCode):String
+		return [for (fn in module.functions) HlWriter.encodeFunction(fn).toHex()].join(",");
 
 	static function probeCompiler(after:String):Void {
 		var compiler = new Compiler();
