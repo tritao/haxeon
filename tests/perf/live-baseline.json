@@ -32,12 +32,12 @@
 			"why": "The edited function, its callers and the adapter: deterministic."
 		},
 		"ui_body_edit_functions": {
-			"value": 2,
+			"value": 1,
 			"tolerance_abs": 0,
 			"why": "The functions the body edit's patch carries, which the runtime compiles: the edited one and what it is inlined into. Deterministic."
 		},
 		"ui_signature_edit_functions": {
-			"value": 10,
+			"value": 7,
 			"tolerance_abs": 0,
 			"why": "The edited function, its callers and the adapter: deterministic."
 		},
