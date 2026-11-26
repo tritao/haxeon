@@ -205,6 +205,46 @@ class PurityInference {
 		};
 	}
 
+	/**
+		For the setter `fn` of instance property `property` of `owner`: the fields its body stores to, when that is all it does
+		to state anyone else can see; null when it may have any other effect. A bare name it stores to must be a field of
+		`owner` with no setter of its own, but for `property`, whose setter this is and whose store is a plain one.
+	 */
+	public static function setterStores(inference:PurityInference, fn:AstFunction, owner:String,
+			property:String):Null<{
+				dependencies:Array<String>,
+				fields:Array<String>
+			}> {
+		var walker = new PurityWalker(inference, owner + "." + fn.name);
+		var stores:{fields:Map<String, Bool>, indexed:Bool} = {fields: [], indexed: false};
+		walker.stores = stores;
+		walker.setterOf = {owner: owner, property: property};
+		walker.declare("this");
+		for (argument in fn.arguments) {
+			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
+				return null;
+			walker.declare(argument.name, PurityWalker.isNumericType(argument.type));
+		}
+		if (!walker.statements(fn.statements) || stores.indexed)
+			return null;
+		return {
+			dependencies: [for (key in walker.dependencies.keys()) key],
+			fields: [for (field in stores.fields.keys()) field]
+		};
+	}
+
+	/** Whether `owner` declares an instance field `name` that a store in its setter of `property` writes directly. */
+	public function plainStoreInSetter(owner:String, property:String, name:String):Bool {
+		note(FactAspect.Members, owner);
+		var declaration = classes.get(owner);
+		if (declaration == null)
+			return false;
+		for (field in declaration.fields)
+			if (!field.isStatic && field.name == name)
+				return name == property || (field.writeAccess != SetAccess && field.writeAccess != DynamicAccess);
+		return false;
+	}
+
 	/** Whether assigning a field of this name may run a setter on some type: a `set_` method or a `set`/`dynamic` field. */
 	public function mayHaveSetter(field:String):Bool {
 		note(FactAspect.Kind, DeclarationFacts.KIND_ACCESSORS);
@@ -577,6 +617,9 @@ private class PurityWalker {
 	/** When set, element and plain field stores are recorded here instead of rejected (see `localBodyStores`). */
 	public var stores:Null<{fields:Map<String, Bool>, indexed:Bool}> = null;
 
+	/** When analyzing a setter (`setterStores`): its class and property, whose bare field stores it records. */
+	public var setterOf:Null<{owner:String, property:String}> = null;
+
 	/** When analyzing construction, direct stores to this fresh receiver do not affect prior state. */
 	public var freshReceiver:Null<String> = null;
 
@@ -759,6 +802,8 @@ private class PurityWalker {
 							isStringArrayType(type), isMapType(type));
 				pure;
 			case Assignment(name, value, _) if (freshReceiver != null && freshAssignment(name)): expression(value);
+			case Assignment(name, value, _) if (setterField(name) != null): recordFieldStore(setterField(name));
+				expression(value);
 			case Assignment(name, value, _) if (stores != null && !isLocal(name)): dottedFieldStore(name)
 				&& expression(value);
 			case Assignment(name, value, _): isLocal(name) && expression(value);
@@ -771,6 +816,8 @@ private class PurityWalker {
 				pure;
 			case TemporaryAssignment(local, value, _): isLocal(local.name) && expression(value);
 			case DeclaredAssignment(name, _, value, _): isLocal(name) && expression(value);
+			case Increment(name, _, _) if (setterField(name) != null): recordFieldStore(setterField(name));
+				true;
 			case Increment(name, _, _) if (stores != null && !isLocal(name)): dottedFieldStore(name);
 			case Increment(name, _, _): isLocal(name);
 			case IndexAssignment(Variable(name, _), key, value, _) if (isOuterPrivateMap(name)): expression(key)
@@ -779,6 +826,9 @@ private class PurityWalker {
 				expression(target) && expression(key) && expression(value);
 			case FieldAssignment(Variable("this", _), field, value,
 				_) if (freshReceiver != null && inference.freshField(freshReceiver, field)):
+				expression(value);
+			case FieldAssignment(Variable("this", _), field, value,
+				_) if (setterField("this." + field) != null): recordFieldStore(field);
 				expression(value);
 			case FieldAssignment(object, field, value,
 				_) if (stores != null && !inference.mayHaveSetter(field)): recordFieldStore(field);
@@ -963,6 +1013,8 @@ private class PurityWalker {
 				true;
 			case PostfixIncrement(target, _, _):
 				switch target {
+					case Variable(name, _) if (setterField(name) != null): recordFieldStore(setterField(name));
+						true;
 					case Variable(name, _) if (stores != null && !isLocal(name)): dottedFieldStore(name);
 					case Variable(name, _): isLocal(name);
 					case Member(object, field, _) if (stores != null && !inference.mayHaveSetter(field)):
@@ -1168,6 +1220,17 @@ private class PurityWalker {
 				return false;
 		recordFieldStore(field);
 		return true;
+	}
+
+	/** In a setter, the receiver's field that a store to `name` (bare or through `this.`) writes directly, or null. */
+	function setterField(name:String):Null<String> {
+		var setter = setterOf;
+		if (setter == null)
+			return null;
+		var field = StringTools.startsWith(name, "this.") ? name.substr(5) : name;
+		if (field.indexOf(".") >= 0 || (field == name && isLocal(name)))
+			return null;
+		return inference.plainStoreInSetter(setter.owner, setter.property, field) ? field : null;
 	}
 
 	function recordFieldStore(field:String):Void {

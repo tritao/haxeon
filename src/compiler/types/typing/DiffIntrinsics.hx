@@ -39,6 +39,13 @@ class DiffIntrinsics {
 			default: false;
 		};
 
+	/** `bit` and `all` are constants of the type's declaration: a call reads and changes nothing. */
+	public static function isConstant(name:String):Bool
+		return switch name {
+			case "Diff.bit", "haxeon.Diff.bit", "Diff.all", "haxeon.Diff.all": true;
+			default: false;
+		};
+
 	public static function expand(session:TypingSession, name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			typeOf:AstExpression->CompilerType,
 			pathOf:AstExpression->compiler.types.TypedAst.TypedExpression):AstExpression {

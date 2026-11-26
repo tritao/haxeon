@@ -56,10 +56,9 @@ class App implements UiApplication implements UiDiagnosticsProvider {
 	function tabs():Tabs {
 		var options = new TabsOptions();
 		options.selectionMode = TabsSelectionMode.Controlled;
-		var style = new LayoutStyle();
-		style.width = LayoutAxis.grow();
-		style.height = LayoutAxis.grow();
-		options.style = style;
+		options.style = new LayoutStyle();
+		options.style.width = LayoutAxis.grow();
+		options.style.height = LayoutAxis.grow();
 		return Tabs.withOptions("tabs", [
 			new TabItem("tasks", "Tasks", tasksPage()),
 			new TabItem("settings", "Settings", settingsPage())

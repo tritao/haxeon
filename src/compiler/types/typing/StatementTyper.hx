@@ -587,7 +587,7 @@ class StatementTyper {
 						propertySetter = ClassProperties.instanceAccessor(session, thisType, name, false, receiver,
 							span);
 					if (propertySetter != null) {
-						session.invalidateCallEffects(propertySetter, scope);
+						session.invalidateSetterEffects(propertySetter, name, scope);
 						return TExpression(setterStore(assigned, bodyTyper.propertySetterCall(receiver, propertySetter,
 							value, span)), span);
 					}
@@ -697,7 +697,7 @@ class StatementTyper {
 							};
 						};
 				if (setter != null) session.invalidateUnknownCall(scope);
-				else if (propertySetter != null) session.invalidateCallEffects(propertySetter, scope);
+				else if (propertySetter != null) session.invalidateSetterEffects(propertySetter, fieldName, scope);
 				scope.invalidateField(fieldName);
 				var objectPath = FlowAnalysis.accessPath(object);
 				if (objectPath != null && setter == null && propertySetter == null) {
@@ -856,7 +856,7 @@ class StatementTyper {
 							}
 					};
 				if (setter != null) session.invalidateUnknownCall(scope);
-				else if (propertySetter != null) session.invalidateCallEffects(propertySetter, scope);
+				else if (propertySetter != null) session.invalidateSetterEffects(propertySetter, fieldName, scope);
 				scope.invalidateField(fieldName);
 				var objectPath = FlowAnalysis.accessPath(object);
 				if (objectPath != null && setter == null && propertySetter == null) {

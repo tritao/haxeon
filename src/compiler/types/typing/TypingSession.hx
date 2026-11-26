@@ -778,6 +778,34 @@ class TypingSession {
 			invalidateUnknownCall(scope);
 	}
 
+	/**
+		Forgets in `scope` what a call of `setter`, the setter of instance property `property`, can change. An inline setter
+		cannot be overridden and its body is part of the call, so it forgets only the fields that body stores to.
+	 */
+	public function invalidateSetterEffects(setter:String, property:String, scope:Scope):Void {
+		if (isPureCall(setter))
+			return;
+		var fields = inlineSetterStores(setter, property);
+		if (fields == null) {
+			invalidateUnknownCall(scope);
+			return;
+		}
+		for (field in fields)
+			scope.invalidateField(field);
+	}
+
+	function inlineSetterStores(setter:String, property:String):Null<Array<String>> {
+		var fn = signatures.get(setter), owner = compiler.core.QualifiedName.parent(setter);
+		if (fn == null || fn.isInline != true || owner == null)
+			return null;
+		readBody(setter);
+		var found = compiler.types.analysis.PurityInference.setterStores(localPurityInference(), fn, owner, property),
+			recorder = reads();
+		if (recorder != null)
+			recorder.read(FactAspect.Members, owner);
+		return found == null || !dependenciesArePure(found.dependencies) ? null : found.fields;
+	}
+
 	/** Annotated functions and read-only compiler intrinsics; the inference seeds from these. */
 	function isDeclaredPure(name:String):Bool
 		return compiler.types.analysis.PurityAnnotations.isDeclaredPure(name, signatures.withoutReads(),
