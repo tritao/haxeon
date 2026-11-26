@@ -1049,10 +1049,8 @@ class IrBodyTagEscapes {
  */
 @:nullSafety(Strict)
 class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
-	/** The tag equalities something calls, kept with the walk summaries they were found from. */
-	@:processWide("a kept walk's key, only ever read")
-	static final CALLED_EQUALITIES = new compiler.ir.reuse.IrStageMemo
-		.IrContributionKey<compiler.ir.reuse.IrWalkRecord<IrWalkSummary, Map<String, Bool>>>("called-tag-equalities");
+	/** The tag equalities something calls, a session's walk (`IrTypeAwareWalk.referenced`). */
+	static inline final CALLED_EQUALITIES = "called-tag-equalities";
 
 	// Facts.
 	static inline final ELIGIBLE = 0;
@@ -1485,7 +1483,7 @@ class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 		for (fn in generated) {
 			if (fn.retention != Reachable)
 				root(fn.name);
-			var summary = IrWalkSummary.of(fn, stageMemos, scratch);
+			var summary = IrWalkSummary.of(fn, scratch);
 			for (name in summary.calls)
 				root(name);
 			for (name in summary.staticClosures)

@@ -129,6 +129,11 @@ class IrStageMemos {
 	 */
 	var helpers:Null<compiler.query.ComputedQueryKind<IrFunction>> = null;
 
+	/** The whole-program walks the steps registered (`walk`), by name. */
+	final walks:Map<String, IrWalkMemo<Dynamic>> = [];
+
+	final walkList:Array<IrWalkMemo<Dynamic>> = [];
+
 	/** The contribution summaries the steps registered (`summary`), by name. */
 	final summaries:Map<String, IrContributionSummary<Dynamic>> = [];
 
@@ -218,6 +223,17 @@ class IrStageMemos {
 	public inline function nextVersion():Int
 		return IrFunction.newVersion();
 
+	/** The session's walk `name` (`IrWalkMemo`), registered the first time a step asks for it. */
+	public function walk<R>(name:String):IrWalkMemo<R> {
+		var known = walks.get(name);
+		if (known == null) {
+			known = database.register(new IrWalkMemo<Dynamic>(name, walkList));
+			walks.set(name, known);
+			walkList.push(known);
+		}
+		return cast known;
+	}
+
 	/** The session's contribution summary `name` (`IrContributionSummary`), registered the first time a step asks for it. */
 	public function summary<T>(name:String):IrContributionSummary<T> {
 		var known = summaries.get(name);
@@ -296,6 +312,8 @@ class IrStageMemos {
 			encodings.clear();
 		memos.clear();
 		summaries.clear();
+		for (walk in walks)
+			walk.clear();
 		contributions.clear();
 		results.clear();
 	}

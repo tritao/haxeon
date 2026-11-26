@@ -254,19 +254,7 @@ class IrEnumEscapeReach {
 			supportsCallableEscape:IrType->Bool, stageMemos:Null<IrStageMemos>):Array<Map<String, Bool>> {
 		if (stageMemos == null)
 			return walkEach(lists, supportsCallableEscape);
-		var given = ['closures ${closureLog.length}', 'maps ${mapLog.length}'],
-			givenTypes = closureLog.concat(mapLog);
-		for (roots in lists) {
-			given.push('roots ${roots.length}');
-			for (root in roots)
-				givenTypes.push(IrTypeIds.id(root));
-		}
-		// The functions the methods name, in program order, found without indexing every function by name.
-		var methodNames:Map<String, Bool> = [];
-		for (object in program.objects)
-			for (method in object.methods)
-				methodNames.set(method.functionName.name, true);
-		var methodFunctions = [for (fn in program.functions) if (methodNames.exists(fn.name)) fn];
+		var given = givenOf(lists), givenTypes = givenTypesOf(lists), methodFunctions = methodFunctionsOf();
 		var memos = stageMemos,
 			last = memos.lastResult(key),
 			kept = last == null ? null : last.holds(program, given, givenTypes, methodFunctions, (_, _) -> null);
@@ -292,6 +280,64 @@ class IrEnumEscapeReach {
 				answers: answers
 			}));
 		return results;
+	}
+
+	/**
+	 * `collect` as the session's walk `name` (`IrWalkMemo`): last build's result while this reach reads what last build's did, the
+	 * roots are the same and `supportsCallableEscape` answers what it answered then; else walked again. With `--check-reuse` a kept
+	 * result is walked again and compared.
+	 */
+	public function collectWalked(name:String, roots:Array<IrType>, supportsCallableEscape:IrType->Bool,
+			stageMemos:Null<IrStageMemos>):Map<String, Bool> {
+		if (stageMemos == null)
+			return collect(roots, supportsCallableEscape);
+		var lists = [roots],
+			memo:compiler.ir.reuse.IrWalkMemo<IrEscapeResults> = stageMemos.walk(name),
+			kept = memo.kept(stageMemos.database, program, methodFunctionsOf(), givenOf(lists), givenTypesOf(lists),
+				false);
+		if (kept != null && sameAnswers(kept, supportsCallableEscape)) {
+			if (stageMemos.checks && !sameResults(walkEach(lists, supportsCallableEscape), kept.results))
+				throw new compiler.core
+					.InternalError('--check-reuse: the escape reach $name reused results that differ from walking it now');
+			return kept.results[0].copy();
+		}
+		memo.begin(stageMemos.database);
+		var asked:Array<IrType> = [], answers:Array<Bool> = [];
+		var results = walkEach(lists, type -> {
+			var answer = supportsCallableEscape(type);
+			asked.push(type);
+			answers.push(answer);
+			answer;
+		});
+		memo.end(stageMemos.database,
+			{results: [for (result in results) result.copy()], asked: asked, answers: answers});
+		return results[0];
+	}
+
+	/** What a kept reach is given besides the program: how many closures, map stores and roots of each list, as names... */
+	function givenOf(lists:Array<Array<IrType>>):Array<String> {
+		var given = ['closures ${closureLog.length}', 'maps ${mapLog.length}'];
+		for (roots in lists)
+			given.push('roots ${roots.length}');
+		return given;
+	}
+
+	/** ...and the closures, the map stores and the roots, as type ids. */
+	function givenTypesOf(lists:Array<Array<IrType>>):Array<Int> {
+		var givenTypes = closureLog.concat(mapLog);
+		for (roots in lists)
+			for (root in roots)
+				givenTypes.push(IrTypeIds.id(root));
+		return givenTypes;
+	}
+
+	/** The functions the methods name, in program order, found without indexing every function by name. */
+	function methodFunctionsOf():Array<IrFunction> {
+		var methodNames:Map<String, Bool> = [];
+		for (object in program.objects)
+			for (method in object.methods)
+				methodNames.set(method.functionName.name, true);
+		return [for (fn in program.functions) if (methodNames.exists(fn.name)) fn];
 	}
 
 	/** Whether `supportsCallableEscape` answers what the walk that found `kept` was answered. */

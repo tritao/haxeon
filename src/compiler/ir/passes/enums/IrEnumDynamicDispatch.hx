@@ -2,9 +2,6 @@ package compiler.ir.passes.enums;
 
 import compiler.core.InternalError;
 import compiler.ir.analysis.IrEnumEscapeReach;
-import compiler.ir.analysis.IrEnumEscapeReach.IrEscapeResults;
-import compiler.ir.reuse.IrWalkRecord;
-import compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
@@ -40,15 +37,11 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 	@:processWide("a shared empty map, only ever read")
 	static final noTypeValues:Map<Int, IrType> = [];
 
-	/** The escape reach of the reflection decision, which a session keeps (`IrEnumEscapeReach.collectKept`). */
-	@:processWide("a kept reach's key, only ever read")
-	public static final OBSERVED =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("enum-dispatch-reach");
+	/** The escape reach of the reflection decision, a session's walk (`IrEnumEscapeReach.collectWalked`). */
+	static inline final OBSERVED = "enum-dispatch-reach";
 
-	/** The reflective equality helpers something reaches, kept with the walk summaries they were found from. */
-	@:processWide("a kept walk's key, only ever read")
-	static final DROPPED = new compiler.ir.reuse.IrStageMemo
-		.IrContributionKey<IrWalkRecord<IrWalkSummary, Map<String, Bool>>>("enum-dispatch-dropped");
+	/** The reflective equality helpers something reaches, a session's walk (`IrTypeAwareWalk.referenced`). */
+	static inline final DROPPED = "enum-dispatch-dropped";
 
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";
@@ -246,7 +239,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 				IrEnumEscapeReach.addNativeRoot(roots, native.result);
 			}
 			var observed = new IrEnumEscapeReach(program, fn -> closing.exists(fn.name),
-				stageMemos).collectKept(OBSERVED,
+				stageMemos).collectWalked(OBSERVED,
 				roots,
 				_ -> false, stageMemos);
 			for (fn in functions) switch fn.kind {
@@ -445,7 +438,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 
 	/**
 	 * The typed reflective equality helpers neither the roots nor a function outside them reaches, which the stage drops
-	 * (`IrTypeAwareWalk.referenced`, kept as `DROPPED` in a session with `program`, the tables of the functions).
+	 * (`IrTypeAwareWalk.referenced`, the session's walk `DROPPED` with `program`, the tables of the functions).
 	 */
 	static function droppedReflectiveHelpers(functions:Array<IrFunction>, roots:Array<String>,
 			stageMemos:Null<compiler.ir.reuse.IrStageMemo.IrStageMemos>, program:Null<IrProgram>):Map<String, Bool> {

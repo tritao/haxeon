@@ -8,10 +8,7 @@ import compiler.core.InternalError;
 import compiler.ir.analysis.IrTypeAwareWalk.IrClassDependencies;
 import compiler.ir.analysis.IrTypeAwareWalk.IrWalkResult;
 import compiler.ir.analysis.IrTypeAwareWalk.IrWalkRoots;
-import compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary;
 import compiler.ir.model.Ir;
-import compiler.ir.reuse.IrStageMemo.IrContributionKey;
-import compiler.ir.reuse.IrWalkRecord;
 
 /**
  * The prune of ADR 0003 §13 at the 3a point of `IrProgramAssembler.assemble` (docs/design/REACHABILITY_WALK.md): after the enum providers are
@@ -57,22 +54,17 @@ class IrPruneWatch {
 
 @:nullSafety(Strict)
 class IrEntryPrune {
-	/** The walk of the dispatch decisions, which a session keeps (`IrTypeAwareWalk.runKept`). */
-	@:processWide("a kept walk's key, only ever read")
-	public static final DISPATCH_WALK =
-		new IrContributionKey<IrWalkRecord<IrWalkSummary, IrWalkResult>>("dispatch-walk");
+	/** The walk of the dispatch decisions, a session's walk (`IrTypeAwareWalk.runKept`). */
+	public static inline final DISPATCH_WALK = "dispatch-walk";
 
-	/** The walk the prune removes by, which a session keeps. */
-	@:processWide("a kept walk's key, only ever read")
-	public static final PRUNE_WALK =
-		new IrContributionKey<IrWalkRecord<IrWalkSummary, IrWalkResult>>("entry-prune-walk");
+	/** The walk the prune removes by. */
+	public static inline final PRUNE_WALK = "entry-prune-walk";
 
 	/**
 	 * The walk `run` prunes by, without removing anything: what `roots` (and `@:keep`) reach in `program`. In a session the walk is
-	 * kept as `key`; the result is the caller's to change.
+	 * the session's walk `name`; the result is the caller's to change.
 	 */
-	public static function walk(program:IrProgram, roots:Array<String>,
-			key:IrContributionKey<IrWalkRecord<IrWalkSummary, IrWalkResult>>,
+	public static function walk(program:IrProgram, roots:Array<String>, name:String,
 			?classDependencies:IrClassDependencies,
 			?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos):IrWalkResult {
 		var entries = roots.copy();
@@ -82,7 +74,7 @@ class IrEntryPrune {
 		var walkRoots:IrWalkRoots = {functions: entries, types: []};
 		if (stageMemos == null)
 			return IrTypeAwareWalk.run(program, walkRoots, null, false, true, classDependencies);
-		return IrTypeAwareWalk.runKept(key, program, walkRoots, true, classDependencies, stageMemos);
+		return IrTypeAwareWalk.runKept(name, program, walkRoots, true, classDependencies, stageMemos);
 	}
 
 	/** Prunes `program` to what `roots` (the entry's function, the static initializers, the exported functions) and `@:keep` reach. */
