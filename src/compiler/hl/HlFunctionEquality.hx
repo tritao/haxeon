@@ -4,16 +4,21 @@ import compiler.hl.HlFunction.HlInstruction;
 
 /** Structural comparison of two lowered functions: type, slot, registers, opcodes, debug locations and assignments. */
 class HlFunctionEquality {
-	/** Null when the functions are the same; otherwise the first difference. */
-	public static function difference(a:HlFunction, b:HlFunction):Null<String> {
-		if (a.type != b.type)
+	/**
+	 * Null when the functions are the same; otherwise the first difference. Without `indexed`, the indices of table entries
+	 * (constants, types, globals, functions, debug names) and the slot are not compared: two functions lowered in builds that
+	 * number their tables apart are the same code when the rest is the same and those indices name the same entries, which the
+	 * caller compares (`HlSectionWriter`), as it does their debug locations, which are not compared then either.
+	 */
+	public static function difference(a:HlFunction, b:HlFunction, indexed:Bool = true):Null<String> {
+		if (indexed && a.type != b.type)
 			return 'type ${a.type} and ${b.type}';
-		if (a.functionIndex != b.functionIndex)
+		if (indexed && a.functionIndex != b.functionIndex)
 			return 'slot ${a.functionIndex} and ${b.functionIndex}';
 		if (a.registers.length != b.registers.length)
 			return 'register counts ${a.registers.length} and ${b.registers.length}';
 		for (index in 0...a.registers.length)
-			if (a.registers[index] != b.registers[index])
+			if (indexed && a.registers[index] != b.registers[index])
 				return 'register $index is type ${a.registers[index]} and ${b.registers[index]}';
 		// Two functions are the same when their labels correspond one to one, whatever numbers they have.
 		var forward:Map<Int, Int> = [],
@@ -21,11 +26,11 @@ class HlFunctionEquality {
 		if (a.opcodes.length != b.opcodes.length)
 			return 'opcode counts ${a.opcodes.length} and ${b.opcodes.length}';
 		for (index in 0...a.opcodes.length)
-			if (!same(a.opcodes[index], b.opcodes[index], forward, backward))
+			if (!same(a.opcodes[index], b.opcodes[index], forward, backward, indexed))
 				return 'opcode $index is ${a.opcodes[index]} and ${b.opcodes[index]}';
-		if (a.debugLocations.length != b.debugLocations.length)
+		if (indexed && a.debugLocations.length != b.debugLocations.length)
 			return 'debug location counts ${a.debugLocations.length} and ${b.debugLocations.length}';
-		for (index in 0...a.debugLocations.length) {
+		for (index in 0...(indexed ? a.debugLocations.length : 0)) {
 			var x = a.debugLocations[index], y = b.debugLocations[index];
 			if (x != y
 				&& (x.anchor != y.anchor || x.line != y.line || x.column != y.column || x.endLine != y.endLine
@@ -37,15 +42,15 @@ class HlFunctionEquality {
 			return 'debug assignment counts ${a.debugAssignments.length} and ${b.debugAssignments.length}';
 		for (index in 0...a.debugAssignments.length) {
 			var x = a.debugAssignments[index], y = b.debugAssignments[index];
-			if (x.name != y.name || x.position != y.position || x.scopeEnd != y.scopeEnd)
+			if (indexed && x.name != y.name || x.position != y.position || x.scopeEnd != y.scopeEnd)
 				return 'debug assignment $index differs';
 		}
 		return null;
 	}
 
 	/** Compare every opcode explicitly; a new constructor must add its operand comparison here. */
-	static function same(a:HlInstruction, b:HlInstruction, forward:Map<Int, Int>,
-			backward:Map<Int, Int>):Bool {
+	static function same(a:HlInstruction, b:HlInstruction, forward:Map<Int, Int>, backward:Map<Int, Int>,
+			indexed:Bool):Bool {
 		return switch a {
 			case Move(destination, source):
 				switch b {
@@ -55,19 +60,19 @@ class HlFunctionEquality {
 			case LoadInt(destination, constant):
 				switch b {
 					case LoadInt(otherDestination, otherConstant): destination == otherDestination
-						&& constant == otherConstant;
+						&& (!indexed || constant == otherConstant);
 					default: false;
 				}
 			case LoadFloat(destination, constant):
 				switch b {
 					case LoadFloat(otherDestination, otherConstant): destination == otherDestination
-						&& constant == otherConstant;
+						&& (!indexed || constant == otherConstant);
 					default: false;
 				}
 			case LoadString(destination, constant):
 				switch b {
 					case LoadString(otherDestination, otherConstant): destination == otherDestination
-						&& constant == otherConstant;
+						&& (!indexed || constant == otherConstant);
 					default: false;
 				}
 			case LoadBool(destination, value):
@@ -82,7 +87,8 @@ class HlFunctionEquality {
 				}
 			case LoadType(destination, type):
 				switch b {
-					case LoadType(otherDestination, otherType): destination == otherDestination && type == otherType;
+					case LoadType(otherDestination, otherType): destination == otherDestination
+						&& (!indexed || type == otherType);
 					default: false;
 				}
 			case GetType(destination, source):
@@ -157,12 +163,13 @@ class HlFunctionEquality {
 			case GlobalGet(destination, global):
 				switch b {
 					case GlobalGet(otherDestination, otherGlobal): destination == otherDestination
-						&& global == otherGlobal;
+						&& (!indexed || global == otherGlobal);
 					default: false;
 				}
 			case GlobalSet(global, source):
 				switch b {
-					case GlobalSet(otherGlobal, otherSource): global == otherGlobal && source == otherSource;
+					case GlobalSet(otherGlobal, otherSource): (!indexed || global == otherGlobal)
+						&& source == otherSource;
 					default: false;
 				}
 			case Add(destination, left, right):
@@ -234,38 +241,41 @@ class HlFunctionEquality {
 			case Call0(destination, functionIndex):
 				switch b {
 					case Call0(otherDestination, otherFunctionIndex): destination == otherDestination
-						&& functionIndex == otherFunctionIndex;
+						&& (!indexed || functionIndex == otherFunctionIndex);
 					default: false;
 				}
 			case Call1(destination, functionIndex, argument):
 				switch b {
 					case Call1(otherDestination, otherFunctionIndex, otherArgument): destination == otherDestination
-						&& functionIndex == otherFunctionIndex && argument == otherArgument;
+						&& (!indexed || functionIndex == otherFunctionIndex) && argument == otherArgument;
 					default: false;
 				}
 			case Call2(destination, functionIndex, argument1, argument2):
 				switch b {
 					case Call2(otherDestination, otherFunctionIndex, otherArgument1, otherArgument2): destination
-						== otherDestination && functionIndex == otherFunctionIndex && argument1 == otherArgument1
+						== otherDestination && (!indexed || functionIndex == otherFunctionIndex)
+						&& argument1 == otherArgument1
 						&& argument2 == otherArgument2;
 					default: false;
 				}
 			case CallN(destination, functionIndex, arguments):
 				switch b {
 					case CallN(otherDestination, otherFunctionIndex, otherArguments): destination == otherDestination
-						&& functionIndex == otherFunctionIndex && sameRegisters(arguments, otherArguments);
+						&& (!indexed || functionIndex == otherFunctionIndex)
+						&& sameRegisters(arguments, otherArguments);
 					default: false;
 				}
 			case StaticClosure(destination, functionIndex):
 				switch b {
 					case StaticClosure(otherDestination, otherFunctionIndex): destination == otherDestination
-						&& functionIndex == otherFunctionIndex;
+						&& (!indexed || functionIndex == otherFunctionIndex);
 					default: false;
 				}
 			case InstanceClosure(destination, functionIndex, receiver):
 				switch b {
 					case InstanceClosure(otherDestination, otherFunctionIndex, otherReceiver): destination
-						== otherDestination && functionIndex == otherFunctionIndex && receiver == otherReceiver;
+						== otherDestination && (!indexed || functionIndex == otherFunctionIndex)
+						&& receiver == otherReceiver;
 					default: false;
 				}
 			case CallClosure(destination, closure, arguments):
@@ -294,7 +304,7 @@ class HlFunctionEquality {
 			case New(destination, type, extra):
 				switch b {
 					case New(otherDestination, otherType, otherExtra): destination == otherDestination
-						&& type == otherType && extra == otherExtra;
+						&& (!indexed || type == otherType) && extra == otherExtra;
 					default: false;
 				}
 			case FieldGet(destination, object, field):

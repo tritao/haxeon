@@ -26,6 +26,12 @@ class HlLoweredFunction {
 	/** The facts lowering read, as pairs of a fact and the print it had (`HlLoweringView`, `IrFacts`). */
 	public final facts:Array<Int>;
 
+	/**
+	 * What the code names, as pairs of a table (`HlSectionWriter`'s use kinds) and an index of `fn`, in the order a section's
+	 * encoding meets them: made from `fn` the first time a section is written with it, and shared by the copies.
+	 */
+	public var uses:Null<Array<Int>> = null;
+
 	public function new(name:String, source:IrFunction, fn:HlFunction, keys:Array<Int>, answers:Array<Int>,
 			facts:Array<Int>) {
 		this.name = name;
@@ -37,9 +43,15 @@ class HlLoweredFunction {
 	}
 
 	/** The same lowering, for an IR function that compares equal to its source (so the next comparison is by identity). */
-	public function from(equalSource:IrFunction):HlLoweredFunction
-		return new HlLoweredFunction(name, equalSource, fn, keys, answers, facts);
+	public function from(equalSource:IrFunction):HlLoweredFunction {
+		var result = new HlLoweredFunction(name, equalSource, fn, keys, answers, facts);
+		result.uses = uses;
+		return result;
+	}
 
-	public function renamed(next:String):HlLoweredFunction
-		return new HlLoweredFunction(next, source, fn, keys, answers, facts);
+	public function renamed(next:String):HlLoweredFunction {
+		var result = new HlLoweredFunction(next, source, fn, keys, answers, facts);
+		result.uses = uses;
+		return result;
+	}
 }

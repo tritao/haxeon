@@ -16,13 +16,20 @@ class HlRequestAnswers {
 
 	final symbols:HlSymbolTable;
 	final functions:Map<String, Int>;
-	final answered:Array<Bool> = [];
-	final values:Array<Int> = [];
+	final answered:Array<Bool>;
+	final values:Array<Int>;
 
-	public function new(keys:HlRequestKeys, symbols:HlSymbolTable, functions:Map<String, Int>) {
+	/**
+	 * With `continued`, the answers of a build whose tables `symbols` extends, with the same function layout: what it answered
+	 * stays the answer (`HlLoweredTables`).
+	 */
+	public function new(keys:HlRequestKeys, symbols:HlSymbolTable, functions:Map<String, Int>,
+			?continued:HlRequestAnswers) {
 		this.keys = keys;
 		this.symbols = symbols;
 		this.functions = functions;
+		answered = continued == null ? [] : continued.answered.copy();
+		values = continued == null ? [] : continued.values.copy();
 	}
 
 	public function answer(key:Int):Int {

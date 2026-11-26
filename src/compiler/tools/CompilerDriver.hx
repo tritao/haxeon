@@ -550,13 +550,19 @@ class CompilerDriver {
 		return result;
 	}
 
-	static function dumpFunction(result:CompileResult, index:Int, report:String->Void):Void
-		for (fn in BackendArtifacts.hashLink(result.artifact).module.functions)
-			if (fn.functionIndex == index) {
+	static function dumpFunction(result:CompileResult, index:Int, report:String->Void):Void {
+		var module = BackendArtifacts.hashLink(result.artifact).module, relocations = module.relocations;
+		for (position in 0...module.functions.length)
+			if ((relocations == null ? module.functions[position].functionIndex : relocations.functionIndices[position])
+				== index) {
+				// A sectioned build's function is shown with this module's indices.
+				var fn = relocations == null ? module.functions[position] : relocations.materialize(position,
+					new compiler.hl.incremental.HlSymbolRequest.HlRemap());
 				report('function ${fn.functionIndex} type=${fn.type} registers=${[for (register in fn.registers) Std.string(register)].join(",")}');
 				for (instructionIndex in 0...fn.opcodes.length)
 					report('$instructionIndex\t${Std.string(fn.opcodes[instructionIndex])}');
 			}
+	}
 
 	/** The live manifest's identities: every function's stable id, by name, in name order, as JSON. */
 	/**

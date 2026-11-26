@@ -1,0 +1,58 @@
+package compiler.hl.incremental;
+
+import compiler.core.InternalError;
+import compiler.hl.incremental.HlSymbolRequest.HlRemap;
+
+/**
+ * The functions of a sectioned build (`HlCode.relocations`), each kept as the build that lowered it made it: its code names
+ * entries by the indices that build's tables gave its requests (`HlLoweredFunction.answers`), and this says where this build's
+ * tables hold them. So a function whose IR and outside facts are the same stays the same object from build to build, however the
+ * tables number now, and a section whose functions and entries read the same is kept (`HlSectionWriter`).
+ */
+class HlRelocations {
+	/** By position in the module's functions, the lowered function, its requests with the answers its code uses. */
+	public final lowered:Array<HlLoweredFunction>;
+
+	/** By position, the function's index in this build's layout. */
+	public final functionIndices:Array<Int>;
+
+	/** By position, the index of the function's type in this build's tables. */
+	public final functionTypes:Array<Int>;
+
+	/** By position, whether some index the function's code uses is another in this build's tables (`fill`). */
+	public final moves:Array<Bool>;
+
+	final answers:HlRequestAnswers;
+
+	/**
+	 * The run of builds whose tables this build's extend (`HlLoweredTables.chain`): an index of a table names the same entry in
+	 * every build of one run, so what a section named in one it names in the others.
+	 */
+	public final chain:Int;
+
+	public function new(lowered:Array<HlLoweredFunction>, functionIndices:Array<Int>, functionTypes:Array<Int>,
+			moves:Array<Bool>, answers:HlRequestAnswers, chain:Int) {
+		this.chain = chain;
+		this.lowered = lowered;
+		this.functionIndices = functionIndices;
+		this.functionTypes = functionTypes;
+		this.moves = moves;
+		this.answers = answers;
+	}
+
+	/** Fills `remap` with where this build's tables hold each index the function at `position` uses. */
+	public function fill(position:Int, remap:HlRemap):Void {
+		var conflict = HlLink.fill(lowered[position], answers, remap);
+		if (conflict != null)
+			throw new InternalError('HashLink sections: ${lowered[position].name} was kept although $conflict');
+	}
+
+	/** The function at `position` with this build's indices, for a reader of the dense module: itself when none moved. */
+	public function materialize(position:Int, remap:HlRemap):HlFunction {
+		var fn = lowered[position].fn;
+		if (!moves[position] && functionIndices[position] == fn.functionIndex)
+			return fn;
+		fill(position, remap);
+		return HlLink.rewritten(fn, functionIndices[position], remap);
+	}
+}

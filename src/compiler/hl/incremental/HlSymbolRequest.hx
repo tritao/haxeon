@@ -63,16 +63,19 @@ enum abstract HlRuntimeHeader(Int) {
 	var ArrayHeader = 1;
 }
 
-/** How a function's indices change between two builds, by table (`HlRequestKeys.INTS` to `FUNCTIONS`). */
+/**
+ * How a function's indices change between two builds, by table (`HlRequestKeys.INTS` to `FUNCTIONS`), for one function at a time:
+ * `start` forgets the last function's.
+ */
 class HlRemap {
-	public final ints:Map<Int, Int> = [];
-	public final floats:Map<Int, Int> = [];
-	public final strings:Map<Int, Int> = [];
-	public final types:Map<Int, Int> = [];
-	public final globals:Map<Int, Int> = [];
-	public final functions:Map<Int, Int> = [];
+	final targets:Array<Array<Int>> = [for (_ in 0...HlRequestKeys.FUNCTIONS + 1)[]];
+	final stamps:Array<Array<Int>> = [for (_ in 0...HlRequestKeys.FUNCTIONS + 1)[]];
+	var epoch = 0;
 
 	public function new() {}
+
+	public function start():Void
+		epoch++;
 
 	/**
 	 * Notes that index `from` of `table` is `to` in this build; false when `from` is already another index, which no remap gives.
@@ -80,19 +83,22 @@ class HlRemap {
 	 * answers them apart (the enum gets a boxed descriptor).
 	 */
 	public function note(table:Int, from:Int, to:Int):Bool {
-		var map = switch table {
-			case HlRequestKeys.INTS: ints;
-			case HlRequestKeys.FLOATS: floats;
-			case HlRequestKeys.STRINGS: strings;
-			case HlRequestKeys.TYPES: types;
-			case HlRequestKeys.GLOBALS: globals;
-			case HlRequestKeys.FUNCTIONS: functions;
-			default: throw new compiler.core.InternalError('HashLink link: table $table has no indices');
-		}, known = map.get(from);
-		if (known != null)
-			return known == to;
-		map.set(from, to);
+		var stamp = stamps[table], target = targets[table];
+		if (from < stamp.length && stamp[from] == epoch)
+			return target[from] == to;
+		if (from >= stamp.length) {
+			stamp.resize(from + 1);
+			target.resize(from + 1);
+		}
+		stamp[from] = epoch;
+		target[from] = to;
 		return true;
+	}
+
+	/** What index `from` of `table` is in this build, or -1 when the function asked for no entry there. */
+	public inline function get(table:Int, from:Int):Int {
+		var stamp = stamps[table];
+		return from < stamp.length && stamp[from] == epoch ? targets[table][from] : -1;
 	}
 
 	public static function methodSlotAnswer(symbols:HlSymbolTable, typeName:String, name:String):Int {

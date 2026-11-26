@@ -102,6 +102,16 @@ class HlLower {
 	/** The answers linking gives the requests in this build's tables. */
 	var answers:Null<compiler.hl.incremental.HlRequestAnswers> = null;
 
+	/** Where this build's tables hold the indices of the function being linked or relocated. */
+	final remap = new HlRemap();
+
+	/**
+	 * A sectioned build (`HlCode.relocations`): a function whose IR is the one the last build lowered, and whose outside facts
+	 * hold, is kept as that build made it, and nothing makes the tables what a cold build's order would, since the sections name
+	 * entries by key.
+	 */
+	final sectioned:Bool;
+
 	/** The functions of the last build, to link instead of lowering again; filled with this build's at the end. */
 	final loweredCache:Null<compiler.hl.incremental.HlLoweredCache>;
 
@@ -163,7 +173,7 @@ class HlLower {
 			developmentMetadata:Bool = true, recordLowering:Bool = false,
 			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
 			trustCache:Bool = false, ?frozen:String->Bool, checkReuse:Bool = false,
-			?sources:compiler.core.SourceAnchor.SourceAnchors):MeasuredHlCode {
+			?sources:compiler.core.SourceAnchor.SourceAnchors, sectioned:Bool = false):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -194,14 +204,15 @@ class HlLower {
 			lowerer = new HlLower(program, symbols, indices, stableIds, affected, runtimeNatives, debugCache,
 				fieldReserve,
 				developmentMetadata, recordLowering,
-				loweredCache, trustCache, frozen, checkReuse, true, sources),
+				loweredCache, trustCache, frozen, checkReuse, true, sources, sectioned),
 			kept = lowerer.lowerProgram(program);
 		var code:HlCode = if (kept != null) kept else {
 			// The last build's tables did not fit what this one asks: lower with fresh ones.
 			symbols.clear();
 			lowerer = new HlLower(program, symbols, indices, stableIds, affected, runtimeNatives, debugCache,
 				fieldReserve,
-				developmentMetadata, recordLowering, loweredCache, trustCache, frozen, checkReuse, false, sources);
+				developmentMetadata, recordLowering, loweredCache, trustCache, frozen, checkReuse, false, sources,
+				sectioned);
 			lowerer.lowerProgram(program) ?? throw new InternalError("HashLink lowering: fresh tables did not fit");
 		}
 		return {
@@ -254,8 +265,9 @@ class HlLower {
 			developmentMetadata:Bool = true,
 			recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, trustCache:Bool = false,
 			?frozen:String->Bool, checkReuse:Bool = false, keepTables:Bool = true,
-			?sources:compiler.core.SourceAnchor.SourceAnchors) {
+			?sources:compiler.core.SourceAnchor.SourceAnchors, sectioned:Bool = false) {
 		this.frozen = frozen;
+		this.sectioned = sectioned;
 		this.keepTables = keepTables;
 		this.symbols = symbols;
 		arrayBounds = new HlArrayBounds(compiler.ir.analysis.IrLoopBounds.pureNativeCalls(program.natives));
@@ -263,7 +275,7 @@ class HlLower {
 		this.checkingLinks = !trustCache && checkReuse;
 		this.loweredCache = loweredCache;
 		this.checkingTrust = trustCache && checkReuse;
-		this.recordLowering = !trustCache && (recordLowering || checkingLinks || loweredCache != null);
+		this.recordLowering = !trustCache && (recordLowering || checkingLinks || loweredCache != null || sectioned);
 		this.requestKeys = loweredCache != null ? loweredCache.keys : new compiler.hl.incremental.HlRequestKeys();
 		this.fieldReserve = fieldReserve;
 		this.stableIds = stableIds;
@@ -562,9 +574,9 @@ class HlLower {
 		var metadataDoneAt = Sys.time() * 1000.0;
 		PeakProbe.mark("lower-metadata-done");
 		var allocationAfterMetadata = AllocationMeter.sample();
-		var environment = checkingLinks ? symbols.copy() : null;
+		var environment = checkingLinks && !sectioned ? symbols.copy() : null;
 		// A plain build keeps the last build's tables when its metadata and function layout are theirs (`HlLinkRecord`).
-		var recordsTables = loweredCache != null && recordLowering && !trustCache,
+		var recordsTables = loweredCache != null && recordLowering && !trustCache && !sectioned,
 			slots = recordsTables ? slotNames() : null,
 			last = recordsTables && keepTables && loweredCache != null ? loweredCache.tables : null,
 			record = last != null && slots != null && last.fits(symbols, slots) ? last : null,
@@ -573,9 +585,22 @@ class HlLower {
 			keeping = new compiler.hl.incremental.HlLinkRecord.HlKeptTables(record, requestKeys);
 			symbols.shareFrom(record.tables);
 		}
-		answers = new compiler.hl.incremental.HlRequestAnswers(requestKeys, symbols, functionIndices);
+		// A sectioned build extends the last one's tables when its metadata and function layout are theirs (`HlLoweredTables`).
+		var sectionSlots = sectioned ? slotNames() : null,
+			previousTables = sectioned && loweredCache != null ? loweredCache.sectionTables : null,
+			extended = keepTables ? previousTables : null;
+		if (extended != null && sectionSlots != null && extended.fits(symbols, sectionSlots))
+			symbols.shareFrom(extended.tables);
+		else
+			extended = null;
+		var chain = extended != null ? extended.chain : previousTables == null ? 0 : previousTables.chain + 1;
+		answers = new compiler.hl.incremental.HlRequestAnswers(requestKeys, symbols, functionIndices,
+			extended == null ? null : extended.answers);
 		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [],
-			order:Array<compiler.hl.incremental.HlLoweredFunction> = [];
+			order:Array<compiler.hl.incremental.HlLoweredFunction> = [],
+			relocated:Array<compiler.hl.incremental.HlLoweredFunction> = [],
+			relocatedTypes:Array<Int> = [],
+			relocatedMoves:Array<Bool> = [];
 		for (position in 0...program.functions.length) {
 			var fn = program.functions[position];
 			var kept = trustCache && !regenerated.exists(fn.name)
@@ -593,44 +618,61 @@ class HlLower {
 				if (entry != null
 					&& (entry.source == fn || compiler.ir.codec.IrFunctionStateEquality.same(entry.source, fn))) {
 					var found:compiler.hl.incremental.HlLoweredFunction = entry;
-					// In kept tables, the function the last build had at this position asks nothing: its requests have their answers.
-					if (record != null && position < record.functions.length && found == record.functions[position]
-						&& view.holds(found.facts) == null) {
-						var same = found.source == fn ? found : found.from(fn);
-						code.functions.push(found.fn);
-						entries.set(fn.name, same);
-						order.push(same);
-						this.lowered.set(fn.name, found);
-						reusedFunctions++;
-						continue;
-					}
 					var current = answers;
 					if (current == null)
 						throw new InternalError("HashLink lowering: linking without answers");
-					var linked = compiler.hl.incremental.HlLink.link(found, current, functionIndices, view);
-					var linkedFn = linked.fn;
-					if (linkedFn != null) {
-						// A function whose indices moved is kept with this build's, so the cache holds the module's code rather than a
-						// second copy of it, and the next build that gives it the same indices keeps it as it is.
-						var rebased = linked.rebased;
-						if (rebased != null) {
-							movedFunctions++;
-							found = rebased;
+					if (sectioned) {
+						var relocation = compiler.hl.incremental.HlLink.relocate(found, current, view, remap);
+						if (relocation != compiler.hl.incremental.HlLink.STALE) {
+							var moves = relocation == compiler.hl.incremental.HlLink.MOVES;
+							var same = found.source == fn ? found : found.from(fn);
+							code.functions.push(found.fn);
+							entries.set(fn.name, same);
+							this.lowered.set(fn.name, found);
+							relocated.push(same);
+							relocatedTypes.push(moves ? remap.get(compiler.hl.incremental.HlRequestKeys.TYPES,
+								found.fn.type) : found.fn.type);
+							relocatedMoves.push(moves);
+							reusedFunctions++;
+							continue;
 						}
-						if (record != null) {
-							var settled = settleKept(position, found, linkedFn);
-							if (settled == null)
-								return false;
-							found = settled.entry;
-							linkedFn = settled.fn;
+					} else {
+						// In kept tables, the function the last build had at this position asks nothing: its requests have their answers.
+						if (record != null && position < record.functions.length && found == record.functions[position]
+							&& view.holds(found.facts) == null) {
+							var same = found.source == fn ? found : found.from(fn);
+							code.functions.push(found.fn);
+							entries.set(fn.name, same);
+							order.push(same);
+							this.lowered.set(fn.name, found);
+							reusedFunctions++;
+							continue;
 						}
-						code.functions.push(linkedFn);
-						var same = found.source == fn ? found : found.from(fn);
-						entries.set(fn.name, same);
-						order.push(same);
-						this.lowered.set(fn.name, found);
-						reusedFunctions++;
-						continue;
+						var linked = compiler.hl.incremental.HlLink.link(found, current, functionIndices, view, remap);
+						var linkedFn = linked.fn;
+						if (linkedFn != null) {
+							// A function whose indices moved is kept with this build's, so the cache holds the module's code rather than a
+							// second copy of it, and the next build that gives it the same indices keeps it as it is.
+							var rebased = linked.rebased;
+							if (rebased != null) {
+								movedFunctions++;
+								found = rebased;
+							}
+							if (record != null) {
+								var settled = settleKept(position, found, linkedFn);
+								if (settled == null)
+									return false;
+								found = settled.entry;
+								linkedFn = settled.fn;
+							}
+							code.functions.push(linkedFn);
+							var same = found.source == fn ? found : found.from(fn);
+							entries.set(fn.name, same);
+							order.push(same);
+							this.lowered.set(fn.name, found);
+							reusedFunctions++;
+							continue;
+						}
 					}
 				}
 				try {
@@ -662,7 +704,15 @@ class HlLower {
 							this.lowered.set(fn.name, entry);
 							entries.set(fn.name, entry);
 							order.push(entry);
-						}
+							if (sectioned) {
+								if (checkingLinks)
+									verifyAnswers(entry);
+								relocated.push(entry);
+								relocatedTypes.push(lowered.type);
+								relocatedMoves.push(false);
+							}
+						} else if (sectioned)
+							throw new InternalError("HashLink lowering: a sectioned build records every function's requests");
 						code.functions.push(lowered);
 					}
 				} catch (error:InternalError) {
@@ -686,7 +736,9 @@ class HlLower {
 		// The String constants' globals each hold the literal's String: its data, its length and its hash, which a string map
 		// computes and keeps on first use. They come after every function, so they are the last requests (see `HlLinkRecord`).
 		var constantKeys:Array<Int> = [], constantAnswers:Array<Int> = [];
-		if (record != null && symbols.stringConstantGlobals() == record.tables.stringConstantGlobals()) {
+		if (extended != null && symbols.stringConstantGlobals() == extended.tables.stringConstantGlobals())
+			code.constants = extended.constants;
+		else if (record != null && symbols.stringConstantGlobals() == record.tables.stringConstantGlobals()) {
 			code.constants = record.constants;
 			constantKeys = record.constantKeys;
 			constantAnswers = record.constantAnswers;
@@ -741,6 +793,12 @@ class HlLower {
 		var cache = loweredCache;
 		if (cache != null) {
 			cache.entries = entries;
+			var current = answers;
+			if (sectioned && sectionSlots != null && current != null) {
+				cache.tables = null;
+				cache.sectionTables = new compiler.hl.incremental.HlLoweredCache.HlLoweredTables(metadata, sectionSlots,
+					symbols, current, code.constants, chain);
+			}
 			if (recordsTables && slots != null)
 				{
 				var next = new compiler.hl.incremental.HlLinkRecord(metadata, slots, order, constantKeys,
@@ -793,6 +851,11 @@ class HlLower {
 		code.globals = symbols.globals;
 		code.functionNames = [for (fn in program.functions) fn.name];
 		code.globalNames = symbols.globalNames();
+		var current = answers;
+		if (sectioned && current != null)
+			code.relocations = new compiler.hl.incremental.HlRelocations(relocated,
+				[for (fn in program.functions) requireFunction(fn.name)], relocatedTypes, relocatedMoves, current,
+				chain);
 		var finalizedAt = Sys.time() * 1000.0;
 		var allocationAfterFinalize = AllocationMeter.sample();
 		allocationPhases = [
@@ -831,7 +894,8 @@ class HlLower {
 		var answers = this.answers;
 		if (answers == null)
 			throw new InternalError("HashLink lowering: kept tables without answers");
-		var linked = compiler.hl.incremental.HlLink.link(entry, answers, functionIndices, view), linkedFn = linked.fn;
+		var linked = compiler.hl.incremental.HlLink.link(entry, answers, functionIndices, view, remap),
+			linkedFn = linked.fn;
 		if (linkedFn == null)
 			return null;
 		movedFunctions++;
@@ -874,7 +938,7 @@ class HlLower {
 			var lowered = this.lowered.get(fn.name);
 			if (lowered == null)
 				throw new InternalError('--check-reuse: no lowering was recorded for ${fn.name}');
-			var linked = compiler.hl.incremental.HlLink.link(lowered, replayed, functionIndices, view);
+			var linked = compiler.hl.incremental.HlLink.link(lowered, replayed, functionIndices, view, remap);
 			if (linked.fn == null)
 				throw new InternalError('--check-reuse: linking ${fn.name} against the tables it was lowered with failed: ${linked.reason}');
 			if (linked.fn != lowered.fn)
@@ -886,6 +950,16 @@ class HlLower {
 		sameReplayTable("the string", symbols.strings, environment.strings);
 		sameReplayTable("the global", symbols.globals, environment.globals);
 		sameReplayTable("the type", symbols.types, environment.types);
+	}
+
+	/** In a sectioned build, what a function's code names is what its requests answer in the tables it was lowered into. */
+	function verifyAnswers(entry:compiler.hl.incremental.HlLoweredFunction):Void {
+		var current = answers;
+		if (current == null)
+			throw new InternalError("HashLink lowering: checking answers without them");
+		for (index in 0...entry.keys.length)
+			if (current.answer(entry.keys[index]) != entry.answers[index])
+				throw new InternalError('--check-reuse: ${entry.name} recorded request ${Std.string(requestKeys.request(entry.keys[index]))} with answer ${entry.answers[index]}, the tables answer ${current.answer(entry.keys[index])}');
 	}
 
 	static function sameReplayTable<T>(what:String, expected:Array<T>, actual:Array<T>):Void {

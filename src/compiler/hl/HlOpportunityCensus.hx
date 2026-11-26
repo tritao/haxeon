@@ -18,18 +18,22 @@ class HlOpportunityCensus {
 		var names:Map<Int, String> = [];
 		for (name => index in indices)
 			names.set(index, name);
-		var functions = code.functions.copy();
-		functions.sort((a, b) -> a.functionIndex - b.functionIndex);
-		for (fn in functions) {
-			var histogram:Map<String, Int> = [];
+		// A sectioned build's functions keep the indices of the builds that lowered them: their indices here are the layout's.
+		var relocations = code.relocations,
+			order = [for (position in 0...code.functions.length) position],
+			indexOf = (position:Int) -> relocations == null
+				? code.functions[position].functionIndex : relocations.functionIndices[position];
+		order.sort((a, b) -> indexOf(a) - indexOf(b));
+		for (position in order) {
+			var fn = code.functions[position], index = indexOf(position), histogram:Map<String, Int> = [];
 			for (op in fn.opcodes)
 				IrOpportunityCensus.addOpcode(histogram, IrOpportunityCensus.constructorName(Std.string(op)));
-			var name = names.get(fn.functionIndex);
+			var name = names.get(index);
 			Sys.stderr()
 				.writeString("EMITTED_CENSUS {\"target\":\"hl\",\"name\":"
-				+ haxe.Json.stringify(name == null ? "#" + fn.functionIndex : name)
+				+ haxe.Json.stringify(name == null ? "#" + index : name)
 				+ ",\"index\":"
-				+ fn.functionIndex
+				+ index
 				+ ",\"instructions\":"
 				+ fn.opcodes.length
 				+ ",\"bytes\":"

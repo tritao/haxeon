@@ -71,6 +71,8 @@ class HlWriter {
 	 * consistency checks of what it reuses (`CompileOptions.checkReuse`).
 	 */
 	public static function encode(code:HlCode, ?cache:HlWriterCache, checkReuse:Bool = false):SegmentedBytes {
+		if (code.relocations != null)
+			throw new compiler.core.InternalError("A sectioned build's module is written as sections");
 		HlValidator.validate(code, cache, checkReuse);
 		var writer = new HlWriter(cache);
 		writer.writeCode(code);

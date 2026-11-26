@@ -15,7 +15,17 @@ class HlCode {
 	public var types:Array<HlTypeDef> = [];
 	public var globals:Array<Int> = [];
 	public var natives:Array<HlNative> = [];
+	/**
+	 * The functions, with the indices of these tables, or, in a sectioned build (`relocations`), each with the indices of the
+	 * build that lowered it.
+	 */
 	public var functions:Array<HlFunction> = [];
+
+	/**
+	 * In a sectioned build, where these tables hold what each of `functions` names: such a module is written as sections only
+	 * (`HlSectionWriter`), and a reader of its functions' indices goes through this.
+	 */
+	public var relocations:Null<compiler.hl.incremental.HlRelocations> = null;
 
 	/** Objects the VM creates when the module loads, each stored in one global. */
 	public var constants:Array<HlConstant> = [];

@@ -2,8 +2,9 @@
 
 Status: designed 2026-11-25; the open questions are decided (section 9). Slice 1, the loader, has landed, and slice 2a: the
 compiler writes sections behind `--module-sections`, links them ahead of time, and every reader of modules reads them
-(section 8). Slice 3a has landed too: homes by declaration, and a warm build keeps every section whose encoding would read the
-same (section 3, "As built in slice 3a"). The option stays off until slice 2b flips it. The user's decision: per-module sections and load-time linking replace "stable output indices"
+(section 8). Slices 3a and 3b have landed too: homes by declaration, a warm build keeps every section whose encoding would
+read the same, and keeps its functions as they were lowered, with no link or replay (section 3, "As built in slice 3a", "As
+built in slice 3b"). The option stays off until slice 2b flips it. The user's decision: per-module sections and load-time linking replace "stable output indices"
 ([COMPILER_FOUNDATIONS.md](COMPILER_FOUNDATIONS.md) item 3, [QUERY_ENGINE.md](QUERY_ENGINE.md) row B).
 
 **Problem.** HashLink's function, type, global, string and constant tables are dense and numbered in first-use order, so a
@@ -267,10 +268,9 @@ None of these can come from a correct compiler. The compiler-side linker (see 5)
   do. `--check-reuse` encodes every kept section again and requires the same bytes.
   - Slice 7 takes it over as is: a section is one computed result keyed by module, its value the bytes, its reads the
     values above (a computed kind per stage, not per section), and the file the root that reuses section by section.
-- **Signature edits.** A plain build relinks every function whose dense indices moved (`HlLink`), into new function
-  objects, so the memo encodes their sections again although most come out the same: on the self-compile's signature
-  edit 503 of 522 sections are encoded and 14 change. Lowering into section-local keys (Lowering, above; the rest of
-  slice 3) keeps those functions the same objects, and the memo then keeps their sections.
+- **Signature edits.** A plain build relinked every function whose dense indices moved (`HlLink`), into new function
+  objects, so the memo encoded their sections again although most came out the same: on the self-compile's signature
+  edit 503 of 522 sections were encoded and 14 changed. Slice 3b keeps those functions the same objects.
 - **Measured** (the compile server on the frozen self-compile input, main-thread instructions, release, perf-guard's
   edits), `--module-sections` against dense HLB 8: the body edit 2.209 G against 2.291 G (slice 2a: 4.257 G), one section
   of 522 encoded; the no-op 0.784 G against 0.798 G (the backend does not run); the signature edit 19.06 G against
@@ -280,6 +280,43 @@ None of these can come from a correct compiler. The compiler-side linker (see 5)
   against 202 M to read the dense module, and starting the compiler (load, link, JIT) 4.519 G against 4.404 G dense
   (+2.6%, was +3.4%). What is left is the opcode reading with its remap (+24 M), LZ4 (22 M), the key and string tables and
   structural interning.
+
+### As built in slice 3b
+
+- **Functions kept as they were lowered** (`HlCode.relocations`, `HlRelocations`). A sectioned build keeps each function whose
+  IR is the one an earlier build lowered, and whose facts and positions (fields, slots) still hold, as the very object that
+  build made, with that build's indices: its references are its requests (`HlLoweredFunction.keys`), and its code names each
+  by the answer it got (`answers`). `HlLink.relocate` asks them of this build's tables, and only when an answer differs says
+  where the entry is now (`HlRemap`); nothing is rewritten, and nothing makes the tables what a cold build's order would. The
+  section writer maps each index a function's code uses through that to the section's (`HlLoweredFunction.uses`, what the
+  code names in the order the encoding meets it, made once per function). The design's per-function reference table is
+  these requests; local positions in it would have meant rewriting every function once more when it is lowered.
+- **Tables extend** (`HlLoweredTables`). A build with the last one's metadata and function layout extends that build's tables
+  and keeps its answers, so a kept function asks nothing and its indices are the same: a run of such builds (`chain`) never
+  changes an entry once made, and an entry no function names any more stays until a build starts a new run (another
+  metadata or layout, as a signature edit makes).
+- **The memo in section terms.** A section's reads are its own inputs (`readOwn`: its functions, their names, their anchors'
+  line and file, with opcode spans also offset and hash, and its snapshots) and what it names (`readNamed`: the section index
+  of everything each function names, then the entries of its tables in the section's indices, with their keys and homes),
+  none of which depends on how the dense tables are numbered. A section of the same run whose functions are the same objects
+  with the same indices, whose imported functions have the same types and whose own inputs read the same is kept without
+  being collected (`unchanged`); else it is collected and kept when both read the same; else it is encoded, and kept as the
+  same bytes when they come out equal. A function lowered again to the same code up to the indices it names and its anchors
+  (`HlFunctionEquality.difference` without `indexed`, then its locations as the section encodes them) reads the same, so a
+  signature edit encodes only the sections whose bytes change.
+- **`--check-reuse`** encodes every kept section again, compares the build's sections with those of a build lowered afresh
+  (their dense tables are numbered as each build asked for entries, so the dense modules are not compared), and checks that
+  each freshly lowered function's answers are what the tables answer, in place of the replay check (`verifyLinking`).
+- **Measured** (as for slice 3a), `--module-sections` against dense HLB 8: the body edit 2.183 G against 2.238 G (slice 3a:
+  2.209 G against 2.291 G) and back 2.079 G against 2.220 G, one section of 522 encoded; the signature edit 17.73 G against
+  18.30 G (slice 3a: 19.06 G against 18.35 G), 14 sections encoded and 14 changed. A cold sectioned build is byte-identical to slice 3a's, and the dense path to
+  the one before.
+- **Left for after slice 2b.** The dense path still links and replays, so that a warm HLB 8 build is byte-identical to a cold
+  one: `HlLinkRecord` and `HlKeptTables`, `HlLink.link`, the dense branches of `HlLower.lowerProgramWithNatives` (kept
+  tables, the recorded String constants, `settleKept`, `settleTables`, `verifyLinking`, `sameReplayTable`),
+  `HlSymbolTable.replaceLeaf`, `truncate`, `typesName` and `stringConstantAt`, and `HlRequestKeys.interns`. The sectioned
+  path uses none of them; they go when plain builds stop writing HLB 8, about −650 lines. Live builds keep their own machinery
+  until slice 4.
 
 ## 4. Live patching
 
@@ -375,7 +412,7 @@ and perf-guard, including startup.
 | A | Positions relative to their declaration (in progress elsewhere) | — | — | — |
 | 1 | Fork: `link.c` and the HLB 9 reader beside the dense one. C tests on hand-built two-section modules cover every failure mode, plus `hldump`. Landed: `tests/native/code_link.c` (the `code-link` suite) | +1,500 C (+1,400 C tests) | fork tests; existing suites untouched (the compiler still writes HLB 8) | — |
 | 2 | Compiler: home modules, `HlSectionWriter`, `HlStaticLink`. Plain builds write HLB 9; live builds stay on HLB 8. AOT, `hl-stat` and the binary-size report link statically. **Split.** 2a landed: the writer, the static link, the readers (`HlModuleReader`, hl-stat, the size report, the debugger) and the check that the VM's link equals the static link (`code_link --compare`, the `module-sections` suite, the `driver-sections` suite), with sections behind the typed option `--module-sections`. 2b: plain builds write sections by default, the self-compile oracle and the checked-in bootstrap take their new base | +1,100 / −150 | the self-compile takes its new base. New validation: the VM's link equals `HlStaticLink`'s. The ci debug-metadata suite | 1, A |
-| 3 | Plain warm builds without link and replay. One memo per module section, then folded into engine slice 7. **Split.** 3a landed: homes by declaration and the section memo (section 3, "As built in slice 3a"). 3b: lowering into section-local keys, without link and replay, which keeps the sections of relinked functions on a signature edit | −1,000 / +150 | `--check-reuse` | 2 |
+| 3 | Plain warm builds without link and replay. One memo per module section, then folded into engine slice 7. **Split.** 3a landed: homes by declaration and the section memo (section 3, "As built in slice 3a"). 3b landed: functions kept as lowered, tables extended, the memo in section terms (section 3, "As built in slice 3b"); link and replay go with dense plain builds | −1,000 / +150 | `--check-reuse` | 2 |
 | 4 | Live patching on sections: HLP 12, the patch linker, loader stable ids, slots and codecs removed, HXR | −2,100 / +500 compiler, −450 / +450 fork | the ci hot-reload suite, the patch mains, `NominalInterfacePatchMain`, an Android watch run; with live pruning ([LIVE_PRUNING.md](LIVE_PRUNING.md) slice 3) | 3 |
 | 5 | Per-class initializer parts in their owning modules. The compiler no longer writes HLB 8 for live builds | −50 / +100 | edit replay on a static-initializer edit | 4 |
 

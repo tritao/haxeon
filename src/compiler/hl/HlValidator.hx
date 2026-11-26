@@ -99,13 +99,21 @@ class HlValidator {
 			requireString(code, native.name, 'native name');
 			addFunctionIndex(functionIndices, native.functionIndex);
 		}
-		for (fn in code.functions) {
-			requireType(code, fn.type, 'function', fn.functionIndex);
-			addFunctionIndex(functionIndices, fn.functionIndex);
+		// A sectioned build's functions keep the indices of the builds that lowered them: each is checked with this module's.
+		var relocations = code.relocations,
+			remap = relocations == null ? null : new compiler.hl.incremental.HlSymbolRequest.HlRemap();
+		for (position in 0...code.functions.length) {
+			var fn = code.functions[position],
+				type = relocations == null ? fn.type : relocations.functionTypes[position],
+				index = relocations == null ? fn.functionIndex : relocations.functionIndices[position];
+			requireType(code, type, 'function', index);
+			addFunctionIndex(functionIndices, index);
 		}
-		for (fn in code.functions) {
-			if (cache != null && cache.isValidated(fn))
+		for (position in 0...code.functions.length) {
+			var kept = code.functions[position];
+			if (cache != null && cache.isValidated(kept))
 				continue;
+			var fn = relocations == null || remap == null ? kept : relocations.materialize(position, remap);
 			if (fn.debugLocations.length != 0 && fn.debugLocations.length != fn.opcodes.length)
 				throw new InternalError('Debug location count does not match opcodes in function ${fn.functionIndex}');
 			for (location in fn.debugLocations)
@@ -115,7 +123,7 @@ class HlValidator {
 				requireType(code, registerType, 'register in function', fn.functionIndex);
 			validateInstructions(code, fn, functionIndices);
 			if (cache != null)
-				cache.markValidated(fn);
+				cache.markValidated(kept);
 		}
 		if (!functionIndices.exists(code.entryPoint))
 			throw new InternalError('Entry point ${code.entryPoint} is not a function');

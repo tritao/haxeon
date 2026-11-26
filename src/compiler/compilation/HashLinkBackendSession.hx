@@ -111,9 +111,16 @@ class HashLinkBackendSession implements BackendSession {
 	}
 
 	/** Why a module assembled from the same inputs differs from `previous`, or null when it is the same module. */
-	public function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String>
-		return moduleDifference(BackendArtifacts.hashLink(previous.artifact).module,
-			BackendArtifacts.hashLink(fresh.artifact).module);
+	public function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String> {
+		var before = BackendArtifacts.hashLink(previous.artifact),
+			after = BackendArtifacts.hashLink(fresh.artifact),
+			sections = before.sections,
+			freshSections = after.sections;
+		if (sections == null || freshSections == null)
+			return sections == null && freshSections == null ? moduleDifference(before.module,
+				after.module) : "one of the modules is sectioned";
+		return sections.equals(freshSections) ? null : "module sections differ";
+	}
 
 	static final noTimings:BackendTimings = {
 		cachePreparationMs: 0.0,
@@ -235,6 +242,7 @@ class HashLinkBackendSession implements BackendSession {
 		candidateAssembler.checkReuse = context.options.checkReuse;
 		candidateAssembler.irVerified = !context.livePatching;
 		candidateAssembler.livePatching = context.livePatching;
+		candidateAssembler.moduleSections = context.options.moduleSections && !context.livePatching;
 		candidateAssembler.keepsLowered = context.options.keepSession;
 		if (loweredCache != null) {
 			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
@@ -258,20 +266,24 @@ class HashLinkBackendSession implements BackendSession {
 		if (candidateAssembler.developmentMetadata)
 			attachSourceSnapshots(context, assembly.module);
 		notePlacedFiles(assembly.module);
+		// The module with functions linked from the last build must be the module lowering every function gives; a sectioned
+		// one is compared as sections, once written, since its dense tables are numbered as this build asked for their entries.
+		var freshModule:Null<HlCode> = null;
 		if (loweredCache != null && candidateAssembler.reusedFunctions > 0 && context.options.checkReuse) {
-			// The module with functions linked from the last build must be the module lowering every function gives.
 			var fresh = new HlModuleAssembler();
 			fresh.fieldReserve = candidateAssembler.fieldReserve;
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.sources = candidateAssembler.sources;
 			fresh.irVerified = candidateAssembler.irVerified;
+			fresh.moduleSections = candidateAssembler.moduleSections;
 			fresh.loweredCache = new HlLoweredCache();
 			var freshAssembly = fresh.assemble(assemblyIr, regenerated, decision,
 				nextAbi == null ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi),
 				context.state.rehydrationBaseline);
 			if (fresh.developmentMetadata)
 				attachSourceSnapshots(context, freshAssembly.module);
-			var difference = moduleDifference(assembly.module, freshAssembly.module);
+			freshModule = freshAssembly.module;
+			var difference = fresh.moduleSections ? null : moduleDifference(assembly.module, freshAssembly.module);
 			if (difference != null)
 				throw new InternalError('--check-reuse: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)');
 		}
@@ -307,6 +319,12 @@ class HashLinkBackendSession implements BackendSession {
 					compiler.hl.HlLz4.FAST, context.options.checkReuse, kept == null ? null : kept.sections);
 			if (kept != null)
 				kept.sections = written.cache;
+			if (freshModule != null) {
+				var afresh = compiler.hl.HlSectionWriter.write(freshModule, modules, context.state.declarationOwners,
+					compiler.hl.HlLz4.FAST);
+				if (!afresh.bytes.equals(written.bytes))
+					throw new InternalError('--check-reuse: the sections of a build with ${candidateAssembler.reusedFunctions} functions kept from the last build differ from the sections of one lowered afresh');
+			}
 			sectionsEncoded = written.encoded + " of " + written.sections + " (" + written.changed + " changed)";
 			sections = written.bytes;
 			functionIndices = [];

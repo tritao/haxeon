@@ -4,6 +4,9 @@ import compiler.core.InternalError;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlWriter.HlSectionIndices;
+import compiler.hl.incremental.HlRelocations;
+import compiler.hl.incremental.HlRequestKeys;
+import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.pipeline.StaticInitializationOrder;
 import compiler.semantic.DeclarationOwners;
@@ -53,6 +56,10 @@ typedef HlSectionOutput = {
  * A section names its function by its name, its types and globals by their symbol names, so a section's bytes depend only on
  * what it owns and on the keys of what it uses. A section whose encoding would read the same as last build's is kept as it was
  * (`HlSectionCache`).
+ *
+ * The module is a sectioned build's (`HlCode.relocations`): each function is the object the build that lowered it made, with
+ * that build's indices, and the writer finds what they name in this build's tables. Its section-local tables never depend on
+ * how the dense tables are numbered: each is in order of first use, and an entry is its content.
  */
 class HlSectionWriter {
 	public static inline final VERSION = 9;
@@ -75,6 +82,19 @@ class HlSectionWriter {
 
 	/** `globalHomes` of a literal constant. */
 	static inline final CONSTANT = -1;
+
+	/**
+	 * The kinds of what a function's code names (`HlLoweredFunction.uses`): the tables of `HlRequestKeys`, then a debug name,
+	 * a string only a development build writes.
+	 */
+	static inline final USE_INT = HlRequestKeys.INTS;
+
+	static inline final USE_FLOAT = HlRequestKeys.FLOATS;
+	static inline final USE_STRING = HlRequestKeys.STRINGS;
+	static inline final USE_TYPE = HlRequestKeys.TYPES;
+	static inline final USE_GLOBAL = HlRequestKeys.GLOBALS;
+	static inline final USE_FUNCTION = HlRequestKeys.FUNCTIONS;
+	static inline final USE_DEBUG_NAME = HlRequestKeys.FUNCTIONS + 1;
 
 	/**
 	 * Writes `code` as HLB 9. `modules` gives the content hash of each module's file by the module's path, and `declarations`
@@ -142,6 +162,14 @@ class HlSectionWriter {
 			|| code == "@".code;
 
 	final code:HlCode;
+	final relocations:HlRelocations;
+
+	/** Where this build's tables hold what the function being collected names. */
+	final remap = new HlRemap();
+
+	/** By index of a function's code, the section's index of what it names: the indices the function is written with. */
+	final functionLocal = new HlSectionIndices();
+
 	final compression:Null<Int>;
 	final hasDebug:Bool;
 	final spans:Bool;
@@ -190,6 +218,10 @@ class HlSectionWriter {
 
 	function new(code:HlCode, compression:Null<Int>) {
 		this.code = code;
+		var relocated = code.relocations;
+		if (relocated == null)
+			throw new InternalError("A module of sections is written from a sectioned build's lowering");
+		relocations = relocated;
 		this.compression = compression;
 		var debug = false;
 		for (fn in code.functions)
@@ -204,7 +236,7 @@ class HlSectionWriter {
 		if (code.functionNames.length != code.functions.length)
 			throw new InternalError("A module of sections needs the name of every function");
 		for (position in 0...code.functions.length)
-			setAt(functionPositions, code.functions[position].functionIndex, position);
+			setAt(functionPositions, relocations.functionIndices[position], position);
 		for (position in 0...code.natives.length)
 			setAt(nativePositions, code.natives[position].functionIndex, position);
 		while (nativePositions.length < functionPositions.length)
@@ -339,6 +371,10 @@ class HlSectionWriter {
 
 	function functionKey(position:Int):String
 		return code.functionNames[position];
+
+	/** The type of the function at `position`, in this build's tables. */
+	inline function functionType(position:Int):Int
+		return relocations.functionTypes[position];
 
 	function typeKey(index:Int):String
 		return switch code.types[index] {
@@ -489,27 +525,59 @@ class HlSectionWriter {
 			nativeSlots[functionIndex] = known;
 			return;
 		}
-		useType(code.functions[position].type);
+		useType(functionType(position));
 		tables.functionImports.push(functionIndex);
 	}
 
-	function useInstruction(instruction:HlInstruction):Void
-		switch instruction {
-			case LoadInt(_, constant):
-				useInt(constant);
-			case LoadFloat(_, constant):
-				useFloat(constant);
-			case LoadString(_, constant):
-				useString(constant);
-			case LoadType(_, type):
-				useType(type);
-			case GlobalGet(_, global) | GlobalSet(global, _):
-				useGlobal(global);
-			case Call0(_, functionIndex) | Call1(_, functionIndex, _) | Call2(_, functionIndex, _, _) | CallN(_,
-				functionIndex, _) | StaticClosure(_, functionIndex) | InstanceClosure(_, functionIndex, _):
-				useFunction(functionIndex);
-			default:
+	/** What `fn`'s code names, in the order the encoding meets it: its type, its registers', its instructions', its debug names. */
+	static function usesOf(fn:HlFunction):Array<Int> {
+		var uses = [USE_TYPE, fn.type];
+		for (register in fn.registers) {
+			uses.push(USE_TYPE);
+			uses.push(register);
 		}
+		for (instruction in fn.opcodes)
+			switch instruction {
+				case LoadInt(_, constant):
+					uses.push(USE_INT);
+					uses.push(constant);
+				case LoadFloat(_, constant):
+					uses.push(USE_FLOAT);
+					uses.push(constant);
+				case LoadString(_, constant):
+					uses.push(USE_STRING);
+					uses.push(constant);
+				case LoadType(_, type):
+					uses.push(USE_TYPE);
+					uses.push(type);
+				case GlobalGet(_, global) | GlobalSet(global, _):
+					uses.push(USE_GLOBAL);
+					uses.push(global);
+				case Call0(_, functionIndex) | Call1(_, functionIndex, _) | Call2(_, functionIndex, _, _) | CallN(_,
+					functionIndex, _) | StaticClosure(_, functionIndex) | InstanceClosure(_, functionIndex, _):
+					uses.push(USE_FUNCTION);
+					uses.push(functionIndex);
+				case New(_, type, _):
+					uses.push(USE_TYPE);
+					uses.push(type);
+				default:
+			}
+		for (assignment in fn.debugAssignments) {
+			uses.push(USE_DEBUG_NAME);
+			uses.push(assignment.name);
+		}
+		return uses;
+	}
+
+	/** `usesOf` the function at `position`, made once for the function object. */
+	function usesAt(position:Int):Array<Int> {
+		var entry = relocations.lowered[position], known = entry.uses;
+		if (known == null) {
+			known = usesOf(entry.fn);
+			entry.uses = known;
+		}
+		return known;
+	}
 
 	/** What a type this section defines names. */
 	function useDefinition(index:Int):Void
@@ -562,13 +630,16 @@ class HlSectionWriter {
 		}
 	}
 
-	/** Everything section `id` names, in order of first use: its functions in declaration order, its globals, then its types. */
+	/**
+	 * Everything section `id` names, in order of first use: its functions in declaration order, its globals, then its types. The
+	 * section's tables are complete after it, their section indices after `settleIndices`.
+	 */
 	function collect(id:Int, owned:Array<Int>, ownedGlobals:Array<Int>, ownedTypes:Array<Int>):Void {
 		section = id;
 		epoch++;
 		tables = new HlSectionTables();
 		for (position in owned) {
-			functionStamps[code.functions[position].functionIndex] = epoch;
+			functionStamps[relocations.functionIndices[position]] = epoch;
 			tables.functions.push(position);
 		}
 		for (global in ownedGlobals) {
@@ -579,25 +650,46 @@ class HlSectionWriter {
 			useType(type);
 		for (global in ownedGlobals)
 			useType(code.globals[global]);
-		var sources = code.sources;
+		var sources = code.sources, found = tables.uses;
 		for (position in owned) {
-			var fn = code.functions[position];
-			useType(fn.type);
-			for (register in fn.registers)
-				useType(register);
-			for (instruction in fn.opcodes)
-				useInstruction(instruction);
+			// A function whose requests have the answers its code names needs no remap.
+			var moves = relocations.moves[position];
+			if (moves)
+				relocations.fill(position, remap);
+			var uses = usesAt(position), at = 0;
+			tables.useStarts.push(found.length);
+			while (at < uses.length) {
+				var kind = uses[at],
+					index = moves ? remap.get(kind == USE_DEBUG_NAME ? USE_STRING : kind, uses[at + 1]) : uses[at + 1];
+				at += 2;
+				if (index < 0)
+					throw new InternalError('HashLink sections: ${code.functionNames[position]} names an entry its requests did not ask for');
+				found.push(index);
+				switch kind {
+					case USE_INT: useInt(index);
+					case USE_FLOAT: useFloat(index);
+					case USE_STRING: useString(index);
+					case USE_TYPE: useType(index);
+					case USE_GLOBAL: useGlobal(index);
+					case USE_FUNCTION: useFunction(index);
+					default:
+				}
+			}
 			if (hasDebug) {
+				var fn = code.functions[position];
 				if (fn.debugLocations.length == 0)
 					tables.file("<generated>");
-				var last = -1;
-				for (location in fn.debugLocations)
-					if (location.anchor != last) {
-						last = location.anchor;
-						tables.file(sources.path(last));
-					}
-				for (assignment in fn.debugAssignments)
-					useString(assignment.name);
+				// Its files in order of first use, as its lines name them.
+				for (anchor in fn.anchors())
+					tables.file(sources.path(anchor));
+				// The debug names last, as the encoding writes them.
+				at = 0;
+				var start = tables.useStarts[tables.useStarts.length - 1];
+				while (at < uses.length) {
+					if (uses[at] == USE_DEBUG_NAME)
+						useString(found[start + (at >> 1)]);
+					at += 2;
+				}
 			}
 		}
 		var next = 0;
@@ -605,128 +697,148 @@ class HlSectionWriter {
 			useDefinition(tables.definitions[next++]);
 	}
 
+	/** The section's index of entry `index` of the dense table `kind` names, once `settleIndices` gave them. */
+	inline function localIndex(kind:Int, index:Int):Int
+		return switch kind {
+			case USE_INT: local.ints[index];
+			case USE_FLOAT: local.floats[index];
+			case USE_TYPE: local.types[index];
+			case USE_GLOBAL: local.globals[index];
+			case USE_FUNCTION: local.functions[index];
+			default: local.strings[index];
+		};
+
+	/** Gives `functionLocal` the section's index of everything the function at `functions[index]` of the section names. */
+	function localizeFunction(index:Int):Void {
+		var t = tables, uses = usesAt(t.functions[index]), start = t.useStarts[index], at = 0, target = functionLocal;
+		while (at < uses.length) {
+			var kind = uses[at], from = uses[at + 1], to = localIndex(kind, t.uses[start + (at >> 1)]);
+			at += 2;
+			setAt(switch kind {
+				case USE_INT: target.ints;
+				case USE_FLOAT: target.floats;
+				case USE_TYPE: target.types;
+				case USE_GLOBAL: target.globals;
+				case USE_FUNCTION: target.functions;
+				default: target.strings;
+			}, from, to);
+		}
+	}
+
 	// ---- what a section's encoding reads
 
 	/**
-	 * Records into `reads`, or checks against them, everything the encoding of section `id` reads of the module beyond the
-	 * tables of `t` (the dense entries it names, which `collect` made): its functions and their names, the places of the anchors
-	 * their lines count from, then each entry it names, with what the entry is, its key and its home where the encoding writes
-	 * them, and the snapshots it carries. Whatever reads the same encodes the same: `collect` reads nothing else, and the
-	 * encoding nothing but these and `t`. Returns whether the module still reads the same (always, when recording).
+	 * Records into `reads`, or checks against them, what the encoding of the section owning the functions at `owned` reads of
+	 * them and of the sources: the functions, their names and the places of the anchors their lines count from, and the
+	 * snapshots it carries. Returns whether they still read the same (always, when recording).
 	 */
-	function readInputs(reads:HlSectionReads, id:Int, owned:Array<Int>, ownedTypes:Array<Int>, ownedGlobals:Array<Int>,
-			t:HlSectionTables, snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):Bool {
-		var sources = code.sources,
-			functions = code.functions,
-			types = code.types,
-			strings = code.strings,
-			globals = code.globals;
+	function readOwn(reads:HlSectionReads, owned:Array<Int>,
+			snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):Bool {
+		var sources = code.sources;
 		reads.int(owned.length);
 		for (position in owned) {
-			var fn = functions[position];
-			reads.object(fn);
+			var fn = code.functions[position];
+			reads.object(fn, spans);
 			reads.string(code.functionNames[position]);
+			// Lines count from their anchor's line in its file; opcode spans add its offset and its file's hash.
 			if (hasDebug)
 				for (anchor in fn.anchors()) {
 					reads.int(sources.line(anchor));
-					reads.int(sources.offset(anchor));
-					reads.int(sources.hash(anchor));
+					reads.string(sources.path(anchor));
+					if (spans) {
+						reads.int(sources.offset(anchor));
+						reads.int(sources.hash(anchor));
+					}
 				}
 			if (!reads.same)
 				return false;
 		}
-		reads.int(ownedTypes.length);
-		for (type in ownedTypes)
-			reads.int(type);
-		reads.int(ownedGlobals.length);
-		for (global in ownedGlobals)
-			reads.int(global);
 		reads.int(snapshots.length);
 		for (snapshot in snapshots)
 			reads.int(snapshot.sourceHash);
-		if (!reads.same)
-			return false;
+		return reads.same;
+	}
+
+	/**
+	 * Records into `reads` everything else the encoding of the section `collect` and `settleIndices` just made tables for
+	 * reads: the section's index of everything each of its functions names, then each entry of its tables with what it is, its
+	 * key and its home where the encoding writes them, in the section's indices. None of these depends on how the dense tables
+	 * are numbered; with `readOwn`, whatever reads the same encodes the same.
+	 */
+	function readNamed(reads:HlSectionReads):Void {
+		var t = tables, types = code.types, strings = code.strings, globals = code.globals;
+		for (index in 0...t.functions.length) {
+			var uses = usesAt(t.functions[index]), start = t.useStarts[index], at = 0;
+			while (at < uses.length) {
+				reads.int(localIndex(uses[at], t.uses[start + (at >> 1)]));
+				at += 2;
+			}
+		}
+		for (count in [
+			t.ints.length, t.floats.length, t.strings.length, t.files.length, t.types.length, t.typeImports.length,
+			t.globals.length, t.globalImports.length, t.constants.length, t.functionImports.length, t.natives.length
+		])
+			reads.int(count);
 		for (index in t.ints)
-			if (index < code.ints.length)
-				reads.int(code.ints[index]);
-			else
-				return false;
+			reads.int(code.ints[index]);
 		for (index in t.floats)
-			if (index < code.floats.length)
-				reads.float(code.floats[index]);
-			else
-				return false;
+			reads.float(code.floats[index]);
 		for (index in t.strings)
-			if (index < strings.length)
-				reads.string(strings[index]);
-			else
-				return false;
+			reads.string(strings[index]);
+		for (file in t.files)
+			reads.string(file);
 		for (index in t.types) {
-			if (index >= types.length)
-				return false;
 			var home = typeHomes[index];
-			reads.type(types[index]);
-			reads.int(home == STRUCTURAL ? ROLE_STRUCTURAL : home == SHARED_DEFINITION ? ROLE_SHARED : home == id
-				? ROLE_OWNED : -1);
-			if (!reads.same)
-				return false;
+			reads.int(home == STRUCTURAL ? ROLE_STRUCTURAL : home == SHARED_DEFINITION ? ROLE_SHARED : ROLE_OWNED);
+			if (home != STRUCTURAL)
+				reads.string(typeKey(index));
+			reads.type(localType(types[index]));
 		}
 		for (index in t.typeImports) {
-			if (index >= types.length)
-				return false;
-			var home = typeHomes[index];
-			if (home < 0 || home == id)
-				return false;
 			reads.int(kindOf(types[index]));
 			reads.string(typeKey(index));
-			reads.string(paths[home]);
+			reads.string(paths[typeHomes[index]]);
 		}
 		for (global in t.globals) {
-			if (global >= globals.length || constantOfGlobal[global] >= 0 || globalHomes[global] != id
-				|| !hasGlobalKey(global))
-				return false;
-			reads.int(globals[global]);
+			reads.int(local.types[globals[global]]);
 			reads.string(globalKey(global));
 		}
 		for (global in t.globalImports) {
-			if (global >= globals.length || constantOfGlobal[global] >= 0 || globalHomes[global] == id
-				|| !hasGlobalKey(global))
-				return false;
-			reads.int(globals[global]);
+			reads.int(local.types[globals[global]]);
 			reads.string(globalKey(global));
 			reads.string(paths[globalHomes[global]]);
 		}
 		for (constant in t.constants) {
-			if (constant >= code.constants.length)
-				return false;
-			var entry = code.constants[constant];
-			reads.int(entry.global);
-			reads.int(globals[entry.global]);
+			var entry = code.constants[constant], fields = constantFields(globals[entry.global]);
+			reads.int(local.types[globals[entry.global]]);
 			reads.int(entry.fields.length);
-			for (value in entry.fields)
-				reads.int(value);
+			for (index in 0...entry.fields.length)
+				reads.int(localField(fieldKind(fields[index].type), entry.fields[index]));
 		}
-		if (!reads.same)
-			return false;
 		for (functionIndex in t.functionImports) {
-			var position = functionIndex < functionPositions.length ? functionPositions[functionIndex] : -1;
-			if (position < 0 || functionHomes[position] == id)
-				return false;
-			reads.int(functions[position].type);
+			var position = functionPositions[functionIndex];
+			reads.int(local.types[functionType(position)]);
 			reads.string(code.functionNames[position]);
 			reads.string(paths[functionHomes[position]]);
 		}
-		for (functionIndex in t.nativeFunctions) {
-			var position = functionIndex < nativePositions.length ? nativePositions[functionIndex] : -1;
-			if (position < 0)
-				return false;
+		for (position in t.natives) {
 			var native = code.natives[position];
 			reads.string(strings[native.library]);
 			reads.string(strings[native.name]);
-			reads.int(native.type);
+			reads.int(local.types[native.type]);
 		}
-		return reads.same;
 	}
+
+	/** A constant's field value in the section's indices, by the kind of the field. */
+	function localField(kind:Int, value:Int):Int
+		return switch kind {
+			case HlType.I32: local.ints[value];
+			case HlType.Bool: value;
+			case HlType.F64: local.floats[value];
+			case HlType.Bytes: local.strings[value];
+			case HlType.Type: local.types[value];
+			default: local.globals[value];
+		};
 
 	// ---- encoding
 
@@ -759,22 +871,49 @@ class HlSectionWriter {
 			encoded = 0,
 			changed = 0;
 		for (id in 0...paths.length) {
-			var owned = ownedFunctions[id],
-				kept = cache.entries.get(paths[id]),
-				reused = keptSection(id, owned, ownedTypes[id], ownedGlobals[id], snapshots[id], kept, checkReuse);
-			var entry:HlSectionEntry = reused != null ? reused : encodeSection(id, owned, ownedTypes[id],
-				ownedGlobals[id],
-				snapshots[id], kept);
-			if (reused == null) {
-				encoded++;
-				if (kept == null || entry.bytes != kept.bytes)
+			var owned = ownedFunctions[id], kept = cache.entries.get(paths[id]), entry:Null<HlSectionEntry> = null;
+			if (kept != null && unchanged(kept, cache, owned, ownedTypes[id], ownedGlobals[id], snapshots[id])) {
+				entry = kept;
+				if (checkReuse) {
+					collect(id, owned, ownedGlobals[id], ownedTypes[id]);
+					settleIndices();
+					if (sectionBytes(snapshots[id]).compare(kept.bytes) != 0)
+						throw new InternalError('--check-reuse: section ${paths[id]} kept from the last build differs from one encoded afresh');
+				}
+			} else {
+				collect(id, owned, ownedGlobals[id], ownedTypes[id]);
+				settleIndices();
+				var own = new HlSectionReads(), named = new HlSectionReads();
+				readOwn(own, owned, snapshots[id]);
+				readNamed(named);
+				// What reads the same encodes the same; encoded to the same bytes, it is the section kept all the same, so
+				// whatever holds it sees no change.
+				var bytes = kept != null && own.equals(kept.own, spans)
+					&& named.equals(kept.named, spans) ? kept.bytes : null;
+				if (bytes == null) {
+					bytes = sectionBytes(snapshots[id]);
+					encoded++;
+				} else if (checkReuse && sectionBytes(snapshots[id]).compare(bytes) != 0)
+					throw new InternalError('--check-reuse: section ${paths[id]} kept from the last build differs from one encoded afresh');
+				var same = kept != null && (bytes == kept.bytes || bytes.compare(kept.bytes) == 0);
+				if (!same)
 					changed++;
+				entry = HlSectionEntry.of(own, named, {
+					chain: relocations.chain,
+					functions: [for (position in owned) code.functions[position]],
+					ownedTypes: ownedTypes[id],
+					ownedGlobals: ownedGlobals[id],
+					imports: tables.functionImports,
+					importTypes: [for (functionIndex in tables.functionImports)
+						functionType(functionPositions[functionIndex])],
+					nativeOrder: tables.nativeOrder
+				}, bytes, same ? kept : null);
 			}
 			entries.set(paths[id], entry);
 			written.push(entry);
 			for (position in owned)
-				linked[code.functions[position].functionIndex] = nextFunction++;
-			for (key in entry.tables.nativeOrder)
+				linked[relocations.functionIndices[position]] = nextFunction++;
+			for (key in entry.collected.nativeOrder)
 				if (!linkedNatives.exists(key))
 					linkedNatives.set(key, nativeCount++);
 		}
@@ -817,35 +956,39 @@ class HlSectionWriter {
 	}
 
 	/**
-	 * Section `id` as `kept` has it, when its encoding would read the same, or null when it must be encoded. With `checkReuse`
-	 * a kept section is encoded again, and must come out the same.
+	 * Whether the section owning the functions at `owned` is `kept` without collecting it: this build's tables extend the ones it
+	 * was collected from (`HlRelocations.chain`), so every index it named names the same entry, its functions are the same
+	 * objects naming their entries by those indices, it owns the same types and globals (a build of the run can add an enum
+	 * tag or a global that a home puts here), the functions it imports have the types they had, the homes are the same, and its
+	 * functions and snapshots read the same (`readOwn`).
 	 */
-	function keptSection(id:Int, owned:Array<Int>, ownedTypes:Array<Int>, ownedGlobals:Array<Int>,
-			snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>, kept:Null<HlSectionEntry>,
-			checkReuse:Bool):Null<HlSectionEntry> {
-		if (kept == null)
-			return null;
-		kept.reads.check();
-		if (!readInputs(kept.reads, id, owned, ownedTypes, ownedGlobals, kept.tables, snapshots)
-			|| !kept.reads.complete())
-			return null;
-		if (checkReuse) {
-			collect(id, owned, ownedGlobals, ownedTypes);
-			if (sectionBytes(snapshots).compare(kept.bytes) != 0)
-				throw new InternalError('--check-reuse: section ${paths[id]} kept from the last build differs from one encoded afresh');
+	function unchanged(kept:HlSectionEntry, cache:HlSectionCache, owned:Array<Int>, ownedTypes:Array<Int>,
+			ownedGlobals:Array<Int>, snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):Bool {
+		var collected = kept.collected;
+		if (collected.chain != relocations.chain || !cache.sameHomes || collected.functions.length != owned.length
+			|| !sameInts(collected.ownedTypes, ownedTypes) || !sameInts(collected.ownedGlobals, ownedGlobals))
+			return false;
+		for (index in 0...owned.length) {
+			var position = owned[index];
+			if (code.functions[position] != collected.functions[index] || relocations.moves[position])
+				return false;
 		}
-		return kept;
+		for (index in 0...collected.imports.length) {
+			var position = functionPositions[collected.imports[index]];
+			if (position < 0 || functionType(position) != collected.importTypes[index])
+				return false;
+		}
+		kept.own.check();
+		return readOwn(kept.own, owned, snapshots) && kept.own.complete();
 	}
 
-	/** Section `id` encoded, with what its encoding read; the bytes of `kept` when they come out the same. */
-	function encodeSection(id:Int, owned:Array<Int>, ownedTypes:Array<Int>, ownedGlobals:Array<Int>,
-			snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>, kept:Null<HlSectionEntry>):HlSectionEntry {
-		collect(id, owned, ownedGlobals, ownedTypes);
-		var bytes = sectionBytes(snapshots), reads = new HlSectionReads();
-		readInputs(reads, id, owned, ownedTypes, ownedGlobals, tables, snapshots);
-		// Encoded to the same bytes: the section is the one kept, so whatever holds it sees no change.
-		return kept != null && bytes.compare(kept.bytes) == 0 ? new HlSectionEntry(tables, reads, kept.bytes,
-			kept.digestLow, kept.digestHigh) : HlSectionEntry.of(tables, reads, bytes);
+	static function sameInts(left:Array<Int>, right:Array<Int>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index] != right[index])
+				return false;
+		return true;
 	}
 
 	/** The section's index of each entry it names: in every index space the imports come first. */
@@ -866,14 +1009,13 @@ class HlSectionWriter {
 		for (position in 0...tables.functionImports.length)
 			local.functions[tables.functionImports[position]] = position;
 		for (position in 0...tables.functions.length)
-			local.functions[code.functions[tables.functions[position]].functionIndex] = functionImports + natives
+			local.functions[relocations.functionIndices[tables.functions[position]]] = functionImports + natives
 				+ position;
 		for (functionIndex in tables.nativeFunctions)
 			local.functions[functionIndex] = functionImports + nativeSlots[functionIndex];
 	}
 
 	function sectionBytes(snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):Bytes {
-		settleIndices();
 		var t = tables, w = new HlWriter(), out = w.output, path = paths[section];
 		w.hasDebug = hasDebug;
 		w.sources = code.sources;
@@ -885,7 +1027,7 @@ class HlSectionWriter {
 			var position = functionPositions[functionIndex];
 			heads.writeUnsignedIndex(t.name(paths[functionHomes[position]]));
 			heads.writeUnsignedIndex(t.name(functionKey(position)));
-			heads.writeUnsignedIndex(local.types[code.functions[position].type]);
+			heads.writeUnsignedIndex(local.types[functionType(position)]);
 		}
 		for (global in t.globalImports) {
 			heads.writeUnsignedIndex(t.name(paths[globalHomes[global]]));
@@ -917,7 +1059,7 @@ class HlSectionWriter {
 		}
 		for (position in t.functions) {
 			heads.writeUnsignedIndex(t.name(functionKey(position)));
-			heads.writeUnsignedIndex(local.types[code.functions[position].type]);
+			heads.writeUnsignedIndex(local.types[functionType(position)]);
 		}
 		for (count in [
 			t.names.length, t.functionImports.length, t.globalImports.length, t.typeImports.length, t.natives.length,
@@ -939,20 +1081,16 @@ class HlSectionWriter {
 			var entry = code.constants[constant], fields = constantFields(code.globals[entry.global]);
 			w.writeIndex(local.types[code.globals[entry.global]]);
 			w.writeUnsignedIndex(entry.fields.length);
-			for (index in 0...entry.fields.length) {
-				var value = entry.fields[index];
-				w.writeUnsignedIndex(switch fieldKind(fields[index].type) {
-					case HlType.I32: local.ints[value];
-					case HlType.Bool: value;
-					case HlType.F64: local.floats[value];
-					case HlType.Bytes: local.strings[value];
-					case HlType.Type: local.types[value];
-					default: local.globals[value];
-				});
-			}
+			for (index in 0...entry.fields.length)
+				w.writeUnsignedIndex(localField(fieldKind(fields[index].type), entry.fields[index]));
 		}
-		for (position in t.functions)
-			w.writeFunction(code.functions[position]);
+		// Each function with its own indices, as the build that lowered it numbered what it names.
+		w.local = functionLocal;
+		for (index in 0...t.functions.length) {
+			localizeFunction(index);
+			w.writeFunction(code.functions[t.functions[index]]);
+		}
+		w.local = local;
 		writeDebugSections(w, snapshots);
 		var payload = out.finish().flatten();
 		var section = new HlWriter();
@@ -1043,10 +1181,7 @@ class HlSectionWriter {
 	}
 }
 
-/**
- * The tables of the section being written, each by index in the dense module's table, in the section's order. Kept with the
- * section's bytes, they are the dense entries whose reads decide whether the next build keeps it (`HlSectionWriter.readInputs`).
- */
+/** The tables of the section being written, each by index in this build's dense table, in the section's order. */
 private class HlSectionTables {
 	public final names:Array<String> = [];
 	/** Function indices. */
@@ -1082,6 +1217,12 @@ private class HlSectionTables {
 	public final strings:Array<Int> = [];
 	public final files:Array<String> = [];
 	public final fileIndices:Map<String, Int> = [];
+
+	/** For each of `functions`, where its entries in `uses` start. */
+	public final useStarts:Array<Int> = [];
+
+	/** By function then by `HlLoweredFunction.uses` entry, the index in the dense table of what the function names there. */
+	public final uses:Array<Int> = [];
 
 	final nameIndices:Map<String, Int> = [];
 
@@ -1134,6 +1275,9 @@ class HlSectionCache {
 	final declaredCount:Int;
 	final moduleCount:Int;
 
+	/** Whether the homes are the last build's: its declarations and modules were the same. */
+	var sameHomes = false;
+
 	/** The last file order of the sections (`orderOf`), with the set of them. */
 	var order:Array<String> = [];
 
@@ -1163,6 +1307,7 @@ class HlSectionCache {
 				previous.declaredModules, previous.declaredCount, previous.moduleCount);
 			result.order = previous.order;
 			result.ordered = previous.ordered;
+			result.sameHomes = true;
 			return result;
 		}
 		var declared:Map<String, String> = [],
@@ -1240,10 +1385,11 @@ class HlSectionCache {
 	}
 }
 
-/** One section as written: its bytes and digest, with the tables and reads it was encoded from (`HlSectionWriter.readInputs`). */
+/** One section as written: its bytes and digest, with what its encoding read (`HlSectionWriter.readOwn`, `readNamed`). */
 private class HlSectionEntry {
-	public final tables:HlSectionTables;
-	public final reads:HlSectionReads;
+	public final own:HlSectionReads;
+	public final named:HlSectionReads;
+	public final collected:HlCollected;
 	public final bytes:Bytes;
 
 	/** The section's reuse key: two 32-bit FNV-1a hashes of its bytes, with different bases. */
@@ -1251,27 +1397,49 @@ private class HlSectionEntry {
 
 	public final digestHigh:Int;
 
-	public function new(tables:HlSectionTables, reads:HlSectionReads, bytes:Bytes, digestLow:Int, digestHigh:Int) {
-		this.tables = tables;
-		this.reads = reads;
+	function new(own:HlSectionReads, named:HlSectionReads, collected:HlCollected, bytes:Bytes, digestLow:Int,
+			digestHigh:Int) {
+		this.own = own;
+		this.named = named;
+		this.collected = collected;
 		this.bytes = bytes;
 		this.digestLow = digestLow;
 		this.digestHigh = digestHigh;
 	}
 
-	public static function of(tables:HlSectionTables, reads:HlSectionReads, bytes:Bytes):HlSectionEntry {
+	/** The entry of `bytes`, with the digest of `same` when it holds the same bytes. */
+	public static function of(own:HlSectionReads, named:HlSectionReads, collected:HlCollected, bytes:Bytes,
+			same:Null<HlSectionEntry>):HlSectionEntry {
+		if (same != null)
+			return new HlSectionEntry(own, named, collected, same.bytes, same.digestLow, same.digestHigh);
 		var low = 0x811C9DC5, high = 0x01000193 ^ bytes.length;
 		for (index in 0...bytes.length) {
 			var byte = bytes.get(index);
 			low = (low ^ byte) * 0x01000193;
 			high = (high ^ byte) * 0x01000197;
 		}
-		return new HlSectionEntry(tables, reads, bytes, low, high);
+		return new HlSectionEntry(own, named, collected, bytes, low, high);
 	}
 }
 
 /**
- * The values a section's encoding read (`HlSectionWriter.readInputs`), recorded in order; then checked against what a later
+ * What a section was collected from, in the indices of the run of builds whose tables it was collected from
+ * (`HlRelocations.chain`): its functions, the types and globals it owns, the functions it imports with the type each had,
+ * and the natives it names in order of first use. A build of the same run checks these to keep the section without collecting
+ * it (`HlSectionWriter.unchanged`).
+ */
+private typedef HlCollected = {
+	final chain:Int;
+	final functions:Array<HlFunction>;
+	final ownedTypes:Array<Int>;
+	final ownedGlobals:Array<Int>;
+	final imports:Array<Int>;
+	final importTypes:Array<Int>;
+	final nativeOrder:Array<String>;
+}
+
+/**
+ * The values a section's encoding read (`HlSectionWriter.readOwn`, `readNamed`), recorded in order; then checked against what a later
  * build reads in the same order, which reads the same while `same` holds and `complete` says every value was read again.
  */
 private class HlSectionReads {
@@ -1301,6 +1469,22 @@ private class HlSectionReads {
 	public function complete():Bool
 		return same && intAt == ints.length && floatAt == floats.length && stringAt == strings.length
 			&& typeAt == types.length && objectAt == objects.length;
+
+	/** Whether `other`, recorded by a later build, read the same values; its functions compare as `object` does. */
+	public function equals(other:HlSectionReads, spans:Bool):Bool {
+		other.check();
+		for (value in ints)
+			other.int(value);
+		for (value in floats)
+			other.float(value);
+		for (value in strings)
+			other.string(value);
+		for (value in types)
+			other.type(value);
+		for (value in objects)
+			other.object(value, spans);
+		return other.complete();
+	}
 
 	public function int(value:Int):Void
 		if (!checking)
@@ -1344,13 +1528,40 @@ private class HlSectionReads {
 			typeAt++;
 		}
 
-	/** A function by identity: the same object is the same code. */
-	public function object(value:HlFunction):Void
+	/**
+	 * A function: the same object is the same code, and so is one lowered again to the same code up to the indices of what it
+	 * names and the anchors its locations count from, which the reads after it compare (`HlSectionWriter.readNamed`). With
+	 * `spans` the locations' columns and ranges are encoded too.
+	 */
+	public function object(value:HlFunction, spans:Bool):Void
 		if (!checking)
 			objects.push(value);
 		else {
-			if (objectAt >= objects.length || objects[objectAt] != value)
+			if (objectAt >= objects.length || objects[objectAt] != value && !sameCode(objects[objectAt], value, spans))
 				same = false;
 			objectAt++;
 		}
+
+	static function sameCode(a:HlFunction, b:HlFunction, spans:Bool):Bool {
+		if (HlFunctionEquality.difference(a, b, false) != null)
+			return false;
+		var x = a.debugLocations, y = b.debugLocations;
+		if (x.length != y.length)
+			return false;
+		var forward:Map<Int, Int> = [], backward:Map<Int, Int> = [];
+		for (index in 0...x.length) {
+			var p = x[index], q = y[index], mapped = forward.get(p.anchor), origin = backward.get(q.anchor);
+			if (mapped == null && origin == null) {
+				forward.set(p.anchor, q.anchor);
+				backward.set(q.anchor, p.anchor);
+			} else if (mapped != q.anchor || origin != p.anchor)
+				return false;
+			if (p.line != q.line
+				|| spans
+				&& (p.column != q.column || p.endLine != q.endLine || p.endColumn != q.endColumn || p.start != q.start
+				|| p.end != q.end || p.flags != q.flags || p.generatedText != q.generatedText))
+				return false;
+		}
+		return true;
+	}
 }
