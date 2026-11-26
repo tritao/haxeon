@@ -266,9 +266,7 @@ class HlLower {
 			code.sources = sources;
 		code.ints = symbols.ints;
 		code.floats = symbols.floats;
-		code.strings = symbols.strings;
 		code.types = symbols.types;
-		code.globals = symbols.globals;
 		if (indices != null)
 			for (name => index in indices)
 				functionIndices.set(name, index);
@@ -648,7 +646,7 @@ class HlLower {
 		}
 		// The String constants' globals each hold the literal's String: its data, its length and its hash, which a string map
 		// computes and keeps on first use. Extended tables keep the last build's while it holds the same literals.
-		if (extended != null && symbols.stringConstantGlobals() == extended.tables.stringConstantGlobals())
+		if (extended != null && symbols.sameStringConstants(extended.tables))
 			code.constants = extended.constants;
 		else
 			for (literal in symbols.stringConstantGlobals())
@@ -704,9 +702,9 @@ class HlLower {
 		code.entryPoint = requireFunction(program.entryPoint);
 		code.ints = symbols.ints;
 		code.floats = symbols.floats;
-		code.strings = symbols.strings;
+		code.strings = symbols.stringTable();
 		code.types = symbols.types;
-		code.globals = symbols.globals;
+		code.globals = symbols.globalTable();
 		code.functionNames = [for (fn in program.functions) fn.name];
 		code.globalNames = symbols.globalNames();
 		if (relocatable)
@@ -760,9 +758,9 @@ class HlLower {
 			return [
 				symbols.ints.length,
 				symbols.floats.length,
-				symbols.strings.length,
+				symbols.stringCount,
 				symbols.types.length,
-				symbols.globals.length
+				symbols.globalCount
 			].join(",");
 		var before = sizes();
 		var fresh:HlFunction;
@@ -2842,7 +2840,7 @@ class HlLower {
 			owner = published == null ? null : switch published.definition {
 				case Object(_, base, _, _, _, _) if (base >= 0):
 					switch symbols.types[base] {
-						case Object(baseName, _, _, _, _, _): symbols.strings[baseName];
+						case Object(baseName, _, _, _, _, _): symbols.string(baseName);
 						default: null;
 					}
 				default: null;

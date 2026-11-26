@@ -320,7 +320,10 @@ class HlcModule {
 	function settleNames():Void {
 		collecting = false;
 		typeLimit = symbols.types.length;
-		globalLimit = symbols.globals.length;
+		globalLimit = symbols.globalCount;
+		// Collecting the functions can intern entries the lowering did not: the module takes the tables as they are now.
+		code.strings = symbols.stringTable();
+		code.globals = symbols.globalTable();
 		if (code.types.length != typeLimit || code.globals.length != globalLimit)
 			throw new InternalError("C backend: the module's tables are not the symbol table's");
 		globalOffsets = types.globalOffsets();

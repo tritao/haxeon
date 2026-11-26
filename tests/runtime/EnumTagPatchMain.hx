@@ -52,14 +52,14 @@ class EnumTagPatchMain {
 		for (malformed in [
 			HlTypeDef.EnumTag(symbols.internType(IrType.I32), [0, 1]),
 			HlTypeDef.EnumTag(boxedType, []),
-			HlTypeDef.EnumTag(boxedType, [0, symbols.globals.length])
+			HlTypeDef.EnumTag(boxedType, [0, symbols.globalCount])
 		]) {
 			var definitions = symbols.types.copy();
 			definitions[tagType] = malformed;
 			var rejected = false;
 			try
-				HlTypeDefStateCodec.decode(HlTypeDefStateCodec.encode(definitions), symbols.strings.length,
-					symbols.globals.length)
+				HlTypeDefStateCodec.decode(HlTypeDefStateCodec.encode(definitions), symbols.stringCount,
+					symbols.globalCount)
 			catch (_:Dynamic)
 				rejected = true;
 			if (!rejected)

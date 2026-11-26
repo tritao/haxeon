@@ -295,10 +295,10 @@ class HlModuleAssembler {
 			&& state.publishedGlobals < 0
 			|| state.publishedInts > result.symbols.ints.length
 			|| state.publishedFloats > result.symbols.floats.length
-			|| state.publishedStrings > result.symbols.strings.length
+			|| state.publishedStrings > result.symbols.stringCount
 			|| state.publishedTypes > result.symbols.types.length
 			|| state.publishedGlobals != null
-			&& state.publishedGlobals > result.symbols.globals.length
+			&& state.publishedGlobals > result.symbols.globalCount
 			|| (!state.initialized && state.revision != 0)
 			|| (state.initialized && state.revision == 0))
 			throw new InternalError("Invalid HashLink assembler baseline");
@@ -310,7 +310,7 @@ class HlModuleAssembler {
 		result.publishedTypes = state.publishedTypes;
 		// A baseline from before literals became globals published every global it had.
 		result.publishedGlobals = state.publishedGlobals == null
-			? result.symbols.globals.length : state.publishedGlobals;
+			? result.symbols.globalCount : state.publishedGlobals;
 		return result;
 	}
 
@@ -671,7 +671,7 @@ class HlModuleAssembler {
 			switch published.definition {
 				case Object(_, _, _, _, methods, _):
 					planObjectFields(object, published.index, valueObjects, nativeVisible, layout, reasons);
-					planObjectMethods(object, [for (method in methods) symbols.strings[method.name]], program.objects,
+					planObjectMethods(object, [for (method in methods) symbols.string(method.name)], program.objects,
 						byName, reasons);
 				default:
 					continue;
@@ -717,7 +717,7 @@ class HlModuleAssembler {
 		var previous = symbols.types[type];
 		for (field in ownFields(type))
 			if (!symbols.isReservedField(field)) {
-				var name = symbols.strings[field.name];
+				var name = symbols.string(field.name);
 				if (present.exists(name))
 					retiredFields.remove(object.name + "." + name);
 				else
@@ -729,7 +729,7 @@ class HlModuleAssembler {
 				slot = -1,
 				own = ownFields(type);
 			for (index in 0...own.length)
-				if (symbols.strings[own[index].name] == field.name)
+				if (symbols.string(own[index].name) == field.name)
 					slot = index;
 			if (slot >= 0) {
 				if (own[slot].type != fieldType)

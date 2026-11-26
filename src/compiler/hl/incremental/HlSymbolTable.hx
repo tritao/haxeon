@@ -57,13 +57,24 @@ typedef HlSymbolState = {
  */
 class HlSymbolTable {
 	public var ints(default, null):Array<Int> = [];
-	public var strings(default, null):Array<String> = [];
 	public var floats(default, null):Array<Float> = [];
 	public var types(default, null):Array<HlTypeDef> = [];
-	public var globals(default, null):Array<Int> = [];
+
+	/** How many strings this table has: the prefix of `stringEntries` it sees (`string`, `stringTable`). */
+	public var stringCount(default, null) = 0;
+
+	/** How many globals this table has: the prefix of `globalEntries` it sees (`globalTable`). */
+	public var globalCount(default, null) = 0;
+
+	/** The strings and the globals only ever grow, so forked tables share them (`HlStringEntries`, `HlGlobalEntries`). */
+	var stringEntries = new HlStringEntries([], []);
+
+	var globalEntries = new HlGlobalEntries([], [], []);
+
+	/** How many of `globalEntries.stringConstants` this table has, the literals among its `globalCount` globals. */
+	var stringConstantCount = 0;
 
 	var intIndices:Map<Int, Int> = [];
-	var stringIndices:Map<String, Int> = [];
 	var floatIndices:Map<String, Int> = [];
 	var typeIndices:Map<String, Int> = [];
 
@@ -73,7 +84,6 @@ class HlSymbolTable {
 	 * them (`fork`, `writable`), and a server's next build keeps it; `renameTypes` drops it with the keys it rewrites.
 	 */
 	var typeIndex:Array<Int> = [];
-	var globalIndices:Map<String, Int> = [];
 	var objectIndices:Map<String, Int> = [];
 	var objectMethodIndices:Map<String, Map<String, Int>> = [];
 	var interfaceMethodIndices:Map<String, Map<String, Int>> = [];
@@ -81,22 +91,18 @@ class HlSymbolTable {
 	/** Counts are needed only while reserved boxed descriptors are still being assembled. */
 	final pendingEnumCaseCounts:Map<String, Int> = [];
 
-	/** The literal globals in index order, so a build reads only these and a patch only the ones past the published globals. */
-	var stringConstants:Array<{global:Int, value:String}> = [];
-
 	/**
 	 * The groups of tables this table shares with a fork (`fork`): a group is copied before its first change, so changing one
-	 * table copies only its own.
+	 * table copies only its own. The strings and globals are not among them: forks share those for good, each seeing its own
+	 * prefix, and one that is not at their end copies its prefix before it appends (`appendableStrings`).
 	 */
 	var shared = 0;
 
 	static inline final INTS = 1;
 	static inline final FLOATS = 2;
-	static inline final STRINGS = 4;
-	static inline final TYPES = 8;
-	static inline final GLOBALS = 16;
-	static inline final OBJECTS = 32;
-	static inline final ALL = 63;
+	static inline final TYPES = 4;
+	static inline final OBJECTS = 8;
+	static inline final ALL = 15;
 
 	public function new() {}
 
@@ -104,17 +110,16 @@ class HlSymbolTable {
 		var result = new HlSymbolTable();
 		for (value in ints)
 			result.internInt(value);
-		for (value in strings)
-			result.internString(value);
+		result.stringEntries = stringEntries.prefix(stringCount);
+		result.stringCount = stringCount;
 		for (value in floats)
 			result.internFloat(value);
 		for (index in 0...types.length)
 			result.types.push(types[index]);
-		for (index in 0...globals.length)
-			result.globals.push(globals[index]);
 		copyMap(typeIndices, result.typeIndices);
-		copyMap(globalIndices, result.globalIndices);
-		result.stringConstants = stringConstants.copy();
+		result.globalEntries = globalEntries.prefix(globalCount, stringConstantCount);
+		result.globalCount = globalCount;
+		result.stringConstantCount = stringConstantCount;
 		copyMap(objectIndices, result.objectIndices);
 		copyNestedMap(objectMethodIndices, result.objectMethodIndices);
 		copyNestedMap(interfaceMethodIndices, result.interfaceMethodIndices);
@@ -124,17 +129,17 @@ class HlSymbolTable {
 	public function fork():HlSymbolTable {
 		var result = new HlSymbolTable();
 		result.ints = ints;
-		result.strings = strings;
 		result.floats = floats;
 		result.types = types;
-		result.globals = globals;
+		result.stringEntries = stringEntries;
+		result.stringCount = stringCount;
+		result.globalEntries = globalEntries;
+		result.globalCount = globalCount;
+		result.stringConstantCount = stringConstantCount;
 		result.intIndices = intIndices;
-		result.stringIndices = stringIndices;
 		result.floatIndices = floatIndices;
 		result.typeIndices = typeIndices;
 		result.typeIndex = typeIndex;
-		result.globalIndices = globalIndices;
-		result.stringConstants = stringConstants;
 		result.objectIndices = objectIndices;
 		result.objectMethodIndices = objectMethodIndices;
 		result.interfaceMethodIndices = interfaceMethodIndices;
@@ -151,17 +156,17 @@ class HlSymbolTable {
 	public function shareFrom(other:HlSymbolTable):Void {
 		var forked = other.fork();
 		ints = forked.ints;
-		strings = forked.strings;
 		floats = forked.floats;
 		types = forked.types;
-		globals = forked.globals;
+		stringEntries = forked.stringEntries;
+		stringCount = forked.stringCount;
+		globalEntries = forked.globalEntries;
+		globalCount = forked.globalCount;
+		stringConstantCount = forked.stringConstantCount;
 		intIndices = forked.intIndices;
-		stringIndices = forked.stringIndices;
 		floatIndices = forked.floatIndices;
 		typeIndices = forked.typeIndices;
 		typeIndex = forked.typeIndex;
-		globalIndices = forked.globalIndices;
-		stringConstants = forked.stringConstants;
 		objectIndices = forked.objectIndices;
 		objectMethodIndices = forked.objectMethodIndices;
 		interfaceMethodIndices = forked.interfaceMethodIndices;
@@ -174,9 +179,9 @@ class HlSymbolTable {
 		return {
 			ints: ints.length,
 			floats: floats.length,
-			strings: strings.length,
+			strings: stringCount,
 			types: types.length,
-			globals: globals.length
+			globals: globalCount
 		};
 
 	public static function sameLengths(left:HlTableLengths, right:HlTableLengths):Bool
@@ -191,8 +196,8 @@ class HlSymbolTable {
 	 */
 	public function startsWith(prefix:HlSymbolTable):Bool {
 		if (ints.length < prefix.ints.length || floats.length < prefix.floats.length
-			|| strings.length < prefix.strings.length || types.length < prefix.types.length
-			|| globals.length < prefix.globals.length)
+			|| stringCount < prefix.stringCount || types.length < prefix.types.length
+			|| globalCount < prefix.globalCount)
 			return false;
 		for (index in 0...prefix.ints.length)
 			if (ints[index] != prefix.ints[index])
@@ -200,15 +205,22 @@ class HlSymbolTable {
 		for (index in 0...prefix.floats.length)
 			if (!sameFloat(floats[index], prefix.floats[index]))
 				return false;
-		for (index in 0...prefix.strings.length)
-			if (strings[index] != prefix.strings[index])
-				return false;
-		for (index in 0...prefix.globals.length)
-			if (globals[index] != prefix.globals[index])
-				return false;
-		for (name => index in prefix.globalIndices)
-			if (globalIndices.get(name) != index)
-				return false;
+		if (stringEntries != prefix.stringEntries) {
+			var values = stringEntries.values, prefixValues = prefix.stringEntries.values;
+			for (index in 0...prefix.stringCount)
+				if (values[index] != prefixValues[index])
+					return false;
+		}
+		if (globalEntries != prefix.globalEntries) {
+			var globals = globalEntries.types, prefixGlobals = prefix.globalEntries.types;
+			for (index in 0...prefix.globalCount)
+				if (globals[index] != prefixGlobals[index])
+					return false;
+			var indices = globalEntries.indices;
+			for (name => index in prefix.globalEntries.indices)
+				if (index < prefix.globalCount && indices.get(name) != index)
+					return false;
+		}
 		for (index in 0...prefix.types.length)
 			if (!sameType(types[index], prefix.types[index]))
 				return false;
@@ -307,20 +319,11 @@ class HlSymbolTable {
 			floats = floats.copy();
 			floatIndices = [for (key => value in floatIndices) key => value];
 		}
-		if (copied & STRINGS != 0) {
-			strings = strings.copy();
-			stringIndices = [for (key => value in stringIndices) key => value];
-		}
 		if (copied & TYPES != 0) {
 			types = types.copy();
 			typeIndices = [for (key => value in typeIndices) key => value];
 			typeIndex = typeIndex.copy();
 			pendingTypes = [for (key => value in pendingTypes) key => value];
-		}
-		if (copied & GLOBALS != 0) {
-			globals = globals.copy();
-			globalIndices = [for (key => value in globalIndices) key => value];
-			stringConstants = stringConstants.copy();
 		}
 		if (copied & OBJECTS != 0) {
 			objectIndices = [for (key => value in objectIndices) key => value];
@@ -334,15 +337,63 @@ class HlSymbolTable {
 		shared &= ~copied;
 	}
 
+	/**
+	 * Lets this table append strings: a table that does not end where the shared strings end (a fork older than another that
+	 * appended) copies its prefix, so the strings past it, which it never had, stay the other's.
+	 */
+	function appendableStrings():Void
+		if (stringCount != stringEntries.values.length)
+			stringEntries = stringEntries.prefix(stringCount);
+
+	/** Lets this table append globals, as `appendableStrings` strings. */
+	function appendableGlobals():Void
+		if (globalCount != globalEntries.types.length)
+			globalEntries = globalEntries.prefix(globalCount, stringConstantCount);
+
+	/** String `index`, below `stringCount`. */
+	public inline function string(index:Int):String
+		return stringEntries.values[index];
+
+	/**
+	 * The strings as a module holds them (`HlCode.strings`): this table's, which no later append reaches. Tables with as many
+	 * strings have the same ones, so they share it.
+	 */
+	public function stringTable():Array<String> {
+		var entries = stringEntries;
+		if (entries.table.length != stringCount)
+			entries.table = entries.values.slice(0, stringCount);
+		return entries.table;
+	}
+
+	/** The type of each global, as `stringTable` gives the strings (`HlCode.globals`). */
+	public function globalTable():Array<Int> {
+		var entries = globalEntries;
+		if (entries.table.length != globalCount)
+			entries.table = entries.types.slice(0, globalCount);
+		return entries.table;
+	}
+
+	/** The index of string `value`, or null when this table does not have it. */
+	inline function stringIndex(value:String):Null<Int> {
+		var index = stringEntries.indices.get(value);
+		return index != null && index < stringCount ? index : null;
+	}
+
+	/** The index of the global named `name`, or null when this table does not have it. */
+	inline function globalIndex(name:String):Null<Int> {
+		var index = globalEntries.indices.get(name);
+		return index != null && index < globalCount ? index : null;
+	}
+
 	public function exportState():HlSymbolState
 		return {
 			ints: ints.copy(),
-			strings: strings.copy(),
+			strings: stringEntries.values.slice(0, stringCount),
 			floats: floats.copy(),
 			types: types.copy(),
-			globals: globals.copy(),
+			globals: globalEntries.types.slice(0, globalCount),
 			typeIndices: orderedMap(typeIndices),
-			globalIndices: orderedMap(globalIndices),
+			globalIndices: orderedMap(namedGlobals()),
 			objectIndices: orderedMap(objectIndices),
 			objectMethodIndices: orderedNestedMap(objectMethodIndices),
 			interfaceMethodIndices: orderedNestedMap(interfaceMethodIndices)
@@ -357,13 +408,15 @@ class HlSymbolTable {
 				throw new InternalError("Duplicate persisted integer symbol");
 			else
 				result.intIndices.set(state.ints[index], index);
+		var strings = result.stringEntries;
 		for (value in state.strings)
-			result.strings.push(value);
+			strings.values.push(value);
 		for (index in 0...state.strings.length)
-			if (result.stringIndices.exists(state.strings[index]))
+			if (strings.indices.exists(state.strings[index]))
 				throw new InternalError("Duplicate persisted string symbol");
 			else
-				result.stringIndices.set(state.strings[index], index);
+				strings.indices.set(state.strings[index], index);
+		result.stringCount = state.strings.length;
 		for (value in state.floats)
 			result.floats.push(value);
 		for (index in 0...state.floats.length) {
@@ -376,11 +429,15 @@ class HlSymbolTable {
 		}
 		for (type in state.types)
 			result.types.push(type);
+		var globals = result.globalEntries;
 		for (global in state.globals)
-			result.globals.push(global);
+			globals.types.push(global);
+		result.globalCount = state.globals.length;
 		loadMap(state.typeIndices, result.typeIndices, "type");
-		loadMap(state.globalIndices, result.globalIndices, "global");
-		result.stringConstants = result.collectStringConstants();
+		loadMap(state.globalIndices, globals.indices, "global");
+		for (constant in collectStringConstants(globals.indices))
+			globals.stringConstants.push(constant);
+		result.stringConstantCount = globals.stringConstants.length;
 		loadMap(state.objectIndices, result.objectIndices, "object");
 		loadNestedMap(state.objectMethodIndices, result.objectMethodIndices, "object method");
 		loadNestedMap(state.interfaceMethodIndices, result.interfaceMethodIndices, "interface method");
@@ -441,12 +498,14 @@ class HlSymbolTable {
 	}
 
 	public function internString(value:String):Int {
-		if (stringIndices.exists(value))
-			return stringIndices.get(value);
-		writable(STRINGS);
-		var index = strings.length;
-		strings.push(value);
-		stringIndices.set(value, index);
+		var known = stringIndex(value);
+		if (known != null)
+			return known;
+		appendableStrings();
+		var index = stringCount;
+		stringEntries.values.push(value);
+		stringEntries.indices.set(value, index);
+		stringCount = index + 1;
 		return index;
 	}
 
@@ -727,7 +786,7 @@ class HlSymbolTable {
 		for (base in interfaceDecl.bases) {
 			var baseIndex = internType(IrType.Virtual(base));
 			switch types[baseIndex] {
-				case Virtual(baseIdentity, _): contract.push(strings[baseIdentity]);
+				case Virtual(baseIdentity, _): contract.push(string(baseIdentity));
 				default: throw new InternalError('Base interface "$base" has no virtual identity');
 			}
 		}
@@ -779,7 +838,7 @@ class HlSymbolTable {
 		}
 		var key = 'obj:${object.name}',
 			index = typeIndices.exists(key) ? typeIndices.get(key) : types.length,
-			global = globals.length + 1;
+			global = globalCount + 1;
 		var base = -1, slots:Map<String, Int> = [], nextSlot = 0;
 		if (object.base != null) {
 			var baseName = Std.string(object.base);
@@ -829,7 +888,7 @@ class HlSymbolTable {
 		}
 		objectIndices.set(object.name, index);
 		objectMethodIndices.set(object.name, slots);
-		globals.push(index);
+		appendGlobal(index);
 		return index;
 	}
 
@@ -876,7 +935,7 @@ class HlSymbolTable {
 
 	/** Whether `field` is a reserved slot no field has taken yet. */
 	public function isReservedField(field:HlObjectField):Bool
-		return strings[field.name] == "" && switch types[field.type] {
+		return string(field.name) == "" && switch types[field.type] {
 			case Simple(kind): kind == HlType.Dyn;
 			default: false;
 		};
@@ -922,7 +981,7 @@ class HlSymbolTable {
 			default:
 		}
 		for (index in 0...fields.length)
-			if (strings[fields[index].name] == fieldName)
+			if (string(fields[index].name) == fieldName)
 				return inheritedFieldCount(found.definition) + index;
 		return null;
 	}
@@ -1015,20 +1074,30 @@ class HlSymbolTable {
 	}
 
 	public function internGlobal(name:String, type:IrType):Int {
-		if (globalIndices.exists(name))
-			return globalIndices.get(name);
-		writable(GLOBALS);
-		var index = globals.length;
+		var known = globalIndex(name);
+		if (known != null)
+			return known;
 		// HFUN globals are raw-function slots: the VM initializes them with a code pointer, not a closure.
 		// Data globals hold nullable closure references. HNULL retains the signature without adding a box.
 		var storage = switch type {
 			case Function(_, _): Nullable(type);
 			default: type;
 		};
-		globals.push(internType(storage));
-		globalIndices.set(name, index);
-		if (StringTools.startsWith(name, STRING_CONSTANT_PREFIX))
-			stringConstants.push({global: index, value: name.substr(STRING_CONSTANT_PREFIX.length)});
+		var index = appendGlobal(internType(storage));
+		globalEntries.indices.set(name, index);
+		if (StringTools.startsWith(name, STRING_CONSTANT_PREFIX)) {
+			globalEntries.stringConstants.push({global: index, value: name.substr(STRING_CONSTANT_PREFIX.length)});
+			stringConstantCount++;
+		}
+		return index;
+	}
+
+	/** Adds a global of type `type`, named or not, and returns its index. */
+	function appendGlobal(type:Int):Int {
+		appendableGlobals();
+		var index = globalCount;
+		globalEntries.types.push(type);
+		globalCount = index + 1;
 		return index;
 	}
 
@@ -1046,9 +1115,10 @@ class HlSymbolTable {
 
 	/** The name of each global by index (`HlCode.globalNames`): null for a class value, which its object type names. */
 	public function globalNames():Array<Null<String>> {
-		var names:Array<Null<String>> = [for (_ in 0...globals.length) null];
-		for (name => index in globalIndices)
-			names[index] = name;
+		var names:Array<Null<String>> = [for (_ in 0...globalCount) null];
+		for (name => index in globalEntries.indices)
+			if (index < globalCount)
+				names[index] = name;
 		return names;
 	}
 
@@ -1064,13 +1134,19 @@ class HlSymbolTable {
 
 	/** Every named global (the static fields), by name: what a refused patch names a stored closure's holder by. */
 	public function namedGlobals():Map<String, Int>
-		return [for (name => index in globalIndices) name => index];
+		return [for (name => index in globalEntries.indices) if (index < globalCount) name => index];
 
-	/** The literal globals, in index order, with the literal each one holds. */
-	public function stringConstantGlobals():Array<{global:Int, value:String}>
-		return stringConstants;
+	/** The literal globals, in index order, with the literal each one holds; read at once, as later globals can extend it. */
+	public function stringConstantGlobals():Array<{global:Int, value:String}> {
+		var constants = globalEntries.stringConstants;
+		return constants.length == stringConstantCount ? constants : constants.slice(0, stringConstantCount);
+	}
 
-	function collectStringConstants():Array<{global:Int, value:String}> {
+	/** Whether this table has the literal globals `other` has, so a module's constants made for one hold for the other. */
+	public function sameStringConstants(other:HlSymbolTable):Bool
+		return globalEntries == other.globalEntries && stringConstantCount == other.stringConstantCount;
+
+	static function collectStringConstants(globalIndices:Map<String, Int>):Array<{global:Int, value:String}> {
 		var result:Array<{global:Int, value:String}> = [];
 		for (name => index in globalIndices)
 			if (StringTools.startsWith(name, STRING_CONSTANT_PREFIX))
@@ -1080,9 +1156,10 @@ class HlSymbolTable {
 	}
 
 	public function requireGlobalIndex(name:String):Int {
-		if (!globalIndices.exists(name))
+		var index = globalIndex(name);
+		if (index == null)
 			throw new InternalError('Unknown static field global "$name"');
-		return globalIndices.get(name);
+		return index;
 	}
 
 	public function requireObjectMethodIndex(objectName:String, methodName:String):Int {
@@ -1139,4 +1216,55 @@ class HlSymbolTable {
 			case Function(arguments,
 				result): 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 		};
+}
+
+/**
+ * The strings of tables forked from one another (`HlSymbolTable.fork`). A table only appends strings, so the tables share these
+ * for good: each sees the first `HlSymbolTable.stringCount`, and an index past it is one it never had. Only the table at the end
+ * appends here; any other copies its prefix first (`prefix`), which is how a build retracted or rolled back to an older table
+ * leaves alone what the newer ones added.
+ */
+private class HlStringEntries {
+	public final values:Array<String>;
+	public final indices:Map<String, Int>;
+
+	/** A copy of a prefix of `values`, given to the modules of tables that long (`HlSymbolTable.stringTable`). */
+	public var table:Array<String> = [];
+
+	public function new(values:Array<String>, indices:Map<String, Int>) {
+		this.values = values;
+		this.indices = indices;
+	}
+
+	/** The first `count` strings, apart from the rest. */
+	public function prefix(count:Int):HlStringEntries
+		return new HlStringEntries(values.slice(0, count),
+			[for (value => index in indices) if (index < count) value => index]);
+}
+
+/** The globals of forked tables, shared as `HlStringEntries` shares their strings: each table sees its `globalCount`. */
+private class HlGlobalEntries {
+	/** The type of each global. */
+	public final types:Array<Int>;
+
+	/** The named globals by name: the static fields and the constants. */
+	public final indices:Map<String, Int>;
+
+	/** The literal globals in index order, so a build reads only these and a patch only the ones past the published globals. */
+	public final stringConstants:Array<{global:Int, value:String}>;
+
+	/** A copy of a prefix of `types`, as `HlStringEntries.table`. */
+	public var table:Array<Int> = [];
+
+	public function new(types:Array<Int>, indices:Map<String, Int>, stringConstants:Array<{global:Int, value:String}>) {
+		this.types = types;
+		this.indices = indices;
+		this.stringConstants = stringConstants;
+	}
+
+	/** The first `count` globals, with the first `constants` literals among them, apart from the rest. */
+	public function prefix(count:Int, constants:Int):HlGlobalEntries
+		return new HlGlobalEntries(types.slice(0, count),
+			[for (name => index in indices) if (index < count) name => index],
+			stringConstants.slice(0, constants));
 }

@@ -1134,8 +1134,8 @@ class TestMain {
 			|| restoredSymbols.internType(I32) != typeIndex)
 			throw "Restored HashLink symbol lookup changed persistent indices";
 		var encodedTypes = HlTypeDefStateCodec.encode(symbolTable.types),
-			decodedTypes = HlTypeDefStateCodec.decode(encodedTypes, symbolTable.strings.length,
-				symbolTable.globals.length);
+			decodedTypes = HlTypeDefStateCodec.decode(encodedTypes, symbolTable.stringCount,
+				symbolTable.globalCount);
 		if (Std.string(decodedTypes) != Std.string(symbolTable.types)
 			|| encodedTypes.compare(HlTypeDefStateCodec.encode(decodedTypes)) != 0)
 			throw "HashLink type definitions did not round trip deterministically";
