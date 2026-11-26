@@ -9,15 +9,40 @@ import PlatformIcon, { type Platform } from '../components/PlatformIcon.astro';
 import StatusBadge from '../components/StatusBadge.astro';
 import { docsUrl, projectRepo, repositorySource } from '../../docs.mjs';
 
-// The newest published release, as its tag names it without the `v`; null until the first one is published. A version
-// with a suffix (0.3.0-preview.1) is a pre-release, as the release workflow publishes it.
-const latest: string | null = null;
-const preview = latest?.includes('-') ?? false;
-
 // The archives are the release workflow's build matrix, so the page lists exactly what a release builds.
 const releaseWorkflow = '.github/workflows/release.yml';
 const workflow = parse(readFileSync(join(__SITE_ROOT__, '..', releaseWorkflow), 'utf8'));
 const builds: { platform: string; aot: boolean; experimental: boolean }[] = workflow.jobs.package.strategy.matrix.include;
+const archiveName = (version: string, platform: string) =>
+  `haxeon-${version}-${platform}.${platform.startsWith('windows') ? 'zip' : 'tar.gz'}`;
+
+// The newest published release, pre-releases included, that holds an archive for every build: its version, as the tag
+// names it without the `v`, and its archives' download links. A version with a suffix (0.3.0-preview.1) is a pre-release,
+// as the release workflow publishes it. Without one, or without the network, the page offers building from source.
+type Release = { tag_name: string; draft: boolean; assets: { name: string; browser_download_url: string }[] };
+async function newestRelease(): Promise<{ version: string; links: Map<string, string> } | null> {
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+  try {
+    const response = await fetch(`${projectRepo.replace('https://github.com/', 'https://api.github.com/repos/')}/releases?per_page=20`, {
+      headers: { Accept: 'application/vnd.github+json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    for (const release of (await response.json()) as Release[]) {
+      if (release.draft || !release.tag_name.startsWith('v')) continue;
+      const version = release.tag_name.slice(1);
+      const links = new Map(release.assets.map((asset) => [asset.name, asset.browser_download_url]));
+      if (builds.every(({ platform }) => links.has(archiveName(version, platform)))) return { version, links };
+    }
+    return null;
+  } catch (error) {
+    console.warn(`download page: could not list the releases (${error}); the page offers building from source`);
+    return null;
+  }
+}
+const release = await newestRelease();
+const latest = release?.version ?? null;
+const preview = latest?.includes('-') ?? false;
+
 const platformNames: Record<string, { name: string; architecture: string; icon: Platform }> = {
   'linux-x86_64': { name: 'Linux', architecture: 'x86-64', icon: 'linux' },
   'windows-x86_64': { name: 'Windows', architecture: 'x86-64', icon: 'windows' },
@@ -26,7 +51,7 @@ const platformNames: Record<string, { name: string; architecture: string; icon: 
 const archives = builds.map(({ platform, aot, experimental }) => {
   const names = platformNames[platform];
   if (!names) throw new Error(`${releaseWorkflow} builds ${platform}, which the download page does not name`);
-  const file = `haxeon-${latest}-${platform}.${platform.startsWith('windows') ? 'zip' : 'tar.gz'}`;
+  const file = latest ? archiveName(latest, platform) : '';
   const [os, arch] = platform.split('-');
   return {
     ...names,
@@ -34,7 +59,7 @@ const archives = builds.map(({ platform, aot, experimental }) => {
     arch,
     status: experimental ? ('Experimental' as const) : ('Supported' as const),
     note: aot ? 'Compiler and CLI built ahead of time.' : 'Compiler and CLI run on the included VM, so commands start more slowly.',
-    href: latest && `${projectRepo}/releases/download/v${latest}/${file}`,
+    href: release?.links.get(file) ?? null,
     file,
   };
 });

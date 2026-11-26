@@ -75,7 +75,10 @@ and clipboard contents.
 
 After building the Showcase and Circuit Run, run `npm run check:embeds` to start every live embed in Chrome at desktop
 and mobile widths and check that a failed load can be retried. `npm run check:download` visits the download page as
-several kinds of visitor and checks which archive it offers each one first. `npm run check:template-web` builds the app template for
+several kinds of visitor and checks which archive it offers each one first. The page offers the newest published
+release that has every archive the release workflow builds, read from GitHub's releases list when the site is built
+(`GITHUB_TOKEN` or `GH_TOKEN` raises the API's rate limit); without one, or offline, it offers building from source, so
+rebuild and redeploy the site after publishing a release. `npm run check:template-web` builds the app template for
 the web and clicks its counter. The browser checks use `CHROME_BIN` when it is set, and save what they saw under
 `SCREENSHOT_DIR` when that is set.
 
