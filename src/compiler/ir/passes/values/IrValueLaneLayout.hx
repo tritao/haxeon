@@ -142,6 +142,24 @@ class IrValueLaneLayout {
 		return Std.int(words);
 	}
 
+	/** Whether two shapes lay out the same lanes. */
+	public static function sameShape(left:IrValueLaneShape, right:IrValueLaneShape):Bool {
+		if (left.scalarWordBits != right.scalarWordBits || left.scalarStrideBits != right.scalarStrideBits
+			|| left.scalarWords != right.scalarWords || left.references != right.references
+			|| left.cLayout != right.cLayout
+			|| left.slots.length != right.slots.length)
+			return false;
+		for (index in 0...left.slots.length) {
+			var a = left.slots[index], b = right.slots[index];
+			if (a.isPresence != b.isPresence || a.nullablePayload != b.nullablePayload || a.index != b.index
+				|| a.isReference != b.isReference || a.bitOffset != b.bitOffset || a.bitWidth != b.bitWidth
+				|| a.signed != b.signed || !compiler.ir.model.IrTypeIdentity.same(a.type, b.type)
+				|| a.path.join(".") != b.path.join("."))
+				return false;
+		}
+		return true;
+	}
+
 	public static function referenceStorageSlots(shape:IrValueLaneShape, length:Int):Int {
 		if (length < 0) throw new InternalError('Negative value array capacity');
 		var slots = length * 1.0 * shape.references;

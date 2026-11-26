@@ -7,6 +7,7 @@ import compiler.core.InternalError;
 import compiler.ir.model.Ir;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneShape;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 /** Overlapping payload lanes for one enum case. The tag is stored separately. */
 typedef IrInlineEnumCaseShape = {
@@ -42,9 +43,18 @@ class IrInlineEnumLayout {
 	final valueCopies:Map<String, String> = [];
 	var decisionPlanner:Null<IrInlineEnumLayout>;
 
-	/** classificationObjects retains the canonical Flat layouts independently of the selected target ABI. */
+	/** The session's stage memos, and their kind of the lanes laid out as this layout lays them out (`lanesOf`); null without a session. */
+	final stageMemos:Null<IrStageMemos>;
+
+	final laneMemos:Null<compiler.query.ComputedQueryKind<IrInlineEnumLanes>>;
+
+	/**
+	 * classificationObjects retains the canonical Flat layouts independently of the selected target ABI. In a session
+	 * (`stageMemos`) an enum's lanes are last build's while the objects they read are the same.
+	 */
 	public function new(enums:Array<IrEnum>, objects:Array<IrObject>, pointerBits:Int, target:IrValueLaneTarget,
-			?classificationObjects:Array<IrObject>, canonical:Bool = false, ?eligible:Map<String, Bool>) {
+			?classificationObjects:Array<IrObject>, canonical:Bool = false, ?eligible:Map<String, Bool>,
+			?stageMemos:IrStageMemos) {
 		if (classificationObjects != null) {
 			var values = [for (object in classificationObjects) if (object.isValue) object.name => true];
 			for (object in objects) if (object.isValue && !values.exists(object.name))
@@ -57,6 +67,8 @@ class IrInlineEnumLayout {
 		this.canonical = canonical;
 		this.classificationObjects = classificationObjects;
 		this.eligible = eligible;
+		this.stageMemos = stageMemos;
+		laneMemos = stageMemos == null ? null : stageMemos.inlineEnumLanes('$pointerBits $target $canonical');
 	}
 
 	/**
@@ -88,7 +100,7 @@ class IrInlineEnumLayout {
 			if (decisionPlanner == null)
 				decisionPlanner = new IrInlineEnumLayout([for (entry in declarations) entry],
 					classificationObjects == null ? [for (object in objects) object] : classificationObjects, 64,
-					HashLink, null, true);
+					HashLink, null, true, null, stageMemos);
 			if (decisionPlanner.shape(name) == null) return reject(name);
 		}
 		var cases:Array<{name:String, object:IrObject}> = [];
@@ -108,13 +120,10 @@ class IrInlineEnumLayout {
 			objects.set(caseName, object);
 			cases.push({name: constructor.name, object: object});
 		}
-		var table = IrObjectTable.of(objects),
-			lanes = new IrValueLaneLayout(table, pointerBits, target),
-			wordBits = canonical ? 64 : 32;
-		for (entry in cases) if (lanes.shape(Obj(entry.object.name)).scalarWordBits == 64) wordBits = 64;
+		var lanes = lanesOf(name, cases), wordBits = lanes.wordBits;
 		var mapped:Array<IrInlineEnumCaseShape> = [], scalarWords = 0, references = 0, largest = 0, second = 0;
-		for (entry in cases) {
-			var payload = lanes.shape(Obj(entry.object.name), wordBits);
+		for (index in 0...cases.length) {
+			var entry = cases[index], payload = lanes.payloads[index];
 			mapped.push({
 				name: entry.name,
 				parameters: [for (field in entry.object.fields) field.type],
@@ -151,6 +160,36 @@ class IrInlineEnumLayout {
 		};
 		results.set(name, result);
 		return result;
+	}
+
+	/**
+	 * The lanes of the cases of the enum `name`, each case's object in `cases`: in a session last build's while every object they
+	 * read is the same shape (`IrInlineEnumLanes.holds`), as they read nothing else but the pointer width and the target; with
+	 * `--check-reuse` laid out again and compared.
+	 */
+	function lanesOf(name:String, cases:Array<{name:String, object:IrObject}>):IrInlineEnumLanes {
+		var memos = stageMemos,
+			kind = laneMemos,
+			key = compiler.ir.model.IrTypeIds.id(Enum(name)),
+			kept:Null<IrInlineEnumLanes> = kind == null ? null : kind.kept(key);
+		if (memos != null && kind != null && kept != null && kept.holds(objects, cases.length) && !memos.checks)
+			return kind.put(memos.database, key, kept);
+		var table = IrObjectTable.of(objects), consulted:Map<String, Bool> = [];
+		if (kind != null)
+			table.consulted = consulted;
+		var lanes = new IrValueLaneLayout(table, pointerBits, target), wordBits = canonical ? 64 : 32;
+		for (entry in cases) if (lanes.shape(Obj(entry.object.name)).scalarWordBits == 64) wordBits = 64;
+		var payloads = [for (entry in cases) lanes.shape(Obj(entry.object.name), wordBits)];
+		if (memos == null || kind == null)
+			return new IrInlineEnumLanes(wordBits, payloads, [], []);
+		var names = [for (read in consulted.keys()) read],
+			made = new IrInlineEnumLanes(wordBits, payloads, names, [for (read in names) objects.get(read)]);
+		if (kept != null && kept.holds(objects, cases.length)) {
+			if (!made.same(kept))
+				throw new InternalError('--check-reuse: the inline enum layout reused lanes of "$name" that differ from laying them out now');
+			return kind.put(memos.database, key, kept);
+		}
+		return kind.put(memos.database, key, made);
 	}
 
 	function reject(name:String):Null<IrInlineEnumShape> {
@@ -241,4 +280,47 @@ class IrInlineEnumLayout {
 					found;
 				default: false;
 			};
+}
+
+/**
+ * The lanes `IrInlineEnumLayout.shape` laid out for the cases of one enum: the payload word width, each case's payload, and the
+ * objects the layout read by name (null where none was found), which it is a function of besides the pointer width and target.
+ */
+@:nullSafety(Strict)
+class IrInlineEnumLanes {
+	public final wordBits:Int;
+	public final payloads:Array<IrValueLaneShape>;
+
+	final names:Array<String>;
+	final objects:Array<Null<IrObject>>;
+
+	public function new(wordBits:Int, payloads:Array<IrValueLaneShape>, names:Array<String>,
+			objects:Array<Null<IrObject>>) {
+		this.wordBits = wordBits;
+		this.payloads = payloads;
+		this.names = names;
+		this.objects = objects;
+	}
+
+	/** Whether the enum's `cases` objects, laid out against `table`, would read what these were laid out from. */
+	public function holds(table:Map<String, IrObject>, cases:Int):Bool {
+		if (cases != payloads.length)
+			return false;
+		for (index in 0...names.length) {
+			var now = table.get(names[index]), then = objects[index];
+			if (now == null || then == null ? now != then : !IrObjectTools.sameShape(now, then))
+				return false;
+		}
+		return true;
+	}
+
+	/** Whether two layouts of an enum's lanes are the same, for `--check-reuse`. */
+	public function same(other:IrInlineEnumLanes):Bool {
+		if (wordBits != other.wordBits || payloads.length != other.payloads.length)
+			return false;
+		for (index in 0...payloads.length)
+			if (!IrValueLaneLayout.sameShape(payloads[index], other.payloads[index]))
+				return false;
+		return true;
+	}
 }

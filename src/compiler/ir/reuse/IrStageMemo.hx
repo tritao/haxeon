@@ -287,6 +287,27 @@ class IrStageMemos {
 		return kind.put(database, id, known == null ? encode(type) : known);
 	}
 
+	/** The lanes of each enum's cases (`IrInlineEnumLayout.lanesOf`), by the configuration they are laid out in. */
+	final laneKinds:Map<String, compiler.query.ComputedQueryKind<compiler.ir.passes.enums.IrInlineEnumLayout.IrInlineEnumLanes>>
+		= [];
+
+	/**
+	 * The kind of the lanes `IrInlineEnumLayout` lays out in the configuration `name` (pointer width, target, canonical), by the
+	 * id of the enum's type: they are a function of the enums and value objects alone, so a build takes last build's where the
+	 * objects they read are the same. Swept with the build.
+	 */
+	public function inlineEnumLanes(name:String):compiler.query
+		.ComputedQueryKind<compiler.ir.passes.enums.IrInlineEnumLayout.IrInlineEnumLanes> {
+		var known = laneKinds.get(name);
+		if (known == null) {
+			known = database.register(new compiler.query
+				.ComputedQueryKind<compiler.ir.passes.enums.IrInlineEnumLayout.IrInlineEnumLanes>("ir-inline-enum-lanes "
+				+ name, (left, right) -> left == right));
+			laneKinds.set(name, known);
+		}
+		return known;
+	}
+
 	/** Last build's helper `name`, or null. */
 	public function helper(name:String):Null<IrFunction> {
 		var kind = helpers;
@@ -315,6 +336,8 @@ class IrStageMemos {
 		var encodings = typeEncodings;
 		if (encodings != null)
 			encodings.clear();
+		for (lanes in laneKinds)
+			lanes.clear();
 		memos.clear();
 		summaries.clear();
 		for (walk in walks)

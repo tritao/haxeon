@@ -67,12 +67,12 @@ class IrInlineEnumLowering {
 	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>,
 			?reflectableObjects:Array<String>, ?builder:IrBodyBuilder, ?stageMemos:IrStageMemos):IrProgram {
 		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
-			canonicalObjects);
+			canonicalObjects, false, null, stageMemos);
 		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects, builder, stageMemos);
 		if (!eligibility.allowed.keys().hasNext())
 			return program;
 		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
-			canonicalObjects, false, eligibility.allowed);
+			canonicalObjects, false, eligibility.allowed, stageMemos);
 		function storage(name:String):compiler.ir.passes.enums.IrInlineEnumLayout.IrInlineEnumShape {
 			var shape = planner.shape(name);
 			if (shape == null)
