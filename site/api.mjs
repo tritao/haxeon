@@ -169,7 +169,8 @@ export function declarationHtml(type, index) {
     case 'interface':
       return `interface ${name}${list('extends', type.supertypes)}`;
     case 'enum':
-      return `enum ${name}${list('implements', type.interfaces)}`;
+      // A raw-value enum names its code type: `enum PixelFormat:Int`.
+      return `enum ${name}${type.underlying ? `:${typeHtml(type.underlying, index)}` : ''}${list('implements', type.interfaces)}`;
     default:
       return `${type.kind === 'extern' ? 'extern class' : 'class'} ${name}${list('extends', type.supertypes)}${list('implements', type.interfaces)}`;
   }
@@ -188,7 +189,7 @@ export function memberHtml(member, index) {
     case 'enumConstructor': {
       const signature = member.arguments.length
         ? `${escape(member.name)}(${argumentsHtml(member.arguments, index)})`
-        : escape(member.name);
+        : member.rawValue != null ? `${escape(member.name)} = ${escape(member.rawValue)}` : escape(member.name);
       // The per-case constants the case sets itself, as its declaration writes them; defaults show on the constant.
       const given = (member.constants ?? []).filter(constant => !constant.isDefault);
       return given.length

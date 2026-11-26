@@ -113,6 +113,7 @@ class ModuleChangeAnalyzer {
 				signature = abstractDecl.visibility.modifier() + ":" + abstractName
 					+ (abstractDecl.typeParameters.length == 0 ? ""
 					: '<${SemanticSignature.parsedParameters(abstractDecl.typeParameters, abstractDecl.typeConstraints, ast.aliases)}>')
+					+ (abstractDecl.isRawEnum == true ? " raw" : "")
 					+ "("
 					+ SemanticSignature.parsed(abstractDecl.underlying, ast.aliases)
 					+ ")"

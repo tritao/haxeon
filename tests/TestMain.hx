@@ -2026,6 +2026,25 @@ class TestMain {
 		expectCompileError('enum E { public final n:Int; A {n: 1}; } function main():Int { var e:E = A; e.n = 2; return 0; }',
 			'Per-case constant "E.n" cannot be assigned', true);
 		Sys.println("PASS: per-case constants are checked at the declaration and read only");
+		// A raw-value enum's cases are payload-free, with distinct constant codes of its Int or String raw type, and it
+		// converts to and from the code only through rawValue() and fromRaw().
+		var rawErrors = [
+			['enum E:Int { A = 1; B = 1; }', 'Enum case E.B has the raw value of E.A'],
+			['enum E:Int { A(x:Int); }', 'Enum case A has a raw value, so it takes no payload'],
+			['enum E:Float { A = 1.5; }', 'Enum "E": a raw value is an Int or a String'],
+			['enum E:Int { public A = 1; }', 'Enum case A takes no modifiers'],
+			['enum E<T>:Int { A; }', 'Enum "E": a raw-value enum takes no type parameters'],
+			['enum E:Int { A = Std.random(3); }', 'Enum case E.A needs a compile-time constant raw value'],
+			[
+				'enum E:Int { A; B; } function f():Int return switch E.A { case A: 1; };',
+				'Enum switch is missing cases: B'
+			],
+			['enum E:Int { A = 1; } function f():Int return E.A;', 'Type mismatch for return: expected Int, got E'],
+			['enum E:Int { A = 1; } function f():E return 1;', 'Type mismatch for return: expected E, got Int']
+		];
+		for (entry in rawErrors)
+			expectCompileError('${entry[0]} function main():Int return 0;', entry[1], true);
+		Sys.println("PASS: raw-value enums are checked at the declaration and convert only explicitly");
 		Sys.println("PASS: a class used as a value is reported as unsupported, not a crash");
 		// A type's visibility is part of its declaration: making it internal is checked again in a session that analyzed it
 		// public, not taken for an edit of bodies alone.

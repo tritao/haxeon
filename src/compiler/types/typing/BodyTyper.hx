@@ -1977,8 +1977,10 @@ class BodyTyper implements BodyTyping {
 				|| context.storage.cell(binding.id) != null ? scope.declaredTypeOf(binding) : null);
 			// An abstract's implementation reads `this` as its underlying value.
 			// Keep the nominal receiver in scope for calls to its own methods.
+			// A raw-value enum's `this` is the enum value, as in any enum; rawValue() reaches the code.
 			if (name == "this" && !asAbstract && context.lexicalOwner != null
-				&& session.declarations.abstracts.exists(context.lexicalOwner))
+				&& session.declarations.abstracts.exists(context.lexicalOwner)
+				&& session.declarations.abstracts.get(context.lexicalOwner).isRawEnum != true)
 				switch type {
 					case TAbstract(_, _, representation):
 						value = session.representation.boundaryCast(value, representation);
@@ -3272,6 +3274,18 @@ class BodyTyper implements BodyTyping {
 	 * The declared values of a closed enum abstract, keyed as switch cases are (`int:N`, `string:S`), or null when `type`
 	 * is not one. Flags combine their values, so their switches have no fixed set to cover.
 	 */
+	/** What a switch over `type` that leaves out `missing` reports: a raw-value enum's are cases, as any enum's. */
+	public function missingEnumAbstractValues(type:CompilerType, missing:Array<String>):String {
+		var raw = switch type {
+			case TAbstract(name, _, _) | TNullable(TAbstract(name, _, _)):
+				var declaration = session.declarations.abstracts.get(name);
+				declaration != null && declaration.isRawEnum == true;
+			default: false;
+		};
+		return raw ? 'Enum switch is missing cases: ${missing.join(", ")}'
+			: 'Enum abstract switch is missing values: ${missing.join(", ")}';
+	}
+
 	public function closedEnumAbstractValues(type:CompilerType):Null<Array<{name:String, key:String}>> {
 		switch type {
 			case TNullable(inner):

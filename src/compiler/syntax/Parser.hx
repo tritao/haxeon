@@ -323,7 +323,9 @@ class Parser {
 					if (check(TokenKind.Identifier) && textOf(current()) == "abstract") {
 						advance();
 						abstracts.push(parseAbstract(start, false, metadata, true, declared));
-					} else
+					} else if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon)
+						abstracts.push(parseAbstract(start, false, metadata, true, declared, true));
+					else
 						enums.push(parseEnum(start, metadata, declared));
 				} else if (check(TokenKind.Interface))
 					interfaces.push(parseInterface(metadata, declared));
@@ -490,15 +492,31 @@ class Parser {
 
 	/** An abstract, or with `isEnum` an enum abstract: the same members, plus its values and `implements`. */
 	function parseAbstract(start:SourceSpan, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>,
-			isEnum:Bool = false, visibility:AstVisibility = AstVisibility.Unwritten):AstAbstract {
+			isEnum:Bool = false, visibility:AstVisibility = AstVisibility.Unwritten, rawEnum:Bool = false):AstAbstract {
 		var name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<AstTypeConstraint> = [],
-			typeParameters = parseTypeParameters(typeConstraints);
-		consume(TokenKind.LeftParen);
-		var underlying = parseType();
-		consume(TokenKind.RightParen);
+			typeParameters = rawEnum ? [] : parseTypeParameters(typeConstraints);
+		// A raw-value enum, `enum Name:Int { Case = 1; }`, is an enum abstract whose values are written as cases.
+		var underlying = if (rawEnum) {
+			var colon = consume(TokenKind.Colon);
+			var written = parseType();
+			// A raw type is Int or String; a name there is a conformance written the Haxe way.
+			switch written {
+				case NamedType(_),
+					AppliedType(_, _): fail(colon, 'Enum "$name": use "implements" to declare conformance');
+				default:
+			}
+			written;
+		} else {
+			consume(TokenKind.LeftParen);
+			var written = parseType();
+			consume(TokenKind.RightParen);
+			written;
+		};
 		var fromTypes = [], toTypes = [], conformances:Array<AstType> = [];
 		while (!check(TokenKind.LeftBrace)) {
+			if (rawEnum && !check(TokenKind.Implements))
+				fail(current(), 'Enum "$name": expected "implements" or "{"');
 			if (isEnum && match(TokenKind.Implements)) {
 				conformances.push(parseType());
 				if (match(TokenKind.Comma)) fail(previous(),
@@ -554,7 +572,17 @@ class Parser {
 					isPublic = kindOf(advance()) == TokenKind.Public;
 			}
 			var memberVisibility = writtenVisibility(isInternalMember, isPublic, memberStart);
-			if (values != null && !isStatic && isEnumAbstractValue(isFinal)) {
+			if (rawEnum && isRawEnumCase(memberStart, isStatic || isInline || isFinal || isPublic != null
+				|| isInternalMember || isExternMember || isDynamic)) {
+				var value = parseRawEnumCase(underlying, nextImplicitInt, methodMetadata);
+				nextImplicitInt = switch value.value {
+					case IntegerLiteral(literal, _): literal + 1;
+					default: null;
+				};
+				values.push(value);
+				continue;
+			}
+			if (values != null && !rawEnum && !isStatic && isEnumAbstractValue(isFinal)) {
 				var value = parseEnumAbstractValue(name, underlying, nextImplicitInt, methodMetadata, memberVisibility);
 				nextImplicitInt = switch value.value {
 					case IntegerLiteral(literal, _): literal + 1;
@@ -600,7 +628,37 @@ class Parser {
 			fields: fields,
 			methods: methods,
 			values: values,
+			isRawEnum: rawEnum ? true : null,
 			span: start.merge(end)
+		};
+	}
+
+	/** Whether a raw-value enum's member ahead is a case, `Name;` or `Name = value;`, which takes no modifiers. */
+	function isRawEnumCase(start:SourceSpan, modified:Bool):Bool {
+		// A case may be named as a type is (`Float`), as an enum abstract's value may.
+		var named = isNameToken(kindOf(current())) && !check(TokenKind.Function) && !check(TokenKind.Var);
+		if (named && peekKind(1) == TokenKind.LeftParen)
+			fail(current(), 'Enum case ${textOf(current())} has a raw value, so it takes no payload');
+		if (!named || (peekKind(1) != TokenKind.Semicolon && peekKind(1) != TokenKind.Assign))
+			return false;
+		if (modified)
+			fail(current(), 'Enum case ${textOf(current())} takes no modifiers');
+		return true;
+	}
+
+	/** `Name;` or `Name = value;` in a raw-value enum; an omitted value is numbered or named as in an enum abstract. */
+	function parseRawEnumCase(underlying:AstType, nextImplicitInt:Null<Int>,
+			metadata:Array<compiler.syntax.Ast.AstMetadata>):compiler.syntax.Ast.AstEnumAbstractValue {
+		var valueName = consumeName();
+		var value = if (match(TokenKind.Assign)) parseExpression();
+		else implicitEnumAbstractValue(underlying, valueName, nextImplicitInt);
+		var end = spanOf(consume(TokenKind.Semicolon));
+		return {
+			name: textOf(valueName),
+			visibility: AstVisibility.Unwritten,
+			metadata: metadata,
+			value: value,
+			span: spanOf(valueName).merge(end)
 		};
 	}
 
@@ -690,7 +748,9 @@ class Parser {
 			fields:Array<compiler.syntax.Ast.AstField> = [],
 			constants:Array<compiler.syntax.Ast.AstEnumConstant> = [];
 		if (match(TokenKind.Colon))
-			fail(previous(), 'Enum "$name": use "implements" to declare conformance');
+			fail(previous(), typeParameters.length > 0
+				? 'Enum "$name": a raw-value enum takes no type parameters'
+				: 'Enum "$name": use "implements" to declare conformance');
 		while (match(TokenKind.Implements)) {
 			conformances.push(parseType());
 			if (match(TokenKind.Comma)) fail(previous(), 'Enum "$name": repeat "implements" for each interface');

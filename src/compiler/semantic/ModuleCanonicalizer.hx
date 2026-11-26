@@ -252,6 +252,7 @@ class ModuleCanonicalizer {
 					value: canonicalExpression(value.value, module, entry, locals, aliases),
 					span: value.span
 				}],
+			isRawEnum: decl.isRawEnum,
 			span: decl.span
 		};
 

@@ -18,7 +18,7 @@ class RawRepresentableGenerator {
 	public static inline final PREFIX = "$raw-representable:";
 
 	public static function conforms(session:TypingSession, declaration:AstAbstract):Bool
-		return DeclaredConformance.has(session,
+		return declaration.isRawEnum == true || DeclaredConformance.has(session,
 			TAbstract(declaration.name, [], session.declarations.resolve(declaration.underlying, declaration.span)),
 			"RawRepresentable");
 
@@ -32,8 +32,9 @@ class RawRepresentableGenerator {
 		switch raw {
 			case TInt, TString:
 			default:
-				BodyTyper.fail(DiagnosticCode.CONFORMANCE, "RawRepresentable requires an Int or String enum abstract",
-					declaration.span);
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE, declaration.isRawEnum == true
+					? 'Enum "${declaration.name}": a raw value is an Int or a String'
+					: "RawRepresentable requires an Int or String enum abstract", declaration.span);
 		}
 		if (declaration.fromTypes.length != 0 || declaration.toTypes.length != 0)
 			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
@@ -45,8 +46,27 @@ class RawRepresentableGenerator {
 					'Constant "${declaration.name}.${value.name}" conflicts with a synthesized RawRepresentable member',
 					value.span);
 			if (InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value)) == null)
-				BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
-					"RawRepresentable requires compile-time constant raw values", value.span);
+				BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, declaration.isRawEnum == true
+					? 'Enum case ${declaration.name}.${value.name} needs a compile-time constant raw value'
+					: "RawRepresentable requires compile-time constant raw values", value.span);
+		}
+		if (declaration.isRawEnum == true) {
+			// A raw value names one case, so fromRaw can return it.
+			var seen:Map<String, String> = [];
+			for (value in declaration.values) {
+				var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
+				var key = constant == null ? value.name : switch constant.expression {
+					case TIntLiteral(raw): "int:" + raw;
+					case TStringLiteral(raw): "string:" + raw;
+					default: value.name;
+				};
+				var other = seen.get(key);
+				if (other != null)
+					BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+						'Enum case ${declaration.name}.${value.name} has the raw value of ${declaration.name}.$other',
+						value.span);
+				seen.set(key, value.name);
+			}
 		}
 	}
 

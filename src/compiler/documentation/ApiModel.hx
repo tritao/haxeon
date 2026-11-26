@@ -78,6 +78,9 @@ typedef ApiMember = {
 	/** An enum case's per-case constant values, in the enum's declaration order (docs/design/ENUM_MEMBERS.md). */
 	final ?constants:Array<ApiCaseConstant>;
 
+	/** A raw-value enum case's code, as written or implied (`enum E:Int { A = 1; }`). */
+	final ?rawValue:String;
+
 	/**
 	 * For an instance field, property or method of a class or interface: the supertype whose member of the same name this
 	 * one overrides or implements (`ApiModelBuilder.overridden`), whose comment documents it when it has none of its own.

@@ -1329,7 +1329,7 @@ class StatementTyper {
 					[for (value in values) if (value.key != "null" && !seenCases.exists(value.key)) value.name];
 				if (missing.length > 0)
 					fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
-						'Enum abstract switch is missing values: ${missing.join(", ")}', span);
+						bodyTyper.missingEnumAbstractValues(typedExpression.type, missing), span);
 				unmatchedEnumAbstract =
 					'Unmatched ${compiler.semantic.SemanticSignature.display(typedExpression.type)} value';
 				var nullArm = SwitchNullCoverage.nullAccessArm(typedExpression, seenCases, span);

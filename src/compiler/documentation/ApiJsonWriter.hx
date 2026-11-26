@@ -119,6 +119,8 @@ class ApiJsonWriter {
 					output.string("conversion", required(value.conversion, value.kind, "conversion"));
 				if (value.kind == "method")
 					overrides(output, value);
+				if (value.kind == "enumConstructor" && value.rawValue != null)
+					output.string("rawValue", value.rawValue);
 				if (value.kind == "enumConstructor" && value.constants != null)
 					output.list("constants", value.constants, (output, constant) -> {
 						output.open();

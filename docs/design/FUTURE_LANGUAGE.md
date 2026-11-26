@@ -260,12 +260,10 @@ decides (change 16).
 
 ### 3. Raw-value enums
 
-`enum abstract Color(Int) { var red = 1; }` becomes `enum Color : Int { red = 1; }`. Haxeon already gives these
-`RawRepresentable` semantics, with checked conversion from declared constants and no implicit conversions; the syntax
-says what they are.
+`enum abstract Color(Int) { var red = 1; }` becomes `enum Color:Int { red = 1; }`, with checked conversion from
+declared constants and no implicit conversions; the syntax says what they are.
 
-Not adopted for Haxeon itself: [ENUM_MEMBERS.md](ENUM_MEMBERS.md) keeps raw codes as `RawRepresentable` enum
-abstracts, whose representation is the code, and gives enums per-case constants for every other number per case.
+Adopted: [ENUM_MEMBERS.md](ENUM_MEMBERS.md#raw-value-enums) has the rules.
 
 ### 4. Newtypes without implicit conversions
 

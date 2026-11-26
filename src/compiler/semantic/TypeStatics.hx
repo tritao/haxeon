@@ -129,6 +129,7 @@ class TypeStatics {
 			fields: fields,
 			methods: declaration.methods,
 			values: declaration.values,
+			isRawEnum: declaration.isRawEnum,
 			span: declaration.span
 		};
 }

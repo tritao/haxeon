@@ -1030,6 +1030,8 @@ class CanonicalComparison {
 			return false;
 		if (!(astType(left.underlying, right.underlying)))
 			return false;
+		if (!(left.isRawEnum == right.isRawEnum))
+			return false;
 		if (!(array(left.fromTypes, right.fromTypes, astType)))
 			return false;
 		if (!(array(left.toTypes, right.toTypes, astType)))

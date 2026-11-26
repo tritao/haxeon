@@ -151,6 +151,17 @@ enum abstract Mode(Int) {
 	private var Internal = 2;
 }
 
+/** A code fixed by a file format. */
+enum Format:Int {
+	/** Uncompressed. */
+	Raw = 1;
+	Packed;
+
+	/** Whether it needs decoding. */
+	public function compressed():Bool
+		return this != Raw;
+}
+
 extern class External {}
 
 private class Hidden {}

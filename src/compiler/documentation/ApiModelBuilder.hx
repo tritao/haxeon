@@ -272,6 +272,47 @@ class ApiModelBuilder {
 				storage.typeConstraints),
 				storage.fields, publicByDefault));
 		addMethods(members, owner, decl.methods, publicByDefault, true);
+		// A raw-value enum reads as an enum whose cases carry codes, with the synthesized rawValue() and fromRaw().
+		if (decl.isRawEnum == true) {
+			var result:ApiType = {kind: "named", path: decl.name, arguments: []},
+				raw = resolve(decl.underlying, decl.span, parametersIn(decl.name, []));
+			var cases:Array<ApiMember> = [for (value in decl.values) {source: source(value.span, value.metadata),
+				kind: "enumConstructor",
+				name: value.name,
+				isStatic: true,
+				arguments: [],
+				result: result,
+				typeParameters: [],
+				// An omitted code is a literal the parser made at the case's name, so it prints from its value.
+				rawValue: switch value.value {
+					case IntegerLiteral(code, _): Std.string(code);
+					case StringLiteral(code, _): haxe.Json.stringify(code);
+					default: expressionText(value.value);
+				}
+			}];
+			var synthesized:Array<ApiMember> = [
+				{
+					source: synthesizedSource(decl.span, "The case's code."),
+					kind: "method",
+					name: "rawValue",
+					isStatic: false,
+					arguments: [],
+					result: raw,
+					typeParameters: []
+				},
+				{
+					source: synthesizedSource(decl.span, "The case whose code is `raw`, or null when no case has it."),
+					kind: "method",
+					name: "fromRaw",
+					isStatic: true,
+					arguments: [{name: "raw", type: raw, optional: false, defaultValue: null}],
+					result: {kind: "builtin", path: "Null", arguments: [result]},
+					typeParameters: []
+				}
+			];
+			return declaration(owner, "enum", decl.metadata, isExtern, cases.concat(synthesized).concat(members), null,
+				decl.conformances, decl.underlying, [], []);
+		}
 		if (decl.values != null) {
 			var result:ApiType = {
 				kind: "named",
@@ -623,6 +664,15 @@ class ApiModelBuilder {
 			doc = DocumentationTools.forSpan(file, scanned, metadata[0].span);
 		return doc;
 	}
+
+	/** The source of a member the compiler synthesizes: the declaration's position, with `documentation` as its comment. */
+	function synthesizedSource(span:SourceSpan, documentation:String):ApiSource
+		return {
+			visibility: "public",
+			position: {file: locate(span.file, moduleName(span)).file, line: span.file.lineAt(span.start)},
+			documentation: {markdown: documentation, tags: []},
+			metadata: []
+		};
 
 	function source(span:SourceSpan, metadata:Null<Array<AstMetadata>>, isInternal:Null<Bool> = false):ApiSource {
 		var file = span.file, doc = commentAt(span, metadata), annotations:Array<ApiModel.ApiAnnotation> = [];

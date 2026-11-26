@@ -84,33 +84,53 @@ enum Shape {
 Lowering adds no new IR: each constant becomes an inline getter whose body is a `switch this` over the cases, and the
 backend's switch lowering handles it (a jump table where the backend makes one).
 
-## Raw values: unchanged
-
-`enum X : Int { A = 1; }` (proposed in [FUTURE_LANGUAGE.md](FUTURE_LANGUAGE.md#3-raw-value-enums)) is not part of this
-design. A closed set whose number is a native, wire or file code keeps `enum abstract X(Int) implements
-RawRepresentable`: its representation is the code itself, so it crosses those boundaries with no conversion, which a
-tag-based enum could not. Per-case constants cover every other use of a number per case. The rule is:
+## Which construct
 
 | A set that is | Declared as |
 | --- | --- |
 | closed, values chosen in Haxe code | `enum` |
-| closed, values fixed by a native, wire or file format | `enum abstract X(Int\|String) implements RawRepresentable` |
+| closed, values fixed by a native, wire or file format | `enum X:Int` or `enum X:String` ([below](#raw-value-enums)) |
 | combinable bits | `enum abstract X(Int) implements Flags` |
 | open (codes from outside that no case may name) | an abstract over `Int` |
 
-### Later: raw values as enums
+## Raw-value enums
 
-Considered and deferred (2026-11-26). Keeping raw codes as enum abstracts leaves two constructs for closed sets, and
-the raw form is the weaker one (no payloads, no per-case constants). The simpler end state:
+Status: decided (2026-11-26), in progress. Before this, closed sets with a fixed external code were enum abstracts,
+which leave two constructs for closed sets; the raw form was the weaker one (no per-case constants, `this` is the bare
+code, and `cast` makes values outside the set).
 
-- `enum PixelFormat : Int { Rgba8 = 1; }`, payload-free only, with `rawValue()` and checked `fromRaw()` synthesized as
-  ordinary members. An `Int` raw value is the enum's representation, so native boundaries stay free; `Null<E>` uses a
-  sentinel the domain leaves unused, or boxes when the codes use every bit pattern. `String` codes convert through a
-  table.
-- No user-facing `RawRepresentable` interface: today only its own tests use it as a bound. A generic need later is met
-  by interfaces with static requirements and `Self` ([FUTURE_LANGUAGE.md](FUTURE_LANGUAGE.md)), which raw-value enums
-  satisfy with their synthesized members. The binding generator emits raw-value enums, and the 23 declarations migrate.
-- `Flags` stays separate: combinable bits, with its own synthesis.
+```haxe
+enum PixelFormat:Int {
+	Rgba8 = 1;
+	Bgra8 = 2;
+	R8; // 3: an omitted Int value counts up from the previous one, a String value is the case name
+
+	public function bytesPerPixel():Int
+		return this == R8 ? 1 : 4;
+}
+```
+
+- **Payload-free cases with a raw value** of type `Int` or `String`, a compile-time constant, unique within the enum.
+- **The representation is the raw value**, so native and wire boundaries cost nothing. It is compiled as an enum
+  abstract over the raw type; `Null<E>` behaves as `Null<Int>` or `Null<String>` does.
+- **No implicit conversions.** `rawValue()` gives the code; `E.fromRaw(code)` returns the case, or null for a code
+  that names none. A `cast` to the enum is unchecked, as every `cast` is.
+- **In its methods `this` is the enum value**, as in any enum; `rawValue()` reaches the code.
+- **Members** are those of any enum: methods, static methods and static fields. Per-case constants come later.
+- **A code this build does not know never reaches a case.** A value read from native code or the wire may carry a code
+  newer than the binding. It keeps its representation, as every native value does, and a `switch` over the enum has an
+  implicit default that throws for it, so no arm runs for a code that is not its own. Code that dispatches on codes from
+  outside, such as the platform event decoder, checks with `fromRaw` and reports an unknown one explicitly (`Raw`)
+  instead of failing.
+- **No `RawRepresentable` interface.** Only its own tests used it as a bound; a generic need later is met by interfaces
+  with static requirements and `Self` ([FUTURE_LANGUAGE.md](FUTURE_LANGUAGE.md)), which raw-value enums satisfy with
+  their synthesized members.
+- **`Flags` stays separate**: combinable bits are not a closed set of cases.
+- **Enum abstracts remain** for Haxe code and for the compiler's own source, which builds with stock Haxe. Haxeon's
+  packages and generated bindings use raw-value enums.
+
+Stages: syntax and typing with tests on every backend; tools (API model and site, formatter, LSP); the binding
+generator, with checked decoding of unknown codes; migration of the packages; removal of `RawRepresentable`.
 
 ## Not in scope
 

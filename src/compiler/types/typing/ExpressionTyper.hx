@@ -2772,7 +2772,7 @@ class ExpressionTyper {
 		var missing = [for (value in values) if (value.key != "null" && !seenCases.exists(value.key)) value.name];
 		if (missing.length > 0)
 			fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
-				'Enum abstract switch is missing values: ${missing.join(", ")}', span);
+				bodyTyper.missingEnumAbstractValues(subject, missing), span);
 		var message =
 			new TypedExpression(TStringLiteral('Unmatched ${compiler.semantic.SemanticSignature.display(subject)} value'),
 			TString, span);
