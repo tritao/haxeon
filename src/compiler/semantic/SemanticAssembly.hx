@@ -171,7 +171,12 @@ class SemanticAssembly {
 				}
 			}
 		aliasUniverse.sort(Reflect.compare);
-		var aliasKey = aliasUniverse.join(";");
+		var aliasKey = aliasUniverse.join(";"), session = context.state;
+		if (session.aliasUniverse != aliasKey) {
+			session.aliasUniverse = aliasKey;
+			session.aliasUniverseRevision = facts.revision;
+		}
+		var aliasRevision = session.aliasUniverseRevision;
 		var discoveryPrefixes:Map<String, Array<String>> = [];
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
@@ -216,7 +221,7 @@ class SemanticAssembly {
 			if (reuseModuleContributions
 				&& state.canonicalRevision == state.revision
 				&& state.canonicalEntry == entryModule
-				&& state.canonicalAliasKey == aliasKey) {
+				&& state.canonicalAliasRevision == aliasRevision) {
 				for (value in state.canonicalAliases)
 					typeAliases.push(value);
 				for (value in state.canonicalEnums)
@@ -244,7 +249,7 @@ class SemanticAssembly {
 			// The facts of the module's declarations are moved by what changed since they were last made (`DeclarationPrints`).
 			var before = state.canonicalRevision > 0 ? canonicalContribution(state) : null,
 				scope = scopeKey(ast),
-				sameScope = state.canonicalScope == scope && state.canonicalAliasKey == aliasKey;
+				sameScope = state.canonicalScope == scope && state.canonicalAliasRevision == aliasRevision;
 			var importedTypes = context.moduleAnalyzer.importAliases(ast.imports),
 				locals = LocalScope.ofNames([]),
 				aliases = AliasTable.of(importedTypes);
@@ -370,7 +375,7 @@ class SemanticAssembly {
 			}
 			var canonicalFunctions:Array<AstFunction>;
 			if (state.canonicalRevision == state.revision && state.canonicalEntry == entryModule
-				&& state.canonicalAliasKey == aliasKey) {
+				&& state.canonicalAliasRevision == aliasRevision) {
 				canonicalFunctions = state.canonicalFunctions;
 				for (use in state.canonicalFunctionNamespaceUses)
 					namespaceUses.push(use);
@@ -389,7 +394,7 @@ class SemanticAssembly {
 				state.canonicalFunctions = canonicalFunctions;
 				state.canonicalRevision = state.revision;
 				state.canonicalEntry = entryModule;
-				state.canonicalAliasKey = aliasKey;
+				state.canonicalAliasRevision = aliasRevision;
 			}
 			for (canonical in canonicalFunctions) {
 				functions.push(canonical);

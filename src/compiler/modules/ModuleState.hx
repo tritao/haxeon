@@ -107,7 +107,8 @@ class ModuleState {
 	public var canonicalGeneratedFunctions:Array<String> = [];
 	public var canonicalRevision:Int = 0;
 	public var canonicalEntry:String = "";
-	public var canonicalAliasKey:String = "";
+	/** The revision of the alias universe the module was canonicalized against (`SessionState.aliasUniverseRevision`). */
+	public var canonicalAliasRevision:Int = -1;
 
 	/**
 	 * What the module's canonical declarations were resolved in, besides their own text (`SemanticAssembly.scopeKey`): the names
@@ -209,7 +210,7 @@ class ModuleState {
 		result.canonicalGeneratedFunctions = canonicalGeneratedFunctions;
 		result.canonicalRevision = canonicalRevision;
 		result.canonicalEntry = canonicalEntry;
-		result.canonicalAliasKey = canonicalAliasKey;
+		result.canonicalAliasRevision = canonicalAliasRevision;
 		result.canonicalScope = canonicalScope;
 		result.staticExtensionKey = staticExtensionKey;
 		return result;

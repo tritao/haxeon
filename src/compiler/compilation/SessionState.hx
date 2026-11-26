@@ -64,6 +64,14 @@ class SessionState {
 	public var programFacts:Null<compiler.semantic.ProgramFacts.InferredProgramFacts> = null;
 
 	/**
+	 * The names every module's canonicalization resolves against, as `SemanticAssembly` keys them, and the build revision they took
+	 * this value at: a module records the revision, so a build compares one number per module instead of the whole key.
+	 */
+	public var aliasUniverse:Null<String> = null;
+
+	public var aliasUniverseRevision:Int = 0;
+
+	/**
 	 * The session's query database (`docs/design/QUERY_ENGINE.md`): the build inputs, the facts typed units read and what each
 	 * unit read. Every copy shares it, as an input is set outside builds and a print only moves forward; the units' records are
 	 * written in a transaction the state taken from the build commits (`committed`).
@@ -308,6 +316,8 @@ class SessionState {
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
 		result.programFacts = programFacts;
+		result.aliasUniverse = aliasUniverse;
+		result.aliasUniverseRevision = aliasUniverseRevision;
 		result.publishedAbi = publishedAbi;
 		result.compiledOnce = compiledOnce;
 		result.committed = committed;
