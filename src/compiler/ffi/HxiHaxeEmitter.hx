@@ -671,7 +671,7 @@ class HxiHaxeEmitter {
 							if (decoder == null) nativeArguments.push(parameter.name);
 							else {
 								checks = true;
-								nativeArguments.push('$decoder(${parameter.name}.rawValue())');
+								nativeArguments.push('$decoder(${parameter.name}.rawValue)');
 							}
 						}
 						var registeredCallback = checks
@@ -773,7 +773,7 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function contains(flag:$projectedName):Bool return haxe.Int64.compare(haxe.Int64.and(this, flag), flag) == 0;\n');
 							output.add('\tpublic inline function with(flag:$projectedName):$projectedName return cast haxe.Int64.or(this, flag);\n');
 							output.add('\tpublic inline function without(flag:$projectedName):$projectedName return cast haxe.Int64.and(this, haxe.Int64.xor(flag, -1));\n');
-							output.add('\tpublic inline function rawValue():haxe.Int64 return this;\n');
+							output.add('\tpublic var rawValue(get, never):haxe.Int64;\n\tinline function get_rawValue():haxe.Int64 return this;\n');
 							output.add('}\n');
 						} else {
 							// A closed set of codes is a raw-value enum; combinable bits stay Flags.
@@ -809,13 +809,13 @@ class HxiHaxeEmitter {
 						var projectedName = projectedHandle.name;
 						emitDocumentation(output, model, name);
 						// Keep handles nominal at the Haxe boundary. Explicit construction and
-						// rawValue() provide deliberate escape hatches without allowing two
+						// rawValue provide deliberate escape hatches without allowing two
 						// unrelated resource handles to flow through their shared Int ABI.
 						output.add('abstract $projectedName(Int) {\n');
 						output.add('\tpublic inline function new(value:Int = 0) this = value;\n');
 						output.add('\tpublic static inline function invalid():$projectedName return new $projectedName();\n');
 						output.add('\tpublic inline function isValid():Bool return cast(this, Int) != 0;\n');
-						output.add('\tpublic inline function rawValue():Int return cast this;\n');
+						output.add('\tpublic var rawValue(get, never):Int;\n\tinline function get_rawValue():Int return cast this;\n');
 						output.add('}\n');
 						if (projectedHandle.owned != null) {
 							var ownedName = projectedHandle.owned.name,
@@ -845,7 +845,7 @@ class HxiHaxeEmitter {
 							output.add('\tprivate function new(handle:$projectedName) this.__handle = handle;\n');
 							output.add('\tpublic static function adopt(handle:$projectedName):$ownedName return new $ownedName(handle);\n');
 							output.add('\tpublic function borrow():$projectedName return this.__handle;\n');
-							output.add('\tpublic function rawValue():Int return this.__handle.rawValue();\n');
+							output.add('\tpublic var rawValue(get, never):Int;\n\tfunction get_rawValue():Int return this.__handle.rawValue;\n');
 							output.add('\tpublic function isClosed():Bool return this.__closed;\n');
 							output.add('\tpublic function close():$closeReturnType {\n');
 							output.add('\t\tif (this.__closed) return ${closeResultValue == null ? "false" : "null"};\n');
@@ -997,7 +997,7 @@ class HxiHaxeEmitter {
 									: '${model.name}.__hxi_struct_get${arrayAccess}(this, $fieldOffset + index * $stride)',
 								arrayWrite = arrayIsHandle
 									|| abi.isEnumValue(abi.classify(array.element))
-									&& element.haxeType != "haxe.Int64" ? "value.rawValue()" : "value";
+									&& element.haxeType != "haxe.Int64" ? "value.rawValue" : "value";
 							var nativeMask = nativeFlagsMask(abi.classify(array.element), abi);
 							if (nativeMask != null)
 								arrayRead = nativeFlagsRead(element.haxeType, arrayRead, nativeMask, stride == 8);
@@ -1075,7 +1075,7 @@ class HxiHaxeEmitter {
 								: '${model.name}.__hxi_struct_get${access}(this, $fieldOffset)',
 							writeExpression = isHandle
 								|| abi.isEnumValue(abi.classify(field.type))
-								&& value.haxeType != "haxe.Int64" ? "value.rawValue()" : "value";
+								&& value.haxeType != "haxe.Int64" ? "value.rawValue" : "value";
 						var nativeMask = nativeFlagsMask(abi.classify(field.type), abi);
 						if (nativeMask != null)
 							readExpression = nativeFlagsRead(value.haxeType, readExpression, nativeMask,
@@ -1125,7 +1125,7 @@ class HxiHaxeEmitter {
 								continue;
 							var write = value.code == 15 ? "value ? 1 : 0" : (isHandleAbi(abi.classify(field.type))
 								|| abi.isEnumValue(abi.classify(field.type))
-								&& value.haxeType != "haxe.Int64") ? "value.rawValue()" : "value";
+								&& value.haxeType != "haxe.Int64") ? "value.rawValue" : "value";
 							output.add('\tpublic function set_$fieldName(index:Int, value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this.bytes, this.offset(index) + $fieldOffset, $write);\n');
 						}
 						output.add('}\n');
@@ -1316,14 +1316,14 @@ class HxiHaxeEmitter {
 						mask = nativeFlagsMask(fn.result, abi);
 					if (mask == null)
 						throw new InternalError("Native result mask disappeared");
-					output.add('function $publicName(${arguments.join(", ")}):$resultType return ${nativeFlagsRead(resultType, (resultType == "haxe.Int64" ? '$rawName($callArguments)' : '$rawName($callArguments).rawValue()'), mask, structSize(result.code) == 8)};\n');
+					output.add('function $publicName(${arguments.join(", ")}):$resultType return ${nativeFlagsRead(resultType, (resultType == "haxe.Int64" ? '$rawName($callArguments)' : '$rawName($callArguments).rawValue'), mask, structSize(result.code) == 8)};\n');
 				} else if (abi.isEnumValue(fn.result)) {
 					var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
 						callArguments = [for (index in 0...argumentTypes.length) 'arg$index'].join(", "),
 						decoder = nativeEnumDecoder(fn.result, abi, profile);
 					if (decoder == null)
 						throw new InternalError("Native enum result decoder disappeared");
-					output.add('function $publicName(${arguments.join(", ")}):$resultType return $decoder($rawName($callArguments).rawValue());\n');
+					output.add('function $publicName(${arguments.join(", ")}):$resultType return $decoder($rawName($callArguments).rawValue);\n');
 				} else if (spanResult != null) {
 					var countName = switch functionDeclarationForSymbol(model.declarations, spanResult.count) {
 						case Function(value, _, _, _, _, _, _, _): projectedFunctionName(value, profile);
@@ -1814,13 +1814,13 @@ class HxiHaxeEmitter {
 			mask = nativeFlagsMask(resultAbi, abi),
 			decoder = nativeEnumDecoder(resultAbi, abi, profile);
 		if (mask != null)
-			call = nativeFlagsRead(resultType, resultType == "haxe.Int64" ? call : '$call.rawValue()', mask,
+			call = nativeFlagsRead(resultType, resultType == "haxe.Int64" ? call : '$call.rawValue', mask,
 				switch resultAbi {
 					case EnumerationValue(_, 64, _): true;
 					default: false;
 				});
 		else if (decoder != null)
-			call = '$decoder($call.rawValue())';
+			call = '$decoder($call.rawValue)';
 		output.add('\t${resultType == "Void" ? "" : "return "}$call;\n');
 		output.add('}\n');
 	}
@@ -1992,7 +1992,7 @@ class HxiHaxeEmitter {
 						})) {
 							var nativeValue = info.handle
 								|| (info.flagsMask != null || info.enumDecoder != null)
-								&& info.haxeType != "haxe.Int64" ? '${parameter.name}.rawValue()' : info.code == 15
+								&& info.haxeType != "haxe.Int64" ? '${parameter.name}.rawValue' : info.code == 15
 								? '(${parameter.name} ? 1 : 0)' : parameter.name;
 							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, $nativeValue);');
 						}
@@ -2177,9 +2177,9 @@ class HxiHaxeEmitter {
 		else if (aggregateResultType != null)
 			output.add('\tvar __managed_result = $aggregateResultType.__hxi_attach(__status);\n');
 		else if (nativeResultMask != null)
-			output.add('\tvar __managed_result = ${nativeFlagsRead(resultType, resultType == "haxe.Int64" ? "__status" : "__status.rawValue()", nativeResultMask, nativeResultWide)};\n');
+			output.add('\tvar __managed_result = ${nativeFlagsRead(resultType, resultType == "haxe.Int64" ? "__status" : "__status.rawValue", nativeResultMask, nativeResultWide)};\n');
 		else if (nativeResultDecoder != null)
-			output.add('\tvar __managed_result = $nativeResultDecoder(__status.rawValue());\n');
+			output.add('\tvar __managed_result = $nativeResultDecoder(__status.rawValue);\n');
 		if (resultOnly) {
 			if (resultType != "Void")
 				output.add('\treturn ${ownedHandleResult == null && aggregateResultType == null && nativeResultMask == null && nativeResultDecoder == null ? "__status" : "__managed_result"};\n');
@@ -2397,7 +2397,7 @@ class HxiHaxeEmitter {
 		var access = structAccess(element.code),
 			value = element.code == 15
 				? '$name[__index] ? 1 : 0' : (element.flagsMask != null || element.enumDecoder != null)
-				&& element.haxeType != "haxe.Int64" ? '$name[__index].rawValue()' : '$name[__index]';
+				&& element.haxeType != "haxe.Int64" ? '$name[__index].rawValue' : '$name[__index]';
 		return [
 			'if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = __hxi_struct_alloc($name.length * ${element.size}); for (__index in 0...$name.length) __hxi_struct_set$access(__array_$name, __index * ${element.size}, $value);'
 		];
@@ -2858,7 +2858,7 @@ class HxiHaxeEmitter {
 					rawParameters.push('$argument:${projected.haxeType}');
 					letters.push(letter);
 					var decoder = nativeEnumDecoder(classified, abi, profile);
-					values.push(decoder == null ? argument : '$decoder($argument.rawValue())');
+					values.push(decoder == null ? argument : '$decoder($argument.rawValue)');
 			}
 		}
 		var call = '__callback(${values.join(", ")})',

@@ -10,7 +10,7 @@ class UiError extends PlatformError {
 
 	/** An error for `status` in `operation`. */
 	public function new(status:UiStatus, operation:String) {
-		super("nativekit-ui", status.rawValue(), operation, null);
+		super("nativekit-ui", status.rawValue, operation, null);
 		this.status = status;
 	}
 }

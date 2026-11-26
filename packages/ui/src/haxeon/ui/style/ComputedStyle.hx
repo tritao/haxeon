@@ -304,11 +304,11 @@ class StyleDiff {
 	static final changedByImpact:Array<Null<StyleDiff>> = [for (_ in 0...64) null];
 
 	static function changedWith(impact:StyleImpact):StyleDiff {
-		var cached = changedByImpact[impact.rawValue()];
+		var cached = changedByImpact[impact.rawValue];
 		if (cached != null)
 			return cached;
 		var created = new StyleDiff(true, impact);
-		changedByImpact[impact.rawValue()] = created;
+		changedByImpact[impact.rawValue] = created;
 		return created;
 	}
 

@@ -829,7 +829,7 @@ class TextField implements View {
 			if (handled) {
 				editor.resetCaretBlink(Sys.time());
 				event.preventDefault();
-			} else if (!readOnly && !command && event.key.rawValue() >= 32 && event.key.rawValue() <= 96) {
+			} else if (!readOnly && !command && event.key.rawValue >= 32 && event.key.rawValue <= 96) {
 				// The character itself arrives through the separate text-input event.
 				event.markHandled();
 			}

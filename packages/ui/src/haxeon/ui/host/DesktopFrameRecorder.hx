@@ -90,11 +90,11 @@ class DesktopFrameRecorder {
 		if (!enabled) return null;
 		return pump.listen(function(value) {
 			switch value {
-				case PointerMove(source, _, _) if (source.rawValue() == window.rawValue()):
+				case PointerMove(source, _, _) if (source.rawValue == window.rawValue):
 					latestPointerAt = Sys.time();
 					if (pointerRequestedAt < 0) pointerRequestedAt = latestPointerAt;
 					pointerMoveCount++;
-				case TextInput(source, _) if (source.rawValue() == window.rawValue()):
+				case TextInput(source, _) if (source.rawValue == window.rawValue):
 					lastInputDeliveredAt = Sys.time();
 					if (inputRequestedAt < 0.0) inputRequestedAt = lastInputDeliveredAt;
 					inputRequestCount++;

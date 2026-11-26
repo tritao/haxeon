@@ -1328,7 +1328,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    **Key wrappers (port under validation).** Return-tab traces still construct
    31 and 32 `Key` objects respectively. The class contains only its validated String; scope lookup
    already uses that value rather than object identity. Use an erased `Key(String)` abstract, with
-   construction still rejecting null/empty input and a single explicit `rawValue()` accessor. No
+   construction still rejecting null/empty input and a single explicit `rawValue` accessor. No
    implicit String conversion, old `.value` getter, adapter or fallback remains after the family port.
    The consumer audit finds 25 typed declarations; fourteen production files read the value and must
    port together. No outer value reads were found. This uses existing abstract methods, not a new

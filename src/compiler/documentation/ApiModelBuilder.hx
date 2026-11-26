@@ -272,7 +272,7 @@ class ApiModelBuilder {
 				storage.typeConstraints),
 				storage.fields, publicByDefault));
 		addMethods(members, owner, decl.methods, publicByDefault, true);
-		// A raw-value enum reads as an enum whose cases carry codes, with the synthesized rawValue() and fromRaw().
+		// A raw-value enum reads as an enum whose cases carry codes, with the synthesized rawValue and fromRaw().
 		if (decl.isRawEnum == true) {
 			var result:ApiType = {kind: "named", path: decl.name, arguments: []},
 				raw = resolve(decl.underlying, decl.span, parametersIn(decl.name, []));
@@ -293,12 +293,12 @@ class ApiModelBuilder {
 			var synthesized:Array<ApiMember> = [
 				{
 					source: synthesizedSource(decl.span, "The case's code."),
-					kind: "method",
+					kind: "property",
 					name: "rawValue",
 					isStatic: false,
-					arguments: [],
-					result: raw,
-					typeParameters: []
+					type: raw,
+					get: "get",
+					set: "never"
 				},
 				{
 					source: synthesizedSource(decl.span, "The case whose code is `raw`, or null when no case has it."),

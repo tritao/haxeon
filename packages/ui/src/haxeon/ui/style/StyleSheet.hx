@@ -229,7 +229,7 @@ class StyleSelector {
 		return result;
 	}
 	static function countStates(states:StyleState):Int {
-		var remaining = states.rawValue(), result = 0;
+		var remaining = states.rawValue, result = 0;
 		while (remaining != 0) {
 			result += remaining & 1;
 			remaining = remaining >>> 1;

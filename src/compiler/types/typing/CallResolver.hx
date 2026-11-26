@@ -496,6 +496,8 @@ class CallResolver {
 			span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool, contextualGenericArguments:Bool):TypedExpression {
 		var synthesized = TypeParameterMembers.synthesizedMember(session, receiver, name);
+		if (synthesized != null && name == "rawValue")
+			fail(DiagnosticCode.CALL_FORM, 'rawValue is a property: read it as `value.rawValue`', span);
 		if (synthesized != null) {
 			if (arguments.length != synthesized.arguments.length)
 				fail(DiagnosticCode.CALL_FORM,
@@ -1209,6 +1211,32 @@ class CallResolver {
 		return false;
 	}
 
+	/**
+	 * `receiver.rawValue`, the code a raw-value enum or a `Flags` value holds, read as a property; null when `receiver` has no
+	 * synthesized one. A type parameter bound by `Flags` reads its specialization's.
+	 */
+	public function synthesizedRawValue(receiver:TypedExpression, span:SourceSpan):Null<TypedExpression> {
+		var synthesized = TypeParameterMembers.synthesizedMember(session, receiver, "rawValue");
+		if (synthesized != null)
+			return new TypedExpression(TCast(receiver), synthesized.result, span);
+		var owner = switch receiver.type {
+			case TAbstract(name, _, _): name;
+			default: return null;
+		};
+		var declaration = session.enumAbstractDecls.get(owner);
+		if (declaration == null)
+			return null;
+		if (RawEnumGenerator.conforms(session, declaration))
+			return new TypedExpression(TCall(RawEnumGenerator.request(session, owner, "rawValue", span), [receiver]),
+				bodyTyper.lowerType(declaration.underlying, declaration.span), span);
+		if (FlagsGenerator.conforms(session, declaration) && !declaresMethod(declaration, "rawValue", false)) {
+			var info = FlagsGenerator.signature(owner, "rawValue");
+			return new TypedExpression(TCall(FlagsGenerator.request(session, owner, "rawValue", span), [receiver]),
+				info.result, span);
+		}
+		return null;
+	}
+
 	public function typeAbstractMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan,
 			scope:Scope):Null<TypedExpression> {
@@ -1221,6 +1249,9 @@ class CallResolver {
 				return null;
 		}
 		var rawDeclaration = session.enumAbstractDecls.get(abstractName);
+		if (name == "rawValue" && rawDeclaration != null && !declaresMethod(rawDeclaration, name, false)
+			&& (RawEnumGenerator.conforms(session, rawDeclaration) || FlagsGenerator.conforms(session, rawDeclaration)))
+			fail(DiagnosticCode.CALL_FORM, 'rawValue is a property: read it as `value.rawValue`', span);
 		// A member the abstract declares itself wins over the one its conformance synthesizes.
 		if (rawDeclaration != null && declaresMethod(rawDeclaration, name, false))
 			rawDeclaration = null;
@@ -1232,15 +1263,11 @@ class CallResolver {
 				[receiver].concat(typed)), info.result, span);
 		}
 
-		if ((name == "rawValue" || name == "toString")
-			&& rawDeclaration != null
-			&& RawEnumGenerator.conforms(session, rawDeclaration)) {
+		if (name == "toString" && rawDeclaration != null && RawEnumGenerator.conforms(session, rawDeclaration)) {
 			if (arguments.length != 0)
 				fail(DiagnosticCode.CALL_FORM, '$name expects no arguments', span);
 			return new TypedExpression(TCall(RawEnumGenerator.request(session, abstractName, name, span),
-				[receiver]),
-				name == "toString" ? TString : bodyTyper.lowerType(rawDeclaration.underlying, rawDeclaration.span),
-				span);
+				[receiver]), TString, span);
 		}
 		var declaration = session.declarations.abstractDeclaration(abstractName);
 		if (declaration == null)

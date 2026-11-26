@@ -179,12 +179,12 @@ internal class LayoutTransaction {
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ID_OFFSET, node.id);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PARENT_OFFSET, parents[index]);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET,
-				node.visualKind.rawValue());
+				node.visualKind.rawValue);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET,
-				style.width.sizing.rawValue());
+				style.width.sizing.rawValue);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, style.width.value);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET,
-				style.height.sizing.rawValue());
+				style.height.sizing.rawValue);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, style.height.value);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET, style.width.min);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET, style.width.max);
@@ -196,7 +196,7 @@ internal class LayoutTransaction {
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET,
 				style.height.growWeight);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_DIRECTION_OFFSET,
-				style.direction.rawValue());
+				style.direction.rawValue);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_LEFT_OFFSET, style.padding.left);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_RIGHT_OFFSET, style.padding.right);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_TOP_OFFSET, style.padding.top);
@@ -214,24 +214,24 @@ internal class LayoutTransaction {
 				style.radiusBottomRight);
 			var clip = (style.clipHorizontal ? NkuiLayoutClipFlags.Horizontal : NkuiLayoutClipFlags.empty())
 				| (style.clipVertical ? NkuiLayoutClipFlags.Vertical : NkuiLayoutClipFlags.empty());
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET, clip.rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET, clip.rawValue);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, textOffset);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET,
 				this.stringBytes[index].length);
 			writeColor(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET, node.textColor);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET,
-				nodeTextStyle.font.rawValue());
+				nodeTextStyle.font.rawValue);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, nodeTextStyle.fontSize);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET,
 				nodeTextStyle.letterSpacing);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET,
 				lineHeight);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET,
-				nodeParagraphStyle.wrap.rawValue());
+				nodeParagraphStyle.wrap.rawValue);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET,
-				nodeParagraphStyle.alignment.rawValue());
+				nodeParagraphStyle.alignment.rawValue);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET,
-				nodeParagraphStyle.direction.rawValue());
+				nodeParagraphStyle.direction.rawValue);
 			if (nodeParagraphStyle.tabWidth < 0) throw "Tab width cannot be negative";
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET,
 				nodeParagraphStyle.tabWidth);
@@ -262,17 +262,17 @@ internal class LayoutTransaction {
 			}
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FLAGS_OFFSET, nodeFlags);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
-				childAlignX.rawValue() | (childAlignY.rawValue() << 8));
+				childAlignX.rawValue | (childAlignY.rawValue << 8));
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET,
-				childDistribution.rawValue());
+				childDistribution.rawValue);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ROW_GAP_OFFSET,
 				style.rowGap);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET,
 				style.columnGap);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET,
-				wrapMode.rawValue());
+				wrapMode.rawValue);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET,
-				alignSelf.rawValue());
+				alignSelf.rawValue);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_MEASURE_VERSION_OFFSET,
 				measureVersion);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET,
@@ -384,7 +384,7 @@ internal class LayoutTransaction {
 		return finite(value) && value > 0.0;
 
 	static function axisDescription(axis:LayoutAxis):String {
-		return "[" + axis.sizing.rawValue() + "," + axis.value + "," + axis.min + "," + axis.max + "," + axis.growWeight
+		return "[" + axis.sizing.rawValue + "," + axis.value + "," + axis.min + "," + axis.max + "," + axis.growWeight
 			+ "]";
 	}
 

@@ -479,7 +479,7 @@ private class StyleDirectionValue extends StyleValue {
 		this.value = value;
 	}
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(value.rawValue());
+	override public function key():String return Std.string(value.rawValue);
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleDirectionValue)
 			&& value == (cast other:StyleDirectionValue).value;
@@ -492,7 +492,7 @@ private class StyleChildAlignXValue extends StyleValue {
 		this.value = value;
 	}
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(value.rawValue());
+	override public function key():String return Std.string(value.rawValue);
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleChildAlignXValue)
 			&& value == (cast other:StyleChildAlignXValue).value;
@@ -505,7 +505,7 @@ private class StyleChildAlignYValue extends StyleValue {
 		this.value = value;
 	}
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(value.rawValue());
+	override public function key():String return Std.string(value.rawValue);
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleChildAlignYValue)
 			&& value == (cast other:StyleChildAlignYValue).value;
@@ -518,7 +518,7 @@ private class StyleChildDistributionValue extends StyleValue {
 		this.value = value;
 	}
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(value.rawValue());
+	override public function key():String return Std.string(value.rawValue);
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleChildDistributionValue)
 			&& value == (cast other:StyleChildDistributionValue).value;
@@ -544,7 +544,7 @@ private class StyleWrapModeValue extends StyleValue {
 		this.value = value;
 	}
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(value.rawValue());
+	override public function key():String return Std.string(value.rawValue);
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleWrapModeValue)
 			&& value == (cast other:StyleWrapModeValue).value;
@@ -557,7 +557,7 @@ private class StyleAlignSelfValue extends StyleValue {
 		this.value = value;
 	}
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(value.rawValue());
+	override public function key():String return Std.string(value.rawValue);
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleAlignSelfValue)
 			&& value == (cast other:StyleAlignSelfValue).value;

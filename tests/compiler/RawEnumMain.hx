@@ -58,7 +58,7 @@ class RawEnumMain {
 		var c = makeCompiler("hl", true);
 		c.update("Code.hx", 'enum Code:Int { A=4; }');
 		c.update("Main.hx",
-			'function main():Int { var value=Code.fromRaw(7); return value==null ? 0 : value.rawValue(); }');
+			'function main():Int { var value=Code.fromRaw(7); return value==null ? 0 : value.rawValue; }');
 		function result():Int
 			return new compiler.ir.tools.IrInterpreter(c.compile("Main").ir).run("main");
 		if (result() != 0)
@@ -76,7 +76,7 @@ class RawEnumMain {
 		imported.update("wire/Code.hx",
 			'package wire; enum Code:Int { A=4; }');
 		imported.update("Main.hx",
-			'import wire.Code as WireCode; function main():Int { var value=WireCode.fromRaw(4); return value==null ? 0 : value.rawValue(); }');
+			'import wire.Code as WireCode; function main():Int { var value=WireCode.fromRaw(4); return value==null ? 0 : value.rawValue; }');
 		if (new compiler.ir.tools.IrInterpreter(imported.compile("Main").ir).run("main") != 4)
 			throw "Imported raw conformance";
 

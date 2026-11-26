@@ -35,7 +35,7 @@ class DspSourceOptions {
 		if (parameter == DspSourceParameter.Resolution
 			&& value % 4 != 0) throw BindingError.invalidArgument("DspSourceOptions.set",
 			"Resonator resolution requires groups of four modes");
-		options.set_values(parameter.rawValue(), value);
+		options.set_values(parameter.rawValue, value);
 		return this;
 	}
 
@@ -43,7 +43,7 @@ class DspSourceOptions {
 	public function get(parameter:DspSourceParameter):Float {
 		var domain = NativeKitAudio.nk_audio_dsp_source_parameter_info(kind, parameter);
 		AudioResult.check(domain.status, "audio.dsp.source.parameter");
-		return options.get_values(parameter.rawValue());
+		return options.get_values(parameter.rawValue);
 	}
 	/** Bank: seven registrations; Harmonic: sixteen partials. Normalize nonnegative weights. */
 	public function spectrum(weights:Array<Float>):DspSourceOptions {

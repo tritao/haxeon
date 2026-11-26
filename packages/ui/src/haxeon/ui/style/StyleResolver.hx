@@ -183,7 +183,7 @@ internal class StyleResolver {
 			applicationRevision:Int, localKey:String, environmentIdentity:Int,
 			environmentRevision:Int):Int {
 		var result = targetHash;
-		result = mix(result, states.rawValue());
+		result = mix(result, states.rawValue);
 		result = mix(result, keyHash(parentKey));
 		result = mix(result, themeIdentity);
 		result = mix(result, themeRevision);

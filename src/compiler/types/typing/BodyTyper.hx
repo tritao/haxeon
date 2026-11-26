@@ -1977,7 +1977,7 @@ class BodyTyper implements BodyTyping {
 				|| context.storage.cell(binding.id) != null ? scope.declaredTypeOf(binding) : null);
 			// An abstract's implementation reads `this` as its underlying value.
 			// Keep the nominal receiver in scope for calls to its own methods.
-			// A raw-value enum's `this` is the enum value, as in any enum; rawValue() reaches the code.
+			// A raw-value enum's `this` is the enum value, as in any enum; rawValue reaches the code.
 			if (name == "this" && !asAbstract && context.lexicalOwner != null
 				&& session.declarations.abstracts.exists(context.lexicalOwner)
 				&& session.declarations.abstracts.get(context.lexicalOwner).isRawEnum != true)
@@ -2488,6 +2488,12 @@ class BodyTyper implements BodyTyping {
 		if (property != null)
 			return callResolver.typeAbstractAccessorCall(object, AbstractProperties.accessor(session, property, true,
 				span), [], span, scope);
+		// A raw-value enum's or a Flags value's code is a property the compiler synthesizes.
+		if (name == "rawValue") {
+			var raw = callResolver.synthesizedRawValue(object, span);
+			if (raw != null)
+				return raw;
+		}
 		// A per-case constant reads as a call of its getter (`EnumConstants`).
 		if (enumConstantOwner(object.type, name) != null)
 			return callResolver.typeMethodCall(object, EnumConstants.getterName(name), [], span, scope, null);

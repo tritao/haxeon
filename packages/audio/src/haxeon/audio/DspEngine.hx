@@ -135,7 +135,7 @@ class DspEngine implements Disposable {
 			for (event in section.events) {
 				var item = new NativeDspTransportEvent();
 				item.frame = event.frame;
-				item.kind = event.kind.rawValue();
+				item.kind = event.kind.rawValue;
 				item.note_id = event.noteId;
 				item.instrument = event.instrument == null
 					? DspInstrumentHandle.invalid() : event.instrument.nativeHandle();

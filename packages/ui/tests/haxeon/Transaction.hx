@@ -47,7 +47,7 @@ class Transaction {
 		surfaceOptions.set_minor_version(3);
 		surfaceOptions.set_width(256);
 		surfaceOptions.set_height(192);
-		var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue()), surfaceOptions);
+		var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue), surfaceOptions);
 		if (createdSurface.status != Result.Ok) {
 			NativeKit.nk_window_destroy(window);
 			runtime.dispose();
@@ -141,9 +141,9 @@ class Transaction {
 		var attempts = 0;
 		var events = runtime.events;
 		var eventSubscription = events.listen(function(value) switch value {
-			case SurfaceReady(source) if (source.rawValue() == surface.rawValue()): ready = true;
+			case SurfaceReady(source) if (source.rawValue == surface.rawValue): ready = true;
 			case SurfaceFrameComplete(source, token, result)
-				if (source.rawValue() == surface.rawValue() && submitted != null && submitted == token):
+				if (source.rawValue == surface.rawValue && submitted != null && submitted == token):
 				submitted = null;
 				if (result == Result.Ok) rendered++ else failure = result;
 			case _:

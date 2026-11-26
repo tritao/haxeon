@@ -302,7 +302,7 @@ typedef AstAbstract = {
 
 	/**
 	 * A raw-value enum, `enum Name:Int { Case = 1; }`: an enum abstract whose `this` is the enum value, with synthesized
-	 * `rawValue()` and `fromRaw()` and no implicit conversions.
+	 * `rawValue` and `fromRaw()` and no implicit conversions.
 	 */
 	final ?isRawEnum:Bool;
 

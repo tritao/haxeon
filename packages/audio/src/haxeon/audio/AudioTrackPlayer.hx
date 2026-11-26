@@ -462,7 +462,7 @@ class AudioTrackPlayer implements Disposable {
 	}
 
 	function matches(source:Handle, voice:Null<Voice>):Bool {
-		return voice != null && !voice.isDisposed() && voice.nativeHandle().rawValue() == source.rawValue();
+		return voice != null && !voice.isDisposed() && voice.nativeHandle().rawValue == source.rawValue;
 	}
 
 	static function copyOptions(source:Null<AudioTransitionOptions>):AudioTransitionOptions {

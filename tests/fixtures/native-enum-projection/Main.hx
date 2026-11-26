@@ -21,7 +21,7 @@ class CaseProbe {
 			var mode = native_enums.Native_enumsEnumDecoders.decodeMode(code);
 			value.set_mode(mode);
 			value.set_modes(0, mode);
-			if (value.get_mode() != mode || value.get_modes(0) != mode || mode.rawValue() != code) return -1;
+			if (value.get_mode() != mode || value.get_modes(0) != mode || mode.rawValue != code) return -1;
 			total += 42;
 		}
 		return total;
@@ -31,7 +31,7 @@ class CaseProbe {
 function main():Int {
 	// Consecutive ranges, gaps, and signed endpoints must keep exactly the declared domain.
 	for (code in [-2147483648, -2, -1, 0, 2, 2147483647])
-		if (native_enums.Native_enumsEnumDecoders.decodePacked(code).rawValue() != code) return 5;
+		if (native_enums.Native_enumsEnumDecoders.decodePacked(code).rawValue != code) return 5;
 	for (code in [-2147483647, -3, 1, 3, 2147483646]) {
 		var invalid = false;
 		try native_enums.Native_enumsEnumDecoders.decodePacked(code) catch (_:Dynamic) invalid = true;

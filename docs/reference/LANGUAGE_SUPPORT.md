@@ -31,7 +31,7 @@ The current subset includes:
 - A raw-value enum (a Haxeon extension) gives each payload-free case a code of an `Int` or `String` raw type:
   `enum PixelFormat:Int { Rgba8 = 1; R8; }`. An omitted `Int` code counts up from the previous one, an omitted `String`
   code is the case name, and codes are compile-time constants, unique in the enum. The code is the value's
-  representation, so native and wire boundaries cost nothing. Conversion is explicit: `rawValue()` gives the code, and
+  representation, so native and wire boundaries cost nothing. Conversion is explicit: `rawValue` gives the code, and
   `E.fromRaw(code)` the case or `null`. In its methods `this` is the enum value, and a `switch` over it covers every case,
   with an implicit default that throws for a code this build does not know. It declares methods and static members as
   any enum does, but no type parameters or per-case constants.

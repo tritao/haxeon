@@ -18,7 +18,7 @@ class TextInput {
 	/** Tells the input method about the focused text in `window`. */
 	public static function updateWindow(window:Window, state:TextInputState):Void {
 		if (window == null) throw BindingError.invalidArgument("TextInput.updateWindow", "Window cannot be null");
-		NativeKit.nk_surface_set_text_input_state_checked(new Handle(window.nativeHandle().rawValue()),
+		NativeKit.nk_surface_set_text_input_state_checked(new Handle(window.nativeHandle().rawValue),
 			checkedState(state).nativeValue());
 	}
 
@@ -41,7 +41,7 @@ class TextInput {
 	/** Shows or hides the input method for `window`. */
 	public static function setWindowActive(window:Window, active:Bool):Void {
 		if (window == null) throw BindingError.invalidArgument("TextInput.setWindowActive", "Window cannot be null");
-		NativeKit.nk_surface_set_text_input_active_checked(new Handle(window.nativeHandle().rawValue()), active);
+		NativeKit.nk_surface_set_text_input_active_checked(new Handle(window.nativeHandle().rawValue), active);
 	}
 
 	/** Like `setActive`, returning the backend's result instead of throwing. */
@@ -50,7 +50,7 @@ class TextInput {
 
 	static function surfaceTarget(surface:Surface):Handle {
 		if (surface == null) throw BindingError.invalidArgument("TextInput.surfaceTarget", "Surface cannot be null");
-		return new Handle(surface.nativeHandle().rawValue());
+		return new Handle(surface.nativeHandle().rawValue);
 	}
 
 	static function checkedState(state:TextInputState):TextInputState {

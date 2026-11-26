@@ -38,11 +38,11 @@ class Align implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var id = context.rootId("align");
-			var computed = context.resolveStyle(new StyleTarget("align", key.rawValue(), key.rawValue(), null,
+			var computed = context.resolveStyle(new StyleTarget("align", key.rawValue, key.rawValue, null,
 				["align"], context.interactionStates.get(id)),
 				style);
 			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			node.setStyleIdentity("align", key.rawValue(), key.rawValue(), null, ["align"]);
+			node.setStyleIdentity("align", key.rawValue, key.rawValue, null, ["align"]);
 			node.states = context.interactionStates.get(id);
 			node.computedStyle = computed;
 			var content = context.withStyleParent(computed, function() {

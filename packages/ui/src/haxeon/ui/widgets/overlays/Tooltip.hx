@@ -147,14 +147,14 @@ class Tooltip implements View {
 			var root = context.withScope(new Key("layers"), function() {
 				var rootId = context.rootId("stack");
 				var rootComputed = context.resolveStyle(new StyleTarget("tooltip-layer",
-					key.rawValue(),
-					key.rawValue(),
+					key.rawValue,
+					key.rawValue,
 					null,
 					["tooltip-layer"],
 					context.interactionStates.get(rootId)),
 					rootStyle);
 				var result = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-				result.setStyleIdentity("tooltip-layer", key.rawValue(), key.rawValue(), null, ["tooltip-layer"]);
+				result.setStyleIdentity("tooltip-layer", key.rawValue, key.rawValue, null, ["tooltip-layer"]);
 				result.states = context.interactionStates.get(rootId);
 				result.computedStyle = rootComputed;
 				var anchorNode = context.withStyleParent(rootComputed,
@@ -262,12 +262,12 @@ class Tooltip implements View {
 			headerModifier.on(UiEventKind.HoverEnter, function(_) {
 				focused.update(false);
 				if (showWhen == null || showWhen()) {
-					if (hoverGroup != null) hoverGroup.enter(key.rawValue());
+					if (hoverGroup != null) hoverGroup.enter(key.rawValue);
 					else delay.start();
 				}
 			});
 			headerModifier.on(UiEventKind.HoverLeave, function(_) {
-				if (hoverGroup != null) hoverGroup.leave(key.rawValue());
+				if (hoverGroup != null) hoverGroup.leave(key.rawValue);
 				else delay.cancel();
 			});
 			headerModifier.on(UiEventKind.PointerDown, function(_) {
@@ -286,15 +286,15 @@ class Tooltip implements View {
 			tipStyle.padding = new Insets(PADDING, 7, PADDING, 7);
 			var tipId = context.id("tooltip");
 			var computed = context.resolveStyle(new StyleTarget("tooltip",
-				key.rawValue(),
-				key.rawValue(),
+				key.rawValue,
+				key.rawValue,
 				null,
 				["tooltip"],
 				context.interactionStates.get(tipId)),
 				tipStyle);
 			var tip = context.createNode(tipId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			tip.computedStyle = computed;
-			tip.setStyleIdentity("tooltip", key.rawValue(), key.rawValue(), null, ["tooltip"]);
+			tip.setStyleIdentity("tooltip", key.rawValue, key.rawValue, null, ["tooltip"]);
 			// A hidden tooltip builds no content: showing it rebuilds, and the layout feedback below positions it that frame.
 			var label:Null<RenderNode> = null;
 			if (tipStyle.visible) {

@@ -60,7 +60,7 @@ class Requests {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.openResource",
 			"Parent and options cannot be null");
-		return resourceDialog(NativeKit.nk_dialog_open_resource_checked(new Handle(parent.nativeHandle().rawValue()),
+		return resourceDialog(NativeKit.nk_dialog_open_resource_checked(new Handle(parent.nativeHandle().rawValue),
 			options.nativeValue()));
 	}
 
@@ -69,7 +69,7 @@ class Requests {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.saveResource",
 			"Parent and options cannot be null");
-		return resourceDialog(NativeKit.nk_dialog_save_resource_checked(new Handle(parent.nativeHandle().rawValue()),
+		return resourceDialog(NativeKit.nk_dialog_save_resource_checked(new Handle(parent.nativeHandle().rawValue),
 			options.nativeValue()));
 	}
 
@@ -79,7 +79,7 @@ class Requests {
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.selectResourceDirectory",
 			"Parent and options cannot be null");
 		return resourceDialog(NativeKit.nk_dialog_select_resource_directory_checked(new Handle(parent.nativeHandle()
-			.rawValue()), options.nativeValue()));
+			.rawValue), options.nativeValue()));
 	}
 
 	/** Commits a raw writable stream; Success(true) means a download was initiated. */
@@ -97,7 +97,7 @@ class Requests {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.messageDialog",
 			"Parent and options cannot be null");
-		var request = NativeKit.nk_dialog_message_checked(new Handle(parent.nativeHandle().rawValue()),
+		var request = NativeKit.nk_dialog_message_checked(new Handle(parent.nativeHandle().rawValue),
 			options.nativeValue());
 		return registerRequest(request, function(value, cancellationRequested) switch value {
 			case DialogMessage(_, result, button, _): messageOutcome(result, button, cancellationRequested);
@@ -131,7 +131,7 @@ class Requests {
 		ensureLive();
 		if (task == null || decode == null) throw BindingError.invalidArgument("Requests.trackTask",
 			"Task and decoder cannot be null");
-		return register("task:" + Std.string(task.nativeHandle().rawValue()), function(value, _) switch value {
+		return register("task:" + Std.string(task.nativeHandle().rawValue), function(value, _) switch value {
 			case TaskComplete(_, result, data):
 				// register() catches decoder exceptions separately from completion-observer exceptions.
 				if (result == Result.Ok) Success(decode(data));
@@ -229,7 +229,7 @@ class Requests {
 		var key:Null<String> = switch value {
 			case TaskProgress(source, _) | TaskComplete(source, _, _) | TaskFailed(source, _, _) | TaskCancelled(source,
 				_, _):
-				return "task:" + Std.string(source.rawValue());
+				return "task:" + Std.string(source.rawValue);
 			case ClipboardText(id, _, _): Std.string(id);
 			case ClipboardFiles(id, _, _): Std.string(id);
 			case DialogMessage(id, _, _, _): Std.string(id);

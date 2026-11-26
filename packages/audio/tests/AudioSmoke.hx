@@ -356,7 +356,7 @@ class AudioSmoke {
 			second.setBus(bus);
 			completion = clip.createVoice(new VoiceOptions());
 			completion.setBus(bus);
-			if (first.nativeHandle().rawValue() == second.nativeHandle().rawValue())
+			if (first.nativeHandle().rawValue == second.nativeHandle().rawValue)
 				throw "Haxe audio voices did not receive independent handles";
 			if (!completion.isReady())
 				throw "Haxe synchronous audio voice did not start ready";
@@ -380,11 +380,11 @@ class AudioSmoke {
 				throw "Haxe audio bus concurrency limit did not reject a voice";
 			transitionSubscription = runtime.events.listen(function(value) {
 				switch value {
-					case AudioVoiceStolen(source) if (source.rawValue() == first.nativeHandle().rawValue()):
+					case AudioVoiceStolen(source) if (source.rawValue == first.nativeHandle().rawValue):
 						stolenTransition = true;
-					case AudioVoiceVirtualized(source) if (source.rawValue() == second.nativeHandle().rawValue()):
+					case AudioVoiceVirtualized(source) if (source.rawValue == second.nativeHandle().rawValue):
 						virtualizedTransition = true;
-					case AudioVoiceResumed(source) if (source.rawValue() == second.nativeHandle().rawValue()):
+					case AudioVoiceResumed(source) if (source.rawValue == second.nativeHandle().rawValue):
 						resumedTransition = true;
 					case _:
 				}
@@ -654,7 +654,7 @@ class AudioSmoke {
 			var completed = false;
 			completionSubscription = runtime.events.listen(function(value) {
 				switch value {
-					case AudioVoiceComplete(source) if (source.rawValue() == completion.nativeHandle().rawValue()):
+					case AudioVoiceComplete(source) if (source.rawValue == completion.nativeHandle().rawValue):
 						completed = true;
 					case _:
 						completed = completed;

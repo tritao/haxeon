@@ -1,4 +1,4 @@
-// Raw-value enums: codes of a 32-case table, an Int set with a high code and a String set; rawValue() and fromRaw() in
+// Raw-value enums: codes of a 32-case table, an Int set with a high code and a String set; rawValue and fromRaw() in
 // fields, arrays, structs and exposed functions.
 enum Code32:Int {
 	Case0 = 0;
@@ -66,13 +66,13 @@ class Probe {
 		for (index in 0...count) {
 			var value = Code32.fromRaw(index & 31);
 			if (value == null) return -1;
-			total += value.rawValue();
+			total += value.rawValue;
 		}
 		return total;
 	}
 	@:expose public static function raw(count:Int):Int {
 		var total = 0;
-		for (index in 0...count) total += Code.Red.rawValue() + Code.Blue.rawValue();
+		for (index in 0...count) total += Code.Red.rawValue + Code.Blue.rawValue;
 		return total;
 	}
 }
@@ -81,9 +81,9 @@ function main():Int {
 	var bits:OpenBits = OpenBits.One | OpenBits.Two;
 	if (bits != 3) return 10;
 	var code:Code = Code.Red;
-	if (code != Code.Red || code.rawValue() != 4) return 1;
+	if (code != Code.Red || code.rawValue != 4) return 1;
 	var values:Array<Code>= [Code.Red, Code.Blue];
-	if (values[1].rawValue() != 7 || values.indexOf(Code.Blue) != 1) return 2;
+	if (values[1].rawValue != 7 || values.indexOf(Code.Blue) != 1) return 2;
 	var strings:Array<Mime>= [Mime.Text];
 	if (strings.indexOf(Mime.Text) != 0 || strings.join(",") != "text/plain") return 13;
 	values[OpenBits.One] = Code.Red;
@@ -92,14 +92,14 @@ function main():Int {
 	var holder = new Holder(Code.Blue);
 	if (holder.code != Code.Blue) return 3;
 	var pair = new Pair(Code.Red, 38);
-	if (pair.code.rawValue() + pair.value != 42) return 4;
+	if (pair.code.rawValue + pair.value != 42) return 4;
 	var zero = Code.fromRaw(0);
-	if (zero == null || zero.rawValue() != 0) return 11;
+	if (zero == null || zero.rawValue != 0) return 11;
 	var known = Code.fromRaw(7);
-	if (known == null || known != Code.Blue || known.rawValue() != 7) return 5;
+	if (known == null || known != Code.Blue || known.rawValue != 7) return 5;
 	if (Code.fromRaw(99) != null || Code.fromRaw(-1) != null) return 6;
 	var text = Mime.fromRaw("text/plain");
-	if (text == null || text != Mime.Text || text.rawValue() != "text/plain") return 7;
+	if (text == null || text != Mime.Text || text.rawValue != "text/plain") return 7;
 	if (Mime.fromRaw("unknown") != null) return 8;
 	if (Probe.raw(2) != 22) return 9;
 	return 42;

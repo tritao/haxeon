@@ -69,7 +69,7 @@ class Bus implements Disposable {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_get_parent(value);
 		AudioResult.check(result.status, "audio.bus.hasParent");
-		return result.out_parent.rawValue() != 0;
+		return result.out_parent.rawValue != 0;
 	}
 
 	/** Schedules the bus to start at an absolute process-wide audio time in PCM frames. */

@@ -12,7 +12,7 @@ import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.HelperRequests.HelperRequest;
 
-/** A raw-value enum's `rawValue()`, `fromRaw()` and `toString()`, synthesized from its cases, never from runtime reflection. */
+/** A raw-value enum's `rawValue`, `fromRaw()` and `toString()`, synthesized from its cases, never from runtime reflection. */
 @:access(compiler.types.typing.BodyTyper)
 class RawEnumGenerator {
 	public static inline final PREFIX = "$raw-enum:";
@@ -35,6 +35,15 @@ class RawEnumGenerator {
 					'Enum "${declaration.name}": a raw value is an Int or a String',
 					declaration.span);
 		}
+		// rawValue and fromRaw are the code and its inverse; a member of either name would break the round trip.
+		for (method in declaration.methods)
+			if (method.name == "rawValue" || method.name == "fromRaw")
+				BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+					'Enum "${declaration.name}" synthesizes ${method.name}; it cannot declare one', method.span);
+		for (field in declaration.fields)
+			if (field.name == "rawValue" || field.name == "fromRaw")
+				BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+					'Enum "${declaration.name}" synthesizes ${field.name}; it cannot declare one', field.span);
 		var seen:Map<String, String> = [];
 		for (value in declaration.values) {
 			if (value.name == "rawValue" || value.name == "fromRaw" || value.name == "toString")

@@ -118,7 +118,7 @@ class ShowcaseWeb implements UiFrameApplication {
 	}
 
 	function matches(source:Handle):Bool
-		return source.rawValue() == host.window.rawValue() || source.rawValue() == host.surface.rawValue();
+		return source.rawValue == host.window.rawValue || source.rawValue == host.surface.rawValue;
 
 	function openGraphics():Void {
 		if (graphics != null) return;

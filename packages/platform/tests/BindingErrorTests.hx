@@ -11,7 +11,7 @@ class BindingErrorTests {
 		var argument = false;
 		try TransportInterop.options(0) catch (error:BindingError) {
 			argument = error.kind == BindingErrorKind.InvalidArgument
-				&& error.code == BindingErrorKind.InvalidArgument.rawValue()
+				&& error.code == BindingErrorKind.InvalidArgument.rawValue
 				&& error.domain == "haxeon-bindings" && error.operation == "TransportInterop.options"
 				&& error.diagnostic != null;
 		}

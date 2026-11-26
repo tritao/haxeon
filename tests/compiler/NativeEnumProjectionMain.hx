@@ -43,7 +43,7 @@ class NativeEnumProjectionMain {
 		compiler.addFfiInterface("dependent.hxi",
 			'interface dependent @target("portable-abi64") @library("dependent") @depends("native_enums") { enum Own : i32 { A=0; } extern fn read() -> Mode; }');
 		compiler.update("Main.hx",
-			'import nativeprobe.Dependent; function main():Int return Dependent.read().rawValue();');
+			'import nativeprobe.Dependent; function main():Int return Dependent.read().rawValue;');
 		var program = compiler.compile("Main").ir, count = 0;
 		for (fn in program.functions)
 			if (StringTools.endsWith(fn.name, "NativeTypesEnumDecoders.decodeMode")) count++;

@@ -56,7 +56,7 @@ class Triangle {
 		scoped var loop = new AppLoop(runtime.events, surface, app, null);
 		var redraws = 0;
 		loop.frameSubscription = surface.onFrame(function(_, _) redraws++);
-		var source = new Handle(surface.nativeHandle().rawValue());
+		var source = new Handle(surface.nativeHandle().rawValue);
 		var token = haxe.Int64.ofInt(17);
 		loop.pending = token;
 		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.ErrorCancelled));
@@ -568,7 +568,7 @@ class Triangle {
 		retainedImage.dispose();
 		var resizeCalls = 0;
 		var resizeSubscription = surface.onResize(function(_, _, _, _) resizeCalls++);
-		var resize = PlatformEvent.SurfaceResize(new Handle(surface.nativeHandle().rawValue()), 800, 600, 800, 600);
+		var resize = PlatformEvent.SurfaceResize(new Handle(surface.nativeHandle().rawValue), 800, 600, 800, 600);
 		runtime.events.dispatch(resize);
 		surface.dispose();
 		runtime.events.dispatch(resize);
@@ -580,7 +580,7 @@ class Triangle {
 			keyCalls++;
 			return true;
 		});
-		var windowKey = PlatformEvent.Key(new Handle(window.nativeHandle().rawValue()), Key.R, 0,
+		var windowKey = PlatformEvent.Key(new Handle(window.nativeHandle().rawValue), Key.R, 0,
 			InputAction.Press, Modifiers.empty());
 		runtime.events.dispatch(PlatformEvent.Key(new Handle(0), Key.R, 0, InputAction.Press, Modifiers.empty()));
 		runtime.events.dispatch(windowKey);

@@ -28,11 +28,11 @@ class Stack implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var id = context.rootId("stack");
-			var computed = context.resolveStyle(new StyleTarget("stack", key.rawValue(), key.rawValue(), null,
+			var computed = context.resolveStyle(new StyleTarget("stack", key.rawValue, key.rawValue, null,
 				["stack"], context.interactionStates.get(id)),
 				style);
 			var root = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			root.setStyleIdentity("stack", key.rawValue(), key.rawValue(), null, ["stack"]);
+			root.setStyleIdentity("stack", key.rawValue, key.rawValue, null, ["stack"]);
 			root.states = context.interactionStates.get(id);
 			root.computedStyle = computed;
 			for (layer in layers) {

@@ -20,7 +20,7 @@ class NativeKitEventDecoderTests {
 		var unknown = new EventSnapshot(EventKind.PluginEvent, handle(7), zero, Result.ErrorInvalidArgument, 3, 4,
 			empty);
 		var rawOk = switch NativeEvent.decodeSnapshot(unknown) {
-			case Raw(kind, source, _, result, flags, count, data): kind == EventKind.PluginEvent && source.rawValue()
+			case Raw(kind, source, _, result, flags, count, data): kind == EventKind.PluginEvent && source.rawValue
 				== 7 && result == Result.ErrorInvalidArgument && flags == 3 && count == 4 && data == empty;
 			case _: false;
 		};
@@ -75,12 +75,12 @@ class NativeKitEventDecoderTests {
 				handle(25), haxe.Int64.ofInt(26), Result.ErrorUnknown, 0, 0, empty))
 		] {
 			case [ResourceAssetReady(source, request), ResourceAssetLoadFailed(failedSource, failedRequest, result)]:
-				source.rawValue() == 24 && Std.string(request) == "25" && failedSource.rawValue() == 25
+				source.rawValue == 24 && Std.string(request) == "25" && failedSource.rawValue == 25
 					&& Std.string(failedRequest) == "26" && result == Result.ErrorUnknown;
 			case _: false;
 		};
 		var editPayload = haxe.io.Bytes.alloc(50);
-		putU32(editPayload, 0, TextEditAction.Compose.rawValue());
+		putU32(editPayload, 0, TextEditAction.Compose.rawValue);
 		putU32(editPayload, 4, 48);
 		putU32(editPayload, 8, 2);
 		putU32(editPayload, 12, 1);
@@ -95,7 +95,7 @@ class NativeKitEventDecoderTests {
 		editPayload.set(49, 0xa9);
 		var editContext = new EventSnapshot(EventKind.TextEdit, handle(9), zero, Result.Ok, 0, 0, editPayload);
 		var editOk = switch NativeEvent.decodeSnapshot(editContext) {
-			case TextEdit(source, edit): source.rawValue() == 9 && edit.action == TextEditAction.Compose
+			case TextEdit(source, edit): source.rawValue == 9 && edit.action == TextEditAction.Compose
 				&& edit.text == "é" && edit.replaceStart == 1 && edit.compositionEnd == 2 && edit.selectionAffinity == 1
 				&& edit.historyKind == nativekit.ffi.NativeKitTypes.TextEditHistoryKind.Composition;
 			case _: false;
@@ -124,7 +124,7 @@ class NativeKitEventDecoderTests {
 			handle(15), zero, Result.Ok, 0, 0, accessibilityPayload);
 		var accessibilityOk = switch NativeEvent.decodeSnapshot(accessibilityContext) {
 			case AccessibilityAction(source, nodeId, action, value, selectionStart, selectionEnd, granularity):
-				source.rawValue() == 15 && nodeId == 77 && action == 1 && value == "ok" && selectionStart == -1
+				source.rawValue == 15 && nodeId == 77 && action == 1 && value == "ok" && selectionStart == -1
 					&& selectionEnd == -1 && granularity == 1;
 			case _: false;
 		};
@@ -133,14 +133,14 @@ class NativeKitEventDecoderTests {
 			handle(15), zero, Result.Ok, 0, 0, unterminatedAccessibility);
 
 		var keyPayload = haxe.io.Bytes.alloc(16);
-		putU32(keyPayload, 0, Key.Escape.rawValue());
+		putU32(keyPayload, 0, Key.Escape.rawValue);
 		putU32(keyPayload, 4, 41);
-		putU32(keyPayload, 8, InputAction.Press.rawValue());
-		putU32(keyPayload, 12, Modifiers.Control.rawValue() | (1 << 30));
+		putU32(keyPayload, 8, InputAction.Press.rawValue);
+		putU32(keyPayload, 12, Modifiers.Control.rawValue | (1 << 30));
 		var keyContext = new EventSnapshot(EventKind.Key, handle(12), zero, Result.Ok, 0, 0, keyPayload);
 		var typedKeyOk = switch NativeEvent.decodeSnapshot(keyContext) {
 			case Key(source, key, scancode, action, modifiers):
-				source.rawValue() == 12 && key == Key.Escape && scancode == 41 && action == InputAction.Press
+				source.rawValue == 12 && key == Key.Escape && scancode == 41 && action == InputAction.Press
 					&& modifiers == Modifiers.Control;
 			case _: false;
 		};
@@ -150,10 +150,10 @@ class NativeKitEventDecoderTests {
 		for (code in [5, 6]) {
 			var payload = haxe.io.Bytes.alloc(32);
 			putU32(payload, 0, code);
-			putU32(payload, 4, InputAction.Press.rawValue());
+			putU32(payload, 4, InputAction.Press.rawValue);
 			var snapshot = new EventSnapshot(EventKind.PointerButton, handle(12), zero, Result.Ok, 0, 0, payload);
 			extraButtonsOk = extraButtonsOk && switch NativeEvent.decodeSnapshot(snapshot) {
-				case PointerButton(_, button, action, _, _, _): button.rawValue() == code
+				case PointerButton(_, button, action, _, _, _): button.rawValue == code
 					&& action == InputAction.Press;
 				case _: false;
 			};
@@ -163,18 +163,18 @@ class NativeKitEventDecoderTests {
 		});
 		var hatPayload = haxe.io.Bytes.alloc(8);
 		putU32(hatPayload, 0, 2);
-		putU32(hatPayload, 4, (JoystickHatFlags.Up | JoystickHatFlags.Left).rawValue());
+		putU32(hatPayload, 4, (JoystickHatFlags.Up | JoystickHatFlags.Left).rawValue);
 		var hatContext = new EventSnapshot(EventKind.JoystickHat, handle(13), zero, Result.Ok, 0, 0, hatPayload);
 		var typedHatOk = switch NativeEvent.decodeSnapshot(hatContext) {
 			case JoystickHat(source, hat, value):
-				source.rawValue() == 13 && hat == 2 && value.contains(JoystickHatFlags.Up)
+				source.rawValue == 13 && hat == 2 && value.contains(JoystickHatFlags.Up)
 					&& value.contains(JoystickHatFlags.Left);
 			case _: false;
 		};
 		var navigationContext = new EventSnapshot(EventKind.WebviewNavigationFailed, handle(14), zero, Result.Ok,
-			NavigationError.NotFound.rawValue(), 0, empty);
+			NavigationError.NotFound.rawValue, 0, empty);
 		var typedNavigationOk = switch NativeEvent.decodeSnapshot(navigationContext) {
-			case WebViewNavigationFailed(source, category, _): source.rawValue() == 14
+			case WebViewNavigationFailed(source, category, _): source.rawValue == 14
 				&& category == NavigationError.NotFound;
 			case _: false;
 		};
@@ -183,14 +183,14 @@ class NativeKitEventDecoderTests {
 		var taskContext = new EventSnapshot(EventKind.TaskComplete, handle(21), zero, Result.Ok,
 			0, 1, taskPayload);
 		var taskOk = switch NativeEvent.decodeSnapshot(taskContext) {
-			case TaskComplete(source, result, data): source.rawValue() == 21 && result == Result.Ok
+			case TaskComplete(source, result, data): source.rawValue == 21 && result == Result.Ok
 				&& data == taskPayload;
 			case _: false;
 		};
 		var audioContext = new EventSnapshot(EventKind.AudioVoiceComplete,
 			handle(16), zero, Result.Ok, 0, 0, empty);
 		var audioOk = switch NativeEvent.decodeSnapshot(audioContext) {
-			case AudioVoiceComplete(source): source.rawValue() == 16;
+			case AudioVoiceComplete(source): source.rawValue == 16;
 			case _: false;
 		};
 		var audioTransitionEventsOk = switch [
@@ -202,41 +202,41 @@ class NativeKitEventDecoderTests {
 				handle(23), zero, Result.Ok, 0, 0, empty))
 		] {
 			case [AudioVoiceStolen(stolen), AudioVoiceVirtualized(virtualized), AudioVoiceResumed(resumed)]:
-				stolen.rawValue() == 21 && virtualized.rawValue() == 22 && resumed.rawValue() == 23;
+				stolen.rawValue == 21 && virtualized.rawValue == 22 && resumed.rawValue == 23;
 			case _: false;
 		};
 		var audioReadyContext = new EventSnapshot(EventKind.AudioVoiceReady,
 			handle(17), zero, Result.Ok, 0, 0, empty);
 		var audioReadyOk = switch NativeEvent.decodeSnapshot(audioReadyContext) {
-			case AudioVoiceReady(source): source.rawValue() == 17;
+			case AudioVoiceReady(source): source.rawValue == 17;
 			case _: false;
 		};
 		var audioFailedContext = new EventSnapshot(EventKind.AudioVoiceLoadFailed,
 			handle(18), zero, Result.ErrorUnknown, 0, 0, empty);
 		var audioFailedOk = switch NativeEvent.decodeSnapshot(audioFailedContext) {
 			case AudioVoiceLoadFailed(source, result):
-				source.rawValue() == 18 && result == Result.ErrorUnknown;
+				source.rawValue == 18 && result == Result.ErrorUnknown;
 			case _: false;
 		};
 		var audioClipReadyContext = new EventSnapshot(EventKind.AudioClipReady,
 			handle(19), haxe.Int64.ofInt(19), Result.Ok, 0, 0, empty);
 		var audioClipReadyOk = switch NativeEvent.decodeSnapshot(audioClipReadyContext) {
 			case AudioClipReady(source, request):
-				source.rawValue() == 19 && Std.string(request) == "19";
+				source.rawValue == 19 && Std.string(request) == "19";
 			case _: false;
 		};
 		var audioClipFailedContext = new EventSnapshot(EventKind.AudioClipLoadFailed,
 			handle(20), haxe.Int64.ofInt(20), Result.ErrorUnknown, 0, 0, empty);
 		var audioClipFailedOk = switch NativeEvent.decodeSnapshot(audioClipFailedContext) {
 			case AudioClipLoadFailed(source, request, result):
-				source.rawValue() == 20 && Std.string(request) == "20" && result == Result.ErrorUnknown;
+				source.rawValue == 20 && Std.string(request) == "20" && result == Result.ErrorUnknown;
 			case _: false;
 		};
 		var audioStreamFailedContext = new EventSnapshot(EventKind.AudioVoiceStreamFailed,
 			handle(24), zero, Result.ErrorUnknown, 0, 0, empty);
 		var audioStreamFailedOk = switch NativeEvent.decodeSnapshot(audioStreamFailedContext) {
 			case AudioVoiceStreamFailed(source, result):
-				source.rawValue() == 24 && result == Result.ErrorUnknown;
+				source.rawValue == 24 && result == Result.ErrorUnknown;
 			case _: false;
 		};
 		var audioDeviceEventsOk = switch [
@@ -315,7 +315,7 @@ class NativeKitEventDecoderTests {
 		putU32(payload, 4, 1);
 		putU32(payload, 8, 16);
 		putU32(payload, 12, 32);
-		putU32(payload, 16, (ResourceFlags.Readable | ResourceFlags.Persisted).rawValue());
+		putU32(payload, 16, (ResourceFlags.Readable | ResourceFlags.Persisted).rawValue);
 		putU32(payload, 20, uriOffset);
 		putU32(payload, 24, mimeOffset);
 		putU32(payload, 28, nameOffset);

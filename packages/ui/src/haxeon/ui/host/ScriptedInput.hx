@@ -165,7 +165,7 @@ class ScriptedInput {
 			delivered++;
 			return true;
 		}
-		var source = new Handle(window.rawValue());
+		var source = new Handle(window.rawValue);
 		var values:Array<PlatformEvent> = switch (Std.string(event.kind)) {
 			case "move": [PointerMove(source, event.x, event.y)];
 			case "down", "up": [PointerButton(source, NativeKitTypes.PointerButton.Left,

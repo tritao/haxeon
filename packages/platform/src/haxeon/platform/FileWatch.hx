@@ -46,7 +46,7 @@ class FileWatch implements Disposable {
 	function new(owned:OwnedFileWatch, events:EventPump, listener:FileWatchEvent->Void) {
 		this.owned = owned;
 		this.listener = listener;
-		handle = owned.borrow().rawValue();
+		handle = owned.borrow().rawValue;
 		subscription = events.listen(onEvent);
 	}
 
@@ -139,7 +139,7 @@ class FileWatch implements Disposable {
 
 	function onEvent(event:PlatformEvent):Void {
 		switch event {
-			case Raw(kind, source, _, _, _, _, data) if (!disposed && source.rawValue() == handle):
+			case Raw(kind, source, _, _, _, _, data) if (!disposed && source.rawValue == handle):
 				if (kind == EventKind.FileWatchReady) {
 					var path = pathIn(data, false);
 					if (path != null && pending.remove(pathKey(path)) && ready)

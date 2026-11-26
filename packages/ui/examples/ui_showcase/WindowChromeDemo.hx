@@ -105,7 +105,7 @@ class WindowChromeDemo implements Disposable {
 		surfaceOptions.set_api(graphicsApi);
 		surfaceOptions.set_width(width);
 		surfaceOptions.set_height(height);
-		var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue()), surfaceOptions);
+		var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue), surfaceOptions);
 		if (createdSurface.status != Result.Ok) throw new NativeKitError(createdSurface.status,
 			"surface.create",
 			NativeKit.nk_last_error());
@@ -120,7 +120,7 @@ class WindowChromeDemo implements Disposable {
 		renderer = Renderer.create();
 		frame = new LayoutFrame(width, height);
 		frameInfo = new FrameInfo(width, height, width, height, scale);
-		input = new NativeInputAdapter(context, new Handle(window.rawValue()));
+		input = new NativeInputAdapter(context, new Handle(window.rawValue));
 		input.attach(events);
 		startFrameLoop();
 	}
@@ -129,29 +129,29 @@ class WindowChromeDemo implements Disposable {
 	public function handleEvent(value:PlatformEvent):Void {
 		if (disposed || value == null) return;
 		switch (value) {
-			case WindowClose(source) if (source.rawValue() == window.rawValue()):
+			case WindowClose(source) if (source.rawValue == window.rawValue):
 				closeRequested = true;
-			case WindowResize(source, newWidth, newHeight) if (source.rawValue() == window.rawValue()):
+			case WindowResize(source, newWidth, newHeight) if (source.rawValue == window.rawValue):
 				width = newWidth;
 				height = newHeight;
 				if (NativeKit.nk_surface_set_bounds(surface, 0, 0, width, height) != Result.Ok) {
 					failure = "surface.resize failed: " + NativeKit.nk_last_error();
 					closeRequested = true;
 				}
-			case WindowScaleChanged(source, newScale) if (source.rawValue() == window.rawValue()):
+			case WindowScaleChanged(source, newScale) if (source.rawValue == window.rawValue):
 				scale = newScale > 0.0 ? newScale : 1.0;
-			case SurfaceReady(source) if (source.rawValue() == surface.rawValue()):
+			case SurfaceReady(source) if (source.rawValue == surface.rawValue):
 				try startFrameLoop();
 				catch (error:Dynamic) {
 					failure = error;
 					closeRequested = true;
 				}
 			case SurfaceResize(source,
-				newWidth, newHeight, framebufferWidth, framebufferHeight) if (source.rawValue() == surface.rawValue()):
+				newWidth, newHeight, framebufferWidth, framebufferHeight) if (source.rawValue == surface.rawValue):
 				width = newWidth;
 				height = newHeight;
 				frameInfo = new FrameInfo(width, height, framebufferWidth, framebufferHeight, scale);
-			case SurfaceLost(source) if (source.rawValue() == surface.rawValue()):
+			case SurfaceLost(source) if (source.rawValue == surface.rawValue):
 				ready = false;
 			case _:
 		}

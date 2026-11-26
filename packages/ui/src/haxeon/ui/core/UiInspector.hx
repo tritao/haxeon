@@ -96,8 +96,8 @@ class UiInspector {
 				line += " z=" + Std.string(record.zIndex);
 			var role = record.role;
 			if (role != null)
-				line += " role=" + Std.string(role.rawValue()) + " states="
-					+ Std.string(record.semanticStates.rawValue());
+				line += " role=" + Std.string(role.rawValue) + " states="
+					+ Std.string(record.semanticStates.rawValue);
 			if (record.label != null && record.label.length > 0)
 				line += ' label="' + escape(record.label) + '"';
 			if (record.value != null)

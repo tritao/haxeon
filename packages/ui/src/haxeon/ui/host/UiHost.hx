@@ -102,7 +102,7 @@ class HostedUiApp implements App {
 			options.height);
 
 		#if wasm
-		NativeKitUIBrowser.nkui_browser_pointer_events(context.window.rawValue(), 1);
+		NativeKitUIBrowser.nkui_browser_pointer_events(context.window.rawValue, 1);
 		var assets = options.fonts;
 		if (assets != null && assets.length > 0) {
 			session.transition(UiHostLifecycle.LoadingResources);
@@ -281,7 +281,7 @@ class HostedUiApp implements App {
 		defer if (traceSubscription != null) traceSubscription.dispose();
 		if (recorder != null) recorder.stopCensus();
 		#else
-		if (context != null) NativeKitUIBrowser.nkui_browser_pointer_events(context.window.rawValue(), 0);
+		if (context != null) NativeKitUIBrowser.nkui_browser_pointer_events(context.window.rawValue, 0);
 		#end
 	}
 }

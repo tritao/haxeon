@@ -12,7 +12,7 @@ function main():Int {
 	var rejected = false;
 	try {
 		callback.call(invalid);
-		rejected = callback.errorKind().rawValue() != 0;
+		rejected = callback.errorKind().rawValue != 0;
 	} catch (_:Dynamic) rejected = true;
 	if (!rejected || calls != 1) return 2;
 	var invalidResult = new EchoCallback(function(mode:Mode):Mode return cast 2);

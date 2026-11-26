@@ -18,7 +18,7 @@ import haxeon.ui.core.WidgetId;
 		store.onUnmount(widget, release);
 		var root = new TrackedScope("owner", () -> new ResourceBody()).build(context);
 		var owner = context.renderScopeAt(root);
-		if (owner == null || owner.resourceId.rawValue() != widget.value) return 1;
+		if (owner == null || owner.resourceId.rawValue != widget.value) return 1;
 		var resource = ResourceId.scope(owner.resourceId), state = ResourceId.widget(widget);
 		if (!resource.isScope() || state.isScope() || resource == state) return 2;
 		store.setOwnedStates(resource, [state]);
@@ -48,10 +48,10 @@ import haxeon.ui.core.WidgetId;
 		store.nextScopeId = 0x7fffffff;
 		var last = store.beginScope();
 		var first = store.beginScope();
-		if (high.rawValue() != 0x40000000 || last.rawValue() != 0x7fffffff
-			|| first.rawValue() != 1) throw "Scope resource counter lost its payload or wrap";
+		if (high.rawValue != 0x40000000 || last.rawValue != 0x7fffffff
+			|| first.rawValue != 1) throw "Scope resource counter lost its payload or wrap";
 		for (id in [high, last]) {
-			var scope = ResourceId.scope(id), widget = ResourceId.widget(new WidgetId(id.rawValue()));
+			var scope = ResourceId.scope(id), widget = ResourceId.widget(new WidgetId(id.rawValue));
 			if (!scope.isScope() || widget.isScope()
 				|| scope == widget) throw "Resource domains depend on the encoded sign";
 		}

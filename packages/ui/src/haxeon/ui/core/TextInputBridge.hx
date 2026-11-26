@@ -129,7 +129,7 @@ class TextInputBridge implements Disposable {
 			!= windowStart || publishedState[1] != documentLength || publishedState[2] != selectionStart
 			|| publishedState[3] != selectionEnd || publishedState[4] != compositionStart
 			|| publishedState[5] != compositionEnd || publishedState[6] != inputType
-			|| publishedState[7] != flags.rawValue() || publishedState[8] != cursor.x || publishedState[9] != cursor.y
+			|| publishedState[7] != flags.rawValue || publishedState[8] != cursor.x || publishedState[9] != cursor.y
 			|| publishedState[10] != cursor.width || publishedState[11] != cursor.height
 			|| publishedState[12] != action;
 		if (stateChanged) {
@@ -154,7 +154,7 @@ class TextInputBridge implements Disposable {
 			publishedState[4] = compositionStart;
 			publishedState[5] = compositionEnd;
 			publishedState[6] = inputType;
-			publishedState[7] = flags.rawValue();
+			publishedState[7] = flags.rawValue;
 			publishedState[8] = cursor.x;
 			publishedState[9] = cursor.y;
 			publishedState[10] = cursor.width;

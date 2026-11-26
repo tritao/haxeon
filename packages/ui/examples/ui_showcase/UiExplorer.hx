@@ -220,7 +220,7 @@ class UiExplorer implements Disposable {
 		nativeWindow = window;
 		webViewSupported = supportsCapability(Capabilities.webview());
 		var accessibilitySource = nativeSurface == null
-			|| !supportsNativeAccessibility() ? window : new Handle(nativeSurface.nativeHandle().rawValue());
+			|| !supportsNativeAccessibility() ? window : new Handle(nativeSurface.nativeHandle().rawValue);
 		var input = new NativeInputAdapter(context, window, accessibilitySource);
 		input.attach(events);
 		return input;

@@ -22,7 +22,7 @@ function main():Int {
 		return 1;
 	if (take(Code.Low) != 0)
 		return 2;
-	if (Code.High.rawValue() != 7)
+	if (Code.High.rawValue != 7)
 		return 3;
 	var parsed = Code.fromRaw(7);
 	if (parsed == null || parsed != Code.High)

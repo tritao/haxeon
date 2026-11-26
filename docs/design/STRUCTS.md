@@ -721,12 +721,12 @@ enum PixelFormat:Int {
     Rgba8 = 1;
     Rgb8 = 2;
 }
-var code:Int = PixelFormat.Rgba8.rawValue();
+var code:Int = PixelFormat.Rgba8.rawValue;
 var format:Null<PixelFormat> = PixelFormat.fromRaw(code);
 ```
 
 A raw-value enum ([ENUM_MEMBERS.md](ENUM_MEMBERS.md#raw-value-enums)) synthesizes
-inline `rawValue():Int|String` and static `fromRaw(value):Null<Self>` from its
+inline `rawValue:Int|String` and static `fromRaw(value):Null<Self>` from its
 current cases. Unknown codes return null; codes are unique, so each names one
 case. Both members, and `toString`, are reserved case names. Codes must be
 compile-time Int/String values. There are no implicit conversions: explicit
@@ -739,7 +739,7 @@ that nominal expected type; no declaration-side hint table survives erasure.
 Synthesized helpers are requested on demand and regenerated when cases change. Array search
 and String-array joining choose the raw storage operation while keeping the
 nominal element type for argument checks.
-`rawValue()` allocates nothing with inlining disabled too.
+`rawValue` allocates nothing with inlining disabled too.
 `fromRaw()` follows the existing `Null<Int>`/`Null<String>` ABI; this feature does
 not introduce scalar nullable specialization (queue item a2).
 

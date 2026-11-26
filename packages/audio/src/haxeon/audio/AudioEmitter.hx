@@ -165,7 +165,7 @@ class AudioEmitter implements Disposable {
 	function release(source:Handle):Void {
 		for (index in 0...voices.length) {
 			var voice = voices[index];
-			if (!voice.isDisposed() && voice.nativeHandle().rawValue() == source.rawValue()) {
+			if (!voice.isDisposed() && voice.nativeHandle().rawValue == source.rawValue) {
 				voices.splice(index, 1);
 				return;
 			}

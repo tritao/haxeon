@@ -28,10 +28,13 @@ internal abstract ResourceId(Int) {
 	@:allow(haxeon.ui.core.StateStore) inline function new(value:Int) this = value;
 
 	public static inline function widget(id:WidgetId):ResourceId return new ResourceId(id.value << 1);
-	internal static inline function scope(id:ScopeResourceId):ResourceId return new ResourceId((id.rawValue() << 1)
+	internal static inline function scope(id:ScopeResourceId):ResourceId return new ResourceId((id.rawValue << 1)
 		| 1);
 
-	public inline function rawValue():Int return this;
+	public var rawValue(get, never):Int;
+
+	inline function get_rawValue():Int
+		return this;
 	public inline function isScope():Bool return (this & 1) != 0;
 
 	@:allow(haxeon.ui.core.StateStore) inline function payload():Int return this >>> 1;

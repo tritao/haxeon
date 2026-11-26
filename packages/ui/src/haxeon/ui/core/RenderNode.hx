@@ -338,7 +338,7 @@ class RenderNode {
 
 	function fingerprintText(text:Null<String>, label:Null<String>):Int {
 		var hash = fingerprintHash.reset();
-		hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(layout.visualKind.rawValue()).addString(text)
+		hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(layout.visualKind.rawValue).addString(text)
 			.addInt(layout.measureVersion).addBool(hitTestSelf).addBool(focusable).addBool(enabled).addString(label);
 		var color = layout.textColor;
 		if (color != null) hash.addInt(haxeon.Hashing.hash(color));
@@ -825,7 +825,7 @@ class RenderNode {
 		var result = style != null && style.decorations.length > 0 ? base + "|style-decorations:" + style.key() : base;
 		// Existing content revisions and routed states invalidate the complete local fingerprint.
 		paintKey = recordsInteraction
-			? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered).rawValue() : result;
+			? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered).rawValue : result;
 		return paintKey;
 	}
 

@@ -49,7 +49,7 @@ class Surface implements Disposable {
 
 	/** Whether a platform event came from this surface. */
 	public function ownsEventSource(source:Handle):Bool
-		return !disposed && source.rawValue() == value.rawValue();
+		return !disposed && source.rawValue == value.rawValue;
 
 	/** The native surface, for packages that draw to it and for interop. */
 	public function nativeHandle():SurfaceHandle {
@@ -106,7 +106,7 @@ class Surface implements Disposable {
 		ensureLive();
 		if (events == null)
 			throw BindingError.invalidState("Surface.listen", "Borrow the surface with its event pump to subscribe");
-		return events.listenSource(new Handle(value.rawValue()), function(event) {
+		return events.listenSource(new Handle(value.rawValue), function(event) {
 			handler(event);
 			return false;
 		}).ownedBy(dependents);

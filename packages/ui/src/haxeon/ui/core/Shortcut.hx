@@ -13,7 +13,7 @@ struct Shortcut implements Hashable {
 
 	/** The chord `key` with `modifiers`, lock states dropped. Throws when `key` is `Unknown`. */
 	public function new(key:UiKey, modifiers:UiModifier = UiModifier.empty()) {
-		if (key.rawValue() <= 0)
+		if (key.rawValue <= 0)
 			throw "Shortcuts require a known key";
 		this.key = key;
 		this.modifiers = normalizeModifiers(modifiers);
@@ -33,11 +33,11 @@ struct Shortcut implements Hashable {
 
 	/** A hash agreeing with `equals`. */
 	public function hash():Int
-		return key.rawValue() * 31 + modifiers.rawValue();
+		return key.rawValue * 31 + modifiers.rawValue;
 
 	/** The chord's key code and modifier bits, for debugging; `label` is the readable form. */
 	public function toString():String
-		return 'Shortcut(${key.rawValue()}, ${modifiers.rawValue()})';
+		return 'Shortcut(${key.rawValue}, ${modifiers.rawValue})';
 
 	/** Text for people, such as "Ctrl+Shift+S". */
 	public function label():String {
@@ -73,7 +73,7 @@ struct Shortcut implements Hashable {
 
 	/** Shift, Control, Alt and Super on either side: pressed alone they are not a shortcut. */
 	public static function isModifierKey(key:UiKey):Bool
-		return key.rawValue() >= 340 && key.rawValue() <= 347;
+		return key.rawValue >= 340 && key.rawValue <= 347;
 
 	function modifierNames(stable:Bool):Array<String> {
 		var modifiers = this.modifiers;
@@ -91,7 +91,7 @@ struct Shortcut implements Hashable {
 
 	/** Names a key; letters and digits are themselves, other keys use NAMED_KEYS or "key<code>". */
 	public static function keyName(key:UiKey, stable:Bool = false):String {
-		return codeName(key.rawValue(), stable);
+		return codeName(key.rawValue, stable);
 	}
 
 	static function codeName(key:Int, stable:Bool):String {

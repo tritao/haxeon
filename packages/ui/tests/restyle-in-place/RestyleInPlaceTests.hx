@@ -800,7 +800,7 @@ private class UpdatingResources implements View {
 		root.walk(function(node) {
 			var style = node.layout.style, color = style.background, text = node.layout.textColor;
 			// State routed onto a node that no widget built from is invisible; a rebuilt node starts without it.
-			out.add(node.id.value + "|" + node.styleType + "|" + (node.recordsInteraction ? node.states.rawValue()
+			out.add(node.id.value + "|" + node.styleType + "|" + (node.recordsInteraction ? node.states.rawValue
 				: -1) + "|" + color.red + "," + color.green + "," + color.blue + "," + color.alpha + "|" + (text
 				== null ? "-" : text.red + "," + text.green + "," + text.blue + "," + text.alpha)
 				+ "|" + style.visible + "|" + style.zIndex + "|" + node.layout.text + "|" + node.children.length + "|");

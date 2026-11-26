@@ -61,7 +61,7 @@ class SurfaceFrame {
 
 	/** Identifies this transaction in SurfaceFrameComplete events, including after submission. */
 	public function token():haxe.Int64
-		return haxe.Int64.make(0, value.rawValue());
+		return haxe.Int64.make(0, value.rawValue);
 
 	/** Transfers the frame and ordered steps. Listen for SurfaceFrameComplete to get the result. */
 	public function submit(steps:Array<SurfaceFrameStep>):Void {
@@ -72,7 +72,7 @@ class SurfaceFrame {
 		for (step in steps) {
 			if (step == null)
 				throw BindingError.invalidArgument("SurfaceFrame.submit", "Frame step must not be null");
-			handles.push(step.nativeHandle().rawValue());
+			handles.push(step.nativeHandle().rawValue);
 		}
 		NativeKit.nk_surface_frame_submit_checked(value, handles);
 		finished = true;

@@ -49,7 +49,7 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 			parent:Null<ComputedStyle>,
 			text:Array<ResolvedTextStyle>) {
 		super();
-		if (resourceId.rawValue() <= 0 || identityId <= 0 || context == null
+		if (resourceId.rawValue <= 0 || identityId <= 0 || context == null
 			|| component == null) throw "A render scope requires an identity, lifetime, context and component";
 		this.resourceId = resourceId;
 		this.identityId = identityId;
@@ -274,5 +274,8 @@ internal class ScopeTextRootNode extends LiveTextNode {
 internal abstract ScopeResourceId(Int) {
 	@:allow(haxeon.ui.core.StateStore) @:allow(haxeon.ui.core.ResourceId) inline function new(value:Int) this = value;
 
-	public inline function rawValue():Int return this;
+	public var rawValue(get, never):Int;
+
+	inline function get_rawValue():Int
+		return this;
 }

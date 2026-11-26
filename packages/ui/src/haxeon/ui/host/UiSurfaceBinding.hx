@@ -53,8 +53,8 @@ class UiSurfaceBinding implements Disposable {
 	function new(context:UiContext, window:WindowHandle, surface:Surface) {
 		this.context = context;
 		this.surface = surface;
-		var surfaceSource = new Handle(surface.nativeHandle().rawValue());
-		var source = window.isValid() ? new Handle(window.rawValue()) : surfaceSource;
+		var surfaceSource = new Handle(surface.nativeHandle().rawValue);
+		var source = window.isValid() ? new Handle(window.rawValue) : surfaceSource;
 		input = new NativeInputAdapter(context, source, surfaceSource);
 	}
 

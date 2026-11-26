@@ -1257,18 +1257,18 @@ class UiContext implements Disposable {
 			|| !steadyForInteractionReuse(cacheKey, frame)) return false;
 		var changes = interactionStates.changes();
 		for (change in changes) {
-			var bits = change.before.rawValue() ^ change.after.rawValue();
+			var bits = change.before.rawValue ^ change.after.rawValue;
 			var node = currentNodesById.get(change.id);
 			if (node == null) return false;
 			// Routed input contains pointer and focus flags. Direct state-store edits must also
 			// agree with authored state before a frame can take the interaction-only path.
-			var other = bits & ~patchInteractionMask.rawValue();
-			if (other != 0 && (change.after.rawValue() & other) != (node.states.rawValue() & other)) return false;
-			bits &= patchInteractionMask.rawValue();
+			var other = bits & ~patchInteractionMask.rawValue;
+			if (other != 0 && (change.after.rawValue & other) != (node.states.rawValue & other)) return false;
+			bits &= patchInteractionMask.rawValue;
 			if (bits == 0) continue;
 			if (buildContext.interactionRenderScope(node) == null
 				&& buildContext.updatingOwner(node) == null && node.recordsInteraction
-				&& (bits != haxeon.ui.style.StyleState.Hovered.rawValue() || buildContext.hoverRebuilds(node)))
+				&& (bits != haxeon.ui.style.StyleState.Hovered.rawValue || buildContext.hoverRebuilds(node)))
 				return false;
 		}
 		patchFramePaintNodes.resize(0);

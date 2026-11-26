@@ -107,7 +107,7 @@ class StateStore implements Disposable {
 	/** Reserve one native instance lifetime before its body captures descendant resource usage. */
 	internal function beginScope():ScopeResourceId {
 		var id = new ScopeResourceId(nextScopeId);
-		while (scopes.exists(id) || frameUsed.has(ResourceId.scope(id).rawValue())) {
+		while (scopes.exists(id) || frameUsed.has(ResourceId.scope(id).rawValue)) {
 			nextScopeId = nextScopeId == 0x7fffffff ? 1 : nextScopeId + 1;
 			id = new ScopeResourceId(nextScopeId);
 		}
@@ -144,8 +144,8 @@ class StateStore implements Disposable {
 		if (previous != null && previous != owner) throw "Native scope resource already has an owner";
 		scopes.set(id, owner);
 		var resource = ResourceId.scope(id);
-		if (!managed.has(resource.rawValue())) {
-			managed.add(resource.rawValue());
+		if (!managed.has(resource.rawValue)) {
+			managed.add(resource.rawValue);
 			appendManaged(resource);
 		}
 	}
@@ -157,7 +157,7 @@ class StateStore implements Disposable {
 		scopes.remove(id);
 		var resource = ResourceId.scope(id);
 		ownedStates.remove(resource);
-		managed.remove(resource.rawValue());
+		managed.remove(resource.rawValue);
 		if (!sweeping && managedCount > 256 && managedCount > managed.count() * 2) compactManaged();
 	}
 
@@ -166,7 +166,7 @@ class StateStore implements Disposable {
 		seenScratch.clear();
 		while (read < managedCount) {
 			var id = managedIds[read++];
-			if (managed.has(id.rawValue()) && seenScratch.add(id.rawValue())) managedIds[write++] = id;
+			if (managed.has(id.rawValue) && seenScratch.add(id.rawValue)) managedIds[write++] = id;
 		}
 		managedCount = write;
 	}
@@ -188,7 +188,7 @@ class StateStore implements Disposable {
 		seenScratch.clear();
 		for (index in start...frameUseCount) {
 			var id = frameUseOrder[index];
-			if (!seenScratch.add(id.rawValue())) continue;
+			if (!seenScratch.add(id.rawValue)) continue;
 			if (previous == null || count >= previous.length || previous[count] != id) same = false;
 			count++;
 		}
@@ -199,7 +199,7 @@ class StateStore implements Disposable {
 		var position = 0;
 		for (index in start...frameUseCount) {
 			var id = frameUseOrder[index];
-			if (seenScratch.add(id.rawValue())) result[position++] = id;
+			if (seenScratch.add(id.rawValue)) result[position++] = id;
 		}
 		return result;
 	}
@@ -219,7 +219,7 @@ class StateStore implements Disposable {
 	internal function retain(ids:Array<ResourceId>, recordUsage:Bool = true):Void {
 		if (ids == null) return;
 		for (id in ids) if (id.isScope() ? scopes.exists(id.scopeId()) : handles.exists(id.payload())) {
-			if (frameActive) frameUsed.add(id.rawValue());
+			if (frameActive) frameUsed.add(id.rawValue);
 			if (recordUsage && (frameActive || usageCaptures > 0)) appendUsage(id);
 			var children = ownedStates.get(id);
 			if (children != null) retain(children, false);
@@ -255,7 +255,7 @@ class StateStore implements Disposable {
 		sweeping = true;
 		for (index in 0...managedCount) {
 			var id = managedIds[index];
-			if (!frameUsed.has(id.rawValue())) stale.push(id);
+			if (!frameUsed.has(id.rawValue)) stale.push(id);
 		}
 		var failure:Dynamic = null;
 		for (id in stale) {
@@ -270,7 +270,7 @@ class StateStore implements Disposable {
 			} catch (error:Dynamic) {
 				if (failure == null) failure = error;
 			}
-			managed.remove(id.rawValue());
+			managed.remove(id.rawValue);
 			if (id.isScope()) scopes.remove(id.scopeId());
 			else {
 				disposers.remove(id.payload());
@@ -321,7 +321,7 @@ class StateStore implements Disposable {
 	public function onUnmount(id:WidgetId, disposer:Void->Void):Void {
 		onDispose(id, disposer);
 		var resource = ResourceId.widget(id);
-		managed.add(resource.rawValue());
+		managed.add(resource.rawValue);
 		appendManaged(resource);
 	}
 
@@ -376,7 +376,7 @@ class StateStore implements Disposable {
 	function markUsed(id:WidgetId):Void markUsedResource(ResourceId.widget(id));
 
 	function markUsedResource(id:ResourceId):Void {
-		if (frameActive) frameUsed.add(id.rawValue());
+		if (frameActive) frameUsed.add(id.rawValue);
 		if (frameActive || usageCaptures > 0) appendUsage(id);
 	}
 }

@@ -1,5 +1,5 @@
 // A raw-value enum's cases carry an Int or String code: omitted Int codes count up from the previous one and omitted
-// String codes are the case name. rawValue() gives the code, fromRaw() the case or null, and `this` in a method is the
+// String codes are the case name. rawValue gives the code, fromRaw() the case or null, and `this` in a method is the
 // enum value. A switch covers every case, as over any enum.
 enum PixelFormat:Int {
 	Rgba8 = 1;
@@ -17,7 +17,7 @@ enum PixelFormat:Int {
 		};
 
 	public function doubled():Int
-		return this.rawValue() * 2;
+		return this.rawValue * 2;
 
 	public static final all:Array<PixelFormat> = [Rgba8, Bgra8, R8];
 }
@@ -36,7 +36,7 @@ struct Tagged {
 		this.format = format;
 
 	public function code():Int
-		return format.rawValue();
+		return format.rawValue;
 }
 
 function name(format:PixelFormat):String
@@ -46,11 +46,11 @@ function name(format:PixelFormat):String
 	};
 
 function main():Int {
-	if (PixelFormat.R8.rawValue() != 3 || PixelFormat.Rgba8.next() != Bgra8 || PixelFormat.R8.bytesPerPixel() != 1)
+	if (PixelFormat.R8.rawValue != 3 || PixelFormat.Rgba8.next() != Bgra8 || PixelFormat.R8.bytesPerPixel() != 1)
 		return 1;
 	if (PixelFormat.fromRaw(2) != Bgra8 || PixelFormat.fromRaw(9) != null || PixelFormat.all.length != 3)
 		return 2;
-	if (Side.Left.rawValue() != "Left" || Side.Right.rawValue() != "R" || Side.fromRaw("R") != Right)
+	if (Side.Left.rawValue != "Left" || Side.Right.rawValue != "R" || Side.fromRaw("R") != Right)
 		return 3;
 	if (Side.fromRaw("Right") != null || name(Rgba8) != "rgba" || name(R8) != "other")
 		return 4;

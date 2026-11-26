@@ -6,6 +6,6 @@ import nativekit.ffi.NativeKitGpu;
 internal class GpuResult {
 	public static function check(status:GpuStatus, operation:String):Void {
 		if (status != GpuStatus.Ok)
-			throw new GpuError(status.rawValue(), operation, NativeKitGpu.nkgpu_last_error());
+			throw new GpuError(status.rawValue, operation, NativeKitGpu.nkgpu_last_error());
 	}
 }

@@ -113,9 +113,9 @@ enum PixelFormat:Int {
 - **Payload-free cases with a raw value** of type `Int` or `String`, a compile-time constant, unique within the enum.
 - **The representation is the raw value**, so native and wire boundaries cost nothing. It is compiled as an enum
   abstract over the raw type; `Null<E>` behaves as `Null<Int>` or `Null<String>` does.
-- **No implicit conversions.** `rawValue()` gives the code; `E.fromRaw(code)` returns the case, or null for a code
+- **No implicit conversions.** `rawValue` gives the code; `E.fromRaw(code)` returns the case, or null for a code
   that names none. A `cast` to the enum is unchecked, as every `cast` is.
-- **In its methods `this` is the enum value**, as in any enum; `rawValue()` reaches the code.
+- **In its methods `this` is the enum value**, as in any enum; `rawValue` reaches the code.
 - **Members** are those of any enum: methods, static methods and static fields. Per-case constants come later.
 - **A code this build does not know never reaches a case.** A value read from native code or the wire may carry a code
   newer than the binding. It keeps its representation, as every native value does, and a `switch` over the enum has an

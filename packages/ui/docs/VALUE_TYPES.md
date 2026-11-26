@@ -51,7 +51,7 @@ dispatchers on Wasm.
   accessibility enums (`LayoutSizing`, `LayoutVisualKind`, `LayoutAlignmentX`, `FontFamily`, `TextAlignment`, `CursorShape`,
   `AccessibilityRole` and the rest) are typedefs of their generated types, so the values are the native codes and the
   boundaries pass them through. A switch over them is checked for exhaustiveness (`E1021`), and an unknown native code
-  throws at the switch. Fingerprints and keys use `rawValue()`, never `Type.enumIndex`. Value names follow the generated
+  throws at the switch. Fingerprints and keys use `rawValue`, never `Type.enumIndex`. Value names follow the generated
   ones, except `CursorShape.Text` for `NK_CURSOR_IBEAM`.
 - **`EffectKind` is the one UI enum with no single native counterpart:** it includes operations that normalization removes
   before the compositor sees them, and `NativeEnums.effectKind` maps the rest.

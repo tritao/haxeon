@@ -89,7 +89,7 @@ class AudioBankEntry {
 
 	@:allow(haxeon.audio.AudioBank)
 	private function matches(source:Handle, eventRequest:haxe.Int64):Bool {
-		return !disposed && !asset.isDisposed() && asset.nativeHandle().rawValue() == source.rawValue()
+		return !disposed && !asset.isDisposed() && asset.nativeHandle().rawValue == source.rawValue
 			&& haxe.Int64.compare(request, eventRequest) == 0;
 	}
 

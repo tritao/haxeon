@@ -697,9 +697,9 @@ class FrameworkSmoke {
 	@:access(haxeon.ui.core.TextInputBridge) static function main():Int {
 		var uiModifierMask = (UiModifier.Shift
 			| UiModifier.Control | UiModifier.Alt | UiModifier.Super | UiModifier.CapsLock
-			| UiModifier.NumLock).rawValue();
+			| UiModifier.NumLock).rawValue;
 		if (uiModifierMask != NativeKit.__hxi_flags_from_native_nk_modifiers(
-			-1).rawValue()) throw "UI modifiers must cover the native header's declared bits";
+			-1).rawValue) throw "UI modifiers must cover the native header's declared bits";
 
 		var hoverSelector = StyleSelector.widget("button").state(StyleState.Hovered | StyleState.Disabled);
 		var plainButton = new StyleTarget("button");

@@ -280,7 +280,7 @@ class AudioCue implements Disposable {
 	function release(source:Handle):Void {
 		for (index in 0...active.length) {
 			var voice = active[index];
-			if (!voice.isDisposed() && voice.nativeHandle().rawValue() == source.rawValue()) {
+			if (!voice.isDisposed() && voice.nativeHandle().rawValue == source.rawValue) {
 				active.splice(index, 1);
 				if (!available.contains(voice))
 					available.push(voice);
@@ -292,7 +292,7 @@ class AudioCue implements Disposable {
 	function discard(source:Handle):Void {
 		for (index in 0...voices.length) {
 			var voice = voices[index];
-			if (!voice.isDisposed() && voice.nativeHandle().rawValue() == source.rawValue()) {
+			if (!voice.isDisposed() && voice.nativeHandle().rawValue == source.rawValue) {
 				removeVoice(voice);
 				voice.dispose();
 				return;

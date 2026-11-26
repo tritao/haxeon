@@ -43,7 +43,7 @@ class HxiFlagsMain {
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.addFfiInterface("flag-widths.hxi", source);
 		compiler.update("FlagsMain.hx",
-			'import flag_widths.*; function main():Int { var first=read_word(); var updated=mutate_word(first.value); send_words([updated.value]); var values=read_words(2); return WideFlags.low().contains(WideFlags.low()) ? values[0].rawValue() : 0; }');
+			'import flag_widths.*; function main():Int { var first=read_word(); var updated=mutate_word(first.value); send_words([updated.value]); var values=read_words(2); return WideFlags.low().contains(WideFlags.low()) ? values[0].rawValue : 0; }');
 		compiler.compile("FlagsMain");
 
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }',

@@ -140,7 +140,7 @@ class ShowcaseDesktop {
 			surfaceOptions.set_api(graphicsApi);
 			surfaceOptions.set_width(initialWidth);
 			surfaceOptions.set_height(initialHeight);
-			var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue()), surfaceOptions);
+			var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue), surfaceOptions);
 			if (createdSurface.status != Result.Ok) {
 				NativeKit.nk_window_destroy(window);
 				NativeKit.nk_shutdown();
@@ -215,7 +215,7 @@ class ShowcaseDesktop {
 				}
 				explorer.attachSurface(frameSurface);
 				explorer.attachWindow(window);
-				explorerInput = explorer.attachInput(activePump, new Handle(window.rawValue()));
+				explorerInput = explorer.attachInput(activePump, new Handle(window.rawValue));
 				for (option in startOptions)
 					if (!explorer.applyStartOption(option))
 						return 2;
@@ -259,17 +259,17 @@ class ShowcaseDesktop {
 				if (chromeDemo != null)
 					chromeDemo.handleEvent(value);
 				switch (value) {
-					case WindowClose(source) if (source.rawValue() == window.rawValue()):
+					case WindowClose(source) if (source.rawValue == window.rawValue):
 						running = false;
 						frameState.running = false;
-					case WindowResize(source, width, height) if (source.rawValue() == window.rawValue()):
+					case WindowResize(source, width, height) if (source.rawValue == window.rawValue):
 						if (NativeKit.nk_surface_set_bounds(surface, 0, 0, width, height) != Result.Ok)
 							throw "surface resize failed";
 						frameState.logicalWidth = width;
 						frameState.logicalHeight = height;
-					case WindowScaleChanged(source, newScale) if (source.rawValue() == window.rawValue()):
+					case WindowScaleChanged(source, newScale) if (source.rawValue == window.rawValue):
 						frameState.scale = newScale;
-					case SurfaceReady(source) if (source.rawValue() == surface.rawValue()):
+					case SurfaceReady(source) if (source.rawValue == surface.rawValue):
 						frameState.ready = true;
 						var size = NativeKit.nk_surface_get_framebuffer_size(surface);
 						if (size.status != Result.Ok)
@@ -334,7 +334,7 @@ class ShowcaseDesktop {
 							}
 						}
 					case SurfaceResize(source, width, height, newFramebufferWidth, newFramebufferHeight)
-						if (source.rawValue() == surface.rawValue()):
+						if (source.rawValue == surface.rawValue):
 						frameState.logicalWidth = width;
 						frameState.logicalHeight = height;
 						frameState.framebufferWidth = newFramebufferWidth;
@@ -345,15 +345,15 @@ class ShowcaseDesktop {
 							explorer.setViewport(frameState.logicalWidth, frameState.logicalHeight,
 								frameState.framebufferWidth, frameState.framebufferHeight,
 								frameState.scale);
-					case SurfaceLost(source) if (source.rawValue() == surface.rawValue()):
+					case SurfaceLost(source) if (source.rawValue == surface.rawValue):
 						frameState.ready = false;
-					case PointerMove(source, x, y) if (source.rawValue() == window.rawValue()):
+					case PointerMove(source, x, y) if (source.rawValue == window.rawValue):
 						if (frameState.graphicsMode && graphics != null)
 							graphics.updatePointer(x, y);
-					case PointerButton(source, _, action, _, x, y) if (source.rawValue() == window.rawValue()):
+					case PointerButton(source, _, action, _, x, y) if (source.rawValue == window.rawValue):
 						if (frameState.graphicsMode && graphics != null)
 							graphics.pointerButton(x, y, action == InputAction.Press);
-					case Key(source, key, _, action, _) if (source.rawValue() == window.rawValue()
+					case Key(source, key, _, action, _) if (source.rawValue == window.rawValue
 						&& action == InputAction.Press && key == Key.Escape):
 						if (frameState.graphicsMode && explorer != null) {
 							frameState.graphicsMode = false;

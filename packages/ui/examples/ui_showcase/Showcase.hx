@@ -366,7 +366,7 @@ class Showcase implements Disposable {
 		return caretPosition.affinity;
 
 	public function caretDirection():Int
-		return multilingual.caret(caretPosition).direction.rawValue();
+		return multilingual.caret(caretPosition).direction.rawValue;
 
 	function submitLayoutFrame(logicalWidth:Float, logicalHeight:Float):Void {
 		layoutRoot.style.width = LayoutAxis.fixed(logicalWidth);

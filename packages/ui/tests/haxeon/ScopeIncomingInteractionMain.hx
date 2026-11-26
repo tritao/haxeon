@@ -113,7 +113,7 @@ import haxeon.ui.style.StyleState;
 		ui.stateStore.dispose();
 		context.dispose();
 		if (!reached || !session.matched) throw "Incoming cached scope missed the pending interaction: flag="
-			+ flag.rawValue() + " enter=" + enter + " nested=" + nested;
+			+ flag.rawValue + " enter=" + enter + " nested=" + nested;
 		if (session.revision < 20) throw "Incoming cached node reset the submitted revision: " + session.revision;
 		if (InteractionLeaf.builds != before + 1) throw "Incoming interaction rebuilt its body more than once";
 	}

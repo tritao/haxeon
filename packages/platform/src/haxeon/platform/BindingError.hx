@@ -9,7 +9,7 @@ class BindingError extends PlatformError {
 
 	/** An error of `kind` in `operation`. */
 	public function new(kind:BindingErrorKind, operation:String, message:String) {
-		super("haxeon-bindings", kind.rawValue(), operation, message);
+		super("haxeon-bindings", kind.rawValue, operation, message);
 		this.kind = kind;
 	}
 

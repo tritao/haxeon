@@ -34,12 +34,12 @@ function main():Int {
 	var value = new NativeBoundaryChoices(), values = [value], copy = values[0];
 	values[0].choice1 = LineCap.Round;
 	if (copy.choice1 != LineCap.Butt || value != copy || values[0] == copy) return 2;
-	if (CompositeMode.SourceOver.rawValue() != 1) return 3;
-	if (LineCap.Square.rawValue() != 2) return 4;
-	if (LineJoin.Miter.rawValue() != 4) return 5;
-	if (ImageFormat.Rgba8.rawValue() != 2) return 6;
-	if (ImageFilter.Nearest.rawValue() != 2) return 7;
-	if (AccessibilityRole.Alert.rawValue() != 35 || MaskKind.Image.rawValue() != 5) return 8;
+	if (CompositeMode.SourceOver.rawValue != 1) return 3;
+	if (LineCap.Square.rawValue != 2) return 4;
+	if (LineJoin.Miter.rawValue != 4) return 5;
+	if (ImageFormat.Rgba8.rawValue != 2) return 6;
+	if (ImageFilter.Nearest.rawValue != 2) return 7;
+	if (AccessibilityRole.Alert.rawValue != 35 || MaskKind.Image.rawValue != 5) return 8;
 	var nativeEvent = new nativekit.ffi.NativeKitTypes.Event();
 	nativeEvent.set_result(nativekit.ffi.NativeKitTypes.Result.TransportWouldBlock);
 	if (nativeEvent.get_result() != nativekit.ffi.NativeKitTypes.Result.TransportWouldBlock) return 9;

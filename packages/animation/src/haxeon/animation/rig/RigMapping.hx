@@ -13,7 +13,7 @@ class RigMapping {
 	final alternatives:Map<String, Array<String>> = new Map();
 
 	/**
-	 * A mapping named `name` from standard bones, keyed by their codes (`HumanBone.rawValue()`), to the asset's joint
+	 * A mapping named `name` from standard bones, keyed by their codes (`HumanBone.rawValue`), to the asset's joint
 	 * names. Throws when a key names no bone.
 	 */
 	public function new(name:String, joints:Map<String, String>) {
@@ -26,17 +26,17 @@ class RigMapping {
 
 	/** The asset joint names that may provide a standard bone, preferred first. */
 	public function jointNames(bone:HumanBone):Array<String> {
-		var primary = joints.get(bone.rawValue());
+		var primary = joints.get(bone.rawValue);
 		var names:Array<String> = primary == null ? [] : [primary];
-		var others = alternatives.get(bone.rawValue());
+		var others = alternatives.get(bone.rawValue);
 		return others == null ? names : names.concat(others);
 	}
 
 	/** Adds a fallback joint name for a bone, tried after the ones already given. */
 	public function alternative(bone:HumanBone, joint:String):RigMapping {
-		var others = alternatives.get(bone.rawValue());
+		var others = alternatives.get(bone.rawValue);
 		if (others == null)
-			alternatives.set(bone.rawValue(), [joint]);
+			alternatives.set(bone.rawValue, [joint]);
 		else
 			others.push(joint);
 		return this;
@@ -45,10 +45,10 @@ class RigMapping {
 	/** Quaternius characters, including the Ultimate Modular and Universal Animation rigs. */
 	public static function quaternius():RigMapping {
 		var joints:Map<String, String> = [
-			HumanBone.Pelvis.rawValue() => "Hips", HumanBone.Spine.rawValue() => "Abdomen",
-			HumanBone.Spine2.rawValue() => "Torso",
-			HumanBone.Chest.rawValue() => "Chest", HumanBone.Neck.rawValue() => "Neck",
-			HumanBone.Head.rawValue() => "Head"
+			HumanBone.Pelvis.rawValue => "Hips", HumanBone.Spine.rawValue => "Abdomen",
+			HumanBone.Spine2.rawValue => "Torso",
+			HumanBone.Chest.rawValue => "Chest", HumanBone.Neck.rawValue => "Neck",
+			HumanBone.Head.rawValue => "Head"
 		];
 		for (side in ["L", "R"]) {
 			joints.set('shoulder.$side', 'Shoulder.$side');
@@ -76,10 +76,10 @@ class RigMapping {
 	/** Quaternius's Universal Animation Library character, whose joints are Blender "DEF-" deformation bones. */
 	public static function universal():RigMapping {
 		var joints:Map<String, String> = [
-			HumanBone.Pelvis.rawValue() => "DEF-hips", HumanBone.Spine.rawValue() => "DEF-spine.001",
-			HumanBone.Spine2.rawValue() => "DEF-spine.002",
-			HumanBone.Chest.rawValue() => "DEF-spine.003", HumanBone.Neck.rawValue() => "DEF-neck",
-			HumanBone.Head.rawValue() => "DEF-head"
+			HumanBone.Pelvis.rawValue => "DEF-hips", HumanBone.Spine.rawValue => "DEF-spine.001",
+			HumanBone.Spine2.rawValue => "DEF-spine.002",
+			HumanBone.Chest.rawValue => "DEF-spine.003", HumanBone.Neck.rawValue => "DEF-neck",
+			HumanBone.Head.rawValue => "DEF-head"
 		];
 		for (side in ["L", "R"]) {
 			joints.set('shoulder.$side', 'DEF-shoulder.$side');
@@ -100,10 +100,10 @@ class RigMapping {
 	/** Mixamo exports, with or without the "mixamorig:" namespace. */
 	public static function mixamo():RigMapping {
 		var joints:Map<String, String> = [
-			HumanBone.Pelvis.rawValue() => "Hips", HumanBone.Spine.rawValue() => "Spine",
-			HumanBone.Spine2.rawValue() => "Spine1",
-			HumanBone.Chest.rawValue() => "Spine2", HumanBone.Neck.rawValue() => "Neck",
-			HumanBone.Head.rawValue() => "Head"
+			HumanBone.Pelvis.rawValue => "Hips", HumanBone.Spine.rawValue => "Spine",
+			HumanBone.Spine2.rawValue => "Spine1",
+			HumanBone.Chest.rawValue => "Spine2", HumanBone.Neck.rawValue => "Neck",
+			HumanBone.Head.rawValue => "Head"
 		];
 		for (pair in [["L", "Left"], ["R", "Right"]]) {
 			var side = pair[0], prefix = pair[1];

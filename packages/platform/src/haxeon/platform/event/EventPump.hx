@@ -60,7 +60,7 @@ class EventPump {
 		ensureLive();
 		if (!source.isValid() || listener == null)
 			throw BindingError.invalidArgument("EventPump.listenSource", "A live source and listener are required");
-		var id = source.rawValue();
+		var id = source.rawValue;
 		var known = sourceListeners.get(id);
 		if (known == null) {
 			known = [];
@@ -121,7 +121,7 @@ class EventPump {
 			case _: false;
 		};
 		if (source != null) {
-			var routes = sourceListeners.get(source.rawValue());
+			var routes = sourceListeners.get(source.rawValue);
 			if (routes != null) {
 				for (route in routes.copy()) {
 					if (!route.active || disposed)

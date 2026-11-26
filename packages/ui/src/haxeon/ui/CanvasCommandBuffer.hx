@@ -46,7 +46,7 @@ internal class CanvasCommandBuffer {
 
 	public function composite(mode:CompositeMode):Void {
 		header(NativeKitUI.CommandOpcode.SetCompositeMode, 12);
-		word(mode.rawValue());
+		word(mode.rawValue);
 	}
 
 	public function paint(value:Paint):Void
@@ -128,7 +128,7 @@ internal class CanvasCommandBuffer {
 		header(NativeKitUI.CommandOpcode.BeginLayer, commandSize,
 			NativeKitUIConstants.NKUI_LAYER_COMMAND_VERSION);
 		float(opacity);
-		word(mode.rawValue());
+		word(mode.rawValue);
 		if (bounds == null) {
 			float(0.0);
 			float(0.0);
@@ -190,7 +190,7 @@ internal class CanvasCommandBuffer {
 			case EffectKind.Brightness | EffectKind.Contrast | EffectKind.Saturate | EffectKind.HueRotate:
 				throw "Effect chain normalization left an unsupported operation";
 		}
-		word(kind.rawValue());
+		word(kind.rawValue);
 		for (component in matrix)
 			float(component);
 		if (kind == NativeKitUI.UiEffectKind.Custom) {
@@ -220,14 +220,14 @@ internal class CanvasCommandBuffer {
 
 	function writeMask(value:Mask):Void {
 		if (value == null) {
-			word(NativeKitUI.UiMaskKind.None.rawValue());
+			word(NativeKitUI.UiMaskKind.None.rawValue);
 			word(0);
 			for (index in 0...8)
 				float(0.0);
 			return;
 		}
-		word(value.kind.rawValue());
-		word(value.image == null ? 0 : value.image.nativeHandle().rawValue());
+		word(value.kind.rawValue);
+		word(value.image == null ? 0 : value.image.nativeHandle().rawValue);
 		for (index in 0...8) {
 			var parameter = 0.0;
 			switch value.kind {
@@ -255,10 +255,10 @@ internal class CanvasCommandBuffer {
 	public function strokePath(path:Path, width:Float, cap:LineCap = LineCap.Butt, join:LineJoin = LineJoin.Miter,
 			miterLimit:Float = 4.0):Void {
 		header(NativeKitUI.CommandOpcode.StrokePath, 28);
-		word(path.nativeHandle().rawValue());
+		word(path.nativeHandle().rawValue);
 		float(width);
-		word(cap.rawValue());
-		word(join.rawValue());
+		word(cap.rawValue);
+		word(join.rawValue);
 		float(miterLimit);
 	}
 
@@ -275,13 +275,13 @@ internal class CanvasCommandBuffer {
 
 	function resource(opcode:NativeKitUI.CommandOpcode, value:NativeKitUIResource):Void {
 		header(opcode, 12);
-		word(value.nativeHandle().rawValue());
+		word(value.nativeHandle().rawValue);
 	}
 
 	function drawRect(opcode:NativeKitUI.CommandOpcode, value:NativeKitUIResource, x:Float, y:Float, width:Float,
 			height:Float):Void {
 		header(opcode, 28);
-		word(value.nativeHandle().rawValue());
+		word(value.nativeHandle().rawValue);
 		float(x);
 		float(y);
 		float(width);
@@ -291,7 +291,7 @@ internal class CanvasCommandBuffer {
 	function header(opcode:NativeKitUI.CommandOpcode, size:Int,
 			version:Int = NativeKitUIConstants.NKUI_COMMAND_VERSION):Void {
 		require(size);
-		var rawOpcode = opcode.rawValue();
+		var rawOpcode = opcode.rawValue;
 		bytes.set(length, rawOpcode & 255);
 		bytes.set(length + 1, (rawOpcode >> 8) & 255);
 		bytes.set(length + 2, version);

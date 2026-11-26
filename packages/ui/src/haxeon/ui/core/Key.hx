@@ -11,7 +11,10 @@ abstract Key(String) {
 	}
 
 	/** The key as text. */
-	public inline function rawValue():String return this;
+	public var rawValue(get, never):String;
+
+	inline function get_rawValue():String
+		return this;
 }
 
 /** Length-prefixed key path with deterministic UTF-8 hashing. */
@@ -40,11 +43,11 @@ class KeyScope {
 			children = new Map();
 			childScopes = [];
 		}
-		var cached = children.get(key.rawValue());
+		var cached = children.get(key.rawValue);
 		if (cached != null) return cached;
-		var result = new KeyScope(path + key.rawValue().length + ":" + key.rawValue() + "|", root);
-		result.childKey = key.rawValue();
-		children.set(key.rawValue(), result);
+		var result = new KeyScope(path + key.rawValue.length + ":" + key.rawValue + "|", root);
+		result.childKey = key.rawValue;
+		children.set(key.rawValue, result);
 		childScopes.push(result);
 		root.entries++;
 		return result;

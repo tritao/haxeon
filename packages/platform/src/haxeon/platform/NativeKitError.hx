@@ -10,7 +10,7 @@ class NativeKitError extends PlatformError {
 
 	/** An error for `result` in `operation`. */
 	public function new(result:Result, operation:String, diagnostic:Null<String>) {
-		super("nativekit", result.rawValue(), operation, diagnostic);
+		super("nativekit", result.rawValue, operation, diagnostic);
 		this.result = result;
 	}
 }

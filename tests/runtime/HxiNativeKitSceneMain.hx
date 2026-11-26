@@ -168,7 +168,7 @@ class Main {
 			surface = window.createSurface(GpuSurfaceOptions.forGpu(64, 64)),
 			ready = false,
 			subscription = realRuntime.events.listen(function(value) switch value {
-				case SurfaceReady(source) if (source.rawValue() == surface.nativeHandle().rawValue()):
+				case SurfaceReady(source) if (source.rawValue == surface.nativeHandle().rawValue):
 					ready = true;
 				case _:
 			});

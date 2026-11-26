@@ -59,7 +59,7 @@ class Radio implements ScopeView {
 			: onSelect;
 	}
 
-	public function scopeKey():String return key.rawValue();
+	public function scopeKey():String return key.rawValue;
 
 	public function inputsEqual(previous:ScopeView):Bool {
 		if (!Std.isOfType(previous, Radio)) return false;
@@ -78,7 +78,7 @@ class Radio implements ScopeView {
 		var flags = context.interactionStates.get(nodeId);
 		flags = (selected ? flags.insert(StyleState.Selected) : flags.remove(StyleState.Selected));
 		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
-		var computed = context.styleResolver.resolve(new StyleTarget("radio", key.rawValue(), key.rawValue(), null,
+		var computed = context.styleResolver.resolve(new StyleTarget("radio", key.rawValue, key.rawValue, null,
 			["radio"], flags),
 			context.inheritedStyle,
 			context.theme.styles,
@@ -86,7 +86,7 @@ class Radio implements ScopeView {
 			style,
 			context.environment);
 		var node = context.createNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
-		node.setStyleIdentity("radio", key.rawValue(), key.rawValue(), null, ["radio"]);
+		node.setStyleIdentity("radio", key.rawValue, key.rawValue, null, ["radio"]);
 		node.states = flags;
 		// The indicator and its dot take the row's hover and press.
 		node.buildsFromHover = true;
@@ -107,7 +107,7 @@ class Radio implements ScopeView {
 		indicatorStyle.childAlignY = LayoutAlignmentY.Center;
 		indicatorStyle.childDistribution = LayoutDistribution.Center;
 		var indicatorComputed = context.styleResolver.resolve(new StyleTarget("radio-indicator",
-			key.rawValue() + ":indicator", null, null, ["radio"], flags),
+			key.rawValue + ":indicator", null, null, ["radio"], flags),
 			null,
 			context.theme.styles,
 			context.styleSheet,
@@ -116,7 +116,7 @@ class Radio implements ScopeView {
 		var indicator = context.createNode(context.rootId("indicator"),
 			LayoutVisualKind.Box,
 			indicatorComputed.toLayoutStyle());
-		indicator.setStyleIdentity("radio-indicator", key.rawValue() + ":indicator", null, null, ["radio"]);
+		indicator.setStyleIdentity("radio-indicator", key.rawValue + ":indicator", null, null, ["radio"]);
 		indicator.states = flags;
 		indicator.computedStyle = indicatorComputed;
 		var dotStyle = new LayoutStyle();
@@ -127,7 +127,7 @@ class Radio implements ScopeView {
 		dotStyle.childAlignX = LayoutAlignmentX.Center;
 		dotStyle.childAlignY = LayoutAlignmentY.Center;
 		dotStyle.childDistribution = LayoutDistribution.Center;
-		var dotComputed = context.styleResolver.resolve(new StyleTarget("radio-dot", key.rawValue() + ":dot", null,
+		var dotComputed = context.styleResolver.resolve(new StyleTarget("radio-dot", key.rawValue + ":dot", null,
 			null, ["radio"], flags),
 			null,
 			context.theme.styles,
@@ -135,7 +135,7 @@ class Radio implements ScopeView {
 			dotStyle,
 			context.environment);
 		var dot = context.createNode(context.rootId("dot"), LayoutVisualKind.Box, dotComputed.toLayoutStyle());
-		dot.setStyleIdentity("radio-dot", key.rawValue() + ":dot", null, null, ["radio"]);
+		dot.setStyleIdentity("radio-dot", key.rawValue + ":dot", null, null, ["radio"]);
 		dot.states = flags;
 		dot.computedStyle = dotComputed;
 		var markStyle = new LayoutStyle();
@@ -143,7 +143,7 @@ class Radio implements ScopeView {
 		markStyle.height = LayoutAxis.fixed(6.0);
 		markStyle.radiusTopLeft = markStyle.radiusTopRight = 3.0;
 		markStyle.radiusBottomLeft = markStyle.radiusBottomRight = 3.0;
-		var markComputed = context.styleResolver.resolve(new StyleTarget("radio-mark", key.rawValue() + ":mark", null,
+		var markComputed = context.styleResolver.resolve(new StyleTarget("radio-mark", key.rawValue + ":mark", null,
 			null, ["radio"], flags),
 			null,
 			context.theme.styles,
@@ -151,7 +151,7 @@ class Radio implements ScopeView {
 			markStyle,
 			context.environment);
 		var mark = context.createNode(context.rootId("mark"), LayoutVisualKind.Box, markComputed.toLayoutStyle());
-		mark.setStyleIdentity("radio-mark", key.rawValue() + ":mark", null, null, ["radio"]);
+		mark.setStyleIdentity("radio-mark", key.rawValue + ":mark", null, null, ["radio"]);
 		mark.states = flags;
 		mark.computedStyle = markComputed;
 		dot.add(mark);

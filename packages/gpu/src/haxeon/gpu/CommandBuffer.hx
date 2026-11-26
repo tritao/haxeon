@@ -51,7 +51,7 @@ class CommandBuffer {
 	public function applyPipeline(pipeline:Pipeline):Void {
 		ensureRenderer(pipeline.rendererOwner());
 		header(1, 12);
-		word(pipeline.nativeHandle().rawValue());
+		word(pipeline.nativeHandle().rawValue);
 	}
 
 	/** Records binding `buffer` as vertex buffer `slot`, from byte `offset`. */
@@ -62,7 +62,7 @@ class CommandBuffer {
 				"GPU vertex-buffer slot and offset must be non-negative");
 		header(2, 20);
 		word(slot);
-		word(buffer.nativeHandle().rawValue());
+		word(buffer.nativeHandle().rawValue);
 		word(offset);
 	}
 
@@ -73,7 +73,7 @@ class CommandBuffer {
 			throw BindingError.invalidArgument("CommandBuffer.applyIndexBuffer",
 				"GPU index-buffer offset must be non-negative");
 		header(3, 16);
-		word(buffer.nativeHandle().rawValue());
+		word(buffer.nativeHandle().rawValue);
 		word(offset);
 	}
 
@@ -84,7 +84,7 @@ class CommandBuffer {
 			throw BindingError.invalidArgument("CommandBuffer.applyImage", "GPU image slot must be non-negative");
 		header(4, 16);
 		word(slot);
-		word(image.nativeHandle().rawValue());
+		word(image.nativeHandle().rawValue);
 	}
 
 	/** Records binding `sampler` to sampler `slot`. */
@@ -94,7 +94,7 @@ class CommandBuffer {
 			throw BindingError.invalidArgument("CommandBuffer.applySampler", "GPU sampler slot must be non-negative");
 		header(5, 16);
 		word(slot);
-		word(sampler.nativeHandle().rawValue());
+		word(sampler.nativeHandle().rawValue);
 	}
 
 	/** Records binding `buffer` to storage buffer `slot`. */
@@ -105,7 +105,7 @@ class CommandBuffer {
 				"GPU storage-buffer slot must be non-negative");
 		header(11, 16);
 		word(slot);
-		word(buffer.nativeHandle().rawValue());
+		word(buffer.nativeHandle().rawValue);
 	}
 
 	/** Records binding `image` to storage image `slot`. */
@@ -116,7 +116,7 @@ class CommandBuffer {
 				"GPU storage-image slot must be non-negative");
 		header(12, 16);
 		word(slot);
-		word(image.nativeHandle().rawValue());
+		word(image.nativeHandle().rawValue);
 	}
 
 	/** Records setting uniform block `slot` to `data`. */
@@ -200,9 +200,9 @@ class CommandBuffer {
 		if (size <= 0 || sourceOffset < 0 || destinationOffset < 0)
 			throw BindingError.invalidArgument("CommandBuffer.copyBuffer", "GPU buffer-copy arguments are invalid");
 		header(14, 28);
-		word(source.nativeHandle().rawValue());
+		word(source.nativeHandle().rawValue);
 		word(sourceOffset);
-		word(destination.nativeHandle().rawValue());
+		word(destination.nativeHandle().rawValue);
 		word(destinationOffset);
 		word(size);
 	}
@@ -218,12 +218,12 @@ class CommandBuffer {
 			|| sourceMip < 0 || sourceLayer < 0 || destinationMip < 0 || destinationLayer < 0)
 			throw BindingError.invalidArgument("CommandBuffer.copyImage", "GPU image-copy arguments are invalid");
 		header(15, 56);
-		word(source.nativeHandle().rawValue());
+		word(source.nativeHandle().rawValue);
 		word(sourceMip);
 		word(sourceLayer);
 		word(sourceX);
 		word(sourceY);
-		word(destination.nativeHandle().rawValue());
+		word(destination.nativeHandle().rawValue);
 		word(destinationMip);
 		word(destinationLayer);
 		word(destinationX);
@@ -243,10 +243,10 @@ class CommandBuffer {
 			throw BindingError.invalidArgument("CommandBuffer.copyBufferToImage",
 				"GPU buffer-to-image arguments are invalid");
 		header(16, 48);
-		word(source.nativeHandle().rawValue());
+		word(source.nativeHandle().rawValue);
 		word(bufferOffset);
 		word(rowPitch);
-		word(destination.nativeHandle().rawValue());
+		word(destination.nativeHandle().rawValue);
 		word(mipLevel);
 		word(layer);
 		word(x);
@@ -266,10 +266,10 @@ class CommandBuffer {
 			throw BindingError.invalidArgument("CommandBuffer.copyImageToBuffer",
 				"GPU image-to-buffer arguments are invalid");
 		header(17, 48);
-		word(destination.nativeHandle().rawValue());
+		word(destination.nativeHandle().rawValue);
 		word(bufferOffset);
 		word(rowPitch);
-		word(source.nativeHandle().rawValue());
+		word(source.nativeHandle().rawValue);
 		word(mipLevel);
 		word(layer);
 		word(x);

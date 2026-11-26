@@ -24,7 +24,7 @@ class KeyValueMain {
 		var right = root.child(new Key("a")).child(new Key("bc")).widgetId("leaf");
 		if (left.equals(right)) throw "Key path boundaries collided";
 		var unicode = "a:b|λ/😀";
-		if (new Key(unicode).rawValue() != unicode) throw "Key contents changed";
+		if (new Key(unicode).rawValue != unicode) throw "Key contents changed";
 		for (invalid in [null, ""]) {
 			var rejected = false;
 			try new Key(invalid) catch (error:Dynamic) {

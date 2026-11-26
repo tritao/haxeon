@@ -47,7 +47,7 @@ class Window implements Disposable {
 		ensureCanCreate();
 		if (handler == null)
 			throw BindingError.invalidArgument("Window.onKey", "Key handler is required");
-		return events.listenSource(new Handle(value.rawValue()), function(event) return switch event {
+		return events.listenSource(new Handle(value.rawValue), function(event) return switch event {
 			case Key(_, key, scancode, action, modifiers): handler(key, scancode, action, modifiers);
 			case _: false;
 		}).ownedBy(children);
@@ -58,7 +58,7 @@ class Window implements Disposable {
 		ensureCanCreate();
 		if (handler == null)
 			throw BindingError.invalidArgument("Window.onClose", "Close handler is required");
-		return events.listenSource(new Handle(value.rawValue()), function(event) {
+		return events.listenSource(new Handle(value.rawValue), function(event) {
 			switch event {
 				case WindowClose(_): handler();
 				case _:
@@ -72,7 +72,7 @@ class Window implements Disposable {
 		ensureCanCreate();
 		if (handler == null)
 			throw BindingError.invalidArgument("Window.onResize", "Resize handler is required");
-		return events.listenSource(new Handle(value.rawValue()), function(event) {
+		return events.listenSource(new Handle(value.rawValue), function(event) {
 			switch event {
 				case WindowResize(_, width, height): handler(width, height);
 				case _:
@@ -98,7 +98,7 @@ class Window implements Disposable {
 	/** Adds a surface from a generated options record. */
 	public function createSurfaceNative(options:NativeSurfaceOptions):Surface {
 		ensureCanCreate();
-		var surface = Surface.adopt(NativeKit.nk_surface_create_checked(new Handle(value.rawValue()), options), events);
+		var surface = Surface.adopt(NativeKit.nk_surface_create_checked(new Handle(value.rawValue), options), events);
 		surface.attachOwner(children.register(surface.dispose));
 		return surface;
 	}
@@ -110,7 +110,7 @@ class Window implements Disposable {
 	/** Adds a web view from a generated options record. */
 	public function createWebViewNative(options:NativeWebViewOptions):WebView {
 		ensureCanCreate();
-		var webview = new WebView(NativeKit.nk_webview_create_checked(new Handle(value.rawValue()), options));
+		var webview = new WebView(NativeKit.nk_webview_create_checked(new Handle(value.rawValue), options));
 		webview.attachOwner(children.register(webview.dispose));
 		return webview;
 	}

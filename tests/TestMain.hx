@@ -2027,7 +2027,7 @@ class TestMain {
 			'Per-case constant "E.n" cannot be assigned', true);
 		Sys.println("PASS: per-case constants are checked at the declaration and read only");
 		// A raw-value enum's cases are payload-free, with distinct constant codes of its Int or String raw type, and it
-		// converts to and from the code only through rawValue() and fromRaw().
+		// converts to and from the code only through rawValue and fromRaw().
 		var rawErrors = [
 			['enum E:Int { A = 1; B = 1; }', 'Enum case E.B has the raw value of E.A'],
 			['enum E:Int { A(x:Int); }', 'Enum case A has a raw value, so it takes no payload'],
@@ -2040,7 +2040,19 @@ class TestMain {
 				'Enum switch is missing cases: B'
 			],
 			['enum E:Int { A = 1; } function f():Int return E.A;', 'Type mismatch for return: expected Int, got E'],
-			['enum E:Int { A = 1; } function f():E return 1;', 'Type mismatch for return: expected E, got Int']
+			['enum E:Int { A = 1; } function f():E return 1;', 'Type mismatch for return: expected E, got Int'],
+			[
+				'enum E:Int { A = 1; public function rawValue():Int return 0; }',
+				'Enum "E" synthesizes rawValue; it cannot declare one'
+			],
+			[
+				'enum E:Int { A = 1; public static function fromRaw(raw:Int):Null<E> return A; }',
+				'Enum "E" synthesizes fromRaw; it cannot declare one'
+			],
+			[
+				'enum E:Int { A = 1; } function f():Int return E.A.rawValue();',
+				'rawValue is a property: read it as `value.rawValue`'
+			]
 		];
 		for (entry in rawErrors)
 			expectCompileError('${entry[0]} function main():Int return 0;', entry[1], true);

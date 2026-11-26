@@ -311,7 +311,7 @@ extern fn nkui_resource_create() -> nkui_resource @owned;
 
 Handles remain named and type-distinct at the Haxe boundary while retaining a
 four-byte value ABI. Their generated Haxe abstracts are copyable, comparable,
-hashable, and provide `invalid()`, `isValid()`, and `rawValue()` helpers; the
+hashable, and provide `invalid()`, `isValid()`, and `rawValue` helpers; the
 backing value is not exposed as a writable struct field. A zero value is the
 invalid handle convention. A handle's optional `@destroy` names an explicit
 by-value release function that accepts that handle and returns `void` or an
@@ -319,7 +319,7 @@ integer/enum status; the importer never infers it from a function name. A
 function result or `@out` slot only becomes an owned Haxe value when it also
 has an explicit bare `@owned` annotation. Those projections return a
 generated closeable owner with idempotent `close()`, `isClosed()`, `borrow()`,
-and deliberate `rawValue()` access. Unannotated results and output slots remain
+and deliberate `rawValue` access. Unannotated results and output slots remain
 non-owning handles. This preserves subsystem-specific C types without
 collapsing every handle into one universal `nk_handle` parameter type.
 

@@ -58,14 +58,14 @@ class Dialog implements View {
 			rootStyle.overlay = true;
 			var rootId = context.rootId("dialog");
 			var rootComputed = context.resolveStyle(new StyleTarget("dialog",
-				key.rawValue(),
-				key.rawValue(),
+				key.rawValue,
+				key.rawValue,
 				null,
 				["dialog"],
 				context.interactionStates.get(rootId)),
 				rootStyle);
 			var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-			root.setStyleIdentity("dialog", key.rawValue(), key.rawValue(), null, ["dialog"]);
+			root.setStyleIdentity("dialog", key.rawValue, key.rawValue, null, ["dialog"]);
 			root.states = context.interactionStates.get(rootId);
 			root.computedStyle = rootComputed;
 			root.focusTrap = true;

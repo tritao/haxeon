@@ -39,7 +39,7 @@ class TypeParameterMembers {
 
 	/**
 	 * The signature of a member the compiler synthesizes for the enum abstracts a capability bound of `receiver`'s type parameter
-	 * stands for (`T:Flags`): `value.rawValue()`, `flags.insert(other)`. Each specialization calls the
+	 * stands for (`T:Flags`): `value.rawValue`, `flags.insert(other)`. Each specialization calls the
 	 * abstract's own; typed with the parameter as itself, the call is checked against this signature, the parameter as the
 	 * abstract, and a raw value, Int or String by the abstract, is Dynamic. Null for any other member or receiver.
 	 */

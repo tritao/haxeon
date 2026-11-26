@@ -25,7 +25,7 @@ class NativeKitLifetimeTests {
 		if (!BindingErrorTests.run()) return false;
 		var requests = events.requests;
 		var source = new Handle(900001);
-		var task = Task.adopt(new TaskHandle(source.rawValue()));
+		var task = Task.adopt(new TaskHandle(source.rawValue));
 		var value = 0;
 		var future = requests.trackTask(task, function(bytes) return bytes.length);
 		future.onComplete(function(outcome) switch outcome {
@@ -79,7 +79,7 @@ class NativeKitLifetimeTests {
 		if (requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(1)))) return false;
 
 		// Request IDs and task handles occupy different namespaces in the same registry.
-		var id = haxe.Int64.ofInt(source.rawValue());
+		var id = haxe.Int64.ofInt(source.rawValue);
 		var rawValue = 0;
 		var raw = requests.trackNative(id, function(event):Outcome<Int> switch event {
 			case ClipboardText(_, result, text): Success(text.length);

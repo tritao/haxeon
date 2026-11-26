@@ -6,11 +6,11 @@ import haxeon.ui.LayoutTransaction;
 function main():Int {
 	var sizes = [LayoutSizing.Fit, LayoutSizing.Grow, LayoutSizing.Fixed, LayoutSizing.Percent];
 	for (index in 0...sizes.length) {
-		if (sizes[index].rawValue() != index) return 1;
+		if (sizes[index].rawValue != index) return 1;
 	}
 	var kinds = [LayoutVisualKind.Box, LayoutVisualKind.Text, LayoutVisualKind.Image, LayoutVisualKind.Custom];
 	for (index in 0...kinds.length) {
-		if (kinds[index].rawValue() != index + 1) return 3;
+		if (kinds[index].rawValue != index + 1) return 3;
 	}
 	var style = new LayoutStyle();
 	style.width = LayoutAxis.fixed(42);

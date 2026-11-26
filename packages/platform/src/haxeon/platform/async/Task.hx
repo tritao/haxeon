@@ -16,7 +16,7 @@ class Task implements Disposable {
 
 	/** Adopts a handle returned by native code or a Haxeon native trampoline. */
 	public static function adopt(value:TaskHandle):Task {
-		if (value == null || value.rawValue() == 0) throw BindingError.invalidArgument("Task.adopt",
+		if (value == null || value.rawValue == 0) throw BindingError.invalidArgument("Task.adopt",
 			"Task cannot adopt an invalid handle");
 		return new Task(value);
 	}

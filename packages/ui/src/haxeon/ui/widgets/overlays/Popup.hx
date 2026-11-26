@@ -106,10 +106,10 @@ class Popup implements View {
 			rootStyle.zIndex = layerZIndex;
 			var rootId = context.rootId("popup-layer");
 			var rootComputed = context.resolveStyle(new StyleTarget("popup",
-				key.rawValue(), key.rawValue(), null, ["popup"], context.interactionStates.get(rootId)),
+				key.rawValue, key.rawValue, null, ["popup"], context.interactionStates.get(rootId)),
 				rootStyle);
 			var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-			root.setStyleIdentity("popup", key.rawValue(), key.rawValue(), null, ["popup"]);
+			root.setStyleIdentity("popup", key.rawValue, key.rawValue, null, ["popup"]);
 			root.states = context.interactionStates.get(rootId);
 			root.computedStyle = rootComputed;
 			root.hitTestSelf = false;
@@ -153,8 +153,8 @@ class Popup implements View {
 			panelStyle.zIndex = layerZIndex + 1;
 			var panelId = context.id("popup-content");
 			var panelComputed = context.resolveStyle(new StyleTarget("popup-content",
-				key.rawValue(),
-				key.rawValue(),
+				key.rawValue,
+				key.rawValue,
 				null,
 				["popup"],
 				context.interactionStates.get(panelId)),
@@ -169,7 +169,7 @@ class Popup implements View {
 				panelComputed.setNumber(StyleProperty.RadiusBottomLeft, 0.0, source);
 			}
 			var panel = context.createNode(panelId, LayoutVisualKind.Box, panelComputed.toLayoutStyle());
-			panel.setStyleIdentity("popup-content", key.rawValue(), key.rawValue(), null, ["popup"]);
+			panel.setStyleIdentity("popup-content", key.rawValue, key.rawValue, null, ["popup"]);
 			panel.states = context.interactionStates.get(panelId);
 			panel.computedStyle = panelComputed;
 			if (menuSurface) {

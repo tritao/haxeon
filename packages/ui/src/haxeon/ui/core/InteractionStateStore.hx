@@ -86,6 +86,6 @@ class InteractionStateStore implements Disposable {
 	public function new(id:Int) this.id = id;
 
 	/** Whether only the hover flag changed. */
-	public inline function hoverOnly():Bool return ((before.rawValue() ^ after.rawValue())
-		& ~StyleState.Hovered.rawValue()) == 0;
+	public inline function hoverOnly():Bool return ((before.rawValue ^ after.rawValue)
+		& ~StyleState.Hovered.rawValue) == 0;
 }

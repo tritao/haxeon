@@ -46,7 +46,7 @@ class NativeInputAdapter {
 		this.context = context;
 		this.source = source;
 		this.accessibilitySource = accessibilitySource == null ? source : accessibilitySource;
-		window = new WindowHandle(source.rawValue());
+		window = new WindowHandle(source.rawValue);
 		cursor = new NativeCursorController(source);
 		attachedEvents = null;
 		eventSubscription = null;
@@ -138,30 +138,30 @@ class NativeInputAdapter {
 			case PointerButton(eventSource, button, action, modifiers, x, y) if (matches(eventSource)):
 				pointerX = x;
 				pointerY = y;
-				snapshotModifiers(UiModifier.fromRaw(modifiers.rawValue()));
+				snapshotModifiers(UiModifier.fromRaw(modifiers.rawValue));
 				if (mouseAsTouch) {
-					if (button.rawValue() != NativeKitTypes.PointerButton.Left.rawValue()) return true;
+					if (button.rawValue != NativeKitTypes.PointerButton.Left.rawValue) return true;
 					var touchData = new UiTouchData(TouchTool.Finger, action == InputAction.Press ? 1.0 : 0.0, 0.0,
 						0.0);
 					if (action == InputAction.Press) {
 						mouseTouchDown = true;
 						context.pointerDown(x / coordinateScale, y / coordinateScale, 0,
-							UiModifier.fromRaw(modifiers.rawValue()),
+							UiModifier.fromRaw(modifiers.rawValue),
 							touchPointerId(0), touchData);
 					} else if (action == InputAction.Release) {
 						mouseTouchDown = false;
 						context.pointerUp(x / coordinateScale, y / coordinateScale, 0,
-							UiModifier.fromRaw(modifiers.rawValue()),
+							UiModifier.fromRaw(modifiers.rawValue),
 							touchPointerId(0), touchData);
 					}
 					return true;
 				}
 				if (action == InputAction.Press)
-					context.pointerDown(x / coordinateScale, y / coordinateScale, button.rawValue(),
-						UiModifier.fromRaw(modifiers.rawValue()));
+					context.pointerDown(x / coordinateScale, y / coordinateScale, button.rawValue,
+						UiModifier.fromRaw(modifiers.rawValue));
 				else if (action == InputAction.Release)
-					context.pointerUp(x / coordinateScale, y / coordinateScale, button.rawValue(),
-						UiModifier.fromRaw(modifiers.rawValue()));
+					context.pointerUp(x / coordinateScale, y / coordinateScale, button.rawValue,
+						UiModifier.fromRaw(modifiers.rawValue));
 				action == InputAction.Press || action == InputAction.Release;
 			case PointerScroll(eventSource, deltaX, deltaY) if (matches(eventSource)):
 				context.scroll(pointerX / coordinateScale, pointerY / coordinateScale, deltaX / coordinateScale,
@@ -214,16 +214,16 @@ class NativeInputAdapter {
 				var data = new UiTouchData(tool, pressure, tiltX, tiltY);
 				if (action == TouchAction.Begin)
 					context.pointerDown(x / coordinateScale, y / coordinateScale, 0,
-						UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
+						UiModifier.fromRaw(modifiers.rawValue), routedId, data);
 				else if (action == TouchAction.Move)
 					context.pointerMove(x / coordinateScale, y / coordinateScale,
-						UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
+						UiModifier.fromRaw(modifiers.rawValue), routedId, data);
 				else if (action == TouchAction.End)
 					context.pointerUp(x / coordinateScale, y / coordinateScale, 0,
-						UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
+						UiModifier.fromRaw(modifiers.rawValue), routedId, data);
 				else if (action == TouchAction.Cancel)
 					context.pointerCancel(routedId, x / coordinateScale, y / coordinateScale,
-						UiModifier.fromRaw(modifiers.rawValue()), data);
+						UiModifier.fromRaw(modifiers.rawValue), data);
 				action == TouchAction.Begin || action == TouchAction.Move || action == TouchAction.End
 					|| action == TouchAction.Cancel;
 			case _:
@@ -235,7 +235,7 @@ class NativeInputAdapter {
 	function snapshotModifiers(modifiers:UiModifier):Void {
 		pointerModifiers = modifiers;
 		for (index in 0...4)
-			if ((modifiers.rawValue() & (1 << index)) == 0)
+			if ((modifiers.rawValue & (1 << index)) == 0)
 				heldModifierKeys &= ~((1 << index) | (1 << (index + 4)));
 	}
 
@@ -244,8 +244,8 @@ class NativeInputAdapter {
 		var kind = keyKind(action);
 		if (kind == null)
 			return false;
-		var keyCode = key.rawValue();
-		var uiModifiers = UiModifier.fromRaw(modifiers.rawValue());
+		var keyCode = key.rawValue;
+		var uiModifiers = UiModifier.fromRaw(modifiers.rawValue);
 		updateKeyModifiers(keyCode, action, uiModifiers);
 		return context.key(kind, key, uiModifiers, scancode);
 	}
@@ -262,7 +262,7 @@ class NativeInputAdapter {
 		if (action == InputAction.Release) heldModifierKeys &= ~held;
 		else heldModifierKeys |= held;
 		var modifier = UiModifier.fromRaw(1 << (index & 3));
-		var pair = modifier.rawValue() | (modifier.rawValue() << 4);
+		var pair = modifier.rawValue | (modifier.rawValue << 4);
 		pointerModifiers = modifiers;
 		if ((heldModifierKeys & pair) != 0) pointerModifiers = pointerModifiers.insert(modifier);
 		else pointerModifiers = pointerModifiers.remove(modifier);
@@ -325,7 +325,7 @@ internal class NativeCursorController {
 	public function new(source:Handle) {
 		if (source == null || !source.isValid())
 			throw "Native cursor control requires a live window handle";
-		window = new WindowHandle(source.rawValue());
+		window = new WindowHandle(source.rawValue);
 		cursors = new Map();
 		capabilityChecked = false;
 		available = false;

@@ -51,13 +51,13 @@ class FlagsMain {
 			+ 'function accepts<T:Flags>(value:T):Int return 42; function main():Int return accepts(1);', "constraint");
 		var inherited = makeCompiler("hl", true);
 		inherited.update("Main.hx",
-			'interface LocalFlags extends Flags {} enum abstract Bits(Int) implements LocalFlags { var A=1; } enum Code:Int { A=42; } function main():Int { return Bits.A.rawValue() + Code.A.rawValue() - 1; }');
+			'interface LocalFlags extends Flags {} enum abstract Bits(Int) implements LocalFlags { var A=1; } enum Code:Int { A=42; } function main():Int { return Bits.A.rawValue + Code.A.rawValue - 1; }');
 		if (new compiler.ir.tools.IrInterpreter(inherited.compile("Main").ir).run("main") != 42)
 			throw "Inherited synthesis conformance was not resolved";
 		var defaults = makeCompiler("hl", true);
 		defaults.update("DefaultBits.hx", 'enum abstract DefaultBits(Int) implements Flags { var A=1; }');
 		defaults.update("Defaults.hx",
-			'import DefaultBits; class Defaults { public function new(value:DefaultBits=DefaultBits.empty()) {} public static function raw(value:DefaultBits=DefaultBits.fromRaw(1)):Int return value.rawValue(); }');
+			'import DefaultBits; class Defaults { public function new(value:DefaultBits=DefaultBits.empty()) {} public static function raw(value:DefaultBits=DefaultBits.fromRaw(1)):Int return value.rawValue; }');
 		defaults.update("Main.hx", 'function main():Int { new Defaults(); return Defaults.raw()+41; }');
 		if (new compiler.ir.tools.IrInterpreter(defaults.compile("Main").ir).run("main") != 42)
 			throw "Flags helpers in default arguments lost their module owner";
@@ -75,7 +75,7 @@ class FlagsMain {
 		var c = makeCompiler("hl", true);
 		c.update("Access.hx", 'enum abstract Access(Int) implements Flags { var A=1; }');
 		c.update("Main.hx",
-			'function main():Int { try { return Access.fromRaw(3).rawValue(); }catch(error:Dynamic){return 0;} }');
+			'function main():Int { try { return Access.fromRaw(3).rawValue; }catch(error:Dynamic){return 0;} }');
 		function result():Int
 			return new compiler.ir.tools.IrInterpreter(c.compile("Main").ir).run("main");
 		if (result() != 0)
@@ -94,7 +94,7 @@ class FlagsMain {
 			'interface native_flags @target("portable-abi64") @library("native_flags") { flags Bits8 : u8 { LOW=1; HIGH=128; } flags Bits16 : u16 { LOW=1; HIGH=32768; } flags Bits32 : u32 { LOW=1; HIGH=0x80000000; } flags Bits64 : u64 { LOW=1; HIGH=1<<63; } }');
 		var source = sys.io.File.getContent("tests/programs/flags.hx"),
 			nativeChecks =
-				'if (native_flags.__hxi_flags_from_native_Bits8(-1).rawValue()!=129 || native_flags.__hxi_flags_from_native_Bits16(-1).rawValue()!=32769 || native_flags.__hxi_flags_from_native_Bits32(-1).rawValue()!=-2147483647 || haxe.Int64.compare(native_flags.__hxi_flags_from_native_Bits64(haxe.Int64.ofInt(-1)),haxe.Int64.make(-2147483648,1))!=0) return -20;';
+				'if (native_flags.__hxi_flags_from_native_Bits8(-1).rawValue!=129 || native_flags.__hxi_flags_from_native_Bits16(-1).rawValue!=32769 || native_flags.__hxi_flags_from_native_Bits32(-1).rawValue!=-2147483647 || haxe.Int64.compare(native_flags.__hxi_flags_from_native_Bits64(haxe.Int64.ofInt(-1)),haxe.Int64.make(-2147483648,1))!=0) return -20;';
 		source = source.replace("var value=Access.fromRaw(index&7);",
 			nativeChecks + "var value=Access.fromRaw(index&7);");
 		source = "import native_flags.*;\n" + source;

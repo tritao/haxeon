@@ -178,7 +178,7 @@ class HxiParserMain {
 		var flagsCompiler = newCompiler();
 		flagsCompiler.addFfiInterface("flag-widths.hxi", flagWidthsSource);
 		var flagsMainSource =
-			'import flag_widths.*; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var preserved:WordFlags = combined; var rejected = false; try { WordFlags.fromRaw(8); } catch (error:Dynamic) { rejected = true; } var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && rejected && preserved.rawValue() == 3 ? 42 : 0; }';
+			'import flag_widths.*; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var preserved:WordFlags = combined; var rejected = false; try { WordFlags.fromRaw(8); } catch (error:Dynamic) { rejected = true; } var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && rejected && preserved.rawValue == 3 ? 42 : 0; }';
 		flagsCompiler.update("FlagsMain.hx", flagsMainSource);
 		flagsCompiler.analyze("FlagsMain");
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }',
@@ -324,7 +324,7 @@ class HxiParserMain {
 			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); var kind:Types.Kind = Types.Kind.Primary; point.kind = kind; return (point.textValue = 42) == point.textValue ? point.textValue : 0; }");
 		layoutCompiler.analyze("LayoutMain");
 		layoutCompiler.update("QualifiedLayoutMain.hx",
-			"import nativekit.ffi.Types as FfiTypes; function main():Int { var kind:FfiTypes.Kind = FfiTypes.Kind.Primary; return kind.rawValue(); }");
+			"import nativekit.ffi.Types as FfiTypes; function main():Int { var kind:FfiTypes.Kind = FfiTypes.Kind.Primary; return kind.rawValue; }");
 		layoutCompiler.analyze("QualifiedLayoutMain");
 		layoutCompiler.update("menu/Kind.hx",
 			"package menu; class Kind { public function new(first:Int, second:Int, third:Int) {} }");
@@ -422,7 +422,7 @@ class HxiParserMain {
 		aliasCompiler.addFfiInterface("native-names.hxi",
 			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; } extern fn check(value: nk_result) -> nk_result; }');
 		aliasCompiler.update("AliasMain.hx",
-			"import native_names.Result; function main():Int { var value:Result = Result.Ok; return value.rawValue(); }");
+			"import native_names.Result; function main():Int { var value:Result = Result.Ok; return value.rawValue; }");
 		aliasCompiler.analyze("AliasMain");
 		var forkedProjectionCompiler = newCompiler();
 		forkedProjectionCompiler.addFfiProjection("renamed.hxmap",
@@ -741,7 +741,7 @@ class HxiParserMain {
 		handleCompiler.addFfiInterface("handles.hxi",
 			'interface handles @target("x86_64-linux-gnu") @library("handles") { handle resource : u32; extern fn create() -> resource; }');
 		handleCompiler.update("HandleMain.hx",
-			"import handles; function main():Int { var value:resource = new resource(); value = handles.create(); var raw:Int = value.rawValue(); var reconstructed:resource = new resource(raw); return reconstructed.isValid() ? reconstructed.rawValue() : 0; }");
+			"import handles; function main():Int { var value:resource = new resource(); value = handles.create(); var raw:Int = value.rawValue; var reconstructed:resource = new resource(raw); return reconstructed.isValid() ? reconstructed.rawValue : 0; }");
 		handleCompiler.compile("HandleMain");
 		var ownedValueHandle = parseValidated("owned-value-handles.hxi",
 			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn create_resource() -> resource @owned; extern fn lookup_resource() -> resource; extern fn create_resource_out(value: ptr<resource> @out @owned) -> i32; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); extern fn use_resource(value: resource) -> i32; }'),
@@ -764,7 +764,7 @@ class HxiParserMain {
 		ownedHandleCompiler.addFfiInterface("owned_values.hxi",
 			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn create_resource() -> resource @owned; extern fn lookup_resource() -> resource; extern fn create_resource_out(value: ptr<resource> @out @owned) -> i32; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); extern fn use_resource(value: resource) -> i32; }');
 		ownedHandleCompiler.update("OwnedValueHandleMain.hx",
-			"import owned_values; function main():Int { var borrowed:resource = owned_values.lookup_resource(); var owner:Ownedresource = owned_values.create_resource(); var view:resource = owner.borrow(); var raw:Int = owner.rawValue(); var out = owned_values.create_resource_out(); var outOwner:Ownedresource = out.value; owned_values.use_resource(view); owner.close(); owner.close(); outOwner.close(); return borrowed.isValid() && raw >= 0 && owner.isClosed() ? 0 : 1; }");
+			"import owned_values; function main():Int { var borrowed:resource = owned_values.lookup_resource(); var owner:Ownedresource = owned_values.create_resource(); var view:resource = owner.borrow(); var raw:Int = owner.rawValue; var out = owned_values.create_resource_out(); var outOwner:Ownedresource = out.value; owned_values.use_resource(view); owner.close(); owner.close(); outOwner.close(); return borrowed.isValid() && raw >= 0 && owner.isClosed() ? 0 : 1; }");
 		ownedHandleCompiler.compile("OwnedValueHandleMain");
 		var borrowedValueCloseCompiler = newCompiler();
 		borrowedValueCloseCompiler.addFfiInterface("owned_values.hxi",
@@ -781,7 +781,7 @@ class HxiParserMain {
 		implicitValueOwnerCompiler.addFfiInterface("owned_values.hxi",
 			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn lookup_resource() -> resource; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); }');
 		implicitValueOwnerCompiler.update("OwnedValueHandleMain.hx",
-			"import owned_values; function main():Int { var owner:Ownedresource = owned_values.lookup_resource(); return owner.rawValue(); }");
+			"import owned_values; function main():Int { var owner:Ownedresource = owned_values.lookup_resource(); return owner.rawValue; }");
 		var implicitValueOwnerRejected = false;
 		try {
 			implicitValueOwnerCompiler.compile("OwnedValueHandleMain");

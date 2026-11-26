@@ -64,7 +64,7 @@ function main():Int {
 	var checked:LayoutDirection = cast escaped;
 	if (checked != LayoutDirection.LeftToRight) return 3;
 	var directions = [LayoutDirection.LeftToRight, LayoutDirection.TopToBottom];
-	if (directions[1].rawValue() != 1) return 4;
+	if (directions[1].rawValue != 1) return 4;
 	var bytes = LayoutTransaction.encode(new LayoutNode(1, LayoutVisualKind.Box, style));
 	var record = NativeKitUIConstants.NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
 	if (bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_DIRECTION_OFFSET) != 0

@@ -65,7 +65,8 @@ class ControlScopesMain {
 		ui.submitCached(build, frame, "panel");
 		if (sliderValue(ui) != 0.5) return 1;
 		var slider = find(ui.root, "slider");
-		if (slider == null || !ui.accessibilityAction(slider.id.value, AccessibilityRequestAction.Increment, null, -1, -1, 1))
+		if (slider == null
+			|| !ui.accessibilityAction(slider.id.value, AccessibilityRequestAction.Increment, null, -1, -1, 1))
 			return 2;
 		if (Math.abs(panel.level - 0.6) > 1e-9) return 3;
 		var before = panel.builds;
