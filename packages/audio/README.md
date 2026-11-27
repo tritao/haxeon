@@ -243,19 +243,21 @@ lease can create instruments only while that lease is live.
 
 ```haxe
 var assets = new haxeon.audio.SoundFontCache(4, 8 * 1024 * 1024);
-var bank = assets.acquire(path); // preparation thread
+var bank = try assets.acquire(path); // preparation thread; Err(SoundFontLoadError) says why not
 var instrument = bank.preset(0, 0.5).createInstrument(engine);
 bank.dispose(); // instrument retains its native sample data
 // Close the scope before shutting down NativeKit:
 assets.dispose();
 ```
 
-Limits cover bank count and encoded source bytes, including in-flight load
-reservations. They are not a measurement of total decoded or playback memory.
+Limits cover bank count and encoded source bytes, counted from when a bank's
+file has been read. They are not a measurement of total decoded or playback memory.
 Idle banks are evicted in least-recently-used order. Pinned banks cannot be
 evicted; insufficient capacity fails admission without removing useful idle
-banks unless the complete request can fit. Failed loads remove their reservations
-and can be retried. Files are treated as immutable within a scope; use a new
+banks unless the complete request can fit (`Pinned`). A file that cannot be read
+is `File(FileError)`, one that is not a bank `Decode(NativeKitError)`, one larger than
+the whole budget `TooLarge`. Failed loads remove their reservations, answer every
+request that waited on them, and can be retried. Files are treated as immutable within a scope; use a new
 scope to load changed assets.
 
 `stats()` reports resident/reserved banks, loading count, consumer pins (including

@@ -15,9 +15,11 @@ provide small manifests only for library-specific exceptions.
 The `nk_result` projection policy preserves raw result-returning functions and
 generates a matching `*_checked` helper. For example,
 `NativeKit.nk_window_show(...)` remains available while
-`NativeKit.nk_window_show_checked(...)` throws a structured `NativeKitError`
-with `result`, `operation`, and `diagnostic` fields. Functions with annotated
-output parameters return their typed output values from the checked helper.
+`NativeKit.nk_window_show_checked(...)` throws what
+`haxeon.platform.NativeKitStatus.failure` gives for a failed result: a
+`BindingError` for the caller's mistake, else a `NativeKitException` holding the
+`NativeKitError`. Functions with annotated output parameters return their typed
+output values from the checked helper.
 
 The binding deliberately begins with lifecycle, event polling, diagnostics,
 window handles, and monitor-name lookup. `@out`, `@inout`, and

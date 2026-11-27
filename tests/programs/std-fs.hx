@@ -5,7 +5,8 @@ import std.fs.Path;
 
 // std.fs answers each operation with a Result whose Err names the failure, on the runtime's natives and on Wasm's
 // in-memory filesystem alike: reads and writes, create and atomic writes, metadata, listings, directories made with
-// their parents, remove (succeeds on nothing) against delete (NotFound), whole trees, renames and copies.
+// their parents, remove (succeeds on nothing) against delete (NotFound), whole trees, renames and copies, and the
+// canonical path two spellings of one file share.
 
 function failure<T>(result:Result<T, FileError>):String
 	return switch result {
@@ -58,6 +59,18 @@ function files(base:Path):Int {
 	return 0;
 }
 
+function canonical(base:Path):Int {
+	Files.createDirectory(base.join("sub")).unwrap();
+	var direct = Files.canonical(base.join("copy.txt")).unwrap();
+	if (!direct.isAbsolute() || direct.name() != "copy.txt")
+		return 35;
+	if (Files.canonical(base.join("sub/../copy.txt")).unwrap().toString() != direct.toString())
+		return 36;
+	if (failure(Files.canonical(base.join("missing.txt"))) != "not found")
+		return 37;
+	return 0;
+}
+
 function directories(base:Path):Int {
 	var deep = base.join("tree/one/two");
 	if (failure(Files.createDirectory(deep)) != "ok" || failure(Files.createDirectory(deep)) != "ok")
@@ -100,6 +113,8 @@ function main():Int {
 	var failed = paths();
 	if (failed == 0)
 		failed = files(base);
+	if (failed == 0)
+		failed = canonical(base);
 	if (failed == 0)
 		failed = directories(base);
 	Files.removeTree(base).unwrap();

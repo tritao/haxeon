@@ -138,6 +138,22 @@ HL_PRIM vstring *HL_NAME(__fs_absolute)( vstring *path ) {
 }
 DEFINE_PRIM(_STRING,__fs_absolute,_STRING);
 
+/* What `path` names, absolute with its links resolved on every system, or null. */
+HL_PRIM vstring *HL_NAME(__fs_canonical)( vstring *path ) {
+	REALTIME_FS_PATH(native,path);
+	realtime_fs_char *canonical = realtime_fs_canonical(native);
+	REALTIME_FS_PATH_END(native);
+	if( canonical == NULL ) return NULL;
+#ifdef HL_WIN
+	vstring *result = realtime_string_of_ustr((const uchar *)canonical);
+#else
+	vstring *result = realtime_string_from_utf8(canonical);
+#endif
+	free(canonical);
+	return result;
+}
+DEFINE_PRIM(_STRING,__fs_canonical,_STRING);
+
 /* Haxe's FileStat of `path` as eleven Ints (gid, uid, atime, mtime, ctime, size, dev, ino, nlink, rdev, mode), or null. */
 HL_PRIM varray *HL_NAME(__fs_stat)( vstring *path ) {
 	int values[11];

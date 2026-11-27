@@ -1,21 +1,27 @@
 package haxeon.audio;
 
+import haxe.io.Bytes;
 import haxeon.platform.BindingError;
-import haxeon.platform.NativeKitException;
+import haxeon.platform.NativeKitError;
 
 import haxeon.audio.SoundFont.SoundFontPresetInfo;
-import sys.FileSystem;
-import sys.io.File;
+import std.fs.Files;
+import std.fs.Path;
 import sys.thread.Condition;
 
 private typedef CachedBank = {
 	var path:String;
 	var sourceBytes:Int;
+	/** Whether it counts against the limits: from when its file is read until it leaves the cache. */
+	var admitted:Bool;
 	var font:Null<SoundFont>;
 	var inventory:Array<SoundFontPresetInfo>;
 	var users:Int;
 	var loading:Bool;
-	var error:Dynamic;
+	/** Why the load failed, which the requests that waited on it answer too. */
+	var failure:Null<SoundFontLoadError>;
+	/** What the load threw instead, which they throw too. */
+	var thrown:Dynamic;
 	var stamp:Float;
 }
 
@@ -32,8 +38,8 @@ typedef SoundFontCacheStats = {
 }
 
 /** Scoped immutable SF2 assets, shared by independent instruments. Never use on the audio thread.
- * Bounds resident banks and source bytes, including load reservations; decoded/playback memory
- * is not measured by sourceBytes. Files are immutable within a cache scope. Idle banks are LRU
+ * Bounds resident banks and source bytes, counted from when a bank's file has been read;
+ * decoded/playback memory is not measured by sourceBytes. Files are immutable within a cache scope. Idle banks are LRU
  * evicted, leased banks stay pinned. Concurrent requests for one canonical path share one load.
  * Close before NativeKit shutdown; outstanding leases remain usable until individually released.
  */
@@ -59,18 +65,15 @@ class SoundFontCache implements Disposable {
 		this.maxSourceBytes = maxSourceBytes;
 	}
 
-	/** Acquire on a preparation thread. A lease owns access to definitions, not playback state. */
-	public function acquire(path:String):SoundFontLease {
-		if (path == null || path.length == 0) throw BindingError.invalidArgument("SoundFontCache.acquire",
-			"SoundFont path must not be empty");
-		var key = FileSystem.fullPath(path);
-		var metadata = FileSystem.metadata(key);
-		if (metadata == null) throw BindingError.invalidArgument("SoundFontCache.acquire",
-			"SoundFont file is unavailable: " + key);
-		var bytes = metadata.size;
-		if (bytes <= 0 || bytes > maxSourceBytes) throw BindingError.invalidArgument("SoundFontCache.acquire",
-			"SoundFont exceeds cache source-byte budget");
-		var victims:Array<SoundFont> = [];
+	/**
+	 * A lease on the bank in the file `path`, loading it unless the cache holds it; acquire on a preparation thread. A
+	 * lease owns access to definitions, not playback state. A disposed cache throws a `BindingError`.
+	 */
+	public function acquire(path:Path):Result<SoundFontLease, SoundFontLoadError> {
+		var key = switch Files.canonical(path) {
+			case Ok(found): found.toString();
+			case Err(error): return Err(File(error));
+		};
 		condition.acquire();
 		if (closed) {
 			condition.release();
@@ -81,70 +84,55 @@ class SoundFontCache implements Disposable {
 			// Pin before waiting: the first caller may release/evict immediately after loading.
 			existing.users++;
 			while (existing.loading && !closed) condition.wait();
-			if (closed || existing.error != null) {
+			var failed = existing.failure != null || existing.thrown != null;
+			if (closed || failed) {
 				existing.users--;
-				var close = closed && !existing.loading && existing.error == null && existing.users == 0;
+				var close = closed && !existing.loading && !failed && existing.users == 0;
 				if (close) remove(existing);
-				var failure:Dynamic = existing.error == null
-					? BindingError.disposed("SoundFontCache.acquire", "SoundFont cache disposed") : existing.error;
 				condition.release();
 				if (close) existing.font.dispose();
-				throw failure;
+				if (existing.failure != null)
+					return Err(existing.failure);
+				if (existing.thrown != null)
+					throw existing.thrown;
+				throw BindingError.disposed("SoundFontCache.acquire", "SoundFont cache disposed");
 			}
 			existing.stamp = ++stamp;
 			hits++;
 			condition.release();
-			return new SoundFontLease(this, existing);
+			return Ok(new SoundFontLease(this, existing));
 		}
-		// Choose the full eviction set before mutating, so failed admission retains useful banks.
-		var selected:Array<CachedBank> = [];
-		var remainingBanks = bankCount;
-		var remainingBytes = sourceBytes;
-		while (remainingBanks >= maxBanks || remainingBytes + bytes > maxSourceBytes) {
-			var oldest:Null<CachedBank> = null;
-			for (entry in entries) if (!entry.loading && entry.users == 0 && selected.indexOf(entry) < 0
-				&& (oldest == null || entry.stamp < oldest.stamp)) oldest = entry;
-			if (oldest == null) {
-				condition.release();
-				throw BindingError.invalidState("SoundFontCache.acquire",
-					"SoundFont cache budget is pinned by active leases");
-			}
-			selected.push(oldest);
-			remainingBanks--;
-			remainingBytes -= oldest.sourceBytes;
-		}
-		for (entry in selected) {
-			remove(entry);
-			victims.push(cast entry.font);
-			evictions++;
-		}
+		// Registered before the file is read, so concurrent requests for it wait on this load.
 		var entry:CachedBank = {
 			path: key,
-			sourceBytes: bytes,
+			sourceBytes: 0,
+			admitted: false,
 			font: null,
 			inventory: [],
 			users: 1,
 			loading: true,
-			error: null,
+			failure: null,
+			thrown: null,
 			stamp: ++stamp
 		};
 		entries.set(key, entry);
-		bankCount++;
-		sourceBytes += bytes;
 		condition.release();
 
-		var font:Null<SoundFont> = null;
+		var loaded:Result<SoundFont, SoundFontLoadError>;
 		try {
-			closeFonts(victims);
-			var data = File.getBytes(key);
-			if (data.length != bytes) throw BindingError.invalidData("SoundFontCache.acquire",
-				"SoundFont changed during cache loading");
-			font = switch SoundFont.fromMemory(data) {
-				case Ok(decoded): decoded;
-				case Err(error): throw new NativeKitException(error, "SoundFontCache.acquire", 0);
-			};
+			loaded = load(entry);
+		} catch (unexpected:Dynamic) {
+			fail(entry, null, unexpected);
+			throw unexpected;
+		}
+		var font = switch loaded {
+			case Ok(font): font;
+			case Err(error):
+				fail(entry, error, null);
+				return Err(error);
+		};
+		try {
 			var inventory = font.presets();
-			var lease = new SoundFontLease(this, entry);
 			condition.acquire();
 			if (closed) {
 				condition.release();
@@ -156,24 +144,89 @@ class SoundFontCache implements Disposable {
 			loads++;
 			condition.broadcast();
 			condition.release();
-			return lease;
-		} catch (failure:Dynamic) {
-			condition.acquire();
-			entry.error = failure;
-			entry.loading = false;
-			entry.users--;
-			remove(entry);
-			failedLoads++;
-			condition.broadcast();
-			condition.release();
-			if (font != null) font.dispose();
-			throw failure;
+		} catch (unexpected:Dynamic) {
+			fail(entry, null, unexpected);
+			font.dispose();
+			throw unexpected;
 		}
+		return Ok(new SoundFontLease(this, entry));
+	}
+
+	/** Reads `entry`'s file, admits it within the limits, and decodes it. */
+	function load(entry:CachedBank):Result<SoundFont, SoundFontLoadError> {
+		var data:Bytes = switch Files.read(entry.path) {
+			case Ok(read): read;
+			case Err(error): return Err(File(error));
+		};
+		if (data.length == 0)
+			return Err(Decode(InvalidData("the file is empty")));
+		var victims = switch admit(entry, data.length) {
+			case Ok(evicted): evicted;
+			case Err(error): return Err(error);
+		};
+		closeFonts(victims);
+		return switch SoundFont.fromMemory(data) {
+			case Ok(font): Ok(font);
+			case Err(error): Err(Decode(error));
+		};
+	}
+
+	/**
+	 * Counts `entry`, of `bytes` bytes, against the limits, evicting the least recently used idle banks it needs room
+	 * from; answers them, to close outside the mutex. Evicts nothing unless the whole request fits.
+	 */
+	function admit(entry:CachedBank, bytes:Int):Result<Array<SoundFont>, SoundFontLoadError> {
+		if (bytes > maxSourceBytes)
+			return Err(TooLarge);
+		condition.acquire();
+		var selected:Array<CachedBank> = [];
+		var remainingBanks = bankCount;
+		var remainingBytes = sourceBytes;
+		while (remainingBanks >= maxBanks || remainingBytes + bytes > maxSourceBytes) {
+			var oldest:Null<CachedBank> = null;
+			for (other in entries) if (other.admitted && !other.loading && other.users == 0
+				&& selected.indexOf(other) < 0 && (oldest == null || other.stamp < oldest.stamp)) oldest = other;
+			if (oldest == null) {
+				condition.release();
+				return Err(Pinned);
+			}
+			selected.push(oldest);
+			remainingBanks--;
+			remainingBytes -= oldest.sourceBytes;
+		}
+		var victims:Array<SoundFont> = [];
+		for (victim in selected) {
+			remove(victim);
+			victims.push(cast victim.font);
+			evictions++;
+		}
+		entry.admitted = true;
+		entry.sourceBytes = bytes;
+		bankCount++;
+		sourceBytes += bytes;
+		condition.release();
+		return Ok(victims);
+	}
+
+	/** Ends `entry`'s load as failed, for `failure` or with `thrown`, and gives back its reservation. */
+	function fail(entry:CachedBank, failure:Null<SoundFontLoadError>, thrown:Dynamic):Void {
+		condition.acquire();
+		entry.failure = failure;
+		entry.thrown = thrown;
+		entry.loading = false;
+		entry.users--;
+		remove(entry);
+		failedLoads++;
+		condition.broadcast();
+		condition.release();
 	}
 
 	// Called with the mutex held. Native destruction always occurs after releasing it.
 	function remove(entry:CachedBank):Void {
 		entries.remove(entry.path);
+		if (!entry.admitted)
+			return;
+		entry.admitted = false;
 		bankCount--;
 		sourceBytes -= entry.sourceBytes;
 	}

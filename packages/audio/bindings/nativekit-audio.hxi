@@ -965,6 +965,10 @@ interface NativeKitAudio @target("portable") @library("nativekit_audio") @depend
 	 * Creates a reusable clip from a UTF-8 native filesystem path. NativeKit
 	 * copies the path and validates the source before returning. The clip is
 	 * stopped and has no playback state; create a voice to play it.
+	 *
+	 * A missing file is NK_ERROR_NOT_FOUND, an unreadable one NK_ERROR_PERMISSION_DENIED, and
+	 * content that is not audio the decoder reads NK_ERROR_INVALID_DATA. The other clip sources
+	 * answer NK_ERROR_INVALID_DATA the same way.
 	 */
 	extern fn nk_audio_clip_create_from_file(path: utf8, out_clip: ptr<nk_audio_clip> @out @owned) -> nk_result;
 	/**
@@ -1516,6 +1520,9 @@ interface NativeKitAudio @target("portable") @library("nativekit_audio") @depend
 		index: u32,
 		out_info: ptr<nk_audio_soundfont_preset_info> @inout
 	) -> nk_result;
+	/**
+	 * Loads an SF2 bank from memory; bytes that are not a bank it reads are NK_ERROR_INVALID_DATA.
+	 */
 	extern fn nk_audio_soundfont_load_memory(
 		bytes: ptr<const<u8>> @in_array("byte_count"),
 		byte_count: u32,

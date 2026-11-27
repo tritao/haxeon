@@ -1,6 +1,7 @@
 package std.fs;
 
 import haxe.io.Bytes;
+import std.fs.FileNatives;
 import std.fs.FileNatives.WriteMode;
 import std.fs.Operations;
 
@@ -53,6 +54,15 @@ function metadata(path:Path):Result<Metadata, FileError>
 /** What is at `path`; a symbolic link is described itself (`SymbolicLink`), not what it points to. */
 function linkMetadata(path:Path):Result<Metadata, FileError>
 	return Operations.metadata(null, path, false);
+
+/**
+ * What `path` names, as one absolute path with every symbolic link on the way resolved: two paths to one entry answer
+ * the same, so it keys what is cached by file. `NotFound` when nothing is there.
+ */
+function canonical(path:Path):Result<Path, FileError> {
+	var found = FileNatives.canonical(path.toString());
+	return found == null ? Err(FileNatives.lastError()) : Ok(Path.of(found));
+}
 
 /** The entries of the directory `path`, in no particular order, without `.` and `..`. */
 function list(path:Path):Result<Array<Entry>, FileError>

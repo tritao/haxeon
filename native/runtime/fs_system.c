@@ -1378,6 +1378,31 @@ static realtime_fs_char *realtime_fs_absolute( const realtime_fs_char *path ) {
 #endif
 }
 
+/* What `path` names, as one absolute path with every symbolic link on the way resolved, in a buffer the caller frees;
+   NULL after recording why, NotFound when nothing is there. Two paths to one entry answer the same. */
+static realtime_fs_char *realtime_fs_canonical( const realtime_fs_char *path ) {
+#ifdef _WIN32
+	HANDLE handle = realtime_fs_open(NULL,path,FILE_READ_ATTRIBUTES,0);
+	if( handle == INVALID_HANDLE_VALUE ) return NULL;
+	wchar_t *final = NULL;
+	bool found = realtime_fs_final_path(handle,&final);
+	CloseHandle(handle);
+	if( !found ) return NULL;
+	/* The final path is in the `\\?\` namespace; the plain spelling is the one everything else takes. */
+	if( wcsncmp(final,L"\\\\?\\UNC\\",8) == 0 ) {
+		memmove(final + 2,final + 8,(wcslen(final + 8) + 1) * sizeof(wchar_t));
+	} else if( wcsncmp(final,L"\\\\?\\",4) == 0 )
+		memmove(final,final + 4,(wcslen(final + 4) + 1) * sizeof(wchar_t));
+	realtime_fs_succeed();
+	return final;
+#else
+	char *resolved = realpath(path,NULL);
+	if( resolved == NULL ) realtime_fs_fail(errno);
+	else realtime_fs_succeed();
+	return resolved;
+#endif
+}
+
 /* Haxe's FileStat of `path`, in its order: gid, uid, atime, mtime, ctime, size, dev, ino, nlink, rdev, mode. */
 static bool realtime_fs_stat( const realtime_fs_char *path, int values[11] ) {
 #ifdef _WIN32

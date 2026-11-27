@@ -3,7 +3,6 @@ package haxeon.audio;
 import haxeon.platform.BindingError;
 
 import haxe.io.Bytes;
-import haxeon.platform.InvalidArgumentMeans;
 import haxeon.platform.NativeKitError;
 import haxeon.platform.NativeKitStatus;
 import haxeon.platform.resource.Resource;
@@ -30,8 +29,7 @@ class Clip implements Disposable {
 			throw BindingError.invalidArgument("Clip.fromFile", "Audio clip path must not be empty");
 		var made = NativeKitAudio.nk_audio_clip_create_from_file(path);
 		return NativeKitStatus.made(made.status, "audio.clip.fromFile", NativeKit.nk_last_error(),
-			() -> new Clip(made.out_clip),
-			RefusedInput);
+			() -> new Clip(made.out_clip));
 	}
 
 	/** Creates a clip from a ready asset in the core resource cache. */
@@ -40,8 +38,7 @@ class Clip implements Disposable {
 			throw BindingError.invalidArgument("Clip.fromAsset", "Audio clip resource asset must not be null");
 		var made = NativeKitAudio.nk_audio_clip_create_from_asset(asset.nativeHandle());
 		return NativeKitStatus.made(made.status, "audio.clip.fromAsset", NativeKit.nk_last_error(),
-			() -> new Clip(made.out_clip),
-			RefusedInput);
+			() -> new Clip(made.out_clip));
 	}
 
 	/** Creates a streaming clip backed by independent provider streams. */
@@ -50,8 +47,7 @@ class Clip implements Disposable {
 			throw BindingError.invalidArgument("Clip.fromStream", "Audio streaming resource must not be null");
 		var made = NativeKitAudio.nk_audio_clip_create_from_stream(resource.nativeValue());
 		return NativeKitStatus.made(made.status, "audio.clip.fromStream", NativeKit.nk_last_error(),
-			() -> new Clip(made.out_clip),
-			RefusedInput);
+			() -> new Clip(made.out_clip));
 	}
 
 	/** A clip of the encoded audio in `data`, which it copies. */
@@ -60,8 +56,7 @@ class Clip implements Disposable {
 			throw BindingError.invalidArgument("Clip.fromMemory", "Audio clip data must not be empty");
 		var made = NativeKitAudio.nk_audio_clip_create_from_memory(data, data.length);
 		return NativeKitStatus.made(made.status, "audio.clip.fromMemory", NativeKit.nk_last_error(),
-			() -> new Clip(made.out_clip),
-			RefusedInput);
+			() -> new Clip(made.out_clip));
 	}
 
 	/** A clip of complete, interleaved mono or stereo PCM frames, which it copies. */

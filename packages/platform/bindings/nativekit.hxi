@@ -2395,6 +2395,11 @@ interface NativeKit @target("portable") @library("nativekit") {
 		NK_RESULT_HTTP_CONNECTION = -101;
 		NK_RESULT_HTTP_DNS = -100;
 		/**
+		 * Well-formed call, but the content it was given (encoded media, a bank, a document) is
+		 * malformed or in a format the operation does not read.
+		 */
+		NK_ERROR_INVALID_DATA = -17;
+		/**
 		 * A graphics surface lost its drawable or context during frame execution.
 		 */
 		NK_ERROR_SURFACE_LOST = -16;
@@ -2451,7 +2456,8 @@ interface NativeKit @target("portable") @library("nativekit") {
 		 */
 		NK_ERROR_INVALID_HANDLE = -3;
 		/**
-		 * A caller-provided pointer, value, size, or combination is invalid.
+		 * A caller-provided pointer, value, size, or combination is invalid: the caller's mistake.
+		 * Content that cannot be read is NK_ERROR_INVALID_DATA instead.
 		 */
 		NK_ERROR_INVALID_ARGUMENT = -2;
 		/**
@@ -3263,6 +3269,9 @@ interface NativeKit @target("portable") @library("nativekit") {
 	 * reports NK_EVENT_FILE_WATCH_READY once all of it is watched. A watcher keeps at most one READY
 	 * per directory waiting in the event queue: one already queued and not yet read stands for every
 	 * later add of that directory, so repeated adds neither queue nor wake anything more.
+	 *
+	 * A path that is not absolute is NK_ERROR_INVALID_ARGUMENT. An absolute path with no directory
+	 * there is NK_ERROR_NOT_FOUND, and one that cannot be read is NK_ERROR_PERMISSION_DENIED.
 	 */
 	extern fn nk_file_watch_add_directory(watch: nk_file_watch, path: utf8, recursive: nk_bool) -> nk_result;
 	/**

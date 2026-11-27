@@ -40,6 +40,7 @@ expected.
 | `create(path, bytes)` | creates the file only when nothing is there | `AlreadyExists` |
 | `writeAtomic(path, bytes)` | replaces the file in one step: a reader or a crash sees the old file or the new one | as `write` |
 | `metadata(path)`, `linkMetadata(path)` | kind, size and last modification; `linkMetadata` describes a symbolic link itself | `NotFound` |
+| `canonical(path)` | the absolute path it names, every symbolic link resolved: one per entry, to key a cache by file (`Files` only) | `NotFound` |
 | `list(path)` | the directory's entries (name and kind), in no particular order | `NotFound`, `NotADirectory` |
 | `createDirectory(path)` | makes the directory and its missing parents; succeeds when it exists | `AlreadyExists` (a file is there) |
 | `remove(path)` | deletes a file, a link or an empty directory; succeeds when nothing is there | `NotEmpty` |
@@ -58,7 +59,7 @@ race with other processes and cost a second call.
 ## Confined to a directory
 
 `Root.open(path)` opens a directory that nothing reached through it can leave. A root has the same operations as
-`Files`, as methods, with paths relative to it (`.` is the root itself):
+`Files` but `canonical`, as methods, with paths relative to it (`.` is the root itself):
 
 ```haxe
 import std.fs.Root;

@@ -3,7 +3,6 @@ package haxeon.audio;
 import haxeon.platform.BindingError;
 
 import haxe.io.Bytes;
-import haxeon.platform.InvalidArgumentMeans;
 import haxeon.platform.NativeKitError;
 import haxeon.platform.NativeKitStatus;
 import nativekit.ffi.NativeKit;
@@ -38,7 +37,7 @@ class SoundFont implements Disposable {
 			"SoundFont data must not be empty");
 		var result = NativeKitAudio.nk_audio_soundfont_load_memory(bytes);
 		return NativeKitStatus.made(result.status, "audio.soundfont.load", NativeKit.nk_last_error(),
-			() -> new SoundFont(result.out_soundfont), RefusedInput);
+			() -> new SoundFont(result.out_soundfont));
 	}
 
 	internal function nativeHandle():SoundFontHandle {

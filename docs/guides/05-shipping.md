@@ -122,7 +122,7 @@ haxeon build --build-mode=release
 ```text
 build/linux/bin/
   my_tool                     the program
-  libnativekit_filesystem.so  the native libraries of the packages it uses, when it uses any
+  libnativekit.so             the native libraries of the packages it uses, when it uses any
 ```
 
 The executable finds those libraries in its own directory, so distribute the whole directory: `build/macos/bin/` on

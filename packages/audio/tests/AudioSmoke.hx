@@ -27,6 +27,8 @@ import haxeon.audio.GainLimits;
 import haxeon.audio.MixSnapshot;
 import haxeon.audio.Mixer;
 import haxeon.audio.PcmFormat;
+import haxeon.audio.SoundFont;
+import haxeon.audio.SoundFontCache;
 import haxeon.audio.Vector3;
 import haxeon.audio.Voice;
 import haxeon.audio.VoiceOptions;
@@ -36,6 +38,7 @@ import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
+import std.fs.Files;
 
 class AudioSmoke {
 	static function tinyWav():Bytes {
@@ -86,6 +89,35 @@ class AudioSmoke {
 		}
 		if (!rejected)
 			throw "Incomplete PCM frame should raise InvalidArgument";
+	}
+
+	/** Content a decoder cannot read, and a SoundFont file that cannot be leased, are answers, not mistakes. */
+	static function verifyLoadErrors():Void {
+		var notAudio = Bytes.ofString("not audio, not a bank");
+		if (!Clip.fromMemory(notAudio).match(Err(InvalidData(_))))
+			throw "Clip.fromMemory of bytes that are not audio should be InvalidData";
+		if (!Clip.fromFile("/nonexistent/haxeon-audio-smoke.wav").match(Err(NotFound)))
+			throw "Clip.fromFile of a missing file should be NotFound";
+		if (!SoundFont.fromMemory(notAudio).match(Err(InvalidData(_))))
+			throw "SoundFont.fromMemory of bytes that are not a bank should be InvalidData";
+		var directory = "out/audio-smoke-soundfonts";
+		Files.createDirectory(directory).unwrap();
+		Files.writeText('$directory/not-a-bank.sf2', "not a bank").unwrap();
+		var cache = new SoundFontCache(1, 8);
+		var answers = [
+			cache.acquire('$directory/missing.sf2').match(Err(File(NotFound))),
+			cache.acquire(directory).match(Err(File(IsADirectory))),
+			cache.acquire('$directory/not-a-bank.sf2').match(Err(TooLarge)),
+		];
+		cache.dispose();
+		cache = new SoundFontCache();
+		answers.push(cache.acquire('$directory/not-a-bank.sf2').match(Err(Decode(InvalidData(_)))));
+		answers.push(cache.acquire('$directory/./not-a-bank.sf2').match(Err(Decode(InvalidData(_)))));
+		var stats = cache.stats();
+		cache.dispose();
+		Files.removeTree(directory).unwrap();
+		if (answers.indexOf(false) >= 0 || stats.failedLoads != 2 || stats.banks != 0)
+			throw "SoundFontCache.acquire answered " + answers + " with " + stats;
 	}
 
 	static function main():Void {
@@ -346,6 +378,7 @@ class AudioSmoke {
 			bus.scheduleStop(haxe.Int64.add(nowFrames, haxe.Int64.ofInt(sampleRate * 6)));
 			bus.clearSchedule();
 			verifyPcmClips();
+			verifyLoadErrors();
 			clip = Clip.fromMemory(tinyWav()).unwrap();
 			var options = new VoiceOptions();
 			options.looping = true;

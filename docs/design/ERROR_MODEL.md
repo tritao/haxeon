@@ -138,8 +138,8 @@ ui's argument checks, stay exceptions. Other APIs change when they are next work
   the network's `HostNotFound`, `ConnectionFailed(reason)`, `TimedOut`, `TlsFailed(reason)`,
   `ProtocolViolation(reason)`, `Closed`, `AddressInUse`, `TooManyRedirects`, `ProxyFailed(reason)`, and `Failed(code,
   reason)` for the rest) and `GpuError` (`Unsupported(reason)`, `DeviceLost`, `OutOfMemory`, `Failed(code, reason)`).
-  Where NativeKit's `InvalidArgument` means something else at a call, the call says so (`InvalidArgumentMeans`): a
-  decoder's refused input is `InvalidData`, a path that names nothing is `NotFound`. These return a `Result`: platform
+  NativeKit keeps the two apart at the source: `INVALID_ARGUMENT` is only ever the caller's mistake, content a decoder
+  cannot read is `INVALID_DATA`, and a path with nothing there is `NOT_FOUND`. These return a `Result`: platform
   requests, the audio device (`Mixer.configureDevice`, `startDevice`, `restartDevice`, `DspEngine.attachToDevice`),
   decoding audio (`Clip.from*`, `SoundFont.fromMemory`, `AudioBankEntry.createClip`), the credential store, and GPU
   setup (`Renderer.create`, `Shader.create` and a generated shader module's `create`, a shader or pipeline builder's

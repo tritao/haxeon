@@ -58,6 +58,10 @@ internal extern function kind(root:Null<RootHandle>, path:String, follow:Bool):I
 @:hlNative("haxeon_runtime", "__fs_absolute")
 internal extern function absolute(path:String):Null<String>;
 
+/** What `path` names, absolute with its symbolic links resolved on every system, or null. */
+@:hlNative("haxeon_runtime", "__fs_canonical")
+internal extern function canonical(path:String):Null<String>;
+
 /** Haxe's FileStat fields of `path` in its order (gid, uid, atime, mtime, ctime, size, dev, ino, nlink, rdev, mode), or null. */
 @:hlNative("haxeon_runtime", "__fs_stat")
 internal extern function stat(path:String):Null<Array<Int>>;
@@ -237,6 +241,11 @@ internal function kind(root:Null<RootHandle>, path:String, follow:Bool):Int {
 
 internal function absolute(path:String):Null<String>
 	return Memory.normalize(path);
+
+internal function canonical(path:String):Null<String> {
+	var full = Memory.normalize(path);
+	return Memory.exists(full) ? full : fail(NotFound, null);
+}
 
 internal function stat(path:String):Null<Array<Int>> {
 	var values = Memory.stat(path);
