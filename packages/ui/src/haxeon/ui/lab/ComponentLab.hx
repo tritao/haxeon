@@ -335,20 +335,14 @@ class ComponentLab implements Observable {
 	}
 
 	function splitStory():View {
-		var options = new SplitViewOptions();
-		options.orientation = SplitOrientation.Horizontal;
-		options.resizableSide = SplitSide.Leading;
-		options.extent = 240.0;
-		options.minimumExtent = 120.0;
-		options.maximumExtent = 420.0;
 		var splitStyle = new LayoutStyle();
 		splitStyle.width = LayoutAxis.grow();
 		splitStyle.height = LayoutAxis.fixed(320.0);
-		options.style = splitStyle;
 		return new SplitView("lab-split",
 			new SizedBox("leading", new Text("Leading pane"), LayoutAxis.grow(), LayoutAxis.grow()),
 			new SizedBox("trailing", new Text("Trailing pane"), LayoutAxis.grow(), LayoutAxis.grow()),
-			options);
+			orientation: SplitOrientation.Horizontal, resizableSide: SplitSide.Leading, extent: 240.0,
+			minimumExtent: 120.0, maximumExtent: 420.0, style: splitStyle);
 	}
 
 	function find(id:String):Null<ComponentStory> {

@@ -260,34 +260,25 @@ class SettingsPanel implements View implements Observable implements Disposable 
 			current.setStyle(inspectorStyle);
 			inspectorView = current;
 		}
-		var options = new SplitViewOptions();
-		options.resizableSide = SplitSide.Leading;
-		options.extent = treeWidth;
-		options.minimumExtent = 140.0;
-		options.maximumExtent = 420.0;
-		options.style = fill();
-		options.dividerVisualExtent = 1.0;
-		options.onResize = function(width) {
-			treeWidth = width;
-			changed();
-		};
 
 		var columnStyle = fill();
 		columnStyle.childGap = 8.0;
-		var children:Array<KeyedView> = [
-			new KeyedView("header", header),
+		var children:Array<KeyedView> = [new KeyedView("header", header),
 			new KeyedView("body",
-				compact ? compactBody(new SettingsFocusRegion(inspectorView, function(node) inspectorNode = node),
-				function(node) categoryNode = node) : new SplitView(key + ":keyboard-split",
-				new SettingsFocusRegion(tree, function(node) categoryNode = node),
-				new SettingsFocusRegion(inspectorView, function(node) inspectorNode = node),
-				options)),
-			new KeyedView("status",
+			compact ? compactBody(new SettingsFocusRegion(inspectorView, function(node) inspectorNode = node),
+			function(node) categoryNode = node) : new SplitView(key + ":keyboard-split",
+			new SettingsFocusRegion(tree, function(node) categoryNode = node),
+			new SettingsFocusRegion(inspectorView, function(node) inspectorNode = node),
+			resizableSide: SplitSide.Leading, extent: treeWidth, minimumExtent: 140.0, maximumExtent: 420.0,
+			dividerVisualExtent: 1.0, style: fill(), onResize: function(width) {
+				treeWidth = width;
+				changed();
+			})),
+				new KeyedView("status",
 				new Text(catalog.store.lastError != null
 				? catalog.store.lastError
 				: (current == null ? "0 settings" : Std.string(current.descriptors.length) + " settings")
-				+ " · Changes save automatically"))
-		];
+				+ " · Changes save automatically"))];
 		var restart = catalog.store.restartChanges();
 		if (restart.length > 0 || restartOnly) {
 			var summaryStyle = new LayoutStyle();

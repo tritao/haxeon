@@ -56,41 +56,53 @@ class SplitView implements View {
 	/** The divider's box. */
 	public final dividerStyle:LayoutStyle;
 
-	/** The resizable pane's extent, in logical pixels. */
-	public var extent:Float;
+	/**
+	 * The resizable pane's extent, in logical pixels: on every build when `onResize` is given, which is then told of each
+	 * change (controlled); otherwise the starting extent, which the view keeps as the user drags (local).
+	 */
+	public final extent:Float;
 
-	/** Whether the resizable pane is collapsed. */
-	public var collapsed:Bool;
+	/**
+	 * Whether the resizable pane is collapsed: on every build when `onCollapsedChanged` is given; otherwise at the start,
+	 * and the view expands it when the user drags it open.
+	 */
+	public final collapsed:Bool;
 
-	/** Two panes, `leading` and `trailing`, split by a draggable divider as `options` sets it up. */
-	public function new(key:String, leading:View, trailing:View, ?options:SplitViewOptions) {
+	/**
+	 * Two panes, `leading` and `trailing`, split by a draggable divider; the rest is given by name
+	 * (`new SplitView("split", list, detail, extent: width, onResize: next -> width = next)`). Throws when a pane is
+	 * missing or the extents are invalid.
+	 */
+	public function new(key:String, leading:View, trailing:View,
+			orientation:SplitOrientation = SplitOrientation.Horizontal,
+			resizableSide:SplitSide = SplitSide.Trailing, extent:Float = 280.0, minimumExtent:Float = 160.0,
+			maximumExtent:Float = 480.0, collapsed:Bool = false, dividerExtent:Float = 8.0, ?dividerVisualExtent:Float,
+			dividerHairline:Bool = false, ?style:LayoutStyle, ?dividerStyle:LayoutStyle, ?onResize:Float->Void,
+			?onCollapsedChanged:Bool->Void) {
 		if (leading == null || trailing == null) throw "SplitView requires leading and trailing views";
-		var resolved = options == null ? new SplitViewOptions() : options;
-		if (!finite(resolved.extent)
-			|| !finite(resolved.minimumExtent) || !finite(resolved.maximumExtent) || !finite(resolved.dividerExtent)
-			|| resolved.minimumExtent < 0.0 || resolved.maximumExtent < resolved.minimumExtent
-			|| resolved.dividerExtent < 0.0
-			|| (resolved.dividerVisualExtent != null
-			&& (!finite(resolved.dividerVisualExtent) || resolved.dividerVisualExtent
-			< 0.0 || resolved.dividerVisualExtent > resolved.dividerExtent)))
+		if (!finite(extent)
+			|| !finite(minimumExtent) || !finite(maximumExtent) || !finite(dividerExtent)
+			|| minimumExtent < 0.0 || maximumExtent < minimumExtent
+			|| dividerExtent < 0.0
+			|| (dividerVisualExtent != null
+			&& (!finite(dividerVisualExtent) || dividerVisualExtent < 0.0 || dividerVisualExtent > dividerExtent)))
 			throw "SplitView extent policy is invalid";
 		this.key = new Key(key);
 		this.leading = leading;
 		this.trailing = trailing;
-		this.orientation = resolved.orientation;
-		this.resizableSide = resolved.resizableSide;
-		this.minimumExtent = resolved.minimumExtent;
-		this.maximumExtent = resolved.maximumExtent;
-		this.dividerExtent = resolved.dividerExtent;
-		this.dividerVisualExtent = resolved.dividerVisualExtent
-			== null ? resolved.dividerExtent : resolved.dividerVisualExtent;
-		this.dividerHairline = resolved.dividerHairline;
-		this.extent = clamp(resolved.extent, minimumExtent, maximumExtent);
-		this.collapsed = resolved.collapsed;
-		this.onResize = resolved.onResize;
-		this.onCollapsedChanged = resolved.onCollapsedChanged;
-		this.style = resolved.style == null ? defaultStyle() : resolved.style.copy();
-		this.dividerStyle = resolved.dividerStyle == null ? defaultDividerStyle() : resolved.dividerStyle.copy();
+		this.orientation = orientation;
+		this.resizableSide = resizableSide;
+		this.minimumExtent = minimumExtent;
+		this.maximumExtent = maximumExtent;
+		this.dividerExtent = dividerExtent;
+		this.dividerVisualExtent = dividerVisualExtent == null ? dividerExtent : dividerVisualExtent;
+		this.dividerHairline = dividerHairline;
+		this.extent = clamp(extent, minimumExtent, maximumExtent);
+		this.collapsed = collapsed;
+		this.onResize = onResize;
+		this.onCollapsedChanged = onCollapsedChanged;
+		this.style = style == null ? defaultStyle() : style.copy();
+		this.dividerStyle = dividerStyle == null ? defaultDividerStyle() : dividerStyle.copy();
 	}
 
 	public function build(context:BuildContext):ViewRoot {
@@ -102,7 +114,16 @@ class SplitView implements View {
 			rootStyle.childDistribution = LayoutDistribution.Start;
 			rootStyle.wrapMode = LayoutWrapMode.NoWrap;
 			var root = context.createNode(context.rootId("split-view"), LayoutVisualKind.Box, rootStyle);
-			var paneExtent = collapsed ? 0.0 : boundedExtent();
+			// A controlled input is authoritative on every build; a local one is the view's own state.
+			var localExtent:State<Float> = context.state(context.id("extent"), extent),
+				localCollapsed:State<Bool> = context.state(context.id("collapsed"), collapsed);
+			var pane = context.lazyState(context.id("pane"), () -> new SplitPane()).value;
+			pane.extent = bounded(onResize != null ? extent : localExtent.value);
+			pane.collapsed = onCollapsedChanged != null ? collapsed : localCollapsed.value;
+			pane.localExtent = localExtent;
+			pane.localCollapsed = localCollapsed;
+			var collapsed = pane.collapsed;
+			var paneExtent = collapsed ? 0.0 : pane.extent;
 
 			var leadingPane = context.createNode(context.rootId("leading-pane"),
 				LayoutVisualKind.Box,
@@ -174,12 +195,12 @@ class SplitView implements View {
 				var sideName = resizableSide == SplitSide.Leading ? "Leading" : "Trailing";
 				var dividerSemantics = new Semantics(AccessibilityRole.Separator, '$sideName pane divider');
 				dividerSemantics.actions = AccessibilityAction.Increment | AccessibilityAction.Decrement;
-				dividerSemantics.numericValue = boundedExtent();
+				dividerSemantics.numericValue = pane.extent;
 				dividerSemantics.numericMinimum = minimumExtent;
 				dividerSemantics.numericMaximum = maximumExtent;
 				divider.semantics = dividerSemantics;
 				var dragState:State<SplitDragState> = context.state(divider.id, new SplitDragState());
-				installDividerHandlers(divider, horizontal, dragState);
+				installDividerHandlers(divider, horizontal, dragState, pane);
 				if (dividerHairline) {
 					// A zero-sized flow anchor marks the shared pane edge. Only the
 					// absolute hit target overlaps the panes; no resize gutter is reserved.
@@ -212,14 +233,15 @@ class SplitView implements View {
 		});
 	}
 
-	function installDividerHandlers(divider:RenderNode, horizontal:Bool, dragState:State<SplitDragState>):Void {
+	function installDividerHandlers(divider:RenderNode, horizontal:Bool, dragState:State<SplitDragState>,
+			pane:SplitPane):Void {
 		divider.on(UiEventKind.PointerDown, function(event:UiEvent) {
 			if (event.button != 0) return;
 			var drag = dragState.value;
 			event.capturePointer();
 			drag.dragging = true;
 			drag.startPointer = horizontal ? event.x : event.y;
-			drag.startExtent = collapsed ? minimumExtent : boundedExtent();
+			drag.startExtent = pane.collapsed ? minimumExtent : pane.extent;
 			dragState.update(drag);
 			event.preventDefault();
 		});
@@ -229,7 +251,7 @@ class SplitView implements View {
 			var pointer = horizontal ? event.x : event.y;
 			var delta = pointer - drag.startPointer;
 			var direction = resizableSide == SplitSide.Leading ? 1.0 : -1.0;
-			updateExtent(drag.startExtent + delta * direction, true);
+			updateExtent(pane, drag.startExtent + delta * direction, true);
 			event.preventDefault();
 		});
 		var handleKey = function(event:UiEvent) {
@@ -242,19 +264,19 @@ class SplitView implements View {
 				: (resizableSide == SplitSide.Leading ? UiKey.Up : UiKey.Down);
 			if (event.key == positive) delta = keyboardStep();
 			else if (event.key == negative) delta = -keyboardStep();
-			else if (event.key == UiKey.Home) updateExtent(minimumExtent, true);
-			else if (event.key == UiKey.End) updateExtent(maximumExtent, true);
+			else if (event.key == UiKey.Home) updateExtent(pane, minimumExtent, true);
+			else if (event.key == UiKey.End) updateExtent(pane, maximumExtent, true);
 			else return;
-			if (delta != 0.0) updateExtent(extent + delta, true);
+			if (delta != 0.0) updateExtent(pane, pane.extent + delta, true);
 			event.preventDefault();
 		};
 		divider.on(UiEventKind.KeyDown, handleKey);
 		divider.on(UiEventKind.KeyRepeat, handleKey);
 		divider.on(UiEventKind.AccessibilityIncrement, function(event) {
-			updateExtent(extent + keyboardStep() * actionGranularity(event), true);
+			updateExtent(pane, pane.extent + keyboardStep() * actionGranularity(event), true);
 		});
 		divider.on(UiEventKind.AccessibilityDecrement, function(event) {
-			updateExtent(extent - keyboardStep() * actionGranularity(event), true);
+			updateExtent(pane, pane.extent - keyboardStep() * actionGranularity(event), true);
 		});
 		divider.on(UiEventKind.PointerUp, function(_) {
 			var drag = dragState.value;
@@ -268,16 +290,21 @@ class SplitView implements View {
 		});
 	}
 
-	function updateExtent(next:Float, expandCollapsed:Bool):Bool {
+	/** Moves the pane to `next`, telling the caller of a controlled input and keeping a local one. */
+	function updateExtent(pane:SplitPane, next:Float, expandCollapsed:Bool):Bool {
 		if (!finite(next)) return false;
-		var bounded = clamp(next, minimumExtent, maximumExtent);
-		var changed = bounded != extent;
-		extent = bounded;
-		if (collapsed && expandCollapsed && bounded > 0.0) {
-			collapsed = false;
+		var target = bounded(next);
+		var changed = target != pane.extent;
+		pane.extent = target;
+		if (pane.collapsed && expandCollapsed && target > 0.0) {
+			pane.collapsed = false;
 			if (onCollapsedChanged != null) onCollapsedChanged(false);
+			else pane.localCollapsed.update(false);
 		}
-		if (changed && onResize != null) onResize(bounded);
+		if (changed) {
+			if (onResize != null) onResize(target);
+			else pane.localExtent.update(target);
+		}
 		return changed;
 	}
 
@@ -319,9 +346,9 @@ class SplitView implements View {
 		return paneExtent <= 0.0 ? LayoutAxis.percent(0.0) : LayoutAxis.fixed(paneExtent);
 	}
 
-	function boundedExtent():Float {
-		if (!finite(extent)) return minimumExtent;
-		return clamp(extent, minimumExtent, maximumExtent);
+	function bounded(value:Float):Float {
+		if (!finite(value)) return minimumExtent;
+		return clamp(value, minimumExtent, maximumExtent);
 	}
 
 	function dividerLayoutStyle(horizontal:Bool):LayoutStyle {
@@ -366,6 +393,19 @@ private class SplitDragState {
 	}
 }
 
+/**
+ * The pane's current extent and collapse, which the divider's handlers read and change between builds, and the local
+ * state a build reads when the caller does not control them.
+ */
+private class SplitPane {
+	public var extent:Float = 0.0;
+	public var collapsed:Bool = false;
+	public var localExtent:Null<State<Float>> = null;
+	public var localCollapsed:Null<State<Bool>> = null;
+
+	public function new() {}
+}
+
 /** Main axis used by a SplitView. */
 enum SplitOrientation implements Hashable {
 	/** Panes side by side, divided by a vertical bar. */
@@ -380,50 +420,4 @@ enum SplitSide implements Hashable {
 	Leading;
 	/** The second pane (right or bottom) has the set extent; the first takes the rest. */
 	Trailing;
-}
-
-/** Policies and controlled state for a SplitView's resizable pane. */
-class SplitViewOptions {
-	/** `SplitView.orientation`: side by side unless set. */
-	public var orientation:SplitOrientation;
-	/** `SplitView.resizableSide`. */
-	public var resizableSide:SplitSide;
-	/** The starting extent of the resizable pane. */
-	public var extent:Float;
-	/** `SplitView.minimumExtent`. */
-	public var minimumExtent:Float;
-	/** `SplitView.maximumExtent`. */
-	public var maximumExtent:Float;
-	/** Whether the resizable pane starts collapsed. */
-	public var collapsed:Bool;
-	/** `SplitView.dividerExtent`. */
-	public var dividerExtent:Float;
-	/** Visible divider width; null uses the full draggable extent. */
-	public var dividerVisualExtent:Null<Float>;
-	/** Paint a device-aligned one-pixel separator with an overlapping resize target and no layout gap. */
-	public var dividerHairline:Bool = false;
-	/** `SplitView.style`; the default when null. */
-	public var style:Null<LayoutStyle>;
-	/** `SplitView.dividerStyle`; the default when null. */
-	public var dividerStyle:Null<LayoutStyle>;
-	/** `SplitView.onResize`. */
-	public var onResize:Null<Float->Void>;
-	/** `SplitView.onCollapsedChanged`. */
-	public var onCollapsedChanged:Null<Bool->Void>;
-
-	/** The default options: side by side, the trailing pane resizable, 280 pixels wide within 160 to 480. */
-	public function new() {
-		orientation = SplitOrientation.Horizontal;
-		resizableSide = SplitSide.Trailing;
-		extent = 280.0;
-		minimumExtent = 160.0;
-		maximumExtent = 480.0;
-		collapsed = false;
-		dividerExtent = 8.0;
-		dividerVisualExtent = null;
-		style = null;
-		dividerStyle = null;
-		onResize = null;
-		onCollapsedChanged = null;
-	}
 }

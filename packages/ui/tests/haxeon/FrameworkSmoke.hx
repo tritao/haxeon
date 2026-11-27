@@ -3666,16 +3666,17 @@ class FrameworkSmoke {
 			|| copiedAppShell.bodyStyle.childGap != 17.0
 			|| copiedAppShell.bodyStyle.direction != LayoutDirection.LeftToRight
 			|| sourceBodyStyle.direction != LayoutDirection.TopToBottom) return 229;
-		var resizedExtent = 0.0;
-		var splitOptions = new SplitViewOptions();
-		splitOptions.resizableSide = SplitSide.Trailing;
-		splitOptions.extent = 96.0;
-		splitOptions.minimumExtent = 64.0;
-		splitOptions.maximumExtent = 144.0;
-		splitOptions.onResize = function(value) {
-			resizedExtent = value;
-		};
-		var split = new SplitView("split-smoke", new Text("Primary"), new Text("Secondary"), splitOptions);
+		var resizedExtent = 0.0, splitExtent = 96.0, splitCollapsed = false;
+		// The caller controls the extent and collapse: it keeps what the view reports and describes the view with it.
+		function smokeSplit():SplitView
+			return new SplitView("split-smoke", new Text("Primary"), new Text("Secondary"),
+				resizableSide: SplitSide.Trailing,
+				extent: splitExtent, minimumExtent: 64.0, maximumExtent: 144.0, collapsed: splitCollapsed,
+				onResize: function(value) {
+					resizedExtent = value;
+					splitExtent = value;
+				}, onCollapsedChanged: next -> splitCollapsed = next);
+		var split = smokeSplit();
 		var splitRoot = context.submit(split, new LayoutFrame(320.0, 192.0));
 		if (splitRoot.children.length != 3
 			|| splitRoot.children[0].children.length != 1 || splitRoot.children[2].children.length != 1) return 230;
@@ -3702,30 +3703,25 @@ class FrameworkSmoke {
 		if (context.events.cursorShape()
 			!= UiCursorShape.HorizontalResize) throw "Split drag cursor after rebuild (check 237)";
 		context.pointerUp(splitPointerX + 20.0, splitPointerY, 0);
-		if (resizedExtent != 76.0 || split.extent != 76.0) return 231;
+		if (resizedExtent != 76.0 || splitExtent != 76.0) return 231;
 		context.pointerMove(splitPointerX, splitPointerY);
 		context.pointerDown(splitPointerX, splitPointerY, 0);
 		context.pointerCancel(0, splitPointerX + 40.0, splitPointerY);
 		if (context.events.cursorShape() != UiCursorShape.Arrow || observedCursor != UiCursorShape.Arrow) return 238;
 		context.setCursorHandler(null);
-		split.collapsed = true;
-		splitRoot = context.submit(split, new LayoutFrame(320.0, 192.0));
+		splitCollapsed = true;
+		splitRoot = context.submit(smokeSplit(), new LayoutFrame(320.0, 192.0));
 		var collapsedSecondaryGeometry:ResolvedLayoutItem = cast splitRoot.children[2].resolved;
 		if (splitRoot.children[2].layout.style.visible || collapsedSecondaryGeometry.width != 0.0) return 232;
-		split.collapsed = false;
-		var expandedSplitRoot = context.submit(split, new LayoutFrame(320.0, 192.0));
+		splitCollapsed = false;
+		var expandedSplitRoot = context.submit(smokeSplit(), new LayoutFrame(320.0, 192.0));
 		if (!expandedSplitRoot.children[2].layout.style.visible
 			|| !splitRoot.children[2].id.equals(expandedSplitRoot.children[2].id)) return 233;
-		var verticalOptions = new SplitViewOptions();
-		verticalOptions.orientation = SplitOrientation.Vertical;
-		verticalOptions.resizableSide = SplitSide.Trailing;
-		verticalOptions.extent = 72.0;
-		verticalOptions.minimumExtent = 48.0;
-		verticalOptions.maximumExtent = 120.0;
-		verticalOptions.onResize = function(value) {
-			resizedExtent = value;
-		};
-		var verticalSplit = new SplitView("vertical-split-smoke", new Text("Top"), new Text("Bottom"), verticalOptions);
+		var verticalSplit = new SplitView("vertical-split-smoke", new Text("Top"), new Text("Bottom"),
+			orientation: SplitOrientation.Vertical, resizableSide: SplitSide.Trailing, extent: 72.0,
+			minimumExtent: 48.0, maximumExtent: 120.0, onResize: function(value) {
+				resizedExtent = value;
+			});
 		var verticalRoot = context.submit(verticalSplit, new LayoutFrame(320.0, 192.0));
 		if (verticalRoot.children.length != 3
 			|| verticalRoot.layout.style.direction != LayoutDirection.TopToBottom) return 234;
@@ -3738,15 +3734,13 @@ class FrameworkSmoke {
 		context.pointerMove(verticalPointerX, verticalPointerY + 20.0);
 		if (context.events.cursorShape() != UiCursorShape.VerticalResize) return 240;
 		context.pointerUp(verticalPointerX, verticalPointerY + 20.0, 0);
-		if (resizedExtent != 52.0 || verticalSplit.extent != 52.0) return 235;
+		if (resizedExtent != 52.0) return 235;
 		var captureClicks = 0;
-		var captureOptions = new SplitViewOptions();
-		captureOptions.resizableSide = SplitSide.Trailing;
-		captureOptions.extent = 120.0;
+		var captureExtent = 120.0;
 		var captureSplit = new SplitView("pointer-capture-split",
 			new Text("Leading"), new Button("Drag target", null, function() {
 				captureClicks++;
-			}), captureOptions);
+			}), resizableSide: SplitSide.Trailing, extent: 120.0, onResize: next -> captureExtent = next);
 		var captureRoot = context.submit(captureSplit, new LayoutFrame(320.0, 192.0));
 		var platformCaptureStates:Array<Bool> = [];
 		context.setPointerCaptureHandler(function(captured) platformCaptureStates.push(captured));
@@ -3773,7 +3767,7 @@ class FrameworkSmoke {
 		context.pointerLeave();
 		if (!context.events.hasPointerCapture(captureDivider.id) || platformCaptureStates.length != 1) return 248;
 		context.pointerMove(captureDividerX - 15.0, captureDividerY);
-		if (captureSplit.extent != 175.0) return 248;
+		if (captureExtent != 175.0) return 248;
 		context.pointerMove(captureDividerX, captureDividerY);
 		// Physical capture is shared by the window, while logical capture stays
 		// independent per pointer. Releasing pointer 1 must not release pointer 0.
@@ -3819,9 +3813,9 @@ class FrameworkSmoke {
 			|| platformCaptureStates.length != 10 || !platformCaptureStates[8] || platformCaptureStates[9]) return 252;
 		context.setPointerCaptureHandler(null);
 		if (!checkSplitKeyboard(context)) return 247;
-		var reentryOptions = new SplitViewOptions();
-		reentryOptions.extent = 200.0;
-		var reentrySplit = new SplitView("reentry-split", new Text("First"), new Text("Second"), reentryOptions);
+		var reentryExtent = 200.0;
+		var reentrySplit = new SplitView("reentry-split", new Text("First"), new Text("Second"), extent: 200.0,
+			onResize: next -> reentryExtent = next);
 		var reentryRoot = context.submit(reentrySplit, new LayoutFrame(400.0, 192.0));
 		var reentryDivider = reentryRoot.children[1];
 		var reentryGeometry:ResolvedLayoutItem = cast reentryDivider.resolved;
@@ -3833,7 +3827,21 @@ class FrameworkSmoke {
 		context.pointerReenter(false, reentryX, reentryY);
 		if (context.events.hasPointerCapture(reentryDivider.id)) return 248;
 		context.pointerMove(reentryX - 20.0, reentryY);
-		if (reentrySplit.extent != 200.0) return 248;
+		if (reentryExtent != 200.0) return 248;
+		// Without onResize the view keeps the extent the user drags to, across builds of the same description.
+		var localSplit = new SplitView("local-split", new Text("First"), new Text("Second"), extent: 120.0,
+			minimumExtent: 64.0);
+		var localRoot = context.submit(localSplit, new LayoutFrame(400.0, 192.0));
+		var localGeometry:ResolvedLayoutItem = cast localRoot.children[1].resolved;
+		var localX = localGeometry.x + localGeometry.width * 0.5, localY = localGeometry.y + localGeometry.height * 0.5;
+		context.pointerDown(localX, localY, 0);
+		context.pointerMove(localX - 20.0, localY);
+		context.pointerUp(localX - 20.0, localY, 0);
+		localRoot = context.submit(localSplit, new LayoutFrame(400.0, 192.0));
+		var localSemantics:Semantics = cast localRoot.children[1].semantics;
+		var localTrailing:ResolvedLayoutItem = cast localRoot.children[2].resolved;
+		if (localSemantics.numericValue != 140.0 || localTrailing.width != 140.0)
+			throw 'A local split did not keep its dragged extent: ${localSemantics.numericValue}, ${localTrailing.width}';
 		var inheritedColor = Color.rgba(0.24, 0.31, 0.42, 1.0);
 		var nestedColor = Color.rgba(0.76, 0.42, 0.18, 1.0);
 		var typography = new DefaultTextStyle(new Column("typography",
@@ -5052,16 +5060,12 @@ class FrameworkSmoke {
 
 	static function checkSplitKeyboard(context:UiContext):Bool {
 		var frame = new LayoutFrame(320.0, 192.0);
-		var trailingOptions = new SplitViewOptions();
-		trailingOptions.resizableSide = SplitSide.Trailing;
-		trailingOptions.extent = 96.0;
-		trailingOptions.minimumExtent = 64.0;
-		trailingOptions.maximumExtent = 144.0;
-		var trailingSplit = new SplitView("keyboard-trailing-split",
-			new Text("Leading"),
-			new Text("Trailing"),
-			trailingOptions);
-		var trailingRoot = context.submit(trailingSplit, frame);
+		var trailingExtent = 96.0;
+		function trailingView():SplitView
+			return new SplitView("keyboard-trailing-split", new Text("Leading"), new Text("Trailing"),
+				resizableSide: SplitSide.Trailing, extent: trailingExtent, minimumExtent: 64.0, maximumExtent: 144.0,
+				onResize: next -> trailingExtent = next);
+		var trailingRoot = context.submit(trailingView(), frame);
 		var trailingDivider = trailingRoot.children[1];
 		var trailingSemantics:Semantics = cast trailingDivider.semantics;
 		if (trailingSemantics == null
@@ -5070,32 +5074,29 @@ class FrameworkSmoke {
 			|| trailingSemantics.numericValue != 96.0) return false;
 		if (!context.focusWidget(trailingDivider.id)) return false;
 		context.key(UiEventKind.KeyDown, UiKey.Right);
-		if (trailingSplit.extent != 88.0) return false;
+		if (trailingExtent != 88.0) return false;
 		context.key(UiEventKind.KeyDown, UiKey.Home);
-		if (trailingSplit.extent != 64.0) return false;
+		if (trailingExtent != 64.0) return false;
 		context.key(UiEventKind.KeyDown, UiKey.End);
-		if (trailingSplit.extent != 144.0) return false;
-		trailingRoot = context.submit(trailingSplit, frame);
+		if (trailingExtent != 144.0) return false;
+		trailingRoot = context.submit(trailingView(), frame);
 		if (!context.accessibilityAction(trailingRoot.children[1].id.value,
-			AccessibilityRequestAction.Decrement, null, -1, -1, 2) || trailingSplit.extent != 128.0) return false;
+			AccessibilityRequestAction.Decrement, null, -1, -1, 2) || trailingExtent != 128.0) return false;
 
 		var leadingResizes = 0;
 		var leadingExpansions = 0;
-		var leadingOptions = new SplitViewOptions();
-		leadingOptions.resizableSide = SplitSide.Leading;
-		leadingOptions.extent = 96.0;
-		leadingOptions.minimumExtent = 64.0;
-		leadingOptions.maximumExtent = 144.0;
-		leadingOptions.onResize = function(value) {
-			leadingResizes = Std.int(value);
-		};
-		leadingOptions.onCollapsedChanged = function(collapsed) {
-			if (!collapsed) leadingExpansions++;
-		};
-		var leadingSplit = new SplitView("keyboard-leading-split",
-			new Text("Leading"),
-			new Text("Trailing"),
-			leadingOptions);
+		var leadingExtent = 96.0, leadingCollapsed = false;
+		function leadingView():SplitView
+			return new SplitView("keyboard-leading-split", new Text("Leading"), new Text("Trailing"),
+				resizableSide: SplitSide.Leading, extent: leadingExtent, minimumExtent: 64.0, maximumExtent: 144.0,
+				collapsed: leadingCollapsed, onResize: function(value) {
+					leadingResizes = Std.int(value);
+					leadingExtent = value;
+				}, onCollapsedChanged: function(collapsed) {
+				leadingCollapsed = collapsed;
+				if (!collapsed) leadingExpansions++;
+			});
+		var leadingSplit = leadingView();
 		var leadingRoot = context.submit(leadingSplit, frame);
 		if (leadingRoot.children.length != 3 || leadingRoot.children[0].layout.style.width.sizing != LayoutSizing.Fixed
 			|| leadingRoot.children[2].layout.style.width.sizing != LayoutSizing.Grow) return false;
@@ -5109,8 +5110,9 @@ class FrameworkSmoke {
 		context.pointerDown(leadingX, leadingY, 0);
 		context.pointerMove(leadingX + 20.0, leadingY);
 		context.pointerUp(leadingX + 20.0, leadingY, 0);
-		if (leadingResizes != 116 || leadingSplit.extent != 116.0) return false;
-		leadingSplit.collapsed = true;
+		if (leadingResizes != 116 || leadingExtent != 116.0) return false;
+		leadingCollapsed = true;
+		leadingSplit = leadingView();
 		leadingRoot = context.submit(leadingSplit, frame);
 		var collapsedLeadingGeometry:ResolvedLayoutItem = cast leadingRoot.children[0].resolved;
 		if (leadingRoot.children[0].layout.style.visible || collapsedLeadingGeometry.width != 0.0) return false;
@@ -5120,14 +5122,15 @@ class FrameworkSmoke {
 		context.pointerDown(collapsedX, collapsedY, 0);
 		context.pointerMove(collapsedX + 20.0, collapsedY);
 		context.pointerUp(collapsedX + 20.0, collapsedY, 0);
-		if (leadingExpansions != 1 || leadingSplit.collapsed || leadingSplit.extent != 84.0) return false;
+		if (leadingExpansions != 1 || leadingCollapsed || leadingExtent != 84.0) return false;
+		leadingSplit = leadingView();
 		leadingRoot = context.submit(leadingSplit, frame);
 		if (!context.focusWidget(leadingRoot.children[1].id)) return false;
 		context.key(UiEventKind.KeyDown, UiKey.Right);
-		if (leadingSplit.extent != 92.0) return false;
-		leadingRoot = context.submit(leadingSplit, frame);
+		if (leadingExtent != 92.0) return false;
+		leadingRoot = context.submit(leadingView(), frame);
 		if (!context.accessibilityAction(leadingRoot.children[1].id.value,
-			AccessibilityRequestAction.Decrement, null, -1, -1, 2) || leadingSplit.extent != 76.0) return false;
+			AccessibilityRequestAction.Decrement, null, -1, -1, 2) || leadingExtent != 76.0) return false;
 		return true;
 	}
 

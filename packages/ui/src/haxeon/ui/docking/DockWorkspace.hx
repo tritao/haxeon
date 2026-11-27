@@ -354,20 +354,10 @@ class DockWorkspace implements View {
 		var divider = DividerExtent;
 		var maximum = available - minimum;
 		if (maximum < minimum) maximum = minimum;
-		var options = new SplitViewOptions();
-		options.orientation = horizontal ? SplitOrientation.Horizontal : SplitOrientation.Vertical;
-		options.resizableSide = SplitSide.Leading;
-		options.extent = clamp(ratio * available, minimum, maximum);
-		options.minimumExtent = minimum;
-		options.maximumExtent = maximum;
-		options.dividerExtent = divider;
-		options.dividerHairline = true;
-		options.onResize = function(next) {
-			model.setSplitRatio(path, next / available);
-		};
-		var remaining = Math.max(0.0, available - options.extent);
-		var firstWidth = horizontal ? options.extent : availableWidth;
-		var firstHeight = horizontal ? availableHeight : options.extent;
+		var extent = clamp(ratio * available, minimum, maximum);
+		var remaining = Math.max(0.0, available - extent);
+		var firstWidth = horizontal ? extent : availableWidth;
+		var firstHeight = horizontal ? availableHeight : extent;
 		var secondWidth = horizontal ? remaining : availableWidth;
 		var secondHeight = horizontal ? availableHeight : remaining;
 		return new SplitView(nodeKey,
@@ -389,7 +379,9 @@ class DockWorkspace implements View {
 			labelWidths,
 			panelCache,
 			paneCache),
-			options);
+			horizontal ? SplitOrientation.Horizontal : SplitOrientation.Vertical, SplitSide.Leading, extent, minimum,
+			maximum, dividerExtent: divider, dividerHairline: true,
+			onResize: next -> model.setSplitRatio(path, next / available));
 	}
 
 	/**
