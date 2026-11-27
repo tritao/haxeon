@@ -7,8 +7,10 @@ section in an existing one, before it is implemented.
 The rules for every entry:
 
 - **Capabilities are declared through types.** A type opts into a capability by conformance (`implements Hashable`,
-  `implements Observable`), not by metadata or by the compiler recognizing a library type. The compiler knows general
-  mechanisms, never UI or other library concepts.
+  `implements Observable`), not by metadata or by the compiler recognizing a library type. A conformance is declared
+  when it changes what code means or commits the type to an API; a capability for diagnostics only, which every type has
+  and which costs nothing where unused (`Debug`, [TEXT_FORMATTING.md](TEXT_FORMATTING.md)), is not. The compiler knows
+  general mechanisms, never UI or other library concepts.
 - **Narrow, typed, declarative.** Features are typed in place and work on every backend (HashLink, Wasm32, Wasm GC). No
   general-purpose macros and no aspect-style weaving.
 - **No compatibility layers.** A feature that replaces an existing form ports every use in the same change and deletes
