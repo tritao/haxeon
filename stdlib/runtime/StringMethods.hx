@@ -6,6 +6,10 @@ extern function makeStringMethod(callback:Array<Dynamic>->Dynamic):Dynamic;
 
 /** Bound method values for the compiler-owned String representation. */
 class StringMethods {
+	/**
+	 * The field `name` of the string `value`, read dynamically: its length, or one of its methods bound to it; null for
+	 * another name.
+	 */
 	public static function field(value:String, name:String):Dynamic {
 		if (name == "length")
 			return value.length;

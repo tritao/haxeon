@@ -41,17 +41,17 @@ internal extern function stringToolsTrim(s:String):String;
 internal extern function stringToolsIsSpace(s:String, pos:Int):Bool;
 #else
 // Wasm implements these in Haxe with the HashLink runtime's semantics.
-function stringToolsReplace(s:String, sub:String, by:String):String
+internal function stringToolsReplace(s:String, sub:String, by:String):String
 	return sub.length == 0 ? s.split("").join(by) : s.split(sub).join(by);
 
-function stringToolsLtrim(s:String):String {
+internal function stringToolsLtrim(s:String):String {
 	var start = 0;
 	while (start < s.length && s.charCodeAt(start) <= 32)
 		start++;
 	return s.substring(start);
 }
 
-function stringToolsTrim(s:String):String {
+internal function stringToolsTrim(s:String):String {
 	var start = 0, end = s.length;
 	while (start < end && s.charCodeAt(start) <= 32)
 		start++;
@@ -60,7 +60,7 @@ function stringToolsTrim(s:String):String {
 	return s.substring(start, end);
 }
 
-function stringToolsIsSpace(s:String, pos:Int):Bool {
+internal function stringToolsIsSpace(s:String, pos:Int):Bool {
 	if (pos < 0 || pos >= s.length)
 		return false;
 	var code = s.charCodeAt(pos);

@@ -7,6 +7,7 @@ import haxeon.wasm.HaxeonHost;
 @:hlNative("haxeon_runtime", "nativeCallbackFromIndex")
 extern function handleOf(index:Int):hl.Abstract<"native_callback">;
 
+/** The function-table index behind the handle `callback`. */
 @:hlNative("haxeon_runtime", "nativeCallbackIndex")
 extern function indexOf(callback:hl.Abstract<"native_callback">):Int;
 
@@ -47,6 +48,10 @@ class Callbacks {
 	public static function fail(id:Int, error:Dynamic):Void
 		errors[id] = Std.string(error);
 
+	/**
+	 * Releases the handle `callback`: the host frees its table entry and the closure is dropped. False when it was
+	 * already released.
+	 */
 	public static function close(callback:hl.Abstract<"native_callback">):Bool {
 		var index = indexOf(callback), id = idOf(index);
 		if (id == 0)
@@ -65,6 +70,7 @@ class Callbacks {
 		return id != 0 && errors[id] != null ? 1 : 0;
 	}
 
+	/** The unread exception of the closure behind `callback`, as UTF-8 text, now read; null when there is none. */
 	public static function takeError(callback:hl.Abstract<"native_callback">):Null<Bytes> {
 		var id = idOf(indexOf(callback));
 		if (id == 0 || errors[id] == null)

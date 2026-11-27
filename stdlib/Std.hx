@@ -29,7 +29,7 @@ import runtime.Ryu;
 internal extern function stdParseFloat(value:String):Float;
 #else
 // Wasm parses floats in Haxe with the HashLink runtime's C semantics (strtod).
-function stdParseFloat(value:String):Float {
+internal function stdParseFloat(value:String):Float {
 	if (value == null)
 		return Math.NaN;
 	var position = skipSpace(value, 0), negative = false;

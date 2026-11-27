@@ -14,6 +14,10 @@ class NativeArena {
 	final blocks:Array<NativeArenaBlock> = [];
 	var blockCursor:Int = 0;
 
+	/**
+	 * An arena allocating blocks of `blockSize` bytes, or larger for an allocation that needs it. Nothing is allocated
+	 * until the first `alloc`.
+	 */
 	public function new(?blockSize:Int = DEFAULT_BLOCK_SIZE) {
 		if (blockSize <= 0)
 			throw "NativeArena block size must be positive";
@@ -96,7 +100,7 @@ private class NativeArenaMemory {
 }
 
 /** One backing allocation retained by a NativeArena until dispose. */
-class NativeArenaBlock {
+internal class NativeArenaBlock {
 	public final memory:RawPtr<UInt8>;
 	public final capacity:Int;
 	public var used:Int = 0;

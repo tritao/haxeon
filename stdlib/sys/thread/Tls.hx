@@ -9,6 +9,7 @@ class Tls<T> {
 	final threads:Array<Int> = [];
 	final values:Array<Null<T>> = [];
 
+	/** Storage no thread has set yet. */
 	public function new() {}
 
 	function get_value():T {

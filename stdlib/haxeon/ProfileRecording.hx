@@ -27,8 +27,8 @@ class ProfileRecording {
 
 #if wasm
 // Browser builds have no HashLink profiler.
-function nativeSetRecording(on:Bool):Bool return false;
-function nativeRecording():Bool return false;
+internal function nativeSetRecording(on:Bool):Bool return false;
+internal function nativeRecording():Bool return false;
 #else
 @:hlNative("std", "prof_recording_set")
 internal extern function nativeSetRecording(on:Bool):Bool;

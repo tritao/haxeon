@@ -15,7 +15,7 @@ import haxe.io.Bytes;
  * writes return an error string. Modification times are a per-session write counter rather than
  * wall-clock seconds; they only ever increase, which is what change detection needs.
  */
-class MemoryFileSystem {
+internal class MemoryFileSystem {
 	/** Every file and directory by normalized path; the root always exists. */
 	static final entries:Map<String, MemoryEntry> = ["/" => new MemoryEntry(null, 0)];
 	static var clock = 0;
@@ -242,7 +242,7 @@ class MemoryFileSystem {
  * Receives MemoryFileSystem changes with normalized absolute paths. A rename moves a whole tree, and a
  * directory is created only after its parent; `content` belongs to the store and must not be changed.
  */
-interface MemoryFileSystemObserver {
+internal interface MemoryFileSystemObserver {
 	function directoryCreated(path:String):Void;
 	function fileWritten(path:String, content:Bytes):Void;
 	/** A file, or a directory that was empty. */

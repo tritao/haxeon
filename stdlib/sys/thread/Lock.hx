@@ -12,6 +12,10 @@ class Lock {
 	/** A lock with no release to consume. */
 	public function new() {}
 
+	/**
+	 * Waits for a release and consumes it. With a timeout in seconds, gives up after it and returns false; without one,
+	 * waits as long as it takes.
+	 */
 	public function wait(?timeout:Float):Bool {
 		if (releases > 0) {
 			releases--;
@@ -22,6 +26,7 @@ class Lock {
 		return false;
 	}
 
+	/** Lets one waiter, present or future, through. */
 	public function release():Void
 		releases++;
 }

@@ -12,7 +12,7 @@ class ProfileCounter {
 
 #if wasm
 // Browser builds have no HashLink profiler to record counters.
-function nativeProfileCounter(name:String, value:Float):Void {}
+internal function nativeProfileCounter(name:String, value:Float):Void {}
 #else
 @:hlNative("haxeon_runtime", "__sys_profile_counter")
 internal extern function nativeProfileCounter(name:String, value:Float):Void;

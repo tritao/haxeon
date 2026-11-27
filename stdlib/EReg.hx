@@ -24,19 +24,19 @@ internal extern function regexpMatchedNum(expression:RegexHandle):Int;
 // Wasm has no PCRE2: runtime.Regex matches in Haxe. See it for the supported syntax.
 private typedef RegexHandle = runtime.Regex;
 
-function regexpNew(pattern:String, options:String):RegexHandle
+internal function regexpNew(pattern:String, options:String):RegexHandle
 	return new runtime.Regex(pattern, options);
 
-function regexpMatch(expression:RegexHandle, value:String, position:Int, length:Int):Bool
+internal function regexpMatch(expression:RegexHandle, value:String, position:Int, length:Int):Bool
 	return expression.match(value, position, length);
 
-function regexpMatchedPos(expression:RegexHandle, group:Int):Int
+internal function regexpMatchedPos(expression:RegexHandle, group:Int):Int
 	return expression.matchedPos(group);
 
-function regexpMatchedLength(expression:RegexHandle, group:Int):Int
+internal function regexpMatchedLength(expression:RegexHandle, group:Int):Int
 	return expression.matchedLength(group);
 
-function regexpMatchedNum(expression:RegexHandle):Int
+internal function regexpMatchedNum(expression:RegexHandle):Int
 	return expression.matchedNum();
 #end
 

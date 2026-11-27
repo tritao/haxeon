@@ -41,6 +41,7 @@ class FileInput extends haxe.io.Input {
 		return count;
 	}
 
+	/** Whether a read has reached the end of the file. */
 	public function eof():Bool
 		return position >= bytes().length;
 

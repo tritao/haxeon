@@ -12,6 +12,7 @@ import toml.TomlDateTime.TomlDateTimeKind;
  * same on every target.
  */
 class TomlParser {
+	/** The table the TOML document `text` holds. Throws a `TomlError` when it is not valid TOML 1.0. */
 	public static function parse(text:String):Dynamic
 		return new TomlParser(text).document();
 

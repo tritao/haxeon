@@ -20,14 +20,19 @@ enum TomlDateTimeKind {
  * a `Date` is the reader's choice, as a local date or time has no instant.
  */
 class TomlDateTime {
+	/** Which of the four types it is. */
 	public final kind:TomlDateTimeKind;
+
+	/** The text the document wrote. */
 	public final text:String;
 
+	/** A date or time of `kind` written as `text`, which must be valid for it. */
 	public function new(kind:TomlDateTimeKind, text:String) {
 		this.kind = kind;
 		this.text = text;
 	}
 
+	/** The text the document wrote. */
 	public function toString():String
 		return text;
 }

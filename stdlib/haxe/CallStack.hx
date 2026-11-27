@@ -1,7 +1,7 @@
 package haxe;
 
 #if wasm
-// Wasm has no runtime symbolizer yet, so stacks are empty.
+/** A stack taken and not yet named: always empty on Wasm, which has no runtime symbolizer yet. */
 typedef StackFrames = Array<String>;
 #else
 

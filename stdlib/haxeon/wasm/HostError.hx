@@ -13,11 +13,14 @@ extern function bytesFromLinear(pointer:Int, length:Int):Bytes;
  * stays small: it does not extend haxe.Exception, whose call stacks would come with it.
  */
 class HostError {
+	/** What the host reported. */
 	public final message:String;
 
+	/** An error reporting `message`. */
 	public function new(message:String)
 		this.message = message;
 
+	/** The message. */
 	public function toString():String
 		return message;
 

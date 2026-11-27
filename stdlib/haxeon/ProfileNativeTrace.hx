@@ -19,11 +19,11 @@ class ProfileNativeTrace {
 
 #if wasm
 // Browser builds have no HashLink profiler to record native trace points.
-function nativeTraceInstall(library:String):Bool {
+internal function nativeTraceInstall(library:String):Bool {
 	return false;
 }
 
-function nativeQpc():Float {
+internal function nativeQpc():Float {
 	return Sys.time() * 1e9;
 }
 #else

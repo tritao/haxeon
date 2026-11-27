@@ -9,29 +9,56 @@ class Runner {
 	final cases:Array<Test> = [];
 	final filters:Array<String> = [];
 
+	/** How many tests passed. */
 	public var successes(default, null):Int = 0;
+
+	/** How many tests failed, setup and teardown failures included. */
 	public var failures(default, null):Int = 0;
+
+	/** How many `setupClass` or `setup` calls failed. */
 	public var setupFailures(default, null):Int = 0;
+
+	/** How many `teardown` or `teardownClass` calls failed. */
 	public var teardownFailures(default, null):Int = 0;
+
+	/** Whether `run` prints each result and a summary. */
 	public var displayResults:Bool = false;
+
+	/** Runs only the tests whose name contains it, in a case added without its own filter; "" runs all. */
 	public var globalPattern:String = "";
+
+	/** How many tests the last `run` selected. */
 	public var length(default, null):Int = 0;
+
+	/** Dispatched when `run` starts. */
 	public final onStart:RunnerEvent;
+
+	/** Dispatched after each test. */
 	public final onProgress:ProgressEvent;
+
+	/** Dispatched when `run` has run every case. */
 	public final onComplete:RunnerEvent;
 
+	/** A runner with no cases. */
 	public function new() {
 		onStart = new RunnerEvent();
 		onProgress = new ProgressEvent();
 		onComplete = new RunnerEvent();
 	}
 
+	/**
+	 * Adds `testCase`, whose tests run when their name contains `filter` ("" for all, or the runner's `globalPattern`).
+	 */
 	public function addCase(testCase:Test, filter:String = ""):Void {
 		testCase.registerTests();
 		cases.push(testCase);
 		filters.push(filter);
 	}
 
+	/**
+	 * Runs every case's selected tests, in the order added, each between its case's `setup` and `teardown`, and each
+	 * case between `setupClass` and `teardownClass`.
+	 */
 	public function run():Void {
 		length = selectedCount();
 		var done = 0;

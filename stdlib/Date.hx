@@ -41,6 +41,7 @@ class Date {
 		time = wall - offsetAt(guess);
 	}
 
+	/** The current date and time. */
 	public static function now():Date
 		return fromTime(haxeon.wasm.HaxeonHost.date_now());
 
@@ -51,15 +52,19 @@ class Date {
 		return date;
 	}
 
+	/** The date as milliseconds since the Unix epoch. */
 	public function getTime():Float
 		return time;
 
+	/** The year, in local time, as four digits. */
 	public function getFullYear():Int
 		return civil(local())[0];
 
+	/** The month, in local time, from 0 for January to 11. */
 	public function getMonth():Int
 		return civil(local())[1] - 1;
 
+	/** The day of the month, in local time, from 1. */
 	public function getDate():Int
 		return civil(local())[2];
 
@@ -67,33 +72,43 @@ class Date {
 	public function getDay():Int
 		return weekday(local());
 
+	/** The hour, in local time, from 0 to 23. */
 	public function getHours():Int
 		return hours(local());
 
+	/** The minutes, in local time, from 0 to 59. */
 	public function getMinutes():Int
 		return minutes(local());
 
+	/** The seconds, in local time, from 0 to 59. */
 	public function getSeconds():Int
 		return seconds(local());
 
+	/** The year, in UTC, as four digits. */
 	public function getUTCFullYear():Int
 		return civil(time)[0];
 
+	/** The month, in UTC, from 0 for January to 11. */
 	public function getUTCMonth():Int
 		return civil(time)[1] - 1;
 
+	/** The day of the month, in UTC, from 1. */
 	public function getUTCDate():Int
 		return civil(time)[2];
 
+	/** The day of the week, in UTC, 0 for Sunday. */
 	public function getUTCDay():Int
 		return weekday(time);
 
+	/** The hour, in UTC, from 0 to 23. */
 	public function getUTCHours():Int
 		return hours(time);
 
+	/** The minutes, in UTC, from 0 to 59. */
 	public function getUTCMinutes():Int
 		return minutes(time);
 
+	/** The seconds, in UTC, from 0 to 59. */
 	public function getUTCSeconds():Int
 		return seconds(time);
 

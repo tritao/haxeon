@@ -2,10 +2,19 @@ package runtime.memory;
 
 /** A NativeSpan's storage: the borrowed base address, its element count, and its owner. */
 class NativeSpanView {
+	/** The address of the first element. */
 	public final base:hl.Bytes;
+
+	/** How many elements the span has. */
 	public final length:Int;
+
+	/** What owns the memory, or null when nothing can close it. */
 	public final owner:Null<NativeSpanOwner>;
 
+	/**
+	 * A view of `length` elements at `base`, owned by `owner`. Throws for a negative length, or elements without an
+	 * address.
+	 */
 	public function new(base:hl.Bytes, length:Int, owner:Null<NativeSpanOwner>) {
 		if (length < 0)
 			throw "Native span length must not be negative";

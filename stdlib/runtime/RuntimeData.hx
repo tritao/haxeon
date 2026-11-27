@@ -6,6 +6,10 @@ package runtime;
  * 4-byte aligned offsets derived from `address`.
  */
 extern class RuntimeData {
+	/**
+	 * Where the module data `hexChunks` spell, in hexadecimal, is placed: an address to give `loadI32`. The compiler
+	 * places the data once.
+	 */
 	@:hlNative("haxeon_runtime", "__runtime_data_address")
 	public static function address(hexChunks:Array<String>):Int;
 

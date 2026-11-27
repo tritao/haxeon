@@ -21,7 +21,7 @@ class Threads {
 
 #if wasm
 // Browser builds run threads inline, on the one thread there is.
-function nativeThreadName(name:String):Void {}
+internal function nativeThreadName(name:String):Void {}
 #else
 @:hlNative("haxeon_runtime", "__sys_thread_set_name")
 internal extern function nativeThreadName(name:String):Void;

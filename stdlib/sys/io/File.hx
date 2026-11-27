@@ -47,19 +47,19 @@ internal extern function fileInputOpen(path:String, binary:Bool):hl.Abstract<"re
 internal extern function fileOutputOpen(path:String, mode:Int, binary:Bool):hl.Abstract<"realtime_file_output">;
 #else
 // Wasm keeps files in the session's in-memory filesystem (runtime.MemoryFileSystem).
-function fileGetContent(path:String):String
+internal function fileGetContent(path:String):String
 	return runtime.MemoryFileSystem.getContent(path);
 
-function fileGetBytes(path:String):Bytes
+internal function fileGetBytes(path:String):Bytes
 	return runtime.MemoryFileSystem.getBytes(path);
 
-function fileSaveContent(path:String, content:String):Void
+internal function fileSaveContent(path:String, content:String):Void
 	runtime.MemoryFileSystem.saveContent(path, content);
 
-function fileAppendContent(path:String, content:String):Void
+internal function fileAppendContent(path:String, content:String):Void
 	runtime.MemoryFileSystem.appendContent(path, content);
 
-function fileSaveBytes(path:String, bytes:Bytes):Void
+internal function fileSaveBytes(path:String, bytes:Bytes):Void
 	runtime.MemoryFileSystem.saveBytes(path, bytes);
 #end
 

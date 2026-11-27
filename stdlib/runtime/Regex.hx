@@ -17,7 +17,7 @@ package runtime;
  * one whole Unicode scalar.
  */
 @:allow(runtime)
-class Regex {
+internal class Regex {
 	static inline var CHAR = 0;
 	static inline var ANY = 1;
 	static inline var CLASS = 2;

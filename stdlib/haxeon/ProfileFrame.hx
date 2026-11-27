@@ -14,7 +14,7 @@ class ProfileFrame {
 
 #if wasm
 // Browser builds have no HashLink profiler to record frames.
-function nativeProfileFrame(kind:Int, frameSet:Int):Void {}
+internal function nativeProfileFrame(kind:Int, frameSet:Int):Void {}
 #else
 @:hlNative("haxeon_runtime", "__sys_profile_frame")
 internal extern function nativeProfileFrame(kind:Int, frameSet:Int):Void;

@@ -9,6 +9,7 @@ package sys.thread;
 class Thread {
 	function new() {}
 
+	/** Starts a thread running `call`. The thread ends when `call` returns. */
 	public static function create(call:Void->Void):Thread {
 		var previous = ThreadState.enter();
 		defer ThreadState.leave(previous);

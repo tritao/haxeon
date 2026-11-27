@@ -18,13 +18,15 @@ private typedef RyuUInt128 = {
 	var high:haxe.Int64;
 }
 
-/** Binary64 to shortest-decimal conversion, implemented in ordinary Haxe. */
 #if !wasm
+/** Binary64 to shortest-decimal conversion: the runtime's own off Wasm. */
 class Ryu {
+	/** `value` in the shortest decimal that reads back as it, as `Std.string` prints a `Float`. */
 	public static function format(value:Float):String
 		return Std.string(value);
 }
 #else
+/** Binary64 to shortest-decimal conversion, implemented in ordinary Haxe. */
 class Ryu {
 	static inline final KIND_POSITIVE = 0;
 	static inline final KIND_NEGATIVE = 1;

@@ -10,6 +10,7 @@ class DynamicObject {
 	final names:Array<String> = [];
 	final values:Array<Dynamic> = [];
 
+	/** An object with no fields. */
 	public function new() {}
 
 	/** Allocation for `{...}` literals typed as Dynamic. */
@@ -24,11 +25,13 @@ class DynamicObject {
 	public static function of(value:Dynamic):Null<DynamicObject>
 		return Std.isOfType(value, DynamicObject) ? cast value : null;
 
+	/** The value of the field `name`, or null when there is none. */
 	public function get(name:String):Dynamic {
 		var index = indices.get(name);
 		return index == null ? null : values[index];
 	}
 
+	/** Sets the field `name` to `value`, adding it after the others when it is new. */
 	public function set(name:String, value:Dynamic):Void {
 		var index = indices.get(name);
 		if (index == null) {
@@ -39,6 +42,7 @@ class DynamicObject {
 			values[index] = value;
 	}
 
+	/** Whether the object has the field `name`. */
 	public function has(name:String):Bool
 		return indices.exists(name);
 
@@ -55,12 +59,15 @@ class DynamicObject {
 		return true;
 	}
 
+	/** How many fields the object has. */
 	public function count():Int
 		return names.length;
 
+	/** The name of the field `index`, in insertion order, or null outside them. */
 	public function nameAt(index:Int):Null<String>
 		return index < 0 || index >= names.length ? null : names[index];
 
+	/** The object as `{name: value, ...}`. */
 	public function toString():String {
 		var output = new StringBuf();
 		output.add("{");

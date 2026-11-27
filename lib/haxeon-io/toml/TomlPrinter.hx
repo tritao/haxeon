@@ -11,6 +11,10 @@ package toml;
  * (stock HashLink) prints both as `1`.
  */
 class TomlPrinter {
+	/**
+	 * The TOML document of the table `value`, its keys in `order` first. Throws when `value` is not a table or holds
+	 * what TOML cannot write.
+	 */
 	public static function print(value:Dynamic, ?order:Array<String>):String {
 		if (!isTable(value))
 			throw new haxe.Exception("a TOML document is a table");

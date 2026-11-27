@@ -12,7 +12,7 @@ internal extern function jsonArrayGet(value:Dynamic, index:Int):Dynamic;
 @:hlNative("haxeon_runtime", "__reflect_array_length")
 internal extern function jsonArrayLength(value:Dynamic):Int;
 #else
-function jsonValueKind(value:Dynamic):Int {
+internal function jsonValueKind(value:Dynamic):Int {
 	if (value == null) return 0;
 	if (Std.isOfType(value, String)) return 1;
 	if (Std.isOfType(value, Bool)) return 2;
@@ -22,7 +22,7 @@ function jsonValueKind(value:Dynamic):Int {
 	return 7;
 }
 
-function jsonArrayGet(value:Dynamic, index:Int):Dynamic
+internal function jsonArrayGet(value:Dynamic, index:Int):Dynamic
 	return (cast(value, Array<Dynamic>))[index];
 #end
 
