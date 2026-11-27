@@ -282,8 +282,7 @@ class ClosureTyper {
 			openResult = expectedFunction.result;
 			inferContextualResult = true;
 		}
-		context.expectedReturnType = expectedFunction == null
-			|| inferContextualResult ? TVoid : expectedFunction.result;
+		context.expectedReturnType = expectedFunction == null || inferContextualResult ? null : expectedFunction.result;
 		context.contextualVoidLambda = expectedFunction != null && (switch (expectedFunction.result) {
 			case TVoid: true;
 			default: false;

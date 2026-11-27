@@ -108,7 +108,11 @@ class TypingContext {
 	/** The scope of the expression being typed, whose flow facts the null-safety checker reads. */
 	public var flowScope:Null<compiler.types.analysis.Scope> = null;
 
-	public var expectedReturnType:CompilerType = TVoid;
+	/**
+	 * The result the body's `return`s give, as its statements are typed against it (`typeStatements`), so a block or `try`
+	 * inside an expression returns the same: null while a lambda's result is inferred from its returns (`inferredResult`).
+	 */
+	public var expectedReturnType:Null<CompilerType> = TVoid;
 	public var inferredResult:Null<CompilerType>;
 	public var contextualVoidLambda:Bool = false;
 
