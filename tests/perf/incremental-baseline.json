@@ -27,7 +27,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"body_edit_allocated_bytes": {
-			"value": 168427040,
+			"value": 164602152,
 			"tolerance": 0.02,
 			"why": "A body-only edit of the entry module: deterministic for a given source tree."
 		},
@@ -62,7 +62,7 @@
 			"why": "Deterministic; the slack absorbs new callers."
 		},
 		"late_body_edit_allocated_bytes": {
-			"value": 187403496,
+			"value": 177673792,
 			"tolerance": 0.02,
 			"why": "The body edit again after the signature edit: the session holds the rewrites of the constructor's callers, which an edit elsewhere must reuse. Deterministic for a given source tree."
 		},
@@ -87,7 +87,7 @@
 			"why": "Main-thread instructions of a no-op rebuild of a warm session, measured as body_edit_instructions is (the median of three): the floor every build in the server pays, reading and comparing the sources and reusing the module."
 		},
 		"body_edit_instructions": {
-			"value": 1471979106,
+			"value": 1417300792,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of the body edit, from perf, in a session of its own without the census and invalidation reports, from a server settled after the build before: what an edit costs before the user can run it. The median of three edits; compared only where perf is installed and allowed."
 		},

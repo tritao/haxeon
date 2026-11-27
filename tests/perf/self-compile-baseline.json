@@ -3,10 +3,9 @@
 	"input_revision": "b3a22d6bf8ec9487a7061b12f93259aaff161552",
 	"metrics": {
 		"allocated_bytes": {
-			"value": 2296775000,
+			"value": 2244516248,
 			"tolerance": 0.02,
-			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates.",
-			"raise_reason": "Plain builds write module sections (MODULE_SECTIONS.md slice 2b): a one-shot compile records every function's requests for its relocations (about +66 MB in backend-functions) and collects and encodes each section's local tables (about +125 MB) where it encoded one dense module; before that, A cold compile also runs the per-function stage passes made for warm-build reuse: enum-tag-lowering's (515979338, about +12 MB) and scalar-arguments and scalar-closures as per-function passes (9e762aab2, f25334794, about +16 MB), with smaller per-pass growth; and the null-safety checker's per-body mode lookup (fefa269cb, about +7 MB left after 70ed3e9b8)"
+			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates."
 		},
 		"collections": {
 			"value": 2,
@@ -14,20 +13,19 @@
 			"why": "Phase-end collections (CompileOptions.phaseCollections) plus the byte trigger as a safety net; one extra collection can come from crossing a trigger boundary."
 		},
 		"live_bytes_tables": {
-			"value": 245786214,
+			"value": 238131610,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"live_bytes_ir": {
-			"value": 242011341,
+			"value": 225443840,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"live_bytes_backend": {
-			"value": 270532608,
+			"value": 248827085,
 			"tolerance": 0.03,
-			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth.",
-			"raise_reason": "Gradual growth since the 90a1f578d baseline, spread over many commits with no single step (bisected at eight commits); the one step found, 240ee8a5c's kept generated functions (about 1.5 MB), was released again in 44cce1283. About +6.7 MB, +2.7%"
+			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"peak_rss_bytes": {
 			"value": 1347186688,
@@ -35,7 +33,7 @@
 			"why": "An outcome of the collection schedule, not a measure of the work: reported and gated loosely, while allocation and the live data at the phase boundaries gate tightly."
 		},
 		"main_thread_instructions": {
-			"value": 53803534398,
+			"value": 51312408941,
 			"tolerance": 0.03,
 			"why": "Stable to well under a percent with perf; compared only where perf is installed and allowed."
 		}
