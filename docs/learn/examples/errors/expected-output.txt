@@ -1,0 +1,6 @@
+port 8080
+no port given
+not a digit at 2
+70000 is out of range
+42
+true

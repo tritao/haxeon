@@ -13,3 +13,4 @@ from the directory that contains its `haxeon.toml`.
 7. [Iteration](iteration.md)
 8. [Wire formats and typed RPC](wire-and-rpc.md)
 9. [Abstracts](abstracts.md)
+10. [Errors as values](errors.md)
