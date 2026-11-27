@@ -145,13 +145,13 @@ class TypingOutput {
 			conversionFrom = use.conversion;
 			ownersFrom = use.owners;
 			enumsFrom = use.enums;
-			if (merged.exists(use.name))
+			// A shared unit this session did not type (one a kept unit used, `TypingSession.keepOwnerSpecialization`) is merged
+			// where its first user typed now uses it, if one does.
+			var output = merged.exists(use.name) ? null : sharedOutputs.get(use.name);
+			if (output == null)
 				continue;
 			merged.set(use.name, true);
-			var output = sharedOutputs.get(use.name);
-			if (output != null)
-				output.mergeInto(program, sharedOutputs, merged,
-					use.anonymousOwner == null ? user : use.anonymousOwner);
+			output.mergeInto(program, sharedOutputs, merged, use.anonymousOwner == null ? user : use.anonymousOwner);
 		}
 		appendRange(program, requestsFrom, requests.count(), conversionFrom, closureConversion.mark(), ownersFrom,
 			owners.length, enumsFrom, enums.length);

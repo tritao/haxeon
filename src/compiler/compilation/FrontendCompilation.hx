@@ -571,6 +571,10 @@ class FrontendCompilation {
 			build.runtimeDependencies = runtimeDependencies;
 			build.keyPathUses = typedResult.keyPathUses;
 			build.typedUnits = typedResult.typedUnits;
+			if (context.options.keepSession)
+				for (specialization in typedResult.ownerSpecializations)
+					context.state.ownerSpecializations.put(context.state.queries,
+						IrSymbol.of(specialization.typed.name).id, specialization);
 			build.inferredSignatures = typedResult.inferredSignatures;
 			checkTypedRuntimeDependencies(context, runtimeDependencies, names);
 			context.state.semanticProgram = semantic;
@@ -992,8 +996,15 @@ class FrontendCompilation {
 		var context = build.context,
 			facts = context.state.declarationFacts,
 			owners = build.semanticAssembly.owners;
+		// A generic owner's specialization is held where its methods are.
+		var specializationMethods = [
+			for (classDecl in build.typed().classes)
+				if (classDecl.specializationOrigin != null && classDecl.methods.length > 0)
+				classDecl.name => classDecl.methods[0].name
+		];
 		for (unit => read in reads.units) {
-			var module = unitModule(unit, owners, build.typedByName);
+			var method = specializationMethods.get(unit),
+				module = unitModule(method ?? unit, owners, build.typedByName);
 			// A unit no function holds (a generic body typed for its errors alone) is read by nothing.
 			if (module == null)
 				continue;
@@ -1405,12 +1416,20 @@ class FrontendCompilation {
 					foundRetired = true;
 				}
 		}
-		for (cached in retired.keys())
+		var facts = build.context.state.declarationFacts;
+		for (cached in retired.keys()) {
 			valid.remove(cached);
+			// A specialization the program no longer has keeps no record.
+			var fn = state.typedFunctions.get(cached),
+				owner = fn == null ? null : fn.physicalOwner,
+				unit = owner == null ? -1 : facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit, owner),
+				record = facts.unitRecord(unit);
+			if (record != null && record.module == name)
+				facts.removeUnit(unit);
+		}
 		var removed = [for (cached in state.typedFunctions.keys()) if (!valid.exists(cached)) cached];
 		// A specialization dropped because nothing in the program asks for it changes for the units outside the program that still
 		// do: one that comes back unchanged is typed again, and asks for it again.
-		var facts = build.context.state.declarationFacts;
 		for (cached in removed) {
 			var fn = state.typedFunctions.get(cached);
 			if (fn != null && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
@@ -2029,6 +2048,18 @@ class FrontendCompilation {
 						}
 					}
 		}
+		// A generic owner specialization is a unit like a helper: the last build's is kept while nothing it read changed since.
+		var specializations:Map<String, compiler.types.typing.RetainedFromPrevious.OwnerSpecialization> = [],
+			kept = context.state.ownerSpecializations;
+		for (entry in previous.classes)
+			if (entry.specializationOrigin != null) {
+				var specialization = kept.kept(IrSymbol.of(entry.name).id),
+					record = facts.unitRecord(facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit,
+						entry.name));
+				if (specialization != null && specialization.typed == entry && record != null
+					&& !invalidated.exists(entry.name))
+					specializations.set(entry.name, specialization);
+			}
 		// A source declaration removed by this edit is not a generated class, even though it is absent from the new program.
 		if (previousSemantic == null)
 			throw new InternalError("Internal error: previous typed program has no semantic program");
@@ -2048,7 +2079,8 @@ class FrontendCompilation {
 				classes: result,
 				enums: retainedEnums,
 				units: units,
-				helpers: helpers
+				helpers: helpers,
+				specializations: specializations
 			};
 		// A type-only request has no complete IR graph to inspect.
 		if (!lowerToIr)
@@ -2057,7 +2089,8 @@ class FrontendCompilation {
 				classes: known,
 				enums: knownEnums,
 				units: units,
-				helpers: helpers
+				helpers: helpers,
+				specializations: specializations
 			};
 		var functions:Map<String, IrFunction> = [],
 			physicalMethods:Map<String, String> = [],
@@ -2155,7 +2188,8 @@ class FrontendCompilation {
 			classes: result,
 			enums: retainedEnums,
 			units: units,
-			helpers: helpers
+			helpers: helpers,
+			specializations: specializations
 		};
 	}
 

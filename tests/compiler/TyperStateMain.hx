@@ -1,23 +1,40 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
+import compiler.ir.model.IrSymbol;
 import compiler.runtime.CompilerIntrinsics;
 
 /**
  * The typer's state a compiler session keeps across builds (docs/design/TYPER_STATE.md): each module's declaration keys and
- * names, and the names every module sees. A build that is not taken and a publication the host rejects leave each as the build
+ * names, the names every module sees, and the generic owner specializations. A build that is not taken and a publication the host rejects leave each as the build
  * before them left it, or without a value, which the next build makes again; never the build's own. The build after either gives
  * a fresh build's module.
  */
+typedef Kept = {
+	final keys:Map<String, Dynamic>;
+	final names:Map<String, Dynamic>;
+	final program:Dynamic;
+	final specializations:Map<String, Dynamic>;
+}
+
 class TyperStateMain {
-	static final libSource = "class Lib { public static function add(a:Int, b:Int):Int return a + b; }";
+	static final boxSource =
+		"@:generic class Box<T> { public var value:T; public function new(value:T) this.value = value; public function get():T return value; }";
 
-	/** An edit that declares a type, which moves the names every module sees, and an inferred function. */
+	static final libSource = "class Lib { public static function add(a:Int, b:Int):Int return a + b; } " + boxSource;
+
+	/**
+	 * An edit that declares a type, which moves the names every module sees, and an inferred function, and edits a method of the
+	 * generic class, whose specialization is typed again.
+	 */
 	static final widerLibSource =
-		"class Lib { public static function add(a:Int, b:Int):Int return a + b; } class Extra { public static function seven() return 7; }";
+		"class Lib { public static function add(a:Int, b:Int):Int return a + b; } class Extra { public static function seven() return 7; } "
+		+ StringTools.replace(boxSource, "return value;", "return this.value;");
 
-	static final mainSource = "class Main { static function main():Int return Lib.add(40, 2); }";
-	static final brokenMainSource = "class Main { static function main():Int return Lib.add(40, \"two\"); }";
+	static final mainSource =
+		"import Lib.Box; class Main { static function main():Int return Lib.add(new Box<Int>(40).get(), 2); }";
+	static final brokenMainSource =
+		"import Lib.Box; class Main { static function main():Int return Lib.add(new Box<Int>(40).get(), \"two\"); }";
 
 	static function main():Void {
 		var failures:Array<String> = [];
@@ -61,10 +78,16 @@ class TyperStateMain {
 			compiler.enablePublicationTracking();
 			compiler.acknowledgePublication(compiler.compile("Main").revision);
 			var before = kept(compiler);
+			for (name => value in before.specializations)
+				if (value == null)
+					throw 'the session keeps no owner specialization $name';
 			compiler.update("Lib.hx", widerLibSource);
-			var published = compiler.compile("Main");
-			if (kept(compiler).program == before.program)
+			var published = compiler.compile("Main"), after = kept(compiler);
+			if (after.program == before.program)
 				throw "the edit that declares a type kept the names every module sees";
+			for (name => value in after.specializations)
+				if (value == before.specializations.get(name))
+					throw 'the edit to the generic class kept its specialization $name';
 			compiler.rejectPublication(published.revision);
 			compareKept(before, kept(compiler));
 			compiler.update("Lib.hx", libSource);
@@ -74,20 +97,35 @@ class TyperStateMain {
 		}
 	}
 
-	/** What the session's database keeps of the typer's state, by module. */
-	static function kept(compiler:Compiler):{keys:Map<String, Dynamic>, names:Map<String, Dynamic>, program:Dynamic} {
-		var state = @:privateAccess compiler.state, keys:Map<String, Dynamic> = [], names:Map<String, Dynamic> = [];
+	/** What the session's database keeps of the typer's state, by module, and the owner specializations by name. */
+	static function kept(compiler:Compiler):Kept {
+		var state = @:privateAccess compiler.state,
+			keys:Map<String, Dynamic> = [],
+			names:Map<String, Dynamic> = [],
+			specializations:Map<String, Dynamic> = [];
 		for (module in ["Lib", "Main"]) {
 			var id = state.inputs.moduleId(module);
 			keys.set(module, state.declarationKeys.kept(id));
 			names.set(module, state.moduleNames.kept(id));
 		}
-		return {keys: keys, names: names, program: state.programNames.kept(0)};
+		var program = state.lastTypedProgram;
+		if (program != null)
+			for (classDecl in program.classes)
+				if (classDecl.specializationOrigin != null)
+					specializations.set(classDecl.name,
+						state.ownerSpecializations.kept(IrSymbol.of(classDecl.name).id));
+		if (!specializations.keys().hasNext())
+			throw "the program has no owner specialization";
+		return {
+			keys: keys,
+			names: names,
+			program: state.programNames.kept(0),
+			specializations: specializations
+		};
 	}
 
 	/** Each value kept after the rollback is the one kept before, or none. */
-	static function compareKept(before:{keys:Map<String, Dynamic>, names:Map<String, Dynamic>, program:Dynamic},
-			after:{keys:Map<String, Dynamic>, names:Map<String, Dynamic>, program:Dynamic}):Void {
+	static function compareKept(before:Kept, after:Kept):Void {
 		for (module => value in after.keys)
 			if (value != null && value != before.keys.get(module))
 				throw 'the declaration keys of $module are the undone build\'s';
@@ -96,6 +134,9 @@ class TyperStateMain {
 				throw 'the names of $module are the undone build\'s';
 		if (after.program != null && after.program != before.program)
 			throw "the names every module sees are the undone build's";
+		for (name => value in after.specializations)
+			if (value != null && value != before.specializations.get(name))
+				throw 'the owner specialization $name is the undone build\'s';
 	}
 
 	static function sameAsFresh(warm:compiler.Compiler.CompileResult, sources:Array<String>):Void {

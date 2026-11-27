@@ -42,6 +42,9 @@ typedef MeasuredTypedProgram = {
 	/** The units this typing typed: function bodies, and field initializers (`Class.__init.x`). */
 	final typedUnits:Map<String, Bool>;
 
+	/** The generic owner specializations of the program, typed or kept, that a next build may keep (`SessionState.ownerSpecializations`). */
+	final ownerSpecializations:Array<RetainedFromPrevious.OwnerSpecialization>;
+
 	/** The signatures of the unannotated functions whose bodies this typing typed, by key (`DeclarationTypeTable.typedSignatures`). */
 	final inferredSignatures:Map<String, compiler.types.DeclarationTypes.InferredSignature>;
 }

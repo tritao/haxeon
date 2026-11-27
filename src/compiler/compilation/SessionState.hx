@@ -24,6 +24,7 @@ import compiler.types.TypeRegistry;
 import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.typing.DeclarationKeys.ModuleDeclarationKeys;
+import compiler.types.typing.RetainedFromPrevious.OwnerSpecialization;
 import haxe.io.Bytes;
 
 /** The modules an entry reached in its last build, with what each depended on then. */
@@ -169,6 +170,13 @@ class SessionState {
 	public var moduleNames(default, null):ComputedQueryKind<compiler.semantic.ProgramNames.ModuleNames>;
 
 	public var programNames(default, null):ComputedQueryKind<compiler.semantic.ProgramNames>;
+
+	/**
+	 * The generic owner specializations the last builds typed, with what typing each produced (`OwnerSpecialization`), by the
+	 * specialization's symbol: put every build by the typer, the kept one while nothing it read changed (`RetainedFromPrevious`).
+	 * Every copy shares it.
+	 */
+	public var ownerSpecializations(default, null):ComputedQueryKind<OwnerSpecialization>;
 
 	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
@@ -323,6 +331,8 @@ class SessionState {
 				(left, right) -> left == right, null, moduleInputs.moduleName, true));
 			programNames = queries.register(new ComputedQueryKind<compiler.semantic.ProgramNames>("program-names",
 				(left, right) -> left == right, null, null, true));
+			ownerSpecializations = queries.register(new ComputedQueryKind<OwnerSpecialization>("owner-specializations",
+				(left, right) -> left == right, null, symbolName, true));
 		} else {
 			queries = sharing.queries;
 			declarationFacts = sharing.declarationFacts;
@@ -337,6 +347,7 @@ class SessionState {
 			declarationKeys = sharing.declarationKeys;
 			moduleNames = sharing.moduleNames;
 			programNames = sharing.programNames;
+			ownerSpecializations = sharing.ownerSpecializations;
 		}
 		assemblyOrder = sharing == null ? new FrontendCompilation.AssemblyOrder() : sharing.assemblyOrder;
 		stageMemos = sharing == null ? new compiler.ir.reuse.IrStageMemos(queries,

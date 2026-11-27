@@ -87,6 +87,12 @@ class UnitRecords {
 		return result;
 	}
 
+	/** Calls `each` with every anonymous type a unit registered, once per unit that did. */
+	public function forEachAnonymousType(each:(name:String, fields:Array<AnonymousField>) -> Void):Void
+		for (uses in anonymousUnits)
+			for (name => fields in uses.types)
+				each(name, fields);
+
 	public function hasAnonymousUnit(unit:String):Bool
 		return anonymousUnits.exists(unit) || keptAnonymousUnits.exists(unit);
 

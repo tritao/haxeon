@@ -405,7 +405,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		// Field and signature types can request owners without a construction expression. A
 		// generated owner's fields and methods can request further owners, so drain to a fixed point.
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
-		var ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration],
+		var ownerSpecializations:Array<RetainedFromPrevious.OwnerSpecialization> = [],
+			keptSpecializations = retained == null ? null : retained.specializations,
+			previousAliases = retained == null ? null : retained.program.genericOwnerAliases,
+			ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration],
 			ownerIndex = 0,
 			generatedIndex = 0,
 			pathClassIndex = 0,
@@ -441,7 +444,20 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					declaration = ownerDeclarations.get(request.origin);
 				if (declaration == null)
 					throw new InternalError('Missing generic owner declaration "${request.origin}"');
-				var specialized = typeClass(declaration, null, false, request);
+				// A specialization the last build typed, nothing it read changed since, is kept with what typing it asked for.
+				var kept = keptSpecializations == null ? null : keptSpecializations.get(request.name),
+					keptOutput = kept == null ? null : kept.output,
+					specialization:RetainedFromPrevious.OwnerSpecialization;
+				if (kept != null && keptOutput != null && previousAliases != null
+					&& kept.typed.specializationOrigin == request.origin) {
+					session.keepOwnerSpecialization(keptOutput, previousAliases);
+					specialization = kept;
+				} else
+					specialization = session.typeOwnerSpecialization(request.name, declaration,
+						() -> typeClass(declaration, null, false, request));
+				var specialized = specialization.typed;
+				if (specialization.output != null)
+					ownerSpecializations.push(specialization);
 				typedClasses.push(specialized);
 				for (method in specialized.methods)
 					typedFunctions.push(method);
@@ -590,6 +606,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
 			typedUnits: session.programOutput.records.typedUnits,
+			ownerSpecializations: ownerSpecializations,
 			inferredSignatures: inferredSignatures,
 			keyPathUses: session.programOutput.records.keyPathUsesByUnit(),
 			metrics: {

@@ -298,6 +298,62 @@ class TypingSession {
 	}
 
 	/**
+	 * Types specialization `name` of generic class `origin` with `type`, as a unit of its own: into an output of its own, merged
+	 * into the program's at once, as typing it into the program's would. Its methods and field initializers are units of their
+	 * own, which it reads; it reads its class's shape and members and the signatures, bodies and initializers its methods and
+	 * fields are made from, which its methods' units do not name. The output is null when typing it made what the program keeps
+	 * outside the outputs (a key path's definition), which a build keeping it would not make: such a specialization is typed again.
+	 */
+	public function typeOwnerSpecialization(name:String, origin:compiler.syntax.Ast.AstClass,
+			type:() -> compiler.types.TypedAst.TypedClass):RetainedFromPrevious.OwnerSpecialization {
+		var unit = beginUnit(), keyPathCount = Lambda.count(keyPaths.definitions), recorder = reads();
+		if (recorder != null) {
+			recorder.begin(name);
+			recorder.read(FactAspect.Shape, origin.name);
+			recorder.read(FactAspect.Members, origin.name);
+			for (method in origin.methods)
+				if (!method.isStatic) {
+					recorder.read(FactAspect.Signature, origin.name + "." + method.name);
+					recorder.read(FactAspect.Body, origin.name + "." + method.name);
+				}
+			for (field in origin.fields)
+				if (!field.isStatic && field.initializer != null)
+					recorder.read(FactAspect.Initializer, origin.name + "." + field.name);
+		}
+		var typed = try type() catch (error:haxe.Exception) {
+			if (recorder != null)
+				recorder.end();
+			endUnit(unit);
+			throw error;
+		}
+		if (recorder != null) {
+			for (method in typed.methods)
+				recorder.read(FactAspect.Unit, method.name);
+			for (field in typed.fields)
+				if (field.initializer != null)
+					recorder.read(FactAspect.Unit, compiler.semantic.InitializerUnit.of(name, field.name));
+			recorder.end();
+		}
+		endUnit(unit);
+		mergeUnits([unit]);
+		return {typed: typed, output: Lambda.count(keyPaths.definitions) == keyPathCount ? unit : null};
+	}
+
+	/**
+	 * Keeps the specialization an earlier build typed (`typeOwnerSpecialization`), whose `output` is merged into the program's as
+	 * typing it again would merge it: what it asked for is asked for again, the structures it met are the program's, and the
+	 * owners it asked for keep the aliases they had in that build's program (`aliases`).
+	 */
+	public function keepOwnerSpecialization(output:TypingOutput, aliases:Map<String, String>):Void {
+		mergeUnits([output]);
+		output.records.forEachAnonymousType((name, fields) -> anonymousTypeRegistry.discover(TAnonymous(name, fields)));
+		representation.restoreGenericOwnerAliases(aliases, [
+			for (index in 0...output.ownerCount())
+				output.owner(index).name => true
+		]);
+	}
+
+	/**
 	 * The errors typing recovered from, in the order they were met: one per body (a function, a field initializer) whose typing
 	 * failed. The program typer goes on with the next body, then fails with all of them (`failIfRecovered`).
 	 */

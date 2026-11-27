@@ -1,6 +1,6 @@
 # The typer's per-build state as results
 
-Status: accepted (pieces 1, 2 and 5 first; piece 4 with engine slices 6 and 7); pieces 1 and 5 are built ("As built", below), piece 2 is not yet. Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
+Status: accepted (pieces 1, 2 and 5 first; piece 4 with engine slices 6 and 7); pieces 1, 3 and 5 are built ("As built", below), piece 2 is not yet. Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
 
 ## Why
 
@@ -155,6 +155,25 @@ old table's map of keys (0.95 MB) is gone. A semantic program kept across builds
 canonicalization it was made from, which a module canonicalized since no longer holds, so the table makes their keys itself
 (4,500 in the UI app); the publications' snapshots kept those of each build's table (0.73 MB) until the table forgot them, with
 the keys it looked up, once the program is typed (`DeclarationKeys.forgetLookups`, made again if a later lookup needs them).
+
+### Piece 3: generic-owner specializations kept
+
+A specialization is a unit with an output of its own: `TypingSession.typeOwnerSpecialization` types it into its own
+`TypingOutput`, merged into the program's at once (so a cold build's output is as before), and records its reads under the
+specialization's name: the generic class's shape and members, each instance method's signature and body, each instance
+field's initializer, and the unit of each specialized method and initializer. The kept value is the engine's: a kind,
+`SessionState.ownerSpecializations`, holds the class and its output by symbol, rolled back with the build. `retainedFromPrevious`
+keeps one when the kind holds the previous program's class, it has a record and the build's invalidation does not name it
+(`RetainedFromPrevious.specializations`); `SemanticAssembly.unitExists` knows a specialization (`GeneratedNames.isOwnerSpecialization`),
+so a changed one is invalidated rather than losing its record. Keeping it (`TypingSession.keepOwnerSpecialization`) merges its
+output again: it asks again for its helpers, owners and enums, brings back its lambdas and structures and its owners' aliases,
+and the same class and method objects go back into the program, so IR generation skips them. A specialization whose typing made
+a key path definition is typed again, as those live outside the outputs. `TypingOutput.mergeInto` no longer marks a shared unit
+merged when the build has no output for it, and `pruneModule` drops a specialization's record with its methods.
+
+The compiler's own sources have 33 specializations with 733 methods, typed again on every warm build before this (about 100 ms
+of a 138 ms `generated` phase, and 40 ms of IR, in a 362 ms no-op). The frozen perf-guard input has 7, so its gain there is
+small; `tests/compiler/TyperStateMain.hx` covers an `@:generic` class kept, and taken back when a publication is refused.
 
 ### Piece 2: not built yet
 

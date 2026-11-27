@@ -1,6 +1,18 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedProgram;
+
+/**
+ * A generic owner's specialization as the unit a build typed it as (`TypingSession.typeOwnerSpecialization`): the class, and what
+ * typing it produced besides (`TypingOutput`: the helpers, owners and enums it asked for, its lambdas, the structures it met). A
+ * build that keeps it merges that output again instead of typing the class (`TypingSession.keepOwnerSpecialization`); one without
+ * an output is typed again.
+ */
+typedef OwnerSpecialization = {
+	final typed:TypedClass;
+	final output:Null<TypingOutput>;
+}
 
 /**
 	What unchanged code still takes from the previous typed program: the generated classes it refers to (generic owners and
@@ -26,4 +38,10 @@ typedef RetainedFromPrevious = {
 	 * (`TypingSession.keptHelper`), as a unit that read nothing that changed.
 	 */
 	final helpers:Map<String, compiler.types.TypedAst.TypedFunction>;
+
+	/**
+	 * The generic owner specializations of the previous program that nothing they read changed since, by name: one the build asks
+	 * for again is the last build's (`SessionState.ownerSpecializations`).
+	 */
+	final specializations:Map<String, OwnerSpecialization>;
 }

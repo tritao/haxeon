@@ -786,7 +786,8 @@ class SemanticAssembly {
 	}
 
 	static function unitExists(unit:String, owners:Map<String, String>, state:ModuleState):Bool {
-		if (owners.exists(unit) || state.typedFunctions.exists(unit))
+		// A generic owner's specialization stays while the program asks for it; its record goes with its methods.
+		if (owners.exists(unit) || state.typedFunctions.exists(unit) || GeneratedNames.isOwnerSpecialization(unit))
 			return true;
 		if (StringTools.startsWith(unit, compiler.types.typing.TypingSession.INLINE_CONSTANT_PREFIX))
 			return owners.exists(QualifiedName.parentOrEmpty(unit.substr(compiler.types.typing.TypingSession
