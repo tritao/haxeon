@@ -422,6 +422,12 @@ class Compiler {
 		if (rootModules.indexOf(name) < 0)
 			rootModules.push(name);
 
+	/** Loads a stdlib module a host calls into, as the stdlib it is, and compiles it with every entry. */
+	public function addHostModule(name:String):Void {
+		sourceLoader.load(name, modules);
+		addRootModule(name);
+	}
+
 	/** Host-visible signatures are layout inputs, not just late backend export names. */
 	public function setExportedFunctions(names:Array<String>):Void {
 		if (sameExportedFunctions(names, exportedFunctions))
