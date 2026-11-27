@@ -149,10 +149,12 @@ Against 182e4bf3d, perf-guard on one machine: no-op 0.585 → 0.542G main-thread
 `frontend` 24.5 → 11.6 ms (`alias-setup` 13 → 0.2 ms), `generated` unchanged (about 23 ms, piece 2). A cold alias setup is
 11 → 13 ms. The small project is unchanged (instructions and allocation within 0.7% of origin/main measured the same day).
 
-Live data: the UI app's server holds 0.7 MB more after the live edits (census 439.8 → 440.5 MB, `aot_ui_server_live_bytes`
-+0.16%): the names every module sees (0.85 MB, `ProgramNames`) are new, the old table's map of keys (0.95 MB) is gone, and the
-keys the last table looked up (0.73 MB, `DeclarationKey` and its map) are still there: something in that session looks them
-up after the program is typed, which the compile server on the compiler's own sources does not; not found yet.
+Live data: on the UI app's server after the live edits the census is 363.3 → 363.4 MB against origin/main at 87532f049
+(`aot_ui_server_live_bytes` 380.95 → 381.05 MB, +0.03%): the names every module sees (0.85 MB, `ProgramNames`) are new and the
+old table's map of keys (0.95 MB) is gone. A semantic program kept across builds holds the function objects of the
+canonicalization it was made from, which a module canonicalized since no longer holds, so the table makes their keys itself
+(4,500 in the UI app); the publications' snapshots kept those of each build's table (0.73 MB) until the table forgot them, with
+the keys it looked up, once the program is typed (`DeclarationKeys.forgetLookups`, made again if a later lookup needs them).
 
 ### Piece 2: not built yet
 
