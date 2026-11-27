@@ -45,11 +45,29 @@ Every standard-library module is under `std`. The compiler reserves the prefix: 
 may not declare `package std...`. `std` names what it is, does not depend on the product's name, and cannot collide with
 a user's or a registry package, as a bare `io` or `fs` would.
 
-### 2. A small prelude
+### 2. The prelude is what the compiler knows by name
 
-The root package holds only what every program uses without an import: the core types (`Int`, `Float`, `Bool`,
-`String`, `Array`, `Map`, `Void`, `Dynamic`), `Result`, and `trace`. Everything else is imported. The
-interfaces the language checks (`Equatable`, `Hashable`, `MustUse`) move to `std.lang`, imported where implemented.
+A program uses the prelude without an import. It holds exactly the declarations the compiler names, and nothing else:
+
+| Names | Why the compiler knows them |
+|---|---|
+| `Int`, `Float`, `Bool`, `String`, `Array`, `Map`, `Void`, `Dynamic`, `Any` | the core types |
+| `Result` | `try` propagation and must-use |
+| `MustUse` | must-use (`E1033`) |
+| `Equatable`, `Hashable` | structural `==` and map keys check them |
+| `Diffable`, `Observable`, `Flags` | the compiler generates their implementations |
+| `Disposable` | a scoped binding requires it, and disposes of it at the end of its scope |
+| `Exception` | the base of what code throws ([ERROR_MODEL.md](../design/ERROR_MODEL.md)) |
+| `PosInfos` | the compiler fills a `?pos:PosInfos` argument |
+| `trace` | the compiler fills its position |
+
+A declaration the compiler does not name is imported from its package, however often it is used: the rule decides, not
+taste. A name the compiler comes to know joins the prelude in the same change.
+
+The prelude is an implicit import, not declarations in the root package: its declarations live in `std` packages
+(`std.Result` and so on), and a program's own names shadow them, whether declared in its modules or imported. A program
+may declare its own `Result` or `Flags`, as an HXI projection without a package now cannot, and a name joining the prelude
+breaks no program.
 
 ### 3. Absence is `T?`, not `Option`
 
@@ -80,7 +98,7 @@ rename.
 
 | Package | Contents | From |
 |---|---|---|
-| `std.lang` | `Equatable`, `Hashable`, `MustUse`, `Disposable`, `Exception`, `PosInfos`, reflection | root, `haxe` |
+| `std.reflect` | reflection, dynamic field access, `Type` | `Reflect`, `haxe` |
 | `std.collections` | `HashMap`, `List`, `ReadOnlyArray`, sorting | `haxeon.collections`, `haxe.ds`, root |
 | `std.text` | `StringBuf`, regular expressions, character codes, number formatting | root, `haxe` |
 | `std.bytes` | `Bytes`, `BytesBuffer`, hex, encodings | `haxe.io` |
@@ -111,7 +129,7 @@ needs from them (`hl.Gc`'s counters, for one) gets a public home such as `std.pr
 ### 6. Errors follow ERROR_MODEL.md everywhere
 
 An expected failure returns `Result<T, E>` with an error enum of the module (`FileError`, `ProcessError`, `NetError`);
-a misuse throws a `std.lang.Exception` subclass. No function answers a failure with `Bool`, `null` or a thrown string.
+a misuse throws an `Exception` subclass. No function answers a failure with `Bool`, `null` or a thrown string.
 
 ### 7. Methods instead of helper classes
 
@@ -159,7 +177,8 @@ The order:
    is today). A module moves, it is not copied: its old name becomes an adapter in the compatibility package in the same
    change.
 4. **The packages, templates and site** move to `std`, package by package.
-5. **The prelude shrinks** and the prefix is reserved, once nothing outside the compatibility package uses the old names.
+5. **The prelude becomes the implicit import** of section 2, the root package empties, and the prefix is reserved, once
+   nothing outside the compatibility package uses the old names.
 6. **The compiler** moves off the compatibility package after ADR 0006's gates.
 
 ## Open questions
@@ -167,7 +186,7 @@ The order:
 - Whether the compatibility package ships in the SDK, or is fetched from the registry like any dependency.
 - The first-party packages (`haxeon.ui`, `haxeon.gpu`, `haxeon.audio`, ...) carry the brand too. They are packages, not
   the standard library, and this ADR leaves their names as they are.
-- `Dynamic` and reflection: what of `Reflect` and `Type` the `std` API keeps, beside the compatibility package.
+- `Dynamic` and reflection: what of `Reflect` and `Type` `std.reflect` keeps, beside the compatibility package.
 - When non-null by default (section 3's prerequisite) lands, against this migration: it changes the meaning of existing
   code, so it is a decision of its own.
 
