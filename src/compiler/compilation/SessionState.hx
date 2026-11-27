@@ -241,9 +241,14 @@ class SessionState {
 
 	/**
 	 * Releases the modules' tokens, syntax trees, semantic models and canonical declarations, for a compile that keeps no session
-	 * once typing is done: the IR is assembled from the typed program. Changes the modules in place, as `releaseRetained` does.
+	 * once typing is done: the IR is assembled from the typed program. What the session keeps of them for a next build goes too:
+	 * the names every module sees hold the parses, and the declaration keys the canonical declarations. Changes the modules and
+	 * those kinds in place, as `releaseRetained` does.
 	 */
-	public function releaseSyntax():Void
+	public function releaseSyntax():Void {
+		declarationKeys.clear();
+		moduleNames.clear();
+		programNames.clear();
 		for (state in modules) {
 			state.tokens = TokenTable.empty;
 			state.ast = null;
@@ -267,6 +272,7 @@ class SessionState {
 			// Nothing canonical is left to reuse: a later canonicalization starts over.
 			state.canonicalRevision = -1;
 		}
+	}
 
 	/**
 	 * Releases the records only a next build reads to decide what to redo (dependency edges, fingerprints, the answers typed bodies
