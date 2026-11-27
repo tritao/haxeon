@@ -3,8 +3,8 @@ import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.GpuViewport;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
@@ -24,7 +24,7 @@ class FountainView implements View {
 		this.viewport = viewport;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var controls = new Column("controls", [
 			new KeyedView("title", new Text("Fountain")),
 			new KeyedView("gravity-label", new Text("Gravity")),

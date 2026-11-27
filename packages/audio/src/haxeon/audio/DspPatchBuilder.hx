@@ -134,9 +134,10 @@ class DspPatchBuilder {
 			voice.set_additional_lfos(index, additionalLfos[index].nativeValue());
 		}
 		voice.additional_lfo_count = additionalLfos.length;
-		if (source != null) {
-			var made = NativeKitAudio.nk_audio_dsp_patch_create_source_extended(options, voice, source.nativeValue(),
-				source.samples);
+		var sampled = source;
+		if (sampled != null) {
+			var made = NativeKitAudio.nk_audio_dsp_patch_create_source_extended(options, voice, sampled.nativeValue(),
+				sampled.samples);
 			AudioResult.check(made.status, "audio.dsp.patch.buildSource");
 			return new DspPatch(made.out_patch);
 		}

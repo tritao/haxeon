@@ -2,7 +2,7 @@ package haxeon.ui.widgets.commands;
 import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.View;
 
 /**
@@ -24,8 +24,8 @@ class CommandScope implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		var node = child.build(context);
-		node.commandScope = scope;
-		return node;
+		var modifier = new RootModifier();
+		modifier.commandScope = scope;
+		return context.build(child, modifier);
 	}
 }

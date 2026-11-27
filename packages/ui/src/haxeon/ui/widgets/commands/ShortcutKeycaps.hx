@@ -7,6 +7,7 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.KeyedView;
@@ -55,11 +56,11 @@ class ShortcutKeycaps implements View {
 		var style = new LayoutStyle();
 		style.childGap = 10.0;
 		style.childAlignY = LayoutAlignmentY.Center;
-		var node = new Row("shortcut-keycaps", children, style).build(context);
-		node.semantics = new haxeon.ui.semantics.Semantics(haxeon.ui.semantics.Semantics.AccessibilityRole.Text,
+		var modifier = new RootModifier();
+		modifier.semantics = new haxeon.ui.semantics.Semantics(haxeon.ui.semantics.Semantics.AccessibilityRole.Text,
 			shortcut);
-		node.hitTestSelf = false;
-		return node;
+		modifier.hitTestSelf = false;
+		return context.build(new Row("shortcut-keycaps", children, style), modifier);
 	}
 }
 
@@ -107,7 +108,6 @@ private class ShortcutKeycap implements View {
 			arrow,
 			14.0,
 			foreground);
-		var node = new Row("keycap", [new KeyedView("label", content)], style).build(context);
 		var surfaceStyle = new LayoutStyle();
 		surfaceStyle.width = LayoutAxis.grow();
 		surfaceStyle.height = LayoutAxis.grow();
@@ -127,9 +127,9 @@ private class ShortcutKeycap implements View {
 				border,
 				1.0);
 		});
-		node.add(surface);
-		node.hitTestSelf = false;
-		return node;
+		var modifier = new RootModifier().add(surface);
+		modifier.hitTestSelf = false;
+		return context.build(new Row("keycap", [new KeyedView("label", content)], style), modifier);
 	}
 
 	static function blend(base:Color, ink:Color, amount:Float):Color {
