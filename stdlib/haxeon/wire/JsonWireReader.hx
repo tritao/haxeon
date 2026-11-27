@@ -26,7 +26,7 @@ private class JsonWireReadFrame {
 	}
 }
 
-/** Bounded JSON reader with the same typed events as MessagePackReader. */
+/** Reads one value from the JSON wire envelope event by event, as `MessagePackReader` reads MessagePack, within limits. */
 class JsonWireReader {
 	final root:Dynamic;
 	final maxContainer:Int;
@@ -34,6 +34,11 @@ class JsonWireReader {
 	final frames:Array<JsonWireReadFrame> = [];
 	var consumed:Bool = false;
 
+	/**
+	 * A reader of the JSON wire envelope `source`, `{"version": 1, "value": ...}`, refusing more than `maxContainer`
+	 * items in a container, `maxDepth` levels of nesting, or `maxBytes` bytes of text. It fails the decode with a
+	 * `WireFailure` when `source` is not such an envelope or is over the limit.
+	 */
 	public function new(source:String, ?maxContainer:Int = 1000000, ?maxDepth:Int = 64,
 			?maxBytes:Int = 16 * 1024 * 1024) {
 		if (source == null || maxContainer < 0 || maxDepth < 0 || maxBytes < 0)
@@ -87,6 +92,10 @@ class JsonWireReader {
 		return pushFrame(values, map);
 	}
 
+	/**
+	 * Enters the object that comes next, and returns how many fields it has: each is read as its name, then its value.
+	 * It fails the decode with a `WireFailure` when what comes next is not an object.
+	 */
 	public function readObjectHeader():Int {
 		var value = take();
 		if (!isObjectValue(value))
@@ -110,6 +119,7 @@ class JsonWireReader {
 		return values.length;
 	}
 
+	/** Whether the whole value has been read. */
 	public function atEnd():Bool {
 		trimCompleted();
 		return consumed && frames.length == 0;
@@ -121,22 +131,27 @@ class JsonWireReader {
 			throw new WireFailure(TrailingData);
 	}
 
+	/** Whether what comes next is null. */
 	public function isNil():Bool
 		return peek() == null;
 
+	/** Whether what comes next is a string. */
 	public function isString():Bool
 		return Std.isOfType(peek(), String);
 
+	/** Whether what comes next is an object. */
 	public function isObject():Bool
 		return isObjectValue(peek());
 
 	function isObjectValue(value:Dynamic):Bool
 		return Reflect.isObject(value) && !Std.isOfType(value, String) && !Std.isOfType(value, Array);
 
+	/** Reads a null; fails the decode with a `WireFailure` when what comes next is not one. */
 	public function readNil():Void
 		if (take() != null)
 			throw new WireFailure(Malformed("Expected JSON null"));
 
+	/** Reads a boolean; fails the decode with a `WireFailure` when what comes next is not one. */
 	public function readBool():Bool {
 		var value = take();
 		if (!Std.isOfType(value, Bool))
@@ -144,6 +159,7 @@ class JsonWireReader {
 		return cast value;
 	}
 
+	/** Reads an integer; fails the decode with a `WireFailure` when what comes next is not one. */
 	public function readInt():Int {
 		var value = take();
 		if (Std.isOfType(value, String)) {
@@ -161,6 +177,10 @@ class JsonWireReader {
 		return cast value;
 	}
 
+	/**
+	 * Reads a 64-bit integer: a JSON integer, or a string `"i64:..."` for one past the `Int` range. It fails the decode
+	 * with a `WireFailure` when what comes next is neither.
+	 */
 	public function readInt64():haxe.Int64 {
 		var value:Dynamic = take();
 		if (Std.isOfType(value, Int))
@@ -173,6 +193,10 @@ class JsonWireReader {
 		return haxe.Int64.parseString(encoded.substr(4));
 	}
 
+	/**
+	 * Reads a number, or `"float:NaN"`, `"float:+Infinity"` or `"float:-Infinity"`; fails the decode with a
+	 * `WireFailure` when what comes next is none of these.
+	 */
 	public function readFloat():Float {
 		var value:Dynamic = take();
 		if (Std.isOfType(value, String)) {
@@ -188,6 +212,7 @@ class JsonWireReader {
 		return cast value;
 	}
 
+	/** Reads a string; fails the decode with a `WireFailure` when what comes next is not one. */
 	public function readString():String {
 		var value = take();
 		if (!Std.isOfType(value, String))
@@ -195,6 +220,10 @@ class JsonWireReader {
 		return cast value;
 	}
 
+	/**
+	 * Reads bytes, written as a string `"base64:..."`; fails the decode with a `WireFailure` when what comes next is
+	 * not one.
+	 */
 	public function readBinary():Bytes {
 		var encoded = readString();
 		if (!StringTools.startsWith(encoded, "base64:"))
@@ -202,12 +231,21 @@ class JsonWireReader {
 		return Base64.decode(encoded.substr(7));
 	}
 
+	/**
+	 * Enters the array that comes next, and returns how many items it has; fails the decode with a `WireFailure` when
+	 * what comes next is not an array.
+	 */
 	public function readArrayHeader():Int
 		return open(false);
 
+	/**
+	 * Enters the map that comes next, written as an array of `[key, value]` pairs, and returns how many entries it has;
+	 * each is read as its key, then its value.
+	 */
 	public function readMapHeader():Int
 		return open(true);
 
+	/** Skips what comes next, with all it contains. */
 	public function skip():Void {
 		take();
 	}

@@ -2,9 +2,11 @@ package haxeon.wire;
 
 import haxe.io.Bytes;
 
-/** Incremental HMPK assembly. feed returns bytes consumed; zero means backpressure.
- * A caller keeps the unconsumed input and drains take() before feeding again.
- * Memory is bounded by maxQueuedBytes plus the ten-byte header. */
+/**
+ * Frames (`MessagePackFrame`) assembled from a byte stream as it arrives. `feed` takes what it can and says how much; 0 is
+ * backpressure, and the caller keeps the rest and drains `take` before feeding again. Memory is bounded by
+ * `maxQueuedBytes` and the ten-byte header.
+ */
 class MessagePackFrameReader {
 	final maxPayload:Int;
 	final maxQueuedBytes:Int;
@@ -17,6 +19,10 @@ class MessagePackFrameReader {
 	var reservedBytes:Int = 0;
 	var failed:Bool = false;
 
+	/**
+	 * A reader taking payloads up to `maxPayload` bytes, queueing up to `maxMessages` of them and `maxQueuedBytes`
+	 * bytes until `take`.
+	 */
 	public function new(maxPayload:Int = 4 * 1024 * 1024, maxQueuedBytes:Int = 8 * 1024 * 1024, maxMessages:Int = 32) {
 		if (maxPayload < 0
 			|| maxQueuedBytes < maxPayload
@@ -28,9 +34,11 @@ class MessagePackFrameReader {
 		this.maxMessages = maxMessages;
 	}
 
+	/** How many bytes the reader holds: queued payloads and the frame being assembled. */
 	public function bufferedBytes():Int
 		return reservedBytes + headerUsed;
 
+	/** How many payloads wait to be taken. */
 	public function bufferedMessages():Int
 		return queued.length;
 

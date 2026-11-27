@@ -8,6 +8,7 @@ class WireFailure extends haxe.Exception {
 	/** Why the input could not be decoded. */
 	public final error:WireError;
 
+	/** A failure for `error`, whose message describes it. */
 	public function new(error:WireError) {
 		super(switch error {
 			case Truncated: "Wire input is truncated";

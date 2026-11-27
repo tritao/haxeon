@@ -10,7 +10,10 @@ import haxe.io.Bytes;
 	payload. Version 1 currently reserves all flags and requires them to be 0.
  */
 class MessagePackFrame {
+	/** The frame version `pack` writes and `unpack` expects by default. */
 	public static inline final CURRENT_VERSION:Int = 1;
+
+	/** The size of a frame's header: magic, version, flags and payload length. */
 	public static inline final HEADER_BYTES:Int = 10;
 
 	static inline final MAGIC_0:Int = 0x48;
@@ -18,6 +21,7 @@ class MessagePackFrame {
 	static inline final MAGIC_2:Int = 0x50;
 	static inline final MAGIC_3:Int = 0x4b;
 
+	/** `payload` in a frame of `version`. Throws for flags other than 0. */
 	public static function pack(payload:Bytes, ?version:Int = CURRENT_VERSION, ?flags:Int = 0):Bytes {
 		if (payload == null)
 			throw new haxe.Exception("MessagePack frame payload cannot be null");

@@ -13,6 +13,7 @@ import haxeon.wire.MessagePackWriter;
 	the escape hatch for values that do not fit the compiler-owned wire profile.
  */
 class MessagePack {
+	/** `value` in MessagePack, written by `codec`. */
 	public static function encodeWith<T>(value:T, codec:MessagePackCodec<T>):Bytes {
 		var writer = new MessagePackWriter();
 		codec.encode(writer, value);
