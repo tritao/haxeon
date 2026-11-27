@@ -169,13 +169,38 @@ Not adopted: reference records (classes keep identity equality), struct construc
 positional component keys (subtle under conditionals), and compile-time body purity, which [PURITY.md](../../../docs/design/PURITY.md)
 defers in favour of the runtime checks.
 
+## Beyond the end state: descriptions as values
+
+Decided 2026-11-27 as the direction after the inputs structs. A component description becomes an `Equatable` struct
+implementing the component interface, and the framework keeps a body when `description == previous`: no component
+writes a comparison, and none can fall out of step with its fields. A struct boxes when converted to the interface,
+which is the allocation a class description costs today. Child views then compare by value; a button with a label view
+built afresh each run compares its old and new label by identity today, so it never keeps its body.
+
+It needs, in this order:
+
+1. **Borrowed struct parameters** ([STRUCTS.md](../../../docs/design/STRUCTS.md#borrowed-parameters-planned)), then
+   `LayoutStyle` as a struct, gated on the live-memory census and frame time.
+2. **Equality through an interface.** Values of an interface that extends `Equatable` are equal when they have one
+   dynamic type and its `==` holds; today interface `==` is identity. It replaces each component's type check.
+3. **Callbacks.** Function fields have no synthesized equality, which stays right in general. A UI type whose equality
+   is presence holds event callbacks, called through the newest description as `latestOf` does; a callback the body calls
+   while building keeps identity equality.
+4. **Child views by value**, a framework-wide change to what keeps; measured before it lands.
+
+The inputs structs are on this path: each becomes its description's value part, and the conversion moves the style,
+callbacks and views into it and deletes `inputsEqual`. Until then `inputsEqual` is `props == other.props`, the style by
+`Diff.mask`, and the callbacks by the rules above; a shared base class for those few terms was considered and left out.
+
 ## Next steps
 
 1. Without compiler work: the read-only root type (done: `ViewRoot`); the `StyleIdentity` struct with the styled-node factory
    (done: `BuildContext.styled`, `resolveStyled`, `applyStyled`), where
    routing owns `RenderNode.states`; inputs structs for `TextField` and `Tabs` with handwritten constructors.
-2. Haxeon: named arguments, then the memberwise initializer and `with` ([NAMED_ARGUMENTS.md](../../../docs/design/NAMED_ARGUMENTS.md)).
-   Then move every component's configuration into an inputs struct.
+2. Haxeon: named arguments, then the memberwise initializer and `with` (done:
+   [NAMED_ARGUMENTS.md](../../../docs/design/NAMED_ARGUMENTS.md)). Then move every component's configuration into an
+   inputs struct: Button and TextField first, then the rest in one pass.
 3. The `willEditRetained` survey, then ADR 0002 stages 6 and 7.
 4. The `View`/`ScopeView` merge and the frame pipeline.
-5. If the pattern holds, a conformance that generates the callback part of `inputsEqual`.
+5. Descriptions as values ([above](#beyond-the-end-state-descriptions-as-values)), which replaces generating parts of
+   `inputsEqual`.

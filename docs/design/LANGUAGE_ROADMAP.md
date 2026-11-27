@@ -34,6 +34,8 @@ The rules for every entry:
 | `internal` | An access level for what a package's modules share but its users may not use, enforced per manifest package, with named friends (`package.friends`) for its own test projects and no public declaration exposing an internal type. Implemented. | [LANGUAGE_SUPPORT.md](../reference/LANGUAGE_SUPPORT.md) |
 | Enum members and per-case constants | `enum` is the one construct for closed value sets: any methods and static members, and immutable per-case constants (`final` fields each case sets, checked complete at the declaration). Raw codes are raw-value enums. Implemented. | [ENUM_MEMBERS.md](ENUM_MEMBERS.md) |
 | Errors as values | `Result<T, E>` in the root package for expected failures, must-use values (`MustUse`, `_ = expr;`), prefix `try` propagation with the same error type, and `Void` as the unit type. Exceptions stay for bugs. | [ERROR_MODEL.md](ERROR_MODEL.md) |
+| Borrowed struct parameters | A struct parameter the callee only reads takes the caller's value without a copy; the step before a struct `LayoutStyle`. Planned. | [STRUCTS.md](STRUCTS.md#borrowed-parameters-planned) |
+| Equality through an interface | Values of an interface that extends `Equatable` are equal when they have one dynamic type and its `==` holds, so UI descriptions compare without a hand-written check. Planned. | [ARCHITECTURE_NOTES.md](../../packages/ui/docs/ARCHITECTURE_NOTES.md#beyond-the-end-state-descriptions-as-values) |
 | Named arguments and memberwise initializers | Calls may name arguments in declaration order, skipping optional ones, and structs get a synthesized memberwise initializer and `with`. An extension: every Haxe call keeps its meaning. Implemented. | [NAMED_ARGUMENTS.md](NAMED_ARGUMENTS.md) |
 
 ### Raw-value enums (implemented)
@@ -310,4 +312,7 @@ Check each against what Haxeon already supports before designing it.
    leave real bugs.
 11. Errors as values, in the stages of [ERROR_MODEL.md](ERROR_MODEL.md#stages): generic enum methods, `Result`,
    must-use, `Void` as the unit type, `try`, then the boundary packages' migration.
-12. Smaller conveniences when a concrete use appears.
+12. Descriptions as values for the UI: borrowed struct parameters, then equality through an interface
+    ([ARCHITECTURE_NOTES.md](../../packages/ui/docs/ARCHITECTURE_NOTES.md#beyond-the-end-state-descriptions-as-values)).
+13. Smaller conveniences when a concrete use appears, such as abstract classes (Haxe 4.2's `abstract class`), which
+    no hierarchy needs yet.
