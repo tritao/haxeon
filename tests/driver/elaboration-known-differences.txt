@@ -33,3 +33,4 @@ map-key-value-iterator	iteration argument: a specialization's concrete iteration
 generic-owner-map-handles	owner specialization: a map member of an owner specialized at a structure is read as Dynamic (the verifier rejects get's result)
 async-Future	owner specialization: an enum in the owner's parameters is specialized differently (Outcome in Promise<Int>.resolve)
 map-to-string	nested generic call: a callee specialized at the body's own parameter (item 4; Std.stringifyMap.K reaches lowering)
+call-type-arguments	iteration argument: a specialization's concrete iteration argument meets the body's own element type (Lambda.fold)

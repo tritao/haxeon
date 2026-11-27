@@ -5,7 +5,8 @@ Use a class when you want an object with fields and methods. Declare `implements
 
 Use an anonymous structure when the field names and types describe the data. `Shelf` gives that shape a name
 with `typedef`. The generic function `first<T>` works with an array of any element type and returns that type.
-Here the compiler infers `T` as `String` from the array.
+Here the compiler infers `T` as `String` from the array. Where nothing gives a type parameter, the call names it before
+its arguments: `first<String>(tags)`, or `MessagePack.decode<User>(bytes)`, whose `T` appears only in its result.
 
 ```haxe
 interface Named {

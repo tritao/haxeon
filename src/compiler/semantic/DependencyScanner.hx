@@ -140,6 +140,10 @@ class DependencyScanner {
 			case CheckType(value, type, _):
 				scanAnnotation(type, dependencies, typeParameters);
 				scanExpression(value, dependencies, typeParameters);
+			case GenericCall(written, typeArguments, _):
+				for (type in typeArguments)
+					scanAnnotation(type, dependencies, typeParameters);
+				scanExpression(written, dependencies, typeParameters);
 			case SwitchExpression(subject, cases, fallback, _):
 				if (fallback == null)
 					dependencies.optional.set(compiler.runtime.RuntimeType.UNMATCHED_VALUE, true);

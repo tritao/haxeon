@@ -1,6 +1,6 @@
 # Type arguments at calls (design note)
 
-Status: proposal (2026-11-27), for the user's review; not started.
+Status: implemented (2026-11-27), as decided by the user: the spelling below, all type arguments or none.
 
 A call names its callee's type arguments, as in `MessagePack.decode<User>(bytes)`. Inferring them from the arguments and
 from the expected type stays the default; the explicit form covers the calls where neither gives them.
@@ -26,24 +26,34 @@ taking `T` = `Void` from a lambda with no arguments (`apply(() -> 1)` for `apply
 Inferring through more positions (a `switch` subject, a method receiver) would fix the first two lines of the example and
 none of the rest. It would also make a call's type depend on how its value is used further away.
 
-## Proposal
+## Rules
 
 - **Syntax.** A callee written as a name or a field access may be followed by type arguments before its arguments:
   `decode<User>(bytes)`, `RpcMethod.wire<Query, Answer>(100)`, `items.map<String>(describe)`. This is the form
   `new Map<String, Int>()` already has, and the one C#, Kotlin, TypeScript and Dart readers expect.
-- **Parsing.** After a name or a field access, `<` starts type arguments when the tokens up to its matching `>` parse as
-  a list of types and the next token is `(`. The parser decides this by looking ahead over tokens, as `try` looks for
-  its `catch`. The rule depends only on the token shapes, not on what the names resolve to, so a formatter or highlighter
-  parses it the same way. Without that `(`, `<` stays a comparison.
+- **Parsing.** After a name or a field access, `<` starts type arguments when the tokens up to its matching `>` are
+  only what types are written with (names, `.`, `,`, `->`, `?`, `:`, braces, and a parenthesis whose `)` is followed by
+  `->`, as a function type's is) and the next token is `(` (`Parser.typeArgumentsAhead`). The parser decides this by
+  looking ahead over tokens, as `try` looks for its `catch`. The rule depends only on the token shapes, not on what the
+  names resolve to, so a formatter or highlighter parses it the same way. Without that `(`, `<` stays a comparison. The
+  AST wraps the call written without them: `GenericCall(call, typeArguments, span)`, so every pass that reads a `Call`
+  or `MethodCall` reads it unchanged.
 - **Typing.** The type arguments bind the callee's own type parameters in declaration order, before the arguments are
-  typed, so lambdas and literals are typed against them (`apply<Void>(() -> 1)`). A generic owner's parameters still come
-  from the receiver. The call gives all of the callee's own type parameters or none of them. Each is checked against
-  its constraints as an inferred one is. A result that does not fit the expected type is the same mismatch as with
-  inferred arguments.
-- **Intrinsics.** `MessagePack.decode`, `JsonWire.decode` and `RpcMethod.wire` already declare their type parameters, so
-  their lowering reads the explicit argument when one is given, and the expected type otherwise.
-- **Errors.** Type arguments for a callee with no type parameters of its own, or the wrong number of them, are errors
-  that name the callee and its parameters.
+  typed, so lambdas and literals are typed against them (`apply<Void>(() -> 1)`). They are the call's: the arguments
+  convert to them rather than refine them, so `same<Float>(5)` is a `Float` and `same<Dynamic>(5)` a `Dynamic`. A generic
+  owner's parameters still come from the receiver, and so do those a static extension's or an array or map method's
+  receiver fixes: `[1, 2].fold<String>(f, "")` writes only `Lambda.fold`'s `B`. The call gives all of the callee's own
+  type parameters or none of them. Each is checked against its constraints as an inferred one is. A result that does
+  not fit the expected type is the same mismatch as with inferred arguments. The typer keeps the written arguments by
+  the call's span while the call is typed (`CallResolver.typeGenericCall`), and each path that resolves a generic callee
+  binds them (`bindTypeArguments`), so a call whose arguments no path took is the error below.
+- **Intrinsics.** `MessagePack.decode`, `JsonWire.decode`, their `encode` and `RpcMethod.wire` declare their type
+  parameters, so their lowering reads the written argument when one is given, and the value or the expected type
+  otherwise.
+- **Errors.** Type arguments for a callee with no type parameters of its own (`"plain" takes no type arguments of its
+  own`), or the wrong number of them (`"make" takes 1 type argument (T), got 2`), are errors that name the callee and its
+  parameters. An enum constructor takes its enum's type arguments from the expected type, as before.
+- **Tooling.** Signature help skips a call's type arguments back to its callee.
 
 ## Haxe compatibility
 
@@ -51,7 +61,7 @@ Haxe has no call type arguments, so the new reading can only take code that Haxe
 shape: `f(a < b, c > (d))`, which Haxe reads as two arguments. Under the new rule it is a call of `a` with type
 arguments `b` and `c`. The two readings never both type: the comparison needs `a`, `b` and `c` to be values, and the call needs
 `a` to be a generic function and `b` and `c` to be types. So no Haxe code silently changes meaning. That one shape fails
-to compile instead, with an error that suggests parentheses, `(a < b), (c > d)`. C# made the same choice for
+to compile instead (`Unknown type "b"`), with a note to put each comparison in parentheses. C# made the same choice for
 `F(G<A, B>(7))`.
 
 ## Alternatives
@@ -63,18 +73,8 @@ to compile instead, with an error that suggests parentheses, `(a < b), (c > d)`.
   them.
 - **Inferring through `switch` subjects and receivers.** See [Problem](#problem).
 
-## Work
+## Not done
 
-1. The parser's lookahead and a call node carrying its type arguments, through the AST walkers. The parser tests cover
-   the ambiguous shape and nested arguments (`decode<Array<User>>(bytes)`, whose `>>` closes two lists).
-2. The typer binding explicit arguments, with the arity and constraint checks, including generic methods.
-3. The wire and RPC intrinsics reading the explicit argument. The stdlib's typed locals and check-type expressions that
-   only state a call's type argument become the explicit form.
-4. Docs: [LANGUAGE_SUPPORT.md](../reference/LANGUAGE_SUPPORT.md), the generics and wire learn pages, and
-   ERROR_MODEL.md's wire note and `Void` limit.
-
-## For the user
-
-- Whether to add the form, and with this spelling.
-- Whether a call may give only some type arguments, with `_` for the rest, as Rust's `collect::<Vec<_>>()` does. The
-  proposal is all or none, with `_` added when a callee with several type parameters needs it.
+- A call giving only some type arguments, with `_` for the rest, as Rust's `collect::<Vec<_>>()` does: added when a
+  callee with several type parameters needs it.
+- Type arguments on a function value without a call (`var f = decode<User>;`), and on an enum constructor.

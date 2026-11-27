@@ -64,6 +64,83 @@ class CallResolver {
 		this.staticExtensions = new StaticExtensions(session, genericInstantiation);
 	}
 
+	/**
+	 * The type arguments written for the calls being typed (`GenericCall`), by the call's span. The resolution of each
+	 * call's callee takes them (`bindTypeArguments`), however many paths lead there, and a call whose type arguments no
+	 * resolution took is an error.
+	 */
+	final writtenTypeArguments:Array<{span:SourceSpan, types:Array<CompilerType>, taken:Bool}> = [];
+
+	/**
+	 * `call` with type arguments `written` for its callee (`decode<User>(bytes)`), typed as it is without them while its
+	 * callee's resolution binds them to its type parameters.
+	 */
+	public function typeGenericCall(call:AstExpression, written:Array<AstType>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):TypedExpression {
+		var entry = {span: span, types: ([]: Array<CompilerType>), taken: false};
+		writtenTypeArguments.push(entry);
+		var typed = try {
+			for (type in written)
+				entry.types.push(session.declarations.resolve(type, span, session.currentContext.typeSubstitutions));
+			bodyTyper.typeExpression(call, scope, expectedType);
+		} catch (error:CompileError) {
+			writtenTypeArguments.remove(entry);
+			// Haxe reads `f(a < b, c > (d))` as two comparisons, which fail to type as a call (CALL_TYPE_ARGUMENTS.md).
+			if (!entry.taken)
+				error.diagnostic.notes.push("if \"<\" and \">\" compare here, put each comparison in parentheses");
+			throw error;
+		}
+		writtenTypeArguments.remove(entry);
+		if (!entry.taken)
+			fail(DiagnosticCode.CALL_FORM, '"${calleeName(call)}" takes no type arguments of its own', span);
+		return typed;
+	}
+
+	static function calleeName(call:AstExpression):String
+		return switch call {
+			case Call(name, _, _), MethodCall(_, name, _, _): compiler.core.QualifiedName.last(name);
+			default: "";
+		};
+
+	/**
+	 * Binds the type arguments written for the call at `span` to its callee `name`'s type `parameters` in `substitutions`,
+	 * which must take one for each. False when the call has none written, so the arguments and the expected type infer them.
+	 */
+	function bindTypeArguments(name:String, parameters:Array<String>, substitutions:Map<String, CompilerType>,
+			span:SourceSpan):Bool {
+		if (writtenTypeArguments.length == 0)
+			return false;
+		var entry = null;
+		for (candidate in writtenTypeArguments)
+			if (candidate.span.start == span.start && candidate.span.end == span.end
+				&& candidate.span.file == span.file)
+				entry = candidate;
+		if (entry == null || entry.taken)
+			return false;
+		entry.taken = true;
+		var shown = compiler.core.QualifiedName.last(name);
+		if (entry.types.length != parameters.length)
+			fail(DiagnosticCode.CALL_FORM,
+				'"$shown" takes ${parameters.length} type argument${parameters.length == 1 ? "" : "s"} (${parameters.join(", ")}), got ${entry.types.length}',
+				span);
+		for (index in 0...parameters.length)
+			substitutions.set(parameters[index], entry.types[index]);
+		return true;
+	}
+
+	/**
+	 * `bindTypeArguments` for a callee whose first argument is the receiver (a static extension, an array or map library
+	 * method): the type parameters the receiver's declared type mentions come from it, so only the others are written.
+	 */
+	function bindReceiverCallTypeArguments(fn:AstFunction, parameters:Array<String>,
+			substitutions:Map<String, CompilerType>, span:SourceSpan):Bool {
+		if (writtenTypeArguments.length == 0)
+			return false;
+		var receiver = fn.arguments.length == 0 ? null : fn.arguments[0].type, none:Map<String, CompilerType> = [];
+		var own = parameters.filter(parameter -> receiver == null || !mentionsUnbound(receiver, [parameter], none));
+		return bindTypeArguments(fn.name, own, substitutions, span);
+	}
+
 	public function coerceArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>,
 			name:String):Array<TypedExpression> {
 		var output:Array<TypedExpression> = [];
@@ -291,9 +368,11 @@ class CallResolver {
 		if (parameters.length > 0) {
 			var first = receiverFor(declared, receiver, null), preset:Map<String, CompilerType> = [];
 			// A Void expectation is a statement whose result is discarded, not a result of type Void.
-			if (expectedType != null && !sameType(expectedType, TVoid))
+			var written = bindReceiverCallTypeArguments(fn, parameters, preset, span);
+			if (!written && expectedType != null
+				&& !sameType(expectedType, TVoid))
 				genericInstantiation.inferTypeParameters(fn.result, expectedType, parameters, preset, span);
-			var prepared = typeGenericCallArguments(fn, arguments, scope, span, [first], preset);
+			var prepared = typeGenericCallArguments(fn, arguments, scope, span, [first], preset, written);
 			var info = session.methodInfoOf(key);
 			return genericInstantiation.specialize(key, fn, prepared.arguments, span, scope,
 				info == null ? null : info.owner, true, prepared.substitutions);
@@ -788,12 +867,12 @@ class CallResolver {
 	**/
 	public function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope,
 			span:SourceSpan, ?leading:Array<TypedExpression>,
-			?presetSubstitutions:Map<String, CompilerType>):{
+			?presetSubstitutions:Map<String, CompilerType>, written = false):{
 				arguments:Array<TypedExpression>,
 				substitutions:Map<String, CompilerType>
 			} {
 		return typeGenericArguments(BodyTyper.functionTypeParameters(fn), fn.arguments, arguments, scope, span, leading,
-			presetSubstitutions, fn);
+			presetSubstitutions, fn, written);
 	}
 
 	/**
@@ -802,7 +881,7 @@ class CallResolver {
 	**/
 	function typeGenericArguments(parameters:Array<String>, declaredArguments:Array<AstArgument>,
 			arguments:Array<AstExpression>, scope:Scope, span:SourceSpan, ?leading:Array<TypedExpression>,
-			?presetSubstitutions:Map<String, CompilerType>, ?fn:AstFunction):{
+			?presetSubstitutions:Map<String, CompilerType>, ?fn:AstFunction, written = false):{
 				arguments:Array<TypedExpression>,
 				substitutions:Map<String, CompilerType>
 			} {
@@ -812,8 +891,9 @@ class CallResolver {
 			offset = leading == null ? 0 : leading.length,
 			lambdas:Array<Int> = [];
 		// A parameter a `Dynamic` expectation of the result gives (`trace(one(i -> p))`) is what the arguments leave it: Dynamic
-		// only where they fix nothing, as Haxe's Dynamic unifies with any type. An owner's parameter is the receiver's.
-		var fallbacks = [
+		// only where they fix nothing, as Haxe's Dynamic unifies with any type. An owner's parameter is the receiver's, and a
+		// `Dynamic` the call writes (`written`) is Dynamic.
+		var fallbacks = written ? [] : [
 			for (parameter => type in substitutions)
 				if (type.match(TDynamic) && parameters.contains(parameter)) parameter
 		];
@@ -847,8 +927,13 @@ class CallResolver {
 			if (allTypeParametersBound(parameters, substitutions))
 				expected = genericInstantiation.expectedArgumentType(fn, offset + index, declared, substitutions);
 			var argument = typeCallArgument(arguments[index], scope, expected, expected != null);
-			genericInstantiation.inferArgumentTypeParameters(fn, offset + index, declared, argument.type, parameters,
-				substitutions, argument.span);
+			// Written type arguments are the call's: its arguments convert to them rather than refine them.
+			if (!written)
+				genericInstantiation.inferArgumentTypeParameters(fn, offset + index, declared, argument.type,
+					parameters, substitutions, argument.span);
+			else if (expected != null)
+				argument = bodyTyper.coerceArgument(argument, expected, fn == null ? "call" : fn.name,
+					offset + index + 1);
 			typed.push(argument);
 		}
 		while (lambdas.length > 0) {
@@ -862,9 +947,9 @@ class CallResolver {
 				if (expected == null && !lambdaParametersAnnotated(arguments[index]))
 					continue;
 				var argument = typeCallArgument(arguments[index], scope, expected, expected != null);
-				genericInstantiation.inferArgumentTypeParameters(fn, offset + index, declared, argument.type,
-					parameters,
-					substitutions, argument.span);
+				if (!written)
+					genericInstantiation.inferArgumentTypeParameters(fn, offset + index, declared, argument.type,
+						parameters, substitutions, argument.span);
 				// A parameter only the callback's result fixes is the type variable its body filled (or left empty, which
 				// `settleTypeArguments` settles where only this callback carries it).
 				for (parameter => variable in opened)
@@ -1138,8 +1223,11 @@ class CallResolver {
 			var generated = typeWireCall(methodKey, method, arguments, span, scope, expectedType);
 			if (generated != null)
 				return generated;
-			if (BodyTyper.functionTypeParameters(method).length > 0) {
-				var prepared = typeGenericCallArguments(method, arguments, scope, span);
+			var parameters = BodyTyper.functionTypeParameters(method);
+			if (parameters.length > 0) {
+				var preset:Map<String, CompilerType> = [];
+				var written = bindTypeArguments(method.name, parameters, preset, span);
+				var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset, written);
 				return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope,
 					methodInfo.owner, true, prepared.substitutions);
 			}
@@ -1178,9 +1266,11 @@ class CallResolver {
 			var preset = copyMap(substitutions),
 				parameters = BodyTyper.functionTypeParameters(method);
 			// A Void expectation is a statement whose result is discarded, not a result of type Void.
-			if (expectedType != null && !sameType(expectedType, TVoid))
+			var written = bindTypeArguments(method.name, parameters, preset, span);
+			if (!written && expectedType != null
+				&& !sameType(expectedType, TVoid))
 				genericInstantiation.inferTypeParameters(method.result, expectedType, parameters, preset, span);
-			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset);
+			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset, written);
 			return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner,
 				false, prepared.substitutions,
 				receiver);
@@ -1591,18 +1681,20 @@ class CallResolver {
 		if (local.signature.isInline == true && span.file == declaration.file
 			&& span.start >= declaration.start && span.end <= declaration.end)
 			fail(DiagnosticCode.DECLARATION_OR_MODIFIER, "Inline function cannot be recursive", declaration);
-		switch local.semantic {
-			case TFunction(_, result, _) if (expected != null && !expected.match(TVoid)):
-				genericInstantiation.inferFromType(result, expected, local.parameters, preset, span);
-			default:
-		}
+		var written = bindTypeArguments(name, local.parameters, preset, span);
+		if (!written)
+			switch local.semantic {
+				case TFunction(_, result, _) if (expected != null && !expected.match(TVoid)):
+					genericInstantiation.inferFromType(result, expected, local.parameters, preset, span);
+				default:
+			}
 		var declared = local.signature.arguments,
 			count = declared.length,
 			rest = count > 0 && RestArguments.isRest(declared[count - 1].type),
 			required = FunctionTypes.requiredCount(FunctionTypes.ofArguments(declared), rest ? count - 1 : count);
 		if (arguments.length < required || arguments.length > count && !rest)
 			fail(DiagnosticCode.CALL_FORM, 'Incorrect number of arguments to "$name"', span);
-		var prepared = typeGenericCallArguments(local.signature, arguments, scope, span, null, preset),
+		var prepared = typeGenericCallArguments(local.signature, arguments, scope, span, null, preset, written),
 			type = localInstantiation(local, prepared.substitutions, span);
 		return switch type {
 			case TFunction(parameters, result, _):
@@ -1721,9 +1813,11 @@ class CallResolver {
 				fail(DiagnosticCode.CALL_FORM, 'Wrong number of arguments to "$name"', span);
 			for (parameter in parameters)
 				preset.remove(parameter);
-			if (expectedType != null && !sameType(expectedType, TVoid))
+			var written = bindTypeArguments(method.name, parameters, preset, span);
+			if (!written && expectedType != null
+				&& !sameType(expectedType, TVoid))
 				genericInstantiation.inferTypeParameters(method.result, expectedType, parameters, preset, span);
-			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset);
+			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset, written);
 			for (parameter in parameters)
 				if (!prepared.substitutions.exists(parameter))
 					prepared.substitutions.set(parameter, TDynamic);
@@ -1786,7 +1880,9 @@ class CallResolver {
 				infoOwner = resolvedInfo.owner;
 				infoStatic = resolvedInfo.isStatic;
 			}
-			var prepared = typeGenericCallArguments(signature, arguments, scope, span);
+			var preset:Map<String, CompilerType> = [];
+			var written = bindTypeArguments(name, BodyTyper.functionTypeParameters(signature), preset, span);
+			var prepared = typeGenericCallArguments(signature, arguments, scope, span, null, preset, written);
 			return genericInstantiation.specialize(name, signature, prepared.arguments, span, scope, infoOwner,
 				infoStatic, prepared.substitutions);
 		}
@@ -1891,9 +1987,11 @@ class CallResolver {
 				? [] : session.representation.nominalSubstitutions(projectNominal(receiver.type, methodInfo.owner)),
 				parameters = BodyTyper.functionTypeParameters(method);
 			// A Void expectation is a statement whose result is discarded, not a result of type Void.
-			if (expectedType != null && !sameType(expectedType, TVoid))
+			var written = bindTypeArguments(method.name, parameters, preset, span);
+			if (!written && expectedType != null
+				&& !sameType(expectedType, TVoid))
 				genericInstantiation.inferTypeParameters(method.result, expectedType, parameters, preset, span);
-			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset);
+			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset, written);
 			return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner,
 				methodInfo.isStatic,
 				prepared.substitutions, receiver);
@@ -2141,9 +2239,11 @@ class CallResolver {
 		else {
 			substitutions = copyMap(substitutions);
 			// A Void expectation is a statement whose result is discarded, not a result of type Void.
-			if (expectedType != null && !sameType(expectedType, TVoid))
+			var written = bindTypeArguments(method.name, parameters, substitutions, span);
+			if (!written && expectedType != null
+				&& !sameType(expectedType, TVoid))
 				genericInstantiation.inferTypeParameters(method.result, expectedType, parameters, substitutions, span);
-			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, substitutions),
+			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, substitutions, written),
 				written = prepared.arguments.length;
 			substitutions = prepared.substitutions;
 			var expected = genericInstantiation.instantiate(displayName, method, prepared.arguments, span, scope,
@@ -2475,30 +2575,38 @@ class CallResolver {
 		var json = switch name {
 			case "haxeon.wire.JsonWire.encode", "haxeon.wire.JsonWire.decode": true;
 			case "haxeon.wire.MessagePack.encode", "haxeon.wire.MessagePack.decode": false;
-			case "haxeon.rpc.RpcMethod.wire":
-				return typeRpcDescriptor(name, arguments, span, scope, expectedType, false);
+			case "haxeon.rpc.RpcMethod.wire": false;
 			default: return null;
 		};
+		// Type arguments written for the call (`MessagePack.decode<User>(bytes)`) name the type; else the value or the
+		// expected type gives it.
+		var parameters = BodyTyper.functionTypeParameters(method),
+			written:Map<String, CompilerType> = [],
+			named:Null<Array<CompilerType>> = null;
+		if (bindTypeArguments(method.name, parameters, written, span))
+			named = [for (parameter in parameters) requiredMapValue(written, parameter)];
+		if (name == "haxeon.rpc.RpcMethod.wire")
+			return typeRpcDescriptor(name, arguments, span, scope,
+				named == null ? expectedType : TInstance(NominalKind.Class, RpcServiceTyping.METHOD, named), false);
 		if (arguments.length != 1)
 			fail(DiagnosticCode.CALL_FORM, 'Function "$name" expects 1 argument, got ${arguments.length}', span);
 		var format = json ? "JsonWire" : "MessagePack";
 		if (method.name == "encode") {
-			var value = typeExpressionValue(arguments[0], scope),
-				keyed = json ? WireCodecGenerator.requestJson(session, value.type, session.currentContext.name, span)
-					: WireCodecGenerator.request(session, value.type, session.currentContext.name, span),
+			var value = typeExpressionValue(arguments[0], scope, named == null ? null : named[0]);
+			if (named != null)
+				value = bodyTyper.coerceArgument(value, named[0], name, 1);
+			var keyed = json ? WireCodecGenerator.requestJson(session, value.type, session.currentContext.name, span)
+				: WireCodecGenerator.request(session, value.type, session.currentContext.name, span),
 				encoder = json ? WireCodecGenerator.jsonEncodeName(keyed) : WireCodecGenerator.encodeName(keyed);
 			return new TypedExpression(TCall(encoder, [value]), json ? TString : TBytes, span, false, null, null, name);
 		}
-		// The decoded type is the expected `Result`'s value type: `var user:Result<User, WireError> = MessagePack.decode(bytes)`,
-		// or `try`'s (`ExpressionTyper.propagatedExpectation`).
-		var valueType = switch expectedType == null ? null : compiler.types.Monomorphs.follow(expectedType) {
-			case null, TNull: null;
-			case TInstance(NominalKind.Enum, result, [value, _]) if (result == "Result"): value;
-			default: throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION,
-				'$format.decode gives a Result<T, WireError>; expect one, or take its value with try', span));
-		};
+		// The decoded type is the written one, or the expected `Result`'s value type: `var user:Result<User, WireError> =
+		// MessagePack.decode(bytes)`, or `try`'s (`ExpressionTyper.propagatedExpectation`).
+		var valueType = named != null ? named[0] : expectedValueType(format, expectedType, span);
 		if (valueType == null || compiler.types.Monomorphs.isUnbound(valueType))
-			fail(DiagnosticCode.VALUE_CONVERSION, '$format.decode requires an expected result type', span);
+			fail(DiagnosticCode.VALUE_CONVERSION,
+				'$format.decode needs the type it decodes: write it, $format.decode<T>(input), or expect a Result<T, WireError>',
+				span);
 		var inputType = json ? TString : TBytes,
 			source = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), inputType, '$format.decode input',
 				DiagnosticCode.ASSIGNMENT_OR_BINDING),
@@ -2521,6 +2629,16 @@ class CallResolver {
 				Call("haxeon.wire.WireFailure.settle", [decode, input], span), span), inner, expectedType);
 		return new TypedExpression(TBlockExpression(statements, settled), settled.type, span, false, null, null, name);
 	}
+
+	/** The value type of the `Result` a decode is expected to give, or null where nothing is expected. */
+	static function expectedValueType(format:String, expectedType:Null<CompilerType>,
+			span:SourceSpan):Null<CompilerType>
+		return switch expectedType == null ? null : compiler.types.Monomorphs.follow(expectedType) {
+			case null, TNull: null;
+			case TInstance(NominalKind.Enum, result, [value, _]) if (result == "Result"): value;
+			default: throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION,
+				'$format.decode gives a Result<T, WireError>; expect one, or take its value with try', span));
+		};
 
 	function typeRpcDescriptor(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, serviceMethod:Bool):TypedExpression {
@@ -2552,7 +2670,8 @@ class CallResolver {
 					serviceMethod ? null : name);
 			default:
 				throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION,
-					"RpcMethod.wire requires an expected RpcMethod<Request, Response> type", span));
+					"RpcMethod.wire needs its request and response types: write them, RpcMethod.wire<Request, Response>(id), or expect an RpcMethod<Request, Response>",
+					span));
 		}
 	}
 
@@ -3365,7 +3484,9 @@ class CallResolver {
 				'$kind.$name expects ${method.arguments.length - 1} arguments, got ${arguments.length}',
 				span);
 		session.runtimeDependencyTracker.record(session.currentContext.name, library);
-		var prepared = typeGenericCallArguments(method, arguments, scope, span, [receiver]);
+		var preset:Map<String, CompilerType> = [];
+		var written = bindReceiverCallTypeArguments(method, BodyTyper.functionTypeParameters(method), preset, span);
+		var prepared = typeGenericCallArguments(method, arguments, scope, span, [receiver], preset, written);
 		return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, library, true,
 			prepared.substitutions);
 	}

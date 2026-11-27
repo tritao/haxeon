@@ -473,6 +473,12 @@ class CanonicalComparison {
 						&& span(l2, r2);
 					default: false;
 				};
+			case GenericCall(l0, l1, l2): switch right {
+					case GenericCall(r0, r1, r2): astExpression(l0, r0)
+						&& array(l1, r1, astType)
+						&& span(l2, r2);
+					default: false;
+				};
 			case SwitchExpression(l0, l1, l2, l3): switch right {
 					case SwitchExpression(r0, r1, r2, r3): astExpression(l0, r0)
 						&& array(l1, r1, astSwitchExpressionCase)

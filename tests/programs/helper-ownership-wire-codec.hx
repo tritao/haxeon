@@ -19,13 +19,13 @@ function save(record:Record):haxe.io.Bytes
 	return MessagePack.encode(record);
 
 function load(bytes:haxe.io.Bytes):Record {
-	var restored:Record = (MessagePack.decode(bytes):Result<Record, haxeon.wire.WireError>).unwrap();
+	var restored:Record = MessagePack.decode<Record>(bytes).unwrap();
 	return restored;
 }
 
 function again(record:Record):Int {
 	var restored:Record =
-		(MessagePack.decode(MessagePack.encode(record)):Result<Record, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<Record>(MessagePack.encode(record)).unwrap();
 	return restored.id;
 }
 

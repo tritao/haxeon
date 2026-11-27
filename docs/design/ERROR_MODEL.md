@@ -96,7 +96,7 @@ enum Result<T, E> implements MustUse {
   is null, and a value read as `Void` is the unit value.
 - So `Result<Void, E>` (an operation that succeeds or fails with no value), `Future<Void>` and `Signal<Void>` work.
 - Not yet: a generic function does not infer `T` = `Void` from a lambda with fewer arguments than `T->U` has
-  (`apply(() -> 1)` for `apply<T>(f:T->Int)`; `apply<Void>(() -> 1)` once calls take type arguments), and
+  (`apply(() -> 1)` for `apply<T>(f:T->Int)`), which the call names instead (`apply<Void>(() -> 1)`), and
   `Null<Void>` and `Array<Void>`, which have no use, have no meaning.
 
 ### Asynchronous operations
@@ -115,11 +115,9 @@ ui's argument checks, stay exceptions. Other APIs change when they are next work
 - **Wire (done).** `MessagePack.decode`, `JsonWire.decode`, their `decodeWith`, the frame readers and
   `MessagePackSchema` return `Result<T, WireError>` (`Truncated`, `TrailingData`, `Malformed`, `LimitExceeded`,
   `IncompatibleSchema`). Inside a decode the readers and codecs throw a `WireFailure`, which the entry point returns as
-  the `Err`; writers throw only for misuse. The codec is generated for the expected `Result`'s value type, so a decode
-  needs an expected `Result`: a typed local, or `try` (whose value is then expected to be a `Result` of the expected
-  type). The subject of a `switch` or the receiver of `.mapErr(f)` has none, and needs the typed local until a call
-  can name its type argument, `MessagePack.decode<User>(bytes)` ([CALL_TYPE_ARGUMENTS.md](CALL_TYPE_ARGUMENTS.md),
-  proposed).
+  the `Err`; writers throw only for misuse. The codec is generated for the decoded type, which the call names
+  (`MessagePack.decode<User>(bytes)`, [CALL_TYPE_ARGUMENTS.md](CALL_TYPE_ARGUMENTS.md)) or an expected `Result` gives:
+  a typed local, or `try` (whose value is then expected to be a `Result` of the expected type).
 - **RPC (next).** `RpcConnection.call` and a typed service's client methods settle `Future<Result<Response,
   RpcError>>`, so `Outcome.Failure` means a bug; the connector's `RpcConnectResult` becomes a `Result` of the transport.
   Open: whether `RpcError` becomes an enum, since its codes include a peer's own and `ambiguous` says whether the

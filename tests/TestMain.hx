@@ -637,6 +637,23 @@ class TestMain {
 			'"try" without "catch" returns its error from the function, which must return a Result, not Int', true);
 		expectCompileError(propagating + ' function main():Int { each(n -> try save()); return 0; }',
 			'"try" without "catch" returns its error from the function, which must return a Result, not Void', true);
+		// A call names its callee's own type arguments, all of them (docs/design/CALL_TYPE_ARGUMENTS.md).
+		var generic = 'function make<T>():Array<T> return []; function plain(x:Int):Int return x;';
+		expectCompileError(generic + ' function main():Int return make<String, Int>().length;',
+			'"make" takes 1 type argument (T), got 2');
+		expectCompileError(generic + ' function main():Int return plain<Int>(1);',
+			'"plain" takes no type arguments of its own');
+		// Haxe reads `f(a < b, c > (d))` as two comparisons; read as type arguments it fails, saying how to keep them.
+		try {
+			Frontend.compile(generic
+				+ ' function main():Int { var a = 1, b = 2, c = 3, d = 4; var both = [a < b, c > (d)]; return 0; }');
+			throw "compiler accepted comparisons read as type arguments";
+		} catch (error:CompileError) {
+			if (error.diagnostic.message != 'Unknown type "b"'
+				|| error.diagnostic.notes.indexOf('if "<" and ">" compare here, put each comparison in parentheses')
+				< 0)
+				throw error;
+		}
 		// A generic enum's case used as a function takes its type arguments from the expected function type.
 		expectCompileError('enum R<T> { G(v:T); } function main():Int { var f = R.G; return 0; }',
 			'Cannot infer the type arguments of "R.G" used as a function; give it an expected function type or call it');
@@ -1395,7 +1412,8 @@ class TestMain {
 		expectCompileError('@:wire enum DuplicateEnumId { @:id(1) Left; @:id(1) Right; } function main():Int { return haxeon.wire.MessagePack.encode(Left).length; }',
 			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)', true);
 		expectCompileError('function main():Int { haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return 0; }',
-			'MessagePack.decode requires an expected result type', true);
+			'MessagePack.decode needs the type it decodes: write it, MessagePack.decode<T>(input), or expect a Result<T, WireError>',
+			true);
 		// Decoding returns a Result, so the expected type is one: a bare value type is not taken as the decoded type.
 		expectCompileError('function main():Int { var n:Int = haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return n; }',
 			'MessagePack.decode gives a Result<T, WireError>; expect one, or take its value with try', true);

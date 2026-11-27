@@ -2,11 +2,12 @@
 
 `haxeon.wire.JsonWire.encode(value)` and `JsonWire.decode(text)` are compiler
 builtins. Decoding returns a `Result<T, WireError>`, as
-[MessagePack](MESSAGEPACK.md) decoding does, and the expected type names `T`:
+[MessagePack](MESSAGEPACK.md) decoding does, and the call or the expected type
+names `T`:
 
 ```haxe
 var text = JsonWire.encode(value);
-var restored:Result<MyRecord, WireError> = JsonWire.decode(text);
+var restored = JsonWire.decode<MyRecord>(text);
 ```
 
 Codecs are inferred from those calls, including the supported types nested in

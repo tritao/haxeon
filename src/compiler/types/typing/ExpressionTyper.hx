@@ -210,6 +210,8 @@ class ExpressionTyper {
 				callResolver.typeNamedCall(name, arguments, span, scope, expectedType);
 			case ClosureCall(callee, arguments, span): callResolver.typeClosureCall(callee, arguments, span, scope,
 				null, true, expectedType);
+			case GenericCall(written, typeArguments, span):
+				callResolver.typeGenericCall(written, typeArguments, span, scope, expectedType);
 			case MethodCall(object, name, arguments, span):
 				var call = bodyTyper.typeMethodCall(object, name, arguments, span, scope, expectedType);
 				if (!isPureCallExpression(call))

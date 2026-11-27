@@ -720,3 +720,4 @@ must-use	42
 enum-case-constants	42
 enum-raw-values	42
 switch-large-table	42
+call-type-arguments	42

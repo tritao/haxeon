@@ -899,10 +899,10 @@ interface Echo {
 
 function exercise(connection:RpcConnection, implementation:Echo):Void {
 	var bytes = MessagePack.encode(42);
-	var packed:Int = (MessagePack.decode(bytes) : Result<Int, haxeon.wire.WireError>).unwrap();
+	var packed:Int = MessagePack.decode<Int>(bytes).unwrap();
 	var json = JsonWire.encode(packed);
-	var decoded:Int = (JsonWire.decode(json) : Result<Int, haxeon.wire.WireError>).unwrap();
-	var method:RpcMethod<Int, Int> = RpcMethod.wire(1);
+	var decoded:Int = JsonWire.decode<Int>(json).unwrap();
+	var method = RpcMethod.wire<Int, Int>(1);
 	connection.serve(Echo, implementation);
 	var stub = connection.of(Echo, 200);
 	stub.echo(decoded);
@@ -920,12 +920,13 @@ function exercise(connection:RpcConnection, implementation:Echo):Void {
 			{receiver: "connection", name: "serve", module: "rpc/RpcConnection", parameter: "implementation:Service"},
 			{receiver: "connection", name: "of", module: "rpc/RpcConnection", parameter: "timeoutMs:Int"}
 		]) {
+			// A call may name its type arguments before its parenthesis (`MessagePack.decode<Int>(bytes)`).
 			var prefix = call.receiver + ".",
-				member = source.indexOf(prefix + call.name + "(") + prefix.length,
+				member = source.indexOf(prefix + call.name) + prefix.length,
 				hover = service.hover(path, member + 1),
 				documentation = service.hoverDocumentation(path, member + 1),
 				definition = service.definition(path, member + 1),
-				signature = service.signatureHelp(path, member + call.name.length + 2);
+				signature = service.signatureHelp(path, source.indexOf("(", member) + 1);
 			if (hover == null || hover.indexOf(call.parameter) < 0 || documentation == null
 				|| documentation.markdown.indexOf("Haxeon generates") < 0)
 				throw '${call.name}: hover omitted the declaration signature or documentation ($hover)';

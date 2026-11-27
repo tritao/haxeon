@@ -679,3 +679,4 @@ result-try
 lambda-inferred-block-return
 result-void
 void-unit
+call-type-arguments

@@ -1277,6 +1277,18 @@ class LanguageService {
 		if (open < 1)
 			return null;
 		var callee = open - 1;
+		// A call's type arguments sit between its callee and its parenthesis (`decode<User>(bytes)`).
+		if (callee >= 0 && tokens.kind(TokenId.ofRow(callee)) == Greater) {
+			var depth = 0;
+			while (callee >= 0) {
+				var kind = tokens.kind(TokenId.ofRow(callee));
+				if (kind == Greater)
+					depth++;
+				else if (kind == Less && --depth == 0)
+					break;
+				callee--;
+			}
+		}
 		while (callee >= 0 && tokens.kind(TokenId.ofRow(callee)) != Identifier)
 			callee--;
 		if (callee < 0)

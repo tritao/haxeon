@@ -48,8 +48,8 @@ function main():Int {
 	var old = new Document();
 	var bytes = MessagePack.encode(old);
 	var json = JsonWire.encode(old);
-	var fromBytes:PinnedDocument = (MessagePack.decode(bytes):Result<PinnedDocument, haxeon.wire.WireError>).unwrap();
-	var fromJson:PinnedDocument = (JsonWire.decode(json):Result<PinnedDocument, haxeon.wire.WireError>).unwrap();
+	var fromBytes:PinnedDocument = MessagePack.decode<PinnedDocument>(bytes).unwrap();
+	var fromJson:PinnedDocument = JsonWire.decode<PinnedDocument>(json).unwrap();
 	if (!matches(fromBytes) || !matches(fromJson))
 		return 1;
 
@@ -61,9 +61,9 @@ function main():Int {
 		!= '{"version":1,"value":[["1:state",[["7:Ready",[42]]]],["3:statuses",[[3,7],[8,3]]],["8:title","motor"]]}')
 		return 3;
 	var decodedBytes:PinnedDocument =
-		(MessagePack.decode(numberedBytes):Result<PinnedDocument, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<PinnedDocument>(numberedBytes).unwrap();
 	var decodedJson:PinnedDocument =
-		(JsonWire.decode(numberedJson):Result<PinnedDocument, haxeon.wire.WireError>).unwrap();
+		JsonWire.decode<PinnedDocument>(numberedJson).unwrap();
 	return matches(decodedBytes) && matches(decodedJson) ? 42 : 4;
 }
 

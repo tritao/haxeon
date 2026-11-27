@@ -22,7 +22,7 @@ function main():Int {
 		return 0;
 
 	var restored:Map<WasmWireKind, Int> =
-		(MessagePack.decode(firstBytes):Result<Map<WasmWireKind, Int>, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<Map<WasmWireKind, Int>>(firstBytes).unwrap();
 	if (restored.get(Left) != 7 || restored.get(Right) != 3 || restored.size() != 2)
 		return 0;
 	var total = 0, count = 0;
@@ -42,7 +42,7 @@ function main():Int {
 	var unknownRejected = false;
 	try {
 		var ignoredUnknown:Map<WasmWireKind, Int> =
-			(MessagePack.decode(unknown.getBytes()):Result<Map<WasmWireKind, Int>, haxeon.wire.WireError>).unwrap();
+			MessagePack.decode<Map<WasmWireKind, Int>>(unknown.getBytes()).unwrap();
 	} catch (_:Dynamic) {
 		unknownRejected = true;
 	}
@@ -56,7 +56,7 @@ function main():Int {
 	var nonIntegerRejected = false;
 	try {
 		var ignoredNonInteger:Map<WasmWireKind, Int> =
-			(MessagePack.decode(nonInteger.getBytes()):Result<Map<WasmWireKind, Int>, haxeon.wire.WireError>).unwrap();
+			MessagePack.decode<Map<WasmWireKind, Int>>(nonInteger.getBytes()).unwrap();
 	} catch (_:Dynamic) {
 		nonIntegerRejected = true;
 	}
@@ -70,6 +70,6 @@ function main():Int {
 	duplicate.writeInt(7);
 	duplicate.writeInt(9);
 	var duplicateDecoded:Map<WasmWireKind, Int> =
-		(MessagePack.decode(duplicate.getBytes()):Result<Map<WasmWireKind, Int>, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<Map<WasmWireKind, Int>>(duplicate.getBytes()).unwrap();
 	return duplicateDecoded.size() == 1 && duplicateDecoded.get(Left) == 9 ? 42 : 0;
 }

@@ -3509,6 +3509,28 @@ class Parser {
 		while (true) {
 			if (check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot)
 				break;
+			if (check(TokenKind.Less)) {
+				var calleeName = switch expression {
+					case Variable(name, _), Member(_, name, _): name;
+					default: null;
+				};
+				if (calleeName != null && typeArgumentsAhead()) {
+					var typeArguments = parseTypeArguments();
+					consume(TokenKind.LeftParen);
+					var arguments = parseCallArguments(calleeName);
+					var end = spanOf(consume(TokenKind.RightParen));
+					// The call its type arguments are written for, spanned as it is without them.
+					var call = switch expression {
+						case Member(object, name, _): MethodCall(object, name, arguments,
+							expressionSpan(object).merge(end));
+						case Variable(name, start): Call(name, arguments,
+							SourceSpan.reference(start.file, start.start, end.end, start.isBareReference));
+						default: throw new InternalError("A call's type arguments follow a name");
+					};
+					expression = GenericCall(call, typeArguments, expressionSpan(call));
+					continue;
+				}
+			}
 			if (match(TokenKind.LeftParen)) {
 				var arguments = parseCallArguments(switch expression {
 					case Variable(name, _): name;
@@ -3553,6 +3575,36 @@ class Parser {
 			break;
 		}
 		return expression;
+	}
+
+	/**
+	 * Whether the `<` at the current token opens a call's type arguments (`decode<User>(bytes)`): up to its matching `>` it
+	 * holds only what types are written with, and `(` follows (docs/design/CALL_TYPE_ARGUMENTS.md). Otherwise it compares.
+	 * A parenthesis there is a function type's, so `->` follows its `)`, which keeps `f(x < (y), z > (w))` two comparisons.
+	 */
+	function typeArgumentsAhead():Bool {
+		var depth = 0;
+		for (offset in 0...tokenCount - position) {
+			var kind = peekKind(offset);
+			if (isNameToken(kind))
+				continue;
+			switch kind {
+				case TokenKind.Less:
+					depth++;
+				case TokenKind.Greater:
+					depth--;
+					if (depth == 0)
+						return peekKind(offset + 1) == TokenKind.LeftParen;
+				case TokenKind.RightParen:
+					if (peekKind(offset + 1) != TokenKind.Arrow)
+						return false;
+				case TokenKind.Dot, TokenKind.Comma, TokenKind.Arrow, TokenKind.LeftParen, TokenKind.LeftBrace,
+					TokenKind.RightBrace, TokenKind.Colon, TokenKind.Question:
+				default:
+					return false;
+			}
+		}
+		return false;
 	}
 
 	function parseType():AstType {
@@ -4019,7 +4071,7 @@ class Parser {
 				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span),
 				Greater(_, _, span), GreaterEqual(_, _, span),
 				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), ClosureCall(_, _, span),
-				MethodCall(_, _, _, span), New(_, _, span),
+				MethodCall(_, _, _, span), GenericCall(_, _, span), New(_, _, span),
 				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), KeyPathLiteral(_, _, span),
 				NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
 				PostfixIncrement(_, _, span), AssignmentValue(_, span), Lambda(_, _, _, span), And(_, _, span),

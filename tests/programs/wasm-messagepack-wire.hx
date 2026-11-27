@@ -33,7 +33,7 @@ function main():Int {
 		0x00, 0x00, 0x00
 	]))
 		return 0;
-	var restored:WasmWireNumbers = (MessagePack.decode(bytes):Result<WasmWireNumbers, haxeon.wire.WireError>).unwrap();
+	var restored:WasmWireNumbers = MessagePack.decode<WasmWireNumbers>(bytes).unwrap();
 	var restoredMax = restored.byName.get("max"),
 		restoredMin = restored.byName.get("min");
 	if (Int64.compare(restored.small, Int64.ofInt(7)) != 0
@@ -50,7 +50,7 @@ function main():Int {
 	byId.set(-1, minimum);
 	byId.set(7, maximum);
 	var restoredById:Map<Int, Int64> =
-		(MessagePack.decode(MessagePack.encode(byId)):Result<Map<Int, Int64>, haxeon.wire.WireError>).unwrap(),
+		MessagePack.decode<Map<Int, Int64>>(MessagePack.encode(byId)).unwrap(),
 		restoredByIdMinimum = restoredById.get(-1),
 		restoredByIdMaximum = restoredById.get(7);
 	if (restoredByIdMinimum == null

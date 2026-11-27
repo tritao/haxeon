@@ -687,6 +687,9 @@ class ModuleCanonicalizer {
 					s);
 			case CheckType(value, type, s):
 				CheckType(canonicalExpression(value, module, entry, locals, aliases), canonicalType(type, aliases), s);
+			case GenericCall(written, typeArguments, s):
+				GenericCall(canonicalExpression(written, module, entry, locals, aliases),
+					[for (type in typeArguments) canonicalType(type, aliases)], s);
 			case SwitchExpression(subject, cases, fallback, s):
 				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases),
 					[for (switchCase in cases) {

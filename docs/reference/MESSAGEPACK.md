@@ -63,16 +63,15 @@ class User {
 }
 
 var bytes = MessagePack.encode(new User(7, "Ada"));
-var decoded:Result<User, WireError> = MessagePack.decode(bytes);
+var decoded = MessagePack.decode<User>(bytes);
 ```
 
 Decoding returns a `Result`, since bytes from elsewhere may not hold a value of
-the expected type. The codec is generated for the `Result`'s value type, so the
-expected type names it: a typed local, as above, or `try` in a function that
-returns a `Result` with the same error type (`var user:User = try
-MessagePack.decode(bytes);`). A decode the `Result` is not expected of, such as
-the subject of a `switch` or the receiver of `.mapErr(f)`, needs the typed local.
-The `Err` is a `WireError`:
+the expected type. The codec is generated for the decoded type, which the call
+names, as above, or the expected `Result` gives: a typed local
+(`var decoded:Result<User, WireError> = MessagePack.decode(bytes);`), or `try`
+in a function that returns a `Result` with the same error type (`var user:User =
+try MessagePack.decode(bytes);`). The `Err` is a `WireError`:
 
 - `Truncated`: the input ends inside a value.
 - `TrailingData`: another value follows the one decoded.

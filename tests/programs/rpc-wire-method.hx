@@ -16,7 +16,7 @@ function main():Int {
 	var clock = function() return 0.0;
 	var client = new RpcConnection(pair.client, clock);
 	var server = new RpcConnection(pair.server, clock);
-	var method:RpcMethod<Query, Answer> = RpcMethod.wire(100);
+	var method = RpcMethod.wire<Query, Answer>(100);
 	server.register(method, function(request, context) {
 		context.respond({text: "Hello " + request.name, length: request.name.length});
 	});

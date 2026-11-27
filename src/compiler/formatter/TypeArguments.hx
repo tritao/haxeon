@@ -19,7 +19,7 @@ typedef TypeArgumentPairs = {
 	The lexer emits `<` and `>` as single characters, so the formatter has to decide which ones bracket
 	types. An angle bracket opens a list when it follows a type name and the tokens up to its matching
 	`>` can only be a type: names, dots, commas, nested lists, and anonymous structure or function types
-	(`{a:Int}`, `(Int) -> Void`), and string constants (`hl.Abstract<"handle">`). Anything else in between, such as a number,
+	(`{a:Int}`, `(Int) -> Void`, whose `)` is followed by `->`), and string constants (`hl.Abstract<"handle">`). Anything else in between, such as a number,
 	an operator or a `;`,
 	means a comparison. The outermost list must also be followed by a token that can follow a type.
 **/
@@ -88,6 +88,11 @@ class TypeArguments {
 					groups++;
 				case TokenKind.RightParen, TokenKind.RightBrace:
 					if (groups == 0)
+						return;
+					// A parenthesis among type arguments is a function type's, as the parser reads a call's
+					// (`Parser.typeArgumentsAhead`): `f(a < (b), c > (d))` compares.
+					if (kind == TokenKind.RightParen
+						&& (position + 1 >= syntax.length || kindAt(tokens, syntax, position + 1) != TokenKind.Arrow))
 						return;
 					groups--;
 				case TokenKind.Var, TokenKind.Final, TokenKind.Semicolon:

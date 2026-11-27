@@ -65,7 +65,7 @@ The current subset includes:
   `Ok()` makes a `Result<Void, E>`, `case Ok():` matches it, `unwrapOr()` takes nothing, and `() -> 7` or a
   `function f():Void` stands for a `T->U` at `T` = `Void`. `Future<Void>` and `Promise<Void>.complete()` work the same
   way. A `Void` value stores nothing, and `Void` satisfies `Equatable` and `Hashable`. A generic function does not infer
-  `T` = `Void` from a lambda that leaves an argument out.
+  `T` = `Void` from a lambda that leaves an argument out; the call names it, `apply<Void>(() -> 1)`.
 - `try value` with no `catch` takes a `Result`: it gives the `Ok` value, and for an `Err` returns that error from the
   enclosing function or lambda, whose result must be a `Result` with the same error type (`try read(path).mapErr(f)`
   converts one first). It is a prefix operator, as `!` is: `try a() + 1` adds to the value. An unannotated function's
@@ -170,6 +170,12 @@ The current subset includes:
   already). As in Haxe, a `@:generic` class with a static field is rejected (`E1007`) where it is first made for its arguments;
   a static read through the class alone compiles. Only a whole `Dynamic` argument on the expected side widens: the other direction, differing concrete arguments,
   and `Dynamic` nested inside an argument (`Box<Array<Dynamic>>`) are still type errors.
+- A call may name its callee's own type arguments, which Haxe has no syntax for: `make<String>()`,
+  `MessagePack.decode<User>(bytes)`, `items.map<String>(describe)`. It
+  gives all of them, and the arguments convert to them rather than refine them. A static extension or an array or map
+  method takes those its receiver does not fix (`[1, 2].fold<String>(f, "")`). `<` opens type arguments only after a
+  name, when its matching `>` holds only types and `(` follows. Haxe's `f(a < b, c > (d))`, two comparisons, is then a
+  call of `a`, which fails to type with a note to parenthesize the comparisons.
 - `==` on enums follows Haxe. A constructor without fields denotes one value, so `Dot == Dot` is true however the two values
   came about; values of constructors with fields compare by identity, so `Circle(1) == Circle(1)` is false for two separately
   built values and `Circle(1) == Circle(2)` is false. `Array<Enum>.indexOf` and `remove` use the same rule. For declared value equality, a type must conform to `Equatable`; `==` and `haxeon.Equality.equals` then use the same

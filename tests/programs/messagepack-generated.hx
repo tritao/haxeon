@@ -88,7 +88,7 @@ function main():Int {
 	user.active = true;
 	user.name = "Ada";
 	var bytes = MessagePack.encode(user);
-	var restored:WireUser = (MessagePack.decode(bytes):Result<WireUser, haxeon.wire.WireError>).unwrap();
+	var restored:WireUser = MessagePack.decode<WireUser>(bytes).unwrap();
 	if (restored.id != 73 || !restored.active || restored.name != "Ada")
 		return 1;
 
@@ -103,7 +103,7 @@ function main():Int {
 	compatible.writeInt(3);
 	compatible.writeBool(true);
 	var reordered:WireUser =
-		(MessagePack.decode(compatible.getBytes()):Result<WireUser, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<WireUser>(compatible.getBytes()).unwrap();
 	if (reordered.id != 73 || !reordered.active || reordered.name != "Ada")
 		return 2;
 
@@ -126,7 +126,7 @@ function main():Int {
 	envelope.statusesByName = ["ready" => status, "idle" => Idle];
 	var envelopeBytes = MessagePack.encode(envelope);
 	var restoredEnvelope:WireEnvelope =
-		(MessagePack.decode(envelopeBytes):Result<WireEnvelope, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<WireEnvelope>(envelopeBytes).unwrap();
 	if (restoredEnvelope.user == null
 		|| restoredEnvelope.user.id != 73
 		|| !restoredEnvelope.user.active
@@ -153,7 +153,7 @@ function main():Int {
 		|| restoredEnvelope.statusesByName.get("idle") == null)
 		return 3;
 	var restoredStatus:WireStatus =
-		(MessagePack.decode(MessagePack.encode(status)):Result<WireStatus, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<WireStatus>(MessagePack.encode(status)).unwrap();
 	switch restoredStatus {
 		case Ready(restoredUser, values, note):
 			if (restoredUser.name != "Ada" || values.length != 2 || values[0] != 1 || values[1] != null || note != null)
@@ -168,7 +168,7 @@ function main():Int {
 	var unknownRejected = false;
 	try {
 		var ignoredStatus:WireStatus =
-			(MessagePack.decode(unknownStatus.getBytes()):Result<WireStatus, haxeon.wire.WireError>).unwrap();
+			MessagePack.decode<WireStatus>(unknownStatus.getBytes()).unwrap();
 	} catch (_:Dynamic) {
 		unknownRejected = true;
 	}
@@ -177,7 +177,7 @@ function main():Int {
 
 	var users:Array<WireUser> = [user];
 	var restoredUsers:Array<WireUser> =
-		(MessagePack.decode(MessagePack.encode(users)):Result<Array<WireUser>, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<Array<WireUser>>(MessagePack.encode(users)).unwrap();
 	if (restoredUsers.length != 1 || restoredUsers[0].id != 73)
 		return 4;
 
@@ -192,7 +192,7 @@ function main():Int {
 	if (firstScoreBytes.compare(secondScoreBytes) != 0)
 		return 5;
 	var restoredScores:Map<String, Int> =
-		(MessagePack.decode(firstScoreBytes):Result<Map<String, Int>, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<Map<String, Int>>(firstScoreBytes).unwrap();
 	if (restoredScores.get("alpha") != 1 || restoredScores.get("zulu") != 26)
 		return 6;
 
@@ -207,7 +207,7 @@ function main():Int {
 	if (firstIdBytes.compare(secondIdBytes) != 0)
 		return 7;
 	var restoredIds:Map<Int, Int> =
-		(MessagePack.decode(firstIdBytes):Result<Map<Int, Int>, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<Map<Int, Int>>(firstIdBytes).unwrap();
 	if (restoredIds.get(-3) != 1 || restoredIds.get(20) != 2)
 		return 8;
 
@@ -222,7 +222,7 @@ function main():Int {
 	if (firstKindBytes.compare(secondKindBytes) != 0)
 		return 14;
 	var restoredKinds:Map<WireKind, Int> =
-		(MessagePack.decode(firstKindBytes):Result<Map<WireKind, Int>, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<Map<WireKind, Int>>(firstKindBytes).unwrap();
 	if (restoredKinds.get(Low) != 8 || restoredKinds.get(High) != 2 || !restoredKinds.exists(High))
 		return 15;
 	var copiedKinds:Map<WireKind, Int> = restoredKinds.copy();
@@ -257,7 +257,7 @@ function main():Int {
 	var unknownKindRejected = false;
 	try {
 		var ignoredKinds:Map<WireKind, Int> =
-			(MessagePack.decode(unknownKind.getBytes()):Result<Map<WireKind, Int>, haxeon.wire.WireError>).unwrap();
+			MessagePack.decode<Map<WireKind, Int>>(unknownKind.getBytes()).unwrap();
 	} catch (_:Dynamic) {
 		unknownKindRejected = true;
 	}
@@ -269,7 +269,7 @@ function main():Int {
 	partialDefaults.writeInt(1);
 	partialDefaults.writeInt(9);
 	var restoredDefaults:WireDefaults =
-		(MessagePack.decode(partialDefaults.getBytes()):Result<WireDefaults, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<WireDefaults>(partialDefaults.getBytes()).unwrap();
 	if (restoredDefaults.retries != 9
 		|| restoredDefaults.mode != Low
 		|| restoredDefaults.labels.length != 0
@@ -278,7 +278,7 @@ function main():Int {
 	var missingRecordRejected = false;
 	try {
 		var ignoredRecord:WireRequiredRecord =
-			(MessagePack.decode(raw([0x80])):Result<WireRequiredRecord, haxeon.wire.WireError>).unwrap();
+			MessagePack.decode<WireRequiredRecord>(raw([0x80])).unwrap();
 	} catch (_:Dynamic) {
 		missingRecordRejected = true;
 	}
@@ -287,7 +287,7 @@ function main():Int {
 	var missingEnumRejected = false;
 	try {
 		var ignoredEnum:WireRequiredEnum =
-			(MessagePack.decode(raw([0x80])):Result<WireRequiredEnum, haxeon.wire.WireError>).unwrap();
+			MessagePack.decode<WireRequiredEnum>(raw([0x80])).unwrap();
 	} catch (_:Dynamic) {
 		missingEnumRejected = true;
 	}
@@ -308,13 +308,13 @@ function main():Int {
 	var optionalUser:Null<WireUser> = user;
 	var optionalBytes = MessagePack.encode(optionalUser);
 	var restoredOptional:Null<WireUser> =
-		(MessagePack.decode(optionalBytes):Result<Null<WireUser>, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<Null<WireUser>>(optionalBytes).unwrap();
 	if (restoredOptional == null || restoredOptional.id != 73)
 		return 9;
 	optionalUser = null;
 	var nullBytes = MessagePack.encode(optionalUser);
 	var restoredNull:Null<WireUser> =
-		(MessagePack.decode(nullBytes):Result<Null<WireUser>, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<Null<WireUser>>(nullBytes).unwrap();
 	return restoredNull == null ? 43 : 13;
 }
 

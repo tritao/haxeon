@@ -423,6 +423,13 @@ enum AstExpression {
 	KeyPathLiteral(root:AstType, fields:Array<String>, span:SourceSpan);
 	ClosureCall(callee:AstExpression, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
+
+	/**
+	 * A call that names its callee's own type arguments (docs/design/CALL_TYPE_ARGUMENTS.md): `call` is the `Call` or
+	 * `MethodCall` written without them (`decode<User>(bytes)`, `MessagePack.decode<User>(bytes)`), typed as it is with
+	 * `typeArguments` bound to the callee's type parameters. `span` is the call's.
+	 */
+	GenericCall(call:AstExpression, typeArguments:Array<AstType>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);
 	NewGeneric(typeName:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan);
 	NewArray(element:AstType, length:AstExpression, span:SourceSpan);

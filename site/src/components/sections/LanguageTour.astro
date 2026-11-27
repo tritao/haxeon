@@ -92,15 +92,13 @@ closed`,
       'Pass any type to <a href="https://msgpack.org">MessagePack</a> or JSON and the compiler writes its codec: no annotations, no reflection. When the data must last, <code>haxeon lint --fix --pin-wire</code> numbers its fields so renames stay compatible, and old data still reads.',
     code: `import haxeon.wire.JsonWire;
 import haxeon.wire.MessagePack;
-import haxeon.wire.WireError;
 
 typedef Task = {title:String, done:Bool};
 
 final task:Task = {title: "Buy milk", done: false};
 final bytes = MessagePack.encode(task);
 final json = JsonWire.encode(task);
-final back:Result<Task, WireError> = MessagePack.decode(bytes);
-switch back {
+switch MessagePack.decode<Task>(bytes) {
 	case Ok(decoded): Sys.println('\${bytes.length} bytes: \${decoded.title}');
 	case Err(error): Sys.println('Not a task: \$error');
 }

@@ -83,7 +83,7 @@ Language:
   phases 2 and 3.
 - [VALUE_CONSTRUCTOR_DESTINATION.md](design/VALUE_CONSTRUCTOR_DESTINATION.md): value constructors that return their value.
 - [ERROR_MODEL.md](design/ERROR_MODEL.md): `Result` and error enums for expected failures, exceptions for bugs.
-- [CALL_TYPE_ARGUMENTS.md](design/CALL_TYPE_ARGUMENTS.md): type arguments at calls, `decode<User>(bytes)` (proposal).
+- [CALL_TYPE_ARGUMENTS.md](design/CALL_TYPE_ARGUMENTS.md): type arguments at calls, `decode<User>(bytes)`.
 - [PURITY.md](design/PURITY.md), [SCOPED_PLACES.md](design/SCOPED_PLACES.md), [SHADERS.md](design/SHADERS.md): deferred.
 - [FUTURE_LANGUAGE.md](design/FUTURE_LANGUAGE.md): idea for a language of our own after Haxe, as a second dialect.
 

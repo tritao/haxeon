@@ -29,6 +29,7 @@ class GenericEnumUsage extends BindingWalker {
 		switch value {
 			case Cast(_, target, _) if (target != null): if (test(target)) found = true;
 			case CheckType(_, type, _): if (test(type)) found = true;
+			case GenericCall(_, typeArguments, _): for (type in typeArguments) if (test(type)) found = true;
 			case NewGeneric(name, arguments, _, _): if (test(AppliedType(name, arguments))) found = true;
 			case NewArray(element, _, _): if (test(element)) found = true;
 			case NewMap(key, value, _): if (test(key) || test(value)) found = true;

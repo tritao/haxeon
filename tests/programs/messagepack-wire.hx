@@ -129,7 +129,7 @@ function main():Int {
 		0x00, 0x00, 0x00
 	]))
 		return 7;
-	var restored:WireNumbers = (MessagePack.decode(encoded):Result<WireNumbers, haxeon.wire.WireError>).unwrap();
+	var restored:WireNumbers = MessagePack.decode<WireNumbers>(encoded).unwrap();
 	var restoredMax = restored.byName.get("max"),
 		restoredMin = restored.byName.get("min");
 	if (Int64.compare(restored.small, numbers.small) != 0
@@ -146,7 +146,7 @@ function main():Int {
 	byId.set(-1, minimum);
 	byId.set(7, maximum);
 	var restoredById:Map<Int, Int64> =
-		(MessagePack.decode(MessagePack.encode(byId)):Result<Map<Int, Int64>, haxeon.wire.WireError>).unwrap(),
+		MessagePack.decode<Map<Int, Int64>>(MessagePack.encode(byId)).unwrap(),
 		restoredByIdMinimum = restoredById.get(-1),
 		restoredByIdMaximum = restoredById.get(7);
 	if (restoredByIdMinimum == null
@@ -162,13 +162,13 @@ function main():Int {
 	duplicate.writeInt(1);
 	duplicate.writeInt(9);
 	var duplicateDecoded:WireNumbers =
-		(MessagePack.decode(duplicate.getBytes()):Result<WireNumbers, haxeon.wire.WireError>).unwrap();
+		MessagePack.decode<WireNumbers>(duplicate.getBytes()).unwrap();
 	if (Int64.compare(duplicateDecoded.small, Int64.ofInt(9)) != 0)
 		return 10;
 
 	var trailing = appendByte(encoded, 0xc0), trailingRejected = false;
 	try {
-		var ignored:WireNumbers = (MessagePack.decode(trailing):Result<WireNumbers, haxeon.wire.WireError>).unwrap();
+		var ignored:WireNumbers = MessagePack.decode<WireNumbers>(trailing).unwrap();
 	} catch (_:Dynamic) {
 		trailingRejected = true;
 	}
