@@ -44,6 +44,7 @@ private enum abstract S(Int) {
 	var ESCAPE;
 }
 
+/** Why `Parser.parse` rejected a document, and where. */
 class XmlParserException {
 	/**
 		the XML parsing error message
@@ -70,6 +71,7 @@ class XmlParserException {
 	**/
 	public var xml:String;
 
+	/** The error `message` at `position` in `xml`, from which the line and its character are counted. */
 	public function new(message:String, xml:String, position:Int) {
 		this.xml = xml;
 		this.message = message;
@@ -89,12 +91,14 @@ class XmlParserException {
 		}
 	}
 
+	/** The message and where it occurred, as `haxe.xml.XmlParserException: message at line L char C`. */
 	public function toString():String {
 		// Haxeon has no `Type` reflection API; the class name is spelled out.
 		return "haxe.xml.XmlParserException: " + message + " at line " + lineNumber + " char " + positionAtLine;
 	}
 }
 
+/** The XML reader `Xml.parse` uses. */
 class Parser {
 	static var escapes:Map<String, String> = {var h = new Map<String, String>();
 	h.set("lt", "<");

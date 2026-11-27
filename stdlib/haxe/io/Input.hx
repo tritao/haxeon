@@ -8,6 +8,7 @@ class Input {
 	/** Whether multi-byte numbers are read most significant byte first. */
 	public var bigEndian:Bool = false;
 
+	/** The next byte, from 0 to 255. Throws `haxe.io.Eof` at the end of the input. */
 	public function readByte():Int
 		throw "Input.readByte is not implemented";
 
@@ -26,6 +27,7 @@ class Input {
 		return len - k;
 	}
 
+	/** Closes the input, releasing what it reads from. It reads nothing after. */
 	public function close():Void {}
 
 	/** Everything to the end of the input. */
@@ -92,39 +94,47 @@ class Input {
 		return line;
 	}
 
+	/** A 32-bit IEEE float, in the input's byte order. */
 	public function readFloat():Float
 		return FPHelper.i32ToFloat(readInt32());
 
+	/** A 64-bit IEEE float, in the input's byte order. */
 	public function readDouble():Float {
 		var first = readInt32(), second = readInt32();
 		return bigEndian ? FPHelper.i64ToDouble(second, first) : FPHelper.i64ToDouble(first, second);
 	}
 
+	/** A signed byte, from -128 to 127. */
 	public function readInt8():Int {
 		var n = readByte();
 		return n >= 128 ? n - 256 : n;
 	}
 
+	/** A signed 16-bit integer, in the input's byte order. */
 	public function readInt16():Int {
 		var n = readUInt16();
 		return n & 0x8000 != 0 ? n - 0x10000 : n;
 	}
 
+	/** An unsigned 16-bit integer, in the input's byte order. */
 	public function readUInt16():Int {
 		var first = readByte(), second = readByte();
 		return bigEndian ? second | (first << 8) : first | (second << 8);
 	}
 
+	/** A signed 24-bit integer, in the input's byte order. */
 	public function readInt24():Int {
 		var n = readUInt24();
 		return n & 0x800000 != 0 ? n - 0x1000000 : n;
 	}
 
+	/** An unsigned 24-bit integer, in the input's byte order. */
 	public function readUInt24():Int {
 		var first = readByte(), second = readByte(), third = readByte();
 		return bigEndian ? third | (second << 8) | (first << 16) : first | (second << 8) | (third << 16);
 	}
 
+	/** A signed 32-bit integer, in the input's byte order. */
 	public function readInt32():Int {
 		var first = readByte(), second = readByte(), third = readByte(), fourth = readByte();
 		return bigEndian ? fourth | (third << 8) | (second << 16) | (first << 24) : first | (second << 8)

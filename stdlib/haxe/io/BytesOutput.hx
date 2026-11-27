@@ -9,6 +9,7 @@ class BytesOutput extends Output {
 	/** The number of bytes written so far. */
 	public var length(get, never):Int;
 
+	/** An empty output. */
 	public function new() {}
 
 	function get_length():Int

@@ -9,7 +9,12 @@ function jsonDynamicObject():Dynamic
 	return new runtime.DynamicObject();
 #end
 
+/** The JSON reader `haxe.Json.parse` uses. */
 class JsonParser {
+	/**
+	 * The value the JSON `text` holds: objects as anonymous objects, arrays as `Array<Dynamic>`. Throws when `text` is
+	 * not JSON.
+	 */
 	public static function parse(text:String):Dynamic
 		return new JsonParser(text).parseDocument();
 

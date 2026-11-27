@@ -24,6 +24,7 @@ class Sha256 {
 	static inline function rotate(value:Int, count:Int):Int
 		return (value >>> count) | (value << (32 - count));
 
+	/** The SHA-256 digest of `text`'s UTF-8 bytes, in lowercase hexadecimal. */
 	public static function encode(text:String):String {
 		var digest = make(Bytes.ofString(text));
 		var result = "";
@@ -31,6 +32,7 @@ class Sha256 {
 		return result.toLowerCase();
 	}
 
+	/** The SHA-256 digest of `input`: 32 bytes. */
 	public static function make(input:Bytes):Bytes {
 		#if wasm
 		var output = Bytes.alloc(32);

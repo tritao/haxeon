@@ -23,7 +23,7 @@
 package haxe.io;
 
 @:hlNative("haxeon_runtime", "__bytes_of_string")
-extern function utf8Bytes(value:String):Bytes;
+internal extern function utf8Bytes(value:String):Bytes;
 
 /**
  * The bytes of `s` in `encoding`, as Haxe's `Bytes.ofString` on HashLink: UTF-8 by default, and with `RawNative` the string's
@@ -57,8 +57,9 @@ function ofHex(s:String):Bytes {
 	return bytes;
 }
 
-/** Supported byte-buffer constructors backed by the stable runtime ABI. */
+/** A fixed-length sequence of bytes, read and written in place. `ofString`, `ofHex` and `alloc` make one. */
 extern class Bytes {
+	/** `length` new bytes, all zero. */
 	@:hlNative("haxeon_runtime", "__bytes_alloc")
 	public static function alloc(length:Int):Bytes;
 

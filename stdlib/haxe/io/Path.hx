@@ -1,7 +1,11 @@
 package haxe.io;
 
-/** Cross-platform lexical path operations with no filesystem access. */
+/** Paths taken apart and put together as text, with `/` or `\` as separators, without looking at the filesystem. */
 class Path {
+	/**
+	 * `path` without its last segment and the separator before it: `"a/b"` for `"a/b/c"`, `"/"` for `"/c"`, `""` when
+	 * it has no separator.
+	 */
 	public static function directory(path:String):String {
 		var separator = lastSeparator(path);
 		if (separator < 0)
@@ -22,11 +26,16 @@ class Path {
 		return dot > lastSeparator(path) ? path.substr(0, dot) : path;
 	}
 
+	/** The last segment of `path`, after its last separator: `"c"` for `"a/b/c"`. */
 	public static function withoutDirectory(path:String):String {
 		var separator = lastSeparator(path);
 		return separator < 0 ? path : path.substr(separator + 1);
 	}
 
+	/**
+	 * `paths` joined with `/` and normalized, skipping the empty ones. An absolute path restarts the result from
+	 * itself.
+	 */
 	public static function join(paths:Array<String>):String {
 		var result = "";
 		for (path in paths) {
@@ -40,6 +49,10 @@ class Path {
 		return normalize(result);
 	}
 
+	/**
+	 * `path` with `/` separators, without empty and `.` segments, and with each `..` removing the segment before it (an
+	 * absolute path drops a `..` at its root). A drive letter is kept; `""` becomes `"."`.
+	 */
 	public static function normalize(path:String):String {
 		if (path == "")
 			return ".";
@@ -100,6 +113,7 @@ class Path {
 	public static function withExtension(path:String, ext:String):String
 		return withoutExtension(path) + "." + ext;
 
+	/** Whether `path` starts at a root: with `/` or `\`, or with a drive letter like `C:`. */
 	public static function isAbsolute(path:String):Bool
 		return path.length > 0
 			&& (path.charCodeAt(0) == "/".code || path.charCodeAt(0) == "\\".code || path.length > 2

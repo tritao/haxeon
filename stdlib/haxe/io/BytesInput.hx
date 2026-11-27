@@ -15,6 +15,10 @@ class BytesInput extends Input {
 	/** The length of the range read. */
 	public var length(get, never):Int;
 
+	/**
+	 * An input reading `len` bytes of `b` from `pos`: by default all of it. Throws `Error.OutsideBounds` when the range
+	 * is not in `b`.
+	 */
 	public function new(b:Bytes, ?pos:Int, ?len:Int) {
 		var start = pos == null ? 0 : pos;
 		var count = len == null ? b.length - start : len;

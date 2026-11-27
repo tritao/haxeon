@@ -14,10 +14,19 @@ typedef StackFrames = hl.Bytes;
 
 /** One portable call-stack entry. */
 enum StackItem {
+	/** A frame of native code. */
 	CFunction;
+
+	/** A frame named only by its symbol, `module`, which names no method. */
 	Module(module:String);
+
+	/** A frame at `line` (and `column`) of `file`, in `item`: the method or function the code is in, when known. */
 	FilePos(item:Null<StackItem>, file:String, line:Int, ?column:Int);
+
+	/** The method `method` of the class `className`; null for a module-level function. */
 	Method(className:Null<String>, method:String);
+
+	/** A local function, the `index`th of its method. */
 	LocalFunction(?index:Int);
 }
 
@@ -175,9 +184,11 @@ abstract CallStack(Array<StackItem>) from Array<StackItem> {
 	public function asArray():Array<StackItem>
 		return this;
 
+	/** The items, innermost frame first. */
 	public function iterator():Iterator<StackItem>
 		return this.iterator();
 
+	/** A copy of the stack, with its own array of items. */
 	public function copy():CallStack
 		return this.copy();
 

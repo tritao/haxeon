@@ -22,7 +22,11 @@
 
 package haxe.ds;
 
+/** A value or none: what `Null<T>` says, as an enum to switch on. */
 enum Option<T> {
+	/** The value `v`. */
 	Some(v:T);
+
+	/** No value. */
 	None;
 }

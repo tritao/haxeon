@@ -30,6 +30,7 @@ abstract Rest<T>(Array<T>) from Array<T> {
 		return result;
 	}
 
+	/** The arguments as an array prints: `[a,b]`. */
 	public function toString():String
 		return Std.string(this);
 }

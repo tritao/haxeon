@@ -22,7 +22,11 @@
 
 package haxe.ds;
 
+/** One of two values of different types. */
 enum Either<L, R> {
+	/** The left value. */
 	Left(v:L);
+
+	/** The right value. */
 	Right(v:R);
 }

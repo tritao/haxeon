@@ -22,8 +22,12 @@
 
 package haxe.ds;
 
-/** Stable in-place merge sort, adapted from the Haxe 4.3.7 standard library. */
+/** A stable sort, which keeps equal elements in their order: a merge sort in place, adapted from Haxe's. */
 class ArraySort {
+	/**
+	 * Sorts `a` in place by `cmp`, which is negative when its first argument goes first, 0 when the two are equal, and
+	 * positive otherwise. Equal elements keep their order.
+	 */
 	public static function sort<T>(a:Array<T>, cmp:(T, T) -> Int):Void {
 		ArraySort.rec(a, cmp, 0, a.length);
 	}

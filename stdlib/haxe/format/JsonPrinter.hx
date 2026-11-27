@@ -26,7 +26,9 @@ function jsonArrayGet(value:Dynamic, index:Int):Dynamic
 	return (cast(value, Array<Dynamic>))[index];
 #end
 
+/** The JSON writer `haxe.Json.stringify` uses. */
 class JsonPrinter {
+	/** `value` as JSON text, as `haxe.Json.stringify` writes it. Throws for a value that contains itself. */
 	public static function print(value:Dynamic, ?replacer:(key:Dynamic, value:Dynamic) -> Dynamic,
 			?space:String):String {
 		var printer = new JsonPrinter(replacer, space);

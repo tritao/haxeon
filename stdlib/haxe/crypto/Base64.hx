@@ -4,8 +4,10 @@ import haxe.io.Bytes;
 
 /** Standard Base64 (RFC 4648) encoding with optional `=` padding. */
 class Base64 {
+	/** The 64 characters of the standard alphabet, in the order of the values they stand for. */
 	public static inline var CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+	/** `bytes` in Base64, padded with `=` to a multiple of four characters unless `complement` is false. */
 	public static function encode(bytes:Bytes, complement:Bool = true):String {
 		var output = new StringBuf(), length = bytes.length, index = 0;
 		while (index + 2 < length) {

@@ -11,5 +11,6 @@ enum Error {
 	/** A range is outside the bytes it is read from or written to. */
 	OutsideBounds;
 
+	/** Another error, which `e` describes. */
 	Custom(e:Dynamic);
 }

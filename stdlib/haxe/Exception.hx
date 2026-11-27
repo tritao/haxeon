@@ -8,9 +8,19 @@ package haxe;
 	`catch (e:Dynamic)` binds the thrown value itself (the compiler's `TypedCatchSubject`).
 **/
 class Exception {
+	/** What went wrong, as the exception was made with. */
 	public var message(default, null):String;
+
+	/**
+	 * The call stack where the exception was made, innermost frame first; for one made for a thrown value, where that
+	 * was thrown. Named when first read.
+	 */
 	public var stack(get, null):CallStack;
+
+	/** The exception this one was thrown for, in a chain: what was caught when this was made, or null. */
 	public var previous(default, null):Null<Exception>;
+
+	/** The value that was thrown: the exception itself, unless it wraps another thrown value. */
 	public var native(default, null):Dynamic;
 
 	/** The thrown exception, or a `haxe.ValueException` wrapping a thrown value that is no exception. */
@@ -54,9 +64,14 @@ class Exception {
 		return stack;
 	}
 
+	/**
+	 * The value a catch of a type other than `haxe.Exception` sees: the exception itself, or the value a
+	 * `ValueException` wraps.
+	 */
 	public function unwrap():Dynamic
 		return native;
 
+	/** The message. */
 	public function toString():String
 		return message;
 

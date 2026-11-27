@@ -23,6 +23,7 @@ class BytesBuffer {
 	/** The number of bytes added so far. */
 	public var length(get, never):Int;
 
+	/** An empty buffer. */
 	public function new()
 		b = Bytes.alloc(64);
 
@@ -45,9 +46,11 @@ class BytesBuffer {
 		return grown;
 	}
 
+	/** Adds the byte `byte`, its low 8 bits. */
 	public inline function addByte(byte:Int):Void
 		room(1).set(pos++, byte);
 
+	/** Adds all of `src`. */
 	public function add(src:Bytes):Void
 		addBytes(src, 0, src.length);
 
@@ -62,22 +65,27 @@ class BytesBuffer {
 		pos += size;
 	}
 
+	/** Adds `v` as 4 bytes, little-endian. */
 	public inline function addInt32(v:Int):Void {
 		room(4).setInt32(pos, v);
 		pos += 4;
 	}
 
+	/** Adds `v` as 8 bytes, little-endian. */
 	public function addInt64(v:haxe.Int64):Void {
 		addInt32(haxe.Int64.toInt(v));
 		addInt32(haxe.Int64.toInt(haxe.Int64.shr(v, 32)));
 	}
 
+	/** Adds `v` as a 32-bit IEEE float, little-endian. */
 	public function addFloat(v:Float):Void
 		addInt32(FPHelper.floatToI32(v));
 
+	/** Adds `v` as a 64-bit IEEE float, little-endian. */
 	public function addDouble(v:Float):Void
 		addInt64(FPHelper.doubleToI64(v));
 
+	/** Adds `len` bytes of `src` from `pos`. Throws `Error.OutsideBounds` when they are not all in `src`. */
 	public function addBytes(src:Bytes, pos:Int, len:Int):Void {
 		if (pos < 0 || len < 0 || pos + len > src.length)
 			throw Error.OutsideBounds;
