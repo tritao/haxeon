@@ -349,7 +349,12 @@ class Parser {
 						if (StringTools.fastCodeAt(s, 0) == '#'.code) {
 							var c = StringTools.fastCodeAt(s, 1) == 'x'.code ? Std.parseInt("0" + s.substr(1,
 								s.length - 1)) : Std.parseInt(s.substr(1, s.length - 1));
-							buf.addChar(c);
+							if (c != null)
+								buf.addChar(c);
+							else if (strict)
+								throw new XmlParserException("Invalid character reference: " + s, str, p);
+							else
+								buf.add('&$s;');
 						} else if (!escapes.exists(s)) {
 							if (strict)
 								throw new XmlParserException("Undefined entity: " + s, str, p);
