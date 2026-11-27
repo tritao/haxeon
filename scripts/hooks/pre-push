@@ -4,8 +4,10 @@
 # longer compiles them (tests/integration/test-self-build.sh, about a minute with the tool compiler rebuilt). A push that deletes
 # or renames a file under src/ also type-checks every module and every tests/compiler main with stock Haxe
 # (tests/integration/test-type-check-all.sh, about twenty seconds): a main that imports what was removed fails there, and
-# otherwise only in the test driver. Enable it in a checkout with `git config core.hooksPath scripts/hooks`;
-# `git push --no-verify` skips it, SKIP_SELF_BUILD=1 only the self-build check.
+# otherwise only in the test driver. A push that changes a Haxe file of a package or of the standard library type-checks every
+# module of each (tests/integration/test-package-modules.sh, about two minutes): a module nothing else compiles fails there, and
+# otherwise only in the site's API build. Enable it in a checkout with `git config core.hooksPath scripts/hooks`;
+# `git push --no-verify` skips it, SKIP_SELF_BUILD=1 only the self-build check, SKIP_PACKAGE_MODULES=1 only the package one.
 #
 # It checks the files the pushed commits change, as they are in this working tree: run it from the tree you push. A push that
 # changes no Haxe file is not checked, nor one from a tree without a native build (a scratch worktree), which CI still checks.
@@ -16,6 +18,7 @@ root=$(git rev-parse --show-toplevel)
 zero=0000000000000000000000000000000000000000
 status=0
 self_build=0
+package_modules=0
 type_check=0
 bindings=0
 while read -r local_ref local_sha remote_ref remote_sha; do
@@ -35,6 +38,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 	fi
 	"$root/scripts/haxeon" dev format --check --range "$base..$local_sha" || status=1
 	[ -n "$(git diff --name-only "$base..$local_sha" -- src lib/haxeon-io stdlib)" ] && self_build=1
+	[ -n "$(git diff --name-only --diff-filter=d "$base..$local_sha" -- 'packages/*.hx' 'stdlib/*.hx')" ] && package_modules=1
 done
 if [ "$status" -ne 0 ]; then
 	echo "pre-push: fix with scripts/haxeon dev format --changed (or haxeon fmt / haxeon lint --fix FILES)" >&2
@@ -49,5 +53,8 @@ if [ "$type_check" = 1 ]; then
 fi
 if [ "$self_build" = 1 ] && [ "${SKIP_SELF_BUILD:-}" != 1 ]; then
 	bash "$root/tests/integration/test-self-build.sh" || status=1
+fi
+if [ "$package_modules" = 1 ] && [ "${SKIP_PACKAGE_MODULES:-}" != 1 ]; then
+	bash "$root/tests/integration/test-package-modules.sh" || status=1
 fi
 exit "$status"

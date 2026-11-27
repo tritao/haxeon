@@ -290,7 +290,10 @@ scripts/haxeon fmt --check FILE...               # exactly these files
 ```
 
 `git config core.hooksPath scripts/hooks` turns on a pre-push hook that runs that check over the commits a push sends, so a
-push CI's format check would fail is refused before it leaves (`git push --no-verify` skips it).
+push CI's format check would fail is refused before it leaves (`git push --no-verify` skips it). It also runs the self-build
+when the compiler's sources change, and, when a package's or the standard library's Haxe files change,
+`tests/integration/test-package-modules.sh`, which type-checks every module of each with `haxeon doc`, so a module that no test,
+example or page compiles cannot break unseen.
 
 ## Bootstrapping and self-hosting
 

@@ -33,6 +33,9 @@ type-check-all                   quick       -- bash tests/integration/test-type
 # The compiler as stock Haxe builds it compiles the compiler's own sources (tools.CompilerExecutable): a change only the compiler's
 # own checks reject (a null check moved into a helper, E1005) passed every stock-Haxe check and broke `haxeon dev aot`.
 self-build                       quick,ci    -- bash tests/integration/test-self-build.sh
+# Every module of the standard library and of each first-party package type-checks on the host, not only what tests, examples or
+# the site reach: three ui widgets stayed broken on main while only the site's API build compiled them.
+package-modules                  quick,ci    -- bash tests/integration/test-package-modules.sh
 checkout-hashlink                ci          fresh-native -- bash tests/integration/test-checkout-hashlink.sh
 hashlink-launchers               ci          fresh-native -- bash tests/integration/test-hashlink-launchers.sh
 gc-root-index                    ci          -- tests/integration/test-gc-root-index.sh
