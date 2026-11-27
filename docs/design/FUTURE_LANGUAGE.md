@@ -109,8 +109,8 @@ meaning of existing code and so need the new dialect; the others can land in Hax
 ### 7. Errors as values (extension)
 
 - **Haxe:** exceptions only.
-- **Haxeon today:** typed catch filters. [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md) plans `Result<T, E>` stored inline,
-  a postfix `?` and must-use results; exceptions remain for programming errors.
+- **Haxeon today:** typed catch filters, and errors as values decided in [ERROR_MODEL.md](ERROR_MODEL.md):
+  `Result<T, E>`, prefix `try` propagation and must-use results; exceptions remain for programming errors.
 - **Proposal:** the same, with `Result` as the standard library's convention for expected failures.
 - **Why:** failures that callers must handle (parsing, IO, RPC) appear in signatures and cost nothing on success.
 
@@ -472,10 +472,9 @@ and `??=`, `?.` and `??`.
 
 - **`T?` against optional parameters.** Haxe marks an optional parameter as `?x:Int`. Optional parameters become
   defaults (`x:Int = 0`) or `x:Int?`, and the prefix form goes away.
-- **Postfix `?` against the ternary.** [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md) plans `expr?` for `Result`, but
-  `a ? b : c` exists. A parser can tell them apart by lookahead; a reader cannot easily. Either use a prefix keyword
-  (`try expr`, as Swift and Zig do, distinct from `try`/`catch`) or drop the ternary, since `if` is already an
-  expression. Dropping the ternary is preferred. This affects the current Haxeon plan and is decided there first.
+- **The ternary.** `if` is already an expression, so `a ? b : c` is redundant; dropping it is preferred. It no longer
+  blocks errors as values: Haxeon chose prefix `try` for propagation ([ERROR_MODEL.md](ERROR_MODEL.md)), not a
+  postfix `?`.
 - **String quotes.** Haxe interpolates single-quoted strings (`'$x'`) and not double-quoted ones. Either both
   interpolate or one quote style remains.
 

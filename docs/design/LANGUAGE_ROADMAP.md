@@ -31,6 +31,7 @@ The rules for every entry:
 | Lazy parameters | Conditional proposal: `Lazy<T>` parameters receive the caller's expression unevaluated; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 | `internal` | An access level for what a package's modules share but its users may not use, enforced per manifest package, with named friends (`package.friends`) for its own test projects and no public declaration exposing an internal type. Implemented. | [LANGUAGE_SUPPORT.md](../reference/LANGUAGE_SUPPORT.md) |
 | Enum members and per-case constants | `enum` is the one construct for closed value sets: any methods and static members, and immutable per-case constants (`final` fields each case sets, checked complete at the declaration). Raw codes are raw-value enums. Implemented. | [ENUM_MEMBERS.md](ENUM_MEMBERS.md) |
+| Errors as values | `Result<T, E>` in the root package for expected failures, must-use values (`MustUse`, `_ = expr;`), prefix `try` propagation with the same error type, and `Void` as the unit type. Exceptions stay for bugs. | [ERROR_MODEL.md](ERROR_MODEL.md) |
 
 ### Raw-value enums (implemented)
 
@@ -168,25 +169,6 @@ optional type per use (for example `hx_optional_rect`). Wasm GC keeps its flatte
 wherever bytes are exposed. Implement with native memory and the node-store prototype (ADR 0002 stage 2), with
 cross-target layout tests, and record it in STRUCTS.md "Flat and Portable".
 
-### Errors as values: `Result<T, E>` and `?`
-
-`Result<T, E>` is an ordinary payload enum (`Ok(value)`, `Err(error)`), stored inline like other eligible enums, so
-returning one allocates nothing. A postfix `?` on a `Result` expression returns early with the error and otherwise
-yields the value; it is allowed only in functions whose result is a compatible `Result`. Errors that callers are
-expected to handle (parsing, IO, RPC, file formats) use `Result`; exceptions remain for programming errors and
-unrecoverable failures. Decide together with the must-use rule below.
-
-Open: a postfix `?` reads ambiguously next to the ternary `a ? b : c`. The parser can separate them by lookahead, but
-readers cannot easily. Decide before implementing between postfix `?` (accepting the ambiguity), a prefix keyword such
-as `try expr` distinct from `try`/`catch`, and a postfix `?` in a dialect without the ternary
-([FUTURE_LANGUAGE.md](FUTURE_LANGUAGE.md#clashes-to-resolve)).
-
-### Must-use results
-
-A call whose result type is declared must-use (`Result`, `Disposable` values, builders) and whose result is discarded is
-a compile error, unless explicitly discarded (`_ = f();`). Catches swallowed errors and leaked resources; pairs with
-scoped cleanup. Declared by conformance or a single compiler-known marker interface, not per-call metadata.
-
 ### Allocation-free iterator chains
 
 `filter`, `map`, `fold`, `sum`, `any`, `count` and similar adapters over arrays, struct arrays and ranges lower to a
@@ -323,4 +305,6 @@ Check each against what Haxeon already supports before designing it.
 9. Scoped cleanup (`defer`, `Disposable` scoped bindings) is implemented.
 10. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
    leave real bugs.
-11. Smaller conveniences when a concrete use appears.
+11. Errors as values, in the stages of [ERROR_MODEL.md](ERROR_MODEL.md#stages): generic enum methods, `Result`,
+   must-use, `Void` as the unit type, `try`, then the boundary packages' migration.
+12. Smaller conveniences when a concrete use appears.
