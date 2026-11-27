@@ -1294,10 +1294,14 @@ class FrontendCompilation {
 			currentSpecializedOwners = build.currentSpecializedOwners;
 		var ast = state.parsedAst(),
 			valid:Map<String, Bool> = [];
-		var ownedFunctions = functionNamesByModule.get(name);
+		var ownedFunctions = functionNamesByModule.get(name),
+			selected = build.semanticAssembly.selected;
+		// A declaration typed again that gave no function of its own name keeps none from an earlier build: one made generic is
+		// typed per call, as specializations named after their type arguments, so a fresh build has no function of its name.
 		if (ownedFunctions != null)
 			for (functionName in ownedFunctions)
-				valid.set(functionName, true);
+				if (!selected.exists(functionName) || typedByName.exists(functionName))
+					valid.set(functionName, true);
 		// A helper typed again this build is the copy of the module that asked for it now: an earlier owner's copy is stale.
 		for (cached in state.typedFunctions.keys())
 			if (calledGeneratedHelpers.exists(cached) && !(typedByName.exists(cached) && owners.get(cached) != name)) {

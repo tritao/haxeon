@@ -217,6 +217,7 @@ class WarmRebuildReuseMain {
 		linesInsertedAbove(failures);
 		specializationOfAnEditedStructure(failures);
 		helpersOfAnEditedDeclaration(failures);
+		functionMadeGeneric(failures);
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
@@ -643,6 +644,36 @@ class WarmRebuildReuseMain {
 				} catch (error:Dynamic) {
 					failures.push('${scenario.label}${check ? ", checked" : ""}: ${Std.string(error)}');
 				}
+	}
+
+	/**
+	 * A function made generic is typed per call, as specializations named after their type arguments, and no longer as a function of
+	 * its own name: the warm build must drop the function the last build typed under that name, as a fresh build never makes it.
+	 */
+	static function functionMadeGeneric(failures:Array<String>):Void {
+		for (check in [false, true])
+			try {
+				var files = [
+					"Fill.hx" => "class Fill { public static function listed(x:Int):Array<Int> return [x, x]; }",
+					"Main.hx" => "class Main { static function main():Int return Fill.listed(21).length * 21; }"
+				];
+				var compiler = newCompiler(files);
+				compiler.options = new CompileOptions({checkReuse: check});
+				compiler.compile("Main");
+				var warm = rebuild(compiler, files, files -> {
+					files.set("Fill.hx",
+						"class Fill { public static function listed<T>(x:T):Array<T> return [x, x]; }");
+					files.set("Main.hx",
+						StringTools.replace(files.get("Main.hx"), "Fill.listed(21)", "Fill.listed(\"a\")"));
+				}),
+					fresh = newCompiler(files).compile("Main");
+				var warmBytes = warm.artifact.hashLink().hashLinkBytes().flatten(),
+					freshBytes = fresh.artifact.hashLink().hashLinkBytes().flatten();
+				if (warmBytes.compare(freshBytes) != 0)
+					throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
+			} catch (error:Dynamic) {
+				failures.push('after a function is made generic${check ? ", checked" : ""}: ' + Std.string(error));
+			}
 	}
 
 	/** The specialized classes of the last typed program and the types the generic owners are named for, sorted. */
