@@ -5585,8 +5585,7 @@ class FrameworkSmoke {
 			if (node.styleType == "button") nestedButtons++;
 		});
 		if (resultRows != 2 || nestedButtons != 0) return false;
-		var centeredPalette = new CommandPalette("centered-palette", surfaceRegistry);
-		centeredPalette.centered = true;
+		var centeredPalette = new CommandPalette("centered-palette", surfaceRegistry, centered: true);
 		var centeredRoot = uiContext.submit(centeredPalette, new LayoutFrame(480.0, 360.0));
 		var centeredPanel = centeredRoot.children[1];
 		var centeredGeometry = centeredPanel.resolved;

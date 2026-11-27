@@ -26,71 +26,63 @@ class SearchPicker implements View {
 	final key:String;
 
 	/** The results, query and selection. */
-	public var model:SearchPickerModel;
+	public final model:SearchPickerModel;
 
 	/**
 	 * Builds a result row from the context, its index, whether it is selected and hovered, and a revision that changes
 	 * when tooltips should close.
 	 */
-	public var buildRow:(BuildContext, Int, Bool, Bool, Int) -> View;
+	public final buildRow:(BuildContext, Int, Bool, Bool, Int) -> View;
 
 	/** Called when the user dismisses the picker, by Escape or a click outside. */
-	public var onDismiss:Void->Void;
+	public final onDismiss:Void->Void;
 
 	/** Called after the query or selection changes, so the owner rebuilds. */
-	public var onChanged:Void->Void;
+	public final onChanged:Void->Void;
 
 	/** Its width, in logical pixels. */
-	public var width:Float = 480;
+	public final width:Float;
 
 	/** The height of every result row. */
-	public var rowHeight:Float = 32;
+	public final rowHeight:Float;
 
 	/** The tallest the result list grows before it scrolls. */
-	public var maxListHeight:Float = 360;
+	public final maxListHeight:Float;
 
 	/** Its left edge, unless `centered`. */
-	public var x:Float = 0;
+	public final x:Float;
 
 	/** Its top edge. */
-	public var y:Float = 10;
+	public final y:Float;
 
 	/** Whether it is centered horizontally in the viewport. */
-	public var centered:Bool = true;
+	public final centered:Bool;
 
 	/** The search field's accessible name. */
-	public var label:String = "Search";
+	public final label:String;
 
 	/** The hint in the search field while it is empty. */
-	public var placeholder:String = "Search";
+	public final placeholder:String;
 
 	/** Text shown before the query in the search field, such as a mode marker. */
-	public var prefix:String = "";
+	public final prefix:String;
 
 	/** Shown when there are no results. */
-	public var emptyText:String = "No matching results";
+	public final emptyText:String;
 	/** Keeps the whole query selected until the user edits it or moves the caret, so typing replaces a value the owner filled in. */
-	public var selectQuery:Bool = false;
+	public final selectQuery:Bool;
 
 	/** Whether it keeps keyboard focus within itself. */
-	public var modal:Bool = true;
+	public final modal:Bool;
 
 	/** Whether the rest of the UI is dimmed behind it. */
-	public var dimBackdrop:Bool = false;
+	public final dimBackdrop:Bool;
 
 	/** Whether it is drawn as a menu surface, with its border and shadow. */
-	public var menuSurface:Bool = true;
+	public final menuSurface:Bool;
 
 	/** Its stacking order among overlays. */
-	public var layerZIndex:Int = 0;
-	final scroll = new ScrollController();
-	var focusPending:Bool = true;
-	var previousQuery:String = "";
-	var previousSelection:Int = -1;
-	var previousRowHeight:Float = 0;
-	var previousListHeight:Float = 0;
-	var hovered:Int = -1;
-	var tooltipDismissRevision:Int = 0;
+	public final layerZIndex:Int;
 
 	/**
 	 * A picker over `model`'s results, `buildRow` building each. Throws when `key` is empty or there is no model or
@@ -100,7 +92,22 @@ class SearchPicker implements View {
 			model:SearchPickerModel,
 			buildRow:(BuildContext, Int, Bool, Bool, Int) -> View,
 			onDismiss:Void->Void,
-			onChanged:Void->Void) {
+			onChanged:Void->Void,
+			width:Float = 480,
+			rowHeight:Float = 32,
+			maxListHeight:Float = 360,
+			x:Float = 0,
+			y:Float = 10,
+			centered:Bool = true,
+			label:String = "Search",
+			placeholder:String = "Search",
+			prefix:String = "",
+			emptyText:String = "No matching results",
+			selectQuery:Bool = false,
+			modal:Bool = true,
+			dimBackdrop:Bool = false,
+			menuSurface:Bool = true,
+			layerZIndex:Int = 0) {
 		if (key == null || key.length == 0
 			|| model == null || buildRow == null) throw "SearchPicker requires a stable key, a model and a row builder";
 		this.key = key;
@@ -108,29 +115,47 @@ class SearchPicker implements View {
 		this.buildRow = buildRow;
 		this.onDismiss = onDismiss;
 		this.onChanged = onChanged;
+		this.width = width;
+		this.rowHeight = rowHeight;
+		this.maxListHeight = maxListHeight;
+		this.x = x;
+		this.y = y;
+		this.centered = centered;
+		this.label = label;
+		this.placeholder = placeholder;
+		this.prefix = prefix;
+		this.emptyText = emptyText;
+		this.selectQuery = selectQuery;
+		this.modal = modal;
+		this.dimBackdrop = dimBackdrop;
+		this.menuSurface = menuSurface;
+		this.layerZIndex = layerZIndex;
 	}
 
 	public function build(context:BuildContext):ViewRoot {
+		var state = context.lazyState(context.id("search-picker:" + key),
+			() -> new SearchPickerState(selectQuery)).value;
 		var tokens = context.theme.tokens;
 		var actualWidth = Math.max(1, Math.min(width, context.viewportWidth - 24));
 		var listHeight = Math.min(Math.max(rowHeight, model.count() * rowHeight),
 			Math.max(rowHeight, Math.min(maxListHeight, context.viewportHeight - 80)));
 		var query = model.query(), selected = model.selectedIndex();
-		if (previousSelection != selected || previousQuery != query) tooltipDismissRevision++;
-		var geometryChanged = previousRowHeight != rowHeight || previousListHeight != listHeight;
-		if (previousQuery != query) {
-			scroll.jumpTo(0, 0);
-			hovered = -1;
+		if (state.previousSelection != selected || state.previousQuery != query) state.tooltipDismissRevision++;
+		var geometryChanged = state.previousRowHeight != rowHeight || state.previousListHeight != listHeight;
+		if (state.previousQuery != query) {
+			state.scroll.jumpTo(0, 0);
+			state.hovered = -1;
 		}
-		if (previousSelection != selected || previousQuery != query || geometryChanged) {
+		if (state.previousSelection != selected || state.previousQuery != query || geometryChanged) {
 			var top = selected * rowHeight;
-			if (top < scroll.offsetY) scroll.jumpTo(0, top);
-			else if (top + rowHeight > scroll.offsetY + listHeight) scroll.jumpTo(0, top + rowHeight - listHeight);
+			if (top < state.scroll.offsetY) state.scroll.jumpTo(0, top);
+			else if (top + rowHeight > state.scroll.offsetY + listHeight) state.scroll.jumpTo(0,
+				top + rowHeight - listHeight);
 		}
-		previousQuery = query;
-		previousSelection = selected;
-		previousRowHeight = rowHeight;
-		previousListHeight = listHeight;
+		state.previousQuery = query;
+		state.previousSelection = selected;
+		state.previousRowHeight = rowHeight;
+		state.previousListHeight = listHeight;
 		var inputStyle = new LayoutStyle();
 		inputStyle.width = LayoutAxis.grow();
 		inputStyle.height = LayoutAxis.fixed(34);
@@ -139,7 +164,7 @@ class SearchPicker implements View {
 		// The field reads its selection provider again right after an edit, before the next build: the provider stops
 		// imposing the selection at once, or the first typed character is selected and replaced by the second ("builds"
 		// became "uilds").
-		var release = function() selectQuery = false;
+		var release = function() state.selectQuery = false;
 		var end = query.length;
 		var input = new TextField("cv-input", query, function(value) {
 			release();
@@ -149,12 +174,12 @@ class SearchPicker implements View {
 			model.navigate(UiKey.Enter, haxeon.ui.core.UiEvent.UiModifier.empty(), 1);
 			onChanged();
 		},
-			onSelectionChange: selectQuery ? _ -> release() : null,
-			selectionProvider: selectQuery ? () -> (selectQuery ? new TextSelection(0, end) : null) : null);
+			onSelectionChange: state.selectQuery ? _ -> release() : null,
+			selectionProvider: state.selectQuery ? () -> (state.selectQuery ? new TextSelection(0, end) : null) : null);
 		var focusedInput = new SearchPickerInput(input, function(ctx, node) {
-			if (focusPending) {
+			if (state.focusPending) {
 				ctx.requestFocusAfterLayout(node.id);
-				focusPending = false;
+				state.focusPending = false;
 			}
 		});
 		var inputChildren:Array<KeyedView> = [];
@@ -174,17 +199,19 @@ class SearchPicker implements View {
 			rows.push(new KeyedView("empty",
 				new Text(emptyText, listStyle, tokens.textSecondary, TextStyleOverride.text(14))));
 		} else {
-			rows.push(new KeyedView("list", new VirtualList("cv-scroll", model.count(), rowHeight, function(index) {
-				var isSelected = model.enabledAt(index) && index == model.selectedIndex();
-				return new SearchPickerRow(buildRow(context, index, isSelected, index == hovered,
-					tooltipDismissRevision), model.labelAt(index), isSelected, model.enabledAt(index), function() {
-						if (model.enabledAt(index)) model.activate(index);
+			rows.push(new KeyedView("list",
+				new VirtualList("cv-state.scroll", model.count(), rowHeight, function(index) {
+					var isSelected = model.enabledAt(index) && index == model.selectedIndex();
+					return new SearchPickerRow(buildRow(context, index, isSelected, index == state.hovered,
+						state.tooltipDismissRevision), model.labelAt(index), isSelected, model.enabledAt(index),
+						function() {
+							if (model.enabledAt(index)) model.activate(index);
+							onChanged();
+						}, function(value) {
+						state.hovered = value ? index : -1;
 						onChanged();
-					}, function(value) {
-					hovered = value ? index : -1;
-					onChanged();
-				});
-			}, listStyle, null, scroll, listHeight, null, model)));
+					});
+				}, listStyle, null, state.scroll, listHeight, null, model)));
 		}
 		var contentStyle = new LayoutStyle();
 		contentStyle.width = LayoutAxis.fixed(Math.max(1, actualWidth - 12));
@@ -205,14 +232,14 @@ class SearchPicker implements View {
 		popup.layerZIndex = layerZIndex;
 		var modifier = new haxeon.ui.core.RootModifier();
 		modifier.on(UiEventKind.Scroll, function(_) {
-			tooltipDismissRevision++;
+			state.tooltipDismissRevision++;
 			onChanged();
 		}, UiEventPhase.Capture);
 		var recheckAfterLayout = geometryChanged;
 		modifier.onResolved(function(_) {
 			if (!recheckAfterLayout) return;
 			recheckAfterLayout = false;
-			previousSelection = -1;
+			state.previousSelection = -1;
 			onChanged();
 		});
 		var navigate = function(event:UiEvent) {
@@ -316,4 +343,20 @@ interface SearchPickerModel extends haxeon.ui.widgets.collections.ListView.ListV
 	public function navigate(key:UiKey, modifiers:UiModifier, pageSize:Int):Void;
 	/** The user chose the result at `index`. */
 	public function activate(index:Int):Void;
+}
+
+/** What a picker keeps between builds: its list's scroll, focus, hover, and what it last showed. */
+private class SearchPickerState {
+	public final scroll = new ScrollController();
+	public var focusPending:Bool = true;
+	public var previousQuery:String = "";
+	public var previousSelection:Int = -1;
+	public var previousRowHeight:Float = 0;
+	public var previousListHeight:Float = 0;
+	public var hovered:Int = -1;
+	public var tooltipDismissRevision:Int = 0;
+	/** Whether the query is still selected, as the picker opens with `selectQuery`; the first edit clears it. */
+	public var selectQuery:Bool;
+
+	public function new(selectQuery:Bool) this.selectQuery = selectQuery;
 }

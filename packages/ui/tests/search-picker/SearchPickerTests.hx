@@ -139,8 +139,7 @@ class SearchPickerTests {
 		commands.register(new Command("enabled", "Enabled command", function() calls++));
 		commands.register(new Command("disabled", "Disabled command", function() calls++, null,
 			function() return false));
-		var palette = new CommandPalette("palette", commands, null, 0, 0, "", function() dismissals++);
-		palette.centered = true;
+		var palette = new CommandPalette("palette", commands, null, 0, 0, "", function() dismissals++, centered: true);
 		root = ui.submit(palette, new LayoutFrame(480, 360));
 		var panel = root.children[1].globalBounds();
 		check(panel.x >= 7 && panel.x + panel.width <= 473 && panel.y >= 7 && panel.y + panel.height <= 353,

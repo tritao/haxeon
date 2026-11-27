@@ -38,20 +38,20 @@ class CommandPalette implements View {
 	public final y:Float;
 
 	/** The search text, which filters the commands by label. */
-	public var query:String;
+	public final query:String;
 	/** Center the palette in the viewport, fitting its list into smaller windows. */
-	public var centered:Bool;
+	public final centered:Bool;
 
 	/** Called when the palette closes without a choice. */
-	public var onDismiss:Null<Void->Void>;
+	public final onDismiss:Null<Void->Void>;
 
 	/** Called with the outcome of each command run. */
-	public var onResult:Null<CommandResult->Void>;
+	public final onResult:Null<CommandResult->Void>;
 
 	/** A palette searching every registered command, starting with `query`. Throws when `key` is empty. */
 	public function new(key:String, ?registry:CommandRegistry, ?invocationContext:CommandContext,
 			x:Float = 0.0, y:Float = 0.0, query:String = "",
-			?onDismiss:Void->Void, ?onResult:CommandResult->Void) {
+			?onDismiss:Void->Void, ?onResult:CommandResult->Void, centered:Bool = false) {
 		if (key == null || key.length == 0)
 			throw "Command palettes require a stable key";
 		this.key = key;
@@ -60,7 +60,7 @@ class CommandPalette implements View {
 		this.x = x;
 		this.y = y;
 		this.query = query == null ? "" : query;
-		centered = false;
+		this.centered = centered;
 		this.onDismiss = onDismiss;
 		this.onResult = onResult;
 	}
@@ -70,37 +70,23 @@ class CommandPalette implements View {
 			var commands = registry == null ? context.commands : registry;
 			var actualContext = invocationContext == null ? context.commandContext : invocationContext;
 			var queryState:State<String> = context.state(context.id("query"), query);
-			query = queryState.value;
+			var query = queryState.value;
 			var selection:State<Int> = context.state(context.id("selection"), -1);
 			var model = new CommandPaletteModel(commands, actualContext, query, selection.value,
 				function(next) {
-					query = next;
 					queryState.update(next);
 					selection.update(-1);
 				},
 					function(next) selection.update(next), onResult, onDismiss);
-			var picker = context.resourceState(context.id("picker"), function() return new SearchPicker(key, model,
-				function(_, index, selected, hovered, _) return model.buildItem(index, selected, hovered),
-				function() {}, function() {}), function(_) {}).value;
-			picker.model = model;
-			picker.buildRow = function(_, index, selected, hovered, _) return model.buildItem(index, selected, hovered);
-			picker.onDismiss = function() {
-				if (onDismiss != null) onDismiss();
-			};
-			picker.width = 504;
-			picker.rowHeight = 36;
-			picker.maxListHeight = 320;
-			picker.label = "Command palette";
-			picker.placeholder = "Search commands";
-			picker.centered = centered;
-			picker.x = x;
 			var listHeight = Math.min(Math.max(36, model.count() * 36),
 				Math.max(36, Math.min(320, context.viewportHeight - 80)));
-			picker.y = centered ? Math.max(8, (context.viewportHeight - listHeight - 58) / 2) : y;
-			picker.dimBackdrop = true;
-			picker.menuSurface = false;
-			picker.layerZIndex = centered ? 1000 : 0;
-			return picker.build(context);
+			return new SearchPicker(key, model,
+				(_, index, selected, hovered, _) -> model.buildItem(index, selected, hovered), function() {
+					if (onDismiss != null) onDismiss();
+				}, function() {}, width: 504, rowHeight: 36, maxListHeight: 320, x: x,
+					y: centered ? Math.max(8, (context.viewportHeight - listHeight - 58) / 2) : y, centered: centered,
+					label: "Command palette", placeholder: "Search commands", dimBackdrop: true, menuSurface: false,
+					layerZIndex: centered ? 1000 : 0).build(context);
 		});
 	}
 }
