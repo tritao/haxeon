@@ -619,6 +619,8 @@ class StatementTyper {
 					var receiver = bodyTyper.typeExpression(Variable("this", span), scope),
 						propertySetter = ClassProperties.instanceAccessor(session, thisType, name, false, receiver,
 							span);
+					// `name = value` writes `this.name`, under the same rule as writing it through `this`.
+					FinalFieldRules.rejectInstanceMutation(session, receiver, name, span);
 					if (propertySetter != null) {
 						session.invalidateSetterEffects(propertySetter, name, scope);
 						return TExpression(setterStore(assigned, bodyTyper.propertySetterCall(receiver, propertySetter,

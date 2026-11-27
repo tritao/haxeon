@@ -1453,6 +1453,11 @@ class TestMain {
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
 		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } class Holder { public var value:Null<Fixed>; public function new() value = new Fixed(1); } function main():Int { var h = new Holder(); if (h.value != null) h.value.x = 2; return 0; }',
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
+		// A bare name writes the field through `this`, in a method, a closure, a compound assignment or an increment.
+		for (write in ['value = 2;', 'var f = function() value = 3; f();', 'value += 1;', 'value++;'])
+			expectCompileError('class Box { public final value:Int; public function new() value = 1; public function change():Void { $write } } function main():Int { new Box().change(); return 0; }',
+				'Final field "Box.value" can only be assigned through this in the constructor of "Box"');
+		Frontend.compile('class Box { public final value:Int; public final other:Int; public function new() { value = 1; other = value + 1; } } function main():Int return new Box().other;');
 		var observablePlace =
 			'interface Observable {} struct Point { public var x:Int; public function new(x:Int) this.x = x; public function move():Void x++; } class Model implements Observable { public var pos:Point; public function new() pos = new Point(1); } ';
 		for (operation in [
