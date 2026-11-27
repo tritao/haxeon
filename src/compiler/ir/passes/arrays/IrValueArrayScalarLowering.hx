@@ -36,17 +36,17 @@ class IrValueArrayScalarLowering extends compiler.ir.pipeline.IrFunctionPass {
 	}
 
 	/**
-	 * Expands the calls of `element`'s boundary helpers in `program`'s functions; in a session with `stageMemos`,
-	 * reusing what it made of each function whose version and helpers are unchanged. A function that changes becomes
-	 * its edited body, edited in place when the stage owns it, else on a copy.
+	 * Expands the calls of `element`'s boundary helpers in `program`'s functions, the helpers being among `generated`, the functions
+	 * the element's rewrite made; in a session with `stageMemos`, reusing what it made of each function whose version and helpers are
+	 * unchanged. A function that changes becomes its edited body, edited in place when the stage owns it, else on a copy.
 	 */
-	public static function rewrite(program:IrProgram, element:IrType, expandAll:Bool,
+	public static function rewrite(program:IrProgram, generated:Array<IrFunction>, element:IrType, expandAll:Bool,
 			scratch:IrPassScratch, ?stageMemos:compiler.ir.reuse.IrStageMemos):Void {
 		var builder = scratch.bodyBuilder;
 		// The helpers as they are before any expansion: a helper's own body may be expanded below.
 		var helpers:Map<String, IrBody> = [];
 		var suffix = ":" + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element));
-		for (fn in program.functions)
+		for (fn in generated)
 			if (StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)
 				&& StringTools.endsWith(fn.name, suffix)
 				&& (expandAll

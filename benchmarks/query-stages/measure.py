@@ -90,6 +90,8 @@ def main():
     parser.add_argument("--accesses", default="base,current,current2,contribute,holds,recompute,has")
     parser.add_argument("--program", help="a StageCostMain build to run instead of building one")
     parser.add_argument("--inliner", default="held,cutoff", help="the inliner's cases (`IrInliner.run`), per function")
+    parser.add_argument("--value-arrays", default="held,edit",
+                        help="the value array rewrite's cases (`IrValueArrayProgramRewrite.rewriteAll`), per function")
     arguments = parser.parse_args()
     pg = guard(arguments.checkout)
     if pg.perf_unavailable():
@@ -113,6 +115,11 @@ def main():
         print(f"{'inliner':8} {'':>8} {'':>8}   instructions per function of a warm build")
         for case in arguments.inliner.split(","):
             total = count(pg, hl, program, ["inliner", case, "1", str(arguments.functions), str(arguments.builds)])
+            print(f"{case:8} {total / (arguments.builds * arguments.functions):8.0f}", flush=True)
+    if arguments.value_arrays:
+        print(f"{'arrays':8} {'':>8} {'':>8}   instructions per function of a warm build of the value array rewrite")
+        for case in arguments.value_arrays.split(","):
+            total = count(pg, hl, program, ["value-arrays", case, "1", str(arguments.functions), str(arguments.builds)])
             print(f"{case:8} {total / (arguments.builds * arguments.functions):8.0f}", flush=True)
     if not arguments.accesses:
         return 0

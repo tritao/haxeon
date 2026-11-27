@@ -13,6 +13,7 @@ import compiler.ir.model.IrSymbol;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.model.TypeKey;
 import compiler.ir.passes.arrays.IrValueArrayProgramRewrite.IrValueArrayRequests;
+import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.verify.IrVerifier;
 
 typedef IrValueArrayMethodRequest = {
@@ -51,8 +52,8 @@ class IrValueArrayPlaceMethods {
 
 	public final requests:Array<IrValueArrayMethodRequest> = [];
 
-	/** By the name of each place method `generate` made, the function it specialized. */
-	public final origins:Map<String, String> = [];
+	/** By the name of each place method `generate` made, the version of the function it specialized (`IrFunction.version`). */
+	public final originVersions:Map<String, Int> = [];
 
 	final requested:Map<String, Bool> = [];
 	final valueWrites:Map<String, ArrayPlaceAccessor> = [];
@@ -114,17 +115,18 @@ class IrValueArrayPlaceMethods {
 		return name;
 	}
 
-	public function generate(originals:Map<String, IrFunction>):Array<IrFunction> {
+	/** The methods and accessors asked for, the methods specialized from `functions`, which are indexed only when one was. */
+	public function generate(functions:Array<IrFunction>):Array<IrFunction> {
 		if (finished)
 			throw new InternalError("Array place methods have already been generated");
-		var result:Array<IrFunction> = [], index = 0;
+		var result:Array<IrFunction> = [], index = 0, originals = new IrFunctionIndex("value-array-rewrite", functions);
 		while (index < requests.length) {
 			var entry = requests[index++],
 				originalName = resolveMethod(entry.receiverType, entry.method, originals),
 				original = originals.get(originalName);
 			if (original == null)
 				throw new InternalError('Missing array place method "$originalName"');
-			origins.set(entry.name, originalName);
+			originVersions.set(entry.name, original.version);
 			result.push(specialize(Provider(TypeKey.of(element),
 				ProviderOperations.detailed(ProviderOperation.ValueArrayMethod, entry.name)), entry.name,
 				original, entry.path));
@@ -784,7 +786,7 @@ class IrValueArrayPlaceMethods {
 		return name;
 	}
 
-	function resolveMethod(receiverType:IrType, method:String, originals:Map<String, IrFunction>):String {
+	function resolveMethod(receiverType:IrType, method:String, originals:IrFunctionIndex):String {
 		if (originals.exists(method))
 			return method;
 		var name:Null<String> = switch receiverType {

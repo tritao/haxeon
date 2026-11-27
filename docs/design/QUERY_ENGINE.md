@@ -258,7 +258,7 @@ Everything below keeps results across builds outside the engine. Lines are the f
 | `IrStageMemo`, `IrStageMemos`, `IrStageEntry` | 526 (the file, with `IrLineage` and the contribution memos) | stage and function slot; input version, fact reads, output, summary, helper requests; dropped when the stage's last run did not use it | `IrFunctionStages.run`, the ~25 `IrFunctionPass` stages | a computed kind per stage, keyed by function symbol; done for every per-function stage (slice 3) and the inliner (slice 5) |
 | ~~`IrLineage`, `IrFunctionSlots`~~ | (above), 95 | slot → function object and version; a version is never given twice; slots swept when cells exceed twice the functions | every stage (`settle`, `versionOf`), `IrStage` | done (slice 3): a version is the function object's own number (`IrFunction.version`), settling is early cutoff in the stages' kinds |
 | `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests); the passes' facts are done (slice 3: `IrStageFacts`, `IrFactReader` reads it), the inliner's (slice 5); `IrFacts` stays for verification (6) and lowering (7) |
-| Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemos.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the requests and enum mentions done (summaries, slice 3), the walk summaries done (`IrWalkMemo`), the enum dispatch's encodings a kind by type id; `lastResult` and the memos the choices and escape reaches read done (slice 4, steps); the inliner's done (slice 5: its call edges a step's summaries, its forms a kind); left: the runtime needs, array types, closure uses, initialization calls and stores (4), the verifier's (6) |
+| Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemos.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the requests and enum mentions done (summaries, slice 3), the walk summaries done (`IrWalkMemo`), the enum dispatch's encodings a kind by type id; `lastResult` and the memos the choices and escape reaches read done (slice 4, steps); the inliner's done (slice 5: its call edges a step's summaries, its forms a kind); the array types and the value array lane check done ("The value array rewrite as built"); left: the runtime needs, closure uses, initialization calls and stores (4), the verifier's (6) |
 | `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | a kind per walk (`IrWalkMemo`); done for the walks before the encode point (slice 3) and past it (slice 4, steps); the record stays for `HlPlainBuild` (6) |
 | Reuse code inside passes | ~750 lines naming the above in 49 files; est. 1,000–1,400 with the code around them | — | — | query declarations (est. a third of it); fact reads stay as engine reads |
 | ~~`IrGeneratedFunctions` (structure printers, initializers)~~ | 95 | key and identity of the input objects; swept when untouched | `FrontendCompilation`, `IrProgramAssembler` | done (slice 2): results in the generation kind with their reads |
@@ -980,6 +980,62 @@ Lines in `src/`: 739 deleted and 545 added, against the estimated −300 / +150;
 rewritten around the new memo. The deleted mechanism is about 450 lines (the entries and their memo, `IrFactRecorder` and the rest of
 `IrFacts` that served the inliner, the output versions, the forms', calls' and parameters' memos, the original bodies), the added
 engine code about 250 (`IrInlineQueries`, `IrInlineCallee`, the verification order, the components' step).
+
+### The value array rewrite as built
+
+The value array rewrite (`IrValueArrayProgramRewrite`, a target stage) ran each element type's rewrite, its scalar lowering and the
+allocation lowering on the stage driver already; what read every function each build were its whole-program parts, outside the
+engine:
+
+- the array types each function names, from which the element types are found: a contribution memo by version (`ARRAY_TYPES`);
+- the check that no ordinary array operation addresses an array of inline value lanes: a contribution memo by version holding a
+  print of the program's value classes, inline enums and reference natives, compared as text for every function
+  (`CHECKED_VALUE_ARRAYS`);
+- per element type, a map of every function by name for the place methods to specialize from, and a second of their versions;
+- per element type, a scan of every function's name for the element's boundary helpers (the scalar lowering);
+- the encodings before and after, which marked every function read.
+
+Now:
+
+- **Array types as a summary.** Each function contributes the ids of the types it names that hold an array or an iterator
+  (`IrContributionSummary`, `array-types`), kept while it is the same object (`holdsFrom`); the element types are found from the
+  ids some function names and the program's tables.
+- **The check is part of the allocation lowering.** `IrArrayFactoryPass` checks each function it lowers against the lane tables
+  (`IrValueArrayLanes`), which it reads as a fact (their print interned, `IrStageFacts`): a held function is not read, and a change
+  of the tables marks every reader. `IrVerifier.verifyValueArraysLowered` stays for a program checked whole.
+- **Place methods find their source by name's number** (`IrFunctionIndex` over the rewrite's input), indexed only when a method is
+  asked for, and keep the version of the function they specialized (`originVersions`), which their derived memo is made from.
+- **The scalar lowering looks among what the element's rewrite generated** for the element's boundary helpers.
+- **Encoding reads only a function without a body.**
+
+Deleted: `ARRAY_TYPES` and `CHECKED_VALUE_ARRAYS` with their memos, the index's map of original functions, the map of versions.
+
+Found on the way: the 425 ms the profile gave the stage on the signature edit were mostly not the stage's. That edit's one
+collection (about 350 to 390 ms of marking, on the main thread in the measured session) started in the allocation lowering's loop;
+the stage's own work on that edit is 30 to 60 ms, nearly all of it on the functions that changed.
+
+Measured, the stage benchmark's value array case (`benchmarks/query-stages`, instructions per function of a warm build, 9,000
+functions, a tenth of which allocate and take an array of a value object; `edit` gives a tenth of the others and a tenth of the
+array users as equal copies; the stage driver's cases are unchanged):
+
+| Case | Before | After |
+|---|---|---|
+| held | 2,685 | 1,154 |
+| edit | 7,268 | 5,779 |
+
+On the compiler's own sources (perf-guard, one machine, against origin/main): the body edit 1.518G → 1.495G instructions (−1.5%;
+the stage 15 → 7 ms, reading 9,448 → 240 functions), the signature edit 16.93G → 16.91G (the stage reads 9,753 → 1,482 functions),
+the no-op rebuild unchanged (0.580G); allocation of the body edit 177.0 → 172.9 MB (the stage 7 → 3 MB), of the signature edit
+933.6 → 927.8 MB, of the late body edit 196.1 → 191.8 MB; the server's live data 790.9 → 790.2 MB. The UI app's live session
+(census at the last build's write) 369.2 → 369.0 MB, the small project's 9.0 → 8.9 MB; a cold small-project build allocates and
+costs the same (11.35G → 11.33G instructions on the VM, 1.540G → 1.533G ahead of time). The
+self-compile is byte-identical, warm builds equal fresh ones with and without `--check-reuse`, the edit replay and the test driver
+pass.
+
+Left, each about 1 ms per element type and build: the resolution of the helpers each element's rewrite generates
+(`IrEnumTagLowering.resolveGenerated`, whose escape rewrite indexes the program's functions, objects and adapters) runs on the helpers
+made fresh before their derived memos keep last build's; a held helper needs the adapters its resolution added, so skipping it
+needs those adapters replayed as requests. And the element's layout and registries are made every build.
 
 ## Prior art
 

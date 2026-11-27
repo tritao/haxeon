@@ -34,86 +34,11 @@ import compiler.ir.model.IrFunction.IrFunctionKind;
 
 /** Rejects malformed or ill-typed SSA programs before backend lowering. */
 class IrVerifier {
-	/** By version, the tables each function was checked against for ordinary operations on lane arrays. */
-	@:processWide("a contribution memo's key, only ever read")
-	public static final CHECKED_VALUE_ARRAYS =
-		new compiler.ir.reuse.IrStageMemos.IrContributionKey<String>("checked-value-arrays");
-
-	/** After value-array lowering, ordinary array instructions must never address lane storage. */
-	/**
-	 * No ordinary array operation reads or writes an array of inline value lanes. With `stageMemos`, a function the session checked at
-	 * the same version against the same value classes, inline enums and reference natives is not read again (not under
-	 * `--check-reuse`).
-	 */
-	public static function verifyValueArraysLowered(program:IrProgram,
-			?stageMemos:compiler.ir.reuse.IrStageMemos):Void {
-		var valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
-			valueEnums:Map<String, Bool> = [
-				for (declaration in program.enums)
-					if (declaration.inlineStorage != null) declaration.name => true
-			],
-			ordinaryRefNatives:Map<String, Bool> = [];
-		function ordinaryRef(name:String):Bool
-			return StringTools.startsWith(name, "__array_") && StringTools.endsWith(name, "_ref");
-		for (native in program.natives)
-			if (ordinaryRef(native.symbol))
-				ordinaryRefNatives.set(native.name, true);
-		// By type id: 1 when a lane array, 0 when not, unset when not yet seen.
-		var lanes:Array<Int> = [];
-		function laneArray(body:IrBody, value:IrValueId):Bool {
-			var id = body.valueTypeId(value),
-				known = id < lanes.length ? lanes[id] : -1;
-			if (known < 0) {
-				known = switch body.valueType(value) {
-					case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name) ? 1 : 0;
-					case Array(Enum(name)) | Array(Nullable(Enum(name))): valueEnums.exists(name) ? 1 : 0;
-					case Array(EnumTag(_)): 1;
-					default: 0;
-				};
-				while (lanes.length <= id)
-					lanes.push(-1);
-				lanes[id] = known;
-			}
-			return known == 1;
-		}
-		function sorted(keys:Iterator<String>):String {
-			var names = [for (name in keys) name];
-			names.sort(Reflect.compare);
-			return names.join(",");
-		}
-		var checks = stageMemos != null && stageMemos.checks,
-			memo = stageMemos == null ? null : stageMemos.contribution(CHECKED_VALUE_ARRAYS),
-			key = memo == null ? "" : sorted(valueObjects.keys()) + ";" + sorted(valueEnums.keys()) + ";"
-				+ sorted(ordinaryRefNatives.keys());
-		for (fn in program.functions) {
-			var version = stageMemos == null ? 0 : fn.version;
-			if (memo != null && version != 0) {
-				if (!checks && memo.get(version) == key)
-					continue;
-				memo.keep(version, key);
-			}
-			var body = fn.encodedBody();
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					var invalid = switch body.opcode(row) {
-						case IrOpcode.ArrayGet | IrOpcode.ArraySet | IrOpcode.IteratorNew: laneArray(body,
-							body.operand(row, 0));
-						case IrOpcode.Call:
-							var name = body.symbol(row).name, found = false;
-							if (ordinaryRef(name) || ordinaryRefNatives.exists(name))
-								for (index in 0...body.operandCount(row))
-									if (laneArray(body, body.operand(row, index)))
-										found = true;
-							found;
-						default: false;
-					};
-					if (invalid)
-						throw new InternalError('IR verification failed for ${fn.name}: ordinary array operation on inline value lanes');
-					row = body.nextRow(row);
-				}
-			}
-		}
+	/** After value-array lowering, no ordinary array operation reads or writes an array of inline value lanes. */
+	public static function verifyValueArraysLowered(program:IrProgram):Void {
+		var lanes = new IrValueArrayLanes(program);
+		for (fn in program.functions)
+			lanes.check(fn);
 	}
 
 	/** A producer boundary must not pass typed enum conversions to a backend without resolution. */
@@ -2010,5 +1935,84 @@ class IrVerifyValues {
 		else
 			defined[count] = id;
 		count++;
+	}
+}
+
+/**
+ * What tells an array of inline value lanes from an ordinary one in a program (its value classes, inline enums and reference
+ * natives), and the check that no ordinary array operation of a function addresses one (`IrVerifier.verifyValueArraysLowered`); the
+ * value array lowering checks each function it lowers, reading `key` as a fact (`IrArrayFactoryPass`).
+ */
+@:nullSafety(Strict)
+class IrValueArrayLanes {
+	final valueObjects:Map<String, Bool>;
+	final valueEnums:Map<String, Bool>;
+	final ordinaryRefNatives:Map<String, Bool> = [];
+
+	/** By type id: 1 when a lane array, 0 when not, unset when not yet seen. */
+	final lanes:Array<Int> = [];
+
+	public function new(program:IrProgram) {
+		valueObjects = [for (object in program.objects) if (object.isValue) object.name => true];
+		valueEnums =
+			[for (declaration in program.enums) if (declaration.inlineStorage != null) declaration.name => true];
+		for (native in program.natives)
+			if (ordinaryRef(native.symbol))
+				ordinaryRefNatives.set(native.name, true);
+	}
+
+	/** What the check depends on, as text: the value classes, the inline enums and the reference natives, each sorted. */
+	public function key():String
+		return sorted(valueObjects.keys()) + ";" + sorted(valueEnums.keys()) + ";" + sorted(ordinaryRefNatives.keys());
+
+	/** Throws when an ordinary array operation of `fn` reads or writes an array of inline value lanes. */
+	public function check(fn:IrFunction):Void {
+		var body = fn.encodedBody();
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var invalid = switch body.opcode(row) {
+					case IrOpcode.ArrayGet | IrOpcode.ArraySet | IrOpcode.IteratorNew: laneArray(body,
+						body.operand(row, 0));
+					case IrOpcode.Call:
+						var name = body.symbol(row).name, found = false;
+						if (ordinaryRef(name) || ordinaryRefNatives.exists(name))
+							for (index in 0...body.operandCount(row))
+								if (laneArray(body, body.operand(row, index)))
+									found = true;
+						found;
+					default: false;
+				};
+				if (invalid)
+					throw new InternalError('IR verification failed for ${fn.name}: ordinary array operation on inline value lanes');
+				row = body.nextRow(row);
+			}
+		}
+	}
+
+	function laneArray(body:IrBody, value:IrValueId):Bool {
+		var id = body.valueTypeId(value),
+			known = id < lanes.length ? lanes[id] : -1;
+		if (known < 0) {
+			known = switch body.valueType(value) {
+				case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name) ? 1 : 0;
+				case Array(Enum(name)) | Array(Nullable(Enum(name))): valueEnums.exists(name) ? 1 : 0;
+				case Array(EnumTag(_)): 1;
+				default: 0;
+			};
+			while (lanes.length <= id)
+				lanes.push(-1);
+			lanes[id] = known;
+		}
+		return known == 1;
+	}
+
+	static function ordinaryRef(name:String):Bool
+		return StringTools.startsWith(name, "__array_") && StringTools.endsWith(name, "_ref");
+
+	static function sorted(keys:Iterator<String>):String {
+		var names = [for (name in keys) name];
+		names.sort(Reflect.compare);
+		return names.join(",");
 	}
 }

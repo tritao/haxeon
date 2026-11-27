@@ -17,6 +17,7 @@ import compiler.ir.passes.nullability.IrOptionalScalarFlow;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.pipeline.IrProgramAssembler;
 import compiler.ir.verify.IrVerifier;
+import compiler.ir.verify.IrVerifier.IrValueArrayLanes;
 
 /** What a function's body says about value arrays: the element keys its types name, and whether it has dynamic views. */
 private typedef ValueArraySummary = {
@@ -34,7 +35,6 @@ private class ValueArrayFunctionIndex {
 	final builder:IrBodyBuilder;
 	var summaries:Map<String, ValueArraySummary> = [];
 	var dynamicDone:Map<String, IrFunction> = [];
-	var originals:Map<String, IrFunction> = [];
 
 	/** By type id, the element keys a type names, once computed. */
 	final typeKeys:Array<Null<Array<String>>> = [];
@@ -63,13 +63,6 @@ private class ValueArrayFunctionIndex {
 	/** `fn`'s body: the one it is, or its encoding, kept. */
 	public inline function bodyOf(fn:IrFunction):IrBody
 		return fn.encodedBody(builder);
-
-	public function originalFunctions(functions:Array<IrFunction>):Map<String, IrFunction> {
-		for (fn in functions)
-			if (originals.get(fn.name) != fn)
-				originals.set(fn.name, fn);
-		return originals;
-	}
 
 	function key(type:IrType):Null<String>
 		return switch type {
@@ -166,22 +159,18 @@ class IrValueArrayProgramRewrite {
 	/** The stage of each element's rewrite, which runs once per element type, each a part of it (`IrFunctionStages.run`). */
 	static inline final STAGE = "value-array-rewrite";
 
-	/** The types naming an array or an iterator each function has. */
-	@:processWide("a contribution memo's key, only ever read")
-	public static final ARRAY_TYPES = new compiler.ir.reuse.IrStageMemos.IrContributionKey<Array<Int>>("array-types");
-
 	/**
 	 * Discover every concrete value array in the assembled program before generating any helpers. A function that changes becomes
-	 * its edited body, owned by the next stage. With `stageMemos`, each element's rewrite and the allocation lowering reuse what they made
-	 * of each function the session has at the same version.
+	 * its edited body, owned by the next stage. With `stageMemos`, what each function names of the arrays is a summary kept while it is
+	 * the same object, and each element's rewrite and the allocation lowering, which checks what it lowers, reuse what they made of each
+	 * function the session has at the same version.
 	 */
 	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget,
 			?scratch:IrPassScratch, ?stageMemos:compiler.ir.reuse.IrStageMemos):Void {
 		if (scratch == null)
 			scratch = new IrPassScratch();
 		var builder = scratch.bodyBuilder;
-		for (fn in program.functions)
-			fn.encodedBody(builder);
+		encodeAll(program, builder);
 		var values:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			inlineEnums:Map<String, Bool> =
 				[for (entry in program.enums) if (entry.inlineStorage != null) entry.name => true],
@@ -235,17 +224,9 @@ class IrValueArrayProgramRewrite {
 				visit(argument);
 			visit(native.result);
 		}
-		// SSA arguments and definitions cover every operand type, including phi edge uses; each type is visited once. What each
-		// function names of them is read once per version in a session (`arrayTypesOf`).
-		var visited:Array<Bool> = [];
-		for (fn in program.functions)
-			for (id in arrayTypesOf(fn, builder, stageMemos))
-				if (id >= visited.length || !visited[id]) {
-					while (visited.length <= id)
-						visited.push(false);
-					visited[id] = true;
-					visit(IrTypeIds.type(id));
-				}
+		// SSA arguments and definitions cover every operand type, including phi edge uses; each type is visited once.
+		for (id in arrayTypes(program.functions, stageMemos))
+			visit(IrTypeIds.type(id));
 		var keyed = [for (key => element in elements) {
 			key: key, element: element
 		}];
@@ -263,24 +244,31 @@ class IrValueArrayProgramRewrite {
 		for (entry in keyed)
 			rewriteIndexed(program, entry.element, pointerBits, target, index, slotNamespace++, scratch, stageMemos,
 				valueDeclarations);
-		IrArrayFactory.lower(program, scratch, stageMemos);
-		IrVerifier.verifyValueArraysLowered(program, stageMemos);
-		encodeAll(program, index);
+		IrArrayFactory.lower(program, scratch, stageMemos, new IrValueArrayLanes(program));
+		encodeAll(program, builder);
 	}
 
-	/** The ids of the types `fn`'s arguments, result, rows and descriptors have that name an array or an iterator. */
-	static function arrayTypesOf(fn:IrFunction, builder:IrBodyBuilder,
+	/**
+	 * The ids of the types naming an array or an iterator that some function of `functions` has, each once: in a session, a summary
+	 * of what each function names (`IrContributionSummary`), read again only of a function that changed; else read now.
+	 */
+	static function arrayTypes(functions:Array<IrFunction>,
 			stageMemos:Null<compiler.ir.reuse.IrStageMemos>):Array<Int> {
-		var version = stageMemos == null ? 0 : fn.version;
-		if (stageMemos == null || version == 0)
-			return readArrayTypes(fn.encodedBody(builder));
-		var memo = stageMemos.contribution(ARRAY_TYPES), known = memo.get(version);
-		if (known == null) {
-			known = readArrayTypes(fn.encodedBody(builder));
-			memo.keep(version, known);
-		} else if (stageMemos.checks && known.join(",") != readArrayTypes(fn.encodedBody(builder)).join(","))
-			throw new InternalError('--check-reuse: the array types reused for ${fn.name} differ from its body');
-		return known;
+		if (stageMemos == null) {
+			var visited:Array<Bool> = [], found:Array<Int> = [];
+			for (fn in functions)
+				for (id in readArrayTypes(fn.encodedBody()))
+					if (id >= visited.length || !visited[id]) {
+						while (visited.length <= id)
+							visited.push(false);
+						visited[id] = true;
+						found.push(id);
+					}
+			return found;
+		}
+		var summary:compiler.ir.reuse.IrStageMemos.IrContributionSummary<Int> = stageMemos.summary("array-types");
+		return summary.collect(stageMemos.database, functions, fn -> readArrayTypes(fn.encodedBody()),
+			id -> Std.string(id), stageMemos.checks, "array types");
 	}
 
 	static function namesArray(type:IrType):Bool
@@ -321,13 +309,14 @@ class IrValueArrayProgramRewrite {
 		var scratch = new IrPassScratch();
 		var index = new ValueArrayFunctionIndex([element], scratch.bodyBuilder);
 		rewriteIndexed(program, element, pointerBits, target, index, nextSlotNamespace(program), scratch);
-		encodeAll(program, index);
+		encodeAll(program, scratch.bodyBuilder);
 	}
 
-	/** Every function has its body, the helpers generated here included. */
-	static function encodeAll(program:IrProgram, index:ValueArrayFunctionIndex):Void {
+	/** Every function has its body, the helpers generated here included; a function that has one is not read. */
+	static function encodeAll(program:IrProgram, builder:IrBodyBuilder):Void {
 		for (fn in program.functions)
-			index.bodyOf(fn);
+			if (fn.body == null)
+				fn.encodedBody(builder);
 	}
 
 	static function nextSlotNamespace(program:IrProgram):Int {
@@ -365,7 +354,6 @@ class IrValueArrayProgramRewrite {
 			factory = new IrValueArrayFactory(objects, element, pointerBits, target, slotNamespace, program.enums),
 			elements = new IrValueArrayElements(element, factory.helpers, factory.bridge),
 			methods = new IrValueArrayPlaceMethods(objects, element, factory.helpers),
-			originals = index.originalFunctions(program.functions),
 			builder = scratch.bodyBuilder,
 			uses = scratch.firstInts,
 			rewritten:Null<Array<IrFunction>> = null;
@@ -446,10 +434,6 @@ class IrValueArrayProgramRewrite {
 			pass = new ValueArrayElementPass(fn -> index.has(fn, element) || index.needsDynamic(fn), rewriteOne,
 				requests,
 				elementFact(stageMemos, print)),
-			checks = stageMemos != null && stageMemos.checks,
-			// The versions of the functions a place method may be specialized from, before the rewrite changes them.
-			originalVersions:Map<String, Int> = stageMemos == null
-				? [] : [for (name => fn in originals) name => fn.version],
 			output = compiler.ir.pipeline.IrFunctionStages.run(STAGE, pass, program.functions, stageMemos, builder,
 				part);
 		for (position in 0...output.length)
@@ -457,7 +441,8 @@ class IrValueArrayProgramRewrite {
 				rewritten = output;
 				break;
 			}
-		var generatedMethods = methods.generate(originals),
+		// The place methods are specialized from the functions as they were before the rewrite.
+		var generatedMethods = methods.generate(program.functions),
 			generatedFactories = factory.functions(),
 			generatedElements = elements.functions(),
 			generatedOptional = optional == null ? [] : optional.functions(),
@@ -484,11 +469,9 @@ class IrValueArrayProgramRewrite {
 		// while the function it specializes has the same version.
 		if (stageMemos != null)
 			for (position in generatedStart...program.functions.length) {
-				var fn = program.functions[position], origin = methods.origins.get(fn.name);
+				var fn = program.functions[position], origin = methods.originVersions.get(fn.name);
 				program.functions[position] = compiler.ir.pipeline.IrFunctionStages.derived(STAGE, fn.name, pass,
-					origin == null
-					? compiler.ir.pipeline.IrFunctionStages.FROM_NAME : originalVersions.get(origin) ?? 0,
-					stageMemos, builder, reader -> {
+					origin ?? compiler.ir.pipeline.IrFunctionStages.FROM_NAME, stageMemos, builder, reader -> {
 						reader.read(ValueArrayElementPass.ELEMENT, "");
 						fn;
 					}, part);
@@ -497,8 +480,8 @@ class IrValueArrayProgramRewrite {
 		for (slot in factory.layout.lanes.slots)
 			if (slot.nullablePayload)
 				nullableScalars = true;
-		IrValueArrayScalarLowering.rewrite(program, element, target != HashLink || nullableScalars, scratch,
-			stageMemos);
+		IrValueArrayScalarLowering.rewrite(program, program.functions.slice(generatedStart), element,
+			target != HashLink || nullableScalars, scratch, stageMemos);
 		var nativeNames:Map<String, Bool> = [for (native in program.natives) native.name => true];
 		for (native in factory.natives().concat(factory.helpers.natives()).concat(elements.natives()))
 			if (!nativeNames.exists(native.name)) {

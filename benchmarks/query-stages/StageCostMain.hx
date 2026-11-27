@@ -29,6 +29,9 @@ import compiler.query.QuerySummary;
  * DRIVER `inliner` runs the inliner (`IrInliner.run`) as a compile server does, on a program whose callers each splice three
  * leaves (CASE: `held`, every function given as the object it was; `cutoff`, every function given as an equal copy, so each is
  * inlined again to the form it had); STAGES is ignored.
+ * DRIVER `value-arrays` runs the value array rewrite (`IrValueArrayProgramRewrite.rewriteAll`) as a compile server's target stages do,
+ * on a program a tenth of whose functions allocate and take an array of a value object (CASE: `held`, every function given as the
+ * object it was; `edit`, a tenth of the other functions and a tenth of the array users given as equal copies); STAGES is ignored.
  * A cold build and a warm one run first; then it prints `ready`, waits for a line on standard input, runs BUILDS warm builds,
  * prints `done` and waits for another line, so that `measure.py` counts only the warm builds.
  */
@@ -47,7 +50,7 @@ class StageCostMain {
 			count = Std.parseInt(args[3]) ?? 0,
 			builds = Std.parseInt(args[4]) ?? 0;
 		var reads = switch scenario {
-			case _ if (driver == "access" || driver == "inliner"): 0;
+			case _ if (driver == "access" || driver == "inliner" || driver == "value-arrays"): 0;
 			case "held": 0;
 			case "held1": 1;
 			case "held3": 3;
@@ -65,6 +68,7 @@ class StageCostMain {
 			case "engine": engineDriver(functions, stages, reads, cutoff);
 			case "access": accessDriver(functions, scenario);
 			case "inliner": inlinerDriver(count, scenario == "cutoff");
+			case "value-arrays": valueArrayDriver(count, scenario == "edit");
 			case _: throw "unknown driver " + driver;
 		}
 		run(0);
@@ -192,6 +196,55 @@ class StageCostMain {
 			memos.bodies = true;
 			compiler.ir.passes.inlining.IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.hashLink,
 				new compiler.CompileOptions({keepSession: true}), null, memos);
+		};
+	}
+
+	/**
+	 * The value array rewrite on `count` functions, every tenth of which allocates an array of a value object and takes one, the rest
+	 * arithmetic: given the same objects every build, or with `edits` a tenth of the others and a tenth of the array users as equal
+	 * copies.
+	 */
+	static function valueArrayDriver(count:Int, edits:Bool):Int->Void {
+		var database = new QueryDatabase();
+		var memos = new IrStageMemos(database,
+			database.register(new ComputedQueryKind<IrFunction>("ir-generation", IrFunctionStateEquality.same)));
+		var scratch = new compiler.ir.model.IrPassScratch();
+		var element:IrType = Obj("bench.Record"), functions:Array<IrFunction> = [];
+		for (index in 0...count) {
+			var builder = new IrBuilder(), value = builder.argument("value", IrType.I32);
+			if (index % 10 == 0) {
+				builder.argument("items", Array(element));
+				builder.call(compiler.ir.passes.arrays.IrArrayFactory.NAME, [value], Array(element));
+			}
+			for (step in 0...4)
+				value = builder.add(value, builder.constInt(index + step));
+			builder.returnValue(value);
+			var fn = new IrFunction("bench.F" + index + ".run", builder.arguments, IrType.I32, builder.blocks,
+				Ordinary);
+			// Past the encode point a function's body is frozen, so a stage edits a copy.
+			fn.encodedBody(scratch.bodyBuilder);
+			fn.freezeBody(scratch.bodyBuilder);
+			functions.push(fn);
+		}
+		return function(build:Int) {
+			database.newRevision();
+			var program = new compiler.ir.model.Ir.IrProgram("bench.F0.run");
+			program.objects.push({
+				name: "bench.Record",
+				isValue: true,
+				base: null,
+				interfaces: [],
+				methods: [],
+				fields: [{name: "x", type: IrType.I32}, {name: "y", type: IrType.F64}]
+			});
+			program.functions = [for (index in 0...count) {
+				var fn = functions[index];
+				edits && (index % 10 == 5 || index % 100 == 0) ? fn.withBlocks(fn.blocks) : fn;
+			}];
+			memos.startBuild(program.functions, false);
+			memos.bodies = true;
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(program, 64,
+				compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget.HashLink, scratch, memos);
 		};
 	}
 

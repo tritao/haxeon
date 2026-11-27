@@ -950,11 +950,7 @@ class ValueArrayAccessMain {
 			throw "An escaping array place must not be silently treated as a live alias";
 		var nestedOriginal = new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void,
 			nestedMethod.blocks, Ordinary);
-		var generatedMethods = methodRewriter.generate([
-			callerFunction.name => callerFunction,
-			adjustmentFunction.name => adjustmentFunction,
-			nestedOriginal.name => nestedOriginal
-		]);
+		var generatedMethods = methodRewriter.generate([callerFunction, adjustmentFunction, nestedOriginal]);
 		if (generatedMethods.length != 4)
 			throw "Nested array-place method dispatch was not specialized";
 		var helperFunctions = helpers.functions();

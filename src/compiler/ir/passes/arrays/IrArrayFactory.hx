@@ -45,14 +45,15 @@ class IrArrayFactory {
 
 	/**
 	 * Emits the remaining allocation requests of `program`'s functions, on their bodies, per function (`IrArrayFactoryPass`): with `stageMemos`, a function the session has at the same version is
-	 * last build's lowering, unread. A function that changes becomes its edited body, owned by the next stage.
+	 * last build's lowering, unread. A function that changes becomes its edited body, owned by the next stage. With `lanes`, each
+	 * function lowered is checked to leave no ordinary array operation on inline value lanes (`IrValueArrayLanes`).
 	 */
 	public static function lower(program:IrProgram, ?scratch:IrPassScratch,
-			?stageMemos:compiler.ir.reuse.IrStageMemos):Void {
+			?stageMemos:compiler.ir.reuse.IrStageMemos, ?lanes:compiler.ir.verify.IrVerifier.IrValueArrayLanes):Void {
 		var builder = scratch == null ? new compiler.ir.model.IrBodyBuilder() : scratch.bodyBuilder;
 		program.functions = compiler.ir.pipeline.IrFunctionStages.run(IrArrayFactoryPass.STAGE,
-			new IrArrayFactoryPass(program, builder), program.functions, stageMemos,
-			builder);
+			new IrArrayFactoryPass(program, builder, lanes, stageMemos == null ? null : stageMemos.stageFacts),
+			program.functions, stageMemos, builder);
 	}
 
 	/** Whether `body` calls the factory, whose symbol id is `name`. */
@@ -118,21 +119,27 @@ class IrArrayFactory {
 /**
  * The array factory lowering per function (`IrFunctionPass`): a function that calls the factory has its calls made allocations;
  * it depends on the function alone. One that makes a typed reference array asks for the array runtime (`TYPED`), which `finish`
- * adds once.
+ * adds once. With lanes to check, every function lowered is checked against them, which it reads as a fact (`LANES`).
  */
 class IrArrayFactoryPass extends compiler.ir.pipeline.IrFunctionPass {
 	public static inline final STAGE = "array-factory";
 
 	static inline final TYPED = 0;
+	static inline final LANES = 0;
 
 	final program:IrProgram;
 	final builder:compiler.ir.model.IrBodyBuilder;
+	final lanes:Null<compiler.ir.verify.IrVerifier.IrValueArrayLanes>;
+	final facts:Null<compiler.ir.reuse.IrStageFacts>;
 	final name = IrSymbol.of(IrArrayFactory.NAME).id;
 	var typed = false;
 
-	public function new(program:IrProgram, builder:compiler.ir.model.IrBodyBuilder) {
+	public function new(program:IrProgram, builder:compiler.ir.model.IrBodyBuilder,
+			lanes:Null<compiler.ir.verify.IrVerifier.IrValueArrayLanes>, facts:Null<compiler.ir.reuse.IrStageFacts>) {
 		this.program = program;
 		this.builder = builder;
+		this.lanes = lanes;
+		this.facts = facts;
 	}
 
 	override public function summarize(fn:IrFunction):Int
@@ -141,17 +148,25 @@ class IrArrayFactoryPass extends compiler.ir.pipeline.IrFunctionPass {
 	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {}
 
-	override public function fact(kind:Int, key:String):Int
-		return compiler.ir.reuse.IrStageFacts.UNKNOWN;
+	override public function fact(kind:Int, key:String):Int {
+		var checked = lanes, interned = facts;
+		return checked == null || interned == null ? 0 : interned.intern(checked.key());
+	}
 
 	override public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
-		var body = fn.encodedBody(builder);
-		if (!IrArrayFactory.requests(body, name))
-			return fn;
-		var edited = body.forEditing(builder);
-		if (IrArrayFactory.emit(edited, name))
-			reader.request(TYPED, Void);
-		return IrFunction.ofOwnedBody(edited);
+		var body = fn.encodedBody(builder), lowered = fn;
+		if (IrArrayFactory.requests(body, name)) {
+			var edited = body.forEditing(builder);
+			if (IrArrayFactory.emit(edited, name))
+				reader.request(TYPED, Void);
+			lowered = IrFunction.ofOwnedBody(edited);
+		}
+		var checked = lanes;
+		if (checked != null) {
+			reader.read(LANES, "");
+			checked.check(lowered);
+		}
+		return lowered;
 	}
 
 	override public function request(kind:Int, type:IrType, name:Null<String>):Void
