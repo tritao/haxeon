@@ -903,7 +903,9 @@ class FrontendCompilation {
 			indexSemantics = build.indexSemantics,
 			lowerToIr = build.lowerToIr,
 			generation = context.state.irGeneration,
-			releasesBodies = context.options.keepSession && !indexSemantics;
+			releasesBodies = context.options.keepSession && !indexSemantics,
+			// One builder encodes every body, so its columns grow once rather than for each function.
+			bodies = new compiler.ir.model.IrBodyBuilder();
 		var touchedModules:Map<String, Bool> = [],
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [],
 			generatedFunctions:Map<String, Bool> = [];
@@ -968,7 +970,7 @@ class FrontendCompilation {
 				// What the session keeps of the IR it had is its body alone: the new IR is compared as rows, encoded, and keeps that
 				// encoding as its body, which the encode point then takes as it is.
 				if (kept != null && kept.body != null)
-					ir.encodedBody();
+					ir.encodedBody(bodies);
 				// Typed again to the IR it already had (a helper every build types from the program's requests, an edit that changes
 				// nothing the function compiles to): the function keeps that IR, so nothing after it sees a change.
 				var made = generation.put(context.state.queries, key, ir);
