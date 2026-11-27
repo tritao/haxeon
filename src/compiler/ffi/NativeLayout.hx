@@ -10,6 +10,35 @@ import compiler.types.TypedAst.TypedNativeLayout;
 
 /** C record layout of source-declared native values, by the same HxiAbi rules that lay out HXI structs. */
 class NativeLayout {
+	/** The tag of the native scalar type named `name` (`UInt8` is "u8"), or null when it names none. */
+	public static function scalarTag(name:String):Null<String>
+		return switch name {
+			case "Int8": "i8";
+			case "UInt8": "u8";
+			case "Int16": "i16";
+			case "UInt16": "u16";
+			case "Int32": "i32";
+			case "UInt32": "u32";
+			case "UInt64": "u64";
+			case "Float32": "f32";
+			case "Float64": "f64";
+			case "CChar": "c_char";
+			case "CSignedChar": "c_schar";
+			case "CUChar": "c_uchar";
+			case "CBool": "c_bool";
+			case "CShort": "c_short";
+			case "CUShort": "c_ushort";
+			case "CInt": "c_int";
+			case "CUInt": "c_uint";
+			case "CLong": "c_long";
+			case "CULong": "c_ulong";
+			case "CLongLong": "c_long_long";
+			case "CULongLong": "c_ulong_long";
+			case "CSize": "c_size";
+			case "CWChar": "c_wchar";
+			default: null;
+		};
+
 	public static function isNativeValue(type:CompilerType):Bool
 		return switch type {
 			case TInstance(NominalKind.NativeValue, _, _): true;

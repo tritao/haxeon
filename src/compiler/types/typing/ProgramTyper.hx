@@ -1922,7 +1922,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				var functionUnit = requiredTypes().functionUnit(method),
 					typedMethod = functionUnit == null ? null : functionUnit.typed;
 				if (functionUnit != null && typedMethod != null) {
-					if (method.name == "new" && instanceInitializers.length > 0)
+					if (method.name == "new" && instanceInitializers.length > 0
+						&& !compiler.semantic.ImplicitConstructors.isMemberwise(method))
 						typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers);
 					methodsTyped[methodIndex] = typedMethod;
 					var output = functionUnit.output;
@@ -1949,7 +1950,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						specialization == null ? null : specialization.name + "." + method.name, null,
 						specialization == null ? null : specialization.name,
 						specialization == null ? null : specialization.typeArguments);
-				if (method.name == "new" && typeBody && instanceInitializers.length > 0)
+				// A struct's memberwise constructor stores every field, so it does not run their initializers.
+				if (method.name == "new" && typeBody && instanceInitializers.length > 0
+					&& !compiler.semantic.ImplicitConstructors.isMemberwise(method))
 					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers,
 						specialization == null ? null : session.representation.receiverType(classDecl.name,
 						substitutions));

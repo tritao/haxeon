@@ -1,7 +1,8 @@
 // Named arguments: after its positional ones, a call names the parameters it passes in their declared order, skipping
 // optional ones, which take their defaults. Methods, overrides (whose own defaults fill a skipped parameter), static
 // extensions, constructors, generic functions and constructors and enum constructors bind them the same way, and the
-// arguments are evaluated in the order written.
+// arguments are evaluated in the order written. A struct without a constructor gets a memberwise one, whose defaults are
+// its fields' initializers, and `with`, a copy with the named fields replaced.
 using namedargs.Padding;
 
 enum Shape {
@@ -16,6 +17,19 @@ struct Size {
 		this.w = w;
 		this.h = h;
 	}
+}
+
+struct Props {
+	public final key:String;
+	public final value:String = "";
+	public final enabled:Bool = true;
+	public final placeholder:Null<String> = null;
+	public final classes:Array<String> = [];
+}
+
+struct Point {
+	public final x:Float;
+	public final y:Float = 0.0;
 }
 
 interface Painter {
@@ -51,6 +65,12 @@ class Box<T> {
 }
 
 var order:Array<String> = [];
+var made = 0;
+
+function fresh():Props {
+	made++;
+	return new Props("k", "v");
+}
 
 function area(width:Int, height:Int = 3, scale:Int = 1, ?unit:String):String
 	return (width * height * scale) + (unit == null ? "" : unit);
@@ -85,5 +105,17 @@ function main():Int {
 	var size = new Size(w:4), box = new Box("x", count:4);
 	if (size.w != 4 || size.h != 5 || box.value != "x" || box.count != 4)
 		return 8;
+	var props = new Props("name", placeholder:"Name"), point = new Point(x:3.0);
+	if (props.key != "name" || props.value != "" || !props.enabled || props.placeholder != "Name"
+		|| props.classes.length != 0
+		|| point.x != 3.0 || point.y != 0.0)
+		return 9;
+	var off = props.with(enabled:false), cleared = props.with(placeholder:null), same = props.with();
+	if (off.enabled || off.key != "name" || off.placeholder != "Name" || !props.enabled || cleared.placeholder != null
+		|| same.placeholder != "Name")
+		return 10;
+	var once = fresh().with(value:"w", classes:["a"]);
+	if (made != 1 || once.key != "k" || once.value != "w" || once.classes.length != 1)
+		return 11;
 	return 42;
 }

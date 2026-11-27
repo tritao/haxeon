@@ -324,6 +324,11 @@ class CallResolver {
 			// `Class.name()` names a static, as Haxe's `using` applies to values.
 			if (missing.span != span || receiver.expression.match(TClassRef(_)))
 				throw missing;
+			if (name == "with") {
+				var copied = typeStructWith(receiver, arguments, span, scope);
+				if (copied != null)
+					return copied;
+			}
 			var extension = typeStaticExtensionCall(declaredReceiver == null ? receiver : declaredReceiver, receiver,
 				name,
 				arguments, span, scope, expectedType);
@@ -334,6 +339,46 @@ class CallResolver {
 				throw missing;
 			throw MissingMember.field(MissingMember.haxeType(declaredReceiver.type), name, span);
 		}
+	}
+
+	/**
+	 * `value.with(field: replacement, ...)` on a struct with a memberwise constructor and no `with` of its own: a copy of
+	 * `value` with the named fields replaced, as `new S(...)` from the replacements and `value`'s other fields. The value is
+	 * evaluated once, first, then the replacements in the order written, which names fields in their declared order. Null
+	 * when the value is no such struct.
+	 */
+	function typeStructWith(receiver:TypedExpression, arguments:Array<AstExpression>, span:SourceSpan,
+			scope:Scope):Null<TypedExpression> {
+		var typeName = switch receiver.type {
+			case TInstance(_, name, _): name;
+			default: null;
+		};
+		if (typeName == null || !session.signatures.exists(typeName + ".new"))
+			return null;
+		var constructor = session.signatures.required(typeName + ".new");
+		if (!compiler.semantic.ImplicitConstructors.isMemberwise(constructor))
+			return null;
+		for (argument in arguments)
+			if (!argument.match(NamedArgument(_, _, _)))
+				fail(DiagnosticCode.CALL_FORM, '`with` on "$typeName" takes the fields it replaces by name',
+					compiler.syntax.Parser.expressionSpan(argument));
+		// Every field may be left as it is.
+		var fields:Array<AstArgument> = [
+			for (argument in constructor.arguments)
+				{name: argument.name, type: argument.type, span: argument.span, optional: true}
+		];
+		var bound = NamedArguments.bind(fields, arguments, 0, typeName + ".with"),
+			held = new TemporaryLocal("__haxeon_with" + span.start),
+			inner = new Scope(scope);
+		var heldBinding = inner.define(held.name, receiver.type, span, true, null, false, null, null, held);
+		var passed:Array<AstExpression> = [
+			for (index in 0...fields.length)
+				index < bound.length
+				&& !NamedArguments.isDefault(bound[index]) ? bound[index] : Member(TemporaryVariable(held,
+				span), fields[index].name, span)
+		];
+		var made = bodyTyper.typeExpression(New(typeName, passed, span), inner, receiver.type);
+		return new TypedExpression(TBlockExpression([TVar(heldBinding.id, receiver, span)], made), made.type, span);
 	}
 
 	/**

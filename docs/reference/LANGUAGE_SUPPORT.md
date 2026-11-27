@@ -281,6 +281,12 @@ The current subset includes:
   omitted as without names. Arguments are evaluated in the order written. An unknown name, a name given twice or out of
   order, a positional argument after a named one, a skipped required parameter, a named rest parameter or a named argument
   to a function value is an error. A parameter's name is part of its function's signature.
+- A struct that declares no constructor gets a memberwise one (a Haxeon extension): a parameter per stored field, in
+  declaration order, defaulting to the field's initializer, so `new Size(4)`, `new Size(w: 4, h: 2)` and, with every
+  field initialized, `new Size()` work. An initializer that is not a literal (`[]`, `new Point(1.0)`) is evaluated per
+  construction; a field without one is a required parameter (`new S()` no longer leaves such fields zero). Its fields
+  need type annotations; annotation and native-layout structs keep the zero-initializing constructor. It also has `with`: `size.with(h: 3)` is a copy with the named fields
+  replaced, the receiver evaluated once; `with(label: null)` sets the field to null.
 - Rest parameters, as in Haxe: the last argument of a function, method, constructor, local function or static extension
   may be `...values:T`, a `haxe.Rest<T>` (`values[i]`, `values.length`, `for (value in values)`, `toArray()`, `append`,
   `prepend`, `haxe.Rest.of(array)`). A call passes the arguments from its position on one by one (`sum(1, 2, 3)`, `sum()`),

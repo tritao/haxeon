@@ -463,8 +463,13 @@ class SemanticAssembly {
 			derivedClasses.set(constructor.owner, constructor.declaration);
 			functions.push(AstFunctions.withName(constructor.method, qualified));
 			derived.push(qualified);
-			facts.setDependencies(facts.id(FactAspect.Signature, qualified),
-				[facts.id(FactAspect.Signature, constructor.base + ".new")]);
+			// A struct's memberwise constructor is made from its fields, and exists only while the structs it holds are not
+			// native-layout.
+			var base = constructor.base;
+			facts.setDependencies(facts.id(FactAspect.Signature, qualified), base == null ? [
+				for (owner in [constructor.owner].concat(constructor.held))
+					facts.id(FactAspect.Members, owner)
+			] : [facts.id(FactAspect.Signature, base + ".new")]);
 		}
 		// A class that implements an interface with variables has their hidden accessors (`InterfaceFieldAccessors`): typed, tracked
 		// and invalidated as its own methods. An accessor's signature is the interface variable's, which the class's members name.

@@ -1,6 +1,6 @@
 # Named arguments, default values and memberwise initializers
 
-Status: named arguments implemented (2026-11-27); the memberwise initializer and `with` are next. Recorded in
+Status: implemented (2026-11-27): named arguments, the memberwise initializer and `with`. Recorded in
 [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md) and [LANGUAGE_SUPPORT.md](../reference/LANGUAGE_SUPPORT.md); the idea first
 appeared as item 10 of [FUTURE_LANGUAGE.md](FUTURE_LANGUAGE.md), and this is the part that lands as a Haxeon extension.
 
@@ -48,9 +48,22 @@ arguments covers construction and copying.
   has no parameter names) is a compile error naming the parameter.
 - **Names are API.** A parameter's name is part of its function's signature: renaming it is a visible change, and
   incremental compilation treats it as one for callers that name it.
-- **Synthesis.** The memberwise initializer and `with` are synthesized only when the struct declares no constructor or
-  `with` of its own. `final` fields are parameters of the initializer and of `with` alike, since `with` builds a new
-  value rather than writing one. Fields without an initializer are required in the initializer.
+- **Synthesis.** A struct that declares no constructor gets the memberwise initializer, when every stored field has a
+  type annotation (a field's type can otherwise be its initializer's): a parameter per stored field, in declaration
+  order, defaulting to its initializer, and a body storing each; it does not run the field initializers. A literal
+  initializer also stays the field's own default, which native descriptors and wire codecs read; any other (`[]`,
+  `new Point(1.0)`), which a struct field could not hold before, is the initializer's default only. Fields without an
+  initializer are required, so no struct is built with fields it did not set: this replaces the earlier rule that
+  `new S()` left such fields zero (a field that should start at zero says `= 0`). `final` fields are parameters of the
+  initializer and of `with` alike.
+- **Exclusions.** Annotation structs, which metadata builds and which declare no methods, and native-layout structs (a
+  native scalar field, `@:repr("C")`, or such a struct held as a field) keep the zero-initializing constructor; the
+  latter only until native-layout values can be passed as parameters. Whether a struct is native-layout depends on the
+  structs it holds, so its initializer is invalidated with theirs.
+- **`with`.** On a struct with the memberwise initializer and no `with` member of its own, `value.with(field: v, ...)`
+  is a copy with the named fields replaced, built at the call site as the initializer's call from the replacements and
+  `value`'s other fields: `value` is evaluated once, first, then the replacements in the order written. Every argument
+  is named; naming a field `null` sets it, which leaving it out does not.
 - **Haxe compatibility.** Every call Haxe accepts keeps its meaning, including skipping optional arguments by type;
   named arguments are only new syntax. Removing skip-by-type is a separate decision for the language after Haxe.
 
@@ -81,9 +94,14 @@ expression typing belongs to a call with no parameter names, which is the functi
 - Deconstruction.
 - Compile-time body purity; the UI keeps the runtime checks, as [PURITY.md](PURITY.md) decides.
 
+The memberwise initializer is added with the other synthesized constructors (`ImplicitConstructors`), so named-argument
+binding, typing and incremental invalidation see an ordinary constructor; its signature depends on the struct's members.
+`with` is resolved where a missing member would fall back to static extensions (`CallResolver.typeStructWith`).
+
 ## Checks
 
 `tests/programs/named-arguments.hx` covers functions, methods and overrides, interface calls, static extensions,
 constructors, generic functions and constructors, enum constructors and evaluation order; `NamedArgumentsMain` covers
-every error cold and incrementally and a parameter rename reaching a caller that names it. The initializer and `with` will
-add structs with nested struct, nullable and array fields.
+every error cold and incrementally and a parameter rename reaching a caller that names it. The same two cover the
+initializer and `with`: defaults including array and nullable fields, explicit null, evaluating the receiver once, and
+`with` misuse and its absence on a struct with a constructor of its own.

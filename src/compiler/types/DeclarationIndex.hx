@@ -554,32 +554,11 @@ class DeclarationIndex {
 					case StdlibNames.INT64, "Int64": TInt64;
 					case StdlibNames.BYTES: TBytes;
 					case StdlibNames.HL_BYTES: THlBytes;
-					case "Int8": TNativeScalar("i8");
-					case "UInt8": TNativeScalar("u8");
-					case "Int16": TNativeScalar("i16");
-					case "UInt16": TNativeScalar("u16");
-					case "Int32": TNativeScalar("i32");
-					case "UInt32": TNativeScalar("u32");
-					case "UInt64": TNativeScalar("u64");
-					case "Float32": TNativeScalar("f32");
-					case "Float64": TNativeScalar("f64");
-					case "CChar": TNativeScalar("c_char");
-					case "CSignedChar": TNativeScalar("c_schar");
-					case "CUChar": TNativeScalar("c_uchar");
-					case "CBool": TNativeScalar("c_bool");
-					case "CShort": TNativeScalar("c_short");
-					case "CUShort": TNativeScalar("c_ushort");
-					case "CInt": TNativeScalar("c_int");
-					case "CUInt": TNativeScalar("c_uint");
-					case "CLong": TNativeScalar("c_long");
-					case "CULong": TNativeScalar("c_ulong");
-					case "CLongLong": TNativeScalar("c_long_long");
-					case "CULongLong": TNativeScalar("c_ulong_long");
-					case "CSize": TNativeScalar("c_size");
-					case "CWChar": TNativeScalar("c_wchar");
 					case "Flat": TInstance(NominalKind.Interface, StructProperties.FLAT_TYPE_NAME, []);
 					case "Portable": TInstance(NominalKind.Interface, StructProperties.PORTABLE_TYPE_NAME, []);
-					default: resolveNamedType(name, span, resolving, substitutions);
+					default:
+						var scalar = compiler.ffi.NativeLayout.scalarTag(name);
+						scalar != null ? TNativeScalar(scalar) : resolveNamedType(name, span, resolving, substitutions);
 				}
 			case AppliedType(name, arguments):
 				requireVisible(name, span);
