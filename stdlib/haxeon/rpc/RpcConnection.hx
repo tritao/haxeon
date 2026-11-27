@@ -300,24 +300,10 @@ class RpcConnection {
 		if (messageBudget < 1 || bytes < maxMessageBytes)
 			throw new haxe.Exception("Invalid RPC poll budget");
 		polling = true;
-		#if !haxe_ver
 		defer polling = false;
-		#end
 		sendMessagesLeft = messageBudget;
 		sendBytesLeft = bytes;
-		#if !haxe_ver
 		return pollInternal(messageBudget, bytes);
-		#else
-		var count:Int;
-		try
-			count = pollInternal(messageBudget, bytes)
-		catch (failure:Dynamic) {
-			polling = false;
-			throw failure;
-		}
-		polling = false;
-		return count;
-		#end
 	}
 
 	function pollInternal(messageBudget:Int, byteBudget:Int):Int {

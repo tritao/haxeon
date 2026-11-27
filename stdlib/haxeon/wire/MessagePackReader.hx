@@ -94,8 +94,7 @@ class MessagePackReader {
 			return false;
 		if (marker == 0xc3)
 			return true;
-		#if haxe_ver
-		return #end unexpected(marker, "boolean");
+		unexpected(marker, "boolean");
 	}
 
 	/** Reads an integer that fits in an `Int`. Throws when what comes next is not one, or does not fit. */
@@ -124,8 +123,7 @@ class MessagePackReader {
 			case 0xcf, 0xd3:
 				throw new WireFailure(Malformed("MessagePack Int64 requires readInt64"));
 			default:
-				#if haxe_ver
-				return #end unexpected(marker, "integer");
+				unexpected(marker, "integer");
 		}
 	}
 
@@ -157,8 +155,7 @@ class MessagePackReader {
 			case 0xd3:
 				return haxe.Int64.make(input.readInt32(), input.readInt32());
 			default:
-				#if haxe_ver
-				return #end unexpected(marker, "integer");
+				unexpected(marker, "integer");
 		}
 	}
 
@@ -230,8 +227,7 @@ class MessagePackReader {
 			case 0xc9:
 				length = readLength32("extension");
 			default:
-				#if haxe_ver
-				return #end unexpected(marker, "extension");
+				unexpected(marker, "extension");
 		}
 		var type = signedByte(readByte());
 		return {type: type, value: readBytes(length)};
@@ -334,8 +330,7 @@ class MessagePackReader {
 			return checkedLength(readUInt16(), kind);
 		if (marker == largeTag)
 			return readLength32(kind);
-		#if haxe_ver
-		return #end unexpected(marker, kind);
+		unexpected(marker, kind);
 	}
 
 	function readLength32(kind:String):Int {
@@ -401,8 +396,7 @@ class MessagePackReader {
 			unexpected(marker, kind);
 	}
 
-	// Stock Haxe needs explicit returns at value sites because it does not use @:noReturn for flow analysis.
 	@:noReturn
-	static function unexpected(marker:Int, expected:String):#if haxe_ver Dynamic #else
-		Void #end throw new WireFailure(Malformed('Expected MessagePack $expected, got marker 0x${StringTools.hex(marker, 2)}'));
+	static function unexpected(marker:Int, expected:String):Void
+		throw new WireFailure(Malformed('Expected MessagePack $expected, got marker 0x${StringTools.hex(marker, 2)}'));
 }
