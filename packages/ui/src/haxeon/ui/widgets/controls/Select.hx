@@ -24,26 +24,27 @@ class Select<T> implements View {
 	public final options:Array<SelectOption<T>>;
 
 	/** The selected option's value. */
-	public var value:T;
+	public final value:T;
 
 	/** Whether the control reacts to input. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 
 	/** The control's box; 36 pixels high unless it sets a height. */
 	public final style:LayoutStyle;
 
 	/** Called with the value of the option the user picks. */
-	public var onChange:T->Void;
+	public final onChange:T->Void;
 	var hasChangeHandler:Bool;
 
 	/** The control's accessible name; without one it is named by the selected option. */
-	public var accessibilityLabel:Null<String> = null;
+	public final accessibilityLabel:Null<String>;
 
 	/**
 	 * A drop-down list of `options` showing the one whose value is `value`. Throws when `key` is empty or two options
 	 * share a key.
 	 */
-	public function new(key:String, options:Array<SelectOption<T>>, value:T, ?onChange:T->Void, ?style:LayoutStyle) {
+	public function new(key:String, options:Array<SelectOption<T>>, value:T, ?onChange:T->Void, ?style:LayoutStyle,
+			enabled:Bool = true, ?accessibilityLabel:String) {
 		if (key == null || key.length == 0) throw "Select requires a stable non-empty key";
 		this.key = new Key(key);
 		this.options = options == null ? [] : options.copy();
@@ -53,16 +54,19 @@ class Select<T> implements View {
 			: onChange;
 		this.style = style == null ? defaultStyle() : style.copy();
 		if (this.style.height.sizing == LayoutSizing.Fit) this.style.height = LayoutAxis.fixed(36.0);
-		this.enabled = true;
 
 		var keys:Map<String, Bool> = new Map();
 		for (option in this.options) {
 			if (option == null || keys.exists(option.key)) throw "Select option keys must be unique";
 			keys.set(option.key, true);
 		}
+		this.enabled = enabled;
+		this.accessibilityLabel = accessibilityLabel;
 	}
 
 	public function build(context:BuildContext):ViewRoot {
+		// What the user picks while this build is shown; the field stays the caller's input.
+		var value = this.value;
 		return context.withScope(key, function() {
 			var rootStyle = style.copy();
 			rootStyle.direction = LayoutDirection.TopToBottom;
@@ -91,9 +95,11 @@ class Select<T> implements View {
 				}
 			});
 
-			// The selected signal is an invalidation source for uncontrolled changes; the view value remains the input.
+			// With `onChange` the caller's value is authoritative on every build (controlled); without it the select keeps
+			// the value the user picks (local).
 			var selectedState:State<T> = context.state(context.id("value"), value);
-			selectedState.value;
+			if (onChange == null) value = selectedState.value;
+			else selectedState.value;
 			var selectedIndex = enabledValueIndex(value);
 			if (selectedIndex < 0) selectedIndex = firstEnabledIndex();
 			if (selectedIndex >= 0 && !sameValue(value, options[selectedIndex].value)) {

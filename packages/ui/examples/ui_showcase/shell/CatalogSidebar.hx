@@ -35,8 +35,7 @@ class CatalogSidebar {
 			0.18);
 		var search = new SearchField("catalog-search", explorer.state.searchText, function(value) {
 			explorer.state.searchText = value;
-		}, searchStyle, "Search…");
-		search.label = "Search components";
+		}, searchStyle, "Search…", label: "Search components");
 		children.push(explorer.keyed("search", search));
 		var navItems:Array<KeyedView> = [];
 		var lastGroup:Null<String> = null;

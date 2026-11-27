@@ -209,7 +209,6 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		var searchNode:Null<ViewRoot> = null,
 			categoryNode:Null<ViewRoot> = null,
 			inspectorNode:Null<ViewRoot> = null;
-		var search = new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter Settings");
 		function firstControl(node:Null<ViewRoot>):Null<haxeon.ui.core.WidgetId> {
 			var first:Null<haxeon.ui.core.WidgetId> = null;
 			if (node != null) node.walk(function(child:haxeon.ui.core.NodeInfo) {
@@ -224,7 +223,8 @@ class SettingsPanel implements View implements Observable implements Disposable 
 			var target = firstControl(node);
 			return target != null && context.requestFocus(target);
 		}
-		search.onSubmit = function(_) focusRegion(inspectorNode);
+		var search = new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter Settings",
+			onSubmit: _ -> focusRegion(inspectorNode));
 		var headerChildren:Array<KeyedView> = [
 			new KeyedView("filter", new SettingsFocusRegion(search, function(node) searchNode = node)),
 			new KeyedView("modified", new Toggle(key + ":modified", "Modified only", modifiedOnly, setModifiedOnly)),

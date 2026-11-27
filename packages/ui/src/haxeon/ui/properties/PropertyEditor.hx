@@ -268,9 +268,7 @@ class PropertyEditor implements View implements Observable {
 				}
 				var checkbox = new Checkbox(editorKey, "", checked, function(next) {
 					applyValue(context, descriptor, PropertyValue.Bool(next));
-				});
-				checkbox.enabled = writable;
-				checkbox.accessibilityLabel = accessibleName(descriptor);
+				}, accessibilityLabel: accessibleName(descriptor), enabled: writable);
 				result = checkbox;
 			case PropertyType.Enum:
 				var selected = descriptor.options.length == 0 ? "" : descriptor.options[0].key;
@@ -287,9 +285,7 @@ class PropertyEditor implements View implements Observable {
 					option.enabled));
 				var select = new Select<String>(editorKey, enumOptions, selected, function(next) {
 					applyValue(context, descriptor, PropertyValue.Enum(next));
-				}, GrowInputStyle);
-				select.enabled = writable;
-				select.accessibilityLabel = accessibleName(descriptor);
+				}, GrowInputStyle, enabled: writable, accessibilityLabel: accessibleName(descriptor));
 				result = select;
 			case PropertyType.Int | PropertyType.Float:
 				result = numericEditor(context, descriptor, value, editorKey, writable);
@@ -323,9 +319,7 @@ class PropertyEditor implements View implements Observable {
 			if (descriptor.type == PropertyType.Bool) applyValue(context, descriptor,
 				PropertyValue.Bool(next == "true"));
 			else applyValue(context, descriptor, PropertyValue.Enum(next));
-		});
-		select.enabled = writable;
-		select.accessibilityLabel = accessibleName(descriptor);
+		}, enabled: writable, accessibilityLabel: accessibleName(descriptor));
 		return select;
 	}
 
@@ -354,8 +348,7 @@ class PropertyEditor implements View implements Observable {
 				if (descriptor.type == PropertyType.Int) applyValue(context, descriptor,
 					PropertyValue.Int(Std.int(next)));
 				else applyValue(context, descriptor, PropertyValue.Float(next));
-			}, GrowInputStyle);
-		slider.enabled = writable;
+			}, GrowInputStyle, enabled: writable);
 		return new Row(editorKey + ":numeric",
 			[
 				new KeyedView("slider", slider),

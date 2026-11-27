@@ -12,6 +12,7 @@ import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
+import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.semantics.AccessibilityRequest;
@@ -33,7 +34,7 @@ class Slider implements ScopeView implements Observable {
 	/** The name assistive technology announces; not drawn. */
 	public final accessibleName:String;
 	/** The current value, between `minimum` and `maximum`. */
-	public var value:Float;
+	public final value:Float;
 
 	/** The value at the start of the track. */
 	public final minimum:Float;
@@ -45,10 +46,10 @@ class Slider implements ScopeView implements Observable {
 	public final step:Float;
 
 	/** Whether the slider reacts to input. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 
 	/** Called with each new value as the user moves the thumb. */
-	public var onChange:Null<Float->Void>;
+	public final onChange:Null<Float->Void>;
 
 	/** The slider's box. */
 	public final style:LayoutStyle;
@@ -64,7 +65,8 @@ class Slider implements ScopeView implements Observable {
 			maximum:Float = 1.0,
 			step:Float = 0.01,
 			?onChange:Float->Void,
-			?style:LayoutStyle) {
+			?style:LayoutStyle,
+			enabled:Bool = true) {
 		if (key == null || key.length == 0
 			|| !finite(minimum) || !finite(maximum) || !finite(value) || !finite(step) || maximum <= minimum || step
 			<= 0.0)
@@ -77,7 +79,7 @@ class Slider implements ScopeView implements Observable {
 		this.value = clamp(value, minimum, maximum);
 		this.onChange = onChange;
 		this.style = style == null ? defaultStyle() : style.copy();
-		enabled = true;
+		this.enabled = enabled;
 	}
 
 	public function scopeKey():String return key;
@@ -95,6 +97,10 @@ class Slider implements ScopeView implements Observable {
 	public function buildBody(context:BuildContext):ViewRoot return buildControl(context, context.rootId("slider"));
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
+		// With `onChange` the caller's value is authoritative on every build (controlled); without it the slider keeps the
+		// value the user sets (local). Either way the handlers below read and change `value` between builds.
+		var local:State<Float> = context.state(context.id("value"), this.value);
+		var value = onChange != null ? this.value : local.value;
 		var authored = enabled ? StyleState.empty() : StyleState.Disabled;
 		var identity = new StyleIdentity("slider", key, key, null, ["slider"]);
 		var computed = context.resolveStyled(nodeId, identity, style, authored, null);
@@ -122,6 +128,7 @@ class Slider implements ScopeView implements Observable {
 			value = bounded;
 			var handler = latest().onChange;
 			if (handler != null) handler(value);
+			else local.update(value);
 			return true;
 		};
 		var valueAtPointer = function(event:UiEvent) {

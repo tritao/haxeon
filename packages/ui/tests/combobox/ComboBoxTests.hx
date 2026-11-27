@@ -1,6 +1,7 @@
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
+import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
@@ -42,15 +43,20 @@ class ComboBoxTests {
 		historyProbe.dispose();
 		var ui = new UiContext(null, fonts);
 		var changes = 0;
-		var combo = new ComboBox<String>("combo", [
-			new SelectOption("one", "One", "one"),
-			new SelectOption("two", "Two", "two"),
-			new SelectOption("blocked", "Blocked", "blocked", false)
-		],
-			"one", function(_) changes++);
+		// The caller controls the value, enabling and box: it keeps what the combo box reports and describes it with them.
+		var comboValue = "one", comboEnabled = true, comboStyle:Null<LayoutStyle> = null;
+		function combo():ComboBox<String>
+			return new ComboBox<String>("combo", [
+				new SelectOption("one", "One", "one"),
+				new SelectOption("two", "Two", "two"),
+				new SelectOption("blocked", "Blocked", "blocked", false)
+			], comboValue, function(next) {
+				changes++;
+				comboValue = next;
+			}, comboStyle, enabled: comboEnabled);
 		var root:RenderNode = null;
 		function build():Void {
-			root = ui.submit(combo, new LayoutFrame(400, 280));
+			root = ui.submit(combo(), new LayoutFrame(400, 280));
 		}
 		function input():RenderNode return root.children[0].children[0];
 		function arrow():RenderNode return root.children[0].children[1].children[0];
@@ -96,7 +102,11 @@ class ComboBoxTests {
 			"Accessible collapse failed");
 		build();
 		check(!open(), "Accessible collapse reopened the popup");
-		combo.style.width = LayoutAxis.fixed(160);
+		// The default box, narrower.
+		comboStyle = new LayoutStyle();
+		comboStyle.width = LayoutAxis.fixed(160);
+		comboStyle.height = LayoutAxis.fixed(40.0);
+		comboStyle.clipHorizontal = true;
 		build();
 		bounds = input().globalBounds();
 		toggleBounds = arrow().globalBounds();
@@ -134,8 +144,8 @@ class ComboBoxTests {
 		check(query.value == "Tw", "Reopening replaced the edited query");
 		ui.key(UiEventKind.KeyDown, UiKey.Enter);
 		build();
-		check(!open() && combo.value == "two" && changes == 1, "Enter did not select the filtered option exactly once");
-		combo.enabled = false;
+		check(!open() && comboValue == "two" && changes == 1, "Enter did not select the filtered option exactly once");
+		comboEnabled = false;
 		build();
 		click(arrow());
 		check(!open() && !arrow().enabled && !arrow().focusable && changes == 1, "Disabled arrow activated");

@@ -199,8 +199,8 @@ private class PaintTrace extends Canvas {
 
 private class MotionRig {
 	public final ui:UiContext;
-	public final slider:Slider;
-	public final progress:ProgressBar;
+	/** The progress this rig shows, in a signal so the bar reading it runs again; the slider keeps its own value. */
+	public final progressValue = new haxeon.reactive.Signal(0.0);
 	public final decorated:Array<DecoratedControl>;
 	public var panelBuilds = 0;
 	final frame = new LayoutFrame(240.0, 140.0);
@@ -213,12 +213,12 @@ private class MotionRig {
 		ui = new UiContext(null, fonts);
 		ui.buildContext.updateInPlace = patched;
 		ui.buildContext.environment.reducedMotion = false;
-		slider = new Slider("live-slider", "Live slider", 0.0, 0.0, 1.0, 0.05);
-		progress = new ProgressBar("live-progress", 0.0);
-		progress.animationDuration = 0.3;
 		decorated = [
-			new DecoratedControl("slider-host", _ -> slider, decorate),
-			new DecoratedControl("progress-host", _ -> progress, decorate)
+			new DecoratedControl("slider-host",
+				_ -> new Slider("live-slider", "Live slider", 0.0, 0.0, 1.0, 0.05),
+				decorate),
+			new DecoratedControl("progress-host",
+				_ -> new ProgressBar("live-progress", progressValue.value, animationDuration: 0.3), decorate)
 		];
 		view = panel();
 	}
@@ -808,20 +808,27 @@ private class PopupHost implements View {
 		var slider = left.children[0], progress = left.children[1];
 		var overlaySlider = slider.children[0], overlayProgress = progress.children[0];
 		var previousPaint = paintTrace(progress, 1), animatedSteps = 0, steps = 0;
-		var compare = function() {
+		var compare = function(?callerChanged:Bool) {
 			left = patched.submit();
 			right = reference.submit();
 			steps++;
 			// A motion step reruns the control's own scope, which builds a new body root; the caller's additions move to it.
 			slider = left.children[0];
 			progress = left.children[1];
+			// A caller that gives the bar a new value runs again, and builds its additions again.
+			if (callerChanged == true) {
+				overlaySlider = slider.children[0];
+				overlayProgress = progress.children[0];
+			}
 			check(patched.ui.buildContext.currentRoot(cast patched.decorated[0].builtNode) == slider
 				&& patched.ui.buildContext.currentRoot(cast patched.decorated[1].builtNode) == progress,
 				"A build root did not resolve to the live node");
 			check(slider.children[0] == overlaySlider && progress.children[0] == overlayProgress,
-				"The caller's child was replaced");
+				"The caller's child was replaced at step " + steps);
 			check(signature(left) == signature(right), "Motion step " + steps + " differs from a full rebuild");
-			check(patched.slider.value == reference.slider.value, "Slider values differ after a drag");
+			check(cast(slider.semantics, Semantics).numericValue == cast(right.children[0].semantics,
+				Semantics).numericValue,
+				"Slider values differ after a drag");
 			var sliderSemantics:Semantics = cast slider.semantics,
 				otherSlider:Semantics = cast right.children[0].semantics;
 			var progressSemantics:Semantics = cast progress.semantics,
@@ -830,7 +837,8 @@ private class PopupHost implements View {
 				"Motion semantics differ at step "
 				+ steps + ": slider=" + sliderSemantics.value + "/" + otherSlider.value + " progress="
 				+ progressSemantics.value
-				+ "/" + otherProgress.value + " targets=" + patched.progress.value + "/" + reference.progress.value);
+				+ "/" + otherProgress.value + " targets=" + patched.progressValue.value + "/"
+				+ reference.progressValue.value);
 			check(paintTrace(slider, 1).same(paintTrace(right.children[0], 1)),
 				"Slider paint differs at step " + steps);
 			var painted = paintTrace(progress, 1);
@@ -852,7 +860,8 @@ private class PopupHost implements View {
 				else rig.ui.pointerMove(x, y);
 			}
 			compare();
-			check(Math.abs(patched.slider.value - fraction) < 0.000001, "The drag stopped using live geometry");
+			check(Math.abs(cast(patched.submit().children[0].semantics, Semantics).numericValue - fraction) < 0.000001,
+				"The drag stopped using live geometry");
 		}
 		for (rig in [patched, reference]) rig.ui.pointerUp(-10.0, -10.0, 0);
 		compare();
@@ -861,9 +870,11 @@ private class PopupHost implements View {
 			reference.ui.key(UiEventKind.KeyDown, key);
 			compare();
 		}
-		for (value in [0.2, 0.6, 0.9, 0.1, 1.0]) {
-			patched.progress.value = reference.progress.value = value;
-			for (_ in 0...4) compare();
+		var progressValues = [0.2, 0.6, 0.9, 0.1, 1.0];
+		for (value in progressValues) {
+			patched.progressValue.value = reference.progressValue.value = value;
+			compare(true);
+			for (_ in 0...3) compare();
 		}
 		for (rig in [patched, reference]) {
 			var bounds = (rig == patched ? progress : right.children[1]).globalBounds();
@@ -874,7 +885,8 @@ private class PopupHost implements View {
 		compare();
 		check(patched.decorated[0].presses > 0 && patched.decorated[1].presses > 0, "Caller listeners never ran");
 		check(animatedSteps >= 10, "Progress paint did not advance through the animation");
-		check(patched.panelBuilds == 1 && reference.panelBuilds > patched.panelBuilds,
+		// The patched panel runs again only for each value its caller gives the bar, never for a motion step.
+		check(patched.panelBuilds == 1 + progressValues.length && reference.panelBuilds > patched.panelBuilds,
 			'Motion did not keep the patched panel stable: patched=${patched.panelBuilds} reference=${reference.panelBuilds}');
 		patched.ui.dispose();
 		reference.ui.dispose();

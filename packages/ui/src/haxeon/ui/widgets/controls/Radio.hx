@@ -26,16 +26,16 @@ class Radio implements ScopeView {
 	public final value:String;
 
 	/** Whether this is the chosen button of its group. */
-	public var selected:Bool;
+	public final selected:Bool;
 
 	/** Whether the button reacts to input. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 
 	/** The button's row. */
 	public final style:LayoutStyle;
 
 	/** Called with `value` when the user chooses this button. */
-	public var onSelect:String->Void;
+	public final onSelect:String->Void;
 	var hasSelectHandler:Bool;
 
 	/**

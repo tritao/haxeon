@@ -136,16 +136,20 @@ class AccessibilityContract {
 			1) || selectedMenu != "save" || menuDismissals != 1) return 8;
 
 		var selectChanges = 0;
-		var selectedSelectValue = "";
-		var select = new Select("accessibility-select", [
-			new SelectOption("one", "Öne", "one"),
-			new SelectOption("blocked", "Blocked", "blocked", false),
-			new SelectOption("two", "Two", "two")
-		], "blocked", function(next) {
-			selectChanges++;
-			selectedSelectValue = next;
-		});
-		var selectRoot = context.submit(select, frame);
+		// The caller controls the value: it starts on a disabled option and keeps what the select reports.
+		var selectedSelectValue = "", selectInput = "blocked";
+		function selectView():Select<String>
+			return new Select("accessibility-select", [
+				new SelectOption("one", "Öne", "one"),
+				new SelectOption("blocked", "Blocked", "blocked", false),
+				new SelectOption("two", "Two", "two")
+			], selectInput, function(next) {
+				selectChanges++;
+				selectedSelectValue = next;
+				selectInput = next;
+			});
+		function shown(root:RenderNode):String return cast(root.children[0].semantics, Semantics).value;
+		var selectRoot = context.submit(selectView(), frame);
 		var selectTrigger = selectRoot.children[0];
 		var selectSemantics:Semantics = cast selectTrigger.semantics;
 		if (selectRoot.children.length != 1 || selectSemantics.role != AccessibilityRole.ComboBox
@@ -155,12 +159,12 @@ class AccessibilityContract {
 			|| !selectSemantics.actions.contains(AccessibilityAction.Expand)
 			|| !context.focusWidget(selectTrigger.id)) return 19;
 		context.key(UiEventKind.KeyDown, UiKey.Down);
-		selectRoot = context.submit(select, frame);
+		selectRoot = context.submit(selectView(), frame);
 		var openSelectSemantics:Semantics = cast selectRoot.children[0].semantics;
 		var optionListSemantics:Semantics = cast selectRoot.children[1].semantics;
 		var selectedOptionSemantics:Semantics = cast selectRoot.children[1].children[0].semantics;
 		if (selectRoot.children.length != 2 || !selectRoot.focusTrap
-			|| select.value != "one" || !openSelectSemantics.states.contains(AccessibilityState.Expanded)
+			|| shown(selectRoot) != "Öne" || !openSelectSemantics.states.contains(AccessibilityState.Expanded)
 			|| !openSelectSemantics.actions.contains(AccessibilityAction.Collapse) || optionListSemantics.role
 			!= AccessibilityRole.List || optionListSemantics.orientation != AccessibilityOrientation.Vertical
 			|| selectedOptionSemantics.setSize != 3 || selectedOptionSemantics.positionInSet != 1
@@ -170,34 +174,34 @@ class AccessibilityContract {
 		context.key(UiEventKind.KeyDown, UiKey.Down);
 		if (context.focus.focusedId == null
 			|| !context.focus.focusedId.equals(selectRoot.children[1].children[2].id)
-			|| select.value != "one") return 21;
+			|| shown(selectRoot) != "Öne" || selectChanges != 0) return 21;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
-		if (select.value != "two" || selectedSelectValue != "two" || selectChanges != 1
+		if (selectedSelectValue != "two" || selectChanges != 1
 			|| context.focus.focusedId == null || !context.focus.focusedId.equals(selectRoot.children[0].id)) return 22;
-		selectRoot = context.submit(select, frame);
+		selectRoot = context.submit(selectView(), frame);
 		if (selectRoot.children.length != 1 || (cast(selectRoot.children[0].semantics,
 			Semantics).value != "Two") || !AccessibilityAudit.isValid(selectRoot)) return 23;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
-		selectRoot = context.submit(select, frame);
+		selectRoot = context.submit(selectView(), frame);
 		if (selectRoot.children.length != 2) return 24;
 		var optionGeometry:ResolvedLayoutItem = cast selectRoot.children[1].children[0].resolved;
 		var optionX = optionGeometry.x + optionGeometry.width * 0.5;
 		var optionY = optionGeometry.y + optionGeometry.height * 0.5;
 		context.pointerDown(optionX, optionY, 0);
 		context.pointerUp(optionX, optionY, 0);
-		selectRoot = context.submit(select, frame);
-		if (select.value != "one" || selectedSelectValue != "one" || selectChanges != 2
+		selectRoot = context.submit(selectView(), frame);
+		if (selectedSelectValue != "one" || selectChanges != 2
 			|| selectRoot.children.length != 1
 			|| context.focus.focusedId == null || !context.focus.focusedId.equals(selectRoot.children[0].id)) return 25;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
-		selectRoot = context.submit(select, frame);
+		selectRoot = context.submit(selectView(), frame);
 		if (selectRoot.children.length != 2) return 27;
 		context.key(UiEventKind.KeyDown, UiKey.Escape);
-		selectRoot = context.submit(select, frame);
+		selectRoot = context.submit(selectView(), frame);
 		if (selectRoot.children.length != 1
 			|| context.focus.focusedId == null || !context.focus.focusedId.equals(selectRoot.children[0].id)) return 28;
 		if (!context.accessibilityAction(selectRoot.children[0].id.value, AccessibilityRequestAction.SetValue,
-			"two", -1, -1, 1) || select.value != "two" || selectedSelectValue != "two" || selectChanges != 3) return 29;
+			"two", -1, -1, 1) || selectedSelectValue != "two" || selectChanges != 3) return 29;
 		if (!checkSelectOverlay(context)) return 30;
 		if (!checkSelectOverlap(context)) return 46;
 		if (!checkMovingHover(context)) return 47;
@@ -504,15 +508,17 @@ class AccessibilityContract {
 
 	static function checkComboBox(context:UiContext):Bool {
 		var changes = 0;
-		var selected = "";
-		var combo = new ComboBox("accessibility-combo", [
-			new SelectOption("one", "One", "one"),
-			new SelectOption("two", "Two", "two"),
-			new SelectOption("blocked", "Blocked", "blocked", false)
-		], "one", function(value) {
-			changes++;
-			selected = value;
-		});
+		var selected = "one";
+		function comboView():ComboBox<String>
+			return new ComboBox("accessibility-combo", [
+				new SelectOption("one", "One", "one"),
+				new SelectOption("two", "Two", "two"),
+				new SelectOption("blocked", "Blocked", "blocked", false)
+			], selected, function(value) {
+				changes++;
+				selected = value;
+			});
+		var combo = comboView();
 		var frame = new LayoutFrame(256.0, 192.0);
 		var root = context.submit(combo, frame);
 		var input = root.children[0].children[0];
@@ -570,13 +576,13 @@ class AccessibilityContract {
 		if (context.focus.focusedId == null
 			|| !context.focus.focusedId.equals(root.children[1].children[1].id)) return false;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
-		if (combo.value != "two" || selected != "two" || changes != 1) return false;
-		root = context.submit(combo, frame);
+		if (selected != "two" || changes != 1) return false;
+		root = context.submit(comboView(), frame);
 		input = root.children[0].children[0];
 		if (root.children.length != 1 || context.focus.focusedId == null
 			|| !context.focus.focusedId.equals(input.id) || !AccessibilityAudit.isValid(root)) return false;
 		if (!context.accessibilityAction(input.id.value, AccessibilityRequestAction.SetValue,
-			"one", -1, -1, 1) || combo.value != "one" || selected != "one" || changes != 2) return false;
+			"one", -1, -1, 1) || selected != "one" || changes != 2) return false;
 		return true;
 	}
 

@@ -120,8 +120,8 @@ class ControlsPage {
 	}
 
 	static function indeterminateProgress():ProgressBar {
-		var progress = new ProgressBar("showcase-indeterminate", 0.0, 0.0, 1.0, "Waiting for a measurable result");
-		progress.mode = ProgressMode.Indeterminate;
+		var progress = new ProgressBar("showcase-indeterminate", 0.0, 0.0, 1.0, "Waiting for a measurable result",
+			mode: ProgressMode.Indeterminate);
 		return progress;
 	}
 
@@ -153,8 +153,8 @@ class ControlsPage {
 			0.16);
 		style.radiusTopLeft = style.radiusTopRight = 5.0;
 		style.radiusBottomLeft = style.radiusBottomRight = 5.0;
-		var spinner = new Spinner(key + "-spinner", label, null, kind, null, 1.0);
-		spinner.running = explorer.state.controls.spinnerRunning;
+		var spinner = new Spinner(key + "-spinner", label, null, kind, null, 1.0,
+			running: explorer.state.controls.spinnerRunning);
 		return new Column(key + "-sample",
 			[
 				explorer.keyed("indicator", new Align(key + "-align", spinner)),

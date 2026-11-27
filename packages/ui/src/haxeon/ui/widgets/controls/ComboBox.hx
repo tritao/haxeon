@@ -26,22 +26,22 @@ class ComboBox<T> implements View {
 	public final options:Array<SelectOption<T>>;
 
 	/** The selected option's value. */
-	public var value:T;
+	public final value:T;
 
 	/** Whether the field reacts to input; true unless set otherwise. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 
 	/** The field's box; 40 pixels high unless it sets a height. */
-	public var style:LayoutStyle;
+	public final style:LayoutStyle;
 
 	/** The hint shown while the query is empty; "Search" by default. */
-	public var placeholder:String;
+	public final placeholder:String;
 
 	/** Called with the value of the option the user picks. */
-	public var onChange:T->Void;
+	public final onChange:T->Void;
 
 	/** Called with the query each time the user edits it, for a caller that loads its options as the user types. */
-	public var onQueryChange:String->Void;
+	public final onQueryChange:String->Void;
 
 	/** Whether the caller passed `onChange`, which otherwise does nothing. */
 	var hasChangeHandler:Bool;
@@ -60,7 +60,8 @@ class ComboBox<T> implements View {
 			?onChange:T->Void,
 			?style:LayoutStyle,
 			?placeholder:String,
-			?onQueryChange:String->Void) {
+			?onQueryChange:String->Void,
+			enabled:Bool = true) {
 		if (key == null || key.length == 0) throw "ComboBox requires a stable non-empty key";
 		this.key = new Key(key);
 		this.options = options == null ? [] : options.copy();
@@ -80,10 +81,12 @@ class ComboBox<T> implements View {
 		this.onQueryChange = onQueryChange == null ? function(_:String) {}
 			: onQueryChange;
 		hasQueryChangeHandler = onQueryChange != null;
-		enabled = true;
+		this.enabled = enabled;
 	}
 
 	public function build(context:BuildContext):ViewRoot {
+		// What the user picks while this build is shown; the field stays the caller's input.
+		var value = this.value;
 		return context.withScope(key, function() {
 			var rootStyle = style.copy();
 			rootStyle.direction = LayoutDirection.TopToBottom;
@@ -112,9 +115,11 @@ class ComboBox<T> implements View {
 				}
 			});
 
-			// The selected signal schedules an uncontrolled change; the view value remains the input.
+			// With `onChange` the caller's value is authoritative on every build (controlled); without it the combo box keeps
+			// the value the user picks (local).
 			var selectedState:State<T> = context.state(context.id("value"), value);
-			selectedState.value;
+			if (onChange == null) value = selectedState.value;
+			else selectedState.value;
 			var selectedIndex = enabledValueIndex(value);
 			if (selectedIndex < 0) selectedIndex = firstEnabledIndex();
 			if (selectedIndex >= 0 && !sameValue(value, options[selectedIndex].value)) {

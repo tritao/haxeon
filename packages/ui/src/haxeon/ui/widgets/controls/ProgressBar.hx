@@ -35,7 +35,7 @@ class ProgressBar implements ScopeView implements Observable {
 	public final label:Null<String>;
 
 	/** How far the work has got, between `minimum` and `maximum`; ignored while `mode` is `Indeterminate`. */
-	public var value:Float;
+	public final value:Float;
 
 	/** The value of no progress. */
 	public final minimum:Float;
@@ -47,9 +47,9 @@ class ProgressBar implements ScopeView implements Observable {
 	public final style:LayoutStyle;
 
 	/** Whether the bar shows how far the work has got, or only that it is under way; `Determinate` by default. */
-	public var mode:ProgressMode;
+	public final mode:ProgressMode;
 	/** Seconds used when a determinate value changes; zero disables interpolation. */
-	public var animationDuration:Float;
+	public final animationDuration:Float;
 
 	/**
 	 * A bar showing `value` between `minimum` and `maximum`, clamped into that range. Throws when `key` is empty, a
@@ -60,7 +60,9 @@ class ProgressBar implements ScopeView implements Observable {
 			minimum:Float = 0.0,
 			maximum:Float = 1.0,
 			?label:String,
-			?style:LayoutStyle) {
+			?style:LayoutStyle,
+			mode:ProgressMode = ProgressMode.Determinate,
+			animationDuration:Float = 0.22) {
 		if (key == null || key.length == 0 || !finite(value)
 			|| !finite(minimum) || !finite(maximum)
 			|| maximum <= minimum) throw "Progress values and range are invalid";
@@ -70,8 +72,8 @@ class ProgressBar implements ScopeView implements Observable {
 		this.minimum = minimum;
 		this.maximum = maximum;
 		this.style = style == null ? defaultStyle() : style.copy();
-		mode = ProgressMode.Determinate;
-		animationDuration = 0.22;
+		this.mode = mode;
+		this.animationDuration = animationDuration;
 	}
 
 	public function scopeKey():String return key;

@@ -33,17 +33,21 @@ class BinaryControl implements ScopeView implements Observable {
 	public final label:String;
 
 	/** Names the control for assistive technology when its visible label is elsewhere, as in a property row. */
-	public var accessibilityLabel:Null<String> = null;
+	public final accessibilityLabel:Null<String>;
 	/** Whether the control is on. Activation flips it and then calls `onChange` with the new value. */
-	public var checked:Bool;
+	// Activation writes it on the mounted instance, which a later build reads (`readChecked`); descriptions as values
+	// replace this with the view's own state.
+	public var checked(default, null):Bool;
 
 	/** Checkbox aggregate state; activation clears it and toggles checked. */
-	public var indeterminate:Bool = false;
+	// Activation writes it on the mounted instance, which a later build reads (`readChecked`); descriptions as values
+	// replace this with the view's own state.
+	public var indeterminate(default, null):Bool;
 	/** Whether the control reacts to input; true unless set otherwise. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 
 	/** Called with the new value after the user turns the control on or off. */
-	public var onChange:Null<Bool->Void>;
+	public final onChange:Null<Bool->Void>;
 	final toggle:Bool;
 	final style:LayoutStyle;
 
@@ -51,7 +55,8 @@ class BinaryControl implements ScopeView implements Observable {
 	 * A control labelled `label`, shown as a switch when `toggle` and as a checkbox otherwise; `Checkbox` and `Toggle` pick
 	 * one. Its row is 32 pixels high unless `style` sets a height. Throws when `key` is empty.
 	 */
-	public function new(key:String, label:String, checked:Bool, toggle:Bool, ?onChange:Bool->Void, ?style:LayoutStyle) {
+	public function new(key:String, label:String, checked:Bool, toggle:Bool, ?onChange:Bool->Void, ?style:LayoutStyle,
+			?accessibilityLabel:String, indeterminate:Bool = false, enabled:Bool = true) {
 		if (key == null || key.length == 0) throw "Boolean controls require a stable key";
 		this.key = key;
 		this.label = label == null ? "" : label;
@@ -63,7 +68,9 @@ class BinaryControl implements ScopeView implements Observable {
 		this.style.childAlignY = LayoutAlignmentY.Center;
 		this.style.childGap = 9.0;
 		if (this.style.height.sizing == LayoutSizing.Fit) this.style.height = LayoutAxis.fixed(32.0);
-		this.enabled = true;
+		this.accessibilityLabel = accessibilityLabel;
+		this.indeterminate = indeterminate;
+		this.enabled = enabled;
 	}
 
 	public function scopeKey():String return key;

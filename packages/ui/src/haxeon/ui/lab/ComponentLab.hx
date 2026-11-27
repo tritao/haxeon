@@ -279,8 +279,7 @@ class ComponentLab implements Observable {
 		columnStyle.width = LayoutAxis.fixed(480.0);
 		columnStyle.childGap = 18.0;
 		var slider = new Slider("volume", "Volume", sliderValue, 0.0, 1.0, 0.01, function(next) sliderValue = next);
-		var progress = new ProgressBar("progress", sliderValue, 0.0, 1.0, "Progress");
-		progress.animationDuration = 0.0;
+		var progress = new ProgressBar("progress", sliderValue, 0.0, 1.0, "Progress", animationDuration: 0.0);
 		return new Column("value-controls",
 			[
 				new KeyedView("slider", slider),

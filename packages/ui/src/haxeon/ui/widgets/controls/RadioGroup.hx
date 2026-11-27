@@ -22,13 +22,13 @@ class RadioGroup implements View {
 	public final options:Array<RadioOption>;
 
 	/** The chosen option's value. A disabled or unknown value gives way to the first enabled option. */
-	public var value:String;
+	public final value:String;
 
 	/** The group's box, which stacks its buttons. */
 	public final style:LayoutStyle;
 
 	/** Called with the newly chosen value when the user picks another option. */
-	public var onChange:String->Void;
+	public final onChange:String->Void;
 	var hasChangeHandler:Bool;
 
 	/** A group of radio buttons for `options`, with `value` chosen. Throws when two options share a key or a value. */
@@ -56,6 +56,8 @@ class RadioGroup implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
+		// What the user picks while this build is shown; the field stays the caller's input.
+		var value = this.value;
 		return context.withScope(key, function() {
 			var root = context.createNode(context.rootId("radio-group"), LayoutVisualKind.Box, style.copy());
 			root.semantics = new Semantics(AccessibilityRole.Group, "Radio group");

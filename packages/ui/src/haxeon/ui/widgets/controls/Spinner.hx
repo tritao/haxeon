@@ -38,7 +38,7 @@ class Spinner implements View {
 	/** The spinner's box. */
 	public final style:LayoutStyle;
 	/** When false, the spinner holds its current frame and is not scheduled. */
-	public var running:Bool;
+	public final running:Bool;
 
 	/** A running spinner. Throws when `key` is empty or `speed` is not finite and positive. */
 	public function new(key:String,
@@ -46,7 +46,8 @@ class Spinner implements View {
 			?style:LayoutStyle,
 			kind:SpinnerKind = SpinnerKind.Ring,
 			?color:Color,
-			speed:Float = 1.0) {
+			speed:Float = 1.0,
+			running:Bool = true) {
 		if (key == null || key.length == 0) throw "Spinners require a stable key";
 		if (!finite(speed) || speed <= 0.0) throw "Spinner speed must be finite and positive";
 		this.key = key;
@@ -55,7 +56,7 @@ class Spinner implements View {
 		this.color = color;
 		this.speed = speed;
 		this.style = style == null ? defaultStyle() : style.copy();
-		running = true;
+		this.running = running;
 	}
 
 	public function build(context:BuildContext):ViewRoot {

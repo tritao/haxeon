@@ -191,8 +191,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 				: "item " + path.join(".")) : descriptor.label + (path.length == 1 ? "" : " item " + path.slice(0,
 				path.length - 1).join(".")) + " " + component;
 			if (Std.isOfType(item, Bool)) {
-				var box = new Checkbox("item:" + address, label, cast item, next -> send(path, next));
-				box.enabled = enabled;
+				var box = new Checkbox("item:" + address, label, cast item, next -> send(path, next), enabled: enabled);
 				return box;
 			}
 			var initial = Std.isOfType(item, String) ? (cast item:String) : haxe.Json.stringify(item);
@@ -201,13 +200,11 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 					drafts.set(draftKey,
 						text);
 					changed();
-				}, compact ? new LayoutStyle() : style(), label);
-			field.enabled = enabled;
-			field.onSubmit = text -> {
+				}, compact ? new LayoutStyle() : style(), label, enabled: enabled, onSubmit: text -> {
 				drafts.set(draftKey, text);
 				changed();
 				commit();
-			};
+			});
 			if (inlineField) return field;
 			var displayLabel = compact ? component : label;
 			if (!compact

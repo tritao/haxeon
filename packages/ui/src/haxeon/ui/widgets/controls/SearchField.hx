@@ -12,6 +12,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.State;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.Icon;
@@ -23,46 +24,54 @@ class SearchField implements View {
 	public final key:String;
 
 	/** The query. */
-	public var value:String;
+	public final value:String;
 
 	/** The hint shown while the query is empty; "Search" by default. */
-	public var placeholder:String;
+	public final placeholder:String;
 
 	/** The field's accessible name; the placeholder unless set. */
-	public var label:String;
+	public final label:String;
 
 	/** Whether the field accepts input. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 
 	/** The field's box, with the search icon before the text. */
 	public final style:LayoutStyle;
 
 	/** Called with the query after each edit. */
-	public var onChange:Null<String->Void>;
+	public final onChange:Null<String->Void>;
 
 	/** Called with the query when the user presses Enter. */
-	public var onSubmit:Null<String->Void>;
+	public final onSubmit:Null<String->Void>;
 
 	/** A search field showing `value`. Throws when `key` is empty. */
 	public function new(key:String,
 			value:String = "",
 			?onChange:String->Void,
 			?style:LayoutStyle,
-			placeholder:String = "Search") {
+			placeholder:String = "Search",
+			?label:String,
+			enabled:Bool = true,
+			?onSubmit:String->Void) {
 		if (key == null || key.length == 0) throw "Search fields require a stable key";
 		this.key = key;
 		this.value = value == null ? "" : value;
 		this.onChange = onChange;
-		onSubmit = null;
 		this.placeholder = placeholder == null || placeholder.length == 0 ? "Search" : placeholder;
-		label = this.placeholder;
-		enabled = true;
 		this.style = style == null ? defaultStyle() : style.copy();
 		this.style.childAlignY = LayoutAlignmentY.Center;
+		this.label = label == null ? this.placeholder : label;
+		this.enabled = enabled;
+		this.onSubmit = onSubmit;
 	}
 
 	public function build(context:BuildContext):ViewRoot {
+		var value = this.value;
 		return context.withScope(new Key(key), function() {
+			// With `onChange` the caller's query is authoritative on every build (controlled); without it the field keeps
+			// what the user types (local).
+			var local:State<String> = context.state(context.id("query"), value);
+			if (onChange == null) value = local.value;
 			var icon = new Icon("search-icon", IconName.Search, 15.0, context.theme.tokens.textSecondary);
 			var leadingStyle = new LayoutStyle();
 			leadingStyle.width = LayoutAxis.fixed(18.0);
@@ -76,6 +85,7 @@ class SearchField implements View {
 			var input = new TextField("input", value, function(next) {
 				value = next;
 				if (onChange != null) onChange(next);
+				else local.update(next);
 			}, inputStyle, label, placeholder: placeholder, enabled: enabled, classes: ["search-input"],
 				onSubmit: onSubmit);
 
@@ -90,6 +100,7 @@ class SearchField implements View {
 				var clear = new Button("", clearStyle, function() {
 					value = "";
 					if (onChange != null) onChange("");
+					else local.update("");
 				}, "clear", enabled,
 					ButtonVariant.Navigation, null, null, IconName.Close, null, null, null, null, null, null,
 					"Clear search");

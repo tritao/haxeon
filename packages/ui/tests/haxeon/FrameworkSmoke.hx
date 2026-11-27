@@ -1046,8 +1046,10 @@ class FrameworkSmoke {
 			null,
 			-1,
 			-1,
-			1) || search.value != "" || searchChange != "") return 228;
-		searchRoot = context.submit(search, new LayoutFrame(256.0, 38.0));
+			1) || searchChange != "") return 228;
+		// The caller controls the query: it describes the field again with what the clear reported.
+		searchRoot = context.submit(new SearchField("search", searchChange, function(next) searchChange = next, null,
+			"Search components…"), new LayoutFrame(256.0, 38.0));
 		if (searchRoot.children.length != 2
 			|| searchRoot.children[1].children[0].children[0].layout.text != "Search components…") return 229;
 		var fieldDiagnostics:Null<TextEditorDiagnostics> = null;
@@ -1673,34 +1675,34 @@ class FrameworkSmoke {
 			0);
 		if (!toggle.checked || !toggleChanged || toggleSemantics.role != AccessibilityRole.Switch
 			|| !toggleSemantics.actions.contains(AccessibilityAction.Toggle)) return 56;
-		var sliderChanged = 0.0;
-		var slider = new Slider("slider-smoke", "Level", 0.5, 0.0, 1.0, 0.1, function(next) {
-			sliderChanged = next;
-		});
-		var sliderRoot = context.submit(slider, new LayoutFrame(256.0, 192.0));
+		// The caller controls the value: it records what the slider reports and describes the slider with it.
+		var sliderChanged = 0.5;
+		function sliderView():Slider
+			return new Slider("slider-smoke", "Level", sliderChanged, 0.0, 1.0, 0.1, next -> sliderChanged = next);
+		var sliderRoot = context.submit(sliderView(), new LayoutFrame(256.0, 192.0));
 		var sliderSemantics:Semantics = cast sliderRoot.semantics;
 		if (sliderSemantics == null
 			|| sliderSemantics.role != AccessibilityRole.Slider || !context.focusWidget(sliderRoot.id)) return 57;
 		context.key(UiEventKind.KeyDown, UiKey.Right);
-		if (slider.value < 0.59 || slider.value > 0.61 || sliderChanged != slider.value) return 58;
+		if (sliderChanged < 0.59 || sliderChanged > 0.61) return 58;
 		if (!context.accessibilityAction(sliderRoot.id.value,
-			AccessibilityRequestAction.SetValue, "0.8", -1, -1, 1) || slider.value < 0.79
-			|| slider.value > 0.81) return 59;
-		sliderRoot = context.submit(slider, new LayoutFrame(256.0, 192.0));
+			AccessibilityRequestAction.SetValue, "0.8", -1, -1, 1) || sliderChanged < 0.79
+			|| sliderChanged > 0.81) return 59;
+		sliderRoot = context.submit(sliderView(), new LayoutFrame(256.0, 192.0));
 		var sliderGeometry:ResolvedLayoutItem = cast sliderRoot.resolved;
 		var sliderY = sliderGeometry.y + sliderGeometry.height * 0.5;
 		var pointerValue = 0.25;
 		var sliderX = sliderGeometry.x + 10.0 + (sliderGeometry.width - 20.0) * pointerValue;
 		context.pointerDown(sliderX, sliderY, 0);
 		context.pointerUp(sliderX, sliderY, 0);
-		if (slider.value < 0.29 || slider.value > 0.31) return 60;
+		if (sliderChanged < 0.29 || sliderChanged > 0.31) return 60;
 		sliderX = sliderGeometry.x + 10.0 + (sliderGeometry.width - 20.0) * 0.25;
 		context.pointerDown(sliderX, sliderY, 0);
-		sliderRoot = context.submit(slider, new LayoutFrame(256.0, 192.0));
+		sliderRoot = context.submit(sliderView(), new LayoutFrame(256.0, 192.0));
 		sliderGeometry = cast sliderRoot.resolved;
 		var dragX = sliderGeometry.x + 10.0 + (sliderGeometry.width - 20.0) * 0.85;
 		context.pointerMove(dragX, sliderY);
-		if (slider.value < 0.89 || slider.value > 0.91) return 100;
+		if (sliderChanged < 0.89 || sliderChanged > 0.91) return 100;
 		context.pointerUp(dragX, sliderY, 0);
 		var progressRoot = context.submit(new ProgressBar("progress-smoke", 0.75, 0.0, 1.0, "Transfer"),
 			new LayoutFrame(256.0, 192.0));
@@ -1708,8 +1710,8 @@ class FrameworkSmoke {
 		if (progressSemantics == null || progressSemantics.role != AccessibilityRole.ProgressBar
 			|| !progressSemantics.states.contains(AccessibilityState.ReadOnly)
 			|| progressSemantics.numericValue != 0.75) return 61;
-		var indeterminateProgress = new ProgressBar("indeterminate-progress-smoke", 0.0, 0.0, 1.0, "Loading");
-		indeterminateProgress.mode = haxeon.ui.widgets.controls.ProgressBar.ProgressMode.Indeterminate;
+		var indeterminateProgress = new ProgressBar("indeterminate-progress-smoke", 0.0, 0.0, 1.0, "Loading",
+			mode: haxeon.ui.widgets.controls.ProgressBar.ProgressMode.Indeterminate);
 		var indeterminateRoot = context.submit(indeterminateProgress, new LayoutFrame(256.0, 192.0));
 		var indeterminateSemantics:Semantics = cast indeterminateRoot.semantics;
 		if (indeterminateSemantics == null || !indeterminateSemantics.states.contains(AccessibilityState.Busy)
@@ -2921,15 +2923,17 @@ class FrameworkSmoke {
 			> tooltipCardGeometry.y + tooltipCardGeometry.height - 12.0 + 0.1) return 103;
 
 		var radioChanges = 0;
-		var radioValue = "";
-		var radioGroup = new RadioGroup("radio-smoke", [
-			new RadioOption("red", "Red", "red"),
-			new RadioOption("blocked", "Blocked", "blocked", false),
-			new RadioOption("green", "Green", "green")
-		], "red", function(next) {
-			radioChanges++;
-			radioValue = next;
-		});
+		var radioValue = "red";
+		function radioView():RadioGroup
+			return new RadioGroup("radio-smoke", [
+				new RadioOption("red", "Red", "red"),
+				new RadioOption("blocked", "Blocked", "blocked", false),
+				new RadioOption("green", "Green", "green")
+			], radioValue, function(next) {
+				radioChanges++;
+				radioValue = next;
+			});
+		var radioGroup = radioView();
 		var radioFrame = new LayoutFrame(256.0, 192.0);
 		var radioRoot = context.submit(radioGroup, radioFrame);
 		if (radioRoot.children.length != 3 || !cast(radioRoot.children[0].semantics,
@@ -2941,9 +2945,9 @@ class FrameworkSmoke {
 			|| Math.abs((radioIndicator.y + radioIndicator.height * 0.5) - (radioDot.y + radioDot.height * 0.5))
 			> 0.01) return 253;
 		context.key(UiEventKind.KeyDown, UiKey.Right);
-		if (radioGroup.value != "green" || radioValue != "green" || radioChanges != 1
+		if (radioValue != "green" || radioChanges != 1
 			|| context.focus.focusedId == null || !context.focus.focusedId.equals(radioRoot.children[2].id)) return 93;
-		radioRoot = context.submit(radioGroup, radioFrame);
+		radioRoot = context.submit(radioView(), radioFrame);
 		if (!cast(radioRoot.children[2].semantics, Semantics).states.contains(AccessibilityState.Selected)) return 94;
 
 		var tabChanges = 0;
@@ -4164,8 +4168,10 @@ class FrameworkSmoke {
 		firstHandle.cancel();
 		if (firstHandle.active || context.animations.activeCount != 0) return 118;
 
-		var spinner = new Spinner("spinner-smoke", "Loading", null, SpinnerKind.Dots, Color.rgba(0.3, 0.7, 1.0, 1.0),
-			1.5);
+		function spinnerView(running:Bool):Spinner
+			return new Spinner("spinner-smoke", "Loading", null, SpinnerKind.Dots, Color.rgba(0.3, 0.7, 1.0, 1.0), 1.5,
+				running: running);
+		var spinner = spinnerView(true);
 		var spinnerFrame = new LayoutFrame(256.0, 192.0);
 		var animationRequests = 0;
 		context.onAnimationFrameRequested = function() {
@@ -4202,14 +4208,12 @@ class FrameworkSmoke {
 		if (clock.steps != 1 || clock.delaySeconds() <= 1.0 / SpinnerClock.StepsPerSecond) return 110;
 		clock.advance(3.0 / SpinnerClock.StepsPerSecond);
 		if (clock.steps != 4 || Math.abs(clock.phase - 4.0 / SpinnerClock.StepsPerSecond) > 1e-9) return 110;
-		spinner.running = false;
 		spinnerFrame.deltaSeconds = 0.0;
-		spinnerRoot = context.submit(spinner, spinnerFrame);
+		spinnerRoot = context.submit(spinnerView(false), spinnerFrame);
 		spinnerSemantics = cast spinnerRoot.semantics;
 		if (context.animations.activeCount != 0 || spinnerSemantics.states.contains(AccessibilityState.Busy)
 			|| spinnerSemantics.value != "Paused" || context.needsAnimationFrame || context.isDirty()) return 111;
-		spinner.running = true;
-		spinnerRoot = context.submit(spinner, spinnerFrame);
+		spinnerRoot = context.submit(spinnerView(true), spinnerFrame);
 		if (context.animations.activeCount != 1) return 112;
 		var spinnerId = spinnerRoot.id;
 		context.onAnimationFrameRequested = null;

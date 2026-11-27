@@ -124,7 +124,7 @@ class StyleSelector {
 	/** The tags it requires, all of them. */
 	public final tagNames:Array<String>;
 	/** The states it requires, all of them. */
-	public final stateMask:StyleState;
+	public var stateMask(default, null):StyleState;
 
 	function new(?widgetType:String,
 			?keyValue:String,
