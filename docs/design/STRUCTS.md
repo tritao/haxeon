@@ -1576,6 +1576,23 @@ point green.
 7. **Fixed arrays.**
 8. **Context-hidden fields, types and methods.**
 
+## Borrowed parameters (planned)
+
+A struct parameter is a copy today: locals, parameters and returns are boxed, binding one copies it, and scalar
+replacement removes only copies that never leave a function. A large struct passed down a call chain therefore
+allocates a copy per call. That is what keeps `LayoutStyle` (thirty fields, passed from a widget's build through
+`BuildContext.styled`, the style resolver and `createNode` to its node) a mutable `Diffable` class.
+
+The plan: a parameter the callee only reads (never stores, mutates, captures or returns) is borrowed, taking the
+caller's value without a copy, as in Swift's default convention. It is the escape test scalar replacement makes, made
+across functions and recorded per function, so a caller depends on the callee's borrow facts as it depends on what it
+read of an inlined callee. Returns already construct into their destination (`value-constructor-destination.hx`).
+
+Then `LayoutStyle` can become a struct, gated on UI live memory (the census) and frame time, with `Insets`, `Color` and
+`Transform2D` kept as shared immutable classes: flattening them is what grew `LayoutStyle` in the earlier prototype
+(16,896 to 29,240 bytes), while kept as references its inline size is today's object less its header. A struct style
+drops the defensive `copy()` calls and can sit in a component's `Equatable` props.
+
 ## Open questions
 
 - **Fixed-array syntax.** `Int32[4]`, or a type such as `Fixed<Int32, 4>`,
