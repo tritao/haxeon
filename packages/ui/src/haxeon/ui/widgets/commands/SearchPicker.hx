@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.commands;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -109,7 +110,7 @@ class SearchPicker implements View {
 		this.onChanged = onChanged;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var tokens = context.theme.tokens;
 		var actualWidth = Math.max(1, Math.min(width, context.viewportWidth - 24));
 		var listHeight = Math.min(Math.max(rowHeight, model.count() * rowHeight),
@@ -205,13 +206,13 @@ class SearchPicker implements View {
 		popup.modal = modal;
 		popup.label = label;
 		popup.layerZIndex = layerZIndex;
-		var root = popup.build(context);
-		root.on(UiEventKind.Scroll, function(_) {
+		var modifier = new haxeon.ui.core.RootModifier();
+		modifier.on(UiEventKind.Scroll, function(_) {
 			tooltipDismissRevision++;
 			onChanged();
 		}, UiEventPhase.Capture);
 		var recheckAfterLayout = geometryChanged;
-		root.onResolved(function(_) {
+		modifier.onResolved(function(_) {
 			if (!recheckAfterLayout) return;
 			recheckAfterLayout = false;
 			previousSelection = -1;
@@ -228,20 +229,20 @@ class SearchPicker implements View {
 				default:
 			}
 		};
-		root.on(UiEventKind.KeyDown, navigate, UiEventPhase.Capture);
-		root.on(UiEventKind.KeyRepeat, navigate, UiEventPhase.Capture);
-		return root;
+		modifier.on(UiEventKind.KeyDown, navigate, UiEventPhase.Capture);
+		modifier.on(UiEventKind.KeyRepeat, navigate, UiEventPhase.Capture);
+		return context.build(popup, modifier);
 	}
 }
 
 private class SearchPickerInput implements View {
 	final input:TextField;
-	final resolved:(BuildContext, RenderNode) -> Void;
-	public function new(input:TextField, resolved:(BuildContext, RenderNode) -> Void) {
+	final resolved:(BuildContext, ViewRoot) -> Void;
+	public function new(input:TextField, resolved:(BuildContext, ViewRoot) -> Void) {
 		this.input = input;
 		this.resolved = resolved;
 	}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var node = input.build(context);
 		resolved(context, node);
 		return node;
@@ -264,35 +265,40 @@ private class SearchPickerRow implements View {
 		this.activate = activate;
 		this.hover = hover;
 	}
-	public function build(context:BuildContext):RenderNode {
-		var node = child.build(context);
-		node.semantics = new haxeon.ui.semantics.Semantics(haxeon.ui.semantics.Semantics.AccessibilityRole.Button,
+	public function build(context:BuildContext):ViewRoot {
+		var semantics = new haxeon.ui.semantics.Semantics(haxeon.ui.semantics.Semantics.AccessibilityRole.Button,
 			label);
-		node.semantics.states = selected
+		semantics.states = selected
 			? haxeon.ui.semantics.Semantics.AccessibilityState.Selected
 			: haxeon.ui.semantics.Semantics.AccessibilityState.empty();
-		node.enabled = enabled;
-		if (!enabled) node.semantics.states |= haxeon.ui.semantics.Semantics.AccessibilityState.Disabled;
-		node.semantics.actions = enabled
+		if (!enabled) semantics.states |= haxeon.ui.semantics.Semantics.AccessibilityState.Disabled;
+		semantics.actions = enabled
 			? haxeon.ui.semantics.Semantics.AccessibilityAction.Activate
 			: haxeon.ui.semantics.Semantics.AccessibilityAction.empty();
-		node.on(UiEventKind.Click, function(event) {
+		var modifier = new haxeon.ui.core.RootModifier();
+		modifier.semantics = semantics;
+		modifier.enabled = enabled;
+		// The handlers run after the build, when the row's root, and so its ID, is known.
+		var rowId:Null<haxeon.ui.core.WidgetId> = null;
+		modifier.on(UiEventKind.Click, function(event) {
 			if (event.button != 0) return;
 			activate();
 			event.stopPropagation();
 		});
-		node.on(UiEventKind.Activate, function(event) {
+		modifier.on(UiEventKind.Activate, function(event) {
 			activate();
 			event.stopPropagation();
 		});
 		// Descendant hover transitions bubble too; only the row boundary changes
 		// whether its hover controls are visible.
-		node.on(UiEventKind.HoverEnter, function(event) {
-			if (event.target.equals(node.id)) hover(true);
+		modifier.on(UiEventKind.HoverEnter, function(event) {
+			if (event.target.equals(rowId)) hover(true);
 		});
-		node.on(UiEventKind.HoverLeave, function(event) {
-			if (event.target.equals(node.id)) hover(false);
+		modifier.on(UiEventKind.HoverLeave, function(event) {
+			if (event.target.equals(rowId)) hover(false);
 		});
+		var node = context.build(child, modifier);
+		rowId = node.id;
 		return node;
 	}
 }

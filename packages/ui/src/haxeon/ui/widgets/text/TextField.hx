@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.text;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.platform.input.TextEdit;
 import haxeon.ui.TextLayout.TextPosition;
@@ -279,9 +280,9 @@ class TextField implements ScopeView {
 			&& (onLayoutResolved == null) == (other.onLayoutResolved == null);
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
-	public function buildBody(context:BuildContext):RenderNode return buildField(context, context.rootId("field"));
+	public function buildBody(context:BuildContext):ViewRoot return buildField(context, context.rootId("field"));
 
 	function buildField(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		var latest = context.latestOf(this);
@@ -489,7 +490,7 @@ class TextField implements ScopeView {
 			null,
 			null,
 			null,
-			textNodeColor)).build(context);
+			textNodeColor)).makeNode(context);
 		textNode.applyTextComponents(textNodeTextStyle, editor.paragraphStyle, textNodeColor);
 		if (!showsPlaceholder) {
 			editor.updateStyle(textNodeTextStyle, editor.paragraphStyle);

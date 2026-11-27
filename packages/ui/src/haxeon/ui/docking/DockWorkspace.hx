@@ -1,4 +1,5 @@
 package haxeon.ui.docking;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Tabs;
@@ -83,7 +84,7 @@ class DockWorkspace implements View {
 		}
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var observed = context.buildProbe != null;
 		var started = observed ? Sys.time() : 0.0;
 		var mounted:State<DockWorkspaceMount> = context.resourceState(context.id("workspace-mount:" + key), function() {
@@ -507,7 +508,7 @@ private class DockPanelView implements View {
 		this.scope = scope;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var keyed = false;
 		var keyA = 0, keyB = 0;
 		if (content.observed) {
@@ -557,7 +558,7 @@ private class DockPanelView implements View {
 		if (keyed) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
 			var dependencies = context.dependenciesSince(dependencyMark, cached == null ? null : cached.observed);
-			panelCache.put(descriptor.id, keyA, keyB, root, usedStates, dependencies);
+			panelCache.put(descriptor.id, keyA, keyB, root.node(), usedStates, dependencies);
 		}
 		return root;
 	}
@@ -589,7 +590,7 @@ private class DockPaneView implements View {
 		this.interaction = interaction;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var cached = retainable ? cache.entry(key) : null;
 		if (cached != null && !context.bypassRetention && cached.matches(keyA,
 			keyB) && cached.topologyMatches() && cached.statesMatch(context)) {
@@ -613,7 +614,7 @@ private class DockPaneView implements View {
 			cache.put(key,
 				keyA,
 				keyB,
-				root,
+				root.node(),
 				usedStates,
 				dependencies,
 				interaction.targetsSince(targetMark),
@@ -843,7 +844,7 @@ private class DockDropTargetView implements View {
 		this.targetPanelId = targetPanelId;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		// The preview overlay goes on the child's root through a modifier: the child may be a component that owns it.
 		var modifier = new RootModifier();
 		var activePreview = interaction.preview;
@@ -869,7 +870,7 @@ private class DockDropTargetView implements View {
 			modifier.add(previewNode);
 		}
 		var node = context.build(child, modifier);
-		interaction.registerTarget(new DockDropTarget(targetPanelId, node));
+		interaction.registerTarget(new DockDropTarget(targetPanelId, node.node()));
 		return node;
 	}
 

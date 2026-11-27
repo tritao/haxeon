@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.navigation;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.reactive.Signal;
 import haxeon.ui.Color;
@@ -69,13 +70,13 @@ class BottomSheet implements ScopeView {
 		return false;
 	}
 
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		var id = context.rootId("bottom-sheet");
 		var motion = context.lazyState(context.id("sheet-motion"), function() return new SheetMotion()).value;
 		return buildSheet(context, id, motion);
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function dismiss():Void {
 		if (onDismiss != null) onDismiss();

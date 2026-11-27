@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.text;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.*;
 import haxeon.ui.core.*;
@@ -53,8 +54,8 @@ class HighlightedText implements View {
 		return merged;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		var node = new Text(value, style, color, textStyle, role).build(context);
+	public function build(context:BuildContext):ViewRoot {
+		var node = new Text(value, style, color, textStyle, role).makeNode(context);
 		var ranges = matches(value, query);
 		var fonts = context.fonts;
 		if (ranges.length == 0 || fonts == null) return node;

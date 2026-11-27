@@ -9,6 +9,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.controls.IconButton;
 
@@ -32,7 +33,7 @@ private class Counted implements ScopeView {
 		return label == other.label && own == other.own;
 	}
 
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		runs++;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(20 + own.value);
@@ -42,7 +43,7 @@ private class Counted implements ScopeView {
 		return node;
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 }
 
 private class Parent implements View {
@@ -53,7 +54,7 @@ private class Parent implements View {
 
 	public function new() {}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		builds++;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(200 + outer.value);
@@ -72,7 +73,7 @@ private class ClickParent implements View {
 
 	public function new() {}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var run = ++generation;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(200 + outer.value);

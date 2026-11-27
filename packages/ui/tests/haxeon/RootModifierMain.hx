@@ -11,6 +11,7 @@ import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 
 private class Body implements ScopeView {
 	final size:Signal<Int>;
@@ -21,7 +22,7 @@ private class Body implements ScopeView {
 
 	public function inputsEqual(previous:ScopeView):Bool return false;
 
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(size.value);
 		style.height = LayoutAxis.fixed(20);
@@ -30,7 +31,7 @@ private class Body implements ScopeView {
 		return node;
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 }
 
 private class Caller implements View {
@@ -41,7 +42,7 @@ private class Caller implements View {
 
 	public function new() {}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(200 + outer.value);
 		style.height = LayoutAxis.fixed(100);

@@ -3,7 +3,7 @@ import haxeon.ui.editing.EditorDocument;
 import haxeon.ui.properties.*;
 import haxeon.ui.properties.PropertyEditor;
 
-class PropertyTests {
+@:access(haxeon.ui.core.ViewRoot) class PropertyTests {
 	static function check(value:Bool, message:String):Void {
 		if (!value) throw message;
 	}
@@ -133,7 +133,7 @@ class PropertyTests {
 						case Custom(_, data): current = data;
 						default:
 					}
-				}).build(context);
+				}).build(context).node();
 			var target:RenderNode = null;
 			root.walk(node -> {
 				if (node.semantics != null && node.semantics.label == label) target = node;
@@ -186,7 +186,7 @@ class PropertyTests {
 						default: throw "Wrong custom value";
 					}
 				});
-			var root = view.build(context);
+			var root = view.build(context).node();
 			var target:Null<RenderNode> = null;
 			root.walk(node -> {
 				if (node.semantics != null && node.semantics.label == label) target = node;

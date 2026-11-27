@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.LayoutAxis;
@@ -145,7 +146,7 @@ class Shape implements View {
 			cacheKey);
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("shape");
 			var computed = context.resolveStyle(context.styleTarget(nodeId, "shape", key, key, null, ["shape"]),

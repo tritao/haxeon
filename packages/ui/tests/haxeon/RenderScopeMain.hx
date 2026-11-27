@@ -8,11 +8,12 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.theme.Theme;
 
 /** Native structural ownership does not reconcile or redirect removed nodes. */
-class RenderScopeMain {
+@:access(haxeon.ui.core.ViewRoot) class RenderScopeMain {
 	static function node(id:Int):RenderNode return new RenderNode(new WidgetId(id));
 	static function publish(context:BuildContext, root:RenderNode):Void {
 		var instances = new Map<Int, RenderNode>();
@@ -33,7 +34,7 @@ class RenderScopeMain {
 		});
 		var modifier = new RootModifier();
 		modifier.add(decoration);
-		var root = context.build(component, modifier), scope = context.renderScopeAt(root);
+		var root = context.build(component, modifier).node(), scope = context.renderScopeAt(root);
 		if (scope == null) return 15;
 		var old = root;
 		scope.refresh();
@@ -75,7 +76,7 @@ class RenderScopeMain {
 			result.layout.text = Std.string(41 + value);
 			return result;
 		});
-		recoveryRoot = recoveryComponent.build(context);
+		recoveryRoot = recoveryComponent.build(context).node();
 		var recovering = context.renderScopeAt(recoveryRoot);
 		if (recovering == null) return 16;
 		context.consumeBindingFrameRequest();
@@ -111,7 +112,8 @@ class RenderScopeMain {
 		});
 		var placement = new RootModifier();
 		placement.zIndex = 9;
-		var elementRoot = context.build(elementComponent, placement), elementScope = context.renderScopeAt(elementRoot);
+		var elementRoot = context.build(elementComponent, placement).node(),
+			elementScope = context.renderScopeAt(elementRoot);
 		if (elementScope == null) return 17;
 		var element = elementRoot;
 		if (elementRoot.layout.style.width.value != 80 || elementRoot.layout.style.height.value != 24
@@ -137,9 +139,10 @@ class RenderScopeMain {
 			var value = first.value;
 			return build.createNode(build.rootId("body"));
 		});
-		var installedRoot = duplicate.build(context), installedOwner = context.renderScopeAt(installedRoot);
+		var installedRoot = duplicate.build(context).node(), installedOwner = context.renderScopeAt(installedRoot);
 		var rejected = false;
-		try duplicate.build(context) catch (error:Dynamic) rejected = Std.string(error).indexOf("Duplicate widget ID")
+		try duplicate.build(context).node() catch (error:Dynamic) rejected =
+			Std.string(error).indexOf("Duplicate widget ID")
 			>= 0;
 		if (!rejected || installedOwner == null || installedOwner.disposed
 			|| context.renderScopeAt(installedRoot) != installedOwner || !first.hasFieldReaders(0)) return 18;
@@ -149,7 +152,7 @@ class RenderScopeMain {
 }
 
 /** A test component supplies changing bodies; the native mount path supplies no callback adapters. */
-private class NativeScopeFixture implements ScopeView {
+@:access(haxeon.ui.core.ViewRoot) private class NativeScopeFixture implements ScopeView {
 	final key:String;
 	final make:BuildContext->RenderNode;
 	public function new(key:String, make:BuildContext->RenderNode) {
@@ -158,6 +161,6 @@ private class NativeScopeFixture implements ScopeView {
 	}
 	public function scopeKey():String return key;
 	public function inputsEqual(previous:ScopeView):Bool return previous == this;
-	public function buildBody(context:BuildContext):RenderNode return make(context);
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function buildBody(context:BuildContext):ViewRoot return make(context);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 }

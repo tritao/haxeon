@@ -5,6 +5,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Row;
@@ -25,7 +26,7 @@ class CircuitHud implements View {
 		this.toggleSound = toggleSound;
 	}
 
-	public function build(buildContext:BuildContext):RenderNode {
+	public function build(buildContext:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.fixed(height);

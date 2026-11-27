@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.scroll;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
@@ -40,6 +41,9 @@ class ScrollView implements View {
 	public var onScroll:UiEvent->Void;
 	/** Shows an interactive overlay scrollbar when vertical content overflows. */
 	public var showScrollbar:Bool;
+
+	/** The scroll area's accessible name. */
+	public var label:Null<String> = null;
 	/**
 	 * Set when the content builds from the scroll offset, as virtualized rows do: scrolling then rebuilds the view. Otherwise
 	 * the content is moved in place and nothing is rebuilt.
@@ -72,7 +76,7 @@ class ScrollView implements View {
 		showScrollbar = true;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var viewportStyle = style.copy();
 			var id = context.rootId("scroll");
@@ -85,7 +89,7 @@ class ScrollView implements View {
 			viewport.states = flags;
 			viewport.computedStyle = computed;
 			viewport.focusable = true;
-			var semantics = new Semantics(AccessibilityRole.ScrollArea);
+			var semantics = new Semantics(AccessibilityRole.ScrollArea, label);
 			semantics.actions = AccessibilityAction.ScrollForward | AccessibilityAction.ScrollBackward;
 			viewport.semantics = semantics;
 			viewport.layout.style.clipHorizontal = viewport.layout.style.clipHorizontal

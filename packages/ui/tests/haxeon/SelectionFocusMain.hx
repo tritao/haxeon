@@ -11,7 +11,7 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.controls.Select;
 
-class SelectionFocusMain {
+@:access(haxeon.ui.core.ViewRoot) class SelectionFocusMain {
 	static function resolve(root:RenderNode):Void {
 		root.walk(node -> {
 			var bounds = new Rect(0, 0, 100, 80);
@@ -39,7 +39,7 @@ class SelectionFocusMain {
 		});
 		var view = new Select("select", [new SelectOption("a", "A", 1), new SelectOption("b", "B", 2)], 1);
 		context.beginFrame();
-		var root = view.build(context);
+		var root = view.build(context).node();
 		resolve(root);
 		focus.rebuild(root);
 		events.setRoot(root);
@@ -47,7 +47,7 @@ class SelectionFocusMain {
 		if (!focus.focus(trigger.id)) throw "Trigger must be focusable";
 		events.key(UiEventKind.KeyDown, UiKey.Down, UiModifier.empty());
 		context.beginFrame();
-		root = view.build(context);
+		root = view.build(context).node();
 		resolve(root);
 		focus.rebuild(root);
 		events.setRoot(root);
@@ -57,7 +57,7 @@ class SelectionFocusMain {
 		if (requested != 1 || !trigger.id.equals(focus.focusedId)) throw "Closing Select did not focus its trigger";
 		events.key(UiEventKind.KeyDown, UiKey.Down, UiModifier.empty());
 		context.beginFrame();
-		root = view.build(context);
+		root = view.build(context).node();
 		resolve(root);
 		focus.rebuild(root);
 		events.setRoot(root);

@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.commands;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
@@ -22,7 +23,7 @@ class CommandScope implements View {
 		this.child = child;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var node = child.build(context);
 		node.commandScope = scope;
 		return node;

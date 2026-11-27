@@ -10,6 +10,7 @@ import haxeon.ui.core.HitTest;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.ComboBox;
 import haxeon.ui.widgets.controls.Select;
@@ -125,7 +126,7 @@ private class PopupDockScene implements View {
 	public function new(control:View)
 		this.control = control;
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.grow();

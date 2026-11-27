@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.reactive.Signal;
 import haxeon.ui.Insets;
@@ -136,9 +137,9 @@ class Tabs implements ScopeView {
 		return true;
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		var rootId = context.rootId("tabs");
 		var selection = context.lazyState(context.id("selected-tab"), function() return new Signal<String>(selectedKey))
 			.value;
@@ -235,7 +236,7 @@ class Tabs implements ScopeView {
 		stripStyle.direction = LayoutDirection.LeftToRight;
 		stripStyle.childGap = 4.0;
 		var strip = context.createNode(context.rootId("tab-strip"), LayoutVisualKind.Box, stripStyle);
-		var buttonNodes:Array<RenderNode> = [];
+		var buttonNodes:Array<ViewRoot> = [];
 		var drag = dragged() ? context.lazyState(context.id("tab-drag"),
 			function() return new TabDragState()).value : null;
 		for (item in items) {
@@ -336,7 +337,7 @@ class Tabs implements ScopeView {
 	}
 
 	/** Keep intrinsic header widths; overflow belongs to a clipped viewport, not the labels. */
-	function scrollStrip(strip:RenderNode, context:BuildContext, active:String, width:LayoutAxis):RenderNode {
+	function scrollStrip(strip:RenderNode, context:BuildContext, active:String, width:LayoutAxis):ViewRoot {
 		var state = context.lazyState(context.id("tab-scroll-state"), function() return new TabsScrollState()).value;
 		var style = new LayoutStyle();
 		style.width = width;
@@ -359,8 +360,8 @@ class Tabs implements ScopeView {
 			// ScrollView updates metrics before resolving the header. Geometry is
 			// untransformed here, so compare against the controller's current offset.
 			header.onResolved(function(tab) {
-				if (viewport.resolved == null) return;
 				var bounds = viewport.resolved;
+				if (bounds == null) return;
 				var left = tab.x - bounds.x;
 				if (state.selected == active
 					&& state.width == bounds.width && state.left == left && state.tabWidth == tab.width) return;
@@ -377,13 +378,13 @@ class Tabs implements ScopeView {
 		return viewport;
 	}
 
-	function buildClosableHeader(context:BuildContext, item:TabItem, buttonNode:RenderNode, focused:Signal<Bool>,
+	function buildClosableHeader(context:BuildContext, item:TabItem, buttonNode:ViewRoot, focused:Signal<Bool>,
 			latest:Void->Tabs):RenderNode {
 		var tabKey = item.key;
 		var rowStyle = new LayoutStyle();
 		rowStyle.direction = LayoutDirection.LeftToRight;
 		rowStyle.childAlignY = LayoutAlignmentY.Center;
-		rowStyle.background = buttonNode.layout.style.background;
+		rowStyle.background = buttonNode.background;
 		var row = context.createNode(context.rootId("tab-actions:" + tabKey), LayoutVisualKind.Box, rowStyle);
 		row.hitTestSelf = false;
 		row.add(buttonNode);
@@ -542,7 +543,7 @@ private class TabDragState {
 private class TabsStripView implements View {
 	final strip:RenderNode;
 	public function new(strip:RenderNode) this.strip = strip;
-	public function build(context:BuildContext):RenderNode return strip;
+	public function build(context:BuildContext):ViewRoot return strip;
 }
 
 private class TabsScrollState {

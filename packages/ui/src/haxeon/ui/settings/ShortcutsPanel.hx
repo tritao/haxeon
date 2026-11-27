@@ -1,4 +1,5 @@
 package haxeon.ui.settings;
+import haxeon.ui.core.ViewRoot;
 
 
 import Observable;
@@ -157,7 +158,7 @@ class ShortcutsPanel implements View implements Observable {
 		return result;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var searchStyle = new LayoutStyle();
 		searchStyle.width = LayoutAxis.grow();
 		var rows:Array<KeyedView> = [];
@@ -268,16 +269,16 @@ private class ShortcutCapture implements View {
 		this.panel = panel;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		var node = button.build(context);
-		if (recording)
-			node.on(UiEventKind.KeyDown, function(event:UiEvent) {
-				if (panel.press(event.key, event.modifiers)) {
-					// Keep the chord from running a command or closing the dialog.
-					event.preventDefault();
-					event.stopPropagation();
-				}
-			});
-		return node;
+	public function build(context:BuildContext):ViewRoot {
+		if (!recording) return button.build(context);
+		var modifier = new haxeon.ui.core.RootModifier();
+		modifier.on(UiEventKind.KeyDown, function(event:UiEvent) {
+			if (panel.press(event.key, event.modifiers)) {
+				// Keep the chord from running a command or closing the dialog.
+				event.preventDefault();
+				event.stopPropagation();
+			}
+		});
+		return context.build(button, modifier);
 	}
 }

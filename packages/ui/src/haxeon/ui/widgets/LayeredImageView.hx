@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Image;
@@ -70,7 +71,7 @@ class LayeredImageView implements View {
 		this.style = style == null ? new LayoutStyle() : style.copy();
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var node = context.createNode(context.rootId("layered-image"), LayoutVisualKind.Custom, style);
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Image, label);

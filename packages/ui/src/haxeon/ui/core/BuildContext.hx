@@ -381,11 +381,11 @@ class BuildContext implements Disposable {
 	};
 
 	/** Reports a measured subtree only when a diagnostic sink is installed. */
-	public function reportBuild(name:String, preparationSeconds:Float, buildSeconds:Float, root:RenderNode):Void {
+	public function reportBuild(name:String, preparationSeconds:Float, buildSeconds:Float, root:ViewRoot):Void {
 		var probe = buildProbe;
 		if (probe == null) return;
 		var nodes = 0;
-		root.walk(function(_) nodes++);
+		root.node().walk(function(_) nodes++);
 		probe(name, preparationSeconds, buildSeconds, nodes);
 	}
 
@@ -710,12 +710,16 @@ class BuildContext implements Disposable {
 	 * Builds `view` with `modifier` added to its root. A component's root belongs to its body, so callers place, flag or
 	 * decorate it this way instead of editing what `build` returned: the modifier is applied after each body run.
 	 */
-	public function build(view:View, ?modifier:RootModifier):RenderNode {
+	public function build(view:View, ?modifier:RootModifier):ViewRoot {
 		if (view == null) throw "A view is required";
 		if (modifier == null) return view.build(this);
 		if (!Std.isOfType(view, haxeon.ui.core.RenderScope.ScopeView)) {
-			var node = view.build(this);
-			modifier.apply(node);
+			var node = view.build(this).node();
+			// A plain view that returned a component's root unchanged, such as a wrapper: the component applies the
+			// modifier after each body run, with its direct caller's.
+			var owner = renderScopeAt(node);
+			if (owner != null) owner.addModifier(modifier);
+			else modifier.apply(node);
 			return node;
 		}
 		// A component's build mounts it before building anything else, which takes the modifier.
@@ -913,7 +917,7 @@ class BuildContext implements Disposable {
 	function readComponentBody(component:haxeon.ui.core.RenderScope.ScopeView, capture:Dependencies):RenderNode {
 		var frame = ReactiveRuntime.enterTracking(capture);
 		defer ReactiveRuntime.leaveTracking(frame);
-		return component.buildBody(this);
+		return component.buildBody(this).node();
 	}
 
 	/** Resource liveness follows the current mounted tree, including bodies rerun outside a full build. */

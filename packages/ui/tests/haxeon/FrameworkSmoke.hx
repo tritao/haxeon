@@ -9,6 +9,7 @@ import haxeon.platform.input.TextEdit as PlatformTextEdit;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
 import haxeon.ui.core.UiEvent;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.host.UiOverlay;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
@@ -7041,7 +7042,7 @@ private class DockPanelSmoke implements View {
 		this.create = create;
 		this.dispose = dispose;
 	}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		context.resourceState(context.id("panel-resource"), () -> {
 			create();
 			return 1;
@@ -7053,7 +7054,7 @@ private class DockPanelSmoke implements View {
 private class ExternalScrollbarSmoke implements View {
 	final controller:ScrollController;
 	public function new(controller:ScrollController) this.controller = controller;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new haxeon.ui.core.Key("external-scrollbar-smoke"), function() {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(240);
@@ -7092,13 +7093,13 @@ private class ModifiedView implements View {
 		this.modifier = modifier;
 	}
 
-	public function build(context:BuildContext):RenderNode return context.build(view, modifier);
+	public function build(context:BuildContext):ViewRoot return context.build(view, modifier);
 }
 
 private class DecoratedButtonSmoke implements View {
 	final decorated:Bool;
 	public function new(decorated:Bool) this.decorated = decorated;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		// A plain focusable box the caller owns, so it may restyle it: a component's root belongs to its body.
 		var boxStyle = new LayoutStyle();
 		boxStyle.width = LayoutAxis.fixed(80);
@@ -7120,7 +7121,7 @@ private class OverlaySmokeView implements View {
 
 	public function new() {}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		builds++;
 		return new Text("Retained overlay").build(context);
 	}

@@ -8,18 +8,19 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.CanvasView;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
 import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.WindowStateFlags;
 
-private class FocusView implements View {
+@:access(haxeon.ui.core.ViewRoot) private class FocusView implements View {
 	public var showFirst = true;
 	public var enableFirst = true;
 	public var trapSecond = false;
 	public function new() {}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(120);
 		style.height = LayoutAxis.fixed(40);
@@ -27,7 +28,7 @@ private class FocusView implements View {
 		if (showFirst) children.push(new KeyedView("first",
 			new CanvasView("first", function(_, _) {}, style, "First")));
 		children.push(new KeyedView("second", new CanvasView("second", function(_, _) {}, style, "Second")));
-		var root = new Column("focus-test", children).build(context);
+		var root = new Column("focus-test", children).build(context).node();
 		for (child in root.children) child.focusable = true;
 		if (showFirst) root.children[0].enabled = enableFirst;
 		root.children[root.children.length - 1].focusTrap = trapSecond;
@@ -35,7 +36,7 @@ private class FocusView implements View {
 	}
 }
 
-class WindowFocusTests {
+@:access(haxeon.ui.core.ViewRoot) class WindowFocusTests {
 	static function check(value:Bool, message:String):Void if (!value) throw message;
 	static function main():Int {
 		var context = new UiContext();

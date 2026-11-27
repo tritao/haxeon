@@ -6,5 +6,5 @@ interface View {
 	 * Describes this view as a render node, in `context`'s frame. A view keeps no state between builds: everything it shows
 	 * comes from its own inputs and from `context`.
 	 */
-	function build(context:BuildContext):RenderNode;
+	function build(context:BuildContext):ViewRoot;
 }

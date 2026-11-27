@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.collections;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutNode;
 
@@ -87,7 +88,7 @@ class VirtualList implements View {
 		materializedLast = 0;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			// Retain an internally owned controller, but never replace one supplied
 			// by the caller. Keyboard reveal and scrolling must share one instance.
@@ -176,7 +177,7 @@ private class VirtualCollectionRow implements View {
 		this.metadata = metadata;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();

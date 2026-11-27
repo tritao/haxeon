@@ -1,4 +1,5 @@
 package haxeon.ui.component;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
@@ -28,12 +29,12 @@ class TrackedScope implements ScopeView {
 			&& (style == other.style || style != null && other.style != null && haxeon.Diff.mask(style,
 			other.style) == 0);
 	}
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		// Description construction can build helper nodes; only the returned body's root owns this identity.
 		var reserved = context.deferRootIdentity();
 		var result = describe(context, reserved);
 		if (result == null) throw "A re-running scope returned no view";
-		var root = result.build(context);
+		var root = result.build(context).node();
 		if (style != null) haxeon.Diff.apply(root.layout.style, DefaultStyle, style);
 		return root;
 	}
@@ -47,5 +48,5 @@ class TrackedScope implements ScopeView {
 			throw error;
 		}
 	}
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 }

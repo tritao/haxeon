@@ -10,6 +10,7 @@ import haxeon.ui.Path;
 import haxeon.ui.Rect;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.core.View;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.widgets.CanvasView;
@@ -39,7 +40,7 @@ class AudioLabView implements View {
 		this.lab = lab;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var rootStyle = new LayoutStyle();
 		rootStyle.width = LayoutAxis.grow();
 		rootStyle.height = LayoutAxis.grow();

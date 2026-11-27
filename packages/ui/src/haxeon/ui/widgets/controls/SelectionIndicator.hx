@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
@@ -55,7 +56,7 @@ private class SelectionIndicatorView implements View {
 		this.open = open;
 		this.withFrame = withFrame;
 	}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var indicator = overlay(context, key);
 		if (kind == 1 || withFrame) paintFrame(context, indicator);
 		if (kind == 0) paintSearch(indicator);

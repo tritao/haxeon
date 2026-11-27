@@ -1,4 +1,5 @@
 package haxeon.ui.component;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
@@ -20,7 +21,7 @@ class BoundText implements View {
 		this.key = key;
 		this.read = read;
 	}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var state:State<LiveTextBinding> = context.resourceState(context.id("bound-text:" + key),
 			() -> new LiveTextBinding(read, context),
 			binding -> binding.dispose());

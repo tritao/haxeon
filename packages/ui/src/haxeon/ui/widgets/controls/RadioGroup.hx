@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -54,7 +55,7 @@ class RadioGroup implements View {
 		}
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var root = context.createNode(context.rootId("radio-group"), LayoutVisualKind.Box, style.copy());
 			root.semantics = new Semantics(AccessibilityRole.Group, "Radio group");
@@ -64,7 +65,7 @@ class RadioGroup implements View {
 			if (active != selected.value) selected.update(active);
 			value = active;
 
-			var nodes:Array<RenderNode> = [];
+			var nodes:Array<ViewRoot> = [];
 			var select = function(next:String) {
 				if (next == value) return;
 				value = next;

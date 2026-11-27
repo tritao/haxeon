@@ -11,6 +11,7 @@ import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleState;
@@ -19,7 +20,7 @@ import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.controls.Button;
 
 /** Constructor composition and resolved outer layout survive native interaction reruns. */
-class ButtonMain {
+@:access(haxeon.ui.core.ViewRoot) class ButtonMain {
 	static function main():Int {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
@@ -60,7 +61,7 @@ class ButtonMain {
 			null,
 			null,
 			null,
-			semantics), modifier);
+			semantics), modifier).node();
 		store.endFrame();
 		var control = root;
 		if (root.layout.style.width.value != 120 || root.layout.style.height.value != 32
@@ -95,7 +96,7 @@ class ButtonMain {
 		events.focusEvent(refreshed.id, UiEventKind.Blur);
 		if (focuses != 2 || blurs != 2) return 7;
 		context.beginFrame();
-		var disabled = new Button("Disabled", null, null, "disabled", false).build(context);
+		var disabled = new Button("Disabled", null, null, "disabled", false).build(context).node();
 		store.endFrame();
 		if (disabled.enabled || disabled.focusable || !disabled.states.contains(StyleState.Disabled)) return 4;
 		var parentBuilds = 0, parentEnabled = new Signal<Bool>(true);
@@ -104,7 +105,7 @@ class ButtonMain {
 			return new Button("Cached", null, null, "cached-button", parentEnabled.value);
 		});
 		context.beginFrame();
-		var cachedRoot = context.trackReads(function() return parent.build(context));
+		var cachedRoot = context.trackReads(function() return parent.build(context).node());
 		store.endFrame();
 		var cachedControl = cachedRoot;
 		var cachedOwner = context.renderScopeAt(cachedControl);
@@ -114,7 +115,7 @@ class ButtonMain {
 		if (!cachedOwner.pending) return 31;
 		context.flushRenderScopes(cachedRoot);
 		context.beginFrame();
-		var reusedRoot = context.trackReads(function() return parent.build(context));
+		var reusedRoot = context.trackReads(function() return parent.build(context).node());
 		store.endFrame();
 		if (parentBuilds != 1 || reusedRoot != context.currentRoot(cachedRoot)
 			|| !reusedRoot.states.contains(StyleState.Hovered) || reusedRoot.layout.style.width.value != 150) return 8;
@@ -123,13 +124,13 @@ class ButtonMain {
 		if (!cachedOwner.pending) return 31;
 		context.flushRenderScopes(reusedRoot);
 		context.beginFrame();
-		reusedRoot = context.trackReads(function() return parent.build(context));
+		reusedRoot = context.trackReads(function() return parent.build(context).node());
 		store.endFrame();
 		if (parentBuilds != 1 || reusedRoot != context.currentRoot(cachedRoot)
 			|| !reusedRoot.states.contains(StyleState.Focused) || reusedRoot.layout.style.width.value != 120) return 10;
 		parentEnabled.value = false;
 		context.beginFrame();
-		var changedRoot = context.trackReads(function() return parent.build(context));
+		var changedRoot = context.trackReads(function() return parent.build(context).node());
 		store.endFrame();
 		// The parent runs again and describes the button with new inputs; the button's own scope builds them.
 		if (parentBuilds != 2 || changedRoot.enabled || changedRoot.focusable) return 11;
@@ -138,10 +139,10 @@ class ButtonMain {
 	}
 }
 
-private class ButtonDecoration implements View {
+@:access(haxeon.ui.core.ViewRoot) private class ButtonDecoration implements View {
 	public var builds = 0;
 	public function new() {}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		if (context.inheritedStyle == null) throw "Button child did not inherit computed style";
 		builds++;
 		return context.createNode(context.rootId("decoration"), LayoutVisualKind.Box);

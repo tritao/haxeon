@@ -4,6 +4,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleState;
@@ -11,7 +12,7 @@ import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.controls.IconButton;
 
 /** A caller's modifier stays on a native control's root across interaction reruns. */
-class IconButtonMain {
+@:access(haxeon.ui.core.ViewRoot) class IconButtonMain {
 	static function main():Int {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
@@ -20,7 +21,7 @@ class IconButtonMain {
 		var overlay = new RenderNode(context.id("caller-overlay"), LayoutVisualKind.Box);
 		modifier.add(overlay);
 		modifier.zIndex = 3;
-		var root = context.build(new IconButton("search", IconName.Search, "Search"), modifier);
+		var root = context.build(new IconButton("search", IconName.Search, "Search"), modifier).node();
 		store.endFrame();
 		if (root.children.length != 2 || root.children[1] != overlay || root.layout.style.zIndex != 3) return 1;
 		var button = root;
@@ -40,7 +41,7 @@ class IconButtonMain {
 			|| root.children.length != 2
 			|| root.children[1] != overlay || overlay.parent != root || root.layout.style.zIndex != 3) return 4;
 		context.beginFrame();
-		var disabled = new IconButton("disabled", IconName.Close, "Close", null, null, false).build(context);
+		var disabled = new IconButton("disabled", IconName.Close, "Close", null, null, false).build(context).node();
 		store.endFrame();
 		if (disabled.enabled || disabled.focusable
 			|| disabled.semantics == null || !disabled.semantics.states.contains(AccessibilityState.Disabled)
@@ -48,17 +49,17 @@ class IconButtonMain {
 		// Equal inputs retain the mounted control. A new model with the same visible key gives it a new callback.
 		var owner = new HistoryOwner();
 		context.beginFrame();
-		var first = new HistoryRow(owner).build(context);
+		var first = new HistoryRow(owner).build(context).node();
 		store.endFrame();
 		var action:IconButton = cast HistoryRow.button;
 		action.onClick();
 		context.beginFrame();
-		var same = new HistoryRow(owner).build(context);
+		var same = new HistoryRow(owner).build(context).node();
 		store.endFrame();
 		if (same != first || HistoryRow.builds != 1 || owner.calls != 1) return 6;
 		var replacement = new HistoryOwner();
 		context.beginFrame();
-		var changed = new HistoryRow(replacement).build(context);
+		var changed = new HistoryRow(replacement).build(context).node();
 		store.endFrame();
 		action = cast HistoryRow.button;
 		action.onClick();
@@ -69,13 +70,13 @@ class IconButtonMain {
 	}
 }
 
-private class HistoryOwner {
+@:access(haxeon.ui.core.ViewRoot) private class HistoryOwner {
 	public var calls = 0;
 	public function new() {}
 }
 
 /** A component whose only input is the model its undo button calls. */
-private class HistoryRow implements ScopeView {
+@:access(haxeon.ui.core.ViewRoot) private class HistoryRow implements ScopeView {
 	public static var builds = 0;
 	public static var button:Null<IconButton>;
 	final owner:HistoryOwner;
@@ -88,13 +89,13 @@ private class HistoryRow implements ScopeView {
 		return Std.isOfType(previous, HistoryRow) && (cast previous:HistoryRow).owner == owner;
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		builds++;
 		var model = owner;
 		var undo = new IconButton("history", IconName.Undo, "Undo", () -> model.calls++);
 		button = undo;
-		return undo.build(context);
+		return undo.build(context).node();
 	}
 }

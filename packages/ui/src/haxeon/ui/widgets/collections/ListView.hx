@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.collections;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
@@ -151,7 +152,7 @@ class ListView implements View {
 		return controller.jumpTo(controller.offsetX, target);
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var layoutFeedback = context.state(context.id("resolved-layout-feedback"), 0);
 			var layoutGeneration = layoutFeedback.value;
@@ -231,9 +232,8 @@ class ListView implements View {
 			semantics.orientation = AccessibilityOrientation.Vertical;
 			semantics.actions = AccessibilityAction.ScrollForward | AccessibilityAction.ScrollBackward;
 			root.semantics = semantics;
-			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
-			root.add(viewport);
-			viewport.onResolved(geometry -> {
+			var viewportModifier = new haxeon.ui.core.RootModifier();
+			viewportModifier.onResolved(geometry -> {
 				// Compare the geometry used to choose the virtual window with the resolved scroll viewport.
 				// ScrollView updates controller metrics before this callback runs.
 				if (!controller.hasMetrics || builtViewportHeight != geometry.height
@@ -242,6 +242,8 @@ class ListView implements View {
 					context.requestBuildFeedback();
 				}
 			});
+			root.add(context.withScope(new Key("scroll-view"),
+				function() return context.build(scroll, viewportModifier)));
 			return root;
 		});
 	}
@@ -440,7 +442,7 @@ private class ListViewRow implements View {
 		this.onBuilt = onBuilt;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();

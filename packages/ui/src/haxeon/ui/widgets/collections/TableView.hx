@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.collections;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
@@ -143,7 +144,7 @@ class TableView implements View {
 		cellIds = new Map();
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			columnRevisionState = context.state(context.id("column-revision"), columnRevision);
 			columnRevision = columnRevisionState.value;
@@ -221,9 +222,6 @@ class TableView implements View {
 			}, handleCellKeyDown, function(row:Int, column:Int, id:WidgetId) {
 				cellIds.set(cellKey(row, column), id);
 			}, columnWidths(), virtualization);
-			var bodyNode = body.build(context);
-			// The table root owns the grid semantics; the nested body remains a scroll region.
-			bodyNode.semantics = null;
 			var header = new TableHeader("header", columns, headerHeight, totalWidth, controller, function(index:Int,
 					delta:Float) {
 						resizeColumn(index, columns[index].width + delta);
@@ -231,13 +229,14 @@ class TableView implements View {
 				toggleSort(index);
 			}, sortColumn, sortAscending);
 			var children:Array<KeyedView> = [new KeyedView("header", header), new KeyedView("body", body)];
-			var root = new Column("table-content", children, viewportStyle).build(context);
+			// The table root owns the grid semantics; the nested body remains a scroll region.
 			var semantics = new Semantics(AccessibilityRole.Grid);
 			semantics.rowCount = rowCount;
 			semantics.columnCount = columns.length;
 			semantics.setSize = rowCount * columns.length;
-			root.semantics = semantics;
-			return root;
+			var grid = new haxeon.ui.core.RootModifier();
+			grid.semantics = semantics;
+			return context.build(new Column("table-content", children, viewportStyle), grid);
 		});
 	}
 
@@ -328,7 +327,7 @@ private class TableHeader implements View {
 		this.sortAscending = sortAscending;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var viewportStyle = new LayoutStyle();
 			viewportStyle.width = LayoutAxis.grow();
@@ -352,11 +351,11 @@ private class TableHeader implements View {
 					onSort(columnIndex);
 				})));
 			}
-			var content = new Row("header-content", headerCells, contentStyle).build(context);
 			var rowSemantics = new Semantics(AccessibilityRole.Row);
 			rowSemantics.columnCount = columns.length;
-			content.semantics = rowSemantics;
-			viewport.add(content);
+			var headerRow = new haxeon.ui.core.RootModifier();
+			headerRow.semantics = rowSemantics;
+			viewport.add(context.build(new Row("header-content", headerCells, contentStyle), headerRow));
 			return viewport;
 		});
 	}
@@ -387,7 +386,7 @@ private class TableHeaderCell implements View {
 		this.onSort = onSort;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(column.width);
@@ -455,7 +454,7 @@ private class TableSelectionCell implements View {
 		this.selected = selected;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();

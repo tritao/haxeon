@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.text;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutNode;
@@ -38,7 +39,10 @@ class Text implements View {
 		this.role = role == null ? TextRole.Body : role;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot return makeNode(context);
+
+	/** The text node itself, for a widget that composes text into a node of its own, as highlighted or shortened text does. */
+	public function makeNode(context:BuildContext):RenderNode {
 		var id = context.rootId("text");
 		var computed = context.resolveStyle(context.styleTarget(id, "text", null, null, null, ["text"]),
 			style,

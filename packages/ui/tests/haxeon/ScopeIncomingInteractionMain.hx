@@ -10,12 +10,13 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.style.StyleState;
 
 /** A retained incoming owner must receive interactions queued against the outgoing physical instance. */
 @:access(haxeon.ui.core.RenderNode) @:access(haxeon.ui.core.EventDispatcher) @:access(haxeon.ui.core
-	.UiContext) class ScopeIncomingInteractionMain implements View {
+	.UiContext) @:access(haxeon.ui.core.ViewRoot) class ScopeIncomingInteractionMain implements View {
 	final version = new Signal<Int>(0);
 	final fresh:Bool;
 	final flag:StyleState;
@@ -29,7 +30,7 @@ import haxeon.ui.style.StyleState;
 		this.flag = flag;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var selected = version.value;
 		context.retainStateIds(incomingIds);
 		context.retainStateIds(outgoingIds);
@@ -41,7 +42,7 @@ import haxeon.ui.style.StyleState;
 	}
 
 	static function leaf(context:BuildContext, flag:StyleState):RenderNode {
-		return new TrackedScope("same-slot", () -> new InteractionLeaf(flag)).build(context);
+		return new TrackedScope("same-slot", () -> new InteractionLeaf(flag)).build(context).node();
 	}
 
 	static function seedLeaf(context:BuildContext, flag:StyleState, nested:Bool):RenderNode {
@@ -78,7 +79,7 @@ import haxeon.ui.style.StyleState;
 		if (!view.incoming.id.equals(view.outgoing.id)) throw "Fixture needs two physical owners of one logical slot";
 		ui.stateStore.endFrame();
 		context.beginFrame();
-		ui.root = context.trackReads(() -> context.withScope(new Key("root"), () -> top.build(context)));
+		ui.root = context.trackReads(() -> context.withScope(new Key("root"), () -> top.build(context).node()));
 		context.captureRootDependencies();
 		ui.stateStore.endFrame();
 		ui.root.walk(node -> {
@@ -132,7 +133,7 @@ import haxeon.ui.style.StyleState;
 	}
 }
 
-private class InteractionLeaf implements View {
+@:access(haxeon.ui.core.ViewRoot) private class InteractionLeaf implements View {
 	public static var builds = 0;
 
 	final flag:StyleState;
@@ -141,7 +142,7 @@ private class InteractionLeaf implements View {
 		this.flag = flag;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		builds++;
 		var id = context.rootId("leaf");
 		var node = context.createNode(id, LayoutVisualKind.Box);
@@ -152,7 +153,8 @@ private class InteractionLeaf implements View {
 	}
 }
 
-@:access(haxeon.ui.LayoutSession) private class InteractionLayoutSession extends LayoutSession {
+@:access(haxeon.ui.LayoutSession) @:access(haxeon.ui.core
+	.ViewRoot) private class InteractionLayoutSession extends LayoutSession {
 	public var matched = false;
 	public var revision = 0;
 

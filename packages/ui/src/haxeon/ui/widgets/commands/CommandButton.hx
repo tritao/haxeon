@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.commands;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.controls.Button;
 
 import haxeon.ui.LayoutStyle;
@@ -60,7 +61,7 @@ class CommandButton implements View {
 		this.onResult = onResult;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var commands = registry == null ? context.commands : registry;
 		var invocation = invocationContext;
 		var command = commands.get(commandId);

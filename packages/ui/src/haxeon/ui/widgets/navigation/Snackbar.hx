@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.navigation;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -47,9 +48,9 @@ class Snackbar implements ScopeView {
 			&& haxeon.Diff.mask(style, other.style) == 0;
 	}
 
-	public function buildBody(context:BuildContext):RenderNode return buildBar(context, context.rootId("snackbar"));
+	public function buildBody(context:BuildContext):ViewRoot return buildBar(context, context.rootId("snackbar"));
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildBar(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		var rootStyle = style.copy();

@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.overlays;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
@@ -95,7 +96,7 @@ class Popup implements View {
 			: onDismiss;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var rootStyle = new LayoutStyle();
 			rootStyle.width = LayoutAxis.grow();

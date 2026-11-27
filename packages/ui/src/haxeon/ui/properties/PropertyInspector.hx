@@ -1,4 +1,5 @@
 package haxeon.ui.properties;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
@@ -160,7 +161,7 @@ class PropertyInspector implements View {
 		return editor == null ? false : editor.applyValue(context, descriptor, value, coalesceKey);
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var observed = context.buildProbe != null;
 		var started = observed ? Sys.time() : 0.0;
 		var result = context.withScope(new Key(key), function() {
@@ -182,16 +183,14 @@ class PropertyInspector implements View {
 			contentStyle.childGap = 6.0;
 			var content = new Column("sections", children, contentStyle);
 			if (!scrollable) {
-				var root = content.build(context);
-				root.semantics = new Semantics(AccessibilityRole.Group, label);
-				return root;
+				var group = new haxeon.ui.core.RootModifier();
+				group.semantics = new Semantics(AccessibilityRole.Group, label);
+				return context.build(content, group);
 			}
 			var scroll = new ScrollView("viewport", content, style, ScrollAxis.Vertical, controller);
 			scroll.showScrollbar = showScrollbar;
-			var root = scroll.build(context);
-			if (root.semantics == null) root.semantics = new Semantics(AccessibilityRole.ScrollArea, label);
-			else root.semantics.label = label;
-			return root;
+			scroll.label = label;
+			return scroll.build(context);
 		});
 		if (observed) context.reportBuild("inspector:" + key, 0.0, Sys.time() - started, result);
 		return result;
@@ -264,7 +263,7 @@ private class PropertyInspectorSectionHeader implements View {
 		this.onToggle = onToggle;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		// Keep the header's text inside its available width when the dock narrows.

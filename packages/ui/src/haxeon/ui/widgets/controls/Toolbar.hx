@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.commands.CommandButton;
 import haxeon.ui.widgets.layout.Row;
@@ -42,7 +43,7 @@ class Toolbar implements View {
 		this.style.direction = LayoutDirection.LeftToRight;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var commands = registry == null ? context.commands : registry;
 		var children:Array<KeyedView> = [];
 		for (commandId in commandIds)

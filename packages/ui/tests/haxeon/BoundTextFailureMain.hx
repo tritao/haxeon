@@ -9,7 +9,8 @@ import haxeon.ui.core.View;
 import haxeon.ui.theme.Theme;
 
 /** A failed binding must not suppress the next host frame request. */
-@:access(haxeon.ui.LayoutSession) @:access(haxeon.ui.core.UiContext) class BoundTextFailureMain {
+@:access(haxeon.ui.LayoutSession) @:access(haxeon.ui.core.UiContext) @:access(haxeon.ui.core
+	.ViewRoot) class BoundTextFailureMain {
 	static function main():Int {
 		var ui = new UiContext(new LayoutSession(cast 0));
 		var frame = new LayoutFrame(300, 80), source = new Signal<Int>(1), scheduled = 0;
@@ -22,7 +23,7 @@ import haxeon.ui.theme.Theme;
 		ui.buildContext.setViewport(frame.width, frame.height);
 		ui.buildContext.setEnvironmentViewport(frame.width, frame.height);
 		ui.buildContext.beginFrame();
-		var node = ui.buildContext.trackReads(() -> view.build(ui.buildContext));
+		var node = ui.buildContext.trackReads(() -> view.build(ui.buildContext).node());
 		ui.buildContext.captureRootDependencies();
 		ui.stateStore.endFrame();
 		// Mount the prepared node in the real context, so the retry exercises its binding-only frame.
@@ -54,7 +55,7 @@ import haxeon.ui.theme.Theme;
 		var source = new Signal<Int>(1);
 		context.beginFrame();
 		var first = new BoundText("replace", () -> Std.string(source.value));
-		var node = context.trackReads(() -> first.build(context));
+		var node = context.trackReads(() -> first.build(context).node());
 		store.endFrame();
 		context.beginFrame();
 		var rejectedSource = new Signal<Int>(0);
@@ -63,7 +64,7 @@ import haxeon.ui.theme.Theme;
 			throw "expected rebind failure";
 		});
 		var failed = false;
-		try context.trackReads(() -> broken.build(context)) catch (_:Dynamic) failed = true;
+		try context.trackReads(() -> broken.build(context).node()) catch (_:Dynamic) failed = true;
 		store.endFrame();
 		var connected = source.hasFieldReaders(0) && !rejectedSource.hasFieldReaders(0);
 		source.value = 2;

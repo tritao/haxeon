@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.layout;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -23,7 +24,7 @@ class Spacer implements View {
 		style.height = height == null ? LayoutAxis.grow() : height;
 	}
 
-	public function build(context:BuildContext):RenderNode return context.withScope(key, function() {
+	public function build(context:BuildContext):ViewRoot return context.withScope(key, function() {
 		return context.createNode(context.rootId("spacer"), LayoutVisualKind.Box, style);
 	});
 }

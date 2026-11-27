@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.text;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
@@ -21,6 +22,6 @@ class DefaultTextStyle implements View {
 		this.style = style;
 	}
 
-	public function build(context:BuildContext):RenderNode
+	public function build(context:BuildContext):ViewRoot
 		return context.withTextStyle(style, function() return child.build(context));
 }

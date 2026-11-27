@@ -55,7 +55,7 @@ internal class NavUi {
 			?letterSpacing:Float):RenderNode {
 		return context.withScope(new Key(local), function() {
 			var textOverride = new TextStyleOverride(null, size, letterSpacing);
-			return new Text(value, null, color, textOverride).build(context);
+			return new Text(value, null, color, textOverride).makeNode(context);
 		});
 	}
 }

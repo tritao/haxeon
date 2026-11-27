@@ -3,9 +3,10 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.core.WidgetId;
 
-@:access(haxeon.ui.core.BuildContext) class RetainedWidgetIdMain {
+@:access(haxeon.ui.core.BuildContext) @:access(haxeon.ui.core.ViewRoot) class RetainedWidgetIdMain {
 	static var context:BuildContext;
 	static var mounted:Map<Int, RenderNode>;
 	static var childId:WidgetId;
@@ -14,7 +15,7 @@ import haxeon.ui.core.WidgetId;
 		context = new BuildContext(new StateStore());
 		context.beginFrame();
 		var marker = context.stateUsageMarker();
-		var root = new TrackedScope("cached", () -> new RetainedBody()).build(context);
+		var root = new TrackedScope("cached", () -> new RetainedBody()).build(context).node();
 		var ids = context.stateIdsUsedSince(marker);
 		var owner = context.renderScopeAt(root);
 		if (owner == null) throw "Fixture failed to mount its native scope";
@@ -57,9 +58,9 @@ import haxeon.ui.core.WidgetId;
 		return 42;
 	}
 }
-private class RetainedBody implements View {
+@:access(haxeon.ui.core.ViewRoot) private class RetainedBody implements View {
 	public function new() {}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var root = context.createNode(context.rootId("body"));
 		root.add(context.createNode(context.id("child")));
 		return root;

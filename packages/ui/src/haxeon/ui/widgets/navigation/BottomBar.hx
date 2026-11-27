@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.navigation;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -67,9 +68,9 @@ class BottomBar implements ScopeView {
 		return true;
 	}
 
-	public function buildBody(context:BuildContext):RenderNode return buildBar(context, context.rootId("bottom-bar"));
+	public function buildBody(context:BuildContext):ViewRoot return buildBar(context, context.rootId("bottom-bar"));
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildBar(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		var rootStyle = style.copy();

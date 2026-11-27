@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.navigation;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -63,9 +64,9 @@ class Chip implements ScopeView {
 		};
 	}
 
-	public function buildBody(context:BuildContext):RenderNode return buildChip(context, context.rootId("chip"));
+	public function buildBody(context:BuildContext):ViewRoot return buildChip(context, context.rootId("chip"));
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildChip(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		var rootStyle = style.copy();

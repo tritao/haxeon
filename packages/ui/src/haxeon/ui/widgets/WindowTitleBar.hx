@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -32,7 +33,7 @@ class WindowTitleBar implements View {
 		this.controls = controls;
 		this.height = height;
 	}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.fixed(height);

@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.layout;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -26,7 +27,7 @@ class SizedBox implements View {
 		style.height = height == null ? LayoutAxis.fit() : height;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var id = context.rootId("sized-box");
 			var computed = context.resolveStyle(context.styleTarget(id, "sized-box",

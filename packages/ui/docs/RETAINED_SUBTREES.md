@@ -60,7 +60,7 @@ read the same field both subscribe, while repeated reads within either cache sti
 parent describes it with equal inputs, and runs its body again, without its parent, when something the body read
 changes: a signal, an `Observable` field, its own `State`, or an interaction state (`styleStates` depends only on the
 states some rule for the node selects on). A body run builds a new root that replaces the old one in its parent; callers
-never edit a component's root, they pass a `RootModifier`. Callbacks a body installs call the newest description
+never edit a view's root: a build returns a read-only `ViewRoot`, and callers pass a `RootModifier`. Callbacks a body installs call the newest description
 through `BuildContext.latestOf`. Every widget is a component or a plain view built by one.
 
 **In place**: `BuildContext.willEditRetained(node)` before changing a node of the submitted tree directly (scrollbar fades,

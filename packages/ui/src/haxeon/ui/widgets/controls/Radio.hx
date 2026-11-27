@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -69,10 +70,10 @@ class Radio implements ScopeView {
 			&& haxeon.Diff.mask(style, other.style) == 0;
 	}
 
-	public function buildBody(context:BuildContext):RenderNode return buildRadio(context, context.rootId("radio"));
+	public function buildBody(context:BuildContext):ViewRoot return buildRadio(context, context.rootId("radio"));
 
 	// Hover and press change only how the option looks: they rerun this scope, and the panel around it stays cached.
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildRadio(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
 		// The indicator and its dot take the row's hover and press, so the body depends on every state.

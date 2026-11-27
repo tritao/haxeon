@@ -1,4 +1,5 @@
 package components;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -21,7 +22,7 @@ class WebViewSlot implements View {
 		this.style = style == null ? defaultStyle() : style.copy();
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var node = new RenderNode(context.id("webview-slot"), LayoutVisualKind.Box, style);
 			node.semantics = new Semantics(AccessibilityRole.Group, SemanticLabel);

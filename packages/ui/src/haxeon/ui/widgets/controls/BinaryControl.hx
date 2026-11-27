@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import Observable;
 
@@ -76,7 +77,7 @@ class BinaryControl implements ScopeView implements Observable {
 			&& haxeon.Diff.mask(style, other.style) == 0;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var root = context.mountComponent(this);
 		// The enclosing scope reads the live control's `checked` too, so activation reruns it: callers commonly keep the
 		// flag in a plain field and branch on it, as in a "show advanced" switch, and that read is not tracked. An equal
@@ -90,7 +91,7 @@ class BinaryControl implements ScopeView implements Observable {
 
 	function readChecked():Bool return checked;
 
-	public function buildBody(context:BuildContext):RenderNode return buildControl(context,
+	public function buildBody(context:BuildContext):ViewRoot return buildControl(context,
 		context.rootId(toggle ? "toggle" : "checkbox"));
 
 	function buildControl(context:BuildContext,

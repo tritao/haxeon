@@ -19,6 +19,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.core.WidgetId;
 
 import haxe.io.Bytes;
@@ -428,7 +429,7 @@ class LayoutSessionSmoke {
 private class ScopeLayoutBody implements View {
 	final mode:Int;
 	public function new(mode:Int) this.mode = mode;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = mode == 0 ? LayoutAxis.fit() : mode == 1 ? LayoutAxis.grow() : LayoutAxis.fixed(90);
 		style.height = LayoutAxis.fit();

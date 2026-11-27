@@ -11,6 +11,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
@@ -21,7 +22,7 @@ import haxeon.ui.widgets.text.Text;
 class WidthBox implements View {
 	public function new() {}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var width = context.state(context.id("box-width"), -1.0);
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.stretch();

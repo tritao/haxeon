@@ -670,7 +670,7 @@ class AccessibilityContract {
 private class DisabledSemanticContainer implements haxeon.ui.core.View {
 	public function new() {}
 
-	public function build(context:haxeon.ui.core.BuildContext):RenderNode {
+	public function build(context:haxeon.ui.core.BuildContext):haxeon.ui.core.ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.grow();
@@ -686,7 +686,7 @@ private class DisabledSemanticContainer implements haxeon.ui.core.View {
 private class AccessibilityMetadataView implements haxeon.ui.core.View {
 	public function new() {}
 
-	public function build(context:haxeon.ui.core.BuildContext):RenderNode {
+	public function build(context:haxeon.ui.core.BuildContext):haxeon.ui.core.ViewRoot {
 		var rootStyle = new LayoutStyle();
 		rootStyle.width = LayoutAxis.fixed(256.0);
 		rootStyle.height = LayoutAxis.fixed(192.0);

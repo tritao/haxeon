@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -47,7 +48,7 @@ class WindowFrame implements View {
 		return result;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();

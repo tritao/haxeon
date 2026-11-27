@@ -1,4 +1,5 @@
 package haxeon.ui.sidebar;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
@@ -32,7 +33,7 @@ class SidebarHost implements View {
 		this.model = model;
 		this.onSelect = onSelect;
 	}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		if (!model.visible) return new haxeon.ui.widgets.layout.Spacer(key, LayoutAxis.fixed(0),
 			LayoutAxis.fixed(0)).build(context);
 		var selected = model.selected();
@@ -62,5 +63,5 @@ class SidebarHost implements View {
 private class SidebarPage implements View {
 	final mode:SidebarMode;
 	public function new(mode:SidebarMode) this.mode = mode;
-	public function build(context:BuildContext):RenderNode return mode.provider().build(context);
+	public function build(context:BuildContext):ViewRoot return mode.provider().build(context);
 }

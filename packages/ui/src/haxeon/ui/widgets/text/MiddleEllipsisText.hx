@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.text;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.editor.TextDocument;
 import haxeon.ui.FontCollection;
@@ -39,7 +40,10 @@ class MiddleEllipsisText implements View {
 		this.textStyle = textStyle;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot return makeNode(context);
+
+	/** The text node itself, for a widget that shows it as its own text, as an unfocused text field does. */
+	public function makeNode(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
@@ -50,7 +54,7 @@ class MiddleEllipsisText implements View {
 				function() return new EllipsisMemo(), function(_) {}).value;
 			var shown = memo.value == value ? memo.result : value;
 			var text = new Text(shown, style, null, labelOverride);
-			var node = text.build(context);
+			var node = text.makeNode(context);
 			if (node.semantics != null) node.semantics.label = value;
 			var resolved = context.resolveTextRole(TextRole.Body, labelOverride);
 			node.onResolved(function(geometry) {

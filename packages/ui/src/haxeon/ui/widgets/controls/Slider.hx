@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import Observable;
 
@@ -89,9 +90,9 @@ class Slider implements ScopeView implements Observable {
 			&& (onChange == null) == (other.onChange == null) && haxeon.Diff.mask(style, other.style) == 0;
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
-	public function buildBody(context:BuildContext):RenderNode return buildControl(context, context.rootId("slider"));
+	public function buildBody(context:BuildContext):ViewRoot return buildControl(context, context.rootId("slider"));
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
 		var flags = context.styleStates(nodeId, "slider", key, key, null, ["slider"]);

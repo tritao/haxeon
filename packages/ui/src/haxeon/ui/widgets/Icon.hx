@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Image;
 
@@ -86,7 +87,7 @@ class Icon implements View {
 		return known;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var node = context.createNode(context.rootId("icon"), LayoutVisualKind.Custom, style);
 			node.hitTestSelf = false;

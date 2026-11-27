@@ -6,7 +6,7 @@ import haxeon.ui.core.StateStore;
 import haxeon.ui.theme.Theme;
 
 /** Cached mounted text must keep its native dependency owner alive. */
-class BindingLifetimeMain {
+@:access(haxeon.ui.core.ViewRoot) class BindingLifetimeMain {
 	static function main():Int {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
@@ -15,11 +15,11 @@ class BindingLifetimeMain {
 		var text:Void->haxeon.ui.core.View = () -> new BoundText("text", () -> Std.string(value.value));
 		var view = new TrackedScope("lifetime", () -> new TrackedScope("stable", text));
 		context.beginFrame();
-		context.trackReads(() -> view.build(context));
+		context.trackReads(() -> view.build(context).node());
 		store.endFrame();
 		context.beginFrame();
 		var marker = context.stateUsageMarker();
-		var root = context.trackReads(() -> view.build(context));
+		var root = context.trackReads(() -> view.build(context).node());
 		var ids = context.stateIdsUsedSince(marker);
 		store.endFrame();
 		// Retain the native owner and its resources without rebuilding the mounted body.

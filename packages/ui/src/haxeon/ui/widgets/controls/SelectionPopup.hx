@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.scroll.ScrollController;
 
 import haxeon.ui.Insets;
@@ -105,9 +106,9 @@ internal class SelectionPopup implements ScopeView {
 		return true;
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		return buildControl(context, context.rootId("selection-popup"));
 	}
 
@@ -348,7 +349,7 @@ internal class SelectionPopup implements ScopeView {
 private class SelectionPopupContent implements View {
 	final node:RenderNode;
 	public function new(node:RenderNode) this.node = node;
-	public function build(context:BuildContext):RenderNode return node;
+	public function build(context:BuildContext):ViewRoot return node;
 }
 
 private class SelectionPopupScrollState {

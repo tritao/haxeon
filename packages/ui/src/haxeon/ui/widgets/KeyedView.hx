@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
@@ -22,6 +23,6 @@ class KeyedView {
 	}
 
 	/** Builds the view under its key. */
-	public function build(context:BuildContext):RenderNode
+	public function build(context:BuildContext):ViewRoot
 		return context.withScope(key, function() return view.build(context));
 }

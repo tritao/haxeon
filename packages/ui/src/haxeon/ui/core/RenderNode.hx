@@ -227,10 +227,11 @@ class RenderNode {
 	}
 
 	/**
-	 * Adds `child` as the node's last child, and returns it. Throws when `child` already has a parent or contains this
-	 * node.
+	 * Adds `root`, a node made here or the root a view's build returned, as the node's last child, and returns it. Throws
+	 * when it already has a parent or contains this node.
 	 */
-	public function add(child:RenderNode):RenderNode {
+	public function add(root:ViewRoot):RenderNode {
+		var child = root.node();
 		if (child == null
 			|| child == this
 			|| child.parent != null) throw "A render node must have one parent and cannot contain itself";

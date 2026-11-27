@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Align;
 import haxeon.ui.widgets.layout.Row;
@@ -60,7 +61,7 @@ class SearchField implements View {
 		this.style.childAlignY = LayoutAlignmentY.Center;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var icon = new Icon("search-icon", IconName.Search, 15.0, context.theme.tokens.textSecondary);
 			var leadingStyle = new LayoutStyle();

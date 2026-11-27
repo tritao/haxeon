@@ -7,6 +7,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.AccessibilityRequest.AccessibilityRequestAction;
 import haxeon.ui.semantics.Semantics;
@@ -21,7 +22,7 @@ private class PlainPanel implements View {
 
 	public function new() {}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		builds++;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(300);

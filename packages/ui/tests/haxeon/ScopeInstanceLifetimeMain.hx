@@ -7,7 +7,7 @@ import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.text.Text;
 
 /** Cached component instances may share a widget identity, but never their native ownership record. */
-class ScopeInstanceLifetimeMain {
+@:access(haxeon.ui.core.ViewRoot) class ScopeInstanceLifetimeMain {
 	static function main():Int {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
@@ -16,14 +16,14 @@ class ScopeInstanceLifetimeMain {
 		var b = new TrackedScope("shared", () -> new Text("B"));
 		context.beginFrame();
 		var mark = context.stateUsageMarker();
-		var rootA = a.build(context), ownerA = context.renderScopeAt(rootA);
+		var rootA = a.build(context).node(), ownerA = context.renderScopeAt(rootA);
 		if (ownerA == null) throw "A has no native owner";
 		var idsA = context.stateIdsUsedSince(mark);
 		store.endFrame();
 		context.beginFrame();
 		context.retainStateIds(idsA);
 		mark = context.stateUsageMarker();
-		var rootB = b.build(context), ownerB = context.renderScopeAt(rootB);
+		var rootB = b.build(context).node(), ownerB = context.renderScopeAt(rootB);
 		if (ownerB == null) throw "B has no native owner";
 		var idsB = context.stateIdsUsedSince(mark);
 		if (!rootA.id.equals(rootB.id)) throw "Alternatives lost their shared widget identity";

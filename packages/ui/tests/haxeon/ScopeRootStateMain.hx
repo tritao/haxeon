@@ -6,7 +6,7 @@ import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.controls.Checkbox;
 
 /** A scope owner and a stateful body root occupy distinct resource identities. */
-@:access(haxeon.ui.core.BuildContext) class ScopeRootStateMain {
+@:access(haxeon.ui.core.BuildContext) @:access(haxeon.ui.core.ViewRoot) class ScopeRootStateMain {
 	static function main():Int {
 		var reads = new Signal<Int>(0);
 		var context = new BuildContext(new StateStore(), null, null, null, Theme.light());
@@ -17,7 +17,7 @@ import haxeon.ui.widgets.controls.Checkbox;
 		for (i in 0...3) {
 			context.beginFrame();
 			reads.value = i;
-			var root = view.build(context);
+			var root = view.build(context).node();
 			if (context.renderScopeAt(root) == null) throw "Stateful body lost its native owner";
 			context.stateStore.endFrame();
 		}
@@ -34,7 +34,7 @@ import haxeon.ui.widgets.controls.Checkbox;
 		var view = new TrackedScope("rejected", () -> new Checkbox("check", Std.string(source.value)));
 		context.beginFrame();
 		var failed = false;
-		try view.build(context) catch (error:Dynamic) {
+		try view.build(context).node() catch (error:Dynamic) {
 			if (Std.string(error) != "Expected installation failure") throw error;
 			failed = true;
 		}
@@ -45,7 +45,7 @@ import haxeon.ui.widgets.controls.Checkbox;
 	}
 }
 
-private class RejectingScopeStore extends StateStore {
+@:access(haxeon.ui.core.ViewRoot) private class RejectingScopeStore extends StateStore {
 	override public function installScope(owner:haxeon.ui.core.RenderScope):Void {
 		throw "Expected installation failure";
 	}

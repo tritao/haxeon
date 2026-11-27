@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
@@ -27,12 +28,10 @@ class WindowChrome implements View {
 		this.cursor = cursor;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(key, function() {
-			var node = child.build(context);
-			if (node == null || node.parent != null)
-				throw "A window chrome child must produce one unparented render root";
-			return node.setWindowDecoration(kind, cursor);
-		});
+	public function build(context:BuildContext):ViewRoot {
+		var modifier = new haxeon.ui.core.RootModifier();
+		modifier.windowDecoration = kind;
+		modifier.windowDecorationCursor = cursor;
+		return context.withScope(key, function() return context.build(child, modifier));
 	}
 }

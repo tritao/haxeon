@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.layout;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.KeyedView;
 
 import haxeon.ui.LayoutNode;
@@ -24,7 +25,7 @@ class Column implements View {
 		this.style.direction = LayoutDirection.TopToBottom;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var id = context.withScope(key, function() return context.rootId("column"));
 		return buildWithId(context, id);
 	}

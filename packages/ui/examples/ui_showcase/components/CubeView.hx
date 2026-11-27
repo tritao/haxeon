@@ -1,4 +1,5 @@
 package components;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Image;
 
@@ -41,7 +42,7 @@ class CubeView implements View {
 		this.speed = speed;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var id = context.id("cube-view");
 			var painterState:State<CubeViewPainter> = context.resourceState(id,

@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
@@ -59,10 +60,10 @@ class IconButton implements ScopeView {
 			other.style) == 0 && enabled == other.enabled && (onClick == null) == (other.onClick == null);
 	}
 
-	public function buildBody(context:BuildContext):RenderNode return buildButton(context,
+	public function buildBody(context:BuildContext):ViewRoot return buildButton(context,
 		context.rootId("icon-button"));
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		var flags = context.styleStates(id, "button", key, key, ["icon-button"], ["button", "icon-button"]);

@@ -59,8 +59,18 @@ class RootModifier {
 	/** Replaces the pointer shape over the root (`RenderNode.cursor`). */
 	public var cursor:Null<CursorShape> = null;
 
+	/**
+	 * Makes the root a window decoration region (`RenderNode.setWindowDecoration`), such as a title bar to drag the window
+	 * by, with `windowDecorationCursor` as its pointer shape when set.
+	 */
+	public var windowDecoration:Null<nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind> = null;
+
+	/** The pointer shape over a window decoration region; see `windowDecoration`. */
+	public var windowDecorationCursor:Null<CursorShape> = null;
+
 	final listeners:Array<ModifierListener> = [];
 	final resolvedHandlers:Array<ResolvedLayoutItem->Void> = [];
+	final rootHandlers:Array<ViewRoot->Void> = [];
 	final overlays:Array<RenderNode> = [];
 
 	/** A modifier that changes nothing until its fields are set or its methods called. */
@@ -78,6 +88,22 @@ class RootModifier {
 		if (handler == null) throw "Resolved geometry handlers cannot be null";
 		resolvedHandlers.push(handler);
 		return this;
+	}
+
+	/**
+	 * Calls `handler` with the root each time this modifier is applied to it, after the body built it: how a caller learns
+	 * the root's ID, to focus it or to recognize it as an event's target.
+	 */
+	public function onRoot(handler:ViewRoot->Void):RootModifier {
+		if (handler == null) throw "Root handlers cannot be null";
+		rootHandlers.push(handler);
+		return this;
+	}
+
+	/** A view that builds `view` with this modifier: for a view that something else builds, such as a popup's content. */
+	public function modify(view:View):View {
+		if (view == null) throw "A view is required";
+		return new ModifiedView(view, this);
 	}
 
 	/** Adds `child`, built by the caller in this pass, after the root's own children. */
@@ -113,11 +139,13 @@ class RootModifier {
 		if (tabIndex != null) root.tabIndex = tabIndex;
 		if (commandScope != null) root.commandScope = commandScope;
 		if (cursor != null) root.cursor = cursor;
+		if (windowDecoration != null) root.setWindowDecoration(windowDecoration, windowDecorationCursor);
 		applied.handlerStart = root.handlerCount();
 		for (listener in listeners) root.on(listener.kind, listener.handler, listener.phase);
 		applied.resolvedStart = root.resolvedHandlerCount();
 		for (handler in resolvedHandlers) root.onResolved(handler);
 		for (child in overlays) root.add(child);
+		for (handler in rootHandlers) handler(root);
 		return applied;
 	}
 }
@@ -141,6 +169,8 @@ class AppliedModifier {
 	final tabIndex:Int;
 	final commandScope:Null<String>;
 	final cursor:Null<CursorShape>;
+	final windowDecoration:Null<nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind>;
+	final windowDecorationCursor:Null<CursorShape>;
 	@:allow(haxeon.ui.core.RootModifier) var handlerStart = 0;
 	@:allow(haxeon.ui.core.RootModifier) var resolvedStart = 0;
 
@@ -163,6 +193,8 @@ class AppliedModifier {
 		tabIndex = root.tabIndex;
 		commandScope = root.commandScope;
 		cursor = root.cursor;
+		windowDecoration = root.windowDecoration;
+		windowDecorationCursor = root.windowDecorationCursor;
 	}
 
 	/** Restores what the root's body built: the replaced values, without the listeners and children the modifier added. */
@@ -182,11 +214,28 @@ class AppliedModifier {
 		if (modifier.hitTestSelf != null) root.hitTestSelf = hitTestSelf;
 		if (modifier.tabIndex != null) root.tabIndex = tabIndex;
 		if (modifier.commandScope != null) root.commandScope = commandScope;
-		if (modifier.cursor != null) root.cursor = cursor;
+		// A window decoration region also sets the cursor.
+		if (modifier.cursor != null || modifier.windowDecoration != null) root.cursor = cursor;
+		if (modifier.windowDecoration != null) {
+			root.windowDecoration = windowDecoration;
+			root.windowDecorationCursor = windowDecorationCursor;
+		}
 		root.removeHandlers(handlerStart, modifier.listenerCount());
 		root.removeResolvedHandlers(resolvedStart, modifier.resolvedCount());
 		for (child in modifier.overlayNodes()) if (child.parent == root) child.detach();
 	}
+}
+
+private class ModifiedView implements View {
+	final view:View;
+	final modifier:RootModifier;
+
+	public function new(view:View, modifier:RootModifier) {
+		this.view = view;
+		this.modifier = modifier;
+	}
+
+	public function build(context:BuildContext):ViewRoot return context.build(view, modifier);
 }
 
 private class ModifierListener {

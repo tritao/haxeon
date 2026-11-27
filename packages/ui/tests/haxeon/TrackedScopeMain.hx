@@ -6,25 +6,26 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.theme.Theme;
 
-class ScopeLeaf implements View {
+@:access(haxeon.ui.core.ViewRoot) class ScopeLeaf implements View {
 	public function new() {}
-	public function build(context:BuildContext):RenderNode return context.createNode(context.rootId("leaf"),
+	public function build(context:BuildContext):ViewRoot return context.createNode(context.rootId("leaf"),
 		LayoutVisualKind.Box);
 }
 
-class ScopeResourceLeaf implements View {
+@:access(haxeon.ui.core.ViewRoot) class ScopeResourceLeaf implements View {
 	final key:String;
 	public static var released = 0;
 	public function new(key:String) this.key = key;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		context.resourceState(context.id("resource-" + key), () -> key, _ -> released++);
 		return context.createNode(context.rootId("resource-leaf"), LayoutVisualKind.Box);
 	}
 }
 
-class TrackedScopeMain {
+@:access(haxeon.ui.core.ViewRoot) class TrackedScopeMain {
 	static function main():Int {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
@@ -40,7 +41,7 @@ class TrackedScopeMain {
 		var decoration = context.createNode(context.rootId("decoration"), LayoutVisualKind.Box);
 		var modifier = new RootModifier();
 		modifier.add(decoration);
-		var root = context.trackReads(() -> context.build(scope, modifier));
+		var root = context.trackReads(() -> context.build(scope, modifier).node());
 		store.endFrame();
 		if (runs != 1 || !read.hasFieldReaders(0)) return 1;
 		unrelated.value = 1;
@@ -80,7 +81,7 @@ class TrackedScopeMain {
 				return new ScopeLeaf();
 			});
 		});
-		var nestedRoot = context.trackReads(() -> nested.build(context));
+		var nestedRoot = context.trackReads(() -> nested.build(context).node());
 		store.endFrame();
 		if (childRuns != 1 || !childSource.hasFieldReaders(0)) return 9;
 		childSource.value = 1;
@@ -90,7 +91,7 @@ class TrackedScopeMain {
 		var resourceChoice = new Signal<Bool>(true);
 		context.beginFrame();
 		var resources = new TrackedScope("resources", () -> new ScopeResourceLeaf(resourceChoice.value ? "a" : "b"));
-		var resourceRoot = context.trackReads(() -> resources.build(context));
+		var resourceRoot = context.trackReads(() -> resources.build(context).node());
 		store.endFrame();
 		resourceChoice.value = false;
 		context.flushRenderScopes(resourceRoot);
@@ -114,12 +115,12 @@ class TrackedScopeMain {
 			return new ScopeLeaf();
 		});
 		context.beginFrame();
-		var replacementRoot = context.trackReads(() -> replacement().build(context));
+		var replacementRoot = context.trackReads(() -> replacement().build(context).node());
 		store.endFrame();
 		context.beginFrame();
 		rejectReplacement = true;
 		var failedReplacement = false;
-		try context.trackReads(() -> replacement().build(context)) catch (_:Dynamic) failedReplacement = true;
+		try context.trackReads(() -> replacement().build(context).node()) catch (_:Dynamic) failedReplacement = true;
 		store.endFrame();
 		rejectReplacement = false;
 		if (!failedReplacement || !replacementSource.hasFieldReaders(0)) return 21;
@@ -127,7 +128,7 @@ class TrackedScopeMain {
 		context.flushRenderScopes(replacementRoot);
 		if (replacementRuns != 2) return 22;
 		context.beginFrame();
-		replacementRoot = context.trackReads(() -> replacement().build(context));
+		replacementRoot = context.trackReads(() -> replacement().build(context).node());
 		store.endFrame();
 		replacementSource.value = 2;
 		context.flushRenderScopes(replacementRoot);
@@ -142,7 +143,7 @@ class TrackedScopeMain {
 			cachedRuns++;
 			return new ScopeResourceLeaf("cached");
 		});
-		var cachedRoot = context.trackReads(() -> cachedResource.build(context));
+		var cachedRoot = context.trackReads(() -> cachedResource.build(context).node());
 		var cachedIds = context.stateIdsUsedSince(cachedMark);
 		store.endFrame();
 		var releasedBeforeHide = ScopeResourceLeaf.released;

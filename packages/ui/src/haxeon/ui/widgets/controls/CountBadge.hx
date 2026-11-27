@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutNode;
 
@@ -16,7 +17,7 @@ class CountBadge implements View {
 	final count:Int;
 	/** A badge showing `count`, for a control whose own accessible label already says it. */
 	public function new(count:Int) this.count = count;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fit(22);
 		style.height = LayoutAxis.fixed(18);

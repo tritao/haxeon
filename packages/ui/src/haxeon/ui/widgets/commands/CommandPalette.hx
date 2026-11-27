@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.commands;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.widgets.KeyedView;
@@ -64,7 +65,7 @@ class CommandPalette implements View {
 		this.onResult = onResult;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var commands = registry == null ? context.commands : registry;
 			var actualContext = invocationContext == null ? context.commandContext : invocationContext;
@@ -189,7 +190,7 @@ private class CommandPaletteItem implements View {
 		this.hovered = hovered;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var color = !enabled ? context.theme.tokens.textDisabled : selected
 			? context.theme.tokens.textOnAccent : context.theme.tokens.textPrimary;
 		var rowStyle = new LayoutStyle();

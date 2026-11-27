@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Image;
@@ -45,7 +46,7 @@ class ImageView implements View {
 		} else this.style = style.copy();
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("image");
 			var computed = context.styleResolver.resolve(context.styleTarget(nodeId, "image", key, key, null,

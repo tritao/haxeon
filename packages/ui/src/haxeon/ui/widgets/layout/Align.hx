@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.layout;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -34,7 +35,7 @@ class Align implements View {
 		this.style.childDistribution = LayoutDistribution.Center;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var id = context.rootId("align");
 			var computed = context.resolveStyle(context.styleTarget(id, "align", key.rawValue, key.rawValue, null,

@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.commands;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
@@ -23,7 +24,7 @@ class ShortcutKeycaps implements View {
 		this.selected = selected;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var children:Array<KeyedView> = [];
 		var color = selected ? context.theme.tokens.textOnAccent : context.theme.tokens.textSecondary;
 		for (alternative in shortcut.split(",")) {
@@ -70,7 +71,7 @@ private class ShortcutKeycap implements View {
 		this.selected = selected;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var tokens = context.theme.tokens;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fit(24.0);

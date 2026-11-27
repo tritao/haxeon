@@ -45,10 +45,13 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 	public var disposed(default, null):Bool = false;
 	public var pending(default, null):Bool = false;
 
-	/** What the caller adds to the root, applied after each body run; `applied` takes it off again. */
-	var modifier:Null<RootModifier> = null;
+	/**
+	 * What callers add to the root, applied in order after each body run; `applied` takes them off again. The first is
+	 * the direct caller's; a plain view that returns this root unchanged, such as a wrapper, adds its caller's after it.
+	 */
+	final modifiers:Array<RootModifier> = [];
 
-	var applied:Null<AppliedModifier> = null;
+	final applied:Array<AppliedModifier> = [];
 
 	public function new(resourceId:ScopeResourceId,
 			identityId:Int,
@@ -169,37 +172,48 @@ internal class RenderScope extends ReactiveDependencySet implements Disposable {
 		if (previous != null) context.renderScopeRebuilt(next);
 	}
 
-	/** What a caller changed on this root by hand, beside its modifier; null when nothing. */
+	/** What a caller changed on this root by hand, beside its modifiers; null when nothing. */
 	@:allow(haxeon.ui.core.BuildContext) function callerChanges():Null<String> {
 		if (root == null || boundary == null) return null;
-		if (applied != null) applied.remove();
+		removeApplied();
 		var change = boundary.callerChanges(root);
-		applied = modifier == null ? null : modifier.apply(root);
+		for (modifier in modifiers) applied.push(modifier.apply(root));
 		return change;
 	}
 
-	@:allow(haxeon.ui.core.BuildContext) function hasModifier():Bool return modifier != null;
+	@:allow(haxeon.ui.core.BuildContext) function hasModifier():Bool return modifiers.length > 0;
 
-	/** Replaces the caller's modifier, keeping the body. */
+	/** Replaces the callers' modifiers with the direct caller's `next`, keeping the body. */
 	@:allow(haxeon.ui.core.BuildContext) function setModifier(next:Null<RootModifier>):Void {
-		if (applied != null) applied.remove();
-		applied = null;
-		modifier = next;
-		if (next != null && root != null) applied = next.apply(root);
+		removeApplied();
+		modifiers.resize(0);
+		if (next != null) addModifier(next);
+	}
+
+	/** Adds the modifier of a caller further out, applied after the ones before it. */
+	@:allow(haxeon.ui.core.BuildContext) function addModifier(next:RootModifier):Void {
+		modifiers.push(next);
+		if (root != null) applied.push(next.apply(root));
+	}
+
+	/** Takes the applied modifiers off, the last applied first. */
+	function removeApplied():Void {
+		var index = applied.length;
+		while (index > 0) applied[--index].remove();
+		applied.resize(0);
 	}
 
 	static function removeSharedModifiers(scope:RenderScope, shared:RenderNode):Void {
 		var outer = scope.parentScope;
 		if (outer != null && outer.root == shared) removeSharedModifiers(outer, shared);
-		if (scope.applied != null) scope.applied.remove();
-		scope.applied = null;
+		scope.removeApplied();
 	}
 
-	/** This scope's modifier, then each forwarding ancestor's, as their builds applied them. */
+	/** This scope's modifiers, then each forwarding ancestor's, as their builds applied them. */
 	function applySharedModifiers(node:RenderNode):Void {
 		var scope:Null<RenderScope> = this;
 		while (scope != null && scope.root == node) {
-			if (scope.modifier != null) scope.applied = scope.modifier.apply(node);
+			for (modifier in scope.modifiers) scope.applied.push(modifier.apply(node));
 			scope = scope.parentScope;
 		}
 	}
@@ -262,7 +276,7 @@ interface ScopeView extends View {
 	function inputsEqual(previous:ScopeView):Bool;
 
 	/** Builds the component's content inside its own scope, which `BuildContext.mountComponent` opens for it. */
-	function buildBody(context:BuildContext):RenderNode;
+	function buildBody(context:BuildContext):ViewRoot;
 }
 
 /** A component's actual body root carries its native owner; ordinary descendants carry no owner field. */

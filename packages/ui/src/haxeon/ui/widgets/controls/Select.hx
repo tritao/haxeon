@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
@@ -61,7 +62,7 @@ class Select<T> implements View {
 		}
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var rootStyle = style.copy();
 			rootStyle.direction = LayoutDirection.TopToBottom;
@@ -115,7 +116,7 @@ class Select<T> implements View {
 			var storedActive:Int = activeState.value;
 			if (active != storedActive) root.onResolved(function(_) activeState.update(active));
 
-			var triggerNode:RenderNode = null;
+			var triggerNode:Null<ViewRoot> = null;
 			// The open popup's option rows, so the trigger's keys can move focus into the list.
 			var popupLink = context.lazyState(context.id("popup-link"),
 				function() return new SelectionPopupLink()).value;

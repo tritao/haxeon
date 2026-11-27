@@ -151,8 +151,10 @@ The rules the whole UI follows:
   reads only the states some rule selects for it and resolves the style. Routing owns `RenderNode.states`; the widget
   supplies only its authored states (disabled, selected, checked). Small values (`TextSelection`, `Insets`, `Color`,
   `Rect`) are structs; `LayoutStyle` becomes one only if measurements allow.
-- **Roots.** A body returns a read-only root type; callers add to it only through `RootModifier`, enforced by the type
-  rather than the debug check.
+- **Roots.** A view's build returns a `ViewRoot`, which a caller can place and read (`walk` gives read-only `NodeInfo`)
+  but not change; it adds to it only through `RootModifier`, and `RootModifier.modify` applies one to a view something
+  else builds. Only the framework (core, components, the dock caches, the tooltip overlay host) reaches the node.
+  Widgets that compose a text primitive into a node of their own use its `makeNode` factory.
 - **The render tree is output-only.** Scroll offsets, fades and animated transforms are layer properties (ADR 0002
   stage 7); independent nodes are placed after layout without another solve (stage 6); `willEditRetained` goes.
 - **One kind of view.** `View` and `ScopeView` merge into one component interface, with a cheap form for small bodies
@@ -167,7 +169,7 @@ defers in favour of the runtime checks.
 
 ## Next steps
 
-1. Without compiler work: the read-only root type; the `StyleIdentity` struct with the styled-node factory, where
+1. Without compiler work: the read-only root type (done: `ViewRoot`); the `StyleIdentity` struct with the styled-node factory, where
    routing owns `RenderNode.states`; inputs structs for `TextField` and `Tabs` with handwritten constructors.
 2. Haxeon: named arguments, then the memberwise initializer and `with` ([NAMED_ARGUMENTS.md](../../../docs/design/NAMED_ARGUMENTS.md)).
    Then move every component's configuration into an inputs struct.

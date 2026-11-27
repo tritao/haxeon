@@ -20,6 +20,7 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.Semantics;
@@ -52,14 +53,14 @@ private class LabelProbe implements ScopeView {
 	public function inputsEqual(previous:ScopeView):Bool {
 		return Std.isOfType(previous, LabelProbe) && (!honest || (cast previous:LabelProbe).label == label);
 	}
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
-	public function buildBody(context:BuildContext):RenderNode return new haxeon.ui.widgets.text.Text(label)
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
+	public function buildBody(context:BuildContext):ViewRoot return new haxeon.ui.widgets.text.Text(label)
 		.build(context);
 }
 
 private class DecoratedControl implements View {
 	public var presses = 0;
-	public var builtNode(default, null):Null<RenderNode> = null;
+	public var builtNode(default, null):Null<ViewRoot> = null;
 	public final key:String;
 	final make:BuildContext->View;
 	final decorate:Null<(BuildContext, RootModifier) -> Void>;
@@ -74,7 +75,7 @@ private class DecoratedControl implements View {
 	public static function ofNodes(key:String, make:BuildContext->RenderNode):DecoratedControl
 		return new DecoratedControl(key, _ -> new NodeView(make));
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var modifier = new RootModifier();
 		modifier.on(UiEventKind.PointerDown, function(_) presses++);
 		modifier.zIndex = 3;
@@ -96,7 +97,7 @@ private class NodeView implements View {
 
 	public function new(make:BuildContext->RenderNode) this.make = make;
 
-	public function build(context:BuildContext):RenderNode return make(context);
+	public function build(context:BuildContext):ViewRoot return make(context);
 }
 
 /** Registers listeners during routing to exercise hover preflight and the dispatcher snapshot. */
@@ -104,7 +105,7 @@ private class NodeView implements View {
 	public final events:Array<String> = [];
 	public var alternate:Bool = false;
 	public function new() {}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var rootStyle = new LayoutStyle();
 		rootStyle.width = LayoutAxis.fixed(160);
 		rootStyle.height = LayoutAxis.fixed(80);
@@ -332,8 +333,8 @@ private class EditedGauge implements ScopeView {
 	public function new(key:String) this.key = key;
 	public function scopeKey():String return key;
 	public function inputsEqual(previous:ScopeView):Bool return previous == this;
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
-	public function buildBody(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
+	public function buildBody(context:BuildContext):ViewRoot {
 		var shown = level.value;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(100.0);
@@ -366,7 +367,7 @@ private class FieldDecoration implements View {
 		this.onPress = onPress;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var modifier = new RootModifier();
 		modifier.on(UiEventKind.PointerDown, function(_) onPress());
 		return context.build(field, modifier);
@@ -462,7 +463,7 @@ private class PopupRig implements View {
 			return this;
 		});
 	}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(150);
 		style.height = LayoutAxis.fixed(36);
@@ -476,7 +477,7 @@ private class PopupRig implements View {
 		return root;
 	}
 	/** The popup's description from the current state, with what this caller adds to its root. */
-	public function describe(context:BuildContext):RenderNode {
+	public function describe(context:BuildContext):ViewRoot {
 		hostBuilds++;
 		var popup = new haxeon.ui.widgets.controls.SelectionPopup(options, [for (index in 0...24) index],
 			chosenSignal.value, activeSignal.value, 0, 0, 8, 8, 150, 36, 150, 36, link, index -> {
@@ -523,7 +524,7 @@ private class PopupRig implements View {
 private class PopupHost implements View {
 	final rig:PopupRig;
 	public function new(rig:PopupRig) this.rig = rig;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.grow();

@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.overlays;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -92,7 +93,7 @@ class Tooltip implements View {
 		this.y = y;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		if (!hoverEnabled) return context.withScope(key, function() return anchor.build(context));
 		if (placement != null) return buildPositioned(context);
 		return context.withScope(key, function() {
@@ -293,11 +294,17 @@ class Tooltip implements View {
 			tip.computedStyle = computed;
 			tip.setStyleIdentity("tooltip", key.rawValue, key.rawValue, null, ["tooltip"]);
 			// A hidden tooltip builds no content: showing it rebuilds, and the layout feedback below positions it that frame.
+			// The tooltip owns the box around its content, whose width placement limits; the content's own root is the
+			// content view's.
 			var label:Null<RenderNode> = null;
 			if (tipStyle.visible) {
-				label = context.withStyleParent(computed,
-					function() return context.withScope(new Key("content"), function() return content.build(context)));
-				tip.add(label);
+				var box = context.createNode(context.rootId("tooltip-content"), LayoutVisualKind.Box,
+					new LayoutStyle());
+				box.hitTestSelf = false;
+				box.add(context.withStyleParent(computed,
+					function() return context.withScope(new Key("content"), function() return content.build(context))));
+				tip.add(box);
+				label = box;
 			}
 			// The tooltip resolves after its anchor sibling; the parent callback
 			// runs before either child has geometry on a freshly built tree.
@@ -364,7 +371,7 @@ private class AnonymousTooltipContent implements View {
 		this.showContent = showContent;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var nodeId = context.rootId("tooltip");
 		var computed = context.resolveStyle(context.styleTarget(nodeId, "tooltip", "tooltip", "tooltip", null,
 			["tooltip"]),
@@ -528,7 +535,7 @@ class TooltipOverlayHost implements View {
 	final content:View;
 	/** Hosts `content`, lifting its tooltips above it so a clipped container does not cut them off. */
 	public function new(content:View) this.content = content;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var lifted = context.lazyState(context.id("lifted-tooltips"),
 			function() return new Array<{
 				tip:RenderNode,
@@ -537,7 +544,8 @@ class TooltipOverlayHost implements View {
 		// Retained anchors must recover their tooltip before being reused.
 		for (entry in lifted) entry.anchor.add(entry.tip.detach());
 		lifted.resize(0);
-		var root = content.build(context);
+		// Hosting lifts nodes out of its content's subtree, which only an overlay host may do.
+		var root = content.build(context).node();
 		var tooltips:Array<RenderNode> = [];
 		root.walk(function(node) {
 			if (node.styleType == "tooltip") tooltips.push(node);
@@ -546,11 +554,10 @@ class TooltipOverlayHost implements View {
 			lifted.push({tip: tip, anchor: tip.parent});
 			root.add(tip.detach());
 		}
-		// A self-updating widget (Tabs) rebuilds without the view, so what it made has tooltips still in their anchors while the
-		// ones lifted by the build before stay in the overlay: both would carry one ID. Lift what a patch made in the place of
-		// the tooltip it replaces.
-		// A render scope that runs again alone does the same. When the content is that scope, its new root took the
-		// overlay's place (and the lifted tooltips, which its boundary keeps as the caller's).
+		// A component that runs again alone rebuilds without the view, so what it made has tooltips still in their anchors
+		// while the ones lifted by the build before stay in the overlay: both would carry one ID. Lift what it made in the place
+		// of the tooltip it replaces. When the content is that component, its new root took the overlay's place (and the
+		// lifted tooltips, which its boundary keeps as the caller's).
 		context.onPatched = function(patched) {
 			var overlay = context.currentRoot(root);
 			var made:Array<RenderNode> = [];

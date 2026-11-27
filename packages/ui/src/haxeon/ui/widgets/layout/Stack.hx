@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.layout;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -24,7 +25,7 @@ class Stack implements View {
 		this.style = style == null ? defaultStyle() : style.copy();
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var id = context.rootId("stack");
 			var computed = context.resolveStyle(context.styleTarget(id, "stack", key.rawValue, key.rawValue, null,

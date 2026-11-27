@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.layout;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
@@ -92,7 +93,7 @@ class SplitView implements View {
 		this.dividerStyle = resolved.dividerStyle == null ? defaultDividerStyle() : resolved.dividerStyle.copy();
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var horizontal = orientation == SplitOrientation.Horizontal;
 			var rootStyle = style.copy();
@@ -297,7 +298,7 @@ class SplitView implements View {
 	}
 
 	/** Keep nested floating content in its pane's layer, below the resize chrome. */
-	function paneContent(context:BuildContext, key:String, content:RenderNode):RenderNode {
+	function paneContent(context:BuildContext, key:String, content:ViewRoot):RenderNode {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.grow();

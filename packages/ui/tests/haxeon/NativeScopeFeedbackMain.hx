@@ -12,6 +12,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.style.StyleState;
 
 /** A component the outer scope describes with equal inputs every time, so its body is kept. */
@@ -28,14 +29,14 @@ class FeedbackBody implements ScopeView {
 		var other:FeedbackBody = cast previous;
 		return value == other.value && revision == other.revision;
 	}
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
-	public function buildBody(context:BuildContext):RenderNode return new FeedbackGeometry(revision).build(context);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
+	public function buildBody(context:BuildContext):ViewRoot return new FeedbackGeometry(revision).build(context);
 }
 
 class FeedbackGeometry implements View {
 	final revision:Signal<Int>;
 	public function new(revision:Signal<Int>) this.revision = revision;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(100);
 		style.height = LayoutAxis.fixed(100);

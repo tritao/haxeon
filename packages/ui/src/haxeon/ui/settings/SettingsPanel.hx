@@ -1,4 +1,5 @@
 package haxeon.ui.settings;
+import haxeon.ui.core.ViewRoot;
 
 import Observable;
 import haxeon.ui.core.UiEvent;
@@ -195,7 +196,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		return inspector;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		if (storeRevision != catalog.store.revision) refresh();
 		var headerStyle = new LayoutStyle();
 		headerStyle.width = LayoutAxis.grow();
@@ -205,22 +206,21 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		headerStyle.childGap = 12.0;
 		var searchStyle = new LayoutStyle();
 		searchStyle.width = LayoutAxis.grow();
-		var searchNode:Null<RenderNode> = null,
-			categoryNode:Null<RenderNode> = null,
-			inspectorNode:Null<RenderNode> = null;
+		var searchNode:Null<ViewRoot> = null,
+			categoryNode:Null<ViewRoot> = null,
+			inspectorNode:Null<ViewRoot> = null;
 		var search = new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter Settings");
-		function firstControl(node:Null<RenderNode>):Null<haxeon.ui.core.WidgetId> {
+		function firstControl(node:Null<ViewRoot>):Null<haxeon.ui.core.WidgetId> {
 			var first:Null<haxeon.ui.core.WidgetId> = null;
-			if (node != null) node.walk(function(child) {
+			if (node != null) node.walk(function(child:haxeon.ui.core.NodeInfo) {
 				if (first == null && child.focusable && child.enabled
-					&& child.styleClasses.indexOf("inspector-section-header")
-					< 0 && child.styleType != "scrollbar-thumb" && (child.semantics == null
-					|| child.semantics.role != haxeon.ui.semantics.Semantics.AccessibilityRole.ScrollArea)) first =
-					child.id;
+					&& !child.hasStyleClass("inspector-section-header")
+					&& child.styleType != "scrollbar-thumb"
+					&& child.role != haxeon.ui.semantics.Semantics.AccessibilityRole.ScrollArea) first = child.id;
 			});
 			return first;
 		}
-		function focusRegion(node:Null<RenderNode>):Bool {
+		function focusRegion(node:Null<ViewRoot>):Bool {
 			var target = firstControl(node);
 			return target != null && context.requestFocus(target);
 		}
@@ -311,15 +311,8 @@ class SettingsPanel implements View implements Observable implements Disposable 
 			context.theme.tokens.textSecondary,
 			null,
 			haxeon.ui.theme.TextRole.Caption)));
-		var root = new Column(key, children, columnStyle).build(context);
-		if (focusSearchPending) {
-			var target = firstControl(searchNode);
-			if (target != null) {
-				context.requestFocusAfterLayout(target);
-				focusSearchPending = false;
-			}
-		}
-		root.on(haxeon.ui.core.UiEvent.UiEventKind.KeyDown, function(event) {
+		var keys = new haxeon.ui.core.RootModifier();
+		keys.on(haxeon.ui.core.UiEvent.UiEventKind.KeyDown, function(event) {
 			if (event.key == haxeon.ui.core.UiKey.F
 				&& (event.modifiers.contains(haxeon.ui.core.UiEvent.UiModifier.Control)
 				|| event.modifiers.contains(haxeon.ui.core.UiEvent.UiModifier.Super))) {
@@ -329,7 +322,8 @@ class SettingsPanel implements View implements Observable implements Disposable 
 				}
 				return;
 			}
-			var inSearch = searchNode != null && searchNode.find(event.target) != null;
+			var search = searchNode;
+			var inSearch = search != null && search.contains(event.target);
 			if (inSearch && event.key == haxeon.ui.core.UiKey.Down && event.modifiers.isEmpty()) {
 				if (focusRegion(categoryNode)) {
 					event.preventDefault();
@@ -341,7 +335,10 @@ class SettingsPanel implements View implements Observable implements Disposable 
 				|| !event.modifiers.remove(haxeon.ui.core.UiEvent.UiModifier.Shift).isEmpty()) return;
 			var regions = [searchNode, categoryNode, inspectorNode];
 			var index = 0;
-			for (i in 0...regions.length) if (regions[i] != null && regions[i].find(event.target) != null) index = i;
+			for (i in 0...regions.length) {
+				var region = regions[i];
+				if (region != null && region.contains(event.target)) index = i;
+			}
 			var step = event.modifiers.contains(haxeon.ui.core.UiEvent.UiModifier.Shift) ? -1 : 1;
 			for (offset in 1...4) if (focusRegion(regions[(index + step * offset + 6) % 3])) {
 				event.preventDefault();
@@ -349,10 +346,18 @@ class SettingsPanel implements View implements Observable implements Disposable 
 				break;
 			}
 		}, UiEventPhase.Capture);
+		var root = context.build(new Column(key, children, columnStyle), keys);
+		if (focusSearchPending) {
+			var target = firstControl(searchNode);
+			if (target != null) {
+				context.requestFocusAfterLayout(target);
+				focusSearchPending = false;
+			}
+		}
 		return root;
 	}
 
-	function compactBody(inspector:View, onCategory:RenderNode->Void):View {
+	function compactBody(inspector:View, onCategory:ViewRoot->Void):View {
 		var options = [for (category in categories()) new haxeon.ui.widgets.controls.Select.SelectOption(category,
 			[for (part in category.split("/")) SettingsCatalog.labelOf(part)].join(" › ")
 			+ " (" + categoryCount(category) + ")",
@@ -486,12 +491,12 @@ private class SettingsTreeModel implements TreeViewModel {
 
 private class SettingsFocusRegion implements View {
 	final child:View;
-	final built:RenderNode->Void;
-	public function new(child:View, built:RenderNode->Void) {
+	final built:ViewRoot->Void;
+	public function new(child:View, built:ViewRoot->Void) {
 		this.child = child;
 		this.built = built;
 	}
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var node = child.build(context);
 		built(node);
 		return node;

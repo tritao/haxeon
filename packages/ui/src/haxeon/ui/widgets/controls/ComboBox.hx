@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.text.TextField;
 
 import haxeon.ui.Color;
@@ -82,7 +83,7 @@ class ComboBox<T> implements View {
 		enabled = true;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var rootStyle = style.copy();
 			rootStyle.direction = LayoutDirection.TopToBottom;
@@ -156,7 +157,7 @@ class ComboBox<T> implements View {
 			var storedActive:Int = activeState.value;
 			if (active != storedActive) root.onResolved(function(_) activeState.update(active));
 
-			var inputNode:RenderNode = null;
+			var inputNode:Null<ViewRoot> = null;
 			// The open popup's option rows, so the trigger's keys can move focus into the list.
 			var popupLink = context.lazyState(context.id("popup-link"),
 				function() return new SelectionPopupLink()).value;
@@ -306,7 +307,8 @@ class ComboBox<T> implements View {
 				if (openState.value == true) close();
 				else {
 					open();
-					context.requestFocus(inputNode.id);
+					var shown = inputNode;
+					if (shown != null) context.requestFocus(shown.id);
 				}
 			}, "toggle", enabled, ButtonVariant.Navigation, null, null, null, null, null,
 				SelectionIndicator.chevron("toggle-indicator",

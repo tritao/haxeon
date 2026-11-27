@@ -548,7 +548,7 @@ class UiContext implements Disposable {
 		var next = patchOnly ? (root == null
 			? null : buildContext.currentRoot(root))
 			: buildContext.trackReads(function() return buildContext.withScope(new haxeon.ui.core.Key("root"),
-			function() return view == null ? null : view.build(buildContext)));
+			function() return view == null ? null : view.build(buildContext).node()));
 		if (!patchOnly) buildContext.captureRootDependencies();
 		if (next == null
 			|| (!patchOnly && next.parent != null)) throw "A view must produce one unparented render tree root";

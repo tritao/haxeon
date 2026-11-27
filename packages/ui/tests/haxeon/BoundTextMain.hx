@@ -7,7 +7,7 @@ import haxeon.ui.core.StateStore;
 import haxeon.ui.core.TreeDiff;
 import haxeon.ui.theme.Theme;
 
-class BoundTextMain {
+@:access(haxeon.ui.core.ViewRoot) class BoundTextMain {
 	static function main():Int {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
@@ -20,7 +20,7 @@ class BoundTextMain {
 			reads++;
 			return source.value;
 		});
-		var node = context.trackReads(() -> binding.build(context));
+		var node = context.trackReads(() -> binding.build(context).node());
 		store.endFrame();
 		var contentRevision = node.contentRevision;
 		var geometryRevision = node.geometryRevision;
@@ -62,7 +62,7 @@ class BoundTextMain {
 		var node = new BoundText("hidden", () -> {
 			reads++;
 			return source.value;
-		}).build(context);
+		}).build(context).node();
 		root.add(node);
 		context.stateStore.endFrame();
 		source.value = "two";

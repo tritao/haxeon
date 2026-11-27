@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
@@ -137,9 +138,9 @@ class Button implements ScopeView {
 			&& (onClickEvent == null) == (other.onClickEvent == null);
 	}
 
-	public function buildBody(context:BuildContext):RenderNode return buildButton(context, context.rootId("button"));
+	public function buildBody(context:BuildContext):ViewRoot return buildButton(context, context.rootId("button"));
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		var resolvedClasses = classes.copy();

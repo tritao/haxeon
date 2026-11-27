@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.layout;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
@@ -49,7 +50,7 @@ class AppShell implements View {
 		this.bodyStyle.direction = LayoutDirection.LeftToRight;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var bodyChildren:Array<KeyedView> = [];
 			if (sidebar != null)

@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
@@ -27,7 +28,7 @@ class GestureDetector implements View {
 		this.style = style == null ? new LayoutStyle() : style.copy();
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var node = context.createNode(context.rootId("gesture-detector"), LayoutVisualKind.Box, style);
 			node.hitTestSelf = false;

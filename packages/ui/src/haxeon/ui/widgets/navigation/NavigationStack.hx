@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.navigation;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
@@ -43,12 +44,12 @@ class NavigationStack implements ScopeView {
 		return false;
 	}
 
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		var id = context.rootId("navigation-stack");
 		return buildStack(context, id);
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildStack(context:BuildContext, id:WidgetId):RenderNode {
 		startTransition(context);

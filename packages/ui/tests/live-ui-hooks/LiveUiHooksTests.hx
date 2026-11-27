@@ -7,22 +7,23 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.CanvasView;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
 
 /** Two focusable boxes; the first runs `handler` when clicked, as the app's current code would install it. */
-private class ButtonsView implements View {
+@:access(haxeon.ui.core.ViewRoot) private class ButtonsView implements View {
 	public var handler:UiEvent->Void;
 	public function new(handler:UiEvent->Void) this.handler = handler;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(120);
 		style.height = LayoutAxis.fixed(40);
 		var root = new Column("buttons", [
 			new KeyedView("first", new CanvasView("first", function(_, _) {}, style, "First")),
 			new KeyedView("second", new CanvasView("second", function(_, _) {}, style, "Second"))
-		]).build(context);
+		]).build(context).node();
 		for (child in root.children) child.focusable = true;
 		root.children[0].on(UiEventKind.Click, handler);
 		return root;
@@ -34,7 +35,7 @@ private class ButtonsView implements View {
  * between release and the next submit is harmless, and the next submit builds afresh with the handlers the code now
  * installs, keeping focus by ID.
  */
-class LiveUiHooksTests {
+@:access(haxeon.ui.core.ViewRoot) class LiveUiHooksTests {
 	static function check(value:Bool, message:String):Void if (!value) throw message;
 
 	static function click(context:UiContext):Void {

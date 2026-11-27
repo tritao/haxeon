@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.overlays;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -48,7 +49,7 @@ class Dialog implements View {
 		dismissOnEscape = true;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var rootStyle = new LayoutStyle();
 			rootStyle.width = LayoutAxis.grow();

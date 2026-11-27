@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.commands;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.overlays.Menu;
 
 import haxeon.ui.core.BuildContext;
@@ -52,7 +53,7 @@ class CommandMenu implements View {
 		this.onResult = onResult;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var commands = registry == null ? context.commands : registry;
 		var actualContext = invocationContext == null ? context.commandContext : invocationContext;
 		var items:Array<MenuItem> = [];

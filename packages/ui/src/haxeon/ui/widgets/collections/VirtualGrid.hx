@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.collections;
 import haxeon.ui.LayoutNode;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
@@ -118,7 +119,7 @@ class VirtualGrid implements View {
 		this.fallbackViewportHeight = viewportHeight;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var stateId = context.id("scroll-state");
 			var stored:State<ScrollController> = context.state(stateId, controller);
@@ -273,7 +274,7 @@ private class VirtualGridRow implements View {
 		this.onCellBuilt = onCellBuilt;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var children:Array<KeyedView> = [];
 			children.push(new KeyedView("before",
@@ -303,13 +304,13 @@ private class VirtualGridRow implements View {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(contentWidth);
 			style.height = LayoutAxis.fixed(rowHeight);
-			var row = new Row("row", children, style).build(context);
 			var semantics = new Semantics(AccessibilityRole.Row);
 			semantics.rowCount = rowCount;
 			semantics.columnCount = columnCount;
 			semantics.rowIndex = rowIndex;
-			row.semantics = semantics;
-			return row;
+			var rowModifier = new haxeon.ui.core.RootModifier();
+			rowModifier.semantics = semantics;
+			return context.build(new Row("row", children, style), rowModifier);
 		});
 	}
 }
@@ -354,7 +355,7 @@ private class VirtualGridCell implements View {
 		this.onCellBuilt = onCellBuilt;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(columnWidth);

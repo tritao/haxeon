@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
@@ -57,7 +58,7 @@ class Spinner implements View {
 		running = true;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var node = context.createNode(context.rootId("spinner"), LayoutVisualKind.Custom, style);
 			var semantics = new Semantics(AccessibilityRole.ProgressBar, label, running ? "Indeterminate" : "Paused");

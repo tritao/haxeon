@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.controls;
+import haxeon.ui.core.ViewRoot;
 
 import Observable;
 
@@ -82,9 +83,9 @@ class ProgressBar implements ScopeView implements Observable {
 			&& haxeon.Diff.mask(style, other.style) == 0;
 	}
 
-	public function buildBody(context:BuildContext):RenderNode return buildControl(context, context.rootId("progress"));
+	public function buildBody(context:BuildContext):ViewRoot return buildControl(context, context.rootId("progress"));
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
 		var computed = context.styleResolver.resolve(context.styleTarget(nodeId, "progress-bar", key, key, null,

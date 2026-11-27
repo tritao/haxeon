@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Image;
 import haxeon.ui.LayoutStyle;
@@ -60,7 +61,7 @@ class NineSliceView implements View {
 		this.style = style == null ? new LayoutStyle() : style.copy();
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("nine-slice");
 			var computed = context.resolveStyle(context.styleTarget(nodeId, "nine-slice", key, key, null,

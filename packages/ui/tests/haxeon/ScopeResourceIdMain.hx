@@ -3,10 +3,11 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.core.WidgetId;
 
 /** Equal payloads in different resource domains must retain and dispose independently. */
-@:access(haxeon.ui.core.StateStore) class ScopeResourceIdMain {
+@:access(haxeon.ui.core.StateStore) @:access(haxeon.ui.core.ViewRoot) class ScopeResourceIdMain {
 	static var released = 0;
 	static function release():Void released++;
 
@@ -16,7 +17,7 @@ import haxeon.ui.core.WidgetId;
 		context.beginFrame();
 		store.initialize(widget, 17);
 		store.onUnmount(widget, release);
-		var root = new TrackedScope("owner", () -> new ResourceBody()).build(context);
+		var root = new TrackedScope("owner", () -> new ResourceBody()).build(context).node();
 		var owner = context.renderScopeAt(root);
 		if (owner == null || owner.resourceId.rawValue != widget.value) return 1;
 		var resource = ResourceId.scope(owner.resourceId), state = ResourceId.widget(widget);
@@ -60,7 +61,7 @@ import haxeon.ui.core.WidgetId;
 	}
 }
 
-private class ResourceBody implements View {
+@:access(haxeon.ui.core.ViewRoot) private class ResourceBody implements View {
 	public function new() {}
-	public function build(context:BuildContext):RenderNode return context.createNode(context.rootId("body"));
+	public function build(context:BuildContext):ViewRoot return context.createNode(context.rootId("body"));
 }

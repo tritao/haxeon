@@ -1,4 +1,5 @@
 package haxeon.ui.widgets;
+import haxeon.ui.core.ViewRoot;
 
 import Observable;
 import haxeon.ui.Canvas;
@@ -171,7 +172,7 @@ class GpuViewport implements View {
 		overlayRevision++;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("viewport");
 			var computed = context.resolveStyle(context.styleTarget(nodeId, "gpu-viewport", key, key, null,

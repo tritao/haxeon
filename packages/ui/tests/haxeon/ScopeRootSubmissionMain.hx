@@ -11,6 +11,7 @@ import haxeon.ui.core.RootModifier;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 
 /** A cached submission follows a replaced top-level body, with fresh verification on every changed frame. */
 class ScopeRootSubmissionMain {
@@ -41,7 +42,7 @@ private class ScopeSubmissionView implements View {
 	public var builds = 0;
 	public var focuses = 0;
 	public function new(width:Signal<Int>) scope = new TrackedScope("width", () -> new SubmissionBox(width.value));
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		builds++;
 		var modifier = new RootModifier();
 		modifier.zIndex = 7;
@@ -54,7 +55,7 @@ private class ScopeSubmissionView implements View {
 private class SubmissionBox implements View {
 	final width:Int;
 	public function new(width:Int) this.width = width;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var id = context.rootId("body"), style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(width);
 		style.height = LayoutAxis.fixed(24);

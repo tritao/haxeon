@@ -1,4 +1,5 @@
 package haxeon.ui.properties;
+import haxeon.ui.core.ViewRoot;
 
 import Observable;
 import haxeon.ui.widgets.KeyedView;
@@ -180,7 +181,7 @@ class PropertyEditor implements View implements Observable {
 		revision++;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var children:Array<KeyedView> = [];
 		var categoryKeys:Map<String, Bool> = new Map();
 		for (descriptor in descriptors) {
@@ -431,13 +432,13 @@ private class PropertyEditorRow implements ScopeView {
 			&& labelWidth == other.labelWidth && stackedRows == other.stackedRows && searchQuery == other.searchQuery;
 	}
 
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		var value = descriptor.readValue();
 		return new PropertyEditorRowContent(owner, descriptor, value).buildWithId(context,
 			context.rootId("property-row-root"));
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 }
 
 private class PropertyEditorRowContent implements View {
@@ -480,7 +481,7 @@ private class PropertyEditorRowContent implements View {
 		this.value = value;
 	}
 
-	public function build(context:BuildContext):RenderNode return buildWithId(context, null);
+	public function build(context:BuildContext):ViewRoot return buildWithId(context, null);
 
 	function buildRoot(context:BuildContext, id:Null<WidgetId>, children:Array<KeyedView>,
 			style:LayoutStyle):RenderNode {

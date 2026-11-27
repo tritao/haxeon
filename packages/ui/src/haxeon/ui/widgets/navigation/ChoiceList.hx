@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.navigation;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.reactive.Signal;
 
@@ -70,12 +71,12 @@ class ChoiceList implements ScopeView {
 		return true;
 	}
 
-	public function buildBody(context:BuildContext):RenderNode {
+	public function buildBody(context:BuildContext):ViewRoot {
 		var id = context.rootId("choice-list");
 		return buildList(context, id);
 	}
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function isSelected(itemId:String):Bool return selected.indexOf(itemId) >= 0;
 
@@ -224,7 +225,7 @@ private class RenderNodeView implements haxeon.ui.core.View {
 
 	public function new(node:RenderNode) this.node = node;
 
-	public function build(context:BuildContext):RenderNode return node;
+	public function build(context:BuildContext):ViewRoot return node;
 }
 
 /** One option in a ChoiceList; `depth` indents nested options. */

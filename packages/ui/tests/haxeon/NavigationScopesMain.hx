@@ -7,6 +7,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.widgets.navigation.BottomSheet;
 import haxeon.ui.widgets.navigation.NavigationController;
 import haxeon.ui.widgets.navigation.NavigationStack;
@@ -16,7 +17,7 @@ private class Screen implements View {
 
 	public function new(name:String) this.name = name;
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(40);
 		style.height = LayoutAxis.fixed(40);

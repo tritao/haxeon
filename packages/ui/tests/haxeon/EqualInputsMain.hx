@@ -7,10 +7,11 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
+import haxeon.ui.core.ViewRoot;
 import haxeon.ui.theme.Theme;
 
 /** A component kept while its key and value are equal, whatever builder each description brings. */
-class PropsChild implements ScopeView {
+@:access(haxeon.ui.core.ViewRoot) class PropsChild implements ScopeView {
 	final key:String;
 	final value:Int;
 	final make:Void->View;
@@ -25,48 +26,48 @@ class PropsChild implements ScopeView {
 		var other:PropsChild = cast previous;
 		return key == other.key && value == other.value;
 	}
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
-	public function buildBody(context:BuildContext):RenderNode return make().build(context);
+	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
+	public function buildBody(context:BuildContext):ViewRoot return make().build(context).node();
 }
 
-class Leaf implements View {
+@:access(haxeon.ui.core.ViewRoot) class Leaf implements View {
 	final source:Signal<Int>;
 	public static var builds = 0;
 	public function new(source:Signal<Int>) this.source = source;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		builds++;
 		var value = source.value;
 		return context.createNode(context.rootId("leaf"), LayoutVisualKind.Box);
 	}
 }
 
-class ReparentContainer implements View {
+@:access(haxeon.ui.core.ViewRoot) class ReparentContainer implements View {
 	final child:View;
 	public function new(child:View) this.child = child;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var root = context.createNode(context.rootId("container"), LayoutVisualKind.Box);
-		root.add(child.build(context));
+		root.add(child.build(context).node());
 		return root;
 	}
 }
 
-class EmptyReparentBody implements View {
+@:access(haxeon.ui.core.ViewRoot) class EmptyReparentBody implements View {
 	public function new() {}
-	public function build(context:BuildContext):RenderNode return context.createNode(context.rootId("empty"),
+	public function build(context:BuildContext):ViewRoot return context.createNode(context.rootId("empty"),
 		LayoutVisualKind.Box);
 }
 
-class PlainHost implements View {
+@:access(haxeon.ui.core.ViewRoot) class PlainHost implements View {
 	final child:View;
 	public function new(child:View) this.child = child;
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		var root = context.createNode(context.rootId("plain-host"), LayoutVisualKind.Box);
-		root.add(child.build(context));
+		root.add(child.build(context).node());
 		return root;
 	}
 }
 
-@:access(haxeon.ui.core.BuildContext) class EqualInputsMain {
+@:access(haxeon.ui.core.BuildContext) @:access(haxeon.ui.core.ViewRoot) class EqualInputsMain {
 	static function main():Int {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
@@ -75,7 +76,7 @@ class PlainHost implements View {
 			context.beginFrame();
 			context.resetObserved();
 			var view = new PropsChild("child", value, () -> new Leaf(source));
-			var root = context.trackReads(() -> view.build(context));
+			var root = context.trackReads(() -> view.build(context).node());
 			store.endFrame();
 			return root;
 		}
@@ -107,7 +108,7 @@ class PlainHost implements View {
 			return new PropsChild("stable", 1, () -> new BoundText("text", () -> Std.string(value.value)));
 		});
 		context.beginFrame();
-		var root = context.trackReads(() -> view.build(context));
+		var root = context.trackReads(() -> view.build(context).node());
 		store.endFrame();
 		revision.value = 1;
 		context.beginFrame();
@@ -136,7 +137,7 @@ class PlainHost implements View {
 			return new PropsChild("leaf", 1, () -> new Leaf(source));
 		});
 		context.beginFrame();
-		var host = context.trackReads(() -> new PlainHost(view).build(context));
+		var host = context.trackReads(() -> new PlainHost(view).build(context).node());
 		context.captureRootDependencies();
 		store.endFrame();
 		var count = Leaf.builds;
@@ -171,7 +172,7 @@ class PlainHost implements View {
 		function mount():RenderNode {
 			context.beginFrame();
 			context.resetObserved();
-			var root = context.trackReads(() -> view.build(context));
+			var root = context.trackReads(() -> view.build(context).node());
 			var mounted:Map<Int, RenderNode> = new Map();
 			root.walk(node -> mounted.set(node.id.value, node));
 			context.retainRenderScopeState(mounted);

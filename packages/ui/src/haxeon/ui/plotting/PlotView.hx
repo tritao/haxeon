@@ -1,4 +1,5 @@
 package haxeon.ui.plotting;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
@@ -79,7 +80,7 @@ class PlotView implements View {
 		this.padding = padding;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("plot");
 			var computed = context.resolveStyle(context.styleTarget(nodeId, "plot", key, key, null, ["plot"]),

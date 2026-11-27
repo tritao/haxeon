@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.collections;
+import haxeon.ui.core.ViewRoot;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
@@ -415,7 +416,7 @@ class TreeView implements View {
 		return controller.jumpTo(controller.offsetX, next);
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			// Model reads are tracked at their fields; child rows retain only the fields they actually read.
 			var guideVisibility = context.resourceState(context.id("guide-visibility"),
@@ -1107,7 +1108,7 @@ private class TreeViewRow implements View {
 		this.onContextMenu = onContextMenu;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var id = context.rootId("tree-item");
 			var flags = context.interactionStates.peek(id);
@@ -1237,7 +1238,7 @@ private class TreeDisclosure implements View {
 		this.onToggle = onToggle;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(20.0);
