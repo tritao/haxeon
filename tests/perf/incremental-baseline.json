@@ -72,7 +72,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"server_live_bytes": {
-			"value": 792723456,
+			"value": 705796506,
 			"tolerance": 0.03,
 			"why": "The session's live data at the end of the last build, from a heap census there: deterministic to a fraction of a megabyte."
 		},

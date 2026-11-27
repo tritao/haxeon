@@ -244,3 +244,36 @@ everything, as before. The tier decides what is kept, never what is built.
     step 5's.
   - *The final IR the inline cache holds* 0.1, *the generated IR and its memo* 0.9, *the canonical declarations* 0.9 and *the
     inliner's memo* 0.9: not worth a mechanism each.
+
+### Step 5: narrow columns, measured first
+
+What the pointer-free arrays hold, from a census that also reads each `Int` array's values (a local diagnostic, not committed):
+per owner field, the bytes, the length against the capacity, the value range, and what the array would take at the narrowest
+width its values fit (8, 16 or 32 bits, per array, so a wide function keeps its width), and the bytes of blocks whose content
+another block of the same type repeats. At the last edit's `request-done` on the UI session (346.0 MB live):
+
+| | MB |
+|---|---|
+| `Int` arrays, header and storage | 83.8 |
+| the same at their exact length | 64.0 |
+| the same at the narrowest width per array | 38.2 |
+| of the 83.8, `IrBody`'s columns | 44.6 (32.5 exact, 19.2 narrow) |
+| `TokenTable`'s columns | 10.1 (6.7 exact, 3.8 narrow; step 4 drops the packages') |
+
+- **Capacity, not width, was the first cut.** An array made at a size (`copy`, `map`, `concat`, a column a builder copies at
+  its length) got half its size again as headroom from the runtime (`hl_alloc_array`), though most are never grown: a frozen
+  body's columns never are. It now gets the size asked for (at least 4), and growth keeps adding half (`hl_array_reserve`).
+  The UI session 346.0 → 323.5 MB at `request-done` (perf-guard 362.70 → 339.21 MB), the small project 9.02 → 8.60 MB, the
+  compiler's own session (the incremental part) 792.7 → 705.8 MB; a compile's output is byte-identical.
+- **Width is the next 13 MB of `IrBody`, and needs a storage it cannot use yet.** Every row and value column fits 16 bits in
+  all but a handful of functions (rows to 3,941, operands to 4,810, values to 3,440, opcodes to 71), so 8 or 16 bits per body
+  would halve them. But the language has no narrow integer storage the compiler's own code can read at array speed: `Bytes`
+  reads 16 bits as two checked byte reads, and the compiler builds with stock Haxe too. A typed narrow array (a value array of
+  `UInt8`/`UInt16` lowered to `MemoryLoad` of that size) comes first; then the frozen body's columns move to it at `freeze`,
+  where nothing edits them again.
+- **Headers are as large as the data in small bodies.** A body has 26 columns, each an array header and a storage block
+  (about 50 bytes before any element), and a median body has a few dozen rows: per body, about 1.3 KB of the columns is
+  headers. Packing a frozen body's row columns into one block is the larger cut than width alone, with the same prerequisite.
+- **Duplicates are spread thin.** Equal blocks of the same type add up (equal `Int` arrays 35 MB, mostly short and empty
+  columns; equal strings 7.7 MB), but no owner holds more than 2 MB of repeated strings, and whole bodies are not repeated:
+  equal columns are different functions' equal shapes (a straight-line body's links). Interning would need a table for each.
