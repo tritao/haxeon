@@ -26,11 +26,12 @@ class IconButtonMain {
 		var button = root;
 		if (button.semantics == null || button.semantics.role != AccessibilityRole.Button
 			|| button.semantics.label != "Search" || !button.semantics.actions.contains(AccessibilityAction.Activate)
-			|| !button.focusable || !button.enabled || context.canPatch(button)) return 2;
-		var scopeOwner = context.interactionRenderScope(button);
+			|| !button.focusable || !button.enabled) return 2;
+		var scopeOwner = context.renderScopeAt(button);
 		if (scopeOwner == null || scopeOwner.root != root) return 3;
 		context.interactionStates.set(button.id, StyleState.Pressed);
-		scopeOwner.markDirty();
+		// The state write wakes the body that styled itself from it.
+		if (!scopeOwner.pending) return 31;
 		context.flushRenderScopes(root);
 		root = context.currentRoot(root);
 		var pressed = root;

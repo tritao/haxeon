@@ -13,7 +13,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fixtures=("$@")
 if [[ ${#fixtures[@]} == 0 ]]; then
-  fixtures=(UiEventPhaseMain KeyValueMain RetainedClaimMain ScopeResourceIdMain WidgetIdCacheMain RetainedWidgetIdMain InteractionStateStoreMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeRootStateMain ScopePatchOrderMain ScopeIncomingInteractionMain RoutingStateMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualInputsMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
+  fixtures=(UiEventPhaseMain KeyValueMain RetainedClaimMain ScopeResourceIdMain WidgetIdCacheMain RetainedWidgetIdMain InteractionStateStoreMain ScopeInstanceLifetimeMain ScopeRootStateMain ScopeIncomingInteractionMain RoutingStateMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualInputsMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
 fi
 for fixture in "${fixtures[@]}"; do
   for inline in 0 1; do

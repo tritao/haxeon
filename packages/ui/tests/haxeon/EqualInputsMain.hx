@@ -56,16 +56,13 @@ class EmptyReparentBody implements View {
 		LayoutVisualKind.Box);
 }
 
-class LegacyScopeHost implements View {
+class PlainHost implements View {
 	final child:View;
 	public function new(child:View) this.child = child;
 	public function build(context:BuildContext):RenderNode {
-		var id = context.rootId("legacy-host");
-		return context.selfUpdating(id, () -> {
-			var root = context.createNode(id, LayoutVisualKind.Box);
-			root.add(child.build(context));
-			return root;
-		});
+		var root = context.createNode(context.rootId("plain-host"), LayoutVisualKind.Box);
+		root.add(child.build(context));
+		return root;
 	}
 }
 
@@ -139,7 +136,7 @@ class LegacyScopeHost implements View {
 			return new PropsChild("leaf", 1, () -> new Leaf(source));
 		});
 		context.beginFrame();
-		var host = context.trackReads(() -> new LegacyScopeHost(view).build(context));
+		var host = context.trackReads(() -> new PlainHost(view).build(context));
 		context.captureRootDependencies();
 		store.endFrame();
 		var count = Leaf.builds;
@@ -152,21 +149,10 @@ class LegacyScopeHost implements View {
 		}
 		source.value = 1;
 		context.flushRenderScopes(host);
-		var valid = Leaf.builds == count + 1 && !context.rootDependenciesDirty() && !context.hasPendingPatches;
+		var valid = Leaf.builds == count + 1 && !context.rootDependenciesDirty() && !context.hasPendingRenderScopes();
 		if (!valid) Sys.println("Native read boundary source refresh: builds=" + Leaf.builds + " expected="
-			+ (count + 1) + " rootDirty=" + context.rootDependenciesDirty() + " patches=" + context.hasPendingPatches);
-		// An ancestor already queued to rebuild must supersede its pending native child body.
-		source.value = 2;
-		context.requestPatch(host.id);
-		context.flushRenderScopes(host);
-		valid = valid && Leaf.builds == count + 1;
-		if (!valid) Sys.println("Native read boundary parent suppression: builds="
-			+ Leaf.builds + " expected=" + (count + 1));
-		context.applyPatches(host);
-		context.flushRenderScopes(host);
-		valid = valid && Leaf.builds == count + 2 && !context.hasPendingRenderScopes();
-		if (!valid) Sys.println("Native read boundary parent commit: builds=" + Leaf.builds + " expected="
-			+ (count + 2) + " pending=" + context.hasPendingRenderScopes() + " children=" + host.children.length);
+			+ (count + 1) + " rootDirty=" + context.rootDependenciesDirty() + " pending="
+			+ context.hasPendingRenderScopes());
 		context.dispose();
 		return valid;
 	}

@@ -13,7 +13,6 @@ import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.TextStyle;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.RootModifier;
@@ -162,10 +161,6 @@ private class WindowItems implements haxeon.ui.widgets.collections.ListView.List
 	public function totalExtent():Null<Float> return 800;
 	public function revision():Int return 0;
 	public function buildItem(index:Int):View return new Text("row-" + index);
-}
-
-private class UpdatingReadModel implements Observable {
-	public var value:Int = 0;
 }
 
 private class ListInputs implements Observable {
@@ -329,42 +324,35 @@ private class Rig {
 	}
 }
 
-/** A self-updating widget whose build puts a listener, a paint callback and a child on its node, each capturing what it shows. */
-private class Gauge implements View {
-	public var level = 1;
-	public var builds = 0;
-	/** What the callbacks of the newest build last reported. */
-	public var painted = "";
-	public var clicked = "";
-	public var asText = false;
+/** A component whose label a caller edits in place between frames, announcing it, while its level makes it run again. */
+private class EditedGauge implements ScopeView {
+	final key:String;
+	public final level = new Signal(1);
 	public var offset = 0.0;
-	public var labelNode:Null<RenderNode>;
-	public var id:Null<haxeon.ui.core.WidgetId> = null;
-
-	public function new() {}
-
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(new Key("gauge"), function() {
-			var nodeId = context.id("gauge");
-			id = nodeId;
-			return context.selfUpdating(nodeId, function() {
-				builds++;
-				var shown = level;
-				var style = new LayoutStyle();
-				style.width = LayoutAxis.fixed(100.0);
-				style.height = LayoutAxis.fixed(30.0);
-				style.zIndex = shown;
-				var node = new RenderNode(nodeId, asText ? LayoutVisualKind.Text : LayoutVisualKind.Custom, style);
-				if (!asText) node.onPaint(function(_, _) painted = "level " + shown, "gauge:" + shown);
-				node.on(UiEventKind.Click, function(_) clicked = "level " + shown);
-				var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
-				label.layout.text = "level " + shown;
-				label.layout.style.transform = haxeon.ui.Transform2D.identity().translated(0, -offset);
-				labelNode = label;
-				node.add(label);
-				return node;
-			});
-		});
+	public function new(key:String) this.key = key;
+	public function scopeKey():String return key;
+	public function inputsEqual(previous:ScopeView):Bool return previous == this;
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+	public function buildBody(context:BuildContext):RenderNode {
+		var shown = level.value;
+		var style = new LayoutStyle();
+		style.width = LayoutAxis.fixed(100.0);
+		style.height = LayoutAxis.fixed(30.0);
+		style.zIndex = shown;
+		var node = context.createNode(context.rootId("gauge"), LayoutVisualKind.Box, style);
+		var label = context.createNode(context.rootId("label"), LayoutVisualKind.Text);
+		label.layout.text = "level " + shown;
+		label.layout.style.transform = haxeon.ui.Transform2D.identity().translated(0, -offset);
+		node.add(label);
+		return node;
+	}
+	/** The label in `root`'s tree. */
+	public function label(root:RenderNode):RenderNode {
+		var found:Null<RenderNode> = null;
+		root.walk(node -> if (found == null && node.layout.text != null
+			&& node.layout.text.indexOf("level ") == 0) found = node);
+		if (found == null) throw "Missing composite child";
+		return found;
 	}
 }
 
@@ -382,23 +370,6 @@ private class FieldDecoration implements View {
 		var modifier = new RootModifier();
 		modifier.on(UiEventKind.PointerDown, function(_) onPress());
 		return context.build(field, modifier);
-	}
-}
-
-/** What a container does to a node after building it: a listener, a style change, a child, and its own semantics. */
-private class DecoratedGauge implements View {
-	public var presses = 0;
-	public final gauge:Gauge;
-
-	public function new(gauge:Gauge) this.gauge = gauge;
-
-	public function build(context:BuildContext):RenderNode {
-		var node = gauge.build(context);
-		node.on(UiEventKind.Click, function(_) presses++);
-		node.layout.style.positionX = 4.0;
-		node.semantics = new Semantics(AccessibilityRole.Button, "decorated");
-		node.add(new RenderNode(context.id("caller-child"), LayoutVisualKind.Box));
-		return node;
 	}
 }
 
@@ -561,48 +532,6 @@ private class PopupHost implements View {
 		root.add(rig.describe(context));
 		return root;
 	}
-}
-
-private class UpdatingResources implements View {
-	public var enabled = false;
-	public var generation = 0;
-	public final reading = new UpdatingReadModel();
-	public var created = 0;
-	public var disposed = 0;
-	public var rootId:Null<haxeon.ui.core.WidgetId>;
-	public var childId:Null<haxeon.ui.core.WidgetId>;
-	public var value:Null<haxeon.ui.core.State<Int>>;
-	public function new() {}
-	public function build(context:BuildContext):RenderNode return context.withScope(new Key("updating-resources"),
-		() -> {
-			var id = context.id("owner");
-			rootId = id;
-			return context.selfUpdating(id, () -> {
-				var root = new RenderNode(id, LayoutVisualKind.Box);
-				// The inner updater makes its own root, so the nested scope's root is a column around it.
-				if (enabled) root.add(new TrackedScope("nested", () -> new Column("nested-column",
-					[new KeyedView("inner", DecoratedControl.ofNodes("inner", context -> {
-						var child = context.id("child");
-						childId = child;
-						return context.selfUpdating(child,
-							() -> {
-								var resource = context.resourceState(context.id("resource-" + generation), () -> {
-									created++;
-									return generation;
-								}, _ -> disposed++);
-								var state = context.state(context.id("value"), 0);
-								value = state;
-								var seen = reading.value;
-								var node = new RenderNode(child, LayoutVisualKind.Box);
-								var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
-								label.layout.text = resource.value + ":" + state.value + ":" + seen;
-								node.add(label);
-								return node;
-							});
-					}))])).build(context));
-				return root;
-			});
-		});
 }
 
 @:access(haxeon.ui.core.UiContext) @:access(haxeon.ui.core.UiInspector) class RestyleInPlaceTests {
@@ -862,59 +791,6 @@ private class UpdatingResources implements View {
    * One rebuild of a self-updating widget, applied to the node it built before: the node stays with what its caller attached,
    * takes the callbacks, style and children of the new build, and is only replaced when its kind changes.
    */
-	static function reconcile(fonts:FontCollection):Void {
-		var ui = new UiContext(null, fonts);
-		var gauge = new Gauge(), decorated = new DecoratedGauge(gauge);
-		var frame = new LayoutFrame(240.0, 120.0);
-		// Retained, so that only the gauge itself builds again.
-		var view:View = new TrackedScope("gauge-panel",
-			function() return new Column("gauge-column", [new KeyedView("gauge", decorated)]));
-		var submit = function() return ui.submitCached(function() return view, frame, "gauge");
-		var column = submit();
-		var root = column.children[0];
-		var semantics = root.semantics;
-		check(find(root, "level 1") != null && gauge.builds == 1, "The gauge did not build");
-		for (level in 2...4) {
-			gauge.level = level;
-			check(ui.buildContext.requestPatch(cast gauge.id), "The gauge was not registered as self-updating");
-			var next = submit().children[0];
-			check(next == root && RenderNode.latest(root) == root,
-				"A rebuild replaced the node instead of reconciling it");
-			check(gauge.builds == level, "The gauge built " + gauge.builds + " times");
-			check(find(root, "level " + level) != null && find(root, "level " + (level - 1)) == null,
-				"The builder's child was not replaced");
-			check(root.layout.style.zIndex == level, "The builder's style change was not applied");
-			check(root.layout.style.positionX == 4.0, "The caller's style change was lost");
-			check(root.semantics == semantics, "Semantics the caller replaced were taken back");
-			var callerChildren = 0;
-			for (child in root.children) if (child.styleType == null
-				&& child.layout.visualKind == LayoutVisualKind.Box) callerChildren++;
-			check(callerChildren == 1 && root.children.length == 2,
-				"A child added by the caller was lost or duplicated");
-			var bounds = root.globalBounds();
-			ui.pointerDown(bounds.x + 5, bounds.y + 5, 0);
-			ui.pointerUp(bounds.x + 5, bounds.y + 5, 0);
-			check(gauge.clicked == "level " + level,
-				"The listener of the first build ran instead of the new one: " + gauge.clicked);
-			check(decorated.presses == level - 1, "The caller's listener ran " + decorated.presses + " times");
-			var paint:Array<Dynamic> = Reflect.field(root, "paintHandlers");
-			check(paint != null && paint.length == 1, "The paint callbacks were not replaced one for one");
-			var paintGauge:Dynamic = paint[0];
-			paintGauge(null, null);
-			check(gauge.painted == "level " + level,
-				"The paint callback of the first build ran instead of the new one: " + gauge.painted);
-		}
-		// A build that changes the node's kind cannot be reconciled: its node is replaced.
-		gauge.asText = true;
-		check(ui.buildContext.requestPatch(cast gauge.id), "The gauge was not registered as self-updating");
-		var replaced = submit().children[0];
-		check(replaced != root && RenderNode.latest(root) == replaced, "A change of kind did not replace the node");
-		check(ui.buildContext.requestPatch(cast gauge.id), "The replacement was not registered as self-updating");
-		ui.dispose();
-		Sys.println("PASS reconcile: a rebuild keeps the node and what callers added, takes the new build's style, children, listeners and paint, and is replaced only when its kind changes");
-		textField(fonts);
-	}
-
 	static function paintTrace(node:RenderNode, expected:Int = 2):PaintTrace {
 		var trace = new PaintTrace();
 		var handlers:Array<Dynamic> = Reflect.field(node, "paintHandlers");
@@ -1628,98 +1504,22 @@ private class UpdatingResources implements View {
 	}
 
 	static function editedComposite(fonts:FontCollection):Void {
-		var ui = new UiContext(null, fonts), gauge = new Gauge();
-		// A self-updating widget makes its own root, so the scope's root is a column around it.
+		var ui = new UiContext(null, fonts), gauge = new EditedGauge("gauge");
 		var view:View = new TrackedScope("edited-composite",
 			() -> new Column("edited-column", [new KeyedView("gauge", gauge)])),
 			frame = new LayoutFrame(200, 100);
 		var build = () -> view;
-		ui.submitCached(build, frame, "edited-composite");
-		var label = gauge.labelNode;
-		if (label == null) throw "Missing composite child";
+		var root = ui.submitCached(build, frame, "edited-composite");
+		var label = gauge.label(root);
 		gauge.offset = 20;
 		ui.buildContext.willEditRetained(label);
 		label.layout.style.transform = haxeon.ui.Transform2D.identity().translated(0, -gauge.offset);
-		check(ui.buildContext.requestPatch(cast gauge.id), "Composite updater was not registered");
+		// The component runs again in the same frame as the announced edit to its child.
+		gauge.level.value = 2;
 		ui.submitCached(build, frame, "edited-composite");
-		check(ui.verifyRetention(build, frame) == null, "Announced child edit was lost when its owner reconciled");
+		check(ui.verifyRetention(build, frame) == null, "Announced child edit was lost when its component ran again");
 		ui.dispose();
-		Sys.println("PASS editing: an announced child edit keeps its original native prior when its composite owner also patches");
-	}
-
-	static function updatingResources(fonts:FontCollection):Void {
-		var ui = new UiContext(null, fonts),
-			widget = new UpdatingResources(),
-			caller = new UpdatingResources(),
-			builds = 0;
-		caller.enabled = true;
-		var view:View = new TrackedScope("resource-panel", () -> {
-			builds++;
-			// A self-updating widget makes its own root, so the scope's root is a column around it.
-			return new Column("resource-column", [
-				new KeyedView("host", new DecoratedControl("resource-host", _ -> widget,
-					(context,
-					modifier) -> modifier.add(context.withScope(new Key("caller"), () -> caller.build(context)))))
-			]);
-		});
-		var frame = new LayoutFrame(200, 100), key = "resources";
-		var factories = 0;
-		function submit():RenderNode return ui.submitCached(() -> {
-			factories++;
-			return view;
-		}, frame, key);
-		var root = submit();
-		widget.enabled = true;
-		check(ui.buildContext.requestPatch(cast widget.rootId), "Resource owner was not registered");
-		submit();
-		check(ui.buildContext.requestPatch(cast widget.rootId), "Composite owner was not rearmed");
-		submit();
-		// The panel's column holds the owner, whose first child is the nested scope's column around the inner updater.
-		function owner(root:Null<RenderNode>):RenderNode {
-			if (root == null) throw "Missing resource panel";
-			return root.children[0];
-		}
-		function innerLabel(root:RenderNode):RenderNode return owner(root).children[0].children[0].children[0];
-		check(owner(ui.root).children.length == 3
-			&& owner(ui.root).children[0].children[0].id.equals(cast widget.childId),
-			"A newly materialized retained child displaced its caller decoration");
-		key = "resources-next";
-		submit();
-		check(builds == 1 && widget.created == 1 && widget.disposed == 0,
-			"Patched resources were not retained independently");
-		widget.generation++;
-		check(ui.buildContext.requestPatch(cast widget.childId), "Nested updater was not registered");
-		submit();
-		key = "resources-again";
-		submit();
-		check(builds == 1 && widget.created == 2 && widget.disposed == 1,
-			"Replaced nested resources did not settle their lifetime");
-		widget.reading.value++;
-		key = "external-reading";
-		var refreshed = submit();
-		check(builds == 1 && innerLabel(refreshed).layout.text == "1:0:1",
-			"Tracked nested reads did not patch their updater in place");
-		var value = widget.value;
-		if (value == null) throw "Missing owned state";
-		value.update(7);
-		refreshed = submit();
-		check(builds == 1 && innerLabel(refreshed).layout.text == "1:7:1",
-			"A tracked state update rebuilt its owning updater or failed to refresh its retained node");
-		check(widget.value == value, "A live state handle changed across patches and complete builds");
-		widget.enabled = false;
-		key = "resources-remove";
-		var previousFactories = factories;
-		check(ui.buildContext.requestPatch(cast widget.rootId), "Resource owner was lost after a rebuild");
-		submit();
-		check(factories == previousFactories + 1,
-			"A complete frame repeated its build to settle already tracked resource membership");
-		check(widget.disposed == 2, "Removed child resources were not disposed");
-		check(caller.created == 1 && caller.disposed == 0,
-			"A caller-owned updater lost its resources across owner patches");
-		ui.dispose();
-		check(caller.created == caller.disposed, "A caller-owned updater leaked resources");
-		check(widget.created == widget.disposed, "Composite updater leaked resources");
-		Sys.println("PASS updating resources: nested patches retain current dependencies, replace and dispose resources, and invalidate on observed and widget-state changes");
+		Sys.println("PASS editing: an announced child edit keeps its original prior when its component also runs again");
 	}
 
 	public static function main():Int {
@@ -1732,13 +1532,12 @@ private class UpdatingResources implements View {
 		hoverRouting(fonts);
 		tabsAndPopup(fonts);
 		editedComposite(fonts);
-		updatingResources(fonts);
 		verifyMode(fonts);
 		verifyPointerFlags(fonts);
 		verifyDisabledFocus(fonts);
 		resolvedList(fonts);
 		buildFeedbackFocus(fonts);
-		reconcile(fonts);
+		textField(fonts);
 		submittedIndex(fonts);
 		motion(fonts);
 		run(fonts,

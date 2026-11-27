@@ -425,8 +425,11 @@ class TreeView implements View {
 			drag = context.resourceState(context.id("tree-drag"),
 				function() return new TreeItemDrag(),
 				function(value) value.dispose()).value;
-			var activeGuides = (context.interactionStates.get(treeId)).contains(StyleState.Hovered)
-				|| guideVisibility.hasFocus(context);
+			// Hover and focus matter only to guides shown on interaction; reading them otherwise would make the whole tree
+			// depend on them.
+			var activeGuides = guidesOnInteraction
+				&& ((context.interactionStates.get(treeId)).contains(StyleState.Hovered)
+				|| guideVisibility.hasFocus(context));
 			guideVisibility.configure(!guidesOnInteraction || activeGuides,
 				!guidesOnInteraction || context.environment.reducedMotion);
 			var guideOpacity = guideVisibility.opacity() * (guidesOnInteraction ? 0.65 : 1.0);

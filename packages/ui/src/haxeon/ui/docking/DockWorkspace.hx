@@ -15,7 +15,6 @@ import haxeon.ui.Rect;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.InteractionStateSnapshot;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RootModifier;
@@ -558,8 +557,7 @@ private class DockPanelView implements View {
 		if (keyed) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
 			var dependencies = context.dependenciesSince(dependencyMark, cached == null ? null : cached.observed);
-			var interactions = new InteractionStateSnapshot(context.currentRoot(root), context);
-			panelCache.put(descriptor.id, keyA, keyB, root, usedStates, interactions, dependencies);
+			panelCache.put(descriptor.id, keyA, keyB, root, usedStates, dependencies);
 		}
 		return root;
 	}
@@ -612,13 +610,11 @@ private class DockPaneView implements View {
 		if (retainable) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
 			var dependencies = context.dependenciesSince(dependencyMark, cached == null ? null : cached.observed);
-			var interactions = new InteractionStateSnapshot(context.currentRoot(root), context);
 			cache.put(key,
 				keyA,
 				keyB,
 				root,
 				usedStates,
-				interactions,
 				dependencies,
 				interaction.targetsSince(targetMark),
 				interaction.tabTargetsSince(tabMark),
@@ -647,10 +643,7 @@ private class DockPanelCache implements Disposable {
 	/** Cached callbacks and drop targets belong to this model and interaction, even if another has the same revision. */
 	public function bind(nextModel:DockWorkspaceModel, nextInteraction:DockWorkspaceInteraction):Void {
 		if (model == nextModel && interaction == nextInteraction) return;
-		for (entry in entries) {
-			entry.observed.dispose();
-			entry.interactions.dispose();
-		}
+		for (entry in entries) entry.observed.dispose();
 		entries.clear();
 		recent.resize(0);
 		model = nextModel;
@@ -671,7 +664,6 @@ private class DockPanelCache implements Disposable {
 			keyB:Int,
 			root:RenderNode,
 			stateIds:Array<ResourceId>,
-			interactions:InteractionStateSnapshot,
 			observed:haxeon.ui.core.Dependencies,
 			?targets:Array<DockDropTarget>,
 			?tabTargets:Array<DockTabDropTarget>,
@@ -680,7 +672,6 @@ private class DockPanelCache implements Disposable {
 		if (previous != null) {
 			if (previous.root != root) previous.root.detach();
 			if (previous.observed != observed) previous.observed.dispose();
-			previous.interactions.dispose();
 		}
 		if (maxEntries > 0) {
 			recent.remove(panelId);
@@ -691,10 +682,7 @@ private class DockPanelCache implements Disposable {
 				if (evicted != null) {
 					var old = entries.get(evicted);
 					entries.remove(evicted);
-					if (old != null) {
-						old.observed.dispose();
-						old.interactions.dispose();
-					}
+					if (old != null) old.observed.dispose();
 				}
 			}
 		}
@@ -703,7 +691,6 @@ private class DockPanelCache implements Disposable {
 			keyB,
 			root,
 			stateIds,
-			interactions,
 			observed,
 			targets,
 			tabTargets,
@@ -712,10 +699,7 @@ private class DockPanelCache implements Disposable {
 	}
 
 	public function retain(context:BuildContext):Void {
-		for (entry in entries) {
-			context.retainStateIds(entry.stateIds, true);
-			entry.interactions.retainState(context);
-		}
+		for (entry in entries) context.retainStateIds(entry.stateIds);
 	}
 
 	public function dispose():Void {
@@ -735,8 +719,7 @@ private class DockPanelCacheEntry implements Disposable {
 	/** Drop targets the build registered; a hit replays them because the interaction forgets them every frame. */
 	public final targets:Array<DockDropTarget>;
 	public final tabTargets:Array<DockTabDropTarget>;
-	public final interactions:InteractionStateSnapshot;
-	/** Observable fields and signals the subtree's build read outside widget state. */
+	/** Observable fields and signals the subtree's build read outside widget state, interaction states included. */
 	public final observed:haxeon.ui.core.Dependencies;
 	/** A hidden pane cannot be reused after one of its retained children moved to another tree. */
 	final topologyNodes:Null<Array<RenderNode>>;
@@ -748,7 +731,6 @@ private class DockPanelCacheEntry implements Disposable {
 			keyB:Int,
 			root:RenderNode,
 			stateIds:Array<ResourceId>,
-			interactions:InteractionStateSnapshot,
 			observed:haxeon.ui.core.Dependencies,
 			?targets:Array<DockDropTarget>,
 			?tabTargets:Array<DockTabDropTarget>,
@@ -758,7 +740,6 @@ private class DockPanelCacheEntry implements Disposable {
 		this.keyB = keyB;
 		this.root = root;
 		this.stateIds = stateIds == null ? [] : stateIds.copy();
-		this.interactions = interactions;
 		this.observed = observed;
 		this.targets = targets == null ? [] : targets;
 		this.tabTargets = tabTargets == null ? [] : tabTargets;
@@ -774,23 +755,11 @@ private class DockPanelCacheEntry implements Disposable {
 				nodes.push(node);
 				parents.push(parent);
 				positions.push(parent == null ? -1 : variableParent ? -2 : parent.children.indexOf(node));
-				// A nested self-updating widget owns its children and may reconcile them while this pane is live.
-				// Its interaction snapshot tracks that build; retain only the children its caller added afterward.
-				// A component's body is still captured: a retained subtree inside it can move to another pane, and
-				// when the component runs again its new children only cost this pane a rebuild.
-				var owner = node == root ? null : topologyContext.updatingBuild(node);
+				// A component's body is captured too: a retained subtree inside it can move to another pane, and when
+				// the component runs again its new children only cost this pane a rebuild.
 				var native = topologyContext.renderScopeAt(node);
-				childCounts.push(owner == null && native == null ? node.children.length : -1);
-				for (child in node.children) {
-					var owned = false;
-					if (owner != null
-						&& owner.built != null) for (made in owner.built.children) if (made.id.value == child.id.value)
-						{
-						owned = true;
-						break;
-					}
-					if (!owned) capture(child, owner != null || native != null);
-				}
+				childCounts.push(native == null ? node.children.length : -1);
+				for (child in node.children) capture(child, native != null);
 			}
 			capture(root, false);
 			topologyNodes = nodes;
@@ -850,16 +819,13 @@ private class DockPanelCacheEntry implements Disposable {
 
 	public function matches(otherA:Int, otherB:Int):Bool return keyA == otherA && keyB == otherB;
 
-	/** A self-updating widget at the root of the subtree was rebuilt in place; keep the replacement. */
+	/** The pane's root component ran again; keep the replacement. */
 	public function replaceRoot(next:RenderNode):Void root = next;
 
-	public function statesMatch(context:BuildContext):Bool {
-		return observed.current() && interactions.matches(context);
-	}
+	public function statesMatch(context:BuildContext):Bool return observed.current();
 
 	public function dispose():Void {
 		root.detach();
-		interactions.dispose();
 		observed.dispose();
 	}
 }

@@ -7,7 +7,7 @@ import haxeon.ui.style.StyleState;
 /**
  * Each widget's routed input states (hovered, pressed, focused), as reactive sources. A build that reads a widget's states
  * depends on the ones it read, so a change wakes exactly those readers; the store also keeps the net changes since the last
- * submission for the parts of the tree that are not components yet.
+ * submission, so the frame repaints custom paint that reads them.
  */
 class InteractionStateStore implements Disposable {
 	/** Every state a widget can have. */

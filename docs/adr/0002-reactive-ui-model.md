@@ -297,10 +297,10 @@ no builder transform or lazy parameter is involved.
 | `observeInt/Bool/String`, model revision counters, `cacheKeyHash` | observable fields and tracked reads |
 | `State.updateQuietly` | removed: writes know their readers |
 | `RetainedView`, `RetainedVariants`, dock pane and panel caches | the first two are deleted (components and `TrackedScope` keep equal bodies); remove the dock caches when the dock is ported |
-| `selfUpdating`, `reconcile`, `BuiltNode`, `RenderNode.latest` | native scope foundation implemented in stage 5; delete these after the remaining widget and panel callers are ported |
-| `requestPatch`, patch frames | a frame where only bindings ran |
+| `selfUpdating`, `reconcile`, `BuiltNode` | components (stage 5); deleted once the last widget was ported |
+| `requestPatch`, patch frames | deleted: a frame where only components and bindings ran |
 | `bindingRevision` | a scope dirtied while hidden runs when shown |
-| `InteractionStateSnapshot`, `hoverRebuilds` | per-node interaction signals and derived style |
+| `InteractionStateSnapshot`, `hoverRebuilds` | deleted: per-node interaction signals; derived style still to come |
 | `willEditRetained`, `RetainedAnimation` | layer properties and animation signals |
 | `LayoutTransaction` encode / native parse / decode | shared store if its prototype passes; otherwise the incremental bridge stays |
 | second layout pass for scrollbars | local placement of independent feedback edits |

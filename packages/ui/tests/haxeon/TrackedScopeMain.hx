@@ -147,7 +147,7 @@ class TrackedScopeMain {
 		store.endFrame();
 		var releasedBeforeHide = ScopeResourceLeaf.released;
 		context.beginFrame();
-		context.retainStateIds(cachedIds, true);
+		context.retainStateIds(cachedIds);
 		store.endFrame();
 		context.pruneRenderScopes(new Map());
 		if (ScopeResourceLeaf.released != releasedBeforeHide) return 15;
@@ -155,7 +155,7 @@ class TrackedScopeMain {
 		context.flushRenderScopes(null);
 		if (cachedRuns != 1 || context.hasPendingRenderScopes()) return 16;
 		context.beginFrame();
-		context.retainStateIds(cachedIds, true);
+		context.retainStateIds(cachedIds);
 		context.claimRetainedTree(cachedRoot);
 		context.flushRenderScopes(cachedRoot);
 		store.endFrame();

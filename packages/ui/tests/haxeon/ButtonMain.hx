@@ -72,12 +72,13 @@ class ButtonMain {
 		events.focusEvent(control.id, UiEventKind.Focus);
 		events.focusEvent(control.id, UiEventKind.Blur);
 		if (focuses != 1 || blurs != 1) return 6;
-		var owner = context.interactionRenderScope(control);
-		if (owner == null || owner.root != root || context.canPatch(control)) return 2;
-		if (context.interactionRenderScope(extra) != null || owner.owns(extra)
+		var owner = context.renderScopeAt(control);
+		if (owner == null || owner.root != root) return 2;
+		if (context.renderScopeAt(extra) != null || owner.owns(extra)
 			|| !owner.owns(root.children[0])) return 13;
 		context.interactionStates.set(control.id, StyleState.Hovered);
-		owner.markDirty();
+		// The state write wakes the body that styled itself from it.
+		if (!owner.pending) return 31;
 		context.flushRenderScopes(root);
 		root = context.currentRoot(root);
 		var refreshed = root;
@@ -106,10 +107,11 @@ class ButtonMain {
 		var cachedRoot = context.trackReads(function() return parent.build(context));
 		store.endFrame();
 		var cachedControl = cachedRoot;
-		var cachedOwner = context.interactionRenderScope(cachedControl);
+		var cachedOwner = context.renderScopeAt(cachedControl);
 		if (cachedOwner == null) return 9;
 		context.interactionStates.set(cachedControl.id, StyleState.Hovered);
-		cachedOwner.markDirty();
+		// The state write wakes the body that styled itself from it.
+		if (!cachedOwner.pending) return 31;
 		context.flushRenderScopes(cachedRoot);
 		context.beginFrame();
 		var reusedRoot = context.trackReads(function() return parent.build(context));
@@ -117,7 +119,8 @@ class ButtonMain {
 		if (parentBuilds != 1 || reusedRoot != context.currentRoot(cachedRoot)
 			|| !reusedRoot.states.contains(StyleState.Hovered) || reusedRoot.layout.style.width.value != 150) return 8;
 		context.interactionStates.set(cachedControl.id, StyleState.Focused);
-		cachedOwner.markDirty();
+		// The state write wakes the body that styled itself from it.
+		if (!cachedOwner.pending) return 31;
 		context.flushRenderScopes(reusedRoot);
 		context.beginFrame();
 		reusedRoot = context.trackReads(function() return parent.build(context));

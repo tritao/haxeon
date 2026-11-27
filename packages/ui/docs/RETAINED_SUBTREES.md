@@ -37,9 +37,10 @@ describes it with equal inputs.) A cached subtree is reused while all of these h
 
 - its declared key matches (style revision and viewport; dock panels opt into tracked retention);
 - every `Signal`, `State` or compiler-tracked `Observable` field it read is still current (`Dependencies`);
-- state-backed resources it used remain mounted (`stateIdsUsedSince` tracks lifetime, not value revisions);
-- the interaction state of nodes a widget built from interaction state is unchanged (`InteractionStateSnapshot`; hover is
-  ignored where no stylesheet rule matches it, and widgets that update themselves are left out).
+- state-backed resources it used remain mounted (`stateIdsUsedSince` tracks lifetime, not value revisions).
+
+Interaction states are dependencies like any other read (`InteractionStateStore`), so a cache needs no separate check
+for them.
 
 Read observable model fields directly inside the retained builder. Their dependencies are recorded automatically, so a
 key cannot omit a value the builder reads. Signal reads track the same way. `CommandButton` tracks its command's presence,
@@ -55,60 +56,34 @@ source are rejected when an earlier computation could observe that value; fresh 
 unread fields can be initialized normally. Each retained computation starts a new capture stamp: two sibling caches that
 read the same field both subscribe, while repeated reads within either cache still use one entry.
 
-**In place** changes without rebuilding the view. A widget's own rebuild goes through one step, `RenderNode.reconcile`; the other two ways
-are edits that have no build to reconcile.
+**Components** run alone. A component (`ScopeView`, run by `BuildContext.mountComponent`) keeps its body while its
+parent describes it with equal inputs, and runs its body again, without its parent, when something the body read
+changes: a signal, an `Observable` field, its own `State`, or an interaction state (`styleStates` depends only on the
+states some rule for the node selects on). A body run builds a new root that replaces the old one in its parent; callers
+never edit a component's root, they pass a `RootModifier`. Callbacks a body installs call the newest description
+through `BuildContext.latestOf`. Every widget is a component or a plain view built by one.
 
-- `BuildContext.selfUpdating(id, build)`: the widget rebuilds alone, on a pointer change over it or when it asks
-  (`requestPatch`; `TextField` does), and the result is reconciled with the node it built before. Tracked signal writes
-  invalidate their readers automatically.
-  The node stays. A rebuild replaces what the builder made on it and nothing else:
-  - style: only the properties that differ between the two builds (`haxeon.Diff.mask`/`apply`), so a
-    style change a caller made after build stays;
-  - computed style, interaction state, and semantics (unless the caller replaced them);
-  - the listeners, outside-pointer, geometry and paint callbacks and decorations the builder made (counted when it returned
-    the node, `BuiltNode`); the ones callers appended after stay behind them;
-  - the children the builder made, each swapped in place for its new build; children callers added stay where they are.
-  Properties that come from the widget instance (focusable, enabled, cursor, tab index) are not reapplied. A build whose node
-  changed kind cannot be reconciled and replaces the node (`replacedBy`, followed by the caches that held it), without what callers
-  added; the root of the whole tree is left to the next full build. `Button`, `IconButton`, `Checkbox`, `Toggle`, `Radio`,
-  `TextField`, `Slider`, `ProgressBar`, `Tabs` and `SelectionPopup` use it. A widget qualifies when its build makes the same kind of node every time.
-  A closure that captures its build root calls `RenderNode.latest(root)` when it needs the node: reconcile forwards that
-  discarded build root to the instance kept in the tree. Descendant captures remain valid because the built children are
-  swapped into the tree.
-  Children are swapped rather than patched field by field because the new build's closures refer to the nodes it made
-  (`TextField`'s pointer handlers read `textNode.resolved`), so those must be the ones in the tree; a hand-kept list of node
-  properties to copy would also go stale with every new one.
-- A component needs no interaction bookkeeping: its body depends on the states it read, and `BuildContext.styleStates`
-  reads only those some rule for the node's identity selects on. The rest of this item is for widgets that are not
-  components yet.
-- Hover never needs a flag: `BuildContext.hoverRebuilds` says hover alone matters to a node only if a stylesheet rule matches it
-  on hover (or it belongs to a self-updating widget, which follows it itself). Otherwise caches ignore it and a node that
-  paints from live state (`TreeView` rows) is repainted by the frame (`UiContext`: `patchFramePaintNodes`). A widget that does
-  more with hover than resolve its style must update itself.
-- `BuildContext.willEditRetained(node)` before changing a node of the submitted tree directly (scrollbar fades, scrolled
-  content, fitted text): the next frame compares it with how it was and lays it out without a rebuild. Animations whose frames
-  only do this implement `RetainedAnimation` and do not count as rebuild work. This stays a separate mechanism because there is
-  no build to reconcile: a scroll offset or a fade changes every frame from a controller, and rebuilding the widget (and its
-  state) for it would cost far more than the edit; what it shares with `reconcile` is the stand-in of how the node was, which
-  the frame comparison needs.
+**In place**: `BuildContext.willEditRetained(node)` before changing a node of the submitted tree directly (scrollbar fades,
+scrolled content, fitted text): the next frame compares it with how it was and lays it out without a rebuild. Animations
+whose frames only do this implement `RetainedAnimation` and do not count as rebuild work. A scroll offset or a fade changes
+every frame from a controller, and running the component (and its state) for it would cost far more than the edit; the
+frame comparison needs only the stand-in of how the node was. Custom paint that reads a node's states as it paints is
+repainted when they change, without a build (`UiContext`: `patchFramePaintNodes`).
 
-A frame where only these happened runs as a patch frame: the submitted tree stays, only the reconciled widgets and edits are
-applied and the view is not built. That is how `requestPatch` and pointer changes are scheduled, not another way to update: it
-exists because skipping the view build is where the saving is, so `selfUpdating` widgets cost one build each per frame.
+A frame where only components ran and edits were applied keeps the submitted tree and does not build the view.
 
 **Verify mode** is the safety net: `UiContext.verifyRetention` builds the view again with every cache, patch and edit
 bypassed and compares the trees. `verifyRetentionEvery` or `HAXEON_UI_VERIFY_RETENTION=N` runs it every N frames that did work
 and throws on a difference; `app/tools/check-ui-retention.py` runs the editor scenarios that way. While it is on, every node
 is also fingerprinted at the end of a frame, and a node still in the next tree whose fingerprint changed without
-`willEditRetained` or a reconcile is reported. A stale cache key, quiet update or unannounced edit shows up as a failure instead
+`willEditRetained` or a component run is reported. A stale cache key, quiet update or unannounced edit shows up as a failure instead
 of old UI.
 
 Rules that keep it working:
 
 - Read data a retained build depends on, outside widget state, through signals or `Observable` fields.
 - Read signals directly; reads are tracked and equal writes do not invalidate their readers.
-- Change a node of the submitted tree only after `willEditRetained`, or inside its own widget's build (which `selfUpdating`
-  reconciles).
+- Change a node of the submitted tree only after `willEditRetained`, or inside its own component's body.
 - Do not write a signal or `State` that already has tracked readers while a tracked build, derived value or effect is running.
 - Dock panels opt into caching with `DockPanelContent.observing`; the cache captures their tracked reads. All editor
   panels declare their external dependencies; `panel-flows` covers them under verify mode.

@@ -107,7 +107,6 @@ class UiContext implements Disposable {
 
 	var submittedInteractionRevision:Int;
 	var submittedRetainedEditRevision:Int = 0;
-	var submittedPatchRequestRevision:Int = 0;
 	var submittedBindingRequestRevision:Int = 0;
 	var submittedStyleRevision:Int;
 	var submittedAnimationRevision:Int;
@@ -510,19 +509,14 @@ class UiContext implements Disposable {
 			hoverPaintNodes = reuseHoverPaint(cacheKey, frame);
 			reuse = hoverPaintNodes >= 0;
 		}
-		var localPatchPending = (buildContext.hasPendingPatches
-			|| buildContext.hasPendingRenderScopes()) && !rootReactiveDirty;
+		var localPatchPending = buildContext.hasPendingRenderScopes() && !rootReactiveDirty;
 		var bindingOnly = cacheKey != null && sameSubmittedInputs(cacheKey, frame) && !rootReactiveDirty
 			&& buildContext.bindingRequestRevision != submittedBindingRequestRevision
 			&& interactionStates.revision == submittedInteractionRevision
 			&& buildContext.styleRevision == submittedStyleRevision;
-		// A reference build (updateInPlace off) rebuilds the whole view on every submit, so it never patches.
+		// A reference build (updateInPlace off) rebuilds the whole view on every submit, so it never runs only components.
 		var patchOnly = buildContext.updateInPlace && !reuse && (localPatchPending || bindingOnly)
 			&& (!reconcileNewFocus || cacheKey != null);
-		if (!patchOnly
-			&& !reuse && reconcileNewFocus && cacheKey != null
-			&& buildFeedbackPass == 0) patchOnly = planInteractionPatches(cacheKey,
-			frame);
 		if (reuse) {
 			frameNumber++;
 			lastFrameMetrics = null;
@@ -538,16 +532,12 @@ class UiContext implements Disposable {
 		previousNodesById.clear();
 		for (node in submittedNodes) previousNodesById.set(node.id.value, node);
 		buildContext.beginLayoutSubmission(previousNodesById);
-		// A patch-only frame keeps the submitted tree and rebuilds just queued self-updating widgets. Internal feedback can
-		// use that path without a cache key because its outer build already ran; a new uncached submission still builds its root.
+		// A patch-only frame keeps the submitted tree and runs just the pending components. Internal feedback can use that
+		// path without a cache key because its outer build already ran; a new uncached submission still builds its root.
 		buildContext.resetObserved();
-		if (!patchOnly) {
-			buildContext.beginFrame();
-			queueInteractionPatches();
-		} else {
-			if (interactionStates.revision != submittedInteractionRevision) queueInteractionPatches();
-		}
-		// Announced edits precede patches: a composite rebuild must not replace their original priors with edited children.
+		if (!patchOnly) buildContext.beginFrame();
+		if (patchOnly || interactionStates.revision != submittedInteractionRevision) queueInteractionPaint();
+		// Announced edits precede component runs: a rerun must not replace their original priors with edited children.
 		buildContext.takeRetainedEdits(currentNodesById);
 		diagnosticStage = 4;
 		var viewStartedAt = Sys.time();
@@ -662,7 +652,7 @@ class UiContext implements Disposable {
 			for (index in 0...submittedNodes.length) submittedNodes[submittedNodes.length - 1 - index].didResolve();
 			// Signal writes and explicit callback requests rebuild before another layout pass consumes stale view geometry.
 			var rootDirty = buildContext.rootDependenciesDirty();
-			var patchesPending = buildContext.hasPendingPatches || buildContext.hasPendingRenderScopes();
+			var patchesPending = buildContext.hasPendingRenderScopes();
 			var earlyFeedback = buildContext.consumeBuildFeedbackBeforeLayout();
 			if (rootDirty || patchesPending || earlyFeedback) {
 				resolvedBuildFeedback = true;
@@ -699,8 +689,7 @@ class UiContext implements Disposable {
 		// returning so the first submitted frame reflects the synchronized value.
 		var callbackBuildFeedback = buildContext.consumeBuildFeedback();
 		var requestedBuildFeedback = resolvedBuildFeedback || callbackBuildFeedback;
-		if (requestedBuildFeedback || buildContext.rootDependenciesDirty()
-			|| buildContext.hasPendingPatches || buildContext.hasPendingRenderScopes()) {
+		if (requestedBuildFeedback || buildContext.rootDependenciesDirty() || buildContext.hasPendingRenderScopes()) {
 			if (buildFeedbackPass >= 7) throw "UI build feedback did not converge after 8 passes";
 			// Commit layout for the next comparison, but keep focus requests and widget resources until children settle.
 			root = next;
@@ -779,7 +768,7 @@ class UiContext implements Disposable {
 		// be able to access widget state while that event is being dispatched.
 		buildContext.retainRenderScopeState(nodesById);
 		stateStore.endFrame();
-		buildContext.pruneSelfUpdatingBuilds(nodesById);
+		buildContext.pruneRetainedEdits(nodesById);
 		buildContext.pruneRenderScopes(nodesById);
 		buildContext.pruneKeyCaches(nodesById, mountedHash);
 		buildContext.stateStore.prunePaths(nodesById);
@@ -787,7 +776,6 @@ class UiContext implements Disposable {
 		submittedStyleRevision = buildContext.styleRevision;
 		submittedAnimationRevision = animations.revision;
 		submittedRetainedEditRevision = buildContext.retainedEditRevision;
-		submittedPatchRequestRevision = buildContext.patchRequestRevision;
 		submittedBindingRequestRevision = bindingAppliedRevision;
 		submittedGestureRevision = gestures.revision;
 		submittedNodeCount = nodeCount;
@@ -808,8 +796,7 @@ class UiContext implements Disposable {
 		// This pass is now committed, including fresh nodes. A focus pass must compare against these instances, not
 		// fingerprints of the previous frame's different nodes with the same IDs.
 		if (verifyRetentionEvery > 0) recordFingerprints(next);
-		if ((interactionStates.revision != routedInteractionRevision
-			&& (buildContext.hasPendingRenderScopes() || routedInteractionNeedsBuild()))
+		if ((interactionStates.revision != routedInteractionRevision && routedInteractionNeedsBuild())
 			|| (reconcileNewFocus
 			&& focusChanged && (nextFocus != null || (previousFocus != null && nodesById.exists(previousFocus.value)))))
 			{
@@ -1221,15 +1208,14 @@ class UiContext implements Disposable {
 
 	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
 	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
+		// A build that read a changed state depends on it, so it is dirty; what is left is custom paint reading hover.
 		if (!steadyForInteractionReuse(cacheKey,
-			frame) || buildContext.hasRetainedEdits || buildContext.hasPendingPatches
-			|| buildContext.hasPendingRenderScopes()
+			frame) || buildContext.hasRetainedEdits || buildContext.hasPendingRenderScopes()
 			|| buildContext.bindingRequestRevision != submittedBindingRequestRevision) return -1;
 		var changes = interactionStates.changes();
 		for (change in changes) {
 			if (!change.hoverOnly()) return -1;
-			var node = currentNodesById.get(change.id);
-			if (node == null || (node.recordsInteraction && buildContext.hoverRebuilds(node))) return -1;
+			if (currentNodesById.get(change.id) == null) return -1;
 		}
 		var painted = 0;
 		for (change in changes) {
@@ -1244,71 +1230,20 @@ class UiContext implements Disposable {
 		return painted;
 	}
 
-	/** Nodes whose only change is custom paint during a patch-only frame; filled by `planInteractionPatches`. */
+	/** Nodes whose custom paint reads a changed state, repainted after the frame comparison; see queueInteractionPaint. */
 	final patchFramePaintNodes:Array<RenderNode> = [];
 
-	static final patchInteractionMask:haxeon.ui.style.StyleState = haxeon.ui.style.StyleState.Hovered
-		| haxeon.ui.style.StyleState.Pressed;
-
-	/**
-	 * Decides whether the pending pointer changes can be met by rebuilding just the widgets that read them (self-updating
-	 * widgets, such as buttons), leaving every other node of the submitted tree as it is. Queues those rebuilds and returns true,
-	 * or returns false having changed nothing, in which case the whole view rebuilds.
-	 */
-	function planInteractionPatches(cacheKey:String, frame:LayoutFrame):Bool {
-		if (inspectionEnabled || !buildContext.updateInPlace
-			|| !steadyForInteractionReuse(cacheKey, frame)) return false;
-		var changes = interactionStates.changes();
-		for (change in changes) {
-			var bits = change.before.rawValue ^ change.after.rawValue;
-			var node = currentNodesById.get(change.id);
-			if (node == null) return false;
-			// Routed input contains pointer and focus flags. Direct state-store edits must also
-			// agree with authored state before a frame can take the interaction-only path.
-			var other = bits & ~patchInteractionMask.rawValue;
-			if (other != 0 && (change.after.rawValue & other) != (node.states.rawValue & other)) return false;
-			bits &= patchInteractionMask.rawValue;
-			if (bits == 0) continue;
-			if (buildContext.interactionRenderScope(node) == null
-				&& buildContext.updatingOwner(node) == null && node.recordsInteraction
-				&& (bits != haxeon.ui.style.StyleState.Hovered.rawValue || buildContext.hoverRebuilds(node)))
-				return false;
-		}
-		patchFramePaintNodes.resize(0);
-		for (change in changes) {
-			var node:RenderNode = cast currentNodesById.get(change.id);
-			var hoverOnly = change.hoverOnly();
-			if (queueNativeInteraction(node)) continue;
-			var owner = buildContext.updatingOwner(node);
-			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
-				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
-			} else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
-		}
-		return true;
-	}
-
+	/** Whether routing changed a state after the build that a build read: a component or the root then runs again. */
 	function routedInteractionNeedsBuild():Bool {
-		var rebuild = false;
 		for (change in interactionStates.changes()) {
 			var node = currentNodesById.get(change.id);
-			if (node == null) continue;
-			var hoverOnly = change.hoverOnly();
-			// A component that read the change is pending already (hasPendingRenderScopes).
-			if (buildContext.interactionRenderScope(node) != null) {
-				if (node.hasPaintHandler()) customPaint.invalidate(node.id.value);
-			} else if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) rebuild = true;
-			else if (node.hasPaintHandler()) {
-				// Layout is already submitted; only the custom list depends on this paint-only routed change.
-				customPaint.invalidate(node.id.value);
-			}
+			// Layout is already submitted; only the custom paint list depends on a state its painter reads.
+			if (node != null && node.hasPaintHandler()) customPaint.invalidate(node.id.value);
 		}
-		return rebuild;
+		return buildContext.hasPendingRenderScopes() || buildContext.rootDependenciesDirty();
 	}
 
 	function settleStructure(next:RenderNode):RenderNode {
-		buildContext.flushRenderScopes(next, true);
-		next = buildContext.currentRoot(next);
-		buildContext.applyPatches(next, submittedTopology);
 		buildContext.flushRenderScopes(next, true);
 		next = buildContext.currentRoot(next);
 		buildContext.flushRenderScopes(next);
@@ -1316,34 +1251,18 @@ class UiContext implements Disposable {
 		return next;
 	}
 
-	function queueInteractionPatches():Void {
+	/** Builds depend on the states they read; custom paint reads them as it paints, so a changed node with a painter repaints. */
+	function queueInteractionPaint():Void {
 		patchFramePaintNodes.resize(0);
 		for (change in interactionStates.changes()) {
 			var node = currentNodesById.get(change.id);
-			if (node == null) continue;
-			var hoverOnly = change.hoverOnly();
-			if (queueNativeInteraction(node)) continue;
-			var owner = buildContext.updatingOwner(node);
-			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
-				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
-				// Retained caches ignore hover no rule matches, so a cached node that paints it is repainted here.
-			} else if (node.recordsInteraction && node.hasPaintHandler()) patchFramePaintNodes.push(node);
+			if (node != null && node.hasPaintHandler()) patchFramePaintNodes.push(node);
 		}
-	}
-
-	/**
-	 * A component's body depends on the states it read, so a change already woke it; what is left is custom paint, which
-	 * reads the node's states as it paints.
-	 */
-	function queueNativeInteraction(node:RenderNode):Bool {
-		if (buildContext.interactionRenderScope(node) == null) return false;
-		if (node.hasPaintHandler() && patchFramePaintNodes.indexOf(node) < 0) patchFramePaintNodes.push(node);
-		return true;
 	}
 
 	function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame):Bool {
 		return sameSubmittedInputs(cacheKey, frame) && dirtyFlagsWithoutRootReads() == UiDirtyFlag.None
-			&& !buildContext.rootDependenciesDirty() && !buildContext.hasPendingPatches;
+			&& !buildContext.rootDependenciesDirty();
 	}
 
 	static function sameGeometry(left:ResolvedLayoutItem, right:ResolvedLayoutItem):Bool {
@@ -1403,10 +1322,6 @@ class UiContext implements Disposable {
 			| UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics
 			| UiDirtyFlag.NeedsHitGeometry;
 		if (animations.rebuildingCount > 0) result |= UiDirtyFlag.NeedsComposite;
-		if (buildContext.patchRequestRevision != submittedPatchRequestRevision) result |= UiDirtyFlag.NeedsBuild
-			| UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout
-			| UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics
-			| UiDirtyFlag.NeedsHitGeometry;
 		if (buildContext.retainedEditRevision != submittedRetainedEditRevision) result |= UiDirtyFlag.NeedsStyle
 			| UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite
 			| UiDirtyFlag.NeedsHitGeometry;
