@@ -49,5 +49,16 @@ function main():Int {
 		case Failure(error): sameException = error == exception;
 		case _:
 	});
-	return sameException ? 42 : 5;
+	if (!sameException)
+		return 5;
+
+	// A promise of no value completes with none, and its success carries none.
+	var done = new Promise<Void>();
+	var completions = 0;
+	done.future.onComplete(outcome -> switch outcome {
+		case Success(): completions++;
+		case _:
+	});
+	done.complete();
+	return completions == 1 ? 42 : 6;
 }

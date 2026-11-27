@@ -80,7 +80,8 @@ enum Result<T, E> implements MustUse {
   substituted for a type parameter, is omitted: `Ok()` makes a `Result<Void, E>`, `case Ok():` matches it.
 - **Generic code stays valid when a type parameter is `Void`.** A binding of type `T` holds the unit value, and passing
   it where a `Void` argument goes is the same as omitting it. `T->U` with `T` as `Void` is `Void->U`, the function
-  with no arguments, as Haxe writes it.
+  with no arguments, as Haxe writes it. A generic body writes an item for each `T`, so it is elaborated at `Void` as at
+  any other type.
 - **Where a `Void` is left out.** Calls, lambdas and patterns follow one rule: where fewer are written than there are
   parameters, each `Void` parameter takes the unit value while more parameters remain than are written, and a `Void` value
   written in its place still takes it. So `Both(42)` makes a `Both(first:Void, second:Int)` and `case Both(n):` matches

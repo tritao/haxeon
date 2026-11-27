@@ -270,8 +270,7 @@ class GenericInstantiation {
 			if (session.representation.containsTypeParameter(argument, []))
 				forParameters = true;
 		session.typeSharedUnit(name,
-			() -> session.closureConversion.addFunction(elaborateGenerics && !forParameters
-			&& !VoidArguments.anyVoid(representationArguments) ? elaboratedBody(name, fn,
+			() -> session.closureConversion.addFunction(elaborateGenerics && !forParameters ? elaboratedBody(name, fn,
 			owner, isStatic, receiver, substitutions) : bodyTyper.typeFunction(fn, owner, isStatic, substitutions, name,
 			receiver)), forParameters, unused);
 	}
