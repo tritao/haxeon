@@ -48,10 +48,35 @@ a user's or a registry package, as a bare `io` or `fs` would.
 ### 2. A small prelude
 
 The root package holds only what every program uses without an import: the core types (`Int`, `Float`, `Bool`,
-`String`, `Array`, `Map`, `Void`, `Dynamic`), `Result` and `Option`, and `trace`. Everything else is imported. The
+`String`, `Array`, `Map`, `Void`, `Dynamic`), `Result`, and `trace`. Everything else is imported. The
 interfaces the language checks (`Equatable`, `Hashable`, `MustUse`) move to `std.lang`, imported where implemented.
 
-### 3. Packages by domain, not by target
+### 3. Absence is `T?`, not `Option`
+
+A value that may be absent is `T?` (today's `Null<T>`), the one way to say so; `std` has no `Option`, and
+`haxe.ds.Option` goes to the compatibility package (section 9). Nothing in the compiler, the packages or `lib/`
+uses `Option` today.
+
+- **It narrows.** After `x != null`, `x` is a `T`; `?.` and `??` read it without a `switch` or an `unwrap`.
+- **It costs nothing.** `T?` takes the inline presence layout (a flag beside the value, as `Null<S>` of a struct has
+  now); `Option` is a boxed generic enum, and inline generic enums (STRUCTS.md E8) would only bring it level.
+- **It is the C ABI's and Haxe's.** A `T?` reference is a nullable pointer, and ported code already says `Null<T>`.
+- **Nesting is the API's job.** `T??` is `T?`, so a lookup of a map whose values are optional cannot answer "no key"
+  apart from "a key whose value is absent" in its return type. Such an API says it another way: `exists(key)`, an entry
+  or a cursor, or a `Result` when a missing key is a failure.
+
+This is only sound once the language has two things it does not have yet, and they are prerequisites of this section,
+not part of it ([FUTURE_LANGUAGE.md](../design/FUTURE_LANGUAGE.md), change 1):
+
+- **Non-null by default.** A plain `T` is never null, so `T?` is what says a value may be absent. Today any reference
+  may be null, and `Null<T>` of a reference tells the compiler nothing.
+- **No silent default.** A `T?` reads as a `T` only once narrowed. Today a null `Null<Int>` reads as `0` wherever an `Int`
+  is expected, which is why `Result` has no accessor returning `Null<T>` ([ERROR_MODEL.md](../design/ERROR_MODEL.md)).
+
+Until they land, `std` APIs return `Null<T>` where a value may be absent and document it, so the move to `T?` is a
+rename.
+
+### 4. Packages by domain, not by target
 
 | Package | Contents | From |
 |---|---|---|
@@ -64,7 +89,7 @@ interfaces the language checks (`Equatable`, `Hashable`, `MustUse`) move to `std
 | `std.time` | `Date`, `Timer`, monotonic and CPU time | root, `haxe`, `Sys` |
 | `std.json`, `std.xml` | parsing and printing | `haxe` |
 | `std.crypto` | `Sha256`, `Base64` | `haxe.crypto` |
-| `std.fs` | files and directories, section 7 | `sys`, `haxeon.filesystem`, `runtime.MemoryFileSystem` |
+| `std.fs` | files and directories, section 8 | `sys`, `haxeon.filesystem`, `runtime.MemoryFileSystem` |
 | `std.process` | the process's arguments and environment, child processes | `Sys`, `sys.io` |
 | `std.net` | sockets, hosts | `sys.net` |
 | `std.thread` | threads, locks, conditions, thread-local values | `sys.thread`, `haxeon.Threads` |
@@ -77,24 +102,24 @@ interfaces the language checks (`Equatable`, `Hashable`, `MustUse`) move to `std
 What a target lacks, it lacks by module: importing `std.process` for Wasm is a diagnostic that names the target, as an
 unsupported feature is today. No module is half-present, with functions that throw "not available on this target".
 
-### 4. The implementation is not a prefix
+### 5. The implementation is not a prefix
 
 `runtime.*` and `hl.*` stop being packages a program can import. Their declarations become `internal` to the modules
 that use them, or move to one internal package the compiler keeps out of a program's imports. What a program legitimately
 needs from them (`hl.Gc`'s counters, for one) gets a public home such as `std.profile`.
 
-### 5. Errors follow ERROR_MODEL.md everywhere
+### 6. Errors follow ERROR_MODEL.md everywhere
 
 An expected failure returns `Result<T, E>` with an error enum of the module (`FileError`, `ProcessError`, `NetError`);
 a misuse throws a `std.lang.Exception` subclass. No function answers a failure with `Bool`, `null` or a thrown string.
 
-### 6. Methods instead of helper classes
+### 7. Methods instead of helper classes
 
 `Std`, `StringTools`, `Lambda`, `DateTools` and most of `Math` become methods of the types they serve:
 `s.startsWith(prefix)`, `Int.parse(s)` returning a `Result`, `values.map(f)`, `x.abs()`. Free functions remain where
 there is no receiver (`std.math.max(a, b)`).
 
-### 7. `std.fs`
+### 8. `std.fs`
 
 The first package built to this layout, because files are where the three APIs and error styles meet:
 
@@ -112,9 +137,9 @@ The first package built to this layout, because files are where the three APIs a
   copies in the compiler, the build, `lib/haxeon-io` and the tests.
 - **Synchronous first.** `Future<Result<T, FileError>>` forms come later, for code on a UI thread.
 
-### 8. Haxe's API is a package of its own
+### 9. Haxe's API is a package of its own
 
-`haxe.*`, `sys.*`, `Std`, `Sys`, `Lambda`, `StringTools`, `DateTools`, `Reflect` and `utest` move to a compatibility
+`haxe.*` (with `haxe.ds.Option`), `sys.*`, `Std`, `Sys`, `Lambda`, `StringTools`, `DateTools`, `Reflect` and `utest` move to a compatibility
 package (`lib/haxe-compat`), written as adapters over `std`: Haxe's `sys.FileSystem.deleteFile` calls `std.fs` and throws
 on the `Err`, as Haxe does. Code ported from Haxe depends on it; new code and the packages do not. Its behaviour is
 Haxe's, so the divergences recorded in `stdlib/UPSTREAM.md` go with it.
@@ -143,10 +168,12 @@ The order:
 - The first-party packages (`haxeon.ui`, `haxeon.gpu`, `haxeon.audio`, ...) carry the brand too. They are packages, not
   the standard library, and this ADR leaves their names as they are.
 - `Dynamic` and reflection: what of `Reflect` and `Type` the `std` API keeps, beside the compatibility package.
+- When non-null by default (section 3's prerequisite) lands, against this migration: it changes the meaning of existing
+  code, so it is a decision of its own.
 
 ## Consequences
 
-- One prefix, one place per domain, one error style and one way to do each thing; a module's documentation says what a
+- One prefix, one place per domain, one error style, one way to say a value may be absent, and one way to do each thing; a module's documentation says what a
   target lacks without a `sys`.
 - Haxe code no longer compiles against the standard library alone: it adds the compatibility package. Migration pages on
   the site say which `std` API replaces each Haxe one.
