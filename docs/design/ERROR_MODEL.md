@@ -117,6 +117,10 @@ ui's argument checks, stay exceptions. Other APIs change when they are next work
   needs an expected `Result`: a typed local, or `try` (whose value is then expected to be a `Result` of the expected
   type). The subject of a `switch` or the receiver of `.mapErr(f)` has none, and needs the typed local; inferring the
   decoded type through such a use is open.
+- **RPC (next).** `RpcConnection.call` and a typed service's client methods settle `Future<Result<Response,
+  RpcError>>`, so `Outcome.Failure` means a bug; the connector's `RpcConnectResult` becomes a `Result` of the transport.
+  Open: whether `RpcError` becomes an enum, since its codes include a peer's own and `ambiguous` says whether the
+  request may have run, and where `retryable` lives once the connector's failure is an error value.
 
 The compiler's own source uses none of this until the gates of [ADR 0006](../adr/0006-haxeon-only-compiler-source.md)
 hold: stock Haxe parses neither enum methods nor `try` without `catch`. Its failures are diagnostics or bugs anyway.
