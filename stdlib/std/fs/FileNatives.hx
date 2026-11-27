@@ -45,7 +45,22 @@ internal extern function read(root:Null<RootHandle>, path:String):Null<Bytes>;
 internal extern function write(root:Null<RootHandle>, path:String, content:Bytes, mode:Int):Bool;
 
 @:hlNative("haxeon_runtime", "__fs_write_atomic")
-internal extern function writeAtomic(root:Null<RootHandle>, path:String, content:Bytes):Bool;
+internal extern function writeAtomic(root:Null<RootHandle>, path:String, content:Bytes, replace:Bool):Bool;
+
+@:hlNative("haxeon_runtime", "__fs_read_text")
+internal extern function readText(root:Null<RootHandle>, path:String):Null<String>;
+
+/** What kind of entry is at `path` (an EntryKind's index), or -1. */
+@:hlNative("haxeon_runtime", "__fs_kind")
+internal extern function kind(root:Null<RootHandle>, path:String, follow:Bool):Int;
+
+/** `path` as an absolute path: its links resolved on POSIX, resolved against the working directory on Windows. */
+@:hlNative("haxeon_runtime", "__fs_absolute")
+internal extern function absolute(path:String):Null<String>;
+
+/** Haxe's FileStat fields of `path` in its order (gid, uid, atime, mtime, ctime, size, dev, ino, nlink, rdev, mode), or null. */
+@:hlNative("haxeon_runtime", "__fs_stat")
+internal extern function stat(path:String):Null<Array<Int>>;
 
 @:hlNative("haxeon_runtime", "__fs_metadata")
 internal extern function nativeMetadata(root:Null<RootHandle>, path:String, follow:Bool, out:Bytes):Bool;
@@ -85,6 +100,14 @@ internal function metadata(root:Null<RootHandle>, path:String, follow:Bool):Null
 	if (!nativeMetadata(root, path, follow, out))
 		return null;
 	return new Metadata(kindOf(out.getInt32(0)), out.getInt64(8), out.getDouble(16));
+}
+
+/** The names in the directory `path`, or null. */
+internal function names(root:Null<RootHandle>, path:String):Null<Array<String>> {
+	var raw = nativeList(root, path);
+	if (raw == null)
+		return null;
+	return [for (index in 0...(raw.length >> 1)) raw[index * 2]];
 }
 
 /** The entries of the directory `path`, or null. */
@@ -190,8 +213,40 @@ internal function write(root:Null<RootHandle>, path:String, content:Bytes, mode:
 	return true;
 }
 
-internal function writeAtomic(root:Null<RootHandle>, path:String, content:Bytes):Bool
-	return write(root, path, content, Replace);
+internal function writeAtomic(root:Null<RootHandle>, path:String, content:Bytes, replace:Bool):Bool
+	return write(root, path, content, replace ? Replace : Create);
+
+internal function readText(root:Null<RootHandle>, path:String):Null<String> {
+	var bytes = read(root, path);
+	if (bytes == null)
+		return null;
+	for (index in 0...bytes.length)
+		if (bytes.get(index) == 0)
+			return fail(Io(-1, "the file holds a NUL character, which a String cannot"), null);
+	return bytes.toString();
+}
+
+internal function kind(root:Null<RootHandle>, path:String, follow:Bool):Int {
+	var full = resolve(root, path);
+	if (full == null)
+		return -1;
+	if (!Memory.exists(full))
+		return fail(NotFound, -1);
+	return Memory.isDirectory(full) ? 1 : 0;
+}
+
+internal function absolute(path:String):Null<String>
+	return Memory.normalize(path);
+
+internal function stat(path:String):Null<Array<Int>> {
+	var values = Memory.stat(path);
+	return values == null ? fail(NotFound, null) : values;
+}
+
+internal function names(root:Null<RootHandle>, path:String):Null<Array<String>> {
+	var entries = list(root, path);
+	return entries == null ? null : [for (entry in entries) entry.name];
+}
 
 internal function metadata(root:Null<RootHandle>, path:String, follow:Bool):Null<Metadata> {
 	var full = resolve(root, path);

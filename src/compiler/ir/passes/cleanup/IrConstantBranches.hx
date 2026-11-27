@@ -10,7 +10,7 @@ import compiler.ir.reuse.IrFactReader;
 
 /**
  * Folds branches whose condition is known before anything walks the program: a Bool constant, a call to a function that
- * only returns a Bool constant (`InputFiles.isRecording()` on Wasm, `#if`-selected flags), or an equality of two known
+ * only returns a Bool constant (a flag selected by `#if`), or an equality of two known
  * Bools. The branch becomes a jump, the blocks only the other side reached are removed with the phi inputs and debug
  * bindings that named them, and the reachability walks after it never see the calls those blocks made, so a dead branch
  * no longer links its callees (or their imports and runtime needs) into the program.

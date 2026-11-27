@@ -22,6 +22,8 @@
 #include <string.h>
 #ifdef _WIN32
 #include <windows.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #else
 #include <dirent.h>
 #include <errno.h>
@@ -71,6 +73,9 @@ enum { REALTIME_FS_REPLACE, REALTIME_FS_APPEND, REALTIME_FS_CREATE };
 
 static REALTIME_FS_TLS int realtime_fs_kind;
 static REALTIME_FS_TLS int realtime_fs_code;
+
+/* The code of an Io failure that is not the system's: a file read as text holds a NUL character, which a String cannot. */
+#define REALTIME_FS_TEXT_NUL (-1)
 
 typedef struct {
 	int kind;
@@ -369,6 +374,11 @@ static bool realtime_fs_is_link( const FILE_ATTRIBUTE_TAG_INFO *tag ) {
 		&& (tag->ReparseTag == IO_REPARSE_TAG_SYMLINK || tag->ReparseTag == IO_REPARSE_TAG_MOUNT_POINT);
 }
 
+static bool realtime_fs_names_directory( const wchar_t *path ) {
+	DWORD attributes = GetFileAttributesW(path);
+	return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
 /* Opens what is at `path` with `access` (FILE_FLAG_OPEN_REPARSE_POINT in `flags` opens a link itself), or answers
    INVALID_HANDLE_VALUE after recording why. A root's handle is kept only when its final path is beneath the root. */
 static HANDLE realtime_fs_open( realtime_fs_directory *root, const wchar_t *path, DWORD access, DWORD flags ) {
@@ -400,8 +410,11 @@ static HANDLE realtime_fs_open( realtime_fs_directory *root, const wchar_t *path
 		handle = CreateFileW(target,access,REALTIME_FS_SHARE_ALL,NULL,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS | flags,NULL);
 		if( handle != INVALID_HANDLE_VALUE ) break;
 		DWORD error = GetLastError();
-		/* A process that holds the file without sharing it (a scanner, an indexer) lets go within a moment. */
-		if( (error != ERROR_SHARING_VIOLATION && error != ERROR_LOCK_VIOLATION) || attempt == 20 ) {
+		/* A process that holds the file without sharing it (a scanner, an indexer) lets go within a moment, and a file an
+		   atomic write is replacing refuses opens while the replaced one is pending deletion. */
+		bool transient = error == ERROR_SHARING_VIOLATION || error == ERROR_LOCK_VIOLATION || error == ERROR_DELETE_PENDING
+			|| (error == ERROR_ACCESS_DENIED && !realtime_fs_names_directory(target));
+		if( !transient || attempt == 20 ) {
 			realtime_fs_fail(error);
 			realtime_fs_classify_missing(target);
 			free(owned);
@@ -561,8 +574,9 @@ static bool realtime_fs_read_handle( HANDLE handle, unsigned char **data, int *l
 		CloseHandle(handle);
 		return realtime_fs_fail(ERROR_FILE_TOO_LARGE);
 	}
+	/* One byte past the end stays free, for a caller that ends the data with a NUL. */
 	int capacity = (int)size.QuadPart, used = 0;
-	unsigned char *buffer = (unsigned char *)malloc(capacity > 0 ? (size_t)capacity : 1);
+	unsigned char *buffer = (unsigned char *)malloc((size_t)capacity + 1);
 	if( buffer == NULL ) {
 		CloseHandle(handle);
 		return realtime_fs_fail(ERROR_NOT_ENOUGH_MEMORY);
@@ -597,6 +611,7 @@ static bool realtime_fs_write_handle( HANDLE handle, const unsigned char *data, 
 	return true;
 }
 
+/* The whole file, in a buffer the caller frees, with one byte free past its end. */
 static bool realtime_fs_read( realtime_fs_directory *root, const wchar_t *path, unsigned char **data, int *length ) {
 	HANDLE handle = realtime_fs_open(root,path,GENERIC_READ,0);
 	return handle != INVALID_HANDLE_VALUE && realtime_fs_read_handle(handle,data,length);
@@ -666,7 +681,7 @@ static bool realtime_fs_write( realtime_fs_directory *root, const wchar_t *path,
 }
 
 static bool realtime_fs_write_atomic( realtime_fs_directory *root, const wchar_t *path, const unsigned char *data,
-	int length ) {
+	int length, bool replace ) {
 	static volatile LONG sequence = 0;
 	realtime_fs_place place;
 	if( !realtime_fs_place_of(root,path,&place,ERROR_ACCESS_DENIED) ) {
@@ -707,7 +722,7 @@ static bool realtime_fs_write_atomic( realtime_fs_directory *root, const wchar_t
 	free(temporary);
 	bool done = created && realtime_fs_write_handle(handle,data,length)
 		&& (FlushFileBuffers(handle) || realtime_fs_fail(GetLastError()))
-		&& realtime_fs_rename_handle(handle,&place,true);
+		&& realtime_fs_rename_handle(handle,&place,replace);
 	if( created && !done ) {
 		int kind = realtime_fs_kind, code = realtime_fs_code;
 		realtime_fs_dispose(handle);
@@ -1040,15 +1055,16 @@ static bool realtime_fs_read_descriptor( int fd, unsigned char **data, int *leng
 		close(fd);
 		return realtime_fs_fail(EISDIR);
 	}
-	/* The measured size is only a first capacity: /proc files and pipes report 0, so read to the end. */
-	size_t capacity = info.st_size > 0 ? (size_t)info.st_size : 4096, used = 0;
+	/* The measured size is only a first capacity: /proc files and pipes report 0, so read to the end. One byte past the
+	   end stays free, for a caller that ends the data with a NUL. */
+	size_t capacity = info.st_size > 0 ? (size_t)info.st_size + 1 : 4096, used = 0;
 	unsigned char *buffer = (unsigned char *)malloc(capacity);
 	if( buffer == NULL ) {
 		close(fd);
 		return realtime_fs_fail(ENOMEM);
 	}
 	for(;;) {
-		if( used == capacity ) {
+		if( used + 1 >= capacity ) {
 			if( capacity >= 0x40000000 ) {
 				free(buffer);
 				close(fd);
@@ -1095,6 +1111,7 @@ static int realtime_fs_write_descriptor( int fd, const unsigned char *data, int 
 	return 0;
 }
 
+/* The whole file, in a buffer the caller frees, with one byte free past its end. */
 static bool realtime_fs_read( realtime_fs_directory *root, const char *path, unsigned char **data, int *length ) {
 	int fd = realtime_fs_open(root,path,O_RDONLY | O_CLOEXEC | O_NOCTTY,0);
 	return fd >= 0 && realtime_fs_read_descriptor(fd,data,length);
@@ -1112,7 +1129,7 @@ static bool realtime_fs_write( realtime_fs_directory *root, const char *path, co
 }
 
 static bool realtime_fs_write_atomic( realtime_fs_directory *root, const char *path, const unsigned char *data,
-	int length ) {
+	int length, bool replace ) {
 	static unsigned sequence = 0;
 	realtime_fs_place place;
 	if( !realtime_fs_place_of(root,path,&place,EISDIR) ) return false;
@@ -1135,9 +1152,12 @@ static bool realtime_fs_write_atomic( realtime_fs_directory *root, const char *p
 	if( error == 0 ) error = realtime_fs_write_descriptor(fd,data,length);
 	if( error == 0 && fsync(fd) != 0 ) error = errno;
 	if( fd >= 0 && close(fd) != 0 && error == 0 ) error = errno;
-	if( error == 0 && renameat(place.directory,temporary,place.directory,place.name) != 0 ) error = errno;
+	/* Without `replace`, a link fails where something is already there, which a rename would replace. */
+	if( error == 0 && replace && renameat(place.directory,temporary,place.directory,place.name) != 0 ) error = errno;
+	if( error == 0 && !replace && linkat(place.directory,temporary,place.directory,place.name,0) != 0 ) error = errno;
+	if( !replace && fd >= 0 ) unlinkat(place.directory,temporary,0);
 	if( error == 0 ) error = realtime_fs_sync_directory(&place);
-	else if( fd >= 0 ) unlinkat(place.directory,temporary,0);
+	else if( replace && fd >= 0 ) unlinkat(place.directory,temporary,0);
 	free(temporary);
 	realtime_fs_place_release(&place);
 	return error == 0 ? realtime_fs_succeed() : realtime_fs_fail(error);
@@ -1308,6 +1328,7 @@ static void realtime_fs_root_close( realtime_fs_directory *root ) {
 /* The system's description of the last failure on this thread, in a buffer the caller frees. */
 static realtime_fs_char *realtime_fs_message( void ) {
 #ifdef _WIN32
+	if( realtime_fs_code == REALTIME_FS_TEXT_NUL ) return realtime_fs_concat(L"the file holds a NUL character, which a String cannot",L"",L"");
 	wchar_t *message = NULL;
 	DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 		NULL,(DWORD)realtime_fs_code,0,(wchar_t *)&message,0,NULL);
@@ -1319,6 +1340,63 @@ static realtime_fs_char *realtime_fs_message( void ) {
 	LocalFree(message);
 	return result;
 #else
+	if( realtime_fs_code == REALTIME_FS_TEXT_NUL ) return strdup("the file holds a NUL character, which a String cannot");
 	return strdup(strerror(realtime_fs_code));
 #endif
+}
+
+/* What kind of entry is at `path` (std.fs.EntryKind), or false: `exists` and `isDirectory` without the rest of the
+   metadata. */
+static bool realtime_fs_kind_at( realtime_fs_directory *root, const realtime_fs_char *path, bool follow, int *kind ) {
+#ifdef _WIN32
+	if( root == NULL ) {
+		DWORD attributes = GetFileAttributesW(path);
+		if( attributes == INVALID_FILE_ATTRIBUTES ) return realtime_fs_fail(GetLastError());
+		if( (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0 ) {
+			*kind = (attributes & FILE_ATTRIBUTE_DIRECTORY) ? REALTIME_FS_DIRECTORY
+				: (attributes & FILE_ATTRIBUTE_DEVICE) ? REALTIME_FS_OTHER : REALTIME_FS_FILE;
+			return realtime_fs_succeed();
+		}
+	}
+#endif
+	realtime_fs_metadata metadata;
+	if( !realtime_fs_metadata_of(root,path,follow,&metadata) ) return false;
+	*kind = metadata.kind;
+	return true;
+}
+
+/* `path` as an absolute path, in a buffer the caller frees, or NULL after recording why: with its symbolic links
+   resolved on POSIX (realpath), resolved against the working directory on Windows (GetFullPathNameW). */
+static realtime_fs_char *realtime_fs_absolute( const realtime_fs_char *path ) {
+#ifdef _WIN32
+	return realtime_fs_full_path(path);
+#else
+	char *resolved = realpath(path,NULL);
+	if( resolved == NULL ) realtime_fs_fail(errno);
+	else realtime_fs_succeed();
+	return resolved;
+#endif
+}
+
+/* Haxe's FileStat of `path`, in its order: gid, uid, atime, mtime, ctime, size, dev, ino, nlink, rdev, mode. */
+static bool realtime_fs_stat( const realtime_fs_char *path, int values[11] ) {
+#ifdef _WIN32
+	struct _stat64 info;
+	if( _wstat64(path,&info) != 0 ) return realtime_fs_fail(GetLastError());
+#else
+	struct stat info;
+	if( stat(path,&info) != 0 ) return realtime_fs_fail(errno);
+#endif
+	values[0] = (int)info.st_gid;
+	values[1] = (int)info.st_uid;
+	values[2] = (int)info.st_atime;
+	values[3] = (int)info.st_mtime;
+	values[4] = (int)info.st_ctime;
+	values[5] = (int)info.st_size;
+	values[6] = (int)info.st_dev;
+	values[7] = (int)info.st_ino;
+	values[8] = (int)info.st_nlink;
+	values[9] = (int)info.st_rdev;
+	values[10] = (int)info.st_mode;
+	return realtime_fs_succeed();
 }

@@ -38,7 +38,8 @@ internal extern function sysProcessMemory():Float;
 @:hlNative("haxeon_runtime", "__sys_get_cwd")
 internal extern function sysGetCwd():String;
 
-@:hlNative("haxeon_runtime", "__sys_full_path")
+/** std.fs's native, bound here too so a program that uses Sys does not load std.fs. */
+@:hlNative("haxeon_runtime", "__fs_absolute")
 internal extern function sysFullPath(path:String):String;
 
 @:hlNative("haxeon_runtime", "__sys_exe_path")

@@ -22,102 +22,25 @@
 
 package sys;
 
-#if !wasm
-@:hlNative("haxeon_runtime", "__sys_exists")
-internal extern function fileSystemExists(path:String):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_is_dir")
-internal extern function fileSystemIsDirectory(path:String):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_full_path")
-internal extern function fileSystemFullPath(path:String):String;
-
-@:hlNative("haxeon_runtime", "__sys_read_dir")
-internal extern function fileSystemReadDirectory(path:String):Array<String>;
-
-@:hlNative("haxeon_runtime", "__sys_read_dir_entries")
-internal extern function fileSystemReadDirectoryEntriesRaw(path:String):Array<String>;
-
-@:hlNative("haxeon_runtime", "__sys_metadata")
-internal extern function fileSystemMetadata(path:String):Null<Array<Int>>;
-
-@:hlNative("haxeon_runtime", "__sys_create_dir")
-internal extern function fileSystemCreateDirectory(path:String, mode:Int):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_delete")
-internal extern function fileSystemDeleteFile(path:String):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_remove_dir")
-internal extern function fileSystemDeleteDirectory(path:String):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_rename")
-internal extern function fileSystemRename(path:String, newPath:String):Bool;
-#else
-// Wasm keeps files in the session's in-memory filesystem (runtime.MemoryFileSystem).
-internal function fileSystemExists(path:String):Bool
-	return runtime.MemoryFileSystem.exists(path);
-
-internal function fileSystemIsDirectory(path:String):Bool
-	return runtime.MemoryFileSystem.isDirectory(path);
-
-internal function fileSystemFullPath(path:String):String
-	return runtime.MemoryFileSystem.normalize(path);
-
-internal function fileSystemReadDirectory(path:String):Array<String>
-	return runtime.MemoryFileSystem.readDirectory(path);
-
-internal function fileSystemReadDirectoryEntriesRaw(path:String):Array<String> {
-	var names = runtime.MemoryFileSystem.readDirectory(path);
-	var entries:Array<String> = [];
-	for (name in names) {
-		entries.push(name);
-		entries.push(runtime.MemoryFileSystem.isDirectory(runtime.MemoryFileSystem.normalize(path + "/" + name))
-			? "d" : "f");
-	}
-	return entries;
-}
-
-internal function fileSystemMetadata(path:String):Null<Array<Int>>
-	return runtime.MemoryFileSystem.stat(path);
-
-/** Creates missing parents too, as the Haxe API documents. The mode is ignored. */
-function fileSystemCreateDirectory(path:String, mode:Int):Bool
-	return runtime.MemoryFileSystem.createDirectory(path);
-
-internal function fileSystemDeleteFile(path:String):Bool
-	return runtime.MemoryFileSystem.deleteFile(path);
-
-internal function fileSystemDeleteDirectory(path:String):Bool
-	return runtime.MemoryFileSystem.deleteDirectory(path);
-
-internal function fileSystemRename(path:String, newPath:String):Bool
-	return runtime.MemoryFileSystem.rename(path, newPath);
-#end
+import std.fs.FileNatives;
 
 /**
- * Files and directories by path: whether they exist, what a directory holds, their status, and creating, deleting and
- * moving them. On Wasm they are the session's in-memory filesystem.
+ * Files and directories by path, as Haxe's API has them: whether they exist, what a directory holds, their status, and
+ * creating, deleting and moving them, throwing where an operation fails. It runs on `std.fs`, which answers the same
+ * operations with a `Result` instead; on Wasm the files are the session's in-memory filesystem.
  */
 class FileSystem {
 	/** Whether a file or directory exists at `path`. */
-	public static function exists(path:String):Bool {
-		var result = fileSystemExists(path);
-		if (haxeon.build.InputFiles.isRecording())
-			haxeon.build.InputFiles.existsQuery(path, result);
-		return result;
-	}
+	public static function exists(path:String):Bool
+		return FileNatives.kind(null, path, true) >= 0;
 
 	/** Whether `path` is a directory. */
-	public static function isDirectory(path:String):Bool {
-		var result = fileSystemIsDirectory(path);
-		if (haxeon.build.InputFiles.isRecording())
-			haxeon.build.InputFiles.directoryQuery(path, result);
-		return result;
-	}
+	public static function isDirectory(path:String):Bool
+		return FileNatives.kind(null, path, true) == 1;
 
 	/** `path` as an absolute path with its symbolic links resolved: the path of what exists there. */
-	public static inline function fullPath(path:String):String
-		return fileSystemFullPath(path);
+	public static function fullPath(path:String):String
+		return FileNatives.absolute(path);
 
 	/** As Haxe's: a relative path joined onto the working directory, whether it exists or not; an absolute one as it is. */
 	public static function absolutePath(relPath:String):String {
@@ -131,38 +54,30 @@ class FileSystem {
 	 * cannot be read.
 	 */
 	public static function readDirectory(path:String):Array<String> {
-		if (!haxeon.build.InputFiles.isRecording())
-			return fileSystemReadDirectory(path);
-		var names:Null<Array<String>> = null;
-		try
-			names = fileSystemReadDirectory(path)
-		catch (error:Dynamic) {
-			haxeon.build.InputFiles.listingFailed(path);
-			throw error;
-		}
-		haxeon.build.InputFiles.listingRead(path, names);
+		var names = FileNatives.names(null, path);
+		if (names == null)
+			throw failed("read directory", path);
 		return names;
 	}
 
-	/** Lists child names and their directory kinds using one native enumeration. */
+	/** Lists child names and whether each is a directory, following a symbolic link, using one native enumeration. */
 	public static function readDirectoryEntries(path:String):Array<FileSystemEntry> {
-		var raw = fileSystemReadDirectoryEntriesRaw(path);
-		var entries:Array<FileSystemEntry> = [];
-		var index = 0;
-		while (index + 1 < raw.length) {
-			entries.push(new FileSystemEntry(raw[index], raw[index + 1] == "d"));
-			index += 2;
-		}
-		if (haxeon.build.InputFiles.isRecording())
-			haxeon.build.InputFiles.listingRead(path, [for (entry in entries) entry.name]);
-		return entries;
+		var entries = FileNatives.list(null, path);
+		if (entries == null)
+			throw failed("read directory", path);
+		return [for (entry in entries)
+			new FileSystemEntry(entry.name, switch entry.kind {
+				case Directory: true;
+				case SymbolicLink: FileNatives.kind(null, path + "/" + entry.name, true) == 1;
+				case _: false;
+			})];
 	}
 
 	/** The file's status, as in Haxe; throws when there is no file at `path`. */
 	public static function stat(path:String):FileStat {
-		var values = fileSystemMetadata(path);
+		var values = FileNatives.stat(path);
 		if (values == null)
-			throw 'Could not stat "$path"';
+			throw failed("stat", path);
 		return {
 			gid: values[0],
 			uid: values[1],
@@ -180,7 +95,7 @@ class FileSystem {
 
 	/** Lightweight metadata for change detection, or null when the path is unavailable. */
 	public static function metadata(path:String):Null<FileMetadata> {
-		var values = fileSystemMetadata(path);
+		var values = FileNatives.stat(path);
 		return values == null ? null : new FileMetadata(values[5], values[3], values[4]);
 	}
 
@@ -194,24 +109,32 @@ class FileSystem {
 				break;
 			current = parent;
 		}
-		for (part in parts)
+		for (part in parts) {
 			// A drive ("C:") and a directory that exists, or that another process creates meanwhile, need nothing.
-			if (!StringTools.endsWith(part, ":") && !exists(part) && !fileSystemCreateDirectory(part, 493)
-				&& !isDirectory(part))
-				throw 'Failed to create directory $part';
+			if (StringTools.endsWith(part, ":") || FileNatives.kind(null, part, true) == 1
+				|| FileNatives.createDirectory(null, part))
+				continue;
+			var error = FileNatives.lastError();
+			if (FileNatives.kind(null, part, true) != 1)
+				throw 'Could not create directory "$part": ${error.describe()}';
+		}
 	}
 
 	/** Deletes the file `path`. Throws when it cannot. */
-	public static inline function deleteFile(path:String):Void
-		if (!fileSystemDeleteFile(path)) throw 'Could not delete file "$path"';
+	public static function deleteFile(path:String):Void
+		if (!FileNatives.deleteFile(null, path)) throw failed("delete file", path);
 
 	/** Removes the empty directory `path`. Throws when it cannot. */
-	public static inline function deleteDirectory(path:String):Void
-		if (!fileSystemDeleteDirectory(path)) throw 'Could not delete directory "$path"';
+	public static function deleteDirectory(path:String):Void
+		if (!FileNatives.deleteDirectory(null, path)) throw failed("delete directory", path);
 
 	/** Moves the file or directory `path` to `newPath`, replacing a file there. Throws when it cannot. */
-	public static inline function rename(path:String, newPath:String):Void
-		if (!fileSystemRename(path, newPath)) throw 'Could not rename "$path" to "$newPath"';
+	public static function rename(path:String, newPath:String):Void
+		if (!FileNatives.rename(null, path, newPath)) throw failed('rename "$path" to', newPath);
+
+	/** What a failed operation throws: `Could not delete file "a.txt": not found`. */
+	static function failed(operation:String, path:String):String
+		return 'Could not $operation "$path": ${FileNatives.lastError().describe()}';
 }
 
 /** What `FileSystem.metadata` reads: enough to tell whether a file changed. */

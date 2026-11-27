@@ -35,8 +35,15 @@ function files():Int {
 	if (loaded.length != 3 || loaded.get(1) != 255 || loaded.get(2) != 42)
 		return 4;
 	var names = FileSystem.readDirectory("/projects/demo");
-	if (names.length != 2 || names[0] != "assets" || names[1] != "scene.json"
-		|| FileSystem.readDirectory("/missing") != null)
+	if (names.length != 2 || names[0] != "assets" || names[1] != "scene.json")
+		return 5;
+	// A directory that is not there throws, as on the native targets.
+	var missingListing = false;
+	try
+		FileSystem.readDirectory("/missing")
+	catch (error:String)
+		missingListing = true;
+	if (!missingListing)
 		return 5;
 	var metadata = FileSystem.metadata("/projects/demo/scene.json");
 	if (metadata == null || metadata.size != 12 || metadata.modified <= 0 || FileSystem.metadata("/missing") != null)
@@ -56,11 +63,11 @@ function failures():Int {
 	try
 		File.getContent("/missing.txt")
 	catch (error:String)
-		missingRead = error == "Could not open source file";
+		missingRead = error == 'Could not read "/missing.txt": not found';
 	try
 		File.saveContent("/no/such/dir/file.txt", "x")
 	catch (error:String)
-		missingParent = error == "Could not open output file";
+		missingParent = error == 'Could not write "/no/such/dir/file.txt": not found';
 	try
 		File.saveContent("/projects", "x")
 	catch (error:String)

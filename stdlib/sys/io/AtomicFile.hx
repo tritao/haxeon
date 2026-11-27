@@ -2,14 +2,7 @@ package sys.io;
 
 import haxe.io.Bytes;
 
-#if !wasm
-@:hlNative("haxeon_runtime", "__file_write_atomic")
-internal extern function writeAtomicBytes(path:String, content:Bytes, replace:Bool):Null<String>;
-#else
-/** Wasm publishes into the session's in-memory filesystem, where a single store is atomic. */
-function writeAtomicBytes(path:String, content:Bytes, replace:Bool):Null<String>
-	return runtime.MemoryFileSystem.writeAtomic(path, content, replace);
-#end
+import std.fs.FileNatives;
 
 /**
  * Whole files written so that a reader never sees part of one: the content goes to a temporary file beside the destination,
@@ -35,8 +28,7 @@ class AtomicFile {
 	public static function createBytes(path:String, content:Bytes):Void
 		publish(path, content, false);
 
-	static function publish(path:String, content:Bytes, replace:Bool):Void {
-		var error = writeAtomicBytes(path, content, replace);
-		if (error != null) throw 'Could not atomically write "$path": $error';
-	}
+	static function publish(path:String, content:Bytes, replace:Bool):Void
+		if (!FileNatives.writeAtomic(null, path, content, replace))
+			throw 'Could not atomically write "$path": ${FileNatives.lastError().describe()}';
 }

@@ -14,14 +14,16 @@ internal function read(root:Null<RootHandle>, path:Path):Result<Bytes, FileError
 	return bytes == null ? Err(FileNatives.lastError()) : Ok(bytes);
 }
 
-internal function readText(root:Null<RootHandle>, path:Path):Result<String, FileError>
-	return read(root, path).map(bytes -> bytes.toString());
+internal function readText(root:Null<RootHandle>, path:Path):Result<String, FileError> {
+	var text = FileNatives.readText(root, path.toString());
+	return text == null ? Err(FileNatives.lastError()) : Ok(text);
+}
 
 internal function write(root:Null<RootHandle>, path:Path, content:Bytes, mode:WriteMode):Result<Void, FileError>
 	return done(FileNatives.write(root, path.toString(), content, mode));
 
 internal function writeAtomic(root:Null<RootHandle>, path:Path, content:Bytes):Result<Void, FileError>
-	return done(FileNatives.writeAtomic(root, path.toString(), content));
+	return done(FileNatives.writeAtomic(root, path.toString(), content, true));
 
 internal function metadata(root:Null<RootHandle>, path:Path, follow:Bool):Result<Metadata, FileError> {
 	var found = FileNatives.metadata(root, path.toString(), follow);

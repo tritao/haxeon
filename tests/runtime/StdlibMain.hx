@@ -108,42 +108,31 @@ class StdlibMain {
 			"sys_thread_cpu_time" => true,
 			"sys_process_memory" => true,
 			"__sys_get_cwd" => true,
-			"__sys_full_path" => true,
+			"__fs_absolute" => true,
 			"__sys_exe_path" => true,
 			"__sys_get_env" => true,
-			"__sys_exists" => true,
-			"__sys_is_dir" => true,
-			"__sys_read_dir" => true,
-			"__sys_metadata" => true,
 			"sys_getpid" => true,
 			"__sys_args" => true,
 			"__sys_set_cwd" => true,
 			"__sys_put_env" => true,
-			"__sys_create_dir" => true,
-			"__sys_remove_dir" => true,
-			"__sys_delete" => true,
-			"__sys_rename" => true,
 			"__sys_command" => true,
 			"sys_sleep" => true,
 			"sys_get_char" => true,
 			"__sys_print" => true
 		];
 		var fileSymbols:Map<String, Bool> = [
-			"__file_get_content" => true,
-			"__file_get_bytes" => true,
-			"__file_save_content" => true,
-			"__file_save_bytes" => true
+			"__fs_read_text" => true,
+			"__fs_read" => true,
+			"__fs_write" => true
 		];
 		var fileSystemSymbols:Map<String, Bool> = [
-			"__sys_exists" => true,
-			"__sys_is_dir" => true,
-			"__sys_full_path" => true,
-			"__sys_read_dir" => true,
-			"__sys_metadata" => true,
-			"__sys_create_dir" => true,
-			"__sys_delete" => true,
-			"__sys_remove_dir" => true,
-			"__sys_rename" => true
+			"__fs_kind" => true,
+			"__fs_absolute" => true,
+			"__fs_list" => true,
+			"__fs_create_directory" => true,
+			"__fs_delete_file" => true,
+			"__fs_delete_directory" => true,
+			"__fs_rename" => true
 		];
 		var dateSymbols:Map<String, Bool> = ["__date_now" => true, "__date_get_time" => true];
 		var coreSymbols:Map<String, Bool> = ["__math_is_nan" => true, "__math_pow" => true,

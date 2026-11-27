@@ -23,108 +23,59 @@
 package sys.io;
 
 import haxe.io.Bytes;
+import std.fs.FileNatives;
+import std.fs.FileNatives.WriteMode;
 
 #if !wasm
-@:hlNative("haxeon_runtime", "__file_get_content")
-internal extern function fileGetContent(path:String):String;
-
-@:hlNative("haxeon_runtime", "__file_get_bytes")
-internal extern function fileGetBytes(path:String):Bytes;
-
-@:hlNative("haxeon_runtime", "__file_save_content")
-internal extern function fileSaveContent(path:String, content:String):Void;
-
-@:hlNative("haxeon_runtime", "__file_append_content")
-internal extern function fileAppendContent(path:String, content:String):Void;
-
-@:hlNative("haxeon_runtime", "__file_save_bytes")
-internal extern function fileSaveBytes(path:String, bytes:Bytes):Void;
-
 @:hlNative("haxeon_runtime", "__file_input_open")
 internal extern function fileInputOpen(path:String, binary:Bool):hl.Abstract<"realtime_file_input">;
 
 @:hlNative("haxeon_runtime", "__file_output_open")
 internal extern function fileOutputOpen(path:String, mode:Int, binary:Bool):hl.Abstract<"realtime_file_output">;
-#else
-// Wasm keeps files in the session's in-memory filesystem (runtime.MemoryFileSystem).
-internal function fileGetContent(path:String):String
-	return runtime.MemoryFileSystem.getContent(path);
-
-internal function fileGetBytes(path:String):Bytes
-	return runtime.MemoryFileSystem.getBytes(path);
-
-internal function fileSaveContent(path:String, content:String):Void
-	runtime.MemoryFileSystem.saveContent(path, content);
-
-internal function fileAppendContent(path:String, content:String):Void
-	runtime.MemoryFileSystem.appendContent(path, content);
-
-internal function fileSaveBytes(path:String, bytes:Bytes):Void
-	runtime.MemoryFileSystem.saveBytes(path, bytes);
 #end
 
-/** Files read and written whole, or opened as streams (`read`, `write`, `append`, `update`). */
+/**
+ * Files read and written whole, or opened as streams (`read`, `write`, `append`, `update`), as Haxe's API has them,
+ * throwing where an operation fails. Whole files go through `std.fs`, which answers the same operations with a
+ * `Result` instead; on Wasm the files are the session's in-memory filesystem.
+ */
 class File {
-	/**
-	 * The text of the file `path`, read as UTF-8. Throws when it cannot be read. While `haxeon.build.InputFiles` is
-	 * recording, every read is noted for the cache that depends on it.
-	 */
+	/** The text of the file `path`, read as UTF-8. Throws when it cannot be read. */
 	public static function getContent(path:String):String {
-		if (!haxeon.build.InputFiles.isRecording())
-			return fileGetContent(path);
-		var text:Null<String> = null;
-		try
-			text = fileGetContent(path)
-		catch (error:Dynamic) {
-			haxeon.build.InputFiles.readFailed(path);
-			throw error;
-		}
-		haxeon.build.InputFiles.textRead(path, text);
+		var text = FileNatives.readText(null, path);
+		if (text == null)
+			throw failed("read", path);
 		return text;
 	}
 
 	/** The bytes of the file `path`. Throws when it cannot be read. */
 	public static function getBytes(path:String):Bytes {
-		if (!haxeon.build.InputFiles.isRecording())
-			return fileGetBytes(path);
-		var bytes:Null<Bytes> = null;
-		try
-			bytes = fileGetBytes(path)
-		catch (error:Dynamic) {
-			haxeon.build.InputFiles.readFailed(path);
-			throw error;
-		}
-		haxeon.build.InputFiles.bytesRead(path, bytes);
+		var bytes = FileNatives.read(null, path);
+		if (bytes == null)
+			throw failed("read", path);
 		return bytes;
 	}
 
 	/** Writes `content`, in UTF-8, as the file `path`, replacing what it held. */
-	public static function saveContent(path:String, content:String):Void {
-		haxeon.build.InputFiles.wrote(path);
-		fileSaveContent(path, content);
-	}
+	public static function saveContent(path:String, content:String):Void
+		saveBytes(path, Bytes.ofString(content == null ? "" : content));
 
 	/** Adds `content`, in UTF-8, at the end of the file `path`, creating it when missing. */
-	public static function appendContent(path:String, content:String):Void {
-		haxeon.build.InputFiles.wrote(path);
-		fileAppendContent(path, content);
-	}
+	public static function appendContent(path:String, content:String):Void
+		if (!FileNatives.write(null, path, Bytes.ofString(content == null ? "" : content), Append))
+			throw failed("append to", path);
 
 	/** Writes `bytes` as the file `path`, replacing what it held. */
-	public static function saveBytes(path:String, bytes:Bytes):Void {
-		haxeon.build.InputFiles.wrote(path);
-		fileSaveBytes(path, bytes);
-	}
+	public static function saveBytes(path:String, bytes:Bytes):Void
+		if (!FileNatives.write(null, path, bytes, Replace)) throw failed("write", path);
 
 	/**
-	 * Opens `path` to read it as a stream; throws when it cannot be opened. While recording, what the file holds when it is
-	 * opened is the input noted, as for `getBytes`. `binary` matters only on Windows, where text mode converts line ends.
+	 * Opens `path` to read it as a stream; throws when it cannot be opened. `binary` matters only on Windows, where text
+	 * mode converts line ends.
 	 */
 	public static function read(path:String, binary:Bool = true):FileInput {
-		if (haxeon.build.InputFiles.isRecording() && !haxeon.build.InputFiles.ignores(path))
-			getBytes(path);
 		#if wasm
-		return new FileInput(fileGetBytes(path));
+		return new FileInput(getBytes(path));
 		#else
 		return new FileInput(fileInputOpen(path, binary));
 		#end
@@ -132,9 +83,8 @@ class File {
 
 	/** Creates or truncates `path` and opens it to write. */
 	public static function write(path:String, binary:Bool = true):FileOutput {
-		haxeon.build.InputFiles.wrote(path);
 		#if wasm
-		fileSaveBytes(path, Bytes.alloc(0));
+		saveBytes(path, Bytes.alloc(0));
 		return new FileOutput(path, Bytes.alloc(0), 0, false);
 		#else
 		return new FileOutput(fileOutputOpen(path, 0, binary));
@@ -143,11 +93,12 @@ class File {
 
 	/** Opens `path` to write at its end, creating it when missing. */
 	public static function append(path:String, binary:Bool = true):FileOutput {
-		haxeon.build.InputFiles.wrote(path);
 		#if wasm
-		var existing = runtime.MemoryFileSystem.exists(path) ? fileGetBytes(path) : Bytes.alloc(0);
-		if (existing.length == 0)
-			fileSaveBytes(path, existing);
+		var existing = FileNatives.read(null, path);
+		if (existing == null) {
+			existing = Bytes.alloc(0);
+			saveBytes(path, existing);
+		}
 		return new FileOutput(path, existing, existing.length, true);
 		#else
 		return new FileOutput(fileOutputOpen(path, 1, binary));
@@ -156,10 +107,8 @@ class File {
 
 	/** Opens the existing file at `path` to write over it from its start, keeping what is not overwritten, as Haxe's. */
 	public static function update(path:String, binary:Bool = true):FileOutput {
-		haxeon.build.InputFiles.wrote(path);
 		#if wasm
-		var existing = fileGetBytes(path);
-		return new FileOutput(path, existing, 0, false);
+		return new FileOutput(path, getBytes(path), 0, false);
 		#else
 		return new FileOutput(fileOutputOpen(path, 2, binary));
 		#end
@@ -168,4 +117,8 @@ class File {
 	/** Copies the file at `srcPath` to `dstPath`, as Haxe's `File.copy`. */
 	public static function copy(srcPath:String, dstPath:String):Void
 		saveBytes(dstPath, getBytes(srcPath));
+
+	/** What a failed operation throws: `Could not read "a.txt": not found`. */
+	static function failed(operation:String, path:String):String
+		return 'Could not $operation "$path": ${FileNatives.lastError().describe()}';
 }

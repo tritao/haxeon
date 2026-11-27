@@ -4,15 +4,14 @@ package runtime;
 import haxe.io.Bytes;
 
 /**
- * The Wasm filesystem behind `sys.io.File`, `sys.io.AtomicFile`, `sys.FileSystem` and the `Sys`
- * path operations. Files live in module memory and vanish with the instance, unless a host
- * keeps them: it can fill the store before the program uses it and set `observer` to mirror
- * every later change to storage of its own.
+ * The Wasm filesystem behind `std.fs` (and so `sys.io.File`, `sys.io.AtomicFile`, `sys.FileSystem`)
+ * and the `Sys` path operations. Files live in module memory and vanish with the instance, unless
+ * a host keeps them: it can fill the store before the program uses it and set `observer` to
+ * mirror every later change to storage of its own.
  *
  * Paths are absolute from "/" or relative to the working directory; repeated separators, "."
- * and ".." are normalized away. Operations report failure as the HashLink runtime does: the
- * boolean ones return false, whole-file reads and writes throw its error messages, and atomic
- * writes return an error string. Modification times are a per-session write counter rather than
+ * and ".." are normalized away. The boolean operations return false where they cannot act, and
+ * `std.fs.FileNatives` tells why. Modification times are a per-session write counter rather than
  * wall-clock seconds; they only ever increase, which is what change detection needs.
  */
 internal class MemoryFileSystem {
@@ -157,53 +156,9 @@ internal class MemoryFileSystem {
 		return content.sub(0, content.length);
 	}
 
-	public static function getContent(path:String):String {
-		var content = getBytes(path);
-		for (index in 0...content.length)
-			if (content.get(index) == 0)
-				throw "HashLink String cannot contain NUL; use File.getBytes for binary data";
-		return content.toString();
-	}
-
 	public static function saveBytes(path:String, content:Bytes):Void {
 		if (!store(normalize(path), content.sub(0, content.length)))
 			throw "Could not open output file";
-	}
-
-	public static function saveContent(path:String, content:String):Void {
-		if (!store(normalize(path), Bytes.ofString(content == null ? "" : content)))
-			throw "Could not open output file";
-	}
-
-	public static function appendContent(path:String, content:String):Void {
-		var target = normalize(path);
-		var existing = fileAt(target), combined = Bytes.ofString(content == null ? "" : content);
-		if (existing != null) {
-			var addition = combined;
-			combined = Bytes.alloc(existing.length + addition.length);
-			combined.blit(0, existing, 0, existing.length);
-			combined.blit(existing.length, addition, 0, addition.length);
-		}
-		if (!store(target, combined))
-			throw "Could not open append file";
-	}
-
-	/**
-	 * Publishes `content` in one step, returning null or the error text the POSIX runtime
-	 * reports. Without `replace`, an existing destination is left untouched.
-	 */
-	public static function writeAtomic(path:String, content:Bytes, replace:Bool):Null<String> {
-		if (content == null)
-			return "content is null";
-		var target = normalize(path);
-		if (isDirectoryAt(target))
-			return "Is a directory";
-		if (!isDirectoryAt(parentOf(target)))
-			return "No such file or directory";
-		if (!replace && entries.exists(target))
-			return "File exists";
-		store(target, content.sub(0, content.length));
-		return null;
 	}
 
 	static function store(target:String, content:Bytes):Bool {

@@ -91,6 +91,66 @@ HL_PRIM realtime_bytes *HL_NAME(__fs_read)( realtime_fs_root *root, vstring *pat
 }
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__fs_read,_ABSTRACT(realtime_fs_root) _STRING);
 
+/* The whole file as UTF-8 text, or null; a file holding a NUL character fails as Io (REALTIME_FS_TEXT_NUL). */
+HL_PRIM vstring *HL_NAME(__fs_read_text)( realtime_fs_root *root, vstring *path ) {
+	unsigned char *data = NULL;
+	int length = 0;
+	REALTIME_FS_PATH(native,path);
+	bool read = realtime_fs_read(realtime_fs_resolver(root),native,&data,&length);
+	REALTIME_FS_PATH_END(native);
+	if( !read ) return NULL;
+	if( length > 0 && memchr(data,0,(size_t)length) != NULL ) {
+		free(data);
+		realtime_fs_kind = REALTIME_FS_IO;
+		realtime_fs_code = REALTIME_FS_TEXT_NUL;
+		return NULL;
+	}
+	data[length] = 0;
+	vstring *result = realtime_string_from_utf8((const char *)data);
+	free(data);
+	return result;
+}
+DEFINE_PRIM(_STRING,__fs_read_text,_ABSTRACT(realtime_fs_root) _STRING);
+
+/* What kind of entry is at `path` (std.fs.EntryKind), or -1. */
+HL_PRIM int HL_NAME(__fs_kind)( realtime_fs_root *root, vstring *path, bool follow ) {
+	int kind = -1;
+	REALTIME_FS_PATH(native,path);
+	bool found = realtime_fs_kind_at(realtime_fs_resolver(root),native,follow,&kind);
+	REALTIME_FS_PATH_END(native);
+	return found ? kind : -1;
+}
+DEFINE_PRIM(_I32,__fs_kind,_ABSTRACT(realtime_fs_root) _STRING _BOOL);
+
+/* `path` as an absolute path, its links resolved on POSIX, or null. */
+HL_PRIM vstring *HL_NAME(__fs_absolute)( vstring *path ) {
+	REALTIME_FS_PATH(native,path);
+	realtime_fs_char *absolute = realtime_fs_absolute(native);
+	REALTIME_FS_PATH_END(native);
+	if( absolute == NULL ) return NULL;
+#ifdef HL_WIN
+	vstring *result = realtime_string_of_ustr((const uchar *)absolute);
+#else
+	vstring *result = realtime_string_from_utf8(absolute);
+#endif
+	free(absolute);
+	return result;
+}
+DEFINE_PRIM(_STRING,__fs_absolute,_STRING);
+
+/* Haxe's FileStat of `path` as eleven Ints (gid, uid, atime, mtime, ctime, size, dev, ino, nlink, rdev, mode), or null. */
+HL_PRIM varray *HL_NAME(__fs_stat)( vstring *path ) {
+	int values[11];
+	REALTIME_FS_PATH(native,path);
+	bool found = realtime_fs_stat(native,values);
+	REALTIME_FS_PATH_END(native);
+	if( !found ) return NULL;
+	varray *result = hl_alloc_array(&hlt_i32,11);
+	memcpy(hl_aptr(result,int),values,sizeof(values));
+	return result;
+}
+DEFINE_PRIM(_ARR,__fs_stat,_STRING);
+
 /* Writes `content` as `mode` says: replacing the file, adding to its end, or only creating it. */
 HL_PRIM bool HL_NAME(__fs_write)( realtime_fs_root *root, vstring *path, realtime_bytes *content, int mode ) {
 	REALTIME_FS_PATH(native,path);
@@ -100,13 +160,14 @@ HL_PRIM bool HL_NAME(__fs_write)( realtime_fs_root *root, vstring *path, realtim
 }
 DEFINE_PRIM(_BOOL,__fs_write,_ABSTRACT(realtime_fs_root) _STRING _ABSTRACT(realtime_bytes) _I32);
 
-HL_PRIM bool HL_NAME(__fs_write_atomic)( realtime_fs_root *root, vstring *path, realtime_bytes *content ) {
+/* Puts `content` at `path` in one step; without `replace`, fails where something is already there. */
+HL_PRIM bool HL_NAME(__fs_write_atomic)( realtime_fs_root *root, vstring *path, realtime_bytes *content, bool replace ) {
 	REALTIME_FS_PATH(native,path);
-	bool written = realtime_fs_write_atomic(realtime_fs_resolver(root),native,content->data,content->length);
+	bool written = realtime_fs_write_atomic(realtime_fs_resolver(root),native,content->data,content->length,replace);
 	REALTIME_FS_PATH_END(native);
 	return written;
 }
-DEFINE_PRIM(_BOOL,__fs_write_atomic,_ABSTRACT(realtime_fs_root) _STRING _ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_BOOL,__fs_write_atomic,_ABSTRACT(realtime_fs_root) _STRING _ABSTRACT(realtime_bytes) _BOOL);
 
 /* Fills `out` with what is at `path`: its kind (std.fs.EntryKind) as an Int32 at 0, its size in bytes as an Int64 at 8,
    and its last modification as Unix seconds, a Float64 at 16. A symbolic link is described itself, not what it points
