@@ -835,10 +835,14 @@ LIVE_STAGES = ("watch", "client", "compile", "pickup", "apply")
 
 class LiveApp:
     """One app of the live part: where its project comes from, the file its edits change, the text its body edits write (`text`:
-    the n-th text, the 0th the project's own), its signature edit (an (old, new) pair of text), and what runs the watch."""
+    the n-th text, the 0th the project's own), its signature edit (an (old, new) pair of text), what runs the watch, and a body
+    edit of a package's file (a (path, old, new) triple, the path from the project), which the session makes and takes back
+    after the signature edit: timed and printed, not compared, as package code keeps less than the app's own
+    (docs/design/SERVER_MEMORY.md, step 4)."""
 
-    def __init__(self, name, prepare, path, text, signature, prefix=()):
+    def __init__(self, name, prepare, path, text, signature, prefix=(), package=None):
         self.name, self.prepare, self.path, self.text, self.signature, self.prefix = name, prepare, path, text, signature, prefix
+        self.package = package
 
     def body(self, index, start=0):
         """The index-th body edit of a session, as an (old, new) pair of text, whose first one writes the text after `start`."""
@@ -862,7 +866,10 @@ def live_apps(work):
         apps.append(LiveApp("ui", ui, os.path.join("src", "Main.hx"),
                             lambda index: "times')" if index == 0 else f"times ({index})')",
                             (os.path.join("src", "Main.hx"), "static function options():UiHostOptions",
-                             "static function options(?width:Int):UiHostOptions"), ("xvfb-run", "-a")))
+                             "static function options(?width:Int):UiHostOptions"), ("xvfb-run", "-a"),
+                            (os.path.join("..", os.path.basename(frozen), "packages", "ui", "src", "haxeon", "ui", "theme",
+                                          "Theme.hx"), "tokens.accent = light ? rgba(0.12,",
+                             "tokens.accent = light ? rgba(0.13,")))
     else:
         print("perf-guard: live ui: skipped (no xvfb-run)")
     return apps
@@ -1159,10 +1166,25 @@ def measure_live_app(app, work, env, mode, owners=False):
         body = edits[LIVE_WARM_EDITS:]
         path, old, new = app.signature
         signature = watch.edit(path, old, new)
+        package = []
+        if app.package is not None:
+            path, old, new = app.package
+            try:
+                time.sleep(LIVE_EDIT_GAP_SECONDS)
+                package.append(watch.edit(path, old, new))
+                time.sleep(LIVE_EDIT_GAP_SECONDS)
+                package.append(watch.edit(path, new, old))
+            finally:
+                # The package is the frozen input's, which later sessions and runs build from.
+                with open(os.path.join(project, path)) as source:
+                    text = source.read()
+                if text.count(new) == 1:
+                    replace_once(os.path.join(project, path), new, old)
         server = live_server_memory(os.path.join(work, "session"))
     finally:
         watch.stop()
-    for label, stage in [(f"body edit {index + 1}", stage) for index, stage in enumerate(body)] + [("signature edit", signature)]:
+    for label, stage in [(f"body edit {index + 1}", stage) for index, stage in enumerate(body)] + [("signature edit", signature)] + [
+            (label, stage) for label, stage in zip(("package edit", "package edit back"), package)]:
         print(f"perf-guard: live {mode} {app.name:5} {label:14} total {stage['total']:6.0f} ms = "
               + " + ".join(f"{name} {stage[name]:.0f}" for name in LIVE_STAGES)
               + f"; rest {stage['rest']:.0f} ms, {stage['functions']} functions; compile phases "
