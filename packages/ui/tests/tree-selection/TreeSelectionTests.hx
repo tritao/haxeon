@@ -67,7 +67,7 @@ class TreeSelectionTests {
 		var items = new Items();
 		function itemsTree(multiSelect:Bool):TreeView
 			return new TreeView("items", items, style, onItemClicked: (key, _) -> opened.push(key),
-				onItemContextMenu: (key, _) -> menus.push(key), multiSelect: multiSelect);
+				onItemContextMenu: (key, _) -> menus.push(key), multiSelect:);
 		var tree = itemsTree(true);
 		var frame = new LayoutFrame(240.0, 320.0);
 		var build = function():View return tree;

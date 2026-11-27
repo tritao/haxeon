@@ -214,7 +214,7 @@ class ComboBox<T> implements View {
 				queryState.update(query);
 				if (hasQueryChangeHandler) onQueryChange(query);
 				open();
-			}, inputStyle, placeholder, enabled: enabled, classes: ["combo-trigger"],
+			}, inputStyle, placeholder, enabled:, classes: ["combo-trigger"],
 				semanticRole: AccessibilityRole.ComboBox,
 				semanticActions: AccessibilityAction.SetValue | AccessibilityAction.SetSelection | (isOpen
 				? AccessibilityAction.Collapse : AccessibilityAction.Expand),

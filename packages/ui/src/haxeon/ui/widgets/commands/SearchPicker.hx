@@ -169,7 +169,7 @@ class SearchPicker implements View {
 		var input = new TextField("cv-input", query, function(value) {
 			release();
 			model.setQuery(value);
-		}, inputStyle, placeholder, new TextStyle(15), tokens.textPrimary, placeholder: placeholder,
+		}, inputStyle, placeholder, new TextStyle(15), tokens.textPrimary, placeholder:,
 			onSubmit: function(_) {
 			model.navigate(UiKey.Enter, haxeon.ui.core.UiEvent.UiModifier.empty(), 1);
 			onChanged();
@@ -224,8 +224,8 @@ class SearchPicker implements View {
 			centered ? Math.max(0, (context.viewportWidth - actualWidth) / 2) : x,
 			y,
 			panelStyle,
-			onDismiss, label: label, modal: modal, dimBackdrop: dimBackdrop, layerZIndex: layerZIndex,
-			menuSurface: menuSurface);
+			onDismiss, label:, modal:, dimBackdrop:, layerZIndex:,
+			menuSurface:);
 		var modifier = new haxeon.ui.core.RootModifier();
 		modifier.on(UiEventKind.Scroll, function(_) {
 			state.tooltipDismissRevision++;

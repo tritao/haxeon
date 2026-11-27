@@ -73,6 +73,16 @@ arguments covers construction and copying.
 An identifier then a colon starts nothing else in an argument list: Haxe's type check `(expr : Type)` has its own
 parentheses, a ternary's colon follows its `?`, and an object literal starts with a brace.
 
+**`name:` alone** passes the variable of that name: `TextField(key, enabled:, onSubmit:)` is
+`TextField(key, enabled: enabled, onSubmit: onSubmit)`. A value passed on under its own name is common (a component
+forwarding its inputs to the widget it builds), and the repeated name says nothing a reader needs; the label stays, so the
+call still names each parameter, which a bare `f(enabled)` (Rust's and JavaScript's field shorthand) would not. OCaml's
+labelled arguments have the same form (`~enabled`); Swift has none, and could not use this one, since `f(x:)` names a
+function there. `name:` before a comma or the closing parenthesis means nothing else in Haxeon. It is the same
+`NamedArgument`, with the variable as its value, so a name that resolves to nothing is the usual unknown-name error, and
+renaming the variable or the parameter breaks the call rather than changing it. The lint rule `redundant-argument-name`
+reports `name: name`, and `haxeon lint --fix` writes it `name:`.
+
 ## Implementation
 
 The parser makes `NamedArgument(name, value)`; `NamedArguments.bind` puts each at its parameter's position and a

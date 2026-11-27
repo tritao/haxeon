@@ -280,7 +280,9 @@ The current subset includes:
   one must be optional and takes its default (for an overridden method, the overriding method's own); trailing ones are
   omitted as without names. Arguments are evaluated in the order written. An unknown name, a name given twice or out of
   order, a positional argument after a named one, a skipped required parameter, a named rest parameter or a named argument
-  to a function value is an error. A parameter's name is part of its function's signature.
+  to a function value is an error. A parameter's name is part of its function's signature. `name:` alone passes the
+  variable of that name (`area(2, scale:)` is `area(2, scale: scale)`); `haxeon lint` reports `name: name` (rule
+  `redundant-argument-name`) and `--fix` shortens it.
 - A struct that declares no constructor gets a memberwise one (a Haxeon extension): a parameter per stored field, in
   declaration order, defaulting to the field's initializer, so `new Size(4)`, `new Size(w: 4, h: 2)` and, with every
   field initialized, `new Size()` work. An initializer that is not a literal (`[]`, `new Point(1.0)`) is evaluated per

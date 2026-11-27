@@ -1017,11 +1017,18 @@ class Parser {
 		if (!check(TokenKind.RightParen)) {
 			do {
 				// `name: value`: the argument of the parameter `name`. An identifier then a colon starts nothing else here: a
-				// type check `(value : T)` has its own parentheses and an object literal starts with a brace.
+				// type check `(value : T)` has its own parentheses and an object literal starts with a brace. `name:` alone,
+				// before a comma or the closing parenthesis, passes the variable of that name (`enabled:` is `enabled: enabled`).
 				if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon) {
 					var nameToken = current(), name = textOf(nameToken);
 					advance();
+					var colon = current();
 					advance();
+					if (check(TokenKind.Comma) || check(TokenKind.RightParen)) {
+						var nameSpan = spanOf(nameToken);
+						arguments.push(NamedArgument(name, Variable(name, nameSpan), spanFrom(colon, nameSpan)));
+						continue;
+					}
 					lambdaPath.pushArgument(callee, arguments.length);
 					var value = parseExpression();
 					lambdaPath.pop();

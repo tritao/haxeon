@@ -266,7 +266,7 @@ class DockWorkspace implements View {
 			onTabDragMove: (panelId, event) -> interaction.moveTabDrag(panelId, event.pointerId, event.x, event.y),
 			onTabDragEnd: (panelId, event) -> interaction.endTabDrag(panelId, event.pointerId, event.x, event.y),
 			onTabDragCancel: (panelId, event) -> interaction.cancelTabDrag(panelId, event.pointerId),
-			selectionMode: TabsSelectionMode.Controlled, onTabHeaderBuilt: onTabHeaderBuilt,
+			selectionMode: TabsSelectionMode.Controlled, onTabHeaderBuilt:,
 			headerTrailing: headerActions == null ? null : headerActions([for (panel in visiblePanels) panel.id],
 			selectedId));
 	}

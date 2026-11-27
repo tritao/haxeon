@@ -84,6 +84,19 @@ class NamedArgumentsMain {
 		reject(result, "new Outer(x: 42).x", "expects 0 arguments");
 		result.update("Inner.hx", inner);
 		accept(result);
-		Sys.println("PASS: named arguments bind, reject misuse cold and incrementally, and follow parameter renames");
+		// `scale:` passes the variable `scale`, which must exist.
+		var short = compiler();
+		short.update("Main.hx", "function main():Int { var scale = 7; return Shapes.area(2, scale:) == 42 ? 42 : 1; }");
+		if (GeneratedProgramRunner.exitCode(short.compile("Main")) != 42)
+			throw "a named argument's short form did not pass its variable";
+		short.update("Main.hx", "function main():Int return Shapes.area(2, scale:);");
+		try {
+			short.compile("Main");
+			throw "a short named argument without its variable was accepted";
+		} catch (error:CompileError) {
+			if (error.diagnostic.message.indexOf("scale") < 0)
+				throw 'unexpected diagnostic for a short named argument: ${error.diagnostic.message}';
+		}
+		Sys.println("PASS: named arguments bind, pass a variable by its name alone, reject misuse cold and incrementally, and follow parameter renames");
 	}
 }

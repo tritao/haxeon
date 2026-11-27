@@ -34,7 +34,7 @@ class ExplorerShell {
 				? UiExplorer.color(0.78, 0.82, 0.89) : UiExplorer.color(0.13, 0.17, 0.24);
 			main = new SplitView("main-inspector", main, explorer.buildInspector(), resizableSide: SplitSide.Trailing,
 				extent: explorer.state.inspector.width, minimumExtent: 220.0, maximumExtent: 420.0, dividerExtent: 8.0,
-				dividerStyle: dividerStyle, onResize: function(value) {
+				dividerStyle:, onResize: function(value) {
 					explorer.state.inspector.width = value;
 				});
 		}

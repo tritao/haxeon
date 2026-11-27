@@ -188,7 +188,7 @@ class PropertyInspector implements View {
 				return context.build(content, group);
 			}
 			return new ScrollView("viewport", content, style, ScrollAxis.Vertical, controller,
-				showScrollbar: showScrollbar, label: label).build(context);
+				showScrollbar:, label:).build(context);
 		});
 		if (observed) context.reportBuild("inspector:" + key, 0.0, Sys.time() - started, result);
 		return result;

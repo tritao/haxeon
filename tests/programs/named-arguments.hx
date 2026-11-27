@@ -119,5 +119,10 @@ function main():Int {
 	var once = fresh().with(value: "w", classes: ["a"]);
 	if (made != 1 || once.key != "k" || once.value != "w" || once.classes.length != 1)
 		return 11;
+	// `name:` passes the variable of that name.
+	var right = 2, count = 5, placeholder = "P";
+	if ("x".padded(right:) != "x.." || new Box("y", count:).count != 5
+		|| new Props("n", placeholder:).placeholder != "P")
+		return 12;
 	return 42;
 }

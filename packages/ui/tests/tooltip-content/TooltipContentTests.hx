@@ -186,7 +186,7 @@ class TooltipContentTests {
 		// Side-placed tooltip: shown after its hover delay, placed inside the viewport.
 		for (placement in [TooltipPlacement.Below, TooltipPlacement.Above, TooltipPlacement.Right]) {
 			var side = new Tooltip("side-" + Std.string(placement), new Button("Anchor"), new Text("Hint"),
-				placement: placement, delaySeconds: 0.5);
+				placement:, delaySeconds: 0.5);
 			root = ui.submit(side, frame);
 			check(hints(root) == 0, "a hidden " + Std.string(placement) + " tooltip built its content");
 			anchor = cast root.children[0].resolved;

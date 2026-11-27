@@ -97,7 +97,7 @@ class TextPage {
 	static function editor(explorer:UiExplorer, key:String, value:String, label:String,
 			multiline:Bool, onChange:String->Void):TextField {
 		return new TextField(key, value, onChange, editorStyle(explorer, multiline ? 142.0 : 42.0), label,
-			multiline: multiline, onSubmit: multiline ? null : _ -> explorer.recordTextSubmit(label),
+			multiline:, onSubmit: multiline ? null : _ -> explorer.recordTextSubmit(label),
 			onDiagnostics: explorer.recordTextDiagnostics);
 	}
 

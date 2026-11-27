@@ -198,7 +198,7 @@ class Menu implements View {
 		var popup = new Popup(key, scrollModifier.modify(scroll), x, y, popupStyle,
 			hasDismissHandler ? onDismiss : null, anchorRectProvider: function() return new Rect(x, y, 0.0, 0.0),
 			label: "Menu", modal: true, dimBackdrop: false, menuSurface: true, viewportMargin: 8.0,
-			flipHorizontally: true, onOutsideClick: onOutsideClick);
+			flipHorizontally: true, onOutsideClick:);
 		var menu = new RootModifier();
 		menu.onRoot(root -> rootId = root.id);
 		// Keep the modal keyboard owner independent of the highlighted action.

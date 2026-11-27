@@ -83,8 +83,8 @@ class CommandPalette implements View {
 			return new SearchPicker(key, model,
 				(_, index, selected, hovered, _) -> model.buildItem(index, selected, hovered), function() {
 					if (onDismiss != null) onDismiss();
-				}, function() {}, width: 504, rowHeight: 36, maxListHeight: 320, x: x,
-					y: centered ? Math.max(8, (context.viewportHeight - listHeight - 58) / 2) : y, centered: centered,
+				}, function() {}, width: 504, rowHeight: 36, maxListHeight: 320, x:,
+					y: centered ? Math.max(8, (context.viewportHeight - listHeight - 58) / 2) : y, centered:,
 					label: "Command palette", placeholder: "Search commands", dimBackdrop: true, menuSurface: false,
 					layerZIndex: centered ? 1000 : 0).build(context);
 		});

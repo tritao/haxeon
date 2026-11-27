@@ -5,6 +5,7 @@ import compiler.core.Source.SourceFile;
 import compiler.formatter.ProjectFormat;
 import compiler.formatter.Formatter;
 import compiler.service.ImportOrder;
+import compiler.service.RedundantArgumentNames;
 import compiler.service.UnusedImports;
 import compiler.service.UnusedImports.ImportTarget;
 import compiler.service.UnusedImports.UnusedImport;
@@ -19,7 +20,8 @@ import sys.io.File;
 
 /**
  * `haxeon lint [--fix] [--only RULE] [--manifest FILE]... FILE...` reports unused imports (rule `unused-imports`) and runs of
- * imports out of order (rule `import-order`, see ImportOrder); `--only` checks one rule. Both read syntax only. The opt-in rules
+ * imports out of order (rule `import-order`, see ImportOrder), and call arguments written `name: name`, which `name:` says (rule
+ * `redundant-argument-name`, see RedundantArgumentNames); `--only` checks one rule. All three read syntax only. The opt-in rules
  * `unbound-local`, `module-namespace` and `throw-non-exception` (TypedLint) need the compiler's analysis, so each runs only when `--only` names it,
  * through `typedRules`, which runs it in a tool that links the compiler.
  *
@@ -42,7 +44,8 @@ class LintCommand {
 	function new() {}
 
 	/** The rules `--only` selects; the typed ones run only when it names them. */
-	static final RULES = "unused-imports, import-order, unbound-local, module-namespace, throw-non-exception";
+	static final RULES =
+		"unused-imports, import-order, redundant-argument-name, unbound-local, module-namespace, throw-non-exception";
 
 	/**
 	 * Lints the files `arguments` names. `typedRules` runs a typed rule on the expanded files and returns its status: the
@@ -57,6 +60,7 @@ class LintCommand {
 			index = 0,
 			checkUnused = true,
 			checkOrder = true,
+			checkArguments = true,
 			typedRule:Null<String> = null,
 			pinWire:Null<String> = null;
 		while (index < arguments.length) {
@@ -71,11 +75,19 @@ class LintCommand {
 				if (index >= arguments.length)
 					throw new InternalError('Option "--only" requires a rule: $RULES');
 				switch arguments[index++] {
-					case "unused-imports": checkOrder = false;
-					case "import-order": checkUnused = false;
+					case "unused-imports":
+						checkOrder = false;
+						checkArguments = false;
+					case "import-order":
+						checkUnused = false;
+						checkArguments = false;
+					case "redundant-argument-name":
+						checkUnused = false;
+						checkOrder = false;
 					case rule = "unbound-local" | "module-namespace" | "throw-non-exception":
 						checkUnused = false;
 						checkOrder = false;
+						checkArguments = false;
 						typedRule = rule;
 					case other: throw new InternalError('Unknown lint rule "$other" (known: $RULES)');
 				}
@@ -92,7 +104,7 @@ class LintCommand {
 		if (paths.length == 0)
 			throw new InternalError("haxeon lint requires at least one file");
 		if (pinWire != null) {
-			if (!fix || paths.length != 1 || !checkUnused || !checkOrder || manifests.length != 0)
+			if (!fix || paths.length != 1 || !checkUnused || !checkOrder || !checkArguments || manifests.length != 0)
 				throw new InternalError("Usage: haxeon lint --fix --pin-wire TYPE FILE");
 			pinWireIds(SourceFiles.requireFile(paths[0]), pinWire);
 			return 0;
@@ -131,17 +143,21 @@ class LintCommand {
 				&& tokens != null ? UnusedImports.find(compiler.syntax.TokenTable.ofTokens(tokens), resolve) : [];
 			var unordered = orderTokens != null ? ImportOrder.find(source, orderTokens,
 				resolve).filter(block -> block.sorted != null) : [];
-			if (unused.length == 0 && unordered.length == 0)
+			var redundant = checkArguments
+				&& tokens != null ? RedundantArgumentNames.find(compiler.syntax.TokenTable.ofTokens(tokens)) : [];
+			if (unused.length == 0 && unordered.length == 0 && redundant.length == 0)
 				continue;
-			found += unused.length + unordered.length;
+			found += unused.length + unordered.length + redundant.length;
 			for (item in unused)
 				Sys.println('$path:${lineOf(source, item.start)}: unused import ${item.path}');
 			for (block in unordered)
 				Sys.println('$path:${lineOf(source, block.start)}: imports not in order');
+			for (item in redundant)
+				Sys.println('$path:${lineOf(source, item.start)}: argument "${item.name}: ${item.name}" is "${item.name}:"');
 			if (fix) {
 				var config = projects.forFile(path),
 					wasFormatted = Formatter.format(source, config) == source,
-					edited = remove(source, unused);
+					edited = remove(RedundantArgumentNames.shorten(source, redundant), unused);
 				// Sorted after the removal, which can join two runs or empty one.
 				if (orderTokens != null)
 					edited = ImportOrder.sort(edited, ImportOrder.tokens(path, edited), resolve);

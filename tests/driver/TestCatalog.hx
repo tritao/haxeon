@@ -324,6 +324,7 @@ class TestCatalog {
 		"ImportOrderMain",
 		"CompilerStaticsMain",
 		"LintProjectRootsMain",
+		"LintRedundantArgumentNameMain",
 		"LintUnboundLocalMain",
 		"LintModuleNamespaceMain",
 		"LintThrowNonExceptionMain",

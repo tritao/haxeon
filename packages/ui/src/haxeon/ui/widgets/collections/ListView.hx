@@ -222,7 +222,7 @@ class ListView implements View {
 			var content = new Column("list-content", rowViews, contentStyle);
 			// The rows built depend on the offset.
 			var scroll = new ScrollView("viewport", content, viewportStyle, ScrollAxis.Vertical, controller,
-				onScroll: onScroll, contentFollowsOffset: true);
+				onScroll:, contentFollowsOffset: true);
 			var root = context.createNode(context.rootId("list"), LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;
