@@ -57,24 +57,24 @@ class TextField implements ScopeView {
 	public final key:String;
 
 	/** The text; kept in sync with the document when the field edits one. */
-	public var value:String;
+	public final value:String;
 	/** Paint-only whitespace visibility: off, selection, or all. */
-	public var renderWhitespace:String = "off";
+	public final renderWhitespace:String;
 
 	/** The color whitespace is drawn in when `renderWhitespace` shows it; the theme's muted text color when null. */
-	public var whitespaceColor:Null<Color>;
+	public final whitespaceColor:Null<Color>;
 
 	/** The field's accessible name. */
-	public var label:Null<String>;
+	public final label:Null<String>;
 	/** Muted visual hint shown only while the editor is empty. */
-	public var placeholder:Null<String>;
+	public final placeholder:Null<String>;
 	/** Show a trailing ellipsis while an overflowing single-line value is not being edited. */
-	public var ellipsizeWhenUnfocused:Bool = false;
+	public final ellipsizeWhenUnfocused:Bool;
 
 	/** Whether Enter inserts a line break rather than submitting. */
 	public final multiline:Bool;
 	/** What the on-screen keyboard's action key is (NativeKit text-input action: 0 default, 5 send); Enter reaches the field as a key either way. */
-	public var imeAction:Int = 0;
+	public final imeAction:Int;
 
 	/** The field's box. */
 	public final style:LayoutStyle;
@@ -85,88 +85,85 @@ class TextField implements ScopeView {
 	/** Its text color; the theme's when null. */
 	public final textColor:Null<Color>;
 	/** Sorted, disjoint absolute codepoint foreground ranges for a visible chunk. */
-	public var colorRangeProvider:Null<(Int, Int) -> Array<TextColorRange>>;
+	public final colorRangeProvider:Null<(Int, Int) -> Array<TextColorRange>>;
 	/** Backgrounds and underlines in absolute document codepoint coordinates. */
-	public var decorationProvider:Null<(Int, Int) -> Array<TextDecoration>>;
+	public final decorationProvider:Null<(Int, Int) -> Array<TextDecoration>>;
 	/** Increment when state captured by presentation providers changes. */
-	public var presentationRevision:Int = 0;
+	public final presentationRevision:Int;
 	/**
 	 * Optional controlled selection, read when the field builds (after shared-document synchronization) and after a
 	 * delegated edit; null from it imposes none. The field follows a change only through a rebuild, so a provider whose
 	 * selection changes on its own reads reactive state, which the field then depends on.
 	 */
-	public var selectionProvider:Null<Void->Null<TextSelection>>;
+	public final selectionProvider:Null<Void->Null<TextSelection>>;
 	/** Reports widget selection after edit callbacks have synchronized a caller-owned document. */
-	public var onSelectionChange:Null<TextSelection->Void>;
-	/** Explicit navigation/edit request for owners that manage an outer viewport. */
-	internal var onEditorAction:Null<TextEditorAction->Bool>;
+	public final onSelectionChange:Null<TextSelection->Void>;
 
 	/**
 	 * Called when an edit or a caret move needs the caret scrolled into view, for a field inside a scroll view of its
 	 * own.
 	 */
-	public var onCaretRevealRequest:Null<Void->Void>;
+	public final onCaretRevealRequest:Null<Void->Void>;
 	/** Additional owner-controlled selections; the primary stays in selectionProvider. */
-	public var additionalSelectionProvider:Null<Void->Array<TextSelection>>;
-	/** Handles navigation of all selections when additional carets are present. */
-	internal var onNavigationIntent:Null<(TextNavigationIntent, TextEditorLayout) -> Bool>;
+	public final additionalSelectionProvider:Null<Void->Array<TextSelection>>;
 	/** Logical viewport height when an outer scroll container owns scrolling. */
-	public var pageHeightProvider:Null<Void->Float>;
+	public final pageHeightProvider:Null<Void->Float>;
 	/** Return true after applying an operation; the live layout supplies shaped word boundaries. */
 	/** True when an application document owns undo/redo. */
-	public var historyManagedExternally:Bool = false;
+	public final historyManagedExternally:Bool;
 	/** Optional external viewport scroll; delta uses application layout coordinates. */
-	public var onSelectionDragScroll:Null<Float->Bool>;
+	public final onSelectionDragScroll:Null<Float->Bool>;
 
 	/**
 	 * Offered each edit before the field makes it; returning true takes it over, for a document owner that applies
 	 * edits itself.
 	 */
-	public var onEditIntent:Null<(TextEditIntent, TextEditorLayout) -> Bool>;
+	public final onEditIntent:Null<(TextEditIntent, TextEditorLayout) -> Bool>;
 	/** Optional aggregate selected text for clipboard copy/cut. */
-	public var selectionTextProvider:Null<Void->Null<String>>;
+	public final selectionTextProvider:Null<Void->Null<String>>;
 	/** Optional pointer action at the text offset; true consumes normal selection handling. */
-	public var onTextPointerDown:Null<Int->UiEvent->Bool>;
+	public final onTextPointerDown:Null<Int->UiEvent->Bool>;
 	/** Hit-tested pointer movement, independent of selection dragging. */
-	public var onTextPointerMove:Null<Int->UiEvent->Void>;
+	public final onTextPointerMove:Null<Int->UiEvent->Void>;
 	/** Typed selector classes used by composite fields such as ComboBox. */
-	public var classes:Array<String>;
+	public final classes:Array<String>;
 
 	/** Whether the field accepts input and focus. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 	/** Selectable and copyable but not editable; multiline fields also scroll with the wheel. */
-	public var readOnly:Bool;
+	public final readOnly:Bool;
 	/** With readOnly, keeps the newest text in view until the user scrolls away from the end. */
-	public var followTail:Bool;
+	public final followTail:Bool;
 
 	/** Called with the text after each edit. */
-	public var onChange:Null<String->Void>;
+	public final onChange:Null<String->Void>;
 	/** Applied edit notifications for a caller-owned EditorKit document. */
-	public var onEdit:Null<TextEditTransaction->Void>;
+	public final onEdit:Null<TextEditTransaction->Void>;
 	/** Optional mutable EditorKit model shared with the persistent editor state. */
-	public var document:Null<TextDocument>;
+	public final document:Null<TextDocument>;
 
 	/** Called with the text when the user presses Enter in a single-line field. */
-	public var onSubmit:Null<String->Void>;
+	public final onSubmit:Null<String->Void>;
 
 	/** Called each frame with the editor's state, for an input method debugging panel. */
-	public var onDiagnostics:Null<TextEditorDiagnostics->Void>;
+	public final onDiagnostics:Null<TextEditorDiagnostics->Void>;
 	/** Current logical-screen caret bounds after layout, or null when clipped out. */
-	public var onCaretRect:Null<Null<Rect>->Void>;
+	public final onCaretRect:Null<Null<Rect>->Void>;
 	/** Borrowed retained text geometry after layout, for aligned companion views. */
-	public var onLayoutResolved:Null<TextEditorLayout->ResolvedLayoutItem->Void>;
+	public final onLayoutResolved:Null<TextEditorLayout->ResolvedLayoutItem->Void>;
 	/** Semantic role override used by composite editable controls. */
-	public var semanticRole:AccessibilityRole;
+	public final semanticRole:AccessibilityRole;
 	/** Semantic action capabilities override used by composite editable controls. */
-	public var semanticActions:AccessibilityAction;
+	public final semanticActions:AccessibilityAction;
 	/** Semantic states a composite editable control adds, such as a combo box's popup. */
-	public var semanticStates:AccessibilityState;
+	public final semanticStates:AccessibilityState;
 	/** Views the field builds over its content with its style as their parent, such as a combo box's frame and icon. */
-	public var overlays:Array<View>;
+	public final overlays:Array<View>;
 
 	/**
 	 * A field editing `value`, or `document` when given, which several editors may share; `onEdit` then receives each
-	 * transaction. Throws when `key` is empty, or with `onEdit` and no document.
+	 * transaction. Throws when `key` is empty, or with `onEdit` and no document. Every input is given here, the later ones
+	 * by name (`new TextField("name", placeholder: "Name", onSubmit: submit)`); none changes after.
 	 */
 	public function new(key:String,
 			value:String = "",
@@ -177,67 +174,97 @@ class TextField implements ScopeView {
 			?textColor:Color,
 			multiline:Bool = false,
 			?document:TextDocument,
-			?onEdit:TextEditTransaction->Void) {
+			?onEdit:TextEditTransaction->Void,
+			?placeholder:String,
+			enabled:Bool = true,
+			readOnly:Bool = false,
+			followTail:Bool = false,
+			?classes:Array<String>,
+			ellipsizeWhenUnfocused:Bool = false,
+			imeAction:Int = 0,
+			renderWhitespace:String = "off",
+			?whitespaceColor:Color,
+			?tabWidth:Int,
+			?wrap:TextWrap,
+			codeWordBoundaries:Bool = false,
+			historyManagedExternally:Bool = false,
+			presentationRevision:Int = 0,
+			semanticRole:AccessibilityRole = AccessibilityRole.TextField,
+			?semanticActions:AccessibilityAction,
+			?semanticStates:AccessibilityState,
+			?overlays:Array<View>,
+			?onSubmit:String->Void,
+			?onSelectionChange:TextSelection->Void,
+			?onCaretRect:Null<Rect>->Void,
+			?onLayoutResolved:TextEditorLayout->ResolvedLayoutItem->Void,
+			?onDiagnostics:TextEditorDiagnostics->Void,
+			?onCaretRevealRequest:Void->Void,
+			?onSelectionDragScroll:Float->Bool,
+			?onEditIntent:(TextEditIntent, TextEditorLayout) -> Bool,
+			?onTextPointerDown:Int->UiEvent->Bool,
+			?onTextPointerMove:Int->UiEvent->Void,
+			?selectionProvider:Void->Null<TextSelection>,
+			?additionalSelectionProvider:Void->Array<TextSelection>,
+			?selectionTextProvider:Void->Null<String>,
+			?colorRangeProvider:(Int, Int) -> Array<TextColorRange>,
+			?decorationProvider:(Int, Int) -> Array<TextDecoration>,
+			?pageHeightProvider:Void->Float) {
 		if (key == null || key.length == 0) throw "Text fields require a stable key";
 		if (onEdit != null && document == null) throw "Transaction callbacks require a shared EditorKit document";
 		this.key = key;
 		this.value = value == null ? "" : value;
 		this.onChange = onChange;
-		this.onEdit = onEdit;
-		this.document = document;
-		this.onSubmit = null;
-		this.onCaretRect = null;
-		this.onLayoutResolved = null;
-		this.colorRangeProvider = null;
-		this.decorationProvider = null;
-		this.selectionProvider = null;
-		this.onSelectionChange = null;
-		this.additionalSelectionProvider = null;
-		this.onNavigationIntent = null;
-		this.onEditIntent = null;
-		this.selectionTextProvider = null;
-		this.label = label;
-		this.placeholder = null;
-		this.multiline = multiline;
 		this.style = style == null ? defaultStyle(multiline) : style.copy();
+		this.label = label;
 		this.textStyle = textStyle;
 		this.textColor = textColor;
-		classes = [];
-		enabled = true;
-		readOnly = false;
-		followTail = false;
-		onDiagnostics = null;
-		semanticRole = AccessibilityRole.TextField;
-		semanticActions = AccessibilityAction.SetValue | AccessibilityAction.SetSelection;
-		semanticStates = AccessibilityState.empty();
-		overlays = [];
+		this.multiline = multiline;
+		this.document = document;
+		this.onEdit = onEdit;
+		this.placeholder = placeholder;
+		this.enabled = enabled;
+		this.readOnly = readOnly;
+		this.followTail = followTail;
+		this.classes = classes == null ? [] : classes.copy();
+		this.ellipsizeWhenUnfocused = ellipsizeWhenUnfocused;
+		this.imeAction = imeAction;
+		this.renderWhitespace = renderWhitespace;
+		this.whitespaceColor = whitespaceColor;
+		this.tabWidth = tabWidth;
+		this.wrap = wrap;
+		this.codeWordBoundaries = codeWordBoundaries;
+		this.historyManagedExternally = historyManagedExternally;
+		this.presentationRevision = presentationRevision;
+		this.semanticRole = semanticRole;
+		this.semanticActions = semanticActions == null
+			? AccessibilityAction.SetValue | AccessibilityAction.SetSelection : semanticActions;
+		this.semanticStates = semanticStates == null ? AccessibilityState.empty() : semanticStates;
+		this.overlays = overlays == null ? [] : overlays.copy();
+		this.onSubmit = onSubmit;
+		this.onSelectionChange = onSelectionChange;
+		this.onCaretRect = onCaretRect;
+		this.onLayoutResolved = onLayoutResolved;
+		this.onDiagnostics = onDiagnostics;
+		this.onCaretRevealRequest = onCaretRevealRequest;
+		this.onSelectionDragScroll = onSelectionDragScroll;
+		this.onEditIntent = onEditIntent;
+		this.onTextPointerDown = onTextPointerDown;
+		this.onTextPointerMove = onTextPointerMove;
+		this.selectionProvider = selectionProvider;
+		this.additionalSelectionProvider = additionalSelectionProvider;
+		this.selectionTextProvider = selectionTextProvider;
+		this.colorRangeProvider = colorRangeProvider;
+		this.decorationProvider = decorationProvider;
+		this.pageHeightProvider = pageHeightProvider;
 	}
 
-	/** Creates a field backed by a shared document and edit transaction stream. */
-	public static function withDocument(key:String,
-			document:TextDocument,
-			?onEdit:TextEditTransaction->Void,
-			?style:LayoutStyle,
-			?label:String,
-			?textStyle:TextStyle,
-			?textColor:Color,
-			multiline:Bool = false):TextField return new TextField(key,
-		"",
-		null,
-		style,
-		label,
-		textStyle,
-		textColor,
-		multiline,
-		document,
-		onEdit);
 
 	/** Tab stops in space advances; zero preserves the default layout behavior. */
-	public var tabWidth:Null<Int> = null;
+	public final tabWidth:Null<Int>;
 	/** Explicit wrapping policy; null retains the normal single/multiline defaults. */
-	public var wrap:Null<TextWrap> = null;
+	public final wrap:Null<TextWrap>;
 	/** Use lexical identifier boundaries for code selection and word commands. */
-	public var codeWordBoundaries:Bool = false;
+	public final codeWordBoundaries:Bool;
 
 	public function scopeKey():String return key;
 
@@ -270,8 +297,6 @@ class TextField implements ScopeView {
 			&& (onCaretRevealRequest == null) == (other.onCaretRevealRequest == null)
 			&& (onSelectionDragScroll == null) == (other.onSelectionDragScroll == null)
 			&& (onEditIntent == null) == (other.onEditIntent == null)
-			&& (onEditorAction == null) == (other.onEditorAction == null)
-			&& (onNavigationIntent == null) == (other.onNavigationIntent == null)
 			&& (selectionTextProvider == null) == (other.selectionTextProvider == null)
 			&& (pageHeightProvider == null) == (other.pageHeightProvider == null)
 			&& (onTextPointerDown == null) == (other.onTextPointerDown == null)
@@ -692,23 +717,6 @@ class TextField implements ScopeView {
 				|| event.key == UiKey.Right || event.key == UiKey.Up || event.key == UiKey.Down)) return;
 			var extend = event.modifiers.contains(UiModifier.Shift);
 			var command = (event.modifiers.contains(UiModifier.Control) || event.modifiers.contains(UiModifier.Super));
-			var editorAction = latest().onEditorAction;
-			var action:Null<TextEditorAction> = event.key == UiKey.Escape ? ClearSelection : command
-				&& event.key == UiKey.C ? Copy : command && event.key == UiKey.X ? Cut : extend && !command && event.key
-				== UiKey.Delete ? Cut : command
-				&& event.key == UiKey.V ? Paste : event.modifiers.contains(UiModifier.Control)
-				&& event.key == UiKey.Insert ? Copy : extend && event.key == UiKey.Insert ? Paste : command
-				&& event.key == UiKey.Enter ? (extend ? InsertLineAbove : InsertLineBelow) : null;
-			if (action != null && (!readOnly
-				|| action == Copy || action == ClearSelection) && editorAction != null && editorAction(action)) {
-				if (document != null) editor.syncDocument(document);
-				var provider = latest().selectionProvider;
-				var imposed = provider == null ? null : provider();
-				if (imposed != null) editor.setAnchoredSelection(imposed);
-				refreshState(false);
-				event.preventDefault();
-				return;
-			}
 			if (command && (event.key == UiKey.Z || event.key == UiKey.Y)) {
 				if (historyManagedExternally) return;
 				var previousRevision = editor.documentRevision();
@@ -730,55 +738,6 @@ class TextField implements ScopeView {
 			#else
 			event.modifiers.contains(UiModifier.Control);
 			#end
-			// The handler is read once: the calls below (pageStep, the modifier checks) may replace it.
-			var navigationIntent = latest().onNavigationIntent;
-			if (additionalSelections.length > 0 && navigationIntent != null) {
-				var navigation:Null<TextNavigationIntent> = switch (event.key) {
-					case UiKey.Left:
-						#if (mac || ios)
-						event.modifiers.contains(UiModifier.Super) ? LineBoundary(false, extend) :
-						#end
-						wordNavigation ? Word(-1, extend, macWordNavigation) : Character(-1, extend);
-					case UiKey.Right:
-						#if (mac || ios)
-						event.modifiers.contains(UiModifier.Super) ? LineBoundary(true, extend) :
-						#end
-						wordNavigation ? Word(1, extend, macWordNavigation) : Character(1, extend);
-					case UiKey.Up:
-						wordNavigation ? Paragraph(-1, extend, macWordNavigation) : multiline ? VisualLine(-1,
-							extend) : null;
-					case UiKey.Down:
-						wordNavigation ? Paragraph(1, extend, macWordNavigation) : multiline ? VisualLine(1,
-							extend) : null;
-					case UiKey.PageUp:
-						multiline ? VisualLine(latest().pageStep(editor, editorContent, -1), extend) : null;
-					case UiKey.PageDown:
-						multiline ? VisualLine(latest().pageStep(editor, editorContent, 1), extend) : null;
-					case UiKey.Home:
-						LineBoundary(false, extend);
-					case UiKey.End:
-						LineBoundary(true, extend);
-					case _:
-						null;
-				};
-				#if (mac || ios)
-				if (event.modifiers.contains(UiModifier.Super)
-					&& event.key == UiKey.Up) navigation = DocumentBoundary(false,
-					extend);
-				else if (event.modifiers.contains(UiModifier.Super)
-					&& event.key == UiKey.Down) navigation = DocumentBoundary(true,
-					extend);
-				#end
-				if (command && (event.key == UiKey.Home || event.key == UiKey.End)) navigation =
-					DocumentBoundary(event.key == UiKey.End,
-					extend);
-				if (navigation != null && navigationIntent(navigation, editor.layout)) {
-					refreshState();
-					editor.resetCaretBlink(Sys.time());
-					event.preventDefault();
-					return;
-				}
-			}
 			if (!readOnly) {
 				var consumed = event.key
 					== UiKey.Backspace

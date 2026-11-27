@@ -1243,26 +1243,6 @@ enum TextEditIntent {
 	DeleteWordForward(macStyle:Bool);
 }
 
-/** Keyboard navigation delegated by a controlled editor with multiple selections. */
-internal enum TextNavigationIntent {
-	Character(direction:Int, extend:Bool);
-	Word(direction:Int, extend:Bool, macStyle:Bool);
-	Paragraph(direction:Int, extend:Bool, macStyle:Bool);
-	VisualLine(direction:Int, extend:Bool);
-	LineBoundary(end:Bool, extend:Bool);
-	DocumentBoundary(end:Bool, extend:Bool);
-}
-
-/** Editor actions shared by widget input and application command surfaces. */
-internal enum TextEditorAction {
-	Copy;
-	Cut;
-	Paste;
-	ClearSelection;
-	InsertLineAbove;
-	InsertLineBelow;
-}
-
 /** Source/coalescing policy attached to one edit transaction. */
 enum TextEditorHistoryKind {
 	/** An edit that undoes on its own. */

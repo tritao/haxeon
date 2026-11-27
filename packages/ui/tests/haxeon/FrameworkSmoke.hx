@@ -117,8 +117,8 @@ import haxeon.ui.widgets.controls.SearchField;
 import haxeon.ui.widgets.layout.SizedBox;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.core.TextStyleOverride;
+import haxeon.ui.widgets.text.TextEditorLayout;
 import haxeon.ui.widgets.text.TextEditorState;
-import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.navigation.BottomBar;
 import haxeon.ui.widgets.navigation.NavigationController;
 import haxeon.ui.widgets.navigation.NavigationStack;
@@ -1015,8 +1015,8 @@ class FrameworkSmoke {
 		blinkEditor.dispose();
 		var editedValue = "";
 		var submittedValue = "";
-		var emptyField = new TextField("empty-entry", "", function(_) {}, null, "Empty message");
-		emptyField.placeholder = "Type a message…";
+		var emptyField = new TextField("empty-entry", "", function(_) {}, null, "Empty message",
+			placeholder:"Type a message…");
 		var emptyRoot = context.submit(emptyField, new LayoutFrame(256.0, 192.0));
 		if (emptyRoot.semantics == null || emptyRoot.semantics.value != ""
 			|| emptyRoot.children[0].children[0].layout.text != "Type a message…") return 39;
@@ -1050,16 +1050,10 @@ class FrameworkSmoke {
 		searchRoot = context.submit(search, new LayoutFrame(256.0, 38.0));
 		if (searchRoot.children.length != 2
 			|| searchRoot.children[1].children[0].children[0].layout.text != "Search components…") return 229;
+		var fieldDiagnostics:Null<TextEditorDiagnostics> = null;
 		var field = new TextField("entry", "hello", function(next) {
 			editedValue = next;
-		}, null, "Message");
-		field.onSubmit = function(next) {
-			submittedValue = next;
-		};
-		var fieldDiagnostics:Null<TextEditorDiagnostics> = null;
-		field.onDiagnostics = function(next) {
-			fieldDiagnostics = next;
-		};
+		}, null, "Message", onSubmit:next->submittedValue = next, onDiagnostics:next->fieldDiagnostics = next);
 		var fieldRoot = context.submit(field, new LayoutFrame(256.0, 192.0));
 		if (fieldRoot.children.length != 1 || fieldRoot.children[0].layout.visualKind != LayoutVisualKind.Box
 			|| fieldRoot.children[0].children.length != 1 || fieldRoot.children[0].children[0].layout.visualKind
@@ -1091,7 +1085,7 @@ class FrameworkSmoke {
 		}
 		if (applicationArrows != 8) throw "text field swallowed application arrow shortcuts";
 		var historyDocument = new TextDocument("");
-		var historyField = TextField.withDocument("field-history", historyDocument);
+		var historyField = new TextField("field-history", document:historyDocument);
 		var historyRoot = context.submit(historyField, new LayoutFrame(256.0, 192.0));
 		var historyState:State<TextEditorState> = context.buildContext.existingState(historyRoot.id);
 		var historyEditor:TextEditorState = cast historyState.value;
@@ -1136,13 +1130,12 @@ class FrameworkSmoke {
 		context.key(UiEventKind.KeyDown, UiKey.Z, historyModifier);
 		if (historyDocument.text != "abc!"
 			|| historyEditor.selectionFocus != 1) throw "navigation did not split typing history";
-		historyField.readOnly = true;
-		context.submit(historyField, new LayoutFrame(256.0, 192.0));
+		context.submit(new TextField("field-history", document:historyDocument, readOnly:true),
+			new LayoutFrame(256.0, 192.0));
 		context.key(UiEventKind.KeyDown, UiKey.Z, historyModifier);
 		if (historyDocument.text != "abc!"
 			|| leakedUndo != 0) throw "read-only undo changed text or escaped to application";
 		historyDocument.replace(0, historyDocument.codepointCount, "fresh");
-		historyField.readOnly = false;
 		context.submit(historyField, new LayoutFrame(256.0, 192.0));
 		context.key(UiEventKind.KeyDown, UiKey.Z, historyModifier);
 		if (historyDocument.text != "fresh") throw "external replacement retained stale field history";
@@ -1191,7 +1184,7 @@ class FrameworkSmoke {
 		compositionHistory.dispose();
 		context.commands.unregister("field-history-global-undo");
 		var wordDocument = new TextDocument("café hello");
-		var wordField = TextField.withDocument("word-delete-field", wordDocument);
+		var wordField = new TextField("word-delete-field", document:wordDocument);
 		var wordRoot = context.submit(wordField, new LayoutFrame(256.0, 192.0));
 		var wordState:State<TextEditorState> = context.buildContext.existingState(wordRoot.id);
 		var wordDeleteEditor:TextEditorState = cast wordState.value;
@@ -1217,14 +1210,14 @@ class FrameworkSmoke {
 		wordDeleteEditor.setSelection(0, 5);
 		context.key(UiEventKind.KeyDown, UiKey.Backspace, wordModifier);
 		if (wordDocument.text != " last") throw "word deletion expanded an existing selection";
-		wordField.readOnly = true;
-		context.submit(wordField, new LayoutFrame(256.0, 192.0));
+		context.submit(new TextField("word-delete-field", document:wordDocument, readOnly:true),
+			new LayoutFrame(256.0, 192.0));
 		context.key(UiEventKind.KeyDown, UiKey.Delete, wordModifier);
 		if (wordDocument.text != " last") throw "word deletion changed a read-only field";
 		var sharedDocument = new TextDocument("start");
 		var sharedEdit:Null<TextEditTransaction> = null;
-		var sharedField = TextField.withDocument("shared-document-field", sharedDocument,
-			function(edit) sharedEdit = edit);
+		var sharedField = new TextField("shared-document-field", document:sharedDocument,
+			onEdit:edit->sharedEdit = edit);
 		var sharedRoot = context.submit(sharedField, new LayoutFrame(256.0, 192.0));
 		var sharedEditorState:State<TextEditorState> = context.buildContext.existingState(sharedRoot.id);
 		var sharedEditor:TextEditorState = cast sharedEditorState.value;
@@ -1258,14 +1251,13 @@ class FrameworkSmoke {
 		var controlledSelection = new haxeon.reactive.Signal(new TextSelection(4, 1));
 		var editDelivered = false;
 		var callbackOrdered = true;
-		var controlledField = TextField.withDocument("controlled-selection", controlledDocument, function(_) {
-			editDelivered = true;
-		});
-		controlledField.selectionProvider = function() return controlledSelection.value;
-		controlledField.onSelectionChange = function(next) {
-			if (controlledDocument.text == "ax" && !editDelivered) callbackOrdered = false;
-			controlledSelection.value = next;
-		};
+		function controlled(?onEditIntent:(TextEditIntent, TextEditorLayout) -> Bool):TextField
+			return new TextField("controlled-selection", document:controlledDocument, onEdit:_->editDelivered = true,
+				onSelectionChange:function(next) {
+					if (controlledDocument.text == "ax" && !editDelivered) callbackOrdered = false;
+					controlledSelection.value = next;
+				}, onEditIntent:onEditIntent, selectionProvider:() -> controlledSelection.value);
+		var controlledField = controlled();
 		var controlledRoot = context.submit(controlledField, new LayoutFrame(256.0, 192.0));
 		var controlledState:State<TextEditorState> = context.buildContext.existingState(controlledRoot.id);
 		var controlledEditor:TextEditorState = cast controlledState.value;
@@ -1282,7 +1274,7 @@ class FrameworkSmoke {
 		context.key(UiEventKind.KeyDown, UiKey.Right, UiModifier.Shift);
 		if (controlledSelection.value.anchor != 0 || controlledSelection.value.focus != 1) return 343;
 		editDelivered = false;
-		controlledField.onEditIntent = function(intent, layout) {
+		controlledField = controlled(function(intent, layout) {
 			switch intent {
 				case Insert(text):
 					controlledDocument.replace(0, controlledDocument.codepointCount, text + "!");
@@ -1292,13 +1284,13 @@ class FrameworkSmoke {
 				case _:
 					return false;
 			}
-		};
+		});
 		context.submit(controlledField, new LayoutFrame(256.0, 192.0));
 		context.text(UiEventKind.TextInput, "🙂");
 		if (controlledDocument.text != "🙂!" || editDelivered || controlledEditor.selectionFocus != 2) return 344;
 		context.key(UiEventKind.KeyDown, UiKey.Backspace);
 		if (controlledDocument.text != "🙂" || !editDelivered || controlledSelection.value.focus != 1) return 345;
-		var sharedArea = TextArea.withDocument("shared-document-area", new TextDocument("multiline"));
+		var sharedArea = new TextField("shared-document-area", multiline:true, document:new TextDocument("multiline"));
 		if (!sharedArea.multiline) return 296;
 		fieldRoot = context.submit(field, new LayoutFrame(256.0, 192.0));
 		if (!context.focusWidget(fieldRoot.id)) return 297;
@@ -1413,7 +1405,7 @@ class FrameworkSmoke {
 		if (arabicEditor.text != "مرحبا بالعالم" || hebrewEditor.text != "x") return 224;
 
 		SelectionDragTests.run(fonts, context);
-		var wordArea = new TextArea("word-navigation", "one two\nthree four");
+		var wordArea = new TextField("word-navigation", "one two\nthree four", multiline:true);
 		var wordAreaRoot = context.submit(wordArea, new LayoutFrame(256.0, 192.0));
 		var wordAreaState:State<TextEditorState> = context.buildContext.existingState(wordAreaRoot.id);
 		var wordEditor:TextEditorState = cast wordAreaState.value;
@@ -1477,9 +1469,8 @@ class FrameworkSmoke {
 		#end
 		for (readOnly in [false, true]) {
 			var pageText = [for (_ in 0...100) "abcdefghij"].join("\n");
-			var pageArea = new TextArea("page-navigation-" + readOnly, pageText);
-			pageArea.readOnly = readOnly;
-			pageArea.pageHeightProvider = function() return 80.0;
+			var pageArea = new TextField("page-navigation-" + readOnly, pageText, multiline:true, readOnly:readOnly,
+				pageHeightProvider:() -> 80.0);
 			var pageRoot = context.submit(pageArea, new LayoutFrame(256.0, 192.0));
 			var pageState:State<TextEditorState> = context.buildContext.existingState(pageRoot.id);
 			var pageEditor:TextEditorState = cast pageState.value;
@@ -1499,7 +1490,7 @@ class FrameworkSmoke {
 				|| pageEditor.selectionFocus != 3) throw "Shift PageUp did not contract the selection";
 			if (pageEditor.text != pageText) throw "page navigation changed document text";
 		}
-		var lineArea = new TextArea("visual-line-navigation", "first line\nsecond\nthird line");
+		var lineArea = new TextField("visual-line-navigation", "first line\nsecond\nthird line", multiline:true);
 		var lineRoot = context.submit(lineArea, new LayoutFrame(256.0, 192.0));
 		var lineState:State<TextEditorState> = context.buildContext.existingState(lineRoot.id);
 		var lineEditor:TextEditorState = cast lineState.value;
@@ -1524,8 +1515,8 @@ class FrameworkSmoke {
 		if (!lineEditor.ensureCaretVisible(30.0) || lineEditor.scrollOffsetY <= 0.0) return 211;
 		lineEditor.placeCaret(0, false);
 		if (!lineEditor.ensureCaretVisible(30.0) || lineEditor.scrollOffsetY != 0.0) return 212;
-		var keyboardArea = new TextArea("keyboard-line-navigation",
-			"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve");
+		var keyboardArea = new TextField("keyboard-line-navigation",
+			"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve", multiline:true);
 		var keyboardRoot = context.submit(keyboardArea, new LayoutFrame(256.0, 192.0));
 		var keyboardState:State<TextEditorState> = context.buildContext.existingState(keyboardRoot.id);
 		var keyboardEditor:TextEditorState = cast keyboardState.value;
@@ -1569,9 +1560,9 @@ class FrameworkSmoke {
 		context.pointerUp(clickX, clickY, 0);
 		if (clickEditor.selectionStart != 6 || clickEditor.selectionEnd != 10) return 107;
 		var areaChanged = "";
-		var area = new TextArea("area-smoke", "line", function(next) {
+		var area = new TextField("area-smoke", "line", function(next) {
 			areaChanged = next;
-		});
+		}, multiline:true);
 		var areaRoot = context.submit(area, new LayoutFrame(256.0, 192.0));
 		var areaSemantics:Semantics = cast areaRoot.semantics;
 		var areaGeometry:ResolvedLayoutItem = cast areaRoot.resolved;
@@ -3875,9 +3866,7 @@ class FrameworkSmoke {
 		var inheritedEditor:TextEditorState = cast inheritedEditorState.value;
 		if (inheritedFieldRoot.children[0].children[0].layout.textStyle.fontSize != 23.0
 			|| inheritedEditor.textStyle.fontSize != 23.0) return 217;
-		var paragraphField = new TextField("paragraph-field", "edit");
-		paragraphField.wrap = TextWrap.None;
-		paragraphField.tabWidth = 8;
+		var paragraphField = new TextField("paragraph-field", "edit", tabWidth:8, wrap:TextWrap.None);
 		var paragraphRoot = context.submit(new DefaultTextStyle(new Column("paragraph-siblings",
 			[
 				new KeyedView("field", paragraphField),
@@ -4354,9 +4343,8 @@ class FrameworkSmoke {
 		for (index in 0...values.length) {
 			var fieldStyle = new LayoutStyle();
 			fieldStyle.width = LayoutAxis.fixed(220.0);
-			var field = new TextField("contrast-" + index, values[index], null, fieldStyle);
-			field.classes = ["property-input"];
-			field.enabled = index != 1;
+			var field = new TextField("contrast-" + index, values[index], null, fieldStyle, enabled:index != 1,
+				classes:["property-input"]);
 			var root = context.submit(field, new LayoutFrame(240.0, 40.0));
 			var expected = field.enabled ? theme.tokens.textPrimary : theme.tokens.textDisabled;
 			var foreground:Color = root.computedStyle.getColor(haxeon.ui.style.StyleProperty.TextColor);
@@ -6998,13 +6986,11 @@ private class SmokeVectorExtension implements PropertyEditorExtension {
 			context:BuildContext,
 			enabled:Bool,
 			apply:PropertyValue->Void):View {
-		var field = new TextField(key, editableTextValue(value), function(_) {}, null, descriptor.label);
-		field.enabled = enabled;
-		field.onSubmit = function(text) {
-			var parsed = parse(text);
-			if (parsed != null) apply(PropertyValue.Custom(typeId(), parsed));
-		};
-		return field;
+		return new TextField(key, editableTextValue(value), function(_) {}, null, descriptor.label, enabled:enabled,
+			onSubmit:function(text) {
+				var parsed = parse(text);
+				if (parsed != null) apply(PropertyValue.Custom(typeId(), parsed));
+			});
 	}
 
 	function editableTextValue(value:PropertyValue):String {

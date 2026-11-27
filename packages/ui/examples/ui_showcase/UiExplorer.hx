@@ -44,7 +44,6 @@ import haxeon.ui.widgets.layout.SizedBox;
 import haxeon.ui.widgets.layout.Stack;
 import haxeon.ui.widgets.text.DefaultTextStyle;
 import haxeon.ui.widgets.text.Text;
-import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.text.TextEditorState;
 import haxeon.ui.widgets.text.TextField;
 import inspector.InspectionOverlay;
@@ -711,7 +710,7 @@ class UiExplorer implements Disposable {
 		return ShowcaseKit.textField(this);
 	}
 
-	function textArea():TextArea
+	function textArea():TextField
 		return ShowcaseKit.textArea(this);
 
 	/** Focuses a text editor by its semantic label for showcase test controls. */

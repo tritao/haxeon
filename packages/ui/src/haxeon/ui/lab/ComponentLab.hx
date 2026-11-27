@@ -23,7 +23,6 @@ import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.layout.SizedBox;
 import haxeon.ui.widgets.layout.SplitView;
 import haxeon.ui.widgets.text.Text;
-import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.text.TextField;
 
 /** Interactive Storybook-style surface backed by ordinary UIKit views. */
@@ -305,11 +304,8 @@ class ComponentLab implements Observable {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(520.0);
 		style.height = LayoutAxis.fixed(220.0);
-		return new TextArea("multiline-editor",
-			multilineValue,
-			function(next) multilineValue = next,
-			style,
-			"Example notes");
+		return new TextField("multiline-editor", multilineValue, next -> multilineValue = next, style, "Example notes",
+			multiline:true);
 	}
 
 	function tokensStory():View {

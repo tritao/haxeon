@@ -128,10 +128,7 @@ class ControlsPage {
 	static function propertyInput(key:String, value:String, enabled:Bool = true):TextField {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(220.0);
-		var field = new TextField(key, value, null, style, key);
-		field.classes = ["property-input"];
-		field.enabled = enabled;
-		return field;
+		return new TextField(key, value, null, style, key, enabled:enabled, classes:["property-input"]);
 	}
 
 	static function iconButtonSample():IconButton {

@@ -15,7 +15,6 @@ import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Padding;
 import haxeon.ui.widgets.layout.Stack;
 import haxeon.ui.widgets.text.Text;
-import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.text.TextField;
 
 /** Showcase-only styling and small compositions built from framework widgets. */
@@ -33,7 +32,7 @@ import haxeon.ui.widgets.text.TextField;
 		}, style, "Display name");
 	}
 
-	static function textArea(explorer:UiExplorer):TextArea {
+	static function textArea(explorer:UiExplorer):TextField {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.fixed(146.0);
@@ -41,9 +40,9 @@ import haxeon.ui.widgets.text.TextField;
 		style.background = explorer.state.lightTheme ? color(0.92, 0.94, 0.98) : color(0.09, 0.12, 0.18);
 		style.radiusTopLeft = style.radiusTopRight = 5.0;
 		style.radiusBottomLeft = style.radiusBottomRight = 5.0;
-		return new TextArea("demo-notes", explorer.state.controls.notesValue, function(value) {
+		return new TextField("demo-notes", explorer.state.controls.notesValue, function(value) {
 			explorer.state.controls.notesValue = value;
-		}, style, "Multilingual notes");
+		}, style, "Multilingual notes", multiline:true);
 	}
 
 	static function slider(explorer:UiExplorer):Slider {

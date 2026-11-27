@@ -203,19 +203,17 @@ value and a function that receives the new one; the function updates the task, a
 works the same way and looks like a switch.
 
 The form adds a task. A `TextField` reports every edit through its change function, and `onSubmit` runs when the user
-presses Enter:
+presses Enter. A control is built in one call: its later options are given by name, and nothing changes it afterwards.
 
 ```haxe
 function addForm():View {
-	var field = new TextField("new-task", draft, text -> draft = text);
-	field.placeholder = "New task";
-	field.onSubmit = _ -> add();
+	var field = new TextField("new-task", draft, text -> draft = text, placeholder: "New task", onSubmit: _ -> add());
 	var style = new LayoutStyle();
 	style.width = LayoutAxis.grow();
 	style.childGap = 8;
 	return new Row("add-form", [
 		new KeyedView("field", field),
-		new KeyedView("add", new Button("Add", null, add, "add", draft.length > 0, ButtonVariant.Primary))
+		new KeyedView("add", new Button("Add", onClick: add, key: "add", enabled: draft.length > 0, variant: ButtonVariant.Primary))
 	], style);
 }
 
@@ -231,8 +229,8 @@ function add():Void {
 The field shows `draft`, so setting `draft` to an empty string in `add()` clears it. The Add button is enabled only
 while there is text, and `ButtonVariant.Primary` marks it as the main action.
 
-Other controls follow the same pattern: `RadioGroup`, `Select`, `ComboBox`, `Slider` and `TextArea` (in
-`haxeon.ui.widgets.controls` and `haxeon.ui.widgets.text`).
+Other controls follow the same pattern: `RadioGroup`, `Select`, `ComboBox` and `Slider` (in
+`haxeon.ui.widgets.controls`), and a multiline `TextField` (`multiline: true`).
 
 ## Navigation
 

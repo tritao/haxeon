@@ -191,8 +191,8 @@ Web builds include IBM Plex Sans in the native UI Wasm module. Applications
 can load additional fonts as assets. The native
 `nativekit_ui_system_fonts` test checks the callback and platform discovery.
 
-Code editors opt into `TextField.codeWordBoundaries` (also available on `TextArea`
-and `TextEditorLayout`). The default remains natural-language segmentation.
+Code editors opt into `TextField.codeWordBoundaries` (also available on
+`TextEditorLayout`). The default remains natural-language segmentation.
 The native layout owns the shared policy used by double-click selection, word
 selection dragging, word navigation, and word deletion. Code mode groups Unicode
 letters, marks, numbers, and connector punctuation into identifiers; punctuation

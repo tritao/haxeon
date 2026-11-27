@@ -9,7 +9,6 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Row;
-import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.text.TextEditorState;
 import haxeon.ui.widgets.text.TextField;
 
@@ -97,18 +96,9 @@ class TextPage {
 
 	static function editor(explorer:UiExplorer, key:String, value:String, label:String,
 			multiline:Bool, onChange:String->Void):TextField {
-		var result:TextField;
-		var style = editorStyle(explorer, multiline ? 142.0 : 42.0);
-		if (multiline)
-			result = new TextArea(key, value, onChange, style, label);
-		else
-			result = new TextField(key, value, onChange, style, label);
-		result.onDiagnostics = explorer.recordTextDiagnostics;
-		if (!multiline)
-			result.onSubmit = function(_) {
-				explorer.recordTextSubmit(label);
-			};
-		return result;
+		return new TextField(key, value, onChange, editorStyle(explorer, multiline ? 142.0 : 42.0), label,
+			multiline:multiline, onSubmit:multiline ? null : _ -> explorer.recordTextSubmit(label),
+			onDiagnostics:explorer.recordTextDiagnostics);
 	}
 
 	static function editorStyle(explorer:UiExplorer, height:Float):LayoutStyle {

@@ -7,8 +7,8 @@ import haxeon.ui.core.State;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
-import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.text.TextEditorState;
+import haxeon.ui.widgets.text.TextField;
 import haxeon.ui.widgets.text.Utf8Text;
 
 /** Drag boundaries and selection synchronization after scroll layout. */
@@ -146,7 +146,7 @@ class SelectionDragTests {
 		edgeStyle.width = LayoutAxis.fixed(200.0);
 		edgeStyle.height = LayoutAxis.fixed(64.0);
 		var edgeText = [for (line in 0...80) "row " + line].join("\n");
-		var edgeArea = new TextArea("selection-edge-scroll", edgeText, null, edgeStyle);
+		var edgeArea = new TextField("selection-edge-scroll", edgeText, null, edgeStyle, multiline:true);
 		var edgeFrame = new LayoutFrame(200.0, 64.0);
 		var edgeRoot = context.submit(edgeArea, edgeFrame);
 		var edgeState:State<TextEditorState> = context.buildContext.existingState(edgeRoot.id);

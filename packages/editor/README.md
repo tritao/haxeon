@@ -30,8 +30,8 @@ lets a field detect edits made by its owner between UI submissions. Long-
 paragraph shaping remains linear in paragraph size; bounding document index
 segments alone does not bound that layout work.
 
-Use `TextField.withDocument` or `TextArea.withDocument` when the application
-owns the document. The field applies native and keyboard edits to that same
+Pass `document:` to `TextField` (with `multiline: true` for an area) when the
+application owns the document. The field applies native and keyboard edits to that same
 `TextDocument`, and its optional `onEdit` callback receives the applied
 transaction with the removed text attached for undo/history. Transaction
 positions use Unicode code points. Reading `TextField.value`, requesting

@@ -108,15 +108,14 @@ class App implements UiApplication implements UiDiagnosticsProvider {
 	}
 
 	function addForm():View {
-		var field = new TextField("new-task", draft, text -> draft = text);
-		field.placeholder = "New task";
-		field.onSubmit = _ -> add();
+		var field = new TextField("new-task", draft, text -> draft = text, placeholder:"New task", onSubmit:_->add());
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.childGap = 8;
 		return new Row("add-form", [
 			new KeyedView("field", field),
-			new KeyedView("add", new Button("Add", null, add, "add", draft.length > 0, ButtonVariant.Primary))
+			new KeyedView("add",
+				new Button("Add", onClick:add, key:"add", enabled:draft.length > 0, variant:ButtonVariant.Primary))
 		], style);
 	}
 

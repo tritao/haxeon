@@ -209,23 +209,21 @@ class ComboBox<T> implements View {
 				queryState.update(query);
 				if (hasQueryChangeHandler) onQueryChange(query);
 				open();
-			}, inputStyle, placeholder);
-			input.classes = ["combo-trigger"];
-			input.enabled = enabled;
-			input.semanticRole = AccessibilityRole.ComboBox;
-			input.semanticActions = AccessibilityAction.SetValue | AccessibilityAction.SetSelection | (isOpen
-				? AccessibilityAction.Collapse : AccessibilityAction.Expand);
-			input.semanticStates = AccessibilityState.HasPopup
-				| (isOpen ? AccessibilityState.Expanded : AccessibilityState.empty());
-			input.onSubmit = function(_) {
+			}, inputStyle, placeholder, enabled:enabled, classes:["combo-trigger"],
+				semanticRole:AccessibilityRole.ComboBox,
+				semanticActions:AccessibilityAction.SetValue | AccessibilityAction.SetSelection | (isOpen
+				? AccessibilityAction.Collapse : AccessibilityAction.Expand),
+				semanticStates:AccessibilityState.HasPopup
+				| (isOpen ? AccessibilityState.Expanded : AccessibilityState.empty()),
+				overlays:[
+					SelectionIndicator.fieldFrame("input-frame"),
+					SelectionIndicator.search("input-search",
+						enabled ? context.theme.tokens.textSecondary : context.theme.tokens.textDisabled)
+				],
+				onSubmit:function(_) {
 				if (openState.value != true) open();
 				else submitActive();
-			};
-			input.overlays = [
-				SelectionIndicator.fieldFrame("input-frame"),
-				SelectionIndicator.search("input-search",
-					enabled ? context.theme.tokens.textSecondary : context.theme.tokens.textDisabled)
-			];
+			});
 			var inputModifier = new RootModifier();
 			inputModifier.on(UiEventKind.PointerDown, function(event) {
 				if (enabled && event.button == 0) open();
