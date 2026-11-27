@@ -164,6 +164,13 @@ private class FrontendBuild {
 	public var allocationAfterIndexRebuild:AllocationSnapshot;
 	public var retyped:Array<String>;
 	public var regenerated:Array<String>;
+
+	/**
+	 * The functions of package code (`ModuleState.packageCode`) this build lowered to IR, whose typed bodies it lets go once its IR
+	 * is assembled (`releaseTypedBodies`).
+	 */
+	public final releasedBodies:Array<compiler.types.TypedAst.TypedFunction> = [];
+
 	public var currentSpecializedOwners:Map<String, Bool>;
 	public var currentObjects:Array<IrObject>;
 
@@ -304,11 +311,22 @@ class FrontendCompilation {
 		PeakProbe.mark("ir-done");
 		PhaseCollections.end("ir", context.options.phaseCollections);
 		selectChangedFunctions(build);
+		releaseTypedBodies(build);
 		var irAssemblyDoneAt = now();
 		build.allocationPhases.push(AllocationMeter.delta("ir-assembly", build.allocationAfterTyping,
 			AllocationMeter.sample()));
 		return result(build, build.ir, irAssemblyDoneAt, build.reusedPipeline, build.reuseMiss);
 	}
+
+	/**
+	 * Lets go of the typed bodies of the package code this build lowered (`FrontendBuild.releasedBodies`), in place: nothing reads a
+	 * typed body once its function has IR, which a build keeps until the function is typed again, and typing it again (an edit
+	 * of its file, or a read that changed) makes a new body. The helpers are kept, as a build can take one as it is
+	 * (`TypingSession.keptHelper`) into the program it walks. A build that is not taken leaves the functions it typed unreachable.
+	 */
+	static function releaseTypedBodies(build:FrontendBuild):Void
+		for (fn in build.releasedBodies)
+			fn.statements.resize(0);
 
 	/**
 	 * The frontend up to the IR tables: a result when the compile ends there, else the build to run the IR pipeline on. It runs in
@@ -880,7 +898,8 @@ class FrontendCompilation {
 			regenerated = build.regenerated,
 			indexSemantics = build.indexSemantics,
 			lowerToIr = build.lowerToIr,
-			generation = context.state.irGeneration;
+			generation = context.state.irGeneration,
+			releasesBodies = context.options.keepSession && !indexSemantics;
 		var touchedModules:Map<String, Bool> = [],
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [],
 			generatedFunctions:Map<String, Bool> = [];
@@ -934,6 +953,9 @@ class FrontendCompilation {
 				var ir = generator.generateFunction(fn),
 					key = ir.symbol.id,
 					kept = generation.kept(key);
+				if (releasesBodies && state.packageCode
+					&& fn.originKind != compiler.types.TypedAst.FunctionOriginKind.Helper)
+					build.releasedBodies.push(fn);
 				// A helper is owned by the module of the code that asked for it first, which another build can ask from elsewhere:
 				// the IR it had is the database's, under its name.
 				if (previous == null && generated)

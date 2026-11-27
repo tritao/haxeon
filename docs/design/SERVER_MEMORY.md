@@ -214,3 +214,14 @@ everything, as before. The tier decides what is kept, never what is built.
   (`ModuleAnalyzer.parse`): nothing in the compile server reads it again, and an edit of the file parses it anew. A semantic
   model made later lexes the file again (`ModuleState.keptTokens`). The UI session 362.70 → 344.35 MB, the small project
   9.02 → 8.60 MB (the standard library's tokens).
+- **Typed bodies.** A function of package code that a build types and lowers to IR lets go of its typed body once the build's
+  IR is assembled (`FrontendCompilation.releaseTypedBodies`), in place, so every holder (the module, the last typed program, a
+  class's methods, the publications' snapshots) lets go of it. Nothing reads a typed body once its function has IR: a later
+  build keeps the IR until the function is typed again, and typing it again (an edit of its file, or a read that changed) makes
+  a new body from the canonical declaration. The released functions are new in the build that releases them, so no state kept
+  from before it shares them. Generated helpers keep theirs, as a build can take a helper as it is into the program it walks
+  (`TypingSession.keptHelper`). Measured alone this is 20.3 MB, three times what releasing the modules' maps showed: the typed
+  functions are also held by class tables and the snapshots. `--check-reuse` covers it as it covers every kept result: the
+  frontend and the live build run afresh must give the same IR (`checkFrontendReuse`, `checkLiveAfresh`), which a build that
+  read a released body would not. The UI session 344.25 → 322.96 MB, the small project 8.60 → 8.07 MB; an edit of a package's
+  file (perf-guard's live package edit) patches in about the time it did, as its module's functions are typed again either way.
