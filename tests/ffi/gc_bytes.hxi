@@ -1,8 +1,8 @@
 interface GcBytes @target("portable-abi32") @library("gc_bytes") {
 	opaque gc_context;
-	struct gc_fixture_point @layout(16, 16) { x: i32 @offset(0); y: i32 @offset(4); }
-	struct gc_value_point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }
-	struct gc_point_list @layout(8, 4) { points: ptr<const<gc_value_point>> @offset(0) @borrowed @length_field("count"); count: u32 @offset(4); }
+	struct gc_fixture_point { x: i32; y: i32; stamp: u64; }
+	struct gc_value_point { x: i32; y: i32; }
+	struct gc_point_list { points: ptr<const<gc_value_point>> @borrowed @length_field("count"); count: u32; }
 	extern fn inspect(data: ptr<const<u8>> @in_array("length"), length: u32) -> i32 @symbol("inspect_bytes");
 	extern fn mutate(data: ptr<u8> @in_array("length"), length: u32) -> i32 @symbol("mutate_bytes");
 	extern fn store(value: ptr<u32> @out, count: ptr<u32> @out) -> void @symbol("store_values");

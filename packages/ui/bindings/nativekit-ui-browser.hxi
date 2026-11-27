@@ -1,4 +1,4 @@
-interface NativeKitUIBrowser @target("portable-abi32") @library("nativekit_ui") {
+interface NativeKitUIBrowser @target("portable") @library("nativekit_ui") {
 	/** Routes the browser canvas's touch and pen pointer events to this window. */
 	extern fn nkui_browser_pointer_events(window: u32, enabled: u32) -> void;
 }

@@ -31,9 +31,9 @@
   },
   "ffi": {
     "interfaces": [
-      "bindings/nativekit-ui.hxi"
+      "bindings/nativekit-ui.hxi",
+      { "path": "bindings/nativekit-ui-browser.hxi", "platforms": ["web"] }
     ],
-    "wasmInterfaces": ["bindings/nativekit-ui-wasm.hxi", "bindings/nativekit-ui-browser-wasm.hxi"],
     "projections": [
       "bindings/nativekit-ui.hxmap"
     ]

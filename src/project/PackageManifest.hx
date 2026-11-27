@@ -52,20 +52,29 @@ class NativeCMakeManifest {
 	}
 }
 
+/** One FFI interface file of a package, loaded on the `platforms` it names, or on all when it names none. */
+typedef FfiInterfaceEntry = {
+	final path:String;
+	final platforms:Array<String>;
+}
+
 class FfiManifest {
 	public final imports:Array<String>;
-	public final interfaces:Array<String>;
+	public final interfaces:Array<FfiInterfaceEntry>;
 	public final projections:Array<String>;
 
-	public final wasmInterfaces:Array<String>;
-
-	public function new(imports:Array<String>, interfaces:Array<String>, projections:Array<String>,
-			wasmInterfaces:Array<String>) {
-		this.wasmInterfaces = wasmInterfaces.copy();
+	public function new(imports:Array<String>, interfaces:Array<FfiInterfaceEntry>, projections:Array<String>) {
 		this.imports = imports.copy();
 		this.interfaces = interfaces.copy();
 		this.projections = projections.copy();
 	}
+
+	/** The interface files a build for `platform` loads. */
+	public function interfacesFor(platform:String):Array<String>
+		return [
+			for (entry in interfaces)
+				if (entry.platforms.length == 0 || entry.platforms.contains(platform)) entry.path
+		];
 }
 
 /**
@@ -474,12 +483,11 @@ class PackageManifest {
 			if (!isObject(ffiData))
 				throw new InternalError('$path "ffi" must be an object');
 			var imports = stringArray(ffiData, "imports", path, []),
-				interfaces = stringArray(ffiData, "interfaces", path, []),
-				projections = stringArray(ffiData, "projections", path, []),
-				wasmInterfaces = stringArray(ffiData, "wasmInterfaces", path, []);
-			if (imports.length == 0 && interfaces.length == 0 && projections.length == 0 && wasmInterfaces.length == 0)
-				throw new InternalError('$path "ffi" requires "imports", "interfaces", "wasmInterfaces", or "projections"');
-			ffi = new FfiManifest(imports, interfaces, projections, wasmInterfaces);
+				interfaces = ffiInterfaces(ffiData, path),
+				projections = stringArray(ffiData, "projections", path, []);
+			if (imports.length == 0 && interfaces.length == 0 && projections.length == 0)
+				throw new InternalError('$path "ffi" requires "imports", "interfaces", or "projections"');
+			ffi = new FfiManifest(imports, interfaces, projections);
 		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
 			scopeSourceRoots, workspace, target, defines,
@@ -721,6 +729,34 @@ class PackageManifest {
 			if (!variants.iterator().hasNext())
 				throw new UsageError('$path shaderVariants.$module must declare a variant');
 			result.set(module, variants);
+		}
+		return result;
+	}
+
+	/** `ffi.interfaces`: each a path, loaded on every platform, or `{ path, platforms }`. */
+	static function ffiInterfaces(ffiData:Dynamic, path:String):Array<FfiInterfaceEntry> {
+		var value:Dynamic = Reflect.field(ffiData, "interfaces");
+		if (value == null)
+			return [];
+		if (!Std.isOfType(value, Array))
+			throw new InternalError('$path "ffi.interfaces" must be an array');
+		var result:Array<FfiInterfaceEntry> = [];
+		for (item in (cast value:Array<Dynamic>)) {
+			if (Std.isOfType(item, String)) {
+				result.push({path: item, platforms: []});
+				continue;
+			}
+			if (!isObject(item))
+				throw new InternalError('$path "ffi.interfaces" entries must be paths or objects with "path" and "platforms"');
+			var entryPath = '$path "ffi.interfaces" entry',
+				platforms = stringArray(item, "platforms", entryPath, []);
+			for (platform in platforms)
+				if (!AppManifest.PLATFORMS.contains(platform))
+					throw new UsageError('$entryPath has an unknown platform "$platform"');
+			result.push({
+				path: requiredValueString(Reflect.field(item, "path"), "path", entryPath),
+				platforms: platforms
+			});
 		}
 		return result;
 	}

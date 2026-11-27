@@ -18,7 +18,7 @@ class HxiOutputsMain {
 		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface("outputs.hxi",
 			'interface Outputs @target("x86_64-linux-gnu") @library("$library") {\n'
-			+ '\tstruct fixture_point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }\n'
+			+ '\tstruct fixture_point { x: i32; y: i32; }\n'
 			+ '\textern fn calls() -> u32 @symbol("native_fixture_output_calls_take");\n'
 			+ '\textern fn squares(n: i32, values: nullable<ptr<i32>> @out_array("count"), count: ptr<u32> @inout) -> i32 @symbol("native_fixture_squares");\n'
 			+ '\textern fn squaresHinted(n: i32, values: nullable<ptr<i32>> @out_array("count") @initial_capacity(4), count: ptr<u32> @inout) -> i32 @symbol("native_fixture_squares");\n'

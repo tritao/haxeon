@@ -234,7 +234,7 @@ class HxiAbiMain {
 		}
 		var model = HxiParser.parse("vec3.hxi",
 			'interface vectors @target("portable-abi32") @library("vectors") {'
-			+ ' struct vec3 @layout(24, 8) { x: f64 @offset(0); y: f64 @offset(8); z: f64 @offset(16); }'
+			+ ' struct vec3 { x: f64; y: f64; z: f64; }'
 			+ ' extern fn length(value: vec3) -> f64;'
 			+ ' }');
 		HxiValidator.validate(model, []);
@@ -252,8 +252,8 @@ class HxiAbiMain {
 		for (entry in targets) {
 			var model = HxiParser.parse('value-record-${entry.target}.hxi',
 				'interface value_records @target("${entry.target}") @library("value_records") {'
-				+ ' struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }'
-				+ ' struct gapped @layout(12, 4) { tag: i8 @offset(0); value: i32 @offset(8); }'
+				+ ' struct point { x: i32; y: i32; }'
+				+ ' struct gapped { tag: i8; value: i32; }'
 				+ ' extern fn read(value: ptr<const<point>>) -> i32;'
 				+ ' extern fn write(value: ptr<point> @out) -> void;'
 				+ ' extern fn update(value: ptr<point> @inout) -> void;'
@@ -277,8 +277,8 @@ class HxiAbiMain {
 			expect(natives[4].fixedResult != null && natives[4].fixedResult.size == 8
 				&& natives[4].fixedResult.alignment == 4,
 				'${entry.target}: by-value struct result lost its layout');
-			expect(natives[5].signature == "5>{12;4;1,2,2,2,2,2,2,2,5}",
-				'${entry.target}: gapped by-value result lost explicit padding');
+			expect(natives[5].signature == "5>{8;4;1,2,2,2,5}",
+				'${entry.target}: gapped by-value result lost its padding');
 			expect(source.indexOf('extern function read(arg0:point):Int;') >= 0
 				&& source.indexOf('function write():point') >= 0
 				&& source.indexOf('function update(value:point):point') >= 0,

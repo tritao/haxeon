@@ -122,9 +122,8 @@ class PackageResolver {
 				}
 			}
 			if (manifest.ffi != null) {
-				var web = platform == "web" && manifest.ffi.wasmInterfaces.length > 0;
-				ffiInterfaces = resolveFiles(resolvedRoot, web ? manifest.ffi.wasmInterfaces : manifest.ffi.interfaces,
-					manifest.packageName, "FFI interface");
+				ffiInterfaces = resolveFiles(resolvedRoot, manifest.ffi.interfacesFor(platform), manifest.packageName,
+					"FFI interface");
 				for (ffiPath in manifest.ffi.imports) {
 					var ffiManifestPath = resolveFiles(resolvedRoot, [ffiPath], manifest.packageName,
 						"FFI manifest")[0];
@@ -133,7 +132,7 @@ class PackageResolver {
 				ffiProjections = projectionsFor(manifest.packageName,
 					resolveFiles(resolvedRoot, manifest.ffi.projections, manifest.packageName, "FFI projection"),
 					ffiInterfaces,
-					resolveFiles(resolvedRoot, manifest.ffi.interfaces.concat(manifest.ffi.wasmInterfaces),
+					resolveFiles(resolvedRoot, [for (entry in manifest.ffi.interfaces) entry.path],
 					manifest.packageName,
 					"FFI interface"),
 					[for (ffiImport in ffiImports) ffiImport.interfaceName()]);

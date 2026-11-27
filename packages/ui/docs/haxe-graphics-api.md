@@ -25,8 +25,9 @@ tools/update-haxeon-hxi.sh
 tools/update-haxeon-hxi.sh --check
 ```
 
-The first command compares Linux, MinGW, Intel macOS, and ARM macOS Clang targets
-under the `portable-abi64` contract before writing the canonical artifact. With
+The first command compares Linux, MinGW, Intel macOS, ARM macOS, and Wasm Clang
+targets under the `portable` contract before writing the canonical artifact, one
+interface for native and Web builds. With
 `--check` it writes to a temporary file instead and fails if the checked-in
 interface differs.
 The Haxeon UI showcase is the executable contract for paths, text, images,

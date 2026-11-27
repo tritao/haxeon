@@ -50,18 +50,19 @@ class HxiProjectionPlanner {
 								value: haxe.Int64.toStr(value.value)
 							}]
 					});
-				case Structure(name, size, alignment, fields, _):
+				case Structure(name, fields, _):
+					var layout = abi.structLayout(name);
 					structures.push({
 						nativeName: name,
 						name: HxiHaxeEmitter.projectedTypeName(name, profile),
-						size: size,
-						alignment: alignment,
-						fields: [for (field in fields)
+						size: layout.size,
+						alignment: layout.align,
+						fields: [for (index in 0...fields.length)
 							{
-								nativeName: field.name,
-								name: HxiHaxeEmitter.projectedFieldName(name, field.name, profile),
-								type: field.type,
-								offset: field.offset
+								nativeName: fields[index].name,
+								name: HxiHaxeEmitter.projectedFieldName(name, fields[index].name, profile),
+								type: fields[index].type,
+								offset: layout.offsets[index]
 							}]
 					});
 				case Handle(name, _, destroy, _):

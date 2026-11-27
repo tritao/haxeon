@@ -14,22 +14,16 @@ export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRAR
 for inline in 0 1; do
     for target in hl wasm32 wasm-gc; do
         options=()
-        platform_hxi="$root/packages/platform/bindings/nativekit.hxi"
-        net_hxi="$root/packages/platform/bindings/nativekit-net.hxi"
-        ui_hxi="$ui/bindings/nativekit-ui.hxi"
         if [[ $target != hl ]]; then
             options=(--target="$target" --wasm-import-memory --wasm-memory-contract="$tmp/memory.json")
-            platform_hxi="$root/packages/platform/bindings/nativekit-wasm.hxi"
-            net_hxi="$root/packages/platform/bindings/nativekit-net-wasm.hxi"
-            ui_hxi="$ui/bindings/nativekit-ui-wasm.hxi"
         fi
         artifact="$tmp/$inline-$target"
         if ! "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --output="$artifact" \
                 --entry=StateStoreLifecycleMain --root="$ui/tests/haxeon" --root="$ui/src" \
                 --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
-                --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
-                --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
-                --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
+                --ffi-interface="$root/packages/platform/bindings/nativekit.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
+                --ffi-interface="$root/packages/platform/bindings/nativekit-net.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
+                --ffi-interface="$ui/bindings/nativekit-ui.hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
                 "$ui/tests/haxeon/StateStoreLifecycleMain.hx" > "$tmp/compile.log" 2>&1; then
             cat "$tmp/compile.log" >&2
             exit 1

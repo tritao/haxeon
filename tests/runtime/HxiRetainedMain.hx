@@ -16,9 +16,9 @@ class HxiRetainedMain {
 		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface("retained.hxi",
 			'interface FixtureRetained @target("$target") @library("$library") {\n'
-			+ '\tstruct fixture_item @layout(8, 8) { name: utf8 @offset(0); }\n'
-			+ '\tstruct fixture_options @layout(48, 8) { items: ptr<const<fixture_item>> @offset(0) @borrowed @length_field("item_count"); item_count: u32 @offset(8); paths: ptr<utf8> @offset(16) @borrowed @length_field("path_count"); path_count: u32 @offset(24); data: ptr<const<u8>> @offset(32) @borrowed @length_field("size"); size: u32 @offset(40); }\n'
-			+ '\tstruct fixture_container @layout(64, 8) { value: fixture_options @offset(0); options: ptr<const<fixture_options>> @offset(48) @borrowed @length_field("count"); count: u32 @offset(56); }\n'
+			+ '\tstruct fixture_item { name: utf8; }\n'
+			+ '\tstruct fixture_options { items: ptr<const<fixture_item>> @borrowed @length_field("item_count"); item_count: u32; paths: ptr<utf8> @borrowed @length_field("path_count"); path_count: u32; data: ptr<const<u8>> @borrowed @length_field("size"); size: u32; }\n'
+			+ '\tstruct fixture_container { value: fixture_options; options: ptr<const<fixture_options>> @borrowed @length_field("count"); count: u32; }\n'
 			+ '\textern fn i64Value() -> i64 @symbol("native_fixture_i64_value");\n'
 			+ '\textern fn check(value: ptr<const<fixture_container>>, extracted: ptr<const<fixture_options>>) -> i32 @symbol("native_fixture_check_retained_container");\n'
 			+ '}\n');

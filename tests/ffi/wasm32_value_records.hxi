@@ -1,17 +1,18 @@
 interface Wasm32ValueRecords @target("portable-abi32") @library("wasm32_value_records") {
-	struct point @layout(8, 4) {
-		size: i32 @offset(0);
-		array: i32 @offset(4);
+	struct point {
+		size: i32;
+		array: i32;
 	}
-	struct gapped @layout(12, 4) {
-		tag: i8 @offset(0);
-		value: i32 @offset(8);
+	struct gapped {
+		tag: i8;
+		reserved: array<u8, 7>;
+		value: i32;
 	}
-	struct id64 @layout(8, 8) {
-		value: u64 @offset(0);
+	struct id64 {
+		value: u64;
 	}
-	struct real @layout(8, 8) {
-		value: f64 @offset(0);
+	struct real {
+		value: f64;
 	}
 	extern fn read(value: ptr<const<point>>) -> i32 @symbol("read_point");
 	extern fn write(value: ptr<point> @out) -> void @symbol("write_point");

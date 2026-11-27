@@ -12,9 +12,8 @@
     "interfaces": [
       "bindings/nativekit.hxi",
       "bindings/nativekit-net.hxi",
-      "bindings/nativekit-vulkan.hxi"
+      { "path": "bindings/nativekit-vulkan.hxi", "platforms": ["linux", "windows", "macos", "android", "ios"] }
     ],
-    "wasmInterfaces": ["bindings/nativekit-wasm.hxi", "bindings/nativekit-net-wasm.hxi"],
     "projections": [
       "bindings/nativekit.hxmap",
       "bindings/nativekit-net.hxmap",

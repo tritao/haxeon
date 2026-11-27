@@ -21,9 +21,6 @@ jobs:
           ./packages/credentials/tools/update-haxeon-hxi.sh --check
           ./packages/filesystem/tools/update-haxeon-hxi.sh --check
           ./packages/animation/native/tools/update-haxeon-hxi.sh --check
-          ./packages/audio/tools/update-haxeon-wasm-hxi.sh --check
-          ./packages/ui/tools/update-haxeon-wasm-hxi.sh --check
-          ./packages/gpu/tools/update-haxeon-hxi.sh --wasm --check
       - run: ./packages/platform/tools/test-haxe-bindings.sh
 
   shaders:

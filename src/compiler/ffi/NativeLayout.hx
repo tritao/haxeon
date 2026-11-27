@@ -2,18 +2,13 @@ package compiler.ffi;
 
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
-import compiler.ffi.HxiModel.HxiDeclaration;
+import compiler.ffi.HxiAbi.HxiTypeLayout;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
-import compiler.types.TypedAst.TypedNativeFieldLayout;
 import compiler.types.TypedAst.TypedNativeLayout;
 
-/**
- * C record layout shared by source-declared native values and HXI imports.
- * HXI supplies Clang's offsets and total size; source declarations use the
- * same HxiAbi field-size/alignment rules to calculate those facts.
- */
+/** C record layout of source-declared native values, by the same HxiAbi rules that lay out HXI structs. */
 class NativeLayout {
 	public static function isNativeValue(type:CompilerType):Bool
 		return switch type {
@@ -100,51 +95,32 @@ class NativeLayout {
 			case _: throw new InternalError('Type $type is not an unmanaged native field type');
 		};
 
-	public static function nestedDeclaration(name:String, layout:TypedNativeLayout, span:SourceSpan):HxiDeclaration
-		return Structure(name, layout.size, layout.alignment, [], span);
-
-	/** Calculate a source-declared record by aligning each field as the ABI does. */
+	/** Calculate a source-declared record by aligning each field as the ABI does; `nested` lays out the records it nests. */
 	public static function record(target:String, name:String, fields:Array<{
 		name:String,
 		type:CompilerType,
 		span:SourceSpan
 	}>,
-			declarations:Map<String, HxiDeclaration>, span:SourceSpan):TypedNativeLayout {
-		var abi = HxiAbi.forTarget(target, declarations),
-			placed:Array<TypedNativeFieldLayout> = [],
-			cursor = 0,
-			recordAlignment = 1;
+			nested:Map<String, HxiTypeLayout>, span:SourceSpan):TypedNativeLayout {
+		var abi = HxiAbi.forTarget(target, null, nested), types:Array<HxiType> = [], layouts:Array<HxiTypeLayout> = [];
 		for (field in fields) {
 			var hxiType = fieldType(field.type), layout = abi.layout(hxiType);
 			if (layout == null || layout.size <= 0 || layout.align <= 0)
 				throw new InternalError('Field "${field.name}" in native record "$name" has no fixed C layout');
-			cursor = alignUp(cursor, layout.align);
-			placed.push({
-				name: field.name,
-				offset: cursor,
-				size: layout.size,
-				alignment: layout.align
-			});
-			if (cursor > 0x7FFFFFFF - layout.size)
-				throw new InternalError('Native record "$name" exceeds the supported layout size');
-			cursor += layout.size;
-			recordAlignment = Std.int(Math.max(recordAlignment, layout.align));
+			types.push(hxiType);
+			layouts.push(layout);
 		}
+		var record = abi.recordLayout(types);
 		return {
 			target: target,
-			size: cursor == 0 ? 1 : alignUp(cursor, recordAlignment),
-			alignment: recordAlignment,
-			fields: placed
+			size: fields.length == 0 ? 1 : record.size,
+			alignment: record.align,
+			fields: [for (index in 0...fields.length) {
+				name: fields[index].name,
+				offset: record.offsets[index],
+				size: layouts[index].size,
+				alignment: layouts[index].align
+			}]
 		};
-	}
-
-	static function alignUp(value:Int, alignment:Int):Int {
-		var remainder = value % alignment;
-		if (remainder == 0)
-			return value;
-		var padding = alignment - remainder;
-		if (value > 0x7FFFFFFF - padding)
-			throw new InternalError("Native record layout exceeds the supported size");
-		return value + padding;
 	}
 }

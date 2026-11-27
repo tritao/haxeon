@@ -12,19 +12,19 @@ class HxiNumericStorageMain {
 		compiler.addFfiInterface("numeric-storage.hxi",
 			'
 interface NumericStorage @target("x86_64-linux-gnu") @library("unused_numeric_storage") {
- struct Point @layout(8,4) { x: i32 @offset(0); y: i32 @offset(4); }
+ struct Point { x: i32; y: i32; }
  type PointAlias = Point;
- struct PointList @layout(16,8) {
-  values: ptr<const<PointAlias>> @offset(0) @borrowed @length_field("count");
-  count: u32 @offset(8);
+ struct PointList {
+  values: ptr<const<PointAlias>> @borrowed @length_field("count");
+  count: u32;
  }
- struct Sized @layout(8,4) { struct_size: u32 @offset(0) @struct_size; x: i32 @offset(4); }
- struct Batch @layout(16,4) { points: array<PointAlias,2> @offset(0); }
- struct Mixed @layout(40,8) {
-  point: PointAlias @offset(0);
-  points: array<PointAlias,2> @offset(8);
-  data: ptr<const<u8>> @offset(24) @borrowed @length_field("size");
-  size: u32 @offset(32);
+ struct Sized { struct_size: u32 @struct_size; x: i32; }
+ struct Batch { points: array<PointAlias,2>; }
+ struct Mixed {
+  point: PointAlias;
+  points: array<PointAlias,2>;
+  data: ptr<const<u8>> @borrowed @length_field("size");
+  size: u32;
  }
 }');
 		var programSource =

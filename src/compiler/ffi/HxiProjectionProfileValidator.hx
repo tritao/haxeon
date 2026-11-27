@@ -111,7 +111,7 @@ class HxiProjectionProfileValidator {
 			if (separator <= 0 || separator == key.length - 1)
 				HxiHaxeEmitter.profileError(path, 'fieldNames key "$key" must have the form "type.field"');
 			var fields = switch declaration {
-				case Structure(_, _, _, fields, _) if (!HxiHaxeEmitter.isOmitted(omitted, typeName)): fields;
+				case Structure(_, fields, _) if (!HxiHaxeEmitter.isOmitted(omitted, typeName)): fields;
 				case null:
 					HxiHaxeEmitter.profileError(path, '$entry references an unknown structure in this interface');
 					[];
@@ -266,7 +266,7 @@ class HxiProjectionProfileValidator {
 							HxiHaxeEmitter.profileError(path,
 								'cannot omit destroy function "$destroyName" while projecting owned value handle "$name"');
 					}
-				case Structure(name, _, _, fields, _):
+				case Structure(name, fields, _):
 					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.projectedTypeName(name, profile),
 						'type "$name"', typeNames);
 					var members:Map<String, String> = [];

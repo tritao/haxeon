@@ -89,19 +89,19 @@ interface NativeKitFilesystem @target("portable-abi64") @library("nativekit_file
 	/**
 	 * Metadata returned by stat and directory iteration. Sizes and timestamps are byte/ns values.
 	 */
-	struct nk_filesystem_entry @layout(56, 8) {
-		struct_size: u32 @offset(0) @struct_size;
-		kind: nk_filesystem_entry_kind @offset(4);
-		size: u64 @offset(8);
-		modified_unix_ns: i64 @offset(16);
-		file_id_high: u64 @offset(24);
-		file_id_low: u64 @offset(32);
-		changed_unix_ns: i64 @offset(40);
+	struct nk_filesystem_entry {
+		struct_size: u32 @struct_size;
+		kind: nk_filesystem_entry_kind;
+		size: u64;
+		modified_unix_ns: i64;
+		file_id_high: u64;
+		file_id_low: u64;
+		changed_unix_ns: i64;
 		/**
 		 * Non-zero means the native filename was not valid UTF-8 and cannot be addressed by this API.
 		 */
-		name_unsupported: u32 @offset(48);
-		reserved: u32 @offset(52);
+		name_unsupported: u32;
+		reserved: u32;
 	}
 	/**
 	 * Opaque, generation-checked root or directory cursor handle.

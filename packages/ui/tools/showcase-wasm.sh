@@ -86,9 +86,9 @@ mkdir -p "$build_dir"
 if [[ ${NATIVEKIT_HAXEON_SKIP_HXI_CHECK:-0} == 1 ]]; then
 	echo "showcase-wasm: skipped standalone HXI freshness audits"
 else
-	HAXEON_DIR="$haxeon_dir" "$haxeon_dir/packages/platform/tools/update-haxeon-wasm-hxi.sh" --check
-	HAXEON_DIR="$haxeon_dir" "$haxeon_dir/packages/platform/tools/update-haxeon-net-wasm-hxi.sh" --check
-	HAXEON_DIR="$haxeon_dir" "$module_dir/tools/update-haxeon-wasm-hxi.sh" --check
+	HAXEON_DIR="$haxeon_dir" "$haxeon_dir/packages/platform/tools/update-haxeon-hxi.sh" --check
+	HAXEON_DIR="$haxeon_dir" "$haxeon_dir/packages/platform/tools/update-haxeon-net-hxi.sh" --check
+	HAXEON_DIR="$haxeon_dir" "$module_dir/tools/update-haxeon-hxi.sh" --check
 fi
 
 compiler=("$haxe_bin" common.hxml --run compiler.tools.HaxeonCompiler)
@@ -111,16 +111,16 @@ compiler_args=(
 	--root="$editor_dir/src"
 	--root="$haxeon_dir/packages/platform/src"
 	--root="$haxeon_dir/packages/gpu/src"
-	--ffi-interface="$haxeon_dir/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
+	--ffi-interface="$haxeon_dir/packages/gpu/bindings/nativekit-gpu.hxi"
 	--ffi-projection="$haxeon_dir/packages/gpu/bindings/nativekit-gpu.hxmap"
-	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-wasm.hxi"
+	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi"
 	--ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap"
-	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-net-wasm.hxi"
+	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-net.hxi"
 	--ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit-net.hxmap"
-	--ffi-interface="$module_dir/bindings/nativekit-ui-wasm.hxi"
-	--ffi-interface="$module_dir/bindings/nativekit-ui-browser-wasm.hxi"
+	--ffi-interface="$module_dir/bindings/nativekit-ui.hxi"
+	--ffi-interface="$module_dir/bindings/nativekit-ui-browser.hxi"
 	--ffi-projection="$module_dir/bindings/nativekit-ui.hxmap"
-	--ffi-interface="$module_dir/bindings/nativekit-ui-showcase-wasm.hxi"
+	--ffi-interface="$module_dir/bindings/nativekit-ui-showcase.hxi"
 	--ffi-projection="$module_dir/bindings/nativekit-ui-showcase.hxmap"
 	"$module_dir/examples/ui_showcase/Showcase.hx"
 	"$module_dir/examples/ui_showcase/ShowcaseWeb.hx"

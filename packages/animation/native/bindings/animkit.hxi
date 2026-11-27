@@ -256,56 +256,56 @@ interface AnimKitNative @target("portable-abi64") @library("animkit_core") {
 	 * Returns this thread's last load failure, or an empty string.
 	 */
 	extern fn ak_last_error() -> utf8 @borrowed;
-	struct ak_asset_info @layout(28, 4) {
-		struct_size: u32 @offset(0) @struct_size;
-		joint_count: u32 @offset(4);
-		primitive_count: u32 @offset(8);
-		material_count: u32 @offset(12);
-		image_count: u32 @offset(16);
-		clip_count: u32 @offset(20);
-		warning_count: u32 @offset(24);
+	struct ak_asset_info {
+		struct_size: u32 @struct_size;
+		joint_count: u32;
+		primitive_count: u32;
+		material_count: u32;
+		image_count: u32;
+		clip_count: u32;
+		warning_count: u32;
 	}
-	struct ak_bounds @layout(28, 4) {
-		struct_size: u32 @offset(0) @struct_size;
-		minimum: array<f32, 3> @offset(4);
-		maximum: array<f32, 3> @offset(16);
+	struct ak_bounds {
+		struct_size: u32 @struct_size;
+		minimum: array<f32, 3>;
+		maximum: array<f32, 3>;
 	}
-	struct ak_image_info @layout(12, 4) {
-		struct_size: u32 @offset(0) @struct_size;
-		width: u32 @offset(4);
-		height: u32 @offset(8);
+	struct ak_image_info {
+		struct_size: u32 @struct_size;
+		width: u32;
+		height: u32;
 	}
-	struct ak_material_info @layout(56, 4) {
-		struct_size: u32 @offset(0) @struct_size;
-		base_color: array<f32, 4> @offset(4);
-		metallic: f32 @offset(20);
-		roughness: f32 @offset(24);
-		emissive: array<f32, 3> @offset(28);
+	struct ak_material_info {
+		struct_size: u32 @struct_size;
+		base_color: array<f32, 4>;
+		metallic: f32;
+		roughness: f32;
+		emissive: array<f32, 3>;
 		/**
 		 * 1 opaque, 2 mask, 3 blend; the same values as SceneKit's alpha modes.
 		 */
-		alpha_mode: u32 @offset(40);
-		alpha_cutoff: f32 @offset(44);
-		double_sided: u32 @offset(48);
+		alpha_mode: u32;
+		alpha_cutoff: f32;
+		double_sided: u32;
 		/**
 		 * Decoded image index, or -1 when there is no usable base color texture.
 		 */
-		base_color_image: i32 @offset(52);
+		base_color_image: i32;
 	}
-	struct ak_primitive_info @layout(28, 4) {
-		struct_size: u32 @offset(0) @struct_size;
-		vertex_count: u32 @offset(4);
-		index_count: u32 @offset(8);
+	struct ak_primitive_info {
+		struct_size: u32 @struct_size;
+		vertex_count: u32;
+		index_count: u32;
 		/**
 		 * Material index, or -1 for the default material.
 		 */
-		material: i32 @offset(12);
-		skinned: u32 @offset(16);
-		has_texcoords: u32 @offset(20);
+		material: i32;
+		skinned: u32;
+		has_texcoords: u32;
 		/**
 		 * Joint a rigid primitive follows, or -1 for a skinned primitive.
 		 */
-		joint: i32 @offset(24);
+		joint: i32;
 	}
 	/**
 	 * A two-bone inverse kinematics chain, such as shoulder, elbow, and wrist,
@@ -319,16 +319,16 @@ interface AnimKitNative @target("portable-abi64") @library("animkit_core") {
 	 * space (0 leaves it turned with the shin and the rest of the chain, 1 restores it): a foot reached to a spot
 	 * keeps lying flat on the floor instead of tilting with the leg.
 	 */
-	struct ak_two_bone_ik @layout(52, 4) {
-		struct_size: u32 @offset(0) @struct_size;
-		start_joint: i32 @offset(4);
-		mid_joint: i32 @offset(8);
-		end_joint: i32 @offset(12);
-		target: array<f32, 3> @offset(16);
-		pole: array<f32, 3> @offset(28);
-		weight: f32 @offset(40);
-		soften: f32 @offset(44);
-		keep_end_rotation: f32 @offset(48);
+	struct ak_two_bone_ik {
+		struct_size: u32 @struct_size;
+		start_joint: i32;
+		mid_joint: i32;
+		end_joint: i32;
+		target: array<f32, 3>;
+		pole: array<f32, 3>;
+		weight: f32;
+		soften: f32;
+		keep_end_rotation: f32;
 	}
 	/**
 	 * Opaque registry identity; only AnimKit may interpret id.

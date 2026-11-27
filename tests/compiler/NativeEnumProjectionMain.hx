@@ -9,7 +9,7 @@ import compiler.tools.CompilerDriver;
 /** Closed native enum reads validate at the boundary without nullable raw-value boxing. */
 class NativeEnumProjectionMain {
 	static final schema =
-		'interface native_enums @target("portable-abi64") @library("native_enums") { enum Mode : i32 { OFF=0; ON=3; } enum Packed : i32 { MIN=-2147483648; A=-2; B=-1; C=0; D=2; MAX=2147483647; } struct Record @layout(8,4) { mode:Mode @offset(0); modes:array<Mode,1> @offset(4); } }';
+		'interface native_enums @target("portable-abi64") @library("native_enums") { enum Mode : i32 { OFF=0; ON=3; } enum Packed : i32 { MIN=-2147483648; A=-2; B=-1; C=0; D=2; MAX=2147483647; } struct Record { mode:Mode; modes:array<Mode,1>; } }';
 
 	static function rejectImplicit(target:String, inlining:Bool):Void {
 		for (body in [

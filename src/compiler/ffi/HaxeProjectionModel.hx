@@ -26,7 +26,7 @@ typedef ProjectedStructField = {
 	final nativeName:String;
 	final name:String;
 	final type:HxiType;
-	final offset:Null<Int>;
+	final offset:Int;
 }
 
 typedef ProjectedStruct = {

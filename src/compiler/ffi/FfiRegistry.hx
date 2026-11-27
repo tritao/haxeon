@@ -67,12 +67,29 @@ class FfiRegistry {
 	final abiCache:Map<String, HxiAbi> = [];
 	final projected:(path:String, source:String) -> Void;
 
+	/** The profile portable interfaces are laid out for (`HxiInterface.resolve`). */
+	var portableProfile = "portable-abi64";
+
+	var hasPortableInterface = false;
+
 	public function new(projected:(path:String, source:String) -> Void)
 		this.projected = projected;
 
+	/** Lay out portable interfaces for `profile`; the ones already registered keep theirs, so it cannot change after them. */
+	public function usePortableProfile(profile:String):Void {
+		if (profile == portableProfile)
+			return;
+		if (hasPortableInterface)
+			throw new InternalError('Portable FFI interfaces are laid out for "$portableProfile", not "$profile"');
+		portableProfile = profile;
+	}
+
 	/** Parse, validate and register one ABI interface, projecting it when its profile is already registered. */
 	public function registerInterface(path:String, source:String):Void {
-		var model = HxiParser.parse(path, source);
+		var parsed = HxiParser.parse(path, source);
+		if (parsed.target == HxiInterface.PORTABLE)
+			hasPortableInterface = true;
+		var model = parsed.resolve(portableProfile);
 		if (interfaceModels.exists(model.name))
 			throw new InternalError('FFI interface "${model.name}" is already registered');
 		var dependencies:Array<HxiInterface> = [];
@@ -236,8 +253,8 @@ class FfiRegistry {
 
 	static function declarationNameOf(declaration:HxiDeclaration):String
 		return switch declaration {
-			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
-				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name,
+				_, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
 				_): name;
 		};
 }

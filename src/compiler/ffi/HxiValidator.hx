@@ -85,7 +85,7 @@ class HxiValidator {
 			switch declaration {
 				case Alias(_, type, span) | Handle(_, type, _, span) | Enumeration(_, type, _, _, span):
 					validateArrayLength(type, span);
-				case Structure(_, _, _, fields, _):
+				case Structure(_, fields, _):
 					for (field in fields)
 						validateArrayLength(field.type, field.span);
 				case Callback(_, parameters, result, _, span):
@@ -146,13 +146,13 @@ class HxiValidator {
 					}
 					if (destroySymbol != null)
 						validateValueHandleDestroy(value, name, destroySymbol, declarationsByName, abi, span);
-				case Structure(name, size, align, fields, span):
-					if (size <= 0 || align <= 0 || (align & (align - 1)) != 0 || size % align != 0)
-						fail('Struct "$name" has invalid layout', span);
+				case Structure(name, fields, span):
+					if (fields.length == 0)
+						fail('Struct "$name" declares no fields', span);
 					var fieldNames:Map<String, Bool> = [];
 					var structSizeFields = 0;
-					var ranges:Array<{start:Int, end:Int, name:String}> = [];
-					for (field in fields) {
+					for (index in 0...fields.length) {
+						var field = fields[index];
 						validateOwnershipMetadata(field.metadata, 'field "${field.name}"', field.span);
 						if (field.metadata.exists("borrowed") && field.metadata.exists("owned"))
 							fail('Field "${field.name}" cannot combine @borrowed and @owned', field.span);
@@ -166,22 +166,12 @@ class HxiValidator {
 								case _: fail('@struct_size field "${field.name}" in struct "$name" must use an unsigned 32-bit integer',
 									field.span);
 							}
-							if (field.offset != 0)
-								fail('@struct_size field "${field.name}" in struct "$name" must be at offset zero',
+							if (index != 0)
+								fail('@struct_size field "${field.name}" in struct "$name" must be its first field',
 									field.span);
 						}
-						var layout = abi.layout(field.type);
-						if (layout == null)
+						if (abi.layout(field.type) == null)
 							fail('Field "${field.name}" in struct "$name" has no fixed C layout', field.span);
-						if (field.offset == null || field.offset < 0 || layout.align > align
-							|| field.offset % layout.align != 0
-							|| field.offset > size - layout.size)
-							fail('Field "${field.name}" has an invalid offset for struct "$name"', field.span);
-						for (range in ranges)
-							if (field.offset < range.end && field.offset + layout.size > range.start)
-								fail('Field "${field.name}" overlaps field "${range.name}" in struct "$name"',
-									field.span);
-						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
 						validateType(field.type, names, declarationsByName, field.span, false);
 						if (field.lengthField != null) {
 							if ((switch (field.ownership) {
@@ -221,6 +211,8 @@ class HxiValidator {
 					}
 					if (structSizeFields > 1)
 						fail('Struct "$name" cannot declare more than one @struct_size field', span);
+					if (abi.findStructLayout(name) == null)
+						fail('Struct "$name" contains itself by value', span);
 				case Enumeration(name, representation, flags, values, span):
 					validateType(representation, names, declarationsByName, span, false);
 					var integer = switch abi.classify(representation) {
@@ -820,7 +812,7 @@ class HxiValidator {
 				if (visiting.exists(name)) false else {
 					visiting.set(name, true);
 					var result = switch declarations.get(name) {
-						case Structure(_, _, _, fields, _):
+						case Structure(_, fields, _):
 							var result = true;
 							for (field in fields)
 								if (!pointerFreeArrayElement(field.type, declarations, visiting))
@@ -937,7 +929,7 @@ class HxiValidator {
 			case Const(element): structureElementType(element, names);
 			case Named(name):
 				switch names.get(name) {
-					case Structure(_, _, _, _, _): name;
+					case Structure(_, _, _): name;
 					case Alias(_, target, _): structureElementType(target, names);
 					case _: null;
 				}
@@ -1031,7 +1023,7 @@ class HxiValidator {
 
 	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan} return switch value {
 		case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, _, span) | Constant(name, _,
-			span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) | Callback(name, _, _, _,
+			span) | Structure(name, _, span) | Enumeration(name, _, _, _, span) | Callback(name, _, _, _,
 			span) | Function(name, _, _, _, _, _, _, span):
 			{name: name, span: span};
 	}

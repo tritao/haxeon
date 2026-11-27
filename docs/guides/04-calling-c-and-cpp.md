@@ -153,16 +153,16 @@ interface Geometry @target("x86_64-linux-gnu") @library("geometry") {
 	extern fn geo_path_add(path: geo_path, point: ptr<const<geo_point>>) -> void;
 	extern fn geo_path_create() -> geo_path @owned;
 	...
-	struct geo_point @layout(16, 8) {
-		x: f64 @offset(0);
-		y: f64 @offset(8);
+	struct geo_point {
+		x: f64;
+		y: f64;
 	}
 	handle geo_path : u32 @destroy("geo_path_destroy");
 }
 ```
 
-Record sizes and field offsets come from Clang for the target you build for, so a record has the layout the C code
-expects. A declaration the importer cannot bind safely (a variadic function, for one) is an error that names it, not a
+A record's size and field offsets follow from its fields by the C rules for the target you build for, and the importer
+checks them against Clang's, so a record has the layout the C code expects. A declaration the importer cannot bind safely (a variadic function, for one) is an error that names it, not a
 guessed binding. `haxeon ffi import` runs the same import by hand, for a header outside a project:
 
 ```sh

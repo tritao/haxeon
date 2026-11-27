@@ -538,8 +538,8 @@ const cases = [
           return 9;
         },
         store_point: pointer => {
-          if (pointer % 16 !== 0)
-            throw new Error("over-aligned aggregate scratch slot is not sixteen-byte aligned");
+          if (pointer % 8 !== 0)
+            throw new Error("eight-byte-aligned aggregate scratch slot is not eight-byte aligned");
           const view = new DataView(moduleInstance.exports.memory.buffer);
           if (view.getInt32(pointer, true) !== 0 || view.getInt32(pointer + 4, true) !== 0
               || view.getUint32(pointer + 8, true) !== 0 || view.getUint32(pointer + 12, true) !== 0)

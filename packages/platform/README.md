@@ -4,7 +4,7 @@ This package owns NativeKit's Haxeon platform services bindings and managed wrap
 
 Managed APIs now live in `haxeon.platform.*`. Generated HXI and projection maps live in `bindings/`; managed code lives in `src/`.
 
-The host platform package includes NativeKit's generic asynchronous HTTP interface. `EventPump` snapshots HTTP headers, progress, and completion events into managed values before releasing the native event; response bodies and headers therefore remain safe to retain. Host builds use `nativekit-net.hxi`; ABI32 builds use `nativekit-net-wasm.hxi` with NativeKit's browser fetch backend.
+The host platform package includes NativeKit's generic asynchronous HTTP interface. `EventPump` snapshots HTTP headers, progress, and completion events into managed values before releasing the native event; response bodies and headers therefore remain safe to retain. Native and Web builds both use `nativekit-net.hxi`; on the Web, NativeKit's browser fetch backend serves it.
 
 ## Native dependency
 
@@ -12,7 +12,7 @@ The `vendor/nativekit` submodule pins the supported NativeKit revision. Initiali
 
 ## Tooling
 
-Run tools from this package's `tools/` directory. Platform `tools/test-haxe-bindings.sh` performs ABI32/ABI64 checks and both platform and GPU runtime smoke tests. GPU `tools/update-haxeon-hxi.sh` regenerates its reviewed interface and `--check` verifies it without writing; `tools/test-haxeon.sh` runs the graphical stress fixture.
+Run tools from this package's `tools/` directory. Platform `tools/test-haxe-bindings.sh` checks the portable bindings and runs both platform and GPU runtime smoke tests. GPU `tools/update-haxeon-hxi.sh` regenerates its reviewed interface and `--check` verifies it without writing; `tools/test-haxeon.sh` runs the graphical stress fixture.
 
 Generator source labels retain their original paths to preserve reviewed HXI content during extraction.
 

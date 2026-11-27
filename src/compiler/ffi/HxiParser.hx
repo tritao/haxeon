@@ -344,19 +344,15 @@ class HxiParser {
 
 	function parseStructure(start:SourceSpan):HxiDeclaration {
 		advance();
-		var name = identifier(),
-			metadata = parseMetadata(["layout"]),
-			layout = metadataPair(metadata, "layout");
-		if (layout == null)
-			fail('Struct "$name" requires @layout(size, align)', start);
+		var name = identifier();
+		parseMetadata([]);
 		expect("{");
 		var fields:Array<HxiField> = [];
 		while (!check("}")) {
 			var fieldStart = current().span, fieldName = identifier();
 			expect(":");
 			var type = parseType(),
-				fieldMetadata = parseMetadata(["offset", "borrowed", "owned", "length_field", "struct_size"]),
-				offset = metadataInteger(fieldMetadata, "offset", true),
+				fieldMetadata = parseMetadata(["borrowed", "owned", "length_field", "struct_size"]),
 				borrowed = metadataFlag(fieldMetadata, "borrowed"),
 				ownership = metadataOwnership(fieldMetadata, "owned"),
 				lengthField = metadataValue(fieldMetadata, "length_field", false),
@@ -365,7 +361,6 @@ class HxiParser {
 			var fieldSpan = fieldStart.merge(end);
 			fields.push({name: fieldName,
 				type: type,
-				offset: offset,
 				ownership: (switch (ownership) {
 					case Unspecified: false;
 					default: true;
@@ -378,7 +373,7 @@ class HxiParser {
 			rememberDocumentation('$name.$fieldName', fieldSpan);
 		}
 		var end = expect("}").span;
-		return Structure(name, layout[0], layout[1], fields, start.merge(end));
+		return Structure(name, fields, start.merge(end));
 	}
 
 	function parseFunction(start:SourceSpan):HxiDeclaration {
@@ -433,7 +428,7 @@ class HxiParser {
 
 	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan} return switch value {
 		case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, _, span) | Constant(name, _,
-			span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) | Callback(name, _, _, _,
+			span) | Structure(name, _, span) | Enumeration(name, _, _, _, span) | Callback(name, _, _, _,
 			span) | Function(name, _, _, _, _, _, _, span):
 			{name: name, span: span};
 	};
@@ -524,29 +519,6 @@ class HxiParser {
 			result.push(dependency);
 		}
 		return result;
-	}
-
-	function metadataInteger(values:Map<String, Array<String>>, name:String, required:Bool):Null<Int> {
-		var entry = values.get(name);
-		if (entry == null) {
-			if (required)
-				fail('@$name requires one integer value', current().span);
-			return null;
-		}
-		if (entry.length != 1 || StringTools.startsWith(entry[0], '"'))
-			fail('@$name requires one integer value', current().span);
-		return Std.parseInt(entry[0]);
-	}
-
-	function metadataPair(values:Map<String, Array<String>>, name:String):Null<Array<Int>> {
-		var entry = values.get(name);
-		if (entry == null)
-			return null;
-		if (entry.length != 2)
-			fail('@$name requires two integer values', current().span);
-		if (StringTools.startsWith(entry[0], '"') || StringTools.startsWith(entry[1], '"'))
-			fail('@$name requires two integer values', current().span);
-		return [Std.parseInt(entry[0]), Std.parseInt(entry[1])];
 	}
 
 	function metadataFlag(values:Map<String, Array<String>>, name:String):Bool {

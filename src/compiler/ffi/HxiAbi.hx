@@ -28,6 +28,9 @@ enum HxiAbiValue {
 /** Concrete size and alignment of one fixed-layout ABI type, in bytes. */
 typedef HxiTypeLayout = {size:Int, align:Int}
 
+/** A C record laid out field by field: each at the next offset its alignment allows, the size padded to the alignment. */
+typedef HxiRecordLayout = {size:Int, align:Int, offsets:Array<Int>}
+
 /** Resolves target-dependent C types without conflating them with fixed-width types. */
 class HxiAbi {
 	public final target:String;
@@ -40,6 +43,8 @@ class HxiAbi {
 	public final scalarAlignLimit:Int;
 
 	final declarations:Map<String, HxiDeclaration> = [];
+	final records:Map<String, HxiTypeLayout>;
+	final structLayouts:Map<String, HxiRecordLayout> = [];
 	final model:Null<HxiInterface>;
 	final classifications:Map<String, HxiAbiValue> = [];
 	final flagMasks:Map<String, haxe.Int64> = [];
@@ -47,14 +52,19 @@ class HxiAbi {
 	var cachedFunctions:Null<Array<HxiFunctionAbi>>;
 
 	public static function forInterface(model:HxiInterface, ?visibleDeclarations:Map<String, HxiDeclaration>):HxiAbi
-		return new HxiAbi(model, model.target, visibleDeclarations);
+		return new HxiAbi(model, model.target, visibleDeclarations, null);
 
-	/** Create an ABI classifier for source-declared native records. */
-	public static function forTarget(target:String, ?visibleDeclarations:Map<String, HxiDeclaration>):HxiAbi
-		return new HxiAbi(null, target, visibleDeclarations);
+	/** Create an ABI classifier for source-declared native records, `records` the layouts of the records they nest. */
+	public static function forTarget(target:String, ?visibleDeclarations:Map<String, HxiDeclaration>,
+			?records:Map<String, HxiTypeLayout>):HxiAbi
+		return new HxiAbi(null, target, visibleDeclarations, records);
 
-	function new(model:Null<HxiInterface>, target:String, visibleDeclarations:Null<Map<String, HxiDeclaration>>) {
+	function new(model:Null<HxiInterface>, target:String, visibleDeclarations:Null<Map<String, HxiDeclaration>>,
+			records:Null<Map<String, HxiTypeLayout>>) {
+		if (target == HxiInterface.PORTABLE)
+			throw new InternalError('A portable HXI interface needs a profile before it has an ABI');
 		this.model = model;
+		this.records = records == null ? [] : records;
 		this.interfaceName = model == null ? null : model.name;
 		this.target = target.toLowerCase();
 		var architecture = switch this.target {
@@ -99,6 +109,84 @@ class HxiAbi {
 	public function layout(type:HxiType):Null<HxiTypeLayout>
 		return typeLayout(type, []);
 
+	/** The layout of struct `name` on this ABI, or null when it is not a struct or a field has no fixed C layout. */
+	public function findStructLayout(name:String):Null<HxiRecordLayout>
+		return structureLayout(name, []);
+
+	/** The layout of struct `name`, which validation has given a fixed C layout. */
+	public function structLayout(name:String):HxiRecordLayout {
+		var layout = structureLayout(name, []);
+		if (layout == null)
+			throw new InternalError('Struct "$name" has no fixed C layout');
+		return layout;
+	}
+
+	/** The offset of field `field` in struct `owner` on this ABI. */
+	public function fieldOffset(owner:String, field:String):Int {
+		var layout = structLayout(owner);
+		switch declarations.get(owner) {
+			case Structure(_, fields, _):
+				for (index in 0...fields.length)
+					if (fields[index].name == field)
+						return layout.offsets[index];
+			case _:
+		}
+		throw new InternalError('Struct "$owner" has no laid-out field "$field"');
+	}
+
+	/** Lay out fields of the given types in order, each of which has a fixed C layout. */
+	public function recordLayout(types:Array<HxiType>):HxiRecordLayout {
+		var layout = placeFields(types, []);
+		if (layout == null)
+			throw new InternalError("A native record field has no fixed C layout");
+		return layout;
+	}
+
+	function structureLayout(name:String, resolving:Map<String, Bool>):Null<HxiRecordLayout> {
+		var cached = structLayouts.get(name);
+		if (cached != null)
+			return cached;
+		var fields = switch declarations.get(name) {
+			case Structure(_, fields, _): fields;
+			case _: return null;
+		};
+		if (fields.length == 0 || resolving.exists(name))
+			return null;
+		resolving.set(name, true);
+		var layout = placeFields([for (field in fields) field.type], resolving);
+		resolving.remove(name);
+		if (layout != null)
+			structLayouts.set(name, layout);
+		return layout;
+	}
+
+	function placeFields(types:Array<HxiType>, resolving:Map<String, Bool>):Null<HxiRecordLayout> {
+		var offsets:Array<Int> = [], cursor = 0, align = 1;
+		for (type in types) {
+			var field = typeLayout(type, resolving);
+			if (field == null || field.size <= 0 || field.align <= 0)
+				return null;
+			cursor = alignUp(cursor, field.align);
+			if (cursor > 0x7FFFFFFF - field.size)
+				throw new InternalError("Native record layout exceeds the supported size");
+			offsets.push(cursor);
+			cursor += field.size;
+			if (field.align > align)
+				align = field.align;
+		}
+		return {size: alignUp(cursor, align), align: align, offsets: offsets};
+	}
+
+	static function alignUp(value:Int, alignment:Int):Int {
+		var remainder = value % alignment;
+		if (remainder == 0)
+			return value;
+		var padding = alignment - remainder;
+		if (value > 0x7FFFFFFF - padding)
+			throw new InternalError("Native record layout exceeds the supported size");
+		return value + padding;
+	}
+
 	function typeLayout(type:HxiType, resolving:Map<String, Bool>):Null<HxiTypeLayout>
 		return switch type {
 			case Const(element): typeLayout(element, resolving);
@@ -130,14 +218,19 @@ class HxiAbi {
 					case _: null;
 				}
 			case Named(name):
-				if (resolving.exists(name)) null;
+				var declaration = declarations.get(name);
+				if (records.exists(name)) records.get(name);
+				else if (declaration != null && declaration.match(Structure(_, _, _))) {
+					// structureLayout tracks the structs being laid out, which a by-value cycle comes back to.
+					var record = structureLayout(name, resolving);
+					record == null ? null : {size: record.size, align: record.align};
+				} else if (resolving.exists(name)) null;
 				else {
 					resolving.set(name, true);
-					var result = switch declarations.get(name) {
+					var result = switch declaration {
 						case Alias(_, target, _): typeLayout(target, resolving);
 						case Handle(_, _, _, _): {size: 4, align: 4};
 						case Enumeration(_, representation, _, _, _): typeLayout(representation, resolving);
-						case Structure(_, size, align, _, _): {size: size, align: align};
 						case Callback(_, _, _, _, _): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
 						case _: null;
 					};
@@ -231,7 +324,9 @@ class HxiAbi {
 					case Callback(_, parameters, result, _, _):
 						CallbackValue(name, [for (parameter in parameters) classify(parameter.type)],
 							classify(result, true), false);
-					case Structure(_, size, align, _, _): AggregateValue(name, size, align);
+					case Structure(_, _, _):
+						var record = structLayout(name);
+						AggregateValue(name, record.size, record.align);
 					case Opaque(_, _): throw new InternalError('Opaque HXI type "$name" cannot be passed by value');
 					case _: throw new InternalError('HXI declaration "$name" is not a type');
 				}
@@ -255,7 +350,7 @@ class HxiAbi {
 			case Const(element): structurePointee(element);
 			case Named(name):
 				switch declarations.get(name) {
-					case Structure(_, _, _, _, _): name;
+					case Structure(_, _, _): name;
 					case Alias(_, target, _): structurePointee(target);
 					case _: null;
 				}
@@ -296,10 +391,10 @@ class HxiAbi {
 			default: throw new InternalError('Unsupported primitive HXI type "$name"');
 		};
 
-	static function nameOf(declaration:HxiDeclaration):String
+	public static function nameOf(declaration:HxiDeclaration):String
 		return switch declaration {
 			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
-				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
+				_) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
 				_): name;
 		};
 }

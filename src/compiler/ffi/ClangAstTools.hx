@@ -77,6 +77,22 @@ class ClangAstTools {
 		return span.file.slice(span.start, span.end);
 	}
 
+	/** What gives a record, field or typedef other than its natural C layout, which HXI computes, or null for nothing. */
+	public static function layoutOverride(node:Dynamic):Null<String> {
+		if (field(node, "isBitfield") == true)
+			return "a bit-field";
+		for (child in children(node)) {
+			var kind:String = field(child, "kind");
+			switch kind {
+				case "PackedAttr": return "packed";
+				case "AlignedAttr": return "an explicit alignment";
+				case "MaxFieldAlignmentAttr": return "#pragma pack";
+				case _:
+			}
+		}
+		return null;
+	}
+
 	/** Returns whether Clang attached the requested source annotation to a declaration. */
 	public static function hasAnnotation(node:Dynamic, expected:String, ?fallbackFile:String):Bool {
 		var file:String = field(node, "_hxiFile");

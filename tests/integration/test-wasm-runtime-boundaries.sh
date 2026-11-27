@@ -8,7 +8,7 @@ export LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${L
 compiler=${HAXEON_COMPILER_HL:-$("$repo_dir/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 cat > "$temporary_dir/BoundaryBuffers.hxi" <<'HXI'
 interface BoundaryBuffers @target("portable-abi32") @library("boundary_buffers") {
-  struct boundary_record @layout(4, 4) { value: i32 @offset(0); }
+  struct boundary_record { value: i32; }
   extern fn read_record(record: ptr<const<boundary_record>>) -> i32;
   extern fn read_blob(data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32;
 }

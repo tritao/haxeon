@@ -55,9 +55,16 @@ class FfiAuditMain {
 		if (paths.length != 1 || targets.length < 2 || (format != "text" && format != "json"))
 			throw new InternalError(tools.CliHelp.FFI_AUDIT_USAGE);
 		var dependencyInterfaces:Array<HxiInterface> = [];
+		// A portable dependency is checked on each profile the audit covers.
+		var profiles = profile == null ? ["portable-abi64"] : profile == HxiInterface.PORTABLE ? [
+			"portable-abi32",
+			"portable-abi64"
+		] : [profile];
 		for (path in dependencyPaths) {
 			var model = HxiParser.parse(path, File.getContent(path));
-			HxiValidator.validateComposition(model, dependencyInterfaces);
+			for (each in profiles)
+				HxiValidator.validateComposition(model.resolve(each),
+					[for (dependency in dependencyInterfaces) dependency.resolve(each)]);
 			dependencyInterfaces.push(model);
 		}
 		var report = HxiAudit.audit(paths[0], targets, includes, profile, library, interfaceName, dependencies,

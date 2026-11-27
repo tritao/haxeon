@@ -22,7 +22,6 @@ enum HxiType {
 typedef HxiField = {
 	final name:String;
 	final type:HxiType;
-	final offset:Null<Int>;
 	final ownership:HxiOwnership;
 	final handleDisposition:HxiHandleDisposition;
 	final lengthField:Null<String>;
@@ -92,7 +91,8 @@ enum HxiDeclaration {
 	Alias(name:String, type:HxiType, span:SourceSpan);
 	Handle(name:String, representation:HxiType, destroySymbol:Null<String>, span:SourceSpan);
 	Constant(name:String, value:String, span:SourceSpan);
-	Structure(name:String, size:Int, align:Int, fields:Array<HxiField>, span:SourceSpan);
+	/** A C record; its size, alignment and field offsets follow from the fields for each ABI (`HxiAbi.structLayout`). */
+	Structure(name:String, fields:Array<HxiField>, span:SourceSpan);
 	Enumeration(name:String, representation:HxiType, flags:Bool, values:Array<HxiEnumValue>, span:SourceSpan);
 	Callback(name:String, parameters:Array<HxiParameter>, result:HxiType, callConvention:String, span:SourceSpan);
 	Function(name:String, parameters:Array<HxiParameter>, result:HxiType, symbol:Null<String>, leaf:Bool,
@@ -105,7 +105,12 @@ class HxiInterface {
 	public static function defaultName(header:String):String
 		return StringTools.replace(StringTools.replace(header, "\\", "/").split("/").pop(), ".", "_");
 
+	/** The target an interface declares when it is valid on both portable profiles, laid out for the one a build uses. */
+	public static inline final PORTABLE = "portable";
+
 	public final name:String;
+
+	/** The C ABI the declarations are laid out for: a target triple, a portable profile, or `PORTABLE` until `resolve`. */
 	public final target:String;
 	public final library:Null<String>;
 
@@ -135,4 +140,9 @@ class HxiInterface {
 		this.documentation = documentation == null ? [] : documentation;
 		this.span = span;
 	}
+
+	/** This interface laid out for `profile` when it is portable; otherwise this interface, which names its own target. */
+	public function resolve(profile:String):HxiInterface
+		return target != PORTABLE ? this : new HxiInterface(name, profile, library, dependencies, declarations, span,
+			documentation);
 }

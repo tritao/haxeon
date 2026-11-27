@@ -59,16 +59,33 @@ class CHeaderImporterMain {
 			conflictingGroups = true;
 		}
 		expect(conflictingGroups, "C enum extension groups must agree on their flags contract");
+		// HXI computes natural C layouts, so the importer rejects what would give a record another.
+		for (variant in [
+			{define: "PACKED_RECORD", reason: "uses packed"},
+			{define: "ALIGNED_FIELD", reason: "uses an explicit alignment"},
+			{define: "PRAGMA_PACK", reason: "uses #pragma pack"},
+			{define: "BIT_FIELD", reason: "uses a bit-field"},
+			{define: "ALIGNED_TYPEDEF", reason: "uses an explicit alignment"}
+		]) {
+			var rejected = "";
+			try
+				CHeaderImporter.importHeaderWithOptions("tests/ffi/import_packed.h", "x86_64-linux-gnu", ["tests/ffi"],
+					"clang", null, null, null, null, [variant.define])
+			catch (error:Dynamic)
+				rejected = Std.string(error);
+			expect(rejected.indexOf(variant.reason) >= 0 && rejected.indexOf("natural C layout") >= 0,
+				'${variant.define} should be rejected for its layout: $rejected');
+		}
 		var firstModel = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]),
 			first = HxiWriter.write(firstModel, generatedHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu")),
 			second = importHeaderText("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]);
 		expect(Std.isOfType(firstModel, HxiInterface)
 			&& firstModel.name == "import_fixture_h", "C header importer should return a typed HXI interface");
 		expect(first == second, "C header import must be deterministic");
-		expect(first.indexOf("struct sample_options @layout(32, 8)") >= 0, "record layout should come from Clang");
-		expect(first.indexOf("title: nullable<utf8> @offset(8)") >= 0,
+		expect(first.indexOf("struct sample_options") >= 0, "record layout should come from Clang");
+		expect(first.indexOf("title: nullable<utf8>") >= 0,
 			"annotated UTF-8 field offsets should be preserved");
-		expect(first.indexOf('data: ptr<const<void>> @offset(0) @borrowed @length_field("data_size")') >= 0,
+		expect(first.indexOf('data: ptr<const<void>> @borrowed @length_field("data_size")') >= 0,
 			"borrowed buffer field annotations should retain their length contract");
 		expect(first.indexOf("extern fn sample_error() -> utf8 @borrowed") >= 0,
 			"annotated borrowed UTF-8 results should import with their ownership contract");

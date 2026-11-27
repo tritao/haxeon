@@ -239,7 +239,7 @@ class CxxHeaderImporterMain {
 			null, "c++20", null, null, true),
 			trivialText = HxiWriter.write(trivial.hxi, "// test"),
 			trivialSource = compiler.ffi.HxiProjection.source(trivial.hxi);
-		expect(trivialText.indexOf("struct __cxx_Point @layout(8, 4)") >= 0
+		expect(trivialText.indexOf("struct __cxx_Point") >= 0
 			&& trivialText.indexOf("extern fn __cxx_make_point() -> __cxx_Point") >= 0
 			&& trivialSource.indexOf("var x(get, set):Int") >= 0
 			&& trivialSource.indexOf("static inline function byteSize():Int return 8") >= 0

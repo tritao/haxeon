@@ -7,7 +7,7 @@ import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
-import compiler.ffi.HxiModel.HxiDeclaration;
+import compiler.ffi.HxiAbi.HxiTypeLayout;
 import compiler.ffi.NativeLayout;
 import compiler.runtime.RuntimeType;
 import compiler.runtime.RuntimeType;
@@ -2215,16 +2215,15 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'Flat value record "$name" contains a by-value layout cycle',
 				declaration.span);
 		visiting.set(key, true);
-		var nativeDeclarations:Map<String, HxiDeclaration> = [];
+		var nested:Map<String, HxiTypeLayout> = [];
 		for (field in declaration.fields)
 			if (!field.isStatic)
-				collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nativeDeclarations,
-					field.span);
+				collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nested, field.span);
 		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [for (field in declaration.fields)
 			if (!field.isStatic) {
 				name: field.name, type: compiler.types.StructProperties.isTagEnum(session.declarations,
 					field.type) ? TInt : field.type, span: field.span
-			}], nativeDeclarations, declaration.span) catch (error:haxe.Exception) {
+			}], nested, declaration.span) catch (error:haxe.Exception) {
 				visiting.remove(key);
 				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 					'Invalid flat value record "$name": ${Std.string(error)}',
@@ -2238,7 +2237,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 
 	function collectNestedNativeDeclarations(type:CompilerType, target:String, classes:Map<String, TypedClass>,
 			layouts:Map<String, TypedNativeLayout>,
-			visiting:Map<String, Bool>, result:Map<String, HxiDeclaration>, span:SourceSpan):Void {
+			visiting:Map<String, Bool>, result:Map<String, HxiTypeLayout>, span:SourceSpan):Void {
 		switch type {
 			case TAbstract(_, _, representation):
 				collectNestedNativeDeclarations(representation, target, classes, layouts, visiting, result, span);
@@ -2258,12 +2257,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 
 	function addNestedNativeDeclaration(name:String, target:String, classes:Map<String, TypedClass>,
 			layouts:Map<String, TypedNativeLayout>,
-			visiting:Map<String, Bool>, result:Map<String, HxiDeclaration>):Void {
-		var nested = computeNativeLayout(name, target, classes, layouts, visiting),
-			nestedClass = classes.get(name);
-		if (nestedClass == null)
-			throw new InternalError('Missing flat or native value record "$name"');
-		result.set(name, NativeLayout.nestedDeclaration(name, nested, nestedClass.span));
+			visiting:Map<String, Bool>, result:Map<String, HxiTypeLayout>):Void {
+		var nested = computeNativeLayout(name, target, classes, layouts, visiting);
+		result.set(name, {size: nested.size, align: nested.alignment});
 	}
 
 	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType,

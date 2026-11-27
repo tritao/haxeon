@@ -10,9 +10,8 @@ compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.t
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 for inline in 0 1; do
   for target in hl wasm32 wasm-gc; do
-    suffix=; flags=()
+    flags=()
     if [[ "$target" != hl ]]; then
-      suffix=-wasm
       flags=(--wasm-import-memory --export=IdleReuseParity.prepare --export=IdleReuseParity.perform)
       if [[ "$target" == wasm32 ]]; then flags+=(--wasm-memory-stats --wasm-gc-stress)
       else flags+=(--wasm-gc-allocation-count); fi
@@ -20,9 +19,9 @@ for inline in 0 1; do
     "$hl" "$compiler" $( ((inline)) || echo --no-inline ) --target="$target" --output="$work/test" --entry=IdleReuseParity \
       --root="$ui/tests/haxeon" --root="$ui/src" \
       --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
-      --ffi-interface="$root/packages/platform/bindings/nativekit$suffix.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
-      --ffi-interface="$root/packages/platform/bindings/nativekit-net$suffix.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
-      --ffi-interface="$ui/bindings/nativekit-ui$suffix.hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
+      --ffi-interface="$root/packages/platform/bindings/nativekit.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
+      --ffi-interface="$root/packages/platform/bindings/nativekit-net.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
+      --ffi-interface="$ui/bindings/nativekit-ui.hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
       "${flags[@]}" "$ui/tests/haxeon/IdleReuseParity.hx" > "$capture/compile.log" 2>&1 || { cat "$capture/compile.log" >&2; exit 1; }
     if [[ "$target" == hl ]]; then
       set +e

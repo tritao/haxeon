@@ -2,8 +2,8 @@
 
 Haxeon calls C and C++ libraries directly, without hand-written glue. The path from a header to a call is:
 
-1. `haxeon ffi import` reads the header with Clang and writes an HXI interface: the library's functions, types and
-   layouts for one target, as plain data.
+1. `haxeon ffi import` reads the header with Clang and writes an HXI interface: the library's functions and types for
+   one target, as plain data.
 2. You review the HXI and add what C syntax cannot say, such as who owns a returned pointer.
 3. An optional projection map (`.hxmap`) chooses Haxe names, packages and error handling.
 4. The compiler generates a Haxe module from the interface, and your code calls it like any other.
@@ -25,8 +25,8 @@ haxeon ffi import \
   /path/to/library/include/library.h
 ```
 
-The target triple is mandatory because C record sizes, alignments, and field
-offsets are target-specific. Include paths may be repeated. Declarations from
+The target triple is mandatory because the sizes of C types such as `long` and
+pointers are target-specific. Include paths may be repeated. Declarations from
 the input header and those include roots are imported; declarations from system
 headers are excluded.
 
@@ -37,7 +37,11 @@ opaque HXI type. Pointer results and output slots may carry `hxi:borrowed`;
 the latter also needs `hxi:out` and a nullable inner pointer when failure can
 leave it unset. A complete struct cannot use `hxi:opaque`.
 It maps fixed-width integer typedefs and `size_t`-family types to raw HXI
-primitives. Structs carry Clang-computed `@layout` and `@offset` annotations.
+primitives. A struct lists its fields; its size, alignment and field offsets
+follow from them by the C rules for the interface's target, so HXI has no
+layout annotations. The importer checks that result against Clang's layout of
+each struct and rejects packed and over-aligned records, `#pragma pack` and
+bit-fields, whose layouts those rules do not give.
 Output is sorted so the same header and target produce byte-identical results.
 Plain C integer types retain ABI-specific names such as `c_int` and `c_long`;
 they are not incorrectly assumed to have a platform-independent width. The
@@ -374,8 +378,8 @@ the `I64` SSA/HashLink representation. Consequently `c_long` projects to
 
 ### Structures
 
-HXI structures with explicit `@layout(size, align)` and field `@offset(...)`
-metadata project to typed Haxe abstracts backed by managed bytes. Constructing
+HXI structures project to typed Haxe abstracts backed by managed bytes, laid out
+for the target the build uses. Constructing
 the abstract zero-initializes exactly the declared size. Use Haxe properties
 such as `point.x = 3.0` and `point.x` to write and read scalar fields.
 Each record provides `Record.byteSize()` for its ABI size in bytes and
@@ -692,9 +696,11 @@ use the same convention as their pointer-returning function.
 ## Checking an ABI across targets
 
 Use `haxeon ffi audit` to import one public header for multiple targets
-and compare its normalized declarations and layouts. The `portable-abi64`
-profile additionally rejects ABI-dependent public scalars such as `long`,
-`size_t`, `wchar_t`, and C `bool`. Audits run Clang in freestanding mode, so
+and compare its normalized declarations, checking each struct's layout against
+Clang's on every target. A profile additionally rejects ABI-dependent public
+scalars such as `long`, `size_t`, `wchar_t`, and C `bool`: `portable-abi64`
+for 64-bit targets, `portable-abi32` for 32-bit ones such as Wasm, and
+`portable` for both, which takes targets of each width. Audits run Clang in freestanding mode, so
 headers limited to the portable C ABI can be checked for Apple and Windows
 targets without installing their platform SDKs:
 
@@ -703,14 +709,17 @@ haxeon ffi audit header.h \
   --target=x86_64-linux-gnu \
   --target=x86_64-w64-windows-gnu \
   --target=arm64-apple-darwin \
-  --profile=portable-abi64
+  --target=wasm32-unknown-wasi \
+  --profile=portable
 ```
 
 `--format=json` emits the same result as a machine-readable CI report. Any
 import failure, portability violation, or normalized ABI difference exits
-nonzero. After a successful comparison, `--output=library-abi64.hxi` writes a
-single canonical interface using `@target("portable-abi64")`; failed audits do
-not touch the output file.
+nonzero. After a successful comparison, `--output=library.hxi` writes a
+single canonical interface with the profile as its target; failed audits do
+not touch the output file. An interface with `@target("portable")` is one file
+for native and Wasm builds alike: a build lays it out for its own profile,
+`portable-abi32` on 32-bit Wasm and `portable-abi64` elsewhere.
 
 When auditing a filtered dependent header, pass the corresponding dependency
 artifact with `--dependency-hxi` so the standalone audit can validate external

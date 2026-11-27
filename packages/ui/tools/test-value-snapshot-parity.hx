@@ -83,7 +83,7 @@ function main() {
 
 	for (inlining in [false, true])
 		for (target in ["hl", "wasm32", "wasm-gc"]) {
-			var wasm = target != "hl", suffix = wasm ? "wasm" : "hl", bindings = wasm ? "-wasm" : "";
+			var wasm = target != "hl", suffix = wasm ? "wasm" : "hl";
 			var options = (inlining ? [] : ["--no-inline"]).concat(wasm ? [
 				'--target=$target',
 				"--wasm-import-memory",
@@ -91,11 +91,11 @@ function main() {
 			] : []).concat([
 				'--root=$fixtures', '--root=$ui/src', '--root=$root/packages/editor/src',
 				'--root=$root/packages/platform/src',
-				'--ffi-interface=$root/packages/platform/bindings/nativekit$bindings.hxi',
+				'--ffi-interface=$root/packages/platform/bindings/nativekit.hxi',
 				'--ffi-projection=$root/packages/platform/bindings/nativekit.hxmap',
-				'--ffi-interface=$root/packages/platform/bindings/nativekit-net$bindings.hxi',
+				'--ffi-interface=$root/packages/platform/bindings/nativekit-net.hxi',
 				'--ffi-projection=$root/packages/platform/bindings/nativekit-net.hxmap',
-				'--ffi-interface=$ui/bindings/nativekit-ui$bindings.hxi',
+				'--ffi-interface=$ui/bindings/nativekit-ui.hxi',
 				'--ffi-projection=$ui/bindings/nativekit-ui.hxmap'
 			]);
 			var label = '$target, inline=${inlining ? 1 : 0}';

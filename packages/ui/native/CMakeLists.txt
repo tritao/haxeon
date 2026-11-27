@@ -730,15 +730,15 @@ if(NK_BUILD_EXAMPLES)
                 DEPENDS
                     "${NKUI_PACKAGE_DIR}/tools/showcase-wasm.sh"
                     "${NKUI_HAXEON_MEMORY_CONTRACT}"
-                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-browser-wasm.hxi"
-                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-wasm.hxi"
-                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-showcase-wasm.hxi"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-browser.hxi"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui.hxi"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-showcase.hxi"
                     "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-showcase.hxmap"
                     "${NKUI_HAXEON_DIR}/common.hxml"
-                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-wasm.hxi"
-                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net-wasm.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net.hxi"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net.hxmap"
-                    "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu.hxi"
                     "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu.hxmap"
                     "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui.hxmap"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit.hxmap"
@@ -804,12 +804,12 @@ if(NK_BUILD_EXAMPLES)
                 target_link_libraries(nativekit_ui_haxeon PRIVATE NativeKit::audio)
                 set(NKUI_HAXEON_EXPORT_SOURCE "-")
                 set(NKUI_HAXEON_HOST_INTERFACES
-                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-wasm.hxi"
-                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net-wasm.hxi"
-                    "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
-                    "${NKUI_HAXEON_DIR}/packages/audio/bindings/nativekit-audio-wasm.hxi"
-                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-wasm.hxi"
-                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-browser-wasm.hxi")
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/audio/bindings/nativekit-audio.hxi"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui.hxi"
+                    "${NKUI_PACKAGE_DIR}/bindings/nativekit-ui-browser.hxi")
             else()
                 set(NKUI_HAXEON_EXPORT_SOURCE "${NKUI_HAXEON_GUEST_WASM}")
                 set(NKUI_HAXEON_EXPORT_DEPS "${NKUI_HAXEON_GUEST_WASM}")

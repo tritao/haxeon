@@ -46,7 +46,7 @@ class HxiSourceOrigins {
 				var declaration = declarations.get(structure.nativeName);
 				result.set(structure.name, span(declaration));
 				switch declaration {
-					case Structure(_, _, _, fields, _):
+					case Structure(_, fields, _):
 						var fieldNames = [for (field in structure.fields) field.name];
 						for (field in structure.fields)
 							for (native in fields)
@@ -94,7 +94,7 @@ class HxiSourceOrigins {
 
 	static function span(declaration:HxiDeclaration):SourceSpan
 		return switch declaration {
-			case Opaque(_, span) | Alias(_, _, span) | Handle(_, _, _, span) | Constant(_, _, span) | Structure(_, _, _,
+			case Opaque(_, span) | Alias(_, _, span) | Handle(_, _, _, span) | Constant(_, _, span) | Structure(_,
 				_, span) | Enumeration(_, _, _, _, span) | Callback(_, _, _, _, span) | Function(_, _, _, _, _, _, _,
 				span): span;
 		};

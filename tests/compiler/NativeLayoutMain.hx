@@ -347,25 +347,28 @@ class NativeLayoutMain {
 		].length != 0)
 			throw "native value records must not be emitted as HashLink objects or HSTRUCT values";
 
+		// One portable interface is laid out for each profile as the Haxe record is.
+		var portable = HxiParser.parse("native-layout.hxi",
+			'interface native @target("portable") { struct Pair { tag: u8; value: i64; ratio: f32; } struct Holder { tag: u8; data: ptr<void>; } }');
 		for (target in ["portable-abi32", "portable-abi64"]) {
-			var imported = HxiParser.parse("native-layout.hxi",
-				'interface native @target("$target") { struct Pair @layout(24, 8) { tag: u8 @offset(0); value: i64 @offset(8); ratio: f32 @offset(16); } }');
+			var imported = portable.resolve(target);
 			HxiValidator.validate(imported, []);
-			var importedLayout = HxiAbi.forInterface(imported).layout(HxiType.Named("Pair")),
+			var abi = HxiAbi.forInterface(imported),
+				importedLayout = abi.structLayout("Pair"),
 				declaredLayout = requireLayout(pair.nativeLayouts, target);
 			expect(importedLayout != null
 				&& importedLayout.size == declaredLayout.size
 				&& importedLayout.align == declaredLayout.alignment,
 				'Haxe and imported HXI declarations must share $target size and alignment rules');
-			switch imported.declarations[0] {
-				case Structure("Pair", _, _, fields, _):
-					for (nativeField in fields)
-						expect(nativeField.offset == field(declaredLayout.fields, nativeField.name).offset,
-							'Haxe and imported HXI declarations must agree on $target offsets for ${nativeField.name}');
-				case _:
-					throw "expected imported Pair layout";
-			}
+			for (name in ["tag", "value", "ratio"])
+				expect(abi.fieldOffset("Pair", name) == field(declaredLayout.fields, name).offset,
+					'Haxe and imported HXI declarations must agree on $target offsets for $name');
 		}
+		var holder32 = HxiAbi.forInterface(portable.resolve("portable-abi32")),
+			holder64 = HxiAbi.forInterface(portable.resolve("portable-abi64"));
+		expect(holder32.fieldOffset("Holder", "data") == 4 && holder32.structLayout("Holder").size == 8
+			&& holder64.fieldOffset("Holder", "data") == 8 && holder64.structLayout("Holder").size == 16,
+			"a portable interface should lay pointers out for the profile it is built for");
 		expectError('@:value @:repr("C") class Bad { public var label:String; }', "not an unmanaged native field type");
 		expectError('@:value @:repr("C") class Bad { public var values:Array<Int>; }',
 			"not an unmanaged native field type");

@@ -22,7 +22,9 @@ fi
     --target=x86_64-w64-windows-gnu \
     --target=x86_64-apple-darwin \
     --target=arm64-apple-darwin \
-    --profile=portable-abi64 \
+    --target=wasm32-unknown-wasi \
+    --target=wasm32-unknown-emscripten \
+    --profile=portable \
     --library=nativekit_ui \
     --interface=NativeKitUI \
     --depends=NativeKit \

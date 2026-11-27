@@ -113,10 +113,33 @@ class CxxAbiLowerer {
 				declarations.push(lowerMethod(method, name, records, enums, aliases, callbackNames));
 			}
 		declarations.sort(function(left, right) return Reflect.compare(declarationName(left), declarationName(right)));
+		requireClangLayouts(model, declarations, target);
 		var source = model.span.file;
 		return new HxiInterface(interfaceName == null ? HxiInterface.defaultName(model.header) : interfaceName, target,
 			library,
 			dependencies == null ? [] : dependencies.copy(), declarations, source.span(0, source.bytes.length));
+	}
+
+	/** Check each value record's computed layout against the one Clang gave it; one with another header's field type is left to the audit. */
+	static function requireClangLayouts(model:CxxModel, declarations:Array<HxiDeclaration>, target:String):Void {
+		var declared:Map<String, HxiDeclaration> = [];
+		for (declaration in declarations)
+			declared.set(declarationName(declaration), declaration);
+		var abi = HxiAbi.forTarget(target, declared);
+		for (record in model.records) {
+			var name = hxiName(record.qualifiedName), computed = switch declared.get(name) {
+				case Structure(_, _, _): abi.findStructLayout(name);
+				case _: null;
+			};
+			if (computed == null)
+				continue;
+			var same = computed.size == record.size && computed.align == record.align;
+			for (index in 0...record.fields.length)
+				if (record.fields[index].offset != computed.offsets[index])
+					same = false;
+			if (!same)
+				throw new InternalError('C++ value record "${record.qualifiedName}" on $target has a layout other than the natural C one HXI computes');
+		}
 	}
 
 	/** Returns the C++-specific dispatch metadata for already lowered declarations. */
@@ -148,11 +171,12 @@ class CxxAbiLowerer {
 			|| record.hasVirtualMembers)
 			return Opaque(hxiName(record.qualifiedName), record.span);
 		var fields:Array<HxiField> = [];
-		for (field in record.fields)
+		for (field in record.fields) {
+			if (field.bitfield)
+				throw new InternalError('C++ value record "${record.qualifiedName}" has bit-field "${field.name}"; HXI records have the natural C layout');
 			fields.push({
 				name: field.name,
 				type: lowerType(field.type, records, enums, aliases, false, callbackNames),
-				offset: field.offset,
 				ownership: HxiOwnership.Unspecified,
 				handleDisposition: HxiHandleDisposition.Unspecified,
 				lengthField: null,
@@ -160,7 +184,8 @@ class CxxAbiLowerer {
 				metadata: [],
 				span: field.span
 			});
-		return Structure(hxiName(record.qualifiedName), record.size, record.align, fields, record.span);
+		}
+		return Structure(hxiName(record.qualifiedName), fields, record.span);
 	}
 
 	static function lowerEnum(enumModel:CxxEnum, enums:Map<String, CxxEnum>, records:Map<String, CxxRecord>,
@@ -423,7 +448,7 @@ class CxxAbiLowerer {
 	static function declarationName(declaration:HxiDeclaration):String
 		return switch declaration {
 			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
-				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
+				_) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
 				_): name;
 		};
 }

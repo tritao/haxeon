@@ -9,8 +9,8 @@
 #
 # It checks the files the pushed commits change, as they are in this working tree: run it from the tree you push. A push that
 # changes no Haxe file is not checked, nor one from a tree without a native build (a scratch worktree), which CI still checks.
-# A push that moves the NativeKit pin or changes the platform bindings or their generators also checks that the generated
-# bindings match the NativeKit headers, which CI's bindings and Web UI jobs would fail.
+# A push that moves the NativeKit pin or changes a package's bindings or their generators also checks that every package's
+# generated bindings match the NativeKit headers, which CI's binding and package jobs would fail.
 set -eu
 root=$(git rev-parse --show-toplevel)
 zero=0000000000000000000000000000000000000000
@@ -26,8 +26,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 		base=$remote_sha
 	fi
 	[ -n "$(git diff --name-only -M --diff-filter=DR "$base..$local_sha" -- src)" ] && type_check=1
-	[ -n "$(git diff --name-only "$base..$local_sha" -- vendor/nativekit packages/platform/bindings packages/platform/tools)" ] &&
-		bindings=1
+	[ -n "$(git diff --name-only "$base..$local_sha" -- vendor/nativekit 'packages/*/bindings' 'packages/*/tools/update-haxeon-*' \
+		'packages/*/native/tools/update-haxeon-*' 'packages/*/tools/audit-haxeon-abi.sh')" ] && bindings=1
 	[ -n "$(git diff --name-only --diff-filter=d "$base..$local_sha" -- '*.hx')" ] || continue
 	if [ ! -f "$("$root/scripts/hashlink-path.sh" --build-dir)/CMakeCache.txt" ]; then
 		echo "pre-push: no native build in this tree, so the pushed Haxe files are not checked" >&2
@@ -40,7 +40,7 @@ if [ "$status" -ne 0 ]; then
 	echo "pre-push: fix with scripts/haxeon dev format --changed (or haxeon fmt / haxeon lint --fix FILES)" >&2
 fi
 if [ "$bindings" = 1 ]; then
-	for check in "$root"/packages/platform/tools/update-haxeon-*hxi.sh; do
+	for check in "$root"/packages/*/tools/update-haxeon-*hxi.sh "$root"/packages/*/native/tools/update-haxeon-*hxi.sh; do
 		"$check" --check >/dev/null || status=1
 	done
 fi

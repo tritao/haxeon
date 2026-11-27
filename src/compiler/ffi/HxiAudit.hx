@@ -17,34 +17,43 @@ typedef HxiAuditReport = {
 	final issues:Array<HxiAuditIssue>;
 }
 
-/** Audits one C header for a portable, identical ABI across Clang targets. */
+/**
+ * Audits one C header for a portable, identical ABI across Clang targets. A profile names the portable ABI the targets
+ * share: `portable-abi64` or `portable-abi32`, or `portable` (`HxiInterface.PORTABLE`) for both, which takes targets of
+ * each width.
+ */
 class HxiAudit {
+	static function knownProfile(profile:String):Bool
+		return profile == "portable-abi64" || profile == "portable-abi32" || profile == HxiInterface.PORTABLE;
+
 	public static function audit(header:String, targets:Array<String>, includes:Array<String>, ?profile:String,
 			?library:String, ?interfaceName:String,
 			?dependencies:Array<String>, ?excludedHeaders:Array<String>,
 			?dependencyInterfaces:Array<HxiInterface>):HxiAuditReport {
 		if (targets.length < 2)
 			throw new InternalError("FFI audit requires at least two targets");
-		if (profile != null && profile != "portable-abi64" && profile != "portable-abi32")
+		if (profile != null && !knownProfile(profile))
 			throw new InternalError('Unknown FFI audit profile "$profile"');
 		var issues:Array<HxiAuditIssue> = [],
 			baseline:Null<String> = null,
-			identical = true;
+			identical = true,
+			widths:Map<Int, Bool> = [];
+		var visibleDeclarations:Map<String, HxiDeclaration> = [];
+		if (dependencyInterfaces != null)
+			for (dependency in dependencyInterfaces)
+				for (declaration in dependency.declarations)
+					visibleDeclarations.set(declarationName(declaration), declaration);
 		for (target in targets) {
 			try {
 				var model = CHeaderImporter.importHeader(header, target, includes, "clang", library, interfaceName,
-					dependencies, excludedHeaders);
+					dependencies, excludedHeaders, visibleDeclarations);
 				HxiValidator.validateComposition(model, dependencyInterfaces == null ? [] : dependencyInterfaces);
-				var visibleDeclarations:Map<String, HxiDeclaration> = [];
-				if (dependencyInterfaces != null)
-					for (dependency in dependencyInterfaces)
-						for (declaration in dependency.declarations)
-							visibleDeclarations.set(declarationName(declaration), declaration);
 				var abi = HxiAbi.forInterface(model, visibleDeclarations);
 				HxiNativeSignature.lower(model, abi, visibleDeclarations);
 				var normalized = stripComments(HxiWriter.write(model, null, profile));
 				if (profile != null)
 					auditPortable(model, target, issues, profile, abi);
+				widths.set(abi.pointerBits, true);
 				if (baseline == null)
 					baseline = normalized;
 				else if (baseline != normalized) {
@@ -56,6 +65,12 @@ class HxiAudit {
 				issues.push({target: target, kind: "import-error", message: Std.string(error)});
 			}
 		}
+		if (profile == HxiInterface.PORTABLE && !(widths.exists(32) && widths.exists(64)))
+			issues.push({
+				target: targets.join(", "),
+				kind: "profile-coverage",
+				message: '${HxiInterface.PORTABLE} requires both 32-bit and 64-bit targets'
+			});
 		return {
 			header: header,
 			targets: targets.copy(),
@@ -71,7 +86,7 @@ class HxiAudit {
 		var model = CHeaderImporter.importHeader(header, target, includes, "clang", library, interfaceName,
 			dependencies, excludedHeaders),
 			label = sourceLabel == null ? header : sourceLabel;
-		if (profile != "portable-abi64" && profile != "portable-abi32")
+		if (!knownProfile(profile))
 			throw new InternalError('Unknown FFI audit profile "$profile"');
 		return HxiWriter.write(model, generatedHeader(label, profile), profile);
 	}
@@ -122,12 +137,21 @@ class HxiAudit {
 
 	static function auditPortable(model:HxiInterface, target:String, issues:Array<HxiAuditIssue>, profile:String,
 			abi:HxiAbi):Void {
-		var requiredBits = profile == "portable-abi32" ? 32 : 64;
-		if (abi.pointerBits != requiredBits)
+		var widths = switch profile {
+			case "portable-abi32": [32];
+			case "portable-abi64": [64];
+			case _: [32, 64];
+		};
+		var reasons:Array<String> = [];
+		if (widths.indexOf(abi.pointerBits) < 0)
+			reasons.push('${widths.join(" or ")}-bit pointers');
+		if (abi.scalarAlignLimit != 8)
+			reasons.push("64-bit scalars aligned to 8 bytes");
+		if (reasons.length != 0)
 			issues.push({
 				target: target,
 				kind: "non-portable-target",
-				message: '$profile requires $requiredBits-bit pointers'
+				message: '$profile requires ${reasons.join(" and ")}'
 			});
 		for (fn in abi.functions())
 			if (fn.semantics.parameters.length != fn.arguments.length)
@@ -142,7 +166,7 @@ class HxiAudit {
 					auditType(type, target, 'alias "$name"', issues);
 				case Handle(name, representation, _, _):
 					auditType(representation, target, 'handle "$name"', issues);
-				case Structure(name, _, _, fields, _):
+				case Structure(name, fields, _):
 					for (field in fields)
 						auditType(field.type, target, 'field "$name.${field.name}"', issues);
 				case Enumeration(name, representation, _, _, _):
@@ -162,7 +186,7 @@ class HxiAudit {
 	static function declarationName(value:HxiDeclaration):String
 		return switch value {
 			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
-				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
+				_) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
 				_): name;
 		};
 

@@ -14,21 +14,12 @@ JSON
 cd "$root"
 for target in hl wasm32 wasm-gc; do
     entry=ShowcaseDesktop
-    suffix=
-    options=(--target="$target")
-    if [[ $target == hl ]]; then
-        options+=(--ffi-interface="$root/packages/gpu/bindings/nativekit-gpu.hxi"
-            --ffi-projection="$root/packages/gpu/bindings/nativekit-gpu.hxmap")
-    fi
+    options=(--target="$target" --ffi-interface="$root/packages/gpu/bindings/nativekit-gpu.hxi"
+        --ffi-projection="$root/packages/gpu/bindings/nativekit-gpu.hxmap")
     if [[ $target != hl ]]; then
-        suffix=-wasm
         entry=ShowcaseWeb
-        options+=(--wasm-import-memory --wasm-memory-contract="$work/memory.json")
-    fi
-    if [[ $target != hl ]]; then
-        options+=(--ffi-interface="$ui/bindings/nativekit-ui-browser-wasm.hxi"
-            --ffi-interface="$root/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
-            --ffi-projection="$root/packages/gpu/bindings/nativekit-gpu.hxmap")
+        options+=(--wasm-import-memory --wasm-memory-contract="$work/memory.json"
+            --ffi-interface="$ui/bindings/nativekit-ui-browser.hxi")
         for symbol in configure caretOffset caretAffinity caretDirection; do
             options+=(--export="ShowcaseWeb.$symbol")
         done
@@ -41,12 +32,12 @@ for target in hl wasm32 wasm-gc; do
     if ! "$hl" "$compiler" "${options[@]}" --entry="$entry" --output="$artifact" \
             --root="$ui/examples/ui_showcase" --root="$ui/src" \
             --root="$root/packages/editor/src" --root="$root/packages/platform/src" --root="$root/packages/gpu/src" \
-            --ffi-interface="$root/packages/platform/bindings/nativekit$suffix.hxi" \
+            --ffi-interface="$root/packages/platform/bindings/nativekit.hxi" \
             --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
-            --ffi-interface="$root/packages/platform/bindings/nativekit-net$suffix.hxi" \
+            --ffi-interface="$root/packages/platform/bindings/nativekit-net.hxi" \
             --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
-            --ffi-interface="$ui/bindings/nativekit-ui$suffix.hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
-            --ffi-interface="$ui/bindings/nativekit-ui-showcase$suffix.hxi" \
+            --ffi-interface="$ui/bindings/nativekit-ui.hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
+            --ffi-interface="$ui/bindings/nativekit-ui-showcase.hxi" \
             --ffi-projection="$ui/bindings/nativekit-ui-showcase.hxmap" \
             "$ui/examples/ui_showcase/$entry.hx" > "$work/$target.log" 2>&1; then
         cat "$work/$target.log" >&2

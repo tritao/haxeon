@@ -30,11 +30,13 @@ class CHeaderImporter {
 	@:processWide("the headers of one import, cleared when the next begins, so an edited header is read again; a concurrent import only re-reads")
 	static final sourceFiles:Map<String, SourceFile> = [];
 
+	/** `dependencyDeclarations`, the declarations of the interfaces it depends on, let every struct's layout be checked. */
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang",
 			?library:String, ?interfaceName:String,
-			?dependencies:Array<String>, ?excludedHeaders:Array<String>):HxiInterface {
+			?dependencies:Array<String>, ?excludedHeaders:Array<String>,
+			?dependencyDeclarations:Map<String, HxiDeclaration>):HxiInterface {
 		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders,
-			null, null);
+			null, null, dependencyDeclarations);
 	}
 
 	/** C importer entry point with the shared Clang frontend options. */
@@ -49,7 +51,7 @@ class CHeaderImporter {
 	static function importHeaderModel(header:String, target:String, includes:Array<String>, clang:String,
 			?library:String, ?interfaceName:String,
 			?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?defines:Array<String>,
-			?compileCommands:String):HxiInterface {
+			?compileCommands:String, ?dependencyDeclarations:Map<String, HxiDeclaration>):HxiInterface {
 		sourceCache.clear();
 		sourceFiles.clear();
 		ClangAstTools.beginImport();
@@ -158,11 +160,56 @@ class CHeaderImporter {
 						hxiDeclarations.push(imported);
 				}
 		}
+		requireClangLayouts(hxiDeclarations, dependencyDeclarations, target, layouts);
 		var source = sourceFile(FileSystem.fullPath(header));
 		return new HxiInterface(interfaceName == null ? HxiInterface.defaultName(header) : interfaceName, target,
 			library,
 			dependencies == null ? [] : dependencies.copy(),
 			hxiDeclarations, source.span(0, source.bytes.length), documentation);
+	}
+
+	static function requireNaturalLayout(node:Dynamic, what:String):Void {
+		var reason = ClangAstTools.layoutOverride(node);
+		if (reason != null)
+			throw new InternalError('${declarationLocation(node)}: $what uses $reason; HXI records have the natural C layout');
+	}
+
+	/**
+	 * Check each struct's computed layout against the one Clang gave it on `target`; records from other headers are known
+	 * by Clang's layout. Without the dependencies' declarations, a struct with a field of another header's non-record type
+	 * is left unchecked; the audit has them.
+	 */
+	static function requireClangLayouts(declarations:Array<HxiDeclaration>,
+			dependencyDeclarations:Null<Map<String, HxiDeclaration>>, target:String,
+			layouts:Map<String, CLayout>):Void {
+		var declared:Map<String, HxiDeclaration> = [], records:Map<String, HxiAbi.HxiTypeLayout> = [];
+		if (dependencyDeclarations != null)
+			for (name => declaration in dependencyDeclarations)
+				declared.set(name, declaration);
+		for (declaration in declarations)
+			declared.set(HxiAbi.nameOf(declaration), declaration);
+		for (name => layout in layouts)
+			if (!declared.exists(name))
+				records.set(name, {size: layout.size, align: layout.align});
+		var abi = HxiAbi.forTarget(target, declared, records);
+		for (declaration in declarations)
+			switch declaration {
+				case Structure(name, fields, _):
+					var computed = abi.findStructLayout(name), clang = layouts.get(name);
+					if (clang == null || (computed == null && dependencyDeclarations == null))
+						continue;
+					if (computed == null) {
+						var unsized = Lambda.find(fields, field -> abi.layout(field.type) == null);
+						throw new InternalError('field "$name.${unsized == null ? "?" : unsized.name}" on $target has no fixed C layout');
+					}
+					var same = computed.size == clang.size && computed.align == clang.align;
+					for (index in 0...fields.length)
+						if (clang.offsets.get(fields[index].name) != computed.offsets[index])
+							same = false;
+					if (!same)
+						throw new InternalError('struct "$name" on $target has a layout other than the natural C one HXI computes');
+				case _:
+			}
 	}
 
 	static function collect(node:Dynamic, output:Array<Dynamic>, roots:Array<String>, currentFile:String,
@@ -287,6 +334,7 @@ class CHeaderImporter {
 				if (field(node, "_hxiEnumAlias") == true)
 					return null;
 				if (!StringTools.startsWith(qualified, "struct ") && !StringTools.startsWith(qualified, "enum ")) {
+					requireNaturalLayout(node, 'typedef "$name"');
 					addDocumentation(documentation, name, node);
 					return Alias(name, typeFromProjection(mapType(qualified)), sourceSpan(node));
 				}
@@ -298,15 +346,15 @@ class CHeaderImporter {
 					[for (child in children(node)) if (field(child, "kind") == "FieldDecl") child];
 				if (fields.length == 0)
 					return null;
-				var layout = layouts.get(name),
-					modelFields:Array<HxiField> = [];
+				requireNaturalLayout(node, 'struct "$name"');
+				var modelFields:Array<HxiField> = [];
 				addDocumentation(documentation, name, node);
 				var previousFieldEnd:Null<Int> = null;
 				for (entry in fields) {
 					var fieldName:String = field(entry, "name"),
 						fieldType:Dynamic = field(entry, "type"),
-						qualifiedType:String = field(fieldType, "qualType"),
-						offset = layout == null ? null : layout.offsets.get(fieldName);
+						qualifiedType:String = field(fieldType, "qualType");
+					requireNaturalLayout(entry, 'field "$name.$fieldName"');
 					if (StringTools.endsWith(qualifiedType, "[]"))
 						throw new InternalError('${declarationLocation(entry)}: unsupported flexible array field "$fieldName"');
 					addDocumentation(documentation, '$name.$fieldName', entry, previousFieldEnd);
@@ -316,8 +364,6 @@ class CHeaderImporter {
 						lengthField = fieldLengthField(entry),
 						structSize = hasAnnotation(entry, "hxi:struct_size"),
 						metadata:Map<String, Array<String>> = [];
-					if (offset != null)
-						metadata.set("offset", [Std.string(offset)]);
 					if (borrowed)
 						metadata.set("borrowed", []);
 					if (lengthField != null)
@@ -327,7 +373,6 @@ class CHeaderImporter {
 					modelFields.push({
 						name: fieldName,
 						type: typeFromProjection(typeName),
-						offset: offset,
 						ownership: borrowed ? Borrowed : Unspecified,
 						handleDisposition: Unspecified,
 						lengthField: lengthField,
@@ -336,8 +381,7 @@ class CHeaderImporter {
 						span: sourceSpan(entry)
 					});
 				}
-				return Structure(name, layout == null ? 0 : layout.size, layout == null ? 0 : layout.align, modelFields,
-					sourceSpan(node));
+				return Structure(name, modelFields, sourceSpan(node));
 			case "FunctionDecl":
 				if (field(node, "variadic") == true)
 					throw new InternalError('${declarationLocation(node)}: unsupported variadic function "$name"');

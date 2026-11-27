@@ -33,7 +33,7 @@ class CliHelp {
 	public static final FFI_IMPORT_USAGE =
 		"Usage: haxeon ffi import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 	public static final FFI_AUDIT_USAGE =
-		"Usage: haxeon ffi audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+		"Usage: haxeon ffi audit --target=<triple> --target=<triple> [--profile=portable|portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 	public static final HEAP_INSPECT_USAGE = "Usage: haxeon heap inspect BYTECODE DUMP [--report PATH] | --capture DIR";
 
 	static final WORKSPACE_COMMANDS = ["plan", "build", "test"];

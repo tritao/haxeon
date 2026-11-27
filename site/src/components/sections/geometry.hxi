@@ -10,8 +10,8 @@ interface Geometry
 		dx: f64,
 		dy: f64
 	) -> void;
-	struct geo_point @layout(16, 8) {
-		x: f64 @offset(0);
-		y: f64 @offset(8);
+	struct geo_point {
+		x: f64;
+		y: f64;
 	}
 }

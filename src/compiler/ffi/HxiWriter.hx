@@ -80,7 +80,7 @@ class HxiWriter {
 			case Opaque(name, _): 'Opaque:$name';
 			case Alias(name, _, _) | Handle(name, _, _, _) | Callback(name, _, _, _, _): 'TypedefDecl:$name';
 			case Constant(name, _, _): 'EnumConstantDecl:$name';
-			case Structure(name, _, _, _, _): 'RecordDecl:$name';
+			case Structure(name, _, _): 'RecordDecl:$name';
 			case Enumeration(name, _, _, _, _): 'EnumDecl:$name';
 			case Function(name, _, _, _, _, _, _, _): 'FunctionDecl:$name';
 		};
@@ -109,11 +109,9 @@ class HxiWriter {
 				writeDocumentation(value.documentation.get(name));
 				line.add('const $name = $constant;');
 				endLine(1);
-			case Structure(name, size, align, fields, _):
+			case Structure(name, fields, _):
 				writeDocumentation(value.documentation.get(name));
-				line.add('struct $name @layout');
-				line.arguments(['$size', '$align']);
-				line.add(" {");
+				line.add('struct $name {');
 				endLine(1);
 				for (field in fields)
 					writeField(value.documentation, name, field);
@@ -166,8 +164,6 @@ class HxiWriter {
 		line.add('${field.name}: ');
 		writeType(line, field.type);
 		if (field.metadata == null) {
-			if (field.offset != null)
-				line.annotation("@offset", '${field.offset}');
 			writeOwnership(line, field.ownership);
 			writeHandleDisposition(line, field.handleDisposition);
 			if (field.lengthField != null)
@@ -175,7 +171,7 @@ class HxiWriter {
 			if (field.structSize)
 				line.add(" @struct_size");
 		} else
-			writeMetadata(line, field.metadata, ["offset", "borrowed", "owned", "length_field", "struct_size"]);
+			writeMetadata(line, field.metadata, ["borrowed", "owned", "length_field", "struct_size"]);
 		line.add(";");
 		endLine(2);
 	}

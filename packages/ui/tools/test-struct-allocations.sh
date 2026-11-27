@@ -12,10 +12,9 @@ for fixture in state pointer; do
   source_file="packages/ui/tests/haxeon/$entry.hx"
 for inline in 0 1; do
   for target in hl wasm32 wasm-gc; do
-    suffix=; [[ "$target" == hl ]] || suffix=-wasm
-    ffi=(--ffi-interface="packages/platform/bindings/nativekit$suffix.hxi" --ffi-projection=packages/platform/bindings/nativekit.hxmap
-      --ffi-interface="packages/platform/bindings/nativekit-net$suffix.hxi" --ffi-projection=packages/platform/bindings/nativekit-net.hxmap
-      --ffi-interface="packages/ui/bindings/nativekit-ui$suffix.hxi" --ffi-projection=packages/ui/bindings/nativekit-ui.hxmap)
+    ffi=(--ffi-interface="packages/platform/bindings/nativekit.hxi" --ffi-projection=packages/platform/bindings/nativekit.hxmap
+      --ffi-interface="packages/platform/bindings/nativekit-net.hxi" --ffi-projection=packages/platform/bindings/nativekit-net.hxmap
+      --ffi-interface="packages/ui/bindings/nativekit-ui.hxi" --ffi-projection=packages/ui/bindings/nativekit-ui.hxmap)
     flags=(); ext=hl
     if [[ "$target" == wasm32 ]]; then
       ext=wasm; flags=(--wasm-import-memory --wasm-memory-stats --wasm-gc-stress --export="$census.prepare" --export="$census.perform")

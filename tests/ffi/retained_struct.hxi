@@ -1,23 +1,23 @@
 interface Retained @target("portable-abi32") @library("retained") {
-	struct retained_point @layout(8, 4) {
-		x: i32 @offset(0);
-		y: i32 @offset(4);
+	struct retained_point {
+		x: i32;
+		y: i32;
 	}
-	struct retained_label @layout(4, 4) {
-		value: utf8 @offset(0);
+	struct retained_label {
+		value: utf8;
 	}
-	struct retained_options @layout(24, 4) {
-		points: ptr<const<retained_point>> @offset(0) @borrowed @length_field("point_count");
-		point_count: u32 @offset(4);
-		paths: ptr<utf8> @offset(8) @borrowed @length_field("path_count");
-		path_count: u32 @offset(12);
-		data: ptr<const<u8>> @offset(16) @borrowed @length_field("size");
-		size: u32 @offset(20);
+	struct retained_options {
+		points: ptr<const<retained_point>> @borrowed @length_field("point_count");
+		point_count: u32;
+		paths: ptr<utf8> @borrowed @length_field("path_count");
+		path_count: u32;
+		data: ptr<const<u8>> @borrowed @length_field("size");
+		size: u32;
 	}
-	struct retained_container @layout(32, 4) {
-		value: retained_options @offset(0);
-		options: ptr<const<retained_options>> @offset(24) @borrowed @length_field("count");
-		count: u32 @offset(28);
+	struct retained_container {
+		value: retained_options;
+		options: ptr<const<retained_options>> @borrowed @length_field("count");
+		count: u32;
 	}
 	extern fn check(point: ptr<const<retained_point>>) -> i32 @symbol("retained_check");
 	extern fn check_label(label: ptr<const<retained_label>>) -> i32 @symbol("retained_check_label");

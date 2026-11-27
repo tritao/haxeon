@@ -586,6 +586,7 @@ class Compiler {
 		defines = nextDefines;
 		var target = BackendTargets.parse(nextDefines.get("target"));
 		backendTarget = target == null ? HashLink : target;
+		ffi.usePortableProfile(portableProfile());
 		// The session's backend builds for the target; one that builds for another starts over.
 		if (state.backend.backendTarget() != backendTarget)
 			state.backend = switch backendTarget {
@@ -897,15 +898,14 @@ class Compiler {
 		}
 		if (interfaceTarget != null)
 			return interfaceTarget;
-		return switch backendTarget {
-			case Wasm32 | WasmGc: "portable-abi32";
-			case Wasm64: "portable-abi64";
-			case HashLink | HashLinkC:
-				// A `target` define that names no backend names the C ABI itself.
-				var named = defines.get("target");
-				named == null || BackendTargets.parse(named) != null ? "portable-abi64" : named;
-		}
+		// A `target` define that names no backend names the C ABI itself.
+		var named = defines.get("target");
+		return isWasmTarget() || named == null || BackendTargets.parse(named) != null ? portableProfile() : named;
 	}
+
+	/** The portable C ABI profile the backend builds for, which portable FFI interfaces are laid out for. */
+	function portableProfile():String
+		return backendTarget == Wasm32 || backendTarget == WasmGc ? "portable-abi32" : "portable-abi64";
 
 	/** True when the active target uses one of the experimental WebAssembly backends. */
 	public function isWasmTarget():Bool

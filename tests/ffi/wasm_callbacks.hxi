@@ -1,8 +1,8 @@
 interface WasmCallbacks @target("portable-abi32") @library("wasm_callbacks") {
-	struct size @layout(12, 4) {
-		kind: u32 @offset(0);
-		width: f32 @offset(4);
-		height: f32 @offset(8);
+	struct size {
+		kind: u32;
+		width: f32;
+		height: f32;
 	}
 	callback combine_fn = fn(left: i32, right: f64, user_data: nullable<ptr<void>>) -> i32;
 	callback measure_fn = fn(node: u32, limits: size, user_data: nullable<ptr<void>>) -> size;
