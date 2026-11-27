@@ -4,7 +4,7 @@ import haxe.io.Bytes;
 import haxeon.wire.MessagePack;
 
 /** Framing/codec versions are independent of the application's version string. */
-class RpcProtocol {
+internal class RpcProtocol {
 	public static inline final VERSION:Int = 2;
 	public static inline final CODEC_VERSION:Int = 1;
 	public static inline final MAX_CAPABILITIES:Int = 64;

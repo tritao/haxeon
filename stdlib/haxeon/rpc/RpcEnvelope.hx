@@ -3,7 +3,7 @@ package haxeon.rpc;
 import haxe.io.Bytes;
 
 /** Permanent variant ids. Request ids belong only to one connection generation. */
-@:wire enum RpcEnvelope {
+@:wire internal enum RpcEnvelope {
 	@:id(1) Hello(protocol:Int, codec:Int, application:String, capabilities:Array<String>);
 	@:id(2) Welcome(protocol:Int, codec:Int, application:String, capabilities:Array<String>);
 	@:id(3) Refused(error:RpcErrorData);

@@ -1,7 +1,7 @@
 package haxeon.reactive;
 
 /** One reusable source-to-reader dependency link. */
-class ReactiveEdge {
+internal class ReactiveEdge {
 	public final source:ReactiveSource;
 	public final reader:ReactiveDependencySet;
 	public final fieldBit:Int;

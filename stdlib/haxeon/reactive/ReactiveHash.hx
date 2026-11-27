@@ -1,7 +1,7 @@
 package haxeon.reactive;
 
 /** Hashes are hints only; every collision is checked by reference identity. */
-class ReactiveHash {
+internal class ReactiveHash {
 	#if wasm
 	static var state:Int = 0x6d2b79f5;
 	@:allow(haxeon.reactive.ReactiveSource)

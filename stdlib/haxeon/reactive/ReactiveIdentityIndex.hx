@@ -1,7 +1,7 @@
 package haxeon.reactive;
 
 /** An adaptive reader-local table. Hashes choose a bucket; identity decides equality. */
-class ReactiveIdentityIndex {
+internal class ReactiveIdentityIndex {
 	var sources:Array<Null<ReactiveSource>>;
 	var bits:Array<Int>;
 	var edges:Array<Null<ReactiveEdge>>;

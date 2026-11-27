@@ -4,7 +4,7 @@ import haxe.io.Bytes;
 
 /** One bounded, nonblocking handshake. Rejection waits for peer close or deadline
  * after sending Refused, so accepted bytes are not discarded by abrupt close. */
-class RpcHandshake {
+internal class RpcHandshake {
 	public var connection(default, null):Null<RpcConnection>;
 	public var failure(default, null):Null<RpcError>;
 	public var remoteApplication(default, null):Null<String>;
