@@ -119,6 +119,8 @@ Runtime and tools:
 - [0003](adr/0003-compiler-architecture.md): compiler architecture.
 - [0004](adr/0004-runtime-library-and-backends.md): runtime library written once, thin backends (proposed).
 - [0005](adr/0005-compilation-units.md): compilation units and the link step (proposed).
+- [0006](adr/0006-haxeon-only-compiler-source.md): the compiler's source may require Haxeon (accepted, gated).
+- [0007](adr/0007-standard-library-layout.md): the standard library under one `std` prefix, Haxe's API as a package (proposed).
 
 ## Reports
 
