@@ -103,6 +103,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			session.failIfRecovered([]);
 			return typed;
 		} catch (error:CompileError) {
+			// The declarations the table belongs to are shared with the programs kept before, which would keep it.
+			var types = session.types;
+			if (types != null)
+				types.endTyping();
 			// A failure after the bodies were typed carries them already; any other comes with the errors recovered before it.
 			if (Std.isOfType(error, TypingFailure))
 				throw error;

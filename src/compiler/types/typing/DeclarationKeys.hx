@@ -180,8 +180,14 @@ class ModuleDeclarationKeys {
 class DeclarationKeys {
 	final modules = new ObjectMap<SourceFile, ModuleDeclarationKeys>();
 
-	/** The keys of the functions no module's keys hold: those the semantic program made, and the copies the typer aliases (`alias`). */
-	final own = new ObjectMap<AstFunction, DeclarationKey>();
+	/**
+	 * The keys of the functions no module's keys hold: those the semantic program made or kept from an earlier canonicalization, and
+	 * the copies the typer aliases (`alias`); made again after `forgetLookups` the first time a lookup needs them.
+	 */
+	var own = new ObjectMap<AstFunction, DeclarationKey>();
+
+	var ownMade = false;
+	final semantic:SemanticProgram;
 
 	/** The keys of the functions of the modules looked up so far, `none` for one without (`forgetLookups`). */
 	var lookedUp = new ObjectMap<AstFunction, DeclarationKey>();
@@ -189,13 +195,21 @@ class DeclarationKeys {
 	final none = new DeclarationKey(null, null);
 
 	public function new(semantic:SemanticProgram, moduleKeys:Array<ModuleDeclarationKeys>) {
+		this.semantic = semantic;
 		for (module in moduleKeys) {
 			var file = module.file;
 			if (file != null)
 				modules.set(file, module);
+		}
+		makeOwn();
+	}
+
+	/** Makes the keys no module's keys hold (`own`). */
+	function makeOwn():Void {
+		ownMade = true;
+		for (module in modules)
 			for (entry in module.elsewhere)
 				own.set(entry.fn, entry.key);
-		}
 		var program = semantic.program;
 		for (decl in program.classes) {
 			var module = modules.get(decl.span.file);
@@ -247,15 +261,23 @@ class DeclarationKeys {
 			own.set(copy, found);
 	}
 
-	/** Forgets the keys looked up in the modules, once the program is typed: a later lookup finds them again. */
-	public function forgetLookups():Void
+	/**
+	 * Forgets the keys looked up and those made here, once the program is typed: the semantic program keeps the table. A later lookup
+	 * finds them again; the typer's aliases are typing's own.
+	 */
+	public function forgetLookups():Void {
 		lookedUp = new ObjectMap();
+		own = new ObjectMap();
+		ownMade = false;
+	}
 
 	/** The keys of `fn`, found in the module its span's file is the first time it is looked up. */
 	function resolve(fn:AstFunction):DeclarationKey {
 		var known = lookedUp.get(fn);
 		if (known != null)
 			return known;
+		if (!ownMade)
+			makeOwn();
 		known = own.get(fn);
 		if (known != null)
 			return known;
