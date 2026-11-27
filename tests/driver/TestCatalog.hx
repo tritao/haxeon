@@ -68,6 +68,7 @@ class TestCatalog {
 		"ReachabilityPruneMain",
 		"TypedMetadataMergeMain",
 		"WarmRebuildReuseMain",
+		"WarmEditCatalogueMain",
 		"TyperStateMain",
 		"WarmStageFactsMain",
 		"ManyValueArrayElementsMain",
