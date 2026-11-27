@@ -148,7 +148,7 @@ class ExpressionTyper {
 				scope,
 				expectedType);
 			case ThrowExpression(value, span): throwExpression(value, span, scope);
-			case Propagate(value, span): propagate(value, span, scope);
+			case Propagate(value, span): propagate(value, span, scope, expectedType);
 			case BreakExpression(span): loopJump(true, span);
 			case ContinueExpression(span): loopJump(false, span);
 			case Capture(_, _, span):
@@ -2260,8 +2260,9 @@ class ExpressionTyper {
 	 * error from the enclosing function, whose result is a `Result` with the same error type (`propagatedResult`). The value
 	 * is held once and its case tested, so no name is looked up: a module's own `Ok` or `Result` cannot be picked instead.
 	 */
-	function propagate(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
-		var held = bodyTyper.typeExpression(value, scope), heldType = compiler.types.Monomorphs.follow(held.type);
+	function propagate(value:AstExpression, span:SourceSpan, scope:Scope, ?expectedType:CompilerType):TypedExpression {
+		var held = bodyTyper.typeExpression(value, scope, propagatedExpectation(expectedType, span)),
+			heldType = compiler.types.Monomorphs.follow(held.type);
 		var error = switch heldType {
 			case TInstance(NominalKind.Enum, name, [_, error]) if (name == RESULT): error;
 			default:
@@ -2301,6 +2302,23 @@ class ExpressionTyper {
 			TVar(binding.id, held, span),
 			TIf(failed, [TReturn(returned, span)], [], span)
 		], ok.value), ok.value.type, span);
+	}
+
+	/**
+	 * What a `try` expects its value to be when the `Ok` value is expected to be `expectedType`: a `Result` of it, with the
+	 * function's error type, so a value that infers from its expected type does (`var config:Config = try decode(bytes)`).
+	 */
+	function propagatedExpectation(expectedType:Null<CompilerType>, span:SourceSpan):Null<CompilerType> {
+		if (expectedType == null || VoidArguments.isVoid(expectedType) || !session.hasBody())
+			return null;
+		var context = session.currentContext, declared = context.expectedReturnType ?? context.inferredResult;
+		var error = declared == null ? null : switch compiler.types.Monomorphs.follow(declared) {
+			case TInstance(NominalKind.Enum, name, [_, error]) if (name == RESULT): error;
+			default: null;
+		};
+		if (error == null)
+			error = session.monomorphs.create('the error of the Result that "try" takes', span);
+		return error == null ? null : TInstance(NominalKind.Enum, RESULT, [expectedType, error]);
 	}
 
 	/**
