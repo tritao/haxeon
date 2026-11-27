@@ -52,6 +52,15 @@ The current subset includes:
   `Circle` where a function returning its enum is expected or where it is the one case of that name in sight
   (`[1.0, 2.0].map(Circle)`, `result.mapErr(ConfigError.Unreadable)`). A generic enum's case takes its type arguments
   from the expected function type.
+- The root package declares `Result<T, E>` (`Ok(value)`, `Err(error)`) for failures a caller is meant to handle, with
+  `isOk`, `isErr`, `map`, `mapErr`, `andThen`, `unwrapOr` and `unwrap`, which throws for an `Err`. A failure that is a
+  bug throws instead.
+  Like the root package's other types, its name cannot be declared again beside a module's main type in the root
+  package.
+- A value whose type implements the root marker interface `MustUse` (a `Result`) must be used: an expression statement
+  that computes one, or the expression body of a lambda that returns `Void` and computes one, is `E1033`. `_ = value;`
+  evaluates a value and drops it on purpose, as a statement or as a lambda's body (`item -> _ = save(item)`); `_` names
+  no variable there, and `_ = value` is not a value itself.
 - A switch over an enum abstract without a default covers every declared value, as one over an enum covers every
   constructor: a missing value is `E1021`, naming it, and a switch that covers them all returns on every path when its
   arms do. A value outside the declared set (a native code newer than its binding, or a cast) throws at the switch.

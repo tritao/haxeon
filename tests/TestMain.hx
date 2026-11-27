@@ -349,8 +349,8 @@ class TestMain {
 			Frontend.compile('enum Storage { Value(value:Int); I8; I16; } function unpack(value:Storage, mode:Int):Int return switch value { case Value(number) if (mode == 0): number; case I8 if (mode == 1): 1; case I16 if (mode == 2): 2; case I8: 3; case I16: 4; case Value(_): 42; } function main():Int return unpack(Value(0), 3);');
 		if (new IrInterpreter(guardedEnumSwitchProgram).run("main") != 42)
 			throw "Guarded enum cases incorrectly hid an unguarded fallback constructor pattern";
-		Frontend.compile('enum Result { Value(value:Int, ?message:String); } function main():Int { var result:Result = Result.Value(42); switch result { case Result.Value(value): return value; } }');
-		Frontend.compile('enum Result { Values(values:Array<Int>); } function main():Int { var result:Result = Values([40, 2]); return switch result { case Values([first, second]): first + second; default: 0; }; }');
+		Frontend.compile('enum Reply { Value(value:Int, ?message:String); } function main():Int { var result:Reply = Reply.Value(42); switch result { case Reply.Value(value): return value; } }');
+		Frontend.compile('enum Reply { Values(values:Array<Int>); } function main():Int { var result:Reply = Values([40, 2]); return switch result { case Values([first, second]): first + second; default: 0; }; }');
 		Frontend.compile('enum Severity { Error; Warning; } function severity(?value:Severity = Error):Severity return value; function main():Int { var value = severity(); return 42; }');
 		Frontend.compile('enum Value { Present(value:Int); } function main():Int { var value:Null<Value> = true ? null : Present(42); return 42; }');
 		Frontend.compile('enum Value { Present(value:Int); } function main():Int { var value:Value = Present(1); value = Present(42); return 42; }');
@@ -436,7 +436,7 @@ class TestMain {
 			|| plainResult.runtimeDependencies.length != 0)
 			throw "Typing session runtime dependencies were incorrect or leaked between programs";
 		Frontend.compile('function values():Array<Int> { var result = []; result.push(42); return result; } function main():Int { return values()[0]; }');
-		Frontend.compile('typedef Result = { values:Array<Int> }; function values():Result { var values = []; return { values: values }; } function main():Int return values().values.length;');
+		Frontend.compile('typedef Reply = { values:Array<Int> }; function values():Reply { var values = []; return { values: values }; } function main():Int return values().values.length;');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
 			'function main():Int return if (true) { var value = 0; if (true) value = 21; else value = 0; value + 21; } else 0;'))
 			.tokenize()).parseProgram();
@@ -616,6 +616,15 @@ class TestMain {
 			'Enum switch is missing cases: W');
 		expectCompileError('enum I { A; B(x:Int); } enum O { W(i:I); P(v:Int); } enum R<T, E> { G(v:T); F(e:E); } function main():Int { var r:R<Int, O> = G(1); return switch r { case G(_): 1; case F(W(A)): 2; case F(P(_)): 3; }; }',
 			'Enum switch is missing cases: F');
+		// A Result is must-use: dropping one is E1033 unless `_ = value;` drops it on purpose, which is a statement only.
+		var mustUse =
+			'enum SaveError { Full; } function save():Result<Int, SaveError> return Ok(1); function each(f:Int->Void):Void f(1);';
+		var dropped = 'A value of type Result<Int, SaveError> must be used: handle it, or drop it with "_ = value;"';
+		expectCompileError(mustUse + ' function main():Int { save(); return 0; }', dropped, true);
+		expectCompileError(mustUse + ' function main():Int { each(n -> save()); return 0; }', dropped, true);
+		expectCompileError(mustUse + ' function main():Int { each(n -> { save(); }); return 0; }', dropped, true);
+		expectCompileError(mustUse + ' function main():Int { var x = (_ = save()); return 0; }',
+			'"_ = value" drops a value, so it is a statement, not a value', true);
 		// A generic enum's case used as a function takes its type arguments from the expected function type.
 		expectCompileError('enum R<T> { G(v:T); } function main():Int { var f = R.G; return 0; }',
 			'Cannot infer the type arguments of "R.G" used as a function; give it an expected function type or call it');

@@ -101,8 +101,8 @@ hold: stock Haxe parses neither enum methods nor `try` without `catch`. Its fail
 | Stage | Contents | Status |
 |---|---|---|
 | 1 | Enum methods with type parameters of their own (`map<U>`), which the `Result` methods need | Implemented |
-| 2 | `Result<T, E>` in the root package, with its methods | |
-| 3 | `MustUse`, `E1033` and `_ = expr;` | |
+| 2 | `Result<T, E>` in the root package, with its methods; nested patterns count for switch coverage, and a case with a payload is a function value (`mapErr(ConfigError.Io)`) | Implemented |
+| 3 | `MustUse`, `E1033` and `_ = expr;` | Implemented |
 | 4 | `Void` as the unit type | |
 | 5 | `try` propagation | |
 | 6 | The migration above, with `Future<Result<T, E>>` for RPC and platform requests | |

@@ -364,6 +364,7 @@ class StatementTyper {
 					case TVoid: true;
 					default: false;
 				}) && context.contextualVoidLambda) {
+					rejectDroppedMustUse(value, span);
 					output.push(TExpression(value, span));
 					output.push(TReturnVoid(span));
 				} else {
@@ -402,13 +403,35 @@ class StatementTyper {
 					fail(DiagnosticCode.LOOP_CONTROL, "continue is only valid inside a loop", span);
 				[TContinue(span)];
 			case Expression(expression, span):
-				[TExpression(bodyTyper.typeExpression(expression, scope, (switch (result) {
+				var value = bodyTyper.typeExpression(expression, scope, (switch (result) {
 					case TVoid: true;
 					default: false;
 				})
-					|| context.contextualVoidLambda ? TVoid : null), span)];
+					|| context.contextualVoidLambda ? TVoid : null);
+				rejectDroppedMustUse(value, span);
+				[TExpression(value, span)];
 			default: null;
 		};
+	}
+
+	/** The target of `_ = value;`, which drops the value. */
+	static inline final DISCARD = "_";
+
+	/**
+	 * Rejects dropping `value` when its type is must-use (`MustUse`): by an expression statement, or as the expression body of a
+	 * lambda that returns Void. `_ = value;` drops one on purpose.
+	 */
+	function rejectDroppedMustUse(value:TypedExpression, span:SourceSpan):Void {
+		// Only a nominal type declares it: Never and Dynamic meet every bound, and no value of theirs is must-use.
+		var type = compiler.types.Monomorphs.follow(value.type),
+			nominal = switch type {
+				case TInstance(_, _, _): true;
+				default: false;
+			};
+		if (nominal && DeclaredConformance.has(session, type, "MustUse"))
+			fail(DiagnosticCode.DROPPED_MUST_USE,
+				'A value of type ${MissingMember.haxeType(type)} must be used: handle it, or drop it with "_ = value;"',
+				span);
 	}
 
 	public function typeIncrement(name:String, delta:Int, span:SourceSpan, scope:Scope):TypedStatement {
@@ -519,6 +542,13 @@ class StatementTyper {
 	}
 
 	public function typeAssignmentValue(assignment:AstStatement, span:SourceSpan, scope:Scope):TypedExpression {
+		switch assignment {
+			case Assignment(name, _, _) if (name == DISCARD):
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+					'"_ = value" drops a value, so it is a statement, not a value',
+					span);
+			default:
+		}
 		var assigned = new AssignedValue(session, span);
 		var generated = typeGeneratedAssignment(assignment, scope, assigned);
 		if (generated != null)
@@ -548,6 +578,9 @@ class StatementTyper {
 
 	public function typeAssignment(name:String, expression:AstExpression, span:SourceSpan, scope:Scope,
 			?assigned:AssignedValue, ?bound:LocalBinding):TypedStatement {
+		// `_ = value;` evaluates the value and drops it on purpose: `_` names no variable there.
+		if (name == DISCARD && bound == null)
+			return TExpression(bodyTyper.typeExpression(expression, scope), span);
 		var written = name;
 		name = sourceTarget(name, span, scope);
 		var dot = name.lastIndexOf(".");

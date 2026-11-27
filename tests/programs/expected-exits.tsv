@@ -709,8 +709,10 @@ dynamic-method-owners	42
 if-empty-block-branch	42
 enum-members	42
 enum-generic-methods	42
+result	42
 enum-case-functions	42
 switch-nested-coverage	42
+must-use	42
 enum-case-constants	42
 enum-raw-values	42
 switch-large-table	42

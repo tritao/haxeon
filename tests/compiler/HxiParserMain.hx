@@ -233,33 +233,33 @@ class HxiParserMain {
 			&& genericNatives[0].name == "generic.validate",
 			"projection policies should rename types, fields, functions, constants, and native references consistently");
 		var resultPolicyModel = parseValidated("result-policy.hxi",
-			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_result : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_result; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_result; }'),
+			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_status : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_status; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_status; }'),
 			resultPolicyProfile = HxiProjectionProfile.parse("result-policy.hxmap",
-				'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}'),
+				'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_status":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}'),
 			resultPolicySource = HxiProjection.source(resultPolicyModel, null, null, null, resultPolicyProfile);
 		HxiProjection.validateProfile("result-policy.hxmap", resultPolicyModel, null, null, resultPolicyProfile);
-		expect(resultPolicySource.indexOf("extern function __hxi_raw_nk_run(arg0:Int):Result") >= 0
+		expect(resultPolicySource.indexOf("extern function __hxi_raw_nk_run(arg0:Int):Status") >= 0
 			&& resultPolicySource.indexOf("function nk_run_checked(seed:Int):Void") >= 0
 			&& resultPolicySource.indexOf("throw new ProjectionError(__result, \"nk_run\", __diagnostic)") >= 0
 			&& resultPolicySource.indexOf("function nk_create_checked(seed:Int):Int") >= 0
 			&& resultPolicySource.indexOf("return __result.output;") >= 0,
 			"result projection policies should preserve raw status calls and generate checked calls with typed output values");
 		var invalidSuccessPolicy = HxiProjectionProfile.parse("bad-result-policy.hxmap",
-			'{"interface":"result_policy","resultPolicies":{"nk_result":{"successValue":"NK_MISSING","errorType":"ProjectionError"}}}');
+			'{"interface":"result_policy","resultPolicies":{"nk_status":{"successValue":"NK_MISSING","errorType":"ProjectionError"}}}');
 		expectProfileError(function() HxiProjection.validateProfile("bad-result-policy.hxmap", resultPolicyModel, null,
 			null, invalidSuccessPolicy),
-			"resultPolicies.nk_result.successValue");
+			"resultPolicies.nk_status.successValue");
 		expectProfileError(function() HxiProjection.validateProfile("omitted-diagnostic.hxmap", resultPolicyModel,
 			["nk_last_error" => true], null,
 			resultPolicyProfile),
 			"cannot use omitted diagnostic function");
 		var resultPolicyCompiler = newCompiler();
 		resultPolicyCompiler.addFfiProjection("result-policy.hxmap",
-			'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}');
+			'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_status":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}');
 		resultPolicyCompiler.addFfiInterface("result-policy.hxi",
-			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_result : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_result; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_result; }');
+			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_status : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_status; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_status; }');
 		resultPolicyCompiler.update("ProjectionError.hx",
-			'class ProjectionError { public final result:result_policy.Result; public final operation:String; public final diagnostic:Null<String>; public function new(result:result_policy.Result, operation:String, diagnostic:Null<String>) { this.result = result; this.operation = operation; this.diagnostic = diagnostic; } }');
+			'class ProjectionError { public final result:result_policy.Status; public final operation:String; public final diagnostic:Null<String>; public function new(result:result_policy.Status, operation:String, diagnostic:Null<String>) { this.result = result; this.operation = operation; this.diagnostic = diagnostic; } }');
 		var resultPolicyMain =
 			'import result_policy; function main():Int { result_policy.nk_run_checked(1); return result_policy.nk_create_checked(1); }';
 		resultPolicyCompiler.update("ResultPolicyMain.hx", resultPolicyMain);
@@ -420,9 +420,9 @@ class HxiParserMain {
 		aliasCompiler.addFfiProjection("native-names.hxmap",
 			'{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
 		aliasCompiler.addFfiInterface("native-names.hxi",
-			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; } extern fn check(value: nk_result) -> nk_result; }');
+			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_status : i32 { NK_OK = 0; } extern fn check(value: nk_status) -> nk_status; }');
 		aliasCompiler.update("AliasMain.hx",
-			"import native_names.Result; function main():Int { var value:Result = Result.Ok; return value.rawValue; }");
+			"import native_names.Status; function main():Int { var value:Status = Status.Ok; return value.rawValue; }");
 		aliasCompiler.analyze("AliasMain");
 		var forkedProjectionCompiler = newCompiler();
 		forkedProjectionCompiler.addFfiProjection("renamed.hxmap",
@@ -449,8 +449,8 @@ class HxiParserMain {
 			"named enums should retain their nominal type in fixed-layout structure fields");
 		var enumCompiler = newCompiler();
 		enumCompiler.addFfiInterface("enums.hxi",
-			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum Result : i32 { OK = 0; ERROR = -1; } extern fn check(value: Result) -> Result; }');
-		enumCompiler.update("EnumMain.hx", "import enums; function main():Result return enums.check(Result.Ok);");
+			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum Status : i32 { OK = 0; ERROR = -1; } extern fn check(value: Status) -> Status; }');
+		enumCompiler.update("EnumMain.hx", "import enums; function main():Status return enums.check(Status.Ok);");
 		enumCompiler.analyze("EnumMain");
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i64 { A = 0; } }',
 			"requires an 8/16/32-bit integer representation");
@@ -790,16 +790,16 @@ class HxiParserMain {
 		expect(implicitValueOwnerRejected,
 			"ordinary value-handle returns must remain borrowed unless @owned is explicit");
 		var statusOwnedValue = parseValidated("status-owned-value.hxi",
-			'interface status_owned @target("x86_64-linux-gnu") @library("status_owned") { handle window : u32 @destroy("window_destroy"); enum Result : i32 { OK = 0; FAILED = -1; } extern fn create_window() -> window @owned; extern fn window_destroy(value: window) -> Result @symbol("window_destroy"); }'),
+			'interface status_owned @target("x86_64-linux-gnu") @library("status_owned") { handle window : u32 @destroy("window_destroy"); enum Status : i32 { OK = 0; FAILED = -1; } extern fn create_window() -> window @owned; extern fn window_destroy(value: window) -> Status @symbol("window_destroy"); }'),
 			statusOwnedSource = HxiProjection.source(statusOwnedValue);
-		expect(statusOwnedSource.indexOf("public function close():Null<Result>") >= 0
+		expect(statusOwnedSource.indexOf("public function close():Null<Status>") >= 0
 			&& statusOwnedSource.indexOf("return status_owned.window_destroy(__value)") >= 0,
 			"status-returning destroy functions should preserve their ABI result in an idempotent owner close");
 		var statusOwnerCompiler = newCompiler();
 		statusOwnerCompiler.addFfiInterface("status_owned.hxi",
-			'interface status_owned @target("x86_64-linux-gnu") @library("status_owned") { handle window : u32 @destroy("window_destroy"); enum Result : i32 { OK = 0; FAILED = -1; } extern fn create_window() -> window @owned; extern fn window_destroy(value: window) -> Result @symbol("window_destroy"); }');
+			'interface status_owned @target("x86_64-linux-gnu") @library("status_owned") { handle window : u32 @destroy("window_destroy"); enum Status : i32 { OK = 0; FAILED = -1; } extern fn create_window() -> window @owned; extern fn window_destroy(value: window) -> Status @symbol("window_destroy"); }');
 		statusOwnerCompiler.update("StatusOwnerMain.hx",
-			"import status_owned; function main():Int { var owner = status_owned.create_window(); var result:Null<Result> = owner.close(); owner.close(); return owner.isClosed() ? 0 : 1; }");
+			"import status_owned; function main():Int { var owner = status_owned.create_window(); var result:Null<Status> = owner.close(); owner.close(); return owner.isClosed() ? 0 : 1; }");
 		statusOwnerCompiler.compile("StatusOwnerMain");
 		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { handle resource : u32; extern fn create() -> resource @owned; }',
 			'requires handle "resource" to declare @destroy');

@@ -281,6 +281,28 @@ report each one:
 src/stats/Meter.hx:8:2: error[E1032]: Public method "Meter.reset" has no doc comment; document it, or make it internal if it is not for other packages
 ```
 
+## E1033: Must-use value dropped
+
+A value whose type implements `MustUse`, such as a `Result`, is computed and then dropped: by an expression statement, or
+by a lambda whose expression body computes it where the lambda returns `Void` (`items.forEach(item -> save(item))`).
+Dropping a `Result` drops its failure unseen. Handle the value (`switch`, `unwrapOr`, `try`), or drop it on purpose with
+`_ = value;`.
+
+```haxe
+enum SaveError {
+	Full;
+}
+
+class Main {
+	static function save(text:String):Result<Int, SaveError>
+		return text.length > 8 ? Err(Full) : Ok(text.length);
+
+	static function main():Void {
+		save("notes"); // the Result of save is dropped
+	}
+}
+```
+
 ## E2001: Missing module or type
 
 A module dependency or a type within a module could not be resolved. Check its spelling, package path, module contents, and project source roots or dependencies.

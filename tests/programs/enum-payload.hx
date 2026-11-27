@@ -1,14 +1,14 @@
-enum Result {
+enum Reply {
 	Ok(Int);
 	Error(String);
 }
 
 function main():Int {
-	var result:Result = Result.Ok(42);
+	var result:Reply = Reply.Ok(42);
 	switch (result) {
-		case Result.Ok(value):
+		case Reply.Ok(value):
 			return value;
-		case Result.Error(_):
+		case Reply.Error(_):
 			return 0;
 		default:
 			return 0;

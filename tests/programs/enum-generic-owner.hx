@@ -2,7 +2,7 @@ enum Outcome<T> {
 	Success(value:T);
 	Stopped;
 }
-typedef Result<T> = Outcome<T>;
+typedef Reply<T> = Outcome<T>;
 class Base<T> {
 	var value:Outcome<T>;
 	public function new(v:Outcome<T>) value = v;
@@ -12,9 +12,9 @@ class Derived<T> extends Base<T> {
 	public function new(v:Outcome<T>) super(v);
 }
 class AliasHolder<T> {
-	var value:Result<T>;
-	public function new(v:Result<T>) value = v;
-	public function get():Result<T> return value;
+	var value:Reply<T>;
+	public function new(v:Reply<T>) value = v;
+	public function get():Reply<T> return value;
 }
 function main():Int {
 	var a:Derived<String>= new Derived(Success("a"));

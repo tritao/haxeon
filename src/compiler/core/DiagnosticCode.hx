@@ -41,6 +41,7 @@ enum abstract DiagnosticCode(String) to String {
 	var PRIVATE_ACCESS = "E1030";
 	var INTERNAL_ACCESS = "E1031";
 	var MISSING_DOCUMENTATION = "E1032";
+	var DROPPED_MUST_USE = "E1033";
 	var MISSING_MODULE = "E2001";
 	var HXI_ERROR = "E3001";
 	var SHADER_ERROR = "E4001";

@@ -2073,8 +2073,16 @@ class Parser {
 		// The terminator belongs to the surrounding expression statement. If
 		// this blockless closure is assigned, consuming it here makes the outer
 		// parser see the following statement where it still expects a semicolon.
-		return [Return(value, start.merge(expressionSpan(value)))];
+		return expressionBody(value, start.merge(expressionSpan(value)));
 	}
+
+	/** A function's expression body: its value returned, or the statement `_ = value;` that drops it. */
+	static function expressionBody(value:AstExpression, span:SourceSpan):Array<AstStatement>
+		return switch value {
+			case AssignmentValue(Assignment(name, expression, assignmentSpan), _) if (name == "_"):
+				[Assignment(name, expression, assignmentSpan)];
+			default: [Return(value, span)];
+		};
 
 	function parseArrowFunctionBody():Array<AstStatement> {
 		// `{name: ...}` is an object literal, as anywhere a value starts (`() -> {key: k, value: v}`); any other brace opens a block.
@@ -2092,7 +2100,7 @@ class Parser {
 		if (check(TokenKind.If) && !ifHasElseAhead())
 			return [parseVoidIf()];
 		var value = parseExpression();
-		return [Return(value, expressionSpan(value))];
+		return expressionBody(value, expressionSpan(value));
 	}
 
 	/** Whether the `{` at the current token starts an object literal's first field, `name:` or `"name":`. */
