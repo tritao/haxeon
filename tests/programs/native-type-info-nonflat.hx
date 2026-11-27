@@ -67,7 +67,7 @@ function main():Int {
 	if (nestedDefaults[3].defaultValue != null) return 19;
 	if (labelDefault == null || labelDefault.type != "String" || labelDefault.value != "leaf") return 20;
 	if (enabledDefault == null || enabledDefault.type != "Bool" || enabledDefault.value != true) return 21;
-	var constructedDefaults = new DescriptorDefaultLeaf(absent:0);
+	var constructedDefaults = new DescriptorDefaultLeaf(absent: 0);
 	if (constructedDefaults.zero != 0
 		|| constructedDefaults.ratio != 1.25 || constructedDefaults.explicitNull != null
 		|| constructedDefaults.absent != 0

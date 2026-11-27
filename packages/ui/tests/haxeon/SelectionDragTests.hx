@@ -146,7 +146,7 @@ class SelectionDragTests {
 		edgeStyle.width = LayoutAxis.fixed(200.0);
 		edgeStyle.height = LayoutAxis.fixed(64.0);
 		var edgeText = [for (line in 0...80) "row " + line].join("\n");
-		var edgeArea = new TextField("selection-edge-scroll", edgeText, null, edgeStyle, multiline:true);
+		var edgeArea = new TextField("selection-edge-scroll", edgeText, null, edgeStyle, multiline: true);
 		var edgeFrame = new LayoutFrame(200.0, 64.0);
 		var edgeRoot = context.submit(edgeArea, edgeFrame);
 		var edgeState:State<TextEditorState> = context.buildContext.existingState(edgeRoot.id);

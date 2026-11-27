@@ -106,7 +106,7 @@ class KeyChordTests {
 		enterOn("item-0");
 		check(tree.isExpanded("item-0"), "Enter without a handler no longer toggles a branch");
 		tree.setExpanded("item-0", false);
-		tree = new TreeView("items", items, style, onActivate:function(key, _) {
+		tree = new TreeView("items", items, style, onActivate: function(key, _) {
 			activated.push(key);
 			return consume;
 		});

@@ -42,7 +42,7 @@ import haxeon.ui.widgets.text.TextField;
 		style.radiusBottomLeft = style.radiusBottomRight = 5.0;
 		return new TextField("demo-notes", explorer.state.controls.notesValue, function(value) {
 			explorer.state.controls.notesValue = value;
-		}, style, "Multilingual notes", multiline:true);
+		}, style, "Multilingual notes", multiline: true);
 	}
 
 	static function slider(explorer:UiExplorer):Slider {

@@ -66,8 +66,8 @@ class TreeSelectionTests {
 		var menus:Array<String> = [];
 		var items = new Items();
 		function itemsTree(multiSelect:Bool):TreeView
-			return new TreeView("items", items, style, onItemClicked:(key, _) -> opened.push(key),
-				onItemContextMenu:(key, _) -> menus.push(key), multiSelect:multiSelect);
+			return new TreeView("items", items, style, onItemClicked: (key, _) -> opened.push(key),
+				onItemContextMenu: (key, _) -> menus.push(key), multiSelect: multiSelect);
 		var tree = itemsTree(true);
 		var frame = new LayoutFrame(240.0, 320.0);
 		var build = function():View return tree;
@@ -123,10 +123,10 @@ class TreeSelectionTests {
 		controlled.buildContext.environment.reducedMotion = true;
 		var choice = new Signal<Null<String>>(null), notifications = 0;
 		var controlledBuild = function():View return new TrackedScope("controlled-tree", function() {
-			return new TreeView("controlled-items", new Items(), style, onSelectionChanged:function(key) {
+			return new TreeView("controlled-items", new Items(), style, onSelectionChanged: function(key) {
 				choice.value = key;
 				notifications++;
-			}, selectionProvider:() -> choice.value);
+			}, selectionProvider: () -> choice.value);
 		});
 		// Build the parent each frame: a new body each time, so the scope runs again and follows the owner.
 		for (desired in ["item-1", "item-8", null, "missing", "item-2"]) {

@@ -76,8 +76,8 @@ class SearchField implements View {
 			var input = new TextField("input", value, function(next) {
 				value = next;
 				if (onChange != null) onChange(next);
-			}, inputStyle, label, placeholder:placeholder, enabled:enabled, classes:["search-input"],
-				onSubmit:onSubmit);
+			}, inputStyle, label, placeholder: placeholder, enabled: enabled, classes: ["search-input"],
+				onSubmit: onSubmit);
 
 			var children:Array<KeyedView> = [new KeyedView("icon", leading), new KeyedView("input", input)];
 			if (value.length > 0) {

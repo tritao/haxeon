@@ -209,18 +209,18 @@ class ComboBox<T> implements View {
 				queryState.update(query);
 				if (hasQueryChangeHandler) onQueryChange(query);
 				open();
-			}, inputStyle, placeholder, enabled:enabled, classes:["combo-trigger"],
-				semanticRole:AccessibilityRole.ComboBox,
-				semanticActions:AccessibilityAction.SetValue | AccessibilityAction.SetSelection | (isOpen
+			}, inputStyle, placeholder, enabled: enabled, classes: ["combo-trigger"],
+				semanticRole: AccessibilityRole.ComboBox,
+				semanticActions: AccessibilityAction.SetValue | AccessibilityAction.SetSelection | (isOpen
 				? AccessibilityAction.Collapse : AccessibilityAction.Expand),
-				semanticStates:AccessibilityState.HasPopup
+				semanticStates: AccessibilityState.HasPopup
 				| (isOpen ? AccessibilityState.Expanded : AccessibilityState.empty()),
-				overlays:[
+				overlays: [
 					SelectionIndicator.fieldFrame("input-frame"),
 					SelectionIndicator.search("input-search",
 						enabled ? context.theme.tokens.textSecondary : context.theme.tokens.textDisabled)
 				],
-				onSubmit:function(_) {
+				onSubmit: function(_) {
 				if (openState.value != true) open();
 				else submitActive();
 			});

@@ -110,7 +110,7 @@ class TokenRoles {
 		for (step in 0...code.length)
 			if (kind(step) == TokenKind.Colon) {
 				var start = tokens[code[step]].start;
-				if (caseColons.exists(start) || colonNeedsSpace(step))
+				if (caseColons.exists(start) || colonNeedsSpace(step) || namesArgument(step))
 					spacedColons.set(start, true);
 			}
 		for (step in 0...code.length)
@@ -267,6 +267,87 @@ class TokenRoles {
 	 * Whether a non-case colon is spaced: an object field's or a conditional's. Inside type arguments (`Array<{a:Int}>`) and in a
 	 * typedef it annotates a type; inside an object literal (the nearest enclosing brace that is not a block) it names a field.
 	 */
+	/**
+	 * Whether `colon` follows the name of a named argument (`f(width: 10)`): an identifier first in an argument of a call,
+	 * not a parameter of a function or of an enum constructor's declaration (`Case(a:Int)`), whose colons are types.
+	 */
+	function namesArgument(colon:Int):Bool {
+		if (colon < 2 || kind(colon - 1) != TokenKind.Identifier)
+			return false;
+		var open = colon - 2;
+		if (kind(open) == TokenKind.Comma) {
+			var depth = 0;
+			open--;
+			while (open >= 0) {
+				if (closesTypeArguments(open))
+					depth++;
+				else if (opensTypeArguments(open)) {
+					if (depth == 0)
+						return false;
+					depth--;
+				} else
+					switch kind(open) {
+						case TokenKind.RightParen | TokenKind.RightBracket | TokenKind.RightBrace:
+							depth++;
+						case TokenKind.LeftParen if (depth == 0):
+							break;
+						case TokenKind.LeftParen | TokenKind.LeftBracket | TokenKind.LeftBrace:
+							if (depth == 0)
+								return false;
+							depth--;
+						case TokenKind.Semicolon if (depth == 0):
+							return false;
+						default:
+					}
+				open--;
+			}
+		}
+		if (open < 1 || kind(open) != TokenKind.LeftParen || parameterOpens.exists(tokens[code[open]].start))
+			return false;
+		var callee = open - 1;
+		return switch kind(callee) {
+			case TokenKind.RightParen | TokenKind.RightBracket: true;
+			case TokenKind.Identifier: !inEnumBody(callee);
+			default: closesTypeArguments(callee);
+		};
+	}
+
+	/** Whether `step` is directly inside an enum's body, where `Name(` declares a constructor. */
+	function inEnumBody(step:Int):Bool {
+		var depth = 0, cursor = step - 1;
+		while (cursor >= 0) {
+			switch kind(cursor) {
+				case TokenKind.RightParen | TokenKind.RightBracket | TokenKind.RightBrace:
+					depth++;
+				case TokenKind.LeftParen | TokenKind.LeftBracket:
+					if (depth == 0)
+						return false;
+					depth--;
+				case TokenKind.LeftBrace:
+					if (depth > 0)
+						depth--;
+					else {
+						// The header before the body's brace, back to the end of the previous declaration.
+						var header = cursor - 1;
+						while (header >= 0) {
+							switch kind(header) {
+								case TokenKind.Enum:
+									return true;
+								case TokenKind.Semicolon | TokenKind.RightBrace | TokenKind.LeftBrace:
+									return false;
+								default:
+							}
+							header--;
+						}
+						return false;
+					}
+				default:
+			}
+			cursor--;
+		}
+		return false;
+	}
+
 	function colonNeedsSpace(colon:Int):Bool {
 		// The nearest enclosing brace that is not a block, if any; the walk goes on past it, since a structure type inside type
 		// arguments (`Array<{a:Int}>`) is still a type.

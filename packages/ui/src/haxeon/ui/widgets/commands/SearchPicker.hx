@@ -144,13 +144,13 @@ class SearchPicker implements View {
 		var input = new TextField("cv-input", query, function(value) {
 			release();
 			model.setQuery(value);
-		}, inputStyle, placeholder, new TextStyle(15), tokens.textPrimary, placeholder:placeholder,
-			onSubmit:function(_) {
+		}, inputStyle, placeholder, new TextStyle(15), tokens.textPrimary, placeholder: placeholder,
+			onSubmit: function(_) {
 			model.navigate(UiKey.Enter, haxeon.ui.core.UiEvent.UiModifier.empty(), 1);
 			onChanged();
 		},
-			onSelectionChange:selectQuery ? _->release() : null,
-			selectionProvider:selectQuery ? () -> (selectQuery ? new TextSelection(0, end) : null) : null);
+			onSelectionChange: selectQuery ? _ -> release() : null,
+			selectionProvider: selectQuery ? () -> (selectQuery ? new TextSelection(0, end) : null) : null);
 		var focusedInput = new SearchPickerInput(input, function(ctx, node) {
 			if (focusPending) {
 				ctx.requestFocusAfterLayout(node.id);

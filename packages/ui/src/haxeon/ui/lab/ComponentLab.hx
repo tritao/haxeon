@@ -305,7 +305,7 @@ class ComponentLab implements Observable {
 		style.width = LayoutAxis.fixed(520.0);
 		style.height = LayoutAxis.fixed(220.0);
 		return new TextField("multiline-editor", multilineValue, next -> multilineValue = next, style, "Example notes",
-			multiline:true);
+			multiline: true);
 	}
 
 	function tokensStory():View {

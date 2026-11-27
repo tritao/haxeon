@@ -370,8 +370,9 @@ class PropertyEditor implements View implements Observable {
 			editorKey:String,
 			writable:Bool):View {
 		return new TextField(editorKey, draftOrValue(descriptor, value), next -> setDraft(descriptor, next),
-			FieldInputStyle, accessibleName(descriptor), placeholder:isMixed(value) ? "Mixed" : null, enabled:writable,
-			classes:["property-input"], onSubmit:next->commitText(context, descriptor, next));
+			FieldInputStyle, accessibleName(descriptor), placeholder: isMixed(value) ? "Mixed" : null,
+			enabled: writable,
+			classes: ["property-input"], onSubmit: next -> commitText(context, descriptor, next));
 	}
 
 	static function isMixed(value:PropertyValue):Bool {
