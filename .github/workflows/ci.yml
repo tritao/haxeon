@@ -144,7 +144,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $haxeon build --verbosity=normal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $workers = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'serve|CompilerServer' } |
+          $workers = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*$env:HAXEON_COMPILER_SESSION_DIR*" } |
             ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" } | Out-String
           $sessions = Get-ChildItem $env:HAXEON_COMPILER_SESSION_DIR -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Name) $($_.Length)" } | Out-String
           (Get-Content src/Main.hx -Raw) -replace 'Hello', 'Hello again' | Set-Content src/Main.hx

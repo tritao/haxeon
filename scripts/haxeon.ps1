@@ -22,7 +22,14 @@ if ($env:HAXEON_NATIVE_READY -ne "1") {
         exit $LASTEXITCODE
     }
 }
-# Test libraries that the programs the CLI runs load by name.
+# Test libraries that the programs the CLI runs load by name. A script run with `&` shares its caller's environment,
+# and the inherited PATH selects the compile server's worker, so the caller's PATH is restored afterwards.
+$CallerPath = $env:PATH
 $env:PATH = "$(Join-Path $RootDir 'out');$env:PATH"
-& $Haxeon @args
-exit $LASTEXITCODE
+try {
+    & $Haxeon @args
+    $Status = $LASTEXITCODE
+} finally {
+    $env:PATH = $CallerPath
+}
+exit $Status
