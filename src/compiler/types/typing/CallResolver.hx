@@ -1285,9 +1285,14 @@ class CallResolver {
 			method = session.signatures.get(methodKey);
 		if (method == null)
 			fail(DiagnosticCode.DECLARATION_OR_MODIFIER, 'Missing signature for method "$methodKey"', span);
-		if (methodInfo.owner == StdlibNames.RPC_CONNECTION && (method.name == "serve" || method.name == "of"))
-			return RpcServiceTyping.typeCall(session, bodyTyper, receiver, methodKey, method.name, arguments, span,
-				scope);
+		if (methodInfo.owner == StdlibNames.RPC_CONNECTION && (method.name == "serve" || method.name == "of")) {
+			// The service interface is the call's type argument: `connection.serve<Greeter>(implementation)`.
+			var written:Map<String, CompilerType> = [];
+			bindTypeArguments(method.name, ["Service"], written, span);
+			return RpcServiceTyping.typeCall(session, bodyTyper, receiver, methodKey, method.name,
+				written.get("Service"),
+				arguments, span, scope);
+		}
 		if (session.relations.isValueClass(receiver.type) && !session.isPureCall(methodKey)
 			&& !session.isReadOnlyReceiver(methodKey))
 			ValuePlaceRules.requireWritable(session, receiver, span);

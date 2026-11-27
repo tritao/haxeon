@@ -10,6 +10,8 @@ import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.TemporaryLocal;
 import compiler.syntax.RpcServiceDeclaration;
+import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.Scope;
@@ -18,20 +20,26 @@ import compiler.types.analysis.Scope;
 @:access(compiler.types.typing.BodyTyper)
 class RpcServiceTyping {
 	public static function typeCall(session:TypingSession, body:BodyTyping, receiver:TypedExpression, methodKey:String,
-			operation:String,
-			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+			operation:String, serviceType:Null<CompilerType>, arguments:Array<AstExpression>, span:SourceSpan,
+			scope:Scope):TypedExpression {
 		var serving = operation == "serve";
-		if (serving ? arguments.length != 2 : arguments.length < 1 || arguments.length > 2)
-			BodyTyper.fail(DiagnosticCode.CALL_FORM,
-				serving ? "RpcConnection.serve expects an interface and its implementation"
-				: "RpcConnection.of expects an interface and an optional timeout", span);
-		var owner = switch arguments[0] {
-			case Variable(name, _) if (session.interfaceDecls.exists(name)): name;
+		var owner = switch serviceType {
+			case TInstance(NominalKind.Interface, name, []): name;
+			case null:
+				BodyTyper.fail(DiagnosticCode.CALL_FORM,
+					'RpcConnection.$operation takes the service interface as a type argument: $operation<Service>(...)',
+					span);
+				null;
 			default:
-				BodyTyper.fail(DiagnosticCode.VALUE_CONVERSION, 'RpcConnection.$operation expects a service interface',
+				BodyTyper.fail(DiagnosticCode.VALUE_CONVERSION,
+					'RpcConnection.$operation expects a service interface, got ${compiler.semantic.SemanticSignature.display(serviceType)}',
 					span);
 				null;
 		};
+		if (serving ? arguments.length != 1 : arguments.length > 1)
+			BodyTyper.fail(DiagnosticCode.CALL_FORM,
+				serving ? "RpcConnection.serve expects the service's implementation"
+				: "RpcConnection.of expects an optional timeout", span);
 		var service = session.interfaceDecls.required(owner);
 		RpcServiceDeclaration.validate(service,
 			(message, at) -> BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, message, at));
@@ -62,7 +70,7 @@ class RpcServiceTyping {
 			argumentValue = TemporaryVariable(argument, span),
 			bindings:Array<AstStatement> = [
 				TemporaryDeclaration(argument, serving ? NamedType(owner) : IntType,
-					arguments.length == 2 ? arguments[1] : IntegerLiteral(1000, span), span)
+					arguments.length == 1 ? arguments[0] : IntegerLiteral(1000, span), span)
 			],
 			fields:Array<compiler.syntax.Ast.AstObjectField> = [],
 			routes:Array<AstExpression> = [];

@@ -63,8 +63,8 @@ function main():Int {
 	var server = new RpcConnection(pair.server, clock);
 	var client = new RpcConnection(pair.client, clock);
 	var implementation = new GreeterImpl();
-	server.serve(Greeter, implementation);
-	var stub = client.of(Greeter);
+	server.serve<Greeter>(implementation);
+	var stub = client.of<Greeter>();
 	var greeting = "";
 	var count = 0;
 	var failures = 0;
@@ -82,7 +82,7 @@ function main():Int {
 	}
 	if (!pair.client.send(message))
 		return 3;
-	client.of(Greeter, 25).measure([1, 2, 3]).onComplete(outcome -> switch outcome {
+	client.of<Greeter>(25).measure([1, 2, 3]).onComplete(outcome -> switch outcome {
 		case Success(Ok(answer)): count = answer;
 		case _: failures++;
 	});

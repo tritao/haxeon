@@ -903,8 +903,8 @@ function exercise(connection:RpcConnection, implementation:Echo):Void {
 	var json = JsonWire.encode(packed);
 	var decoded:Int = JsonWire.decode<Int>(json).unwrap();
 	var method = RpcMethod.wire<Int, Int>(1);
-	connection.serve(Echo, implementation);
-	var stub = connection.of(Echo, 200);
+	connection.serve<Echo>(implementation);
+	var stub = connection.of<Echo>(200);
 	stub.echo(decoded);
 }
 ',

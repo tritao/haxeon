@@ -437,14 +437,12 @@ class RpcConnection {
 		}
 	}
 
-	/** Registers a service implementation. Haxeon generates dispatch and codecs for the supplied interface. */
-	public extern function serve<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end,
-			implementation:Service):Void;
+	/** Registers `implementation` of the service interface `Service`: `serve<Greeter>(new MyGreeter())`. Haxeon generates its dispatch and codecs. */
+	public extern function serve<Service>(implementation:Service):Void;
 
 	/**
 		Returns a client stub whose methods take one request and return a `Future<Result<Response, RpcError>>`, as `call`
-		does. Haxeon generates the stub and codecs for the supplied interface. The default timeout is 1000 milliseconds.
+		does: `of<Greeter>()`. Haxeon generates the stub and codecs for the interface `Service`. The default timeout is 1000 milliseconds.
 	 */
-	public extern function of<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end,
-			?timeoutMs:Int):Dynamic;
+	public extern function of<Service>(?timeoutMs:Int):Dynamic;
 }

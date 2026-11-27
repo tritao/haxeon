@@ -19,8 +19,8 @@ class MyGreeter implements Greeter {
 }
 
 // server and client are the two established connections.
-server.serve(Greeter, new MyGreeter());
-var greeter = client.of(Greeter, 1000);
+server.serve<Greeter>(new MyGreeter());
+var greeter = client.of<Greeter>(1000);
 var greeting = greeter.greet({name: "Ada"});
 greeting.onComplete(outcome -> switch outcome {
     case Success(Ok(answer)): Sys.println(answer.text);
