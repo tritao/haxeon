@@ -20,6 +20,13 @@ typedef ScriptRunOptions = {
 	var ?log:String;
 }
 
+/** One program for `Script.runAll`: what `Script.run` takes. */
+typedef ScriptJob = {
+	final command:String;
+	final ?arguments:Array<String>;
+	final ?options:ScriptRunOptions;
+}
+
 /**
  * What shell scripts make short, for Haxe scripts run with `haxeon script.hx` (tools.ScriptRun): running programs and
  * checking their status, capturing their output, and the small file chores around them. Programs are started directly, never
@@ -47,19 +54,50 @@ class Script {
 		return program("haxeon");
 
 	/** Runs `command` and returns its exit status. Its output passes through, or goes to `options.log`. */
-	public static function run(command:String, ?arguments:Array<String>, ?options:ScriptRunOptions):Int {
-		var log = options == null || options.log == null ? null : File.write(options.log, true);
+	public static function run(command:String, ?arguments:Array<String>, ?options:ScriptRunOptions):Int
+		return runAll([{command: command, arguments: arguments, options: options}], 1)[0];
+
+	/**
+	 * Runs `jobs` with up to `parallel` at a time and returns their exit statuses, in their order. Each one's output goes to
+	 * its `options.log`, or passes through, interleaved with the others', without one.
+	 */
+	public static function runAll(jobs:Array<ScriptJob>, parallel:Int):Array<Int> {
+		var statuses = [for (_ in jobs) -1], running:Array<{index:Int, program:RunningProgram}> = [], next = 0;
 		try {
-			var status = pump(command, arguments, options, log == null ? Sys.stdout() : log,
-				log == null ? Sys.stderr() : log);
-			if (log != null)
-				log.close();
-			return status;
+			while (next < jobs.length || running.length > 0) {
+				while (running.length < (parallel < 1 ? 1 : parallel) && next < jobs.length) {
+					var job = jobs[next];
+					running.push({index: next, program: new RunningProgram(job.command, job.arguments, job.options)});
+					next++;
+				}
+				var moved = false;
+				for (entry in running.copy())
+					if (entry.program.step())
+						moved = true;
+					else {
+						var status = entry.program.exitStatus();
+						if (status >= 0) {
+							statuses[entry.index] = status;
+							entry.program.close();
+							running.remove(entry);
+							moved = true;
+						}
+					}
+				if (!moved)
+					Sys.sleep(0.002);
+			}
 		} catch (error:Dynamic) {
-			if (log != null)
-				log.close();
+			for (entry in running)
+				entry.program.close();
 			throw error;
 		}
+		return statuses;
+	}
+
+	/** How many programs a script runs at once: `TEST_JOBS`, or `fallback`. */
+	public static function jobs(fallback:Int):Int {
+		var configured = Sys.getEnv("TEST_JOBS"), parsed = configured == null ? null : Std.parseInt(configured);
+		return parsed == null || parsed < 1 ? fallback : parsed;
 	}
 
 	/** As `run`, and stops the script when the status is not 0. */
@@ -73,7 +111,7 @@ class Script {
 	/** Runs `command` and returns its standard output; its standard error passes through. Stops the script on a status other than 0. */
 	public static function output(command:String, ?arguments:Array<String>, ?options:ScriptRunOptions):String {
 		var captured = new BytesOutput(),
-			status = pump(command, arguments, options, captured, Sys.stderr()),
+			status = new RunningProgram(command, arguments, options, captured).finish(),
 			text = captured.getBytes().toString();
 		if (status != 0)
 			fail('${describe(command, arguments)} exited with status $status');
@@ -121,59 +159,6 @@ class Script {
 		}
 	}
 
-	/** Starts the program and copies its two pipes to `out` and `err` as they produce, until it exits and both are drained. */
-	static function pump(command:String, arguments:Null<Array<String>>, options:Null<ScriptRunOptions>, out:Output,
-			err:Output):Int {
-		var keys:Array<String> = [], values:Array<String> = [];
-		if (options != null && options.env != null)
-			for (key => value in options.env) {
-				keys.push(key);
-				values.push(value);
-			}
-		var cwd = options == null || options.cwd == null ? "" : options.cwd,
-			process = ChildProcess.spawn(command, arguments == null ? [] : arguments, cwd, keys, values),
-			buffer = Bytes.alloc(65536),
-			outOpen = true,
-			errOpen = true;
-		try {
-			while (outOpen || errOpen) {
-				var moved = false;
-				if (outOpen) {
-					var read = process.readStdout(buffer, 0, buffer.length);
-					if (read > 0) {
-						out.writeBytes(buffer, 0, read);
-						out.flush();
-						moved = true;
-					} else if (read == -1)
-						outOpen = false;
-				}
-				if (errOpen) {
-					var read = process.readStderr(buffer, 0, buffer.length);
-					if (read > 0) {
-						err.writeBytes(buffer, 0, read);
-						err.flush();
-						moved = true;
-					} else if (read == -1)
-						errOpen = false;
-				}
-				if (!moved && (outOpen || errOpen))
-					Sys.sleep(0.002);
-			}
-			var status = process.pollExit();
-			while (status < 0) {
-				Sys.sleep(0.002);
-				status = process.pollExit();
-			}
-			out.flush();
-			err.flush();
-			process.close();
-			return status;
-		} catch (error:Dynamic) {
-			process.close();
-			throw error;
-		}
-	}
-
 	/** A program in the bin of the SDK of the haxeon command that started this script (`HAXEON_SDK`). */
 	static function program(name:String):String {
 		var sdk = Sys.getEnv("HAXEON_SDK");
@@ -184,4 +169,93 @@ class Script {
 
 	static function describe(command:String, arguments:Null<Array<String>>):String
 		return [command].concat(arguments == null ? [] : arguments).join(" ");
+}
+
+/**
+ * A started program whose two pipes are copied as they produce: to `options.log`, to `out` for standard output when given,
+ * or through to the script's own.
+ */
+private class RunningProgram {
+	final process:ChildProcess;
+	final log:Null<Output>;
+	final out:Output;
+	final err:Output;
+	final buffer = Bytes.alloc(65536);
+	var outOpen = true;
+	var errOpen = true;
+
+	public function new(command:String, arguments:Null<Array<String>>, options:Null<ScriptRunOptions>, ?out:Output) {
+		var keys:Array<String> = [], values:Array<String> = [];
+		if (options != null && options.env != null)
+			for (key => value in options.env) {
+				keys.push(key);
+				values.push(value);
+			}
+		var logFile = options == null || options.log == null ? null : File.write(options.log, true);
+		log = logFile;
+		this.out = out != null ? out : logFile != null ? logFile : Sys.stdout();
+		err = logFile != null ? logFile : Sys.stderr();
+		try {
+			process = ChildProcess.spawn(command, arguments == null ? [] : arguments,
+				options == null || options.cwd == null ? "" : options.cwd, keys, values);
+		} catch (error:Dynamic) {
+			if (logFile != null)
+				logFile.close();
+			throw error;
+		}
+	}
+
+	/** Copies what the pipes have ready; whether anything moved. False once both are drained. */
+	public function step():Bool {
+		var moved = false;
+		if (outOpen) {
+			var read = process.readStdout(buffer, 0, buffer.length);
+			if (read > 0) {
+				out.writeBytes(buffer, 0, read);
+				out.flush();
+				moved = true;
+			} else if (read == -1)
+				outOpen = false;
+		}
+		if (errOpen) {
+			var read = process.readStderr(buffer, 0, buffer.length);
+			if (read > 0) {
+				err.writeBytes(buffer, 0, read);
+				err.flush();
+				moved = true;
+			} else if (read == -1)
+				errOpen = false;
+		}
+		return moved;
+	}
+
+	/** The exit status once both pipes are drained and the program has exited, else -1. */
+	public function exitStatus():Int
+		return outOpen || errOpen ? -1 : process.pollExit();
+
+	/** Copies the pipes until the program exits, closes it and returns its status. */
+	public function finish():Int {
+		try {
+			var status = -1;
+			while (status < 0) {
+				if (!step())
+					Sys.sleep(0.002);
+				status = exitStatus();
+			}
+			close();
+			return status;
+		} catch (error:Dynamic) {
+			close();
+			throw error;
+		}
+	}
+
+	/** Releases the program and closes its log. */
+	public function close():Void {
+		process.close();
+		out.flush();
+		err.flush();
+		if (log != null)
+			log.close();
+	}
 }

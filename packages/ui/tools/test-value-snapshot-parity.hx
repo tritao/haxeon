@@ -1,12 +1,14 @@
 #!/usr/bin/env haxeon
 /**
  * The UI value-type fixtures on HashLink, Wasm32 and Wasm GC, with and without inlining: `haxeon
- * packages/ui/tools/test-value-snapshot-parity.hx [GROUP...]`. Each group's entry must build and return 42, and every other
- * fixture in tests/value-types is one of its implicit raw-value conversions, which must be rejected with its type error. This
- * UI graph reaches higher-order closure adapters that the Showcase does not.
+ * packages/ui/tools/test-value-snapshot-parity.hx [GROUP...]`. Each group's entry must build and return 42 everywhere, and
+ * every other fixture in tests/value-types is one of its implicit raw-value conversions, which must be rejected with its
+ * type error on HashLink and on Wasm. This UI graph reaches higher-order closure adapters that the Showcase does not.
+ * Programs run `TEST_JOBS` at a time (4 by default: each compile holds the whole UI).
  */
 import haxe.io.Path;
 import haxeon.Script;
+import haxeon.Script.ScriptJob;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -81,58 +83,100 @@ function main() {
 		nativeLibraries.push(inherited);
 	var env = ["LD_LIBRARY_PATH" => nativeLibraries.join(":")];
 
-	for (inlining in [false, true])
-		for (target in ["hl", "wasm32", "wasm-gc"]) {
-			var wasm = target != "hl", suffix = wasm ? "wasm" : "hl";
-			var options = (inlining ? [] : ["--no-inline"]).concat(wasm ? [
-				'--target=$target',
-				"--wasm-import-memory",
-				'--wasm-memory-contract=$memory'
-			] : []).concat([
-				'--root=$fixtures', '--root=$ui/src', '--root=$root/packages/editor/src',
-				'--root=$root/packages/platform/src',
-				'--ffi-interface=$root/packages/platform/bindings/nativekit.hxi',
-				'--ffi-projection=$root/packages/platform/bindings/nativekit.hxmap',
-				'--ffi-interface=$root/packages/platform/bindings/nativekit-net.hxi',
-				'--ffi-projection=$root/packages/platform/bindings/nativekit-net.hxmap',
-				'--ffi-interface=$ui/bindings/nativekit-ui.hxi',
-				'--ffi-projection=$ui/bindings/nativekit-ui.hxmap'
-			]);
-			var label = '$target, inline=${inlining ? 1 : 0}';
-			function compile(entry:String, output:String, log:String):Int
-				return Script.run(hl, [compiler].concat(options).concat([
-					'--entry=$entry', '--output=$output', Path.join([
-						fixtures,
-						'$entry.hx'
-					])
-				]), {
-					env: env,
-					log: log
-				});
+	var parallel = Script.jobs(4);
+	function options(target:String, inlining:Bool):Array<String> {
+		var wasm = target != "hl";
+		return (inlining ? [] : ["--no-inline"]).concat(wasm ? [
+			'--target=$target',
+			"--wasm-import-memory",
+			'--wasm-memory-contract=$memory'
+		] : []).concat([
+			'--root=$fixtures', '--root=$ui/src', '--root=$root/packages/editor/src',
+			'--root=$root/packages/platform/src',
+			'--ffi-interface=$root/packages/platform/bindings/nativekit.hxi',
+			'--ffi-projection=$root/packages/platform/bindings/nativekit.hxmap',
+			'--ffi-interface=$root/packages/platform/bindings/nativekit-net.hxi',
+			'--ffi-projection=$root/packages/platform/bindings/nativekit-net.hxmap',
+			'--ffi-interface=$ui/bindings/nativekit-ui.hxi',
+			'--ffi-projection=$ui/bindings/nativekit-ui.hxmap'
+		]);
+	}
+	function compile(target:String, inlining:Bool, entry:String, output:String, log:String):ScriptJob
+		return {
+			command: hl,
+			arguments: [compiler].concat(options(target, inlining)).concat([
+				'--entry=$entry', '--output=$output', Path.join([
+					fixtures,
+					'$entry.hx'
+				])
+			]),
+			options: {env: env, log: log}
+		};
 
+	// Each group's entry builds and returns 42 on every target, with and without inlining.
+	var builds:Array<{entry:String, label:String, target:String, inlining:Bool, artifact:String, log:String}> = [];
+	for (inlining in [false, true])
+		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (entry in groups) {
-				var artifact = Path.join([work, '$entry-${inlining ? 1 : 0}-$target.$suffix']),
-					log = Path.join([work, "compile.log"]);
-				if (compile(entry, artifact, log) != 0)
-					Script.fail('FAIL: $entry does not build on $label:\n${File.getContent(log)}');
-				var status = wasm ? Script.run("node", [runner, artifact, label], {env: env}) : Script.run(hl,
-					[artifact], {env: env});
-				if (status != (wasm ? 0 : 42))
-					Script.fail('FAIL: $entry on $label exited with $status');
-				Sys.println('PASS: $entry on $label');
+				var name = '$entry-${inlining ? 1 : 0}-$target';
+				builds.push({
+					entry: entry,
+					label: '$target, inline=${inlining ? 1 : 0}',
+					target: target,
+					inlining: inlining,
+					artifact: Path.join([work, '$name.${target == "hl" ? "hl" : "wasm"}']),
+					log: Path.join([work, '$name.log'])
+				});
 			}
-			for (entry in rejected) {
-				var log = Path.join([work, "rejected.log"]);
-				if (compile(entry, Path.join([work, 'rejected.$suffix']), log) == 0)
-					Script.fail('FAIL: $entry accepted an implicit raw-value conversion on $label');
-				var integerProperty = entry == "layout-policies-integer-property",
-					expected = integerProperty
-						? 'E1009: Type mismatch for argument 1 to "haxeon.ui.style.ComputedStyle.setInteger"'
-						: 'E1002: Type mismatch for local "state"';
-				// The status alone would pass a compiler that failed for any other reason, so the rejection must be this one.
-				if (File.getContent(log).indexOf(expected) < 0)
-					Script.fail('FAIL: $entry was rejected on $label without "$expected":\n${File.getContent(log)}');
-				Sys.println('PASS: $entry rejects ${integerProperty ? "integer writes to an enum property" : "implicit raw-value conversion"} on $label');
+	var built = Script.runAll([
+		for (build in builds)
+			compile(build.target, build.inlining, build.entry, build.artifact, build.log)
+	], parallel);
+	for (index in 0...builds.length)
+		if (built[index] != 0)
+			Script.fail('FAIL: ${builds[index].entry} does not build on ${builds[index].label}:\n${File.getContent(builds[index].log)}');
+	var ran = Script.runAll([
+		for (build in builds)
+			build.target == "hl" ? {
+				command: hl,
+				arguments: [build.artifact],
+				options: {env: env, log: build.log + ".run"}
+			} : {
+				command: "node",
+				arguments: [runner, build.artifact, build.label],
+				options: {env: env, log: build.log + ".run"}
 			}
-		}
+	], parallel);
+	for (index in 0...builds.length) {
+		var build = builds[index];
+		if (ran[index] != (build.target == "hl" ? 42 : 0))
+			Script.fail('FAIL: ${build.entry} on ${build.label} exited with ${ran[index]}:\n${File.getContent(build.log + ".run")}');
+		Sys.println('PASS: ${build.entry} on ${build.label}');
+	}
+
+	// Every other fixture is a conversion the typer rejects, which no backend or inlining setting reaches: it is checked once
+	// on HashLink and once on Wasm, whose standard library differs.
+	var checks:Array<{entry:String, target:String, log:String}> = [
+		for (target in ["hl", "wasm32"])
+			for (entry in rejected)
+			{entry: entry, target: target, log: Path.join([work, 'rejected-$entry-$target.log'])}
+	];
+	var rejections = Script.runAll([
+		for (check in checks)
+			compile(check.target, true, check.entry,
+			Path.join([work, 'rejected-${check.entry}.${check.target == "hl" ? "hl" : "wasm"}']), check.log)
+	], parallel);
+	for (index in 0...checks.length) {
+		var check = checks[index];
+		if (rejections[index] == 0)
+			Script.fail('FAIL: ${check.entry} accepted an implicit raw-value conversion on ${check.target}');
+		var integerProperty = check.entry == "layout-policies-integer-property",
+			expected = integerProperty
+				? 'E1009: Type mismatch for argument 1 to "haxeon.ui.style.ComputedStyle.setInteger"'
+				: 'E1002: Type mismatch for local "state"';
+		// The status alone would pass a compiler that failed for any other reason, so the rejection must be this one.
+		if (File.getContent(check.log).indexOf(expected) < 0)
+			Script.fail('FAIL: ${check.entry} was rejected on ${check.target} without "$expected":\n${File.getContent(check.log)}');
+		Sys.println('PASS: ${check.entry} rejects ${integerProperty ? "integer writes to an enum property" : "implicit raw-value conversion"} on ${check.target}');
+	}
 }
