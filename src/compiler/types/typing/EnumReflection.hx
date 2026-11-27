@@ -54,15 +54,19 @@ class EnumReflection {
 			held = bind(bodyTyper, inner, "__haxeon_enum_value" + span.start, value, span),
 			statements = [held.statement];
 		function arguments(constructor:Int):TypedExpression {
-			var parameters = enumDecl.cases[constructor].params;
-			return new TypedExpression(TArrayLiteral([for (field in 0...parameters.length) {
+			var parameters = enumDecl.cases[constructor].params, values:Array<TypedExpression> = [];
+			for (field in 0...parameters.length) {
 				var parameter = parameters[field],
-					stored = new TypedExpression(TEnumField(held.local, constructor, field),
-						session.representation.enumStorageType(enumDecl.typeParameters, parameter, type), span),
-					read = session.representation.boundaryCast(stored,
-						session.representation.enumParameterType(enumDecl.typeParameters, parameter, type));
-				bodyTyper.coerce(read, TDynamic, "Type.enumParameters argument", DiagnosticCode.ASSIGNMENT_OR_BINDING);
-			}]), result, span);
+					semantic = session.representation.enumParameterType(enumDecl.typeParameters, parameter, type);
+				// A `Void` payload is stored as nothing (`ProgramFacts.enumVoidPayloads`), so it is no argument here either.
+				if (VoidArguments.isVoid(semantic))
+					continue;
+				var stored = new TypedExpression(TEnumField(held.local, constructor, field),
+					session.representation.enumStorageType(enumDecl.typeParameters, parameter, type), span);
+				values.push(bodyTyper.coerce(session.representation.boundaryCast(stored, semantic), TDynamic,
+					"Type.enumParameters argument", DiagnosticCode.ASSIGNMENT_OR_BINDING));
+			}
+			return new TypedExpression(TArrayLiteral(values), result, span);
 		}
 		if (enumDecl.cases.length == 1)
 			return new TypedExpression(TBlockExpression(statements, arguments(0)), result, span);

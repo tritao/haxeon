@@ -332,13 +332,15 @@ class IrProgramAssembler {
 	 * session typed (a warm session types fewer than a fresh compiler), and the order is the order of the module's type table.
 	 */
 	public static function enumsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrEnum> {
+		// A payload of type `Void` has no storage (`ProgramFacts.enumVoidPayloads`).
 		var result:Array<IrEnum> = [for (enumDecl in typed.enums)
 			{
 				name: enumDecl.name,
 				isRecursive: enumDecl.isRecursive,
 				cases: [for (caseDecl in enumDecl.cases)
 					{
-						name: caseDecl.name, params: [for (param in caseDecl.params) generator.lowerType(param)]
+						name: caseDecl.name,
+						params: [for (param in caseDecl.params) if (!param.match(TVoid)) generator.lowerType(param)]
 					}]
 			}];
 		result.sort((left, right) -> Reflect.compare(left.name, right.name));

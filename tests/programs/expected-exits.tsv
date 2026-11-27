@@ -711,6 +711,8 @@ enum-members	42
 enum-generic-methods	42
 result	42
 result-try	42
+result-void	42
+void-unit	42
 lambda-inferred-block-return	42
 enum-case-functions	42
 switch-nested-coverage	42

@@ -269,6 +269,9 @@ class IrLocalsBuilder {
 	}
 
 	public function safeCast(value:IrValue, type:IrType):IrValue {
+		// `Void` is the unit type: a value read as one, such as an erased `T` at `Void`, is the unit value.
+		if (type.match(Void))
+			return constVoid();
 		var out = temporary(type);
 		emit(SafeCast(out, value));
 		return out;
@@ -446,6 +449,9 @@ class IrLocalsBuilder {
 			default: false;
 		}) && target == null)
 			return value;
+		// `Void` is the unit type, whose one value is null where a type parameter is erased to `Dynamic`.
+		if (value.type.match(Void))
+			return constNull(target == null ? Dyn : target);
 		var out = temporary(target == null ? Dyn : target);
 		emit(ToDyn(out, value));
 		return out;
@@ -495,8 +501,16 @@ class IrLocalsBuilder {
 
 	public function call(name:String, args:Array<IrValue>, result:IrType):IrValue {
 		var out = temporary(result);
-		emit(Call(out, IrSymbol.of(name), args));
+		emit(Call(out, IrSymbol.of(name), withoutUnits(args)));
 		return out;
+	}
+
+	/** A `Void` parameter takes no argument (`VoidArguments`), so the unit values passed for one are left out of a call. */
+	static function withoutUnits(args:Array<IrValue>):Array<IrValue> {
+		for (arg in args)
+			if (arg.type.match(Void))
+				return [for (kept in args) if (!kept.type.match(Void)) kept];
+		return args;
 	}
 
 	public function cNativeCall(name:String, args:Array<IrValue>, result:IrType):IrValue {
@@ -519,7 +533,7 @@ class IrLocalsBuilder {
 
 	public function callClosure(closure:IrValue, args:Array<IrValue>, result:IrType):IrValue {
 		var out = temporary(result);
-		emit(CallClosure(out, closure, args));
+		emit(CallClosure(out, closure, withoutUnits(args)));
 		return out;
 	}
 
@@ -538,7 +552,7 @@ class IrLocalsBuilder {
 	public function methodCall(object:IrValue, methodName:String, args:Array<IrValue>, result:IrType,
 			terminalReceiver:Bool = false):IrValue {
 		var out = temporary(result);
-		emit(MethodCall(out, object, methodName, args, terminalReceiver));
+		emit(MethodCall(out, object, methodName, withoutUnits(args), terminalReceiver));
 		return out;
 	}
 

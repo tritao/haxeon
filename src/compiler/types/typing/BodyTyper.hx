@@ -1269,7 +1269,10 @@ class BodyTyper implements BodyTyping {
 				if (info == null)
 					return null;
 				var instanceType = enumInstance(expected) ?? TInstance(NominalKind.Enum, info.enumName, []);
-				var required = requiredEnumParameters(info.params);
+				var required = requiredEnumParameters(info.params, [
+					for (parameter in info.params)
+						enumParameterType(info.typeParameters, parameter, instanceType)
+				]);
 				if (arguments.length < required || arguments.length > info.params.length)
 					fail(DiagnosticCode.PATTERN_OR_DEFER,
 						'Enum switch case "$name" expects $required to ${info.params.length} bindings', span);
@@ -2959,10 +2962,12 @@ class BodyTyper implements BodyTyping {
 		return session.representation.enumParameterType(typeParameters, parameter, instance);
 	}
 
-	static function requiredEnumParameters(parameters:Array<compiler.syntax.Ast.AstEnumParameter>):Int {
+	/** How many bindings a pattern of a case with `parameters` needs: an optional one, or one whose type is `Void`, may be left out at the end. */
+	static function requiredEnumParameters(parameters:Array<compiler.syntax.Ast.AstEnumParameter>,
+			?types:Array<CompilerType>):Int {
 		var minimum = 0;
 		for (index in 0...parameters.length)
-			if (!parameters[index].optional)
+			if (!parameters[index].optional && (types == null || !VoidArguments.isVoid(types[index])))
 				minimum = index + 1;
 		return minimum;
 	}

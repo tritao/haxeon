@@ -256,10 +256,17 @@ class Monomorphs {
 			case [TMap(k1, v1), TMap(k2, v2)]:
 				unifyWithin(k1, k2, meeting);
 				unifyWithin(v1, v2, meeting);
-			case [TFunction(a1, r1, _), TFunction(a2, r2, _)] if (a1.length == a2.length):
-				for (index in 0...a1.length)
-					unifyWithin(a2[index], a1[index], meeting);
-				unifyWithin(r1, r2, meeting);
+			case [TFunction(a1, r1, o1), TFunction(a2, r2, o2)]:
+				// A `Void` argument takes none (`FunctionTypes.withoutUnits`).
+				if (a1.length != a2.length) {
+					a1 = FunctionTypes.withoutUnits(a1, o1).arguments;
+					a2 = FunctionTypes.withoutUnits(a2, o2).arguments;
+				}
+				if (a1.length == a2.length) {
+					for (index in 0...a1.length)
+						unifyWithin(a2[index], a1[index], meeting);
+					unifyWithin(r1, r2, meeting);
+				}
 			case [TInstance(k1, n1, a1), TInstance(k2, n2, a2)] if (k1 == k2 && (n1:String) == (n2:String)
 				&& a1.length == a2.length):
 				for (index in 0...a1.length)

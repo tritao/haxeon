@@ -81,8 +81,21 @@ enum Result<T, E> implements MustUse {
 - **Generic code stays valid when a type parameter is `Void`.** A binding of type `T` holds the unit value, and passing
   it where a `Void` argument goes is the same as omitting it. `T->U` with `T` as `Void` is `Void->U`, the function
   with no arguments, as Haxe writes it.
-- A `Void` value occupies no storage on any target.
+- **Where an argument is left out.** A call with fewer arguments than parameters gets the unit value at each `Void`
+  parameter while more parameters remain than arguments, so `Both(42)` makes a `Both(first:Void, second:Int)`, and a
+  `Void` value written in its place still takes it. A pattern may leave out its trailing `Void` payloads (`case Ok():`),
+  and a lambda its `Void` arguments (`() -> 7` is a `Void->Int`). Function types compare and unify by their other
+  arguments, so a `function f():Void` is a `T->Void` at `T` = `Void`.
+- `Void` satisfies `Equatable` and `Hashable`: its one value equals itself and adds nothing to a hash, so a
+  `Maybe<Void>` of an `enum Maybe<T:Equatable>` compares.
+- A `Void` value occupies no storage on any target. The type checker gives a call one argument per parameter, the unit
+  value where one is left out; IR generation then leaves `Void` out of parameters, call operands, function types'
+  arguments and enum payloads (`ProgramFacts.enumVoidPayloads`; the payloads after one are stored one place earlier),
+  so no backend sees it. Where a type parameter is erased to `Dynamic`, as in a generic class's methods, the unit value
+  is null, and a value read as `Void` is the unit value.
 - So `Result<Void, E>` (an operation that succeeds or fails with no value), `Future<Void>` and `Signal<Void>` work.
+- Not yet: a generic function does not infer `T` = `Void` from a lambda with fewer arguments than `T->U` has
+  (`apply(() -> 1)` for `apply<T>(f:T->Int)`), and `Null<Void>` and `Array<Void>`, which have no use, have no meaning.
 
 ### Asynchronous operations
 
@@ -107,7 +120,7 @@ hold: stock Haxe parses neither enum methods nor `try` without `catch`. Its fail
 | 1 | Enum methods with type parameters of their own (`map<U>`), which the `Result` methods need | Implemented |
 | 2 | `Result<T, E>` in the root package, with its methods; nested patterns count for switch coverage, and a case with a payload is a function value (`mapErr(ConfigError.Io)`) | Implemented |
 | 3 | `MustUse`, `E1033` and `_ = expr;` | Implemented |
-| 4 | `Void` as the unit type | |
+| 4 | `Void` as the unit type | Implemented |
 | 5 | `try` propagation | Implemented |
 | 6 | The migration above, with `Future<Result<T, E>>` for RPC and platform requests | |
 | 7 | Inline generic enums (STRUCTS.md E8), so returning a `Result` allocates nothing | |

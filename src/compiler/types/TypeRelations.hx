@@ -231,6 +231,14 @@ class TypeRelations {
 			case TFunction(expectedArguments, expectedResult, expectedOptional):
 				switch actual {
 					case TFunction(actualArguments, actualResult, actualOptional):
+						if (FunctionTypes.hasUnit(expectedArguments) || FunctionTypes.hasUnit(actualArguments)) {
+							var expectedKept = FunctionTypes.withoutUnits(expectedArguments, expectedOptional),
+								actualKept = FunctionTypes.withoutUnits(actualArguments, actualOptional);
+							expectedArguments = expectedKept.arguments;
+							expectedOptional = expectedKept.optional;
+							actualArguments = actualKept.arguments;
+							actualOptional = actualKept.optional;
+						}
 						// A function whose argument is required cannot stand for one a call may omit it from (Haxe's `Cant_force_optional`).
 						if (actualArguments.length != expectedArguments.length
 							|| !FunctionTypes.acceptsOptional(actualOptional, expectedOptional)
@@ -498,6 +506,9 @@ class TypeRelations {
 			case TInstance(NominalKind.Interface, name, _) if (name == "Equatable" || name == "Hashable"): true;
 			default: false;
 		};
+		// `Void` is the unit type: its one value equals itself, and a payload of it adds nothing to a hash.
+		if (valueCapability && actual.match(TVoid))
+			return true;
 		switch actual {
 			case TAbstract(name, _, _) if (!valueCapability && declarations.enumAbstracts.exists(name)):
 				var declaration = declarations.enumAbstracts.get(name);
@@ -783,6 +794,14 @@ class TypeRelations {
 			optional:Array<Bool>, visiting:Null<Array<FieldPair>>):Bool
 		return switch type {
 			case TFunction(otherArguments, otherResult, otherOptional):
+				if (FunctionTypes.hasUnit(arguments) || FunctionTypes.hasUnit(otherArguments)) {
+					var kept = FunctionTypes.withoutUnits(arguments, optional),
+						otherKept = FunctionTypes.withoutUnits(otherArguments, otherOptional);
+					arguments = kept.arguments;
+					optional = kept.optional;
+					otherArguments = otherKept.arguments;
+					otherOptional = otherKept.optional;
+				}
 				if (arguments.length != otherArguments.length
 					|| !FunctionTypes.sameOptional(optional, otherOptional)) false;
 				else {

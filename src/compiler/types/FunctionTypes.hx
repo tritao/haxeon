@@ -1,7 +1,40 @@
 package compiler.types;
 
-/** The optional-argument flags of a `TFunction`, which may be shorter than its arguments: a missing flag is false. */
+import compiler.types.Type.CompilerType;
+
+/**
+ * The argument lists of a `TFunction`: its optional-argument flags, which may be shorter than its arguments (a missing flag
+ * is false), and its `Void` arguments, which take none.
+ */
 class FunctionTypes {
+	/**
+	 * Whether a function type has an argument of type `Void`, which takes none (`VoidArguments`): `T->U` at `T` = `Void` is the
+	 * function with no arguments, so function types compare and unify by their other arguments (`withoutUnits`).
+	 */
+	public static function hasUnit(arguments:Array<CompilerType>):Bool {
+		for (argument in arguments)
+			if (Monomorphs.follow(argument).match(TVoid))
+				return true;
+		return false;
+	}
+
+	/** `arguments` without their `Void` ones, and `optional` in step; both as given when there are none. */
+	public static function withoutUnits(arguments:Array<CompilerType>,
+			optional:Array<Bool>):{
+				arguments:Array<CompilerType>,
+				optional:Array<Bool>
+			} {
+		if (!hasUnit(arguments))
+			return {arguments: arguments, optional: optional};
+		var kept:Array<CompilerType> = [], flags:Array<Bool> = [];
+		for (index in 0...arguments.length)
+			if (!Monomorphs.follow(arguments[index]).match(TVoid)) {
+				kept.push(arguments[index]);
+				flags.push(isOptional(optional, index));
+			}
+		return {arguments: kept, optional: flags};
+	}
+
 	/** The flags of a function declared with `arguments`. */
 	public static function ofArguments(arguments:Array<compiler.syntax.Ast.AstArgument>):Array<Bool>
 		return canonical([for (argument in arguments) compiler.syntax.AstPredicates.isOptionalArgument(argument)]);

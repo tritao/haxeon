@@ -670,3 +670,12 @@ float-to-int-range
 loop-bounds-replaced-array
 generic-null-argument
 map-to-string
+enum-generic-methods
+enum-case-functions
+switch-nested-coverage
+result
+must-use
+result-try
+lambda-inferred-block-return
+result-void
+void-unit

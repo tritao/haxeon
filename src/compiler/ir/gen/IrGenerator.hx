@@ -358,12 +358,19 @@ class IrGenerator {
 			localTypes.set(argument.name, argument.type);
 			builder.argument(argument.name, argument.type);
 		}];
+		var units:Array<String> = [];
 		for (argument in fn.arguments) {
 			var type = lowerType(argument.type);
 			localTypes.set(argument.name, type);
 			builder.debugLocal(argument.name, fn.span, fn.span.end);
-			arguments.push(builder.argument(argument.name, type));
+			// A `Void` parameter takes no argument (`VoidArguments`): the body reads it as the unit value.
+			if (type.match(Void))
+				units.push(argument.name);
+			else
+				arguments.push(builder.argument(argument.name, type));
 		}
+		for (name in units)
+			builder.store(name, builder.constVoid());
 		if (scratch.valueConstructor != null) {
 			var valueType:IrType = Obj(scratch.valueConstructor);
 			localTypes.set("this", valueType);
@@ -2354,11 +2361,13 @@ class IrGenerator {
 			case TEnumLiteral(name,
 				index): builder.makeEnum(compiler.types.typing.EnumRuntimeType.name(expression.type), index, []);
 			case TEnumConstruct(name, index,
-				arguments): builder.makeEnum(compiler.types.typing.EnumRuntimeType.name(expression.type), index,
-				lowerOperands(arguments, builder, localTypes));
+				arguments): builder.makeEnum(compiler.types.typing.EnumRuntimeType.name(expression.type), index, [
+					for (operand in lowerOperands(arguments, builder, localTypes))
+						if (!operand.type.match(Void)) operand
+				]);
 			case TEnumIndex(value): builder.enumIndex(lowerExpression(value, builder, localTypes));
 			case TEnumField(value, constructor,
-				field): builder.enumField(lowerExpression(value, builder, localTypes), constructor, field,
+				field): enumPayload(builder, lowerExpression(value, builder, localTypes), constructor, field,
 				lowerType(expression.type));
 			case TNullLiteral: throw new InternalError('Uncoerced null literal typed as ${expression.type} at ${expression.span.file.path}:${expression.span.start}');
 			case TVoidLiteral: builder.constVoid();
@@ -4327,7 +4336,7 @@ class IrGenerator {
 		for (index in 0...predicates.length) {
 			var predicate = predicates[index];
 			builder.select(checkBlock);
-			var field = builder.enumField(builder.load(subjectName, subjectType), constructorIndex, predicate.index,
+			var field = enumPayload(builder, builder.load(subjectName, subjectType), constructorIndex, predicate.index,
 				lowerType(predicate.fieldStorageType));
 			for (access in predicate.nestedPath ?? [])
 				field = nestedEnumField(builder, field, access);
@@ -4374,7 +4383,7 @@ class IrGenerator {
 
 	function lowerEnumBinding(builder:IrLocalsBuilder, subject:IrValue, constructorIndex:Int,
 			binding:TypedSwitchBinding):IrValue {
-		var field = builder.enumField(subject, constructorIndex, binding.index, lowerType(binding.fieldStorageType));
+		var field = enumPayload(builder, subject, constructorIndex, binding.index, lowerType(binding.fieldStorageType));
 		for (access in binding.nestedPath ?? [])
 			field = nestedEnumField(builder, field, access);
 		if (binding.arrayIndex >= 0)
@@ -4387,8 +4396,30 @@ class IrGenerator {
 		storage type, which a recursive generic enum erases to Dynamic, so it is cast back to its enum type first.
 	**/
 	function nestedEnumField(builder:IrLocalsBuilder, value:IrValue, access:TypedSwitchFieldAccess):IrValue
-		return builder.enumField(abiBoundaryCast(builder, value, lowerType(access.enumType)), access.constructorIndex,
+		return enumPayload(builder, abiBoundaryCast(builder, value, lowerType(access.enumType)),
+			access.constructorIndex,
 			access.fieldIndex, lowerType(access.storageType));
+
+	/**
+	 * Payload `field` of `constructor` of the enum value `subject`. A payload of type `Void` has no storage
+	 * (`ProgramFacts.enumVoidPayloads`): it reads as the unit value, and the payloads after it are stored one place earlier.
+	 */
+	function enumPayload(builder:IrLocalsBuilder, subject:IrValue, constructor:Int, field:Int, type:IrType):IrValue {
+		var units = switch subject.type {
+			case Enum(name): facts.enumVoidPayloads.get(name);
+			default: null;
+		};
+		if (units == null)
+			return builder.enumField(subject, constructor, field, type);
+		var payloads = units[constructor];
+		if (payloads[field])
+			return builder.constVoid();
+		var stored = 0;
+		for (index in 0...field)
+			if (!payloads[index])
+				stored++;
+		return builder.enumField(subject, constructor, stored, type);
+	}
 
 	function isStringPatternType(type:CompilerType):Bool
 		return switch type {
@@ -4672,7 +4703,10 @@ class IrGenerator {
 				}
 			case TArray(element): Array(lowerType(element));
 			case TIterator(element): Iterator(lowerType(element));
-			case TFunction(arguments, result, _): Function([for (argument in arguments) lowerType(argument)],
+			case TFunction(arguments, result, _): Function([
+				for (argument in arguments)
+					if (!argument.match(TVoid)) lowerType(argument)
+			],
 				lowerType(result));
 			case TAnonymous(name, _): Obj(name);
 		};

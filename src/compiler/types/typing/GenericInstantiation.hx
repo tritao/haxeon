@@ -413,9 +413,15 @@ class GenericInstantiation {
 						inferFromType(value, actualValue, parameters, substitutions, span);
 					default:
 				}
-			case TFunction(patternArguments, patternResult, _):
+			case TFunction(patternArguments, patternResult, patternOptional):
 				switch actual {
-					case TFunction(actualArguments, actualResult, _):
+					case TFunction(actualArguments, actualResult, actualOptional):
+						if (patternArguments.length != actualArguments.length) {
+							patternArguments = compiler.types.FunctionTypes.withoutUnits(patternArguments,
+								patternOptional).arguments;
+							actualArguments = compiler.types.FunctionTypes.withoutUnits(actualArguments,
+								actualOptional).arguments;
+						}
 						each(patternArguments, actualArguments);
 						inferFromType(patternResult, actualResult, parameters, substitutions, span);
 					default:
@@ -484,6 +490,14 @@ class GenericInstantiation {
 		} else
 			substitutions.set(name, actual);
 	}
+
+	/** Whether the written argument type `argument` is `Void`, as written or as `substitutions` binds its type parameter. */
+	static function isUnitArgument(argument:AstType, substitutions:Map<String, CompilerType>):Bool
+		return switch argument {
+			case VoidType: true;
+			case NamedType(name): VoidArguments.isVoid(substitutions.get(name));
+			default: false;
+		};
 
 	public function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>,
 			substitutions:Map<String, CompilerType>,
@@ -558,7 +572,17 @@ class GenericInstantiation {
 								substitutions, span);
 					default:
 				}
-			case FunctionType(patternArguments, patternResult, _):
+			case FunctionType(writtenArguments, patternResult, _):
+				// A written `T` that is `Void` here takes no argument (`VoidArguments`): `T->U` matches `() -> u`.
+				var patternArguments = writtenArguments;
+				switch actual {
+					case TFunction(actualArguments, _, _) if (writtenArguments.length != actualArguments.length):
+						patternArguments = [
+							for (argument in writtenArguments)
+								if (!isUnitArgument(argument, substitutions)) argument
+						];
+					default:
+				}
 				switch actual {
 					case TFunction(actualArguments,
 						actualResult, _) if (patternArguments.length == actualArguments.length):

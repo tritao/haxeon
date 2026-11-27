@@ -77,6 +77,8 @@ class ClosureTyper {
 				case TDynamic: true;
 				default: false;
 			}) && inferDynamicLambdaResult;
+		if (expectedFunction != null)
+			arguments = VoidArguments.fillParameters(arguments, expectedFunction.arguments, span);
 		if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
 			fail(DiagnosticCode.CALL_FORM,
 				'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}',

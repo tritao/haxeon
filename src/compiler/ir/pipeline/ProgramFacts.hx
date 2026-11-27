@@ -16,6 +16,12 @@ class ProgramFacts {
 	public var enumConstructorCounts:Map<String, Int> = [];
 	public var enumEquatableTypes:Map<String, Bool> = [];
 	public var enumPayloadTypes:Map<String, Bool> = [];
+
+	/**
+	 * For each enum with a payload of type `Void`, whether each payload of each constructor is one: a `Void` payload has no
+	 * storage, so the IR enum leaves it out (`IrProgramAssembler.enumsFrom`) and reading it gives the unit value.
+	 */
+	public var enumVoidPayloads:Map<String, Array<Array<Bool>>> = [];
 	public var valueClasses:Map<String, Bool> = [];
 	public var classBases:Map<String, String> = [];
 	public var genericOwnerAliases:Map<String, String> = [];
@@ -81,6 +87,8 @@ class ProgramFacts {
 		section("enumEquatableTypes", [for (key in enumEquatableTypes.keys()) key],
 			key -> flag(enumEquatableTypes.get(key)));
 		section("enumPayloadTypes", [for (key in enumPayloadTypes.keys()) key], key -> flag(enumPayloadTypes.get(key)));
+		section("enumVoidPayloads", [for (key in enumVoidPayloads.keys()) key],
+			key -> voidPayloadsText(enumVoidPayloads.get(key)));
 		section("valueClasses", [for (key in valueClasses.keys()) key], key -> flag(valueClasses.get(key)));
 		section("classBases", [for (key in classBases.keys()) key], key -> text(classBases.get(key)));
 		section("genericOwnerAliases", [for (key in genericOwnerAliases.keys()) key],
@@ -112,14 +120,31 @@ class ProgramFacts {
 		enumConstructorCounts = [];
 		enumEquatableTypes = [];
 		enumPayloadTypes = [];
+		enumVoidPayloads = [];
 		for (enumDecl in enums) {
 			for (constructor in enumDecl.cases)
 				if (constructor.params.length > 0)
 					enumPayloadTypes.set(enumDecl.name, true);
+			if (Lambda.exists(enumDecl.cases, constructor -> Lambda.exists(constructor.params, isVoid)))
+				enumVoidPayloads.set(enumDecl.name, [
+					for (constructor in enumDecl.cases)
+						[for (param in constructor.params) isVoid(param)]
+				]);
 			if (enumDecl.equatable == true)
 				enumEquatableTypes.set(enumDecl.name, true);
 			enumConstructorCounts.set(enumDecl.name, enumDecl.cases.length);
 		}
+	}
+
+	static function isVoid(type:compiler.types.Type.CompilerType):Bool
+		return type.match(TVoid);
+
+	/** `enumVoidPayloads` of one enum as text: per constructor, a 1 for each `Void` payload and a 0 for each other. */
+	static function voidPayloadsText(constructors:Array<Array<Bool>>):String {
+		var parts:Array<String> = [];
+		for (payloads in constructors)
+			parts.push([for (unit in payloads) unit ? "1" : "0"].join(""));
+		return parts.join(".");
 	}
 
 	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */

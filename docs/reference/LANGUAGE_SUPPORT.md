@@ -61,6 +61,11 @@ The current subset includes:
   that computes one, or the expression body of a lambda that returns `Void` and computes one, is `E1033`. `_ = value;`
   evaluates a value and drops it on purpose, as a statement or as a lambda's body (`item -> _ = save(item)`); `_` names
   no variable there, and `_ = value` is not a value itself.
+- `Void` is the unit type when it is a type argument: a parameter or payload of type `Void` takes no argument, so
+  `Ok()` makes a `Result<Void, E>`, `case Ok():` matches it, `unwrapOr()` takes nothing, and `() -> 7` or a
+  `function f():Void` stands for a `T->U` at `T` = `Void`. `Future<Void>` and `Promise<Void>.complete()` work the same
+  way. A `Void` value stores nothing, and `Void` satisfies `Equatable` and `Hashable`. A generic function does not infer
+  `T` = `Void` from a lambda that leaves an argument out.
 - `try value` with no `catch` takes a `Result`: it gives the `Ok` value, and for an `Err` returns that error from the
   enclosing function or lambda, whose result must be a `Result` with the same error type (`try read(path).mapErr(f)`
   converts one first). It is a prefix operator, as `!` is: `try a() + 1` adds to the value. An unannotated function's

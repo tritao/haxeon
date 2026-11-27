@@ -736,6 +736,7 @@ class CallResolver {
 		var parameters = callee.arguments,
 			declared = bodyTyper.argumentTypesOf(callee, substitutions),
 			required = parameters.length;
+		arguments = VoidArguments.fill(arguments, declared.slice(offset), span);
 		while (required > offset && AstPredicates.isOptionalArgument(parameters[required - 1]))
 			required--;
 		if (arguments.length + offset < required || arguments.length + offset > parameters.length) {
@@ -2166,15 +2167,20 @@ class CallResolver {
 	function typeEnumConstructor(name:String, arguments:Array<AstExpression>, expectedType:Null<CompilerType>,
 			enumCase:EnumConstructorInfo, span:SourceSpan,
 			scope:Scope):TypedExpression {
+		var instance = enumCase.aliasType ?? enumInstanceOf(enumCase, expectedType),
+			typedArguments:Array<TypedExpression>;
+		if (instance == null && enumCase.typeParameters.length == 0)
+			instance = TInstance(NominalKind.Enum, enumCase.enumName, []);
+		if (instance != null)
+			arguments = VoidArguments.fill(arguments, [
+				for (parameter in enumCase.params)
+					enumParameterType(enumCase.typeParameters, parameter, instance)
+			], span);
 		var required = requiredEnumParameters(enumCase.params);
 		if (arguments.length < required || arguments.length > enumCase.params.length)
 			fail(DiagnosticCode.CALL_FORM,
 				'Enum constructor "$name" expects $required to ${enumCase.params.length} arguments, got ${arguments.length}',
 				span);
-		var instance = enumCase.aliasType ?? enumInstanceOf(enumCase, expectedType),
-			typedArguments:Array<TypedExpression>;
-		if (instance == null && enumCase.typeParameters.length == 0)
-			instance = TInstance(NominalKind.Enum, enumCase.enumName, []);
 		if (instance == null) {
 			// A generic enum's constructor infers its type parameters as a generic function call does, from its arguments
 			// (`GenericInstantiation.constructedEnumType`).

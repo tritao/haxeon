@@ -138,9 +138,12 @@ class EnumEqualityGenerator {
 						for (fieldIndex in 0...constructor.params.length) {
 							var parameter = constructor.params[fieldIndex],
 								fieldType = session.representation.enumParameterType(declaration.typeParameters,
-									parameter, type),
-								storageType = session.representation.enumStorageType(declaration.typeParameters,
-									parameter, type),
+									parameter, type);
+							// A `Void` payload is the unit value: two of them are equal.
+							if (VoidArguments.isVoid(fieldType))
+								continue;
+							var storageType = session.representation.enumStorageType(declaration.typeParameters,
+								parameter, type),
 								leftField = session.representation
 									.boundaryCast(new TypedExpression(TEnumField(left, constructorIndex, fieldIndex),
 									storageType, span), fieldType),
