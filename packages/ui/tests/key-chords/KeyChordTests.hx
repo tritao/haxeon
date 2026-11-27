@@ -86,7 +86,8 @@ class KeyChordTests {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(240.0);
 		style.height = LayoutAxis.fixed(120.0);
-		var tree = new TreeView("items", new Items(), style);
+		var items = new Items();
+		var tree = new TreeView("items", items, style);
 		var frame = new LayoutFrame(240.0, 120.0);
 		var root = ui.submit(tree, frame);
 		var activated:Array<String> = [];
@@ -105,10 +106,10 @@ class KeyChordTests {
 		enterOn("item-0");
 		check(tree.isExpanded("item-0"), "Enter without a handler no longer toggles a branch");
 		tree.setExpanded("item-0", false);
-		tree.onActivate = function(key, _) {
+		tree = new TreeView("items", items, style, onActivate:function(key, _) {
 			activated.push(key);
 			return consume;
-		};
+		});
 		root = ui.submit(tree, frame);
 		enterOn("item-0");
 		check(activated.join(",") == "item-0" && !tree.isExpanded("item-0"),

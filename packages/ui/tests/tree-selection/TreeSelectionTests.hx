@@ -62,12 +62,13 @@ class TreeSelectionTests {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(240.0);
 		style.height = LayoutAxis.fixed(320.0);
-		var tree = new TreeView("items", new Items(), style);
-		tree.multiSelect = true;
 		var opened:Array<String> = [];
 		var menus:Array<String> = [];
-		tree.onItemClicked = function(key, _) opened.push(key);
-		tree.onItemContextMenu = function(key, _) menus.push(key);
+		var items = new Items();
+		function itemsTree(multiSelect:Bool):TreeView
+			return new TreeView("items", items, style, onItemClicked:(key, _) -> opened.push(key),
+				onItemContextMenu:(key, _) -> menus.push(key), multiSelect:multiSelect);
+		var tree = itemsTree(true);
 		var frame = new LayoutFrame(240.0, 320.0);
 		var build = function():View return tree;
 		var root = ui.submit(build(), frame);
@@ -111,7 +112,8 @@ class TreeSelectionTests {
 			"Plain click did not collapse the selection: " + selection());
 
 		// Trees that do not opt in keep single selection for modified clicks.
-		tree.multiSelect = false;
+		tree = itemsTree(false);
+		root = ui.submit(build(), frame);
 		click("item-6", UiModifier.Shift);
 		check(selection() == "item-6" && opened.join(",") == "item-2,item-1,item-6",
 			"Single-select tree handled Shift-click as a range");
@@ -121,13 +123,10 @@ class TreeSelectionTests {
 		controlled.buildContext.environment.reducedMotion = true;
 		var choice = new Signal<Null<String>>(null), notifications = 0;
 		var controlledBuild = function():View return new TrackedScope("controlled-tree", function() {
-			var next = new TreeView("controlled-items", new Items(), style);
-			next.selectionProvider = function() return choice.value;
-			next.onSelectionChanged = function(key) {
+			return new TreeView("controlled-items", new Items(), style, onSelectionChanged:function(key) {
 				choice.value = key;
 				notifications++;
-			};
-			return next;
+			}, selectionProvider:() -> choice.value);
 		});
 		// Build the parent each frame: a new body each time, so the scope runs again and follows the owner.
 		for (desired in ["item-1", "item-8", null, "missing", "item-2"]) {

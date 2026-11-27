@@ -58,61 +58,61 @@ class TreeView implements View {
 	public var selectedKey(default, null):Null<String>;
 
 	/** Called with the newly selected key when the user selects an item. */
-	public var onSelectionChanged:Null<String->Void>;
+	public final onSelectionChanged:Null<String->Void>;
 	/** Synchronize external state after retained selection/expansion loads, before rows materialize. */
-	public var onStateReady:Null<TreeView->Void>;
+	public final onStateReady:Null<TreeView->Void>;
 
 	/** Called with an item's key when the user activates it, by Enter or a double click. */
-	public var onItemActivated:Null<String->Void>;
+	public final onItemActivated:Null<String->Void>;
 	/** Enter or double-click on any row, branches included. Return true to consume the activation; false (or unset) keeps the default toggle/open. */
-	public var onActivate:Null<(String, UiEvent) -> Bool>;
+	public final onActivate:Null<(String, UiEvent) -> Bool>;
 	/** Event-aware activation for callers that need pointer or keyboard modifiers. */
-	public var onItemActivatedWithEvent:Null<String->UiEvent->Void>;
+	public final onItemActivatedWithEvent:Null<String->UiEvent->Void>;
 	/** Primary row clicks, including repeated clicks on the selected item. */
-	public var onItemClicked:Null<String->Int->Void>;
+	public final onItemClicked:Null<String->Int->Void>;
 	/** Optional non-blocking hint used to draw expand controls without loading children. */
-	public var hasChildrenHint:Null<String->Bool>;
+	public final hasChildrenHint:Null<String->Bool>;
 	/** Toggle branches on every primary row click; otherwise toggle only on double-click. */
-	public var expandOnSingleClick:Bool = false;
+	public final expandOnSingleClick:Bool;
 
 	/** Called with an item's key and the event when the user asks for its context menu. */
-	public var onItemContextMenu:Null<String->UiEvent->Void>;
+	public final onItemContextMenu:Null<String->UiEvent->Void>;
 
 	/** Called with the selected item's key when the user presses F2. */
-	public var onItemRename:Null<String->Void>;
+	public final onItemRename:Null<String->Void>;
 	/** Optional intra-tree drag/drop policy. Drops use stable model keys. */
-	public var canDragItem:Null<String->Bool>;
+	public final canDragItem:Null<String->Bool>;
 
 	/**
 	 * Whether the dragged item (the first key) may be dropped on the target (the second); without it, no drop is
 	 * accepted.
 	 */
-	public var canDropItem:Null<(String, String) -> Bool>;
+	public final canDropItem:Null<(String, String) -> Bool>;
 
 	/** Called with the dragged item's key and the target's when the user drops one on the other. */
-	public var onItemDrop:Null<(String, String) -> Void>;
+	public final onItemDrop:Null<(String, String) -> Void>;
 	var drag = new TreeItemDrag();
 	/** Optional row builder receiving the current expansion state. */
-	public var itemBuilder:Null<(String, Bool) -> View>;
+	public final itemBuilder:Null<(String, Bool) -> View>;
 	/** Return false to defer a requested expansion; toggles identify repeated pointer/activation intent. */
-	public var onExpansionRequested:Null<(String, Bool, Bool) -> Bool>;
+	public final onExpansionRequested:Null<(String, Bool, Bool) -> Bool>;
 	/** Called even when no visible branch needs collapsing, so pending requests can be canceled. */
-	public var onCollapseAll:Null<Void->Void>;
+	public final onCollapseAll:Null<Void->Void>;
 
 	/** Called with an item's key and whether it is now expanded, when the user expands or collapses it. */
-	public var onExpandedChanged:Null<String->Bool->Void>;
+	public final onExpandedChanged:Null<String->Bool->Void>;
 	/** Horizontal indentation between tree hierarchy levels. */
-	public var indentWidth:Float = 16.0;
+	public final indentWidth:Float;
 	/** Draw vertical indentation guides through all rows inside expanded branches. */
-	public var verticalGuidesOnly:Bool = false;
+	public final verticalGuidesOnly:Bool;
 	/** Reveal indentation guides while the tree is hovered or any descendant has focus. */
-	public var guidesOnInteraction:Bool = false;
+	public final guidesOnInteraction:Bool;
 	/** Align leaf content in the disclosure column instead of reserving arrow space. */
-	public var compactLeafIndent:Bool = false;
+	public final compactLeafIndent:Bool;
 	/** Shift-click selects a range and Control/Super-click toggles rows; plain clicks select one row. */
-	public var multiSelect:Bool = false;
+	public final multiSelect:Bool;
 	/** Optional observed primary selection. Null clears selection; absent keys render unselected. Only input notifies the owner. */
-	public var selectionProvider:Null<Void->Null<String>> = null;
+	public final selectionProvider:Null<Void->Null<String>>;
 
 
 	final fallbackViewportHeight:Float;
@@ -141,7 +141,8 @@ class TreeView implements View {
 
 	/**
 	 * A tree of `model`'s items, `viewportHeight` pixels tall unless `viewportStyle` says otherwise, with
-	 * `selectedKey` selected and `expandedKeys` expanded. Throws when `key` is empty.
+	 * `selectedKey` selected and `expandedKeys` expanded. Throws when `key` is empty. The later inputs are given by name
+	 * (`new TreeView("files", model, onItemClicked: open, multiSelect: true)`); none changes after.
 	 */
 	public function new(key:String,
 			model:TreeViewModel,
@@ -153,7 +154,27 @@ class TreeView implements View {
 			?onSelectionChanged:String->Void,
 			?onItemActivated:String->Void,
 			?onExpandedChanged:String->Bool->Void,
-			?virtualization:VirtualizationPolicy) {
+			?virtualization:VirtualizationPolicy,
+			?onStateReady:TreeView->Void,
+			?onActivate:(String, UiEvent) -> Bool,
+			?onItemActivatedWithEvent:String->UiEvent->Void,
+			?onItemClicked:String->Int->Void,
+			?hasChildrenHint:String->Bool,
+			expandOnSingleClick:Bool = false,
+			?onItemContextMenu:String->UiEvent->Void,
+			?onItemRename:String->Void,
+			?canDragItem:String->Bool,
+			?canDropItem:(String, String) -> Bool,
+			?onItemDrop:(String, String) -> Void,
+			?itemBuilder:(String, Bool) -> View,
+			?onExpansionRequested:(String, Bool, Bool) -> Bool,
+			?onCollapseAll:Void->Void,
+			indentWidth:Float = 16.0,
+			verticalGuidesOnly:Bool = false,
+			guidesOnInteraction:Bool = false,
+			compactLeafIndent:Bool = false,
+			multiSelect:Bool = false,
+			?selectionProvider:Void->Null<String>) {
 		if (key == null
 			|| key.length == 0 || model == null || viewportHeight <= 0.0 || !finite(viewportHeight)
 			|| (selectedKey != null
@@ -168,12 +189,27 @@ class TreeView implements View {
 		this.selectedKey = selectedKey;
 		this.onSelectionChanged = onSelectionChanged;
 		this.onItemActivated = onItemActivated;
-		onItemActivatedWithEvent = null;
-		onItemClicked = null;
-		hasChildrenHint = null;
-		onItemContextMenu = null;
-		onItemRename = null;
 		this.onExpandedChanged = onExpandedChanged;
+		this.onStateReady = onStateReady;
+		this.onActivate = onActivate;
+		this.onItemActivatedWithEvent = onItemActivatedWithEvent;
+		this.onItemClicked = onItemClicked;
+		this.hasChildrenHint = hasChildrenHint;
+		this.expandOnSingleClick = expandOnSingleClick;
+		this.onItemContextMenu = onItemContextMenu;
+		this.onItemRename = onItemRename;
+		this.canDragItem = canDragItem;
+		this.canDropItem = canDropItem;
+		this.onItemDrop = onItemDrop;
+		this.itemBuilder = itemBuilder;
+		this.onExpansionRequested = onExpansionRequested;
+		this.onCollapseAll = onCollapseAll;
+		this.indentWidth = indentWidth;
+		this.verticalGuidesOnly = verticalGuidesOnly;
+		this.guidesOnInteraction = guidesOnInteraction;
+		this.compactLeafIndent = compactLeafIndent;
+		this.multiSelect = multiSelect;
+		this.selectionProvider = selectionProvider;
 		this.virtualization = virtualization == null ? new VirtualizationPolicy() : virtualization;
 		materializedFirst = 0;
 		materializedLast = 0;

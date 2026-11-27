@@ -2602,13 +2602,16 @@ class FrameworkSmoke {
 		var treeStyle = new LayoutStyle();
 		treeStyle.width = LayoutAxis.fixed(256.0);
 		treeStyle.height = LayoutAxis.fixed(120.0);
-		var tree = new TreeView("tree-smoke", treeModel, treeStyle, treeController, 120.0, null, null,
-			function(nodeKey) {
-				treeSelection = nodeKey;
-			}, null, function(nodeKey, expanded) {
-			treeExpansionKey = nodeKey;
-			treeExpansionValue = expanded;
-		});
+		// The tree is described afresh with or without a state-ready callback; its state lives in the context.
+		function smokeTree(?onStateReady:TreeView->Void):TreeView
+			return new TreeView("tree-smoke", treeModel, treeStyle, treeController, 120.0, null, null,
+				function(nodeKey) {
+					treeSelection = nodeKey;
+				}, null, function(nodeKey, expanded) {
+				treeExpansionKey = nodeKey;
+				treeExpansionValue = expanded;
+			}, onStateReady:onStateReady);
+		var tree = smokeTree();
 		var treeRoot = context.submit(tree, new LayoutFrame(256.0, 120.0));
 		var treeSemantics:Semantics = cast treeRoot.semantics;
 		if (treeSemantics.role != AccessibilityRole.Tree || treeSemantics.setSize <= 100000
@@ -2618,16 +2621,17 @@ class FrameworkSmoke {
 		if (!tree.scrollTo("root:0:child:2") || treeController.offsetY <= 0.0) return 170;
 		// External controllers synchronize after retained state loads, without a feedback callback.
 		var treeStateReady = false;
-		tree.onStateReady = function(current) {
+		tree = smokeTree(function(current) {
 			treeStateReady = true;
 			current.select("root:0:child:1", false);
 			current.scrollIntoView("root:0:child:1");
-		};
+		});
 		context.submit(tree, new LayoutFrame(256.0, 120.0));
 		if (!treeStateReady || tree.selectedKey != "root:0:child:1" || treeSelection
 			!= "root:0:child:2") throw "TreeView state-ready synchronization must retain silent external selection";
 		if (tree.scrollIntoView("root:0:child:1")) throw "TreeView must not scroll a row that is already fully visible";
-		tree.onStateReady = null;
+		tree = smokeTree();
+		context.submit(tree, new LayoutFrame(256.0, 120.0));
 		if (!tree.setExpanded("root:0", false) || treeExpansionKey != "root:0" || treeExpansionValue) return 171;
 		// Toggling immediately after a tree revision must find the visible row
 		// even before a new viewport build materializes its entry.
@@ -2641,8 +2645,7 @@ class FrameworkSmoke {
 		if (tree.toggleExpanded("no-longer-visible") || tree.setExpanded("no-longer-visible", true)) return 174;
 		// A directory hint keeps an empty folder expandable with no child rows.
 		var emptyFolderTree = new TreeView("empty-folder-tree-smoke", treeModel, treeStyle, new ScrollController(),
-			120.0);
-		emptyFolderTree.hasChildrenHint = function(key) return key == "root:0" || key == "root:0:child:2";
+			120.0, hasChildrenHint:key->key == "root:0" || key == "root:0:child:2");
 		context.submit(emptyFolderTree, new LayoutFrame(256.0, 120.0));
 		if (!emptyFolderTree.toggleExpanded("root:0:child:2")
 			|| !emptyFolderTree.isExpanded("root:0:child:2")) return 176;
