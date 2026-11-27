@@ -28,7 +28,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"body_edit_allocated_bytes": {
-			"value": 176851904,
+			"value": 172865160,
 			"tolerance": 0.02,
 			"why": "A body-only edit of the entry module: deterministic for a given source tree."
 		},
@@ -63,7 +63,7 @@
 			"why": "Deterministic; the slack absorbs new callers."
 		},
 		"late_body_edit_allocated_bytes": {
-			"value": 195937896,
+			"value": 191842248,
 			"tolerance": 0.02,
 			"why": "The body edit again after the signature edit: the session holds the rewrites of the constructor's callers, which an edit elsewhere must reuse. Deterministic for a given source tree."
 		},
