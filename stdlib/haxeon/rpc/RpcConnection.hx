@@ -11,10 +11,13 @@ private typedef PendingCall = {
 	var failure:RpcError->Void;
 }
 
-/** One established connection generation. Handshake/reconnect belongs to its owner.
- * poll is nonblocking and bounded. Requests are sent once and never replayed.
- * Clock values and deadlines are monotonic milliseconds. */
+/**
+ * One established connection to a peer, over a transport: calls and notifications both ways. The handshake and
+ * reconnecting belong to its owner, an `RpcClient` or a server. `poll` does its work without blocking, within a budget.
+ * A request is sent once and never replayed. Clock values and deadlines are monotonic milliseconds.
+ */
 class RpcConnection {
+	/** Why the connection closed, once it has: the reason given to `close`, or the protocol error that closed it. */
 	public var closeReason(default, null):Null<String>;
 
 	final transport:MessageTransport;
@@ -38,6 +41,10 @@ class RpcConnection {
 	var sendMessagesLeft:Int = 0;
 	var sendBytesLeft:Int = 0;
 
+	/**
+	 * A connection over `transport`, with `clock` giving monotonic milliseconds. It refuses a message over
+	 * `maxMessageBytes`, more than `maxCalls` calls in flight, and more than `maxQueuedBytes` bytes waiting to be sent.
+	 */
 	public function new(transport:MessageTransport, clock:Void->Float, maxMessageBytes:Int = 4 * 1024 * 1024,
 			maxCalls:Int = 256,
 			maxQueuedBytes:Int = 8 * 1024 * 1024) {
@@ -53,12 +60,15 @@ class RpcConnection {
 		this.maxQueuedBytes = maxQueuedBytes;
 	}
 
+	/** Whether the connection and its transport are open. */
 	public function isOpen():Bool
 		return open && transport.isOpen();
 
+	/** How many calls this side made that have no response yet. */
 	public function pendingCalls():Int
 		return pendingCount;
 
+	/** How many of the peer's requests this side is handling. */
 	public function activeRequests():Int
 		return activeCount;
 
@@ -74,9 +84,14 @@ class RpcConnection {
 		return earliest;
 	}
 
+	/** How many bytes wait to be sent. */
 	public function bufferedBytes():Int
 		return queuedBytes + (held == null ? 0 : held.length);
 
+	/**
+	 * Handles the peer's calls of `method` with `handler`, which answers through its context. Throws when the method is
+	 * already handled.
+	 */
 	public function register<Request, Response>(method:RpcMethod<Request, Response>,
 			handler:(Request, RpcContext<Response>) -> Void):Void {
 		installRoutes([@:privateAccess method.route(handler, finish)]);
@@ -103,6 +118,10 @@ class RpcConnection {
 			case ServiceId(service, id): 'service:$service:$id';
 		};
 
+	/**
+	 * Handles the peer's notifications `id` with `handler`, decoding each with `decode`; one that does not decode
+	 * closes the connection. Throws when `id` is not positive or is already handled.
+	 */
 	public function onNotification<T>(id:Int, decode:Bytes->T, handler:T->Void):Void {
 		if (id <= 0 || notifications.exists(id))
 			throw "Invalid or duplicate notification id";
@@ -118,6 +137,10 @@ class RpcConnection {
 		});
 	}
 
+	/**
+	 * Sends the notification `id` with `value`, which expects no response: false when the connection is closed or its
+	 * queue is full.
+	 */
 	public function notify<T>(id:Int, value:T, encode:T->Bytes):Bool {
 		if (!isOpen())
 			return false;
@@ -234,6 +257,9 @@ class RpcConnection {
 		return true;
 	}
 
+	/**
+	 * Closes the connection and its transport, for `reason`: pending calls fail and the peer's requests are cancelled.
+	 */
 	public function close(reason:String = "disconnected"):Void {
 		if (!open)
 			return;

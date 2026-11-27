@@ -2,19 +2,35 @@ package haxeon.rpc;
 
 import haxe.io.Bytes;
 
-typedef RpcRoute = {
+internal typedef RpcRoute = {
 	final selectors:Array<RpcMethodKey>;
 	final handle:(Bytes, RpcRequestState) -> Void;
 }
 
-/** Permanent method identity and concrete typed codecs. No reflection dispatch. */
+/**
+ * An RPC method: its permanent identity, by number, by qualified name or both, and the codecs of its request and response.
+ * Both peers declare the same method; nothing is dispatched by reflection.
+ */
 class RpcMethod<Request, Response> {
+	/** The method's number: positive, or 0 for a method routed by name only. */
 	public final id:Int;
+
+	/** How a request names the method. */
 	public final key:RpcMethodKey;
+
+	/** The method's qualified name, `Service.method`, or null for one with only a number. */
 	public final name:Null<String>;
+
+	/** Encodes a request. */
 	public final encodeRequest:Request->Bytes;
+
+	/** Decodes a request; throws for bytes that are not one. */
 	public final decodeRequest:Bytes->Request;
+
+	/** Encodes a response. */
 	public final encodeResponse:Response->Bytes;
+
+	/** Decodes a response; throws for bytes that are not one. */
 	public final decodeResponse:Bytes->Response;
 
 	/** A qualified service method uses zero for name routing or a positive ID scoped to its interface. */

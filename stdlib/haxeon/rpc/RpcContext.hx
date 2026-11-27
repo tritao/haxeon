@@ -3,24 +3,30 @@ package haxeon.rpc;
 import haxe.io.Bytes;
 import haxeon.async.Future;
 
-/** Completion is at most once; cancellation and expiry never promise rollback. */
+/**
+ * What a handler answers a request through: `respond` or `fail`, once. A request can be cancelled or expire while the
+ * handler works, which then answers nothing; neither undoes what the handler did.
+ */
 class RpcContext<Response> {
 	final state:RpcRequestState;
 	final encode:Response->Bytes;
 	final complete:(Bytes, Null<RpcError>) -> Bool;
 
-	public function new(state:RpcRequestState, encode:Response->Bytes, complete:(Bytes, Null<RpcError>) -> Bool) {
+	internal function new(state:RpcRequestState, encode:Response->Bytes, complete:(Bytes, Null<RpcError>) -> Bool) {
 		this.state = state;
 		this.encode = encode;
 		this.complete = complete;
 	}
 
+	/** When the request expires, in the connection's clock milliseconds. */
 	public function deadline():Float
 		return state.deadline;
 
+	/** Whether the request was cancelled or has expired, so an answer would be dropped. */
 	public function isCancelled():Bool
 		return state.isCancelled();
 
+	/** Answers the request with `value`: false when it was already answered, cancelled or expired. */
 	public function respond(value:Response):Bool {
 		if (!state.isActive())
 			return false;
@@ -51,6 +57,7 @@ class RpcContext<Response> {
 		});
 	}
 
+	/** Answers the request with the failure `error`: false when it was already answered, cancelled or expired. */
 	public function fail(error:RpcError):Bool {
 		if (!state.isActive())
 			return false;
