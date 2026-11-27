@@ -14,20 +14,23 @@ private typedef ResolvedRoot = {
 
 /** Loads a deterministic explicit source manifest into a compiler instance. */
 class SourceManifestLoader {
+	/** `dependencyRoots`: the roots whose files are a dependency's, package code (`ModuleState.packageCode`). */
 	public static function load(compiler:Compiler, roots:Array<String>, paths:Array<String>,
 			?packageRoots:Array<PackageSourceRoot>,
-			?readSource:String->Null<String>):Void {
+			?readSource:String->Null<String>, ?dependencyRoots:Array<String>):Void {
 		var ordered = paths.copy(),
 			resolvedPackages = resolve(packageRoots == null ? [] : [for (root in packageRoots) root.path],
 				packageRoots == null ? [] : [for (root in packageRoots) root.packageName]),
-			resolvedRoots = resolve(roots);
+			resolvedRoots = resolve(roots),
+			dependencies = resolve(dependencyRoots == null ? [] : dependencyRoots);
 		ordered.sort(Reflect.compare);
 		for (path in ordered)
 			try {
 				var source = readSource == null ? File.getContent(path) : readSource(path);
 				if (source != null) {
 					var physical = canonicalPath(path);
-					compiler.update(locate(path, physical, resolvedRoots, resolvedPackages), source, null, physical);
+					compiler.update(locate(path, physical, resolvedRoots, resolvedPackages), source, null, physical,
+						within(physical, dependencies));
 				}
 			} catch (error:Dynamic) {
 				throw new InternalError("Could not load compiler source " + path + ": " + Std.string(error));
@@ -68,6 +71,13 @@ class SourceManifestLoader {
 
 	static function packagedPath(relative:String, packagePrefix:String):String
 		return StringTools.startsWith(relative, packagePrefix) ? relative : packagePrefix + relative;
+
+	static function within(canonicalFile:String, roots:Array<ResolvedRoot>):Bool {
+		for (root in roots)
+			if (StringTools.startsWith(canonicalFile, root.prefix))
+				return true;
+		return false;
+	}
 
 	static function locate(path:String, canonicalFile:String, roots:Array<ResolvedRoot>,
 			packageRoots:Array<ResolvedRoot>):String {

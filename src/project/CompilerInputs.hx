@@ -39,6 +39,12 @@ class CompilerInputs {
 	/** The source roots whose files belong to their package (`scopeSourceRoots`). */
 	public final packageRoots:Array<PackageSourceRoot>;
 
+	/**
+	 * The roots of the project's dependencies, of `roots` and `packageRoots` and their generated FFI projections: package code, which
+	 * a compile session keeps less of than the project's own (`--dependency-root`).
+	 */
+	public final dependencyRoots:Array<String>;
+
 	/** The packages' source files, sorted. */
 	public final sources:Array<String>;
 
@@ -65,13 +71,15 @@ class CompilerInputs {
 	public final sourcePackages:Array<compiler.SourcePackages.SourcePackage>;
 
 	function new(target:String, entry:Null<String>, roots:Array<String>, packageRoots:Array<PackageSourceRoot>,
-			sources:Array<String>, ffiInterfaces:Array<String>, ffiProjections:Array<String>,
+			dependencyRoots:Array<String>, sources:Array<String>, ffiInterfaces:Array<String>,
+			ffiProjections:Array<String>,
 			generatedFfi:Array<GeneratedFfiInputs>, defines:Array<String>, inlineEnabled:Bool,
 			nullSafety:Array<NullSafetyRule>, sourcePackages:Array<compiler.SourcePackages.SourcePackage>) {
 		this.target = target;
 		this.entry = entry;
 		this.roots = roots;
 		this.packageRoots = packageRoots;
+		this.dependencyRoots = dependencyRoots;
 		this.sources = sources;
 		this.ffiInterfaces = ffiInterfaces;
 		this.ffiProjections = ffiProjections;
@@ -88,6 +96,7 @@ class CompilerInputs {
 			entry = project.manifest.entry,
 			roots:Array<String> = [],
 			packageRoots:Array<PackageSourceRoot> = [],
+			dependencyRoots:Array<String> = [],
 			sources:Array<String> = [],
 			ffiInterfaces:Array<String> = [],
 			ffiProjections:Array<String> = [],
@@ -96,6 +105,9 @@ class CompilerInputs {
 		for (resolvedPackage in project.packages.packages) {
 			for (sourceRoot in resolvedPackage.sourceRoots)
 				roots.push(sourceRoot);
+			if (resolvedPackage.name != project.rootPackage.name)
+				for (sourceRoot in resolvedPackage.sourceRoots)
+					dependencyRoots.push(sourceRoot);
 			// A dependency's files belong to its package; the root package's do only when the entry is one of them.
 			var scoped = resolvedPackage.manifest.scopeSourceRoots
 				&& (resolvedPackage.name != project.rootPackage.name
@@ -122,6 +134,8 @@ class CompilerInputs {
 		for (resolvedPackage in project.packages.packages)
 			for (ffi in resolvedPackage.ffiImports) {
 				var name = ffi.config.name;
+				if (ffi.config.projection && resolvedPackage.name != project.rootPackage.name)
+					dependencyRoots.push(layout.ffiProjectionPath(resolvedPackage.name, name));
 				generatedFfi.push({
 					interfacePath: layout.ffiInterfacePath(resolvedPackage.name, name),
 					projectionRoot: ffi.config.projection ? layout.ffiProjectionPath(resolvedPackage.name, name) : null,
@@ -133,7 +147,8 @@ class CompilerInputs {
 		var defines = buildTarget.isAndroid() ? ["android"] : [];
 		for (define in project.manifest.defines)
 			defines.push(define);
-		return new CompilerInputs(compilerTarget(buildTarget), entry, roots, packageRoots, sources, ffiInterfaces,
+		return new CompilerInputs(compilerTarget(buildTarget), entry, roots, packageRoots, dependencyRoots, sources,
+			ffiInterfaces,
 			ffiProjections, generatedFfi, defines, project.manifest.inlineEnabled != false, nullSafety, [
 				for (resolvedPackage in project.packages.packages)
 					new compiler.SourcePackages.SourcePackage(resolvedPackage.name, resolvedPackage.root,

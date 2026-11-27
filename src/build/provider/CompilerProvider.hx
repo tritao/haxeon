@@ -106,6 +106,8 @@ class CompilerProvider {
 		}
 		for (root in compilerInputs.packageRoots)
 			arguments.push('--package-root=${root.packageName}=${root.path}');
+		for (root in compilerInputs.dependencyRoots)
+			arguments.push("--dependency-root=" + root);
 		for (projection in compilerInputs.ffiProjections)
 			arguments.push("--ffi-projection=" + projection);
 		for (interfacePath in compilerInputs.ffiInterfaces)

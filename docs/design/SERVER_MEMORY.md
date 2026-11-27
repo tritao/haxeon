@@ -1,6 +1,6 @@
 # Compile-server memory: keep what decides, recompute the rest
 
-Status: proposed; measured again (below) and steps 1 to 3 built ("As built", at the end).
+Status: proposed; measured again (below), steps 1 to 3 built and step 4 in part ("As built", at the end).
 
 ## Where the live data is
 
@@ -192,3 +192,25 @@ not share, at the last edit (released one part at a time, as above): 24.4 MB ove
   section that a build copies once it changes one entry; types, objects, reachability, owners and the inline cache's own maps
   about 2. These are the history a refusal returns to, plus whole-table copies of small changes; a table that keeps each
   entry's history, as the query database's rollback log does, would make them differences, and is the next cut if they grow.
+
+### Step 4: package code keeps less
+
+What each intermediate keeps alone, released one at a time at the last edit's `request-done` of the UI session (a local
+diagnostic, as for step 0; every module, of which the app's own is one): the token tables 14.7 MB, the modules' syntax trees
+10.1 (their canonical declarations 0.9 more), the stage memos 27.6, of them the walks and contribution summaries 16.2, the
+per-stage function memos 9.5, the inliner's memo 0.9 and the stage facts 0.5; the typed functions with the last typed program's
+list 6.1; the generated IR and its memo 0.9; the final IR the inline cache holds 0.1, as the stage memos and the assembler hold
+the same functions. So the 77 MB of final IR the first paths charged to the inline cache are not the inline cache's: what is
+kept alone is the frontend's state and the stage memos' intermediate forms, about 40 MB, not 100–120.
+
+**The tier.** A module is package code (`ModuleState.packageCode`) when it is the standard library's, a dependency's, or an
+FFI module projected from an interface (which a session never changes). The project's dependencies are named by the CLI:
+`CompilerInputs.dependencyRoots`, every source root of a package other than the root package and the FFI projections of their
+imports, which `CompilerProvider` passes as `--dependency-root=`. Most packages do not scope their roots (`scopeSourceRoots`),
+so `PackageSourceRoot` alone does not tell them apart from the project's own roots; a request without the flag keeps
+everything, as before. The tier decides what is kept, never what is built.
+
+- **Tokens.** A module of package code keeps no token table after its parse in a session without semantic models
+  (`ModuleAnalyzer.parse`): nothing in the compile server reads it again, and an edit of the file parses it anew. A semantic
+  model made later lexes the file again (`ModuleState.keptTokens`). The UI session 362.70 → 344.35 MB, the small project
+  9.02 → 8.60 MB (the standard library's tokens).

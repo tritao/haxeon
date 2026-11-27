@@ -27,6 +27,14 @@ class ModuleState {
 	public var revision:Int = 1;
 	public var parseVersion:Int = 0;
 	public var typeVersion:Int = 0;
+
+	/**
+	 * Whether the module is package code: a dependency's (`--dependency-root`) or the standard library's. Its sources change
+	 * rarely, so a kept session keeps of it only what other code and the output need, and makes the rest again when it is edited
+	 * (docs/design/SERVER_MEMORY.md, step 4). It decides what is kept, never what is built.
+	 */
+	public var packageCode = false;
+
 	public var tokens = TokenTable.empty;
 	public var ast:Null<AstProgram>;
 	public var recoveredAst:Null<AstProgram>;
@@ -135,6 +143,10 @@ class ModuleState {
 		return result;
 	}
 
+	/** The module's tokens, or null once they were released (package code keeps none after its parse). */
+	public function keptTokens():Null<TokenTable>
+		return tokens == TokenTable.empty ? null : tokens;
+
 	/** The caller supplied new text for the module. */
 	public function update(source:SourceFile):Void {
 		loadedText = source.text;
@@ -161,6 +173,7 @@ class ModuleState {
 		result.revision = revision;
 		result.parseVersion = parseVersion;
 		result.typeVersion = typeVersion;
+		result.packageCode = packageCode;
 		result.tokens = tokens;
 		result.ast = ast;
 		result.recoveredAst = recoveredAst;

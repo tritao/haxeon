@@ -394,8 +394,11 @@ class SessionState {
 	 */
 	public function freshFromSources():SessionState {
 		var result = new SessionState(new TypeRegistry(), new GenericSpecializationRegistry(), backend.forCandidate());
-		for (name => state in modules)
-			result.modules.set(name, new ModuleState(name, state.source));
+		for (name => state in modules) {
+			var fresh = new ModuleState(name, state.source);
+			fresh.packageCode = state.packageCode;
+			result.modules.set(name, fresh);
+		}
 		return result;
 	}
 

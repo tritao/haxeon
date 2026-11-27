@@ -407,11 +407,12 @@ class Compiler {
 
 	/**
 	 * A module the FFI registry projected from an interface: a source update. One with no text changes nothing beyond the
-	 * interface's registration, which is an input of its own.
+	 * interface's registration, which is an input of its own. It is package code: generated from an interface, which a session
+	 * never changes.
 	 */
 	function projectedFfiModule(path:String, source:String):Void
 		if (source.length > 0)
-			update(path, source);
+			update(path, source, null, null, true);
 
 	/** Modules compiled with every entry, whatever it imports: what a host calls into (haxeon.wasm.HostError). */
 	public final rootModules:Array<String> = [];
@@ -446,9 +447,12 @@ class Compiler {
 		return true;
 	}
 
-	/** Add a filesystem root whose modules are loaded on demand during resolution. */
-	public function addSourceRoot(path:String):Void {
-		sourceLoader.addRoot(path);
+	/**
+	 * Add a filesystem root whose modules are loaded on demand during resolution; `dependency` when it holds a dependency's
+	 * sources, which are package code (`ModuleState.packageCode`).
+	 */
+	public function addSourceRoot(path:String, dependency = false):Void {
+		sourceLoader.addRoot(path, dependency);
 		state.inputs.addSourceRoot("source:" + path);
 	}
 
@@ -460,8 +464,8 @@ class Compiler {
 	}
 
 	/** Add a package-scoped source root for a resolved local dependency. */
-	public function addPackageSourceRoot(packageName:String, path:String):Void {
-		sourceLoader.addPackageRoot(packageName, path);
+	public function addPackageSourceRoot(packageName:String, path:String, dependency = false):Void {
+		sourceLoader.addPackageRoot(packageName, path, dependency);
 		state.inputs.addSourceRoot("package:" + packageName + "=" + path);
 	}
 
@@ -493,8 +497,12 @@ class Compiler {
 		return result;
 	}
 
-	/** An explicit module identity keeps a standalone file's directory out of its package. */
-	public function update(path:String, source:String, ?moduleName:String, ?physicalPath:String):ModuleState {
+	/**
+	 * An explicit module identity keeps a standalone file's directory out of its package. `packageCode`: the file is a
+	 * dependency's (`ModuleState.packageCode`).
+	 */
+	public function update(path:String, source:String, ?moduleName:String, ?physicalPath:String,
+			packageCode = false):ModuleState {
 		var name = moduleName == null ? ModulePath.fromFile(path) : moduleName;
 		var isStandardLibrarySource = false;
 		if (modules.exists(name)) {
@@ -514,6 +522,7 @@ class Compiler {
 			state = new ModuleState(name, file);
 			modules.set(name, state);
 		}
+		state.packageCode = packageCode || isStandardLibrarySource;
 		this.state.inputs.setSource(name, file);
 		return state;
 	}

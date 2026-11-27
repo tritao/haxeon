@@ -25,7 +25,10 @@ class ModuleAnalyzer {
 	final natives:NativeRegistry;
 	final compiledOnce:Bool;
 	final buildSemanticModels:Bool;
-	/** Whether a module keeps its tokens after its parse: a kept session reads them again (`lastGoodTokens`, semantic models). */
+	/**
+	 * Whether a module keeps its tokens after its parse: a kept session reads them again (`lastGoodTokens`, semantic models), but for
+	 * package code (`ModuleState.packageCode`) without semantic models, whose tokens are made again by the parse an edit brings.
+	 */
 	final keepsTokens:Bool;
 	final defines:Map<String, String>;
 	final sourceLoader:ModuleSourceLoader;
@@ -137,7 +140,7 @@ class ModuleAnalyzer {
 		if (state.ast != null) {
 			if (buildSemanticModels && state.semanticModel == null)
 				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
-					state.revision, state.tokens);
+					state.revision, state.keptTokens());
 			return;
 		}
 		try {
@@ -145,7 +148,7 @@ class ModuleAnalyzer {
 			lookupParses.remove(state.name);
 			state.conditionalDefines = parsed.defines;
 			state.embeddedInputs = parsed.embeddedInputs;
-			state.tokens = keepsTokens ? parsed.tokens : TokenTable.empty;
+			state.tokens = buildSemanticModels || keepsTokens && !state.packageCode ? parsed.tokens : TokenTable.empty;
 			state.ast = parsed.ast;
 			declarationOwners.release(state.name);
 			if (!state.source.isStandardLibrarySource)

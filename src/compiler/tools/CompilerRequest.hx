@@ -108,5 +108,12 @@ typedef CompilerRequest = {
 	 */
 	final stdlib:String;
 	final packageRoots:Array<PackageSourceRoot>;
+
+	/**
+	 * The roots among `roots` and `packageRoots` that hold a dependency's sources (`--dependency-root=`): package code, of which a
+	 * kept session keeps only what other code and the output need (`ModuleState.packageCode`).
+	 */
+	final dependencyRoots:Array<String>;
+
 	final paths:Array<String>;
 }

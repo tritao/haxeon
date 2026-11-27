@@ -701,7 +701,7 @@ class FrontendCompilation {
 			for (module in reindexedModules.keys()) {
 				var state = context.state.writableState(module, build.rollbackModules);
 				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
-					state.revision, state.tokens);
+					state.revision, state.keptTokens());
 			}
 			context.state.semanticWorkspace.invalidateResolutionCache();
 			for (module in reindexedModules.keys()) {

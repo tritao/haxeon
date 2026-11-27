@@ -214,9 +214,10 @@ class CompilerSession {
 			}
 			compiler.addStandardLibrarySourceRoot(request.stdlib);
 			for (root in request.roots)
-				compiler.addSourceRoot(root);
+				compiler.addSourceRoot(root, request.dependencyRoots.indexOf(root) >= 0);
 			for (root in request.packageRoots)
-				compiler.addPackageSourceRoot(root.packageName, root.path);
+				compiler.addPackageSourceRoot(root.packageName, root.path,
+					request.dependencyRoots.indexOf(root.path) >= 0);
 			configuration = identity;
 		} else {
 			if (request.verbosity.atLeast(Verbosity.Normal))
@@ -230,7 +231,8 @@ class CompilerSession {
 				}
 			}
 		}
-		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots, readChanged);
+		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots, readChanged,
+			request.dependencyRoots);
 		// Wasm guests always carry the stdlib modules their host calls into.
 		var hostModules = hostSources(request);
 		SourceManifestLoader.load(compiler, [request.stdlib], hostModules, null, readChanged);

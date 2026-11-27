@@ -9,7 +9,8 @@ import sys.FileSystem;
 class ModuleSourceLoader {
 	static final caseSensitiveFileSystem:Bool = Sys.systemName() != "Windows" && Sys.systemName() != "Mac";
 
-	final roots:Array<{path:String, packagePrefix:Null<String>, isStandardLibrary:Bool}> = [];
+	/** Each root, and whether its modules are package code (`ModuleState.packageCode`): the standard library's or a dependency's. */
+	final roots:Array<{path:String, packagePrefix:Null<String>, isStandardLibrary:Bool, packageCode:Bool}> = [];
 	// Names no root holds a module for. Import resolution asks for the same missing names (a declaration path, then each
 	// parent) many times, each a file probe in every root. A copy starts empty, so each compile request probes again.
 	final missing:Map<String, Bool> = [];
@@ -22,11 +23,12 @@ class ModuleSourceLoader {
 
 	public function new() {}
 
-	public function addRoot(path:String):Void {
+	/** `dependency`: the root holds a dependency's sources, which are package code. */
+	public function addRoot(path:String, dependency = false):Void {
 		var normalized = normalizeRoot(path);
 		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
 			throw new InternalError('Source root "$path" is not a directory');
-		addRootMapping(normalized, null, false);
+		addRootMapping(normalized, null, false, dependency);
 	}
 
 	/** Register the compiler-owned standard library root; sources loaded from it carry trusted provenance. */
@@ -34,7 +36,7 @@ class ModuleSourceLoader {
 		var normalized = normalizeRoot(path);
 		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
 			throw new InternalError('Standard library source root "$path" is not a directory');
-		addRootMapping(normalized, null, true);
+		addRootMapping(normalized, null, true, true);
 	}
 
 	/**
@@ -50,22 +52,28 @@ class ModuleSourceLoader {
 			addStandardLibraryRoot(portable);
 	}
 
-	public function addPackageRoot(packageName:String, path:String):Void {
+	public function addPackageRoot(packageName:String, path:String, dependency = false):Void {
 		if (packageName == null || packageName.length == 0)
 			throw new InternalError("Package source root requires a package name");
 		var normalized = normalizeRoot(path);
 		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
 			throw new InternalError('Package source root "$path" is not a directory');
-		addRootMapping(normalized, packageName, false);
+		addRootMapping(normalized, packageName, false, dependency);
 	}
 
-	function addRootMapping(path:String, packagePrefix:Null<String>, isStandardLibrary:Bool):Void {
+	function addRootMapping(path:String, packagePrefix:Null<String>, isStandardLibrary:Bool, packageCode:Bool):Void {
 		for (root in roots)
 			if (root.path == path && root.packagePrefix == packagePrefix) {
 				root.isStandardLibrary = root.isStandardLibrary || isStandardLibrary;
+				root.packageCode = root.packageCode || packageCode;
 				return;
 			}
-		roots.push({path: path, packagePrefix: packagePrefix, isStandardLibrary: isStandardLibrary});
+		roots.push({
+			path: path,
+			packagePrefix: packagePrefix,
+			isStandardLibrary: isStandardLibrary,
+			packageCode: packageCode
+		});
 		missing.clear();
 		listings.clear();
 	}
@@ -80,7 +88,7 @@ class ModuleSourceLoader {
 		if (missing.exists(name))
 			return null;
 		var relative = name.split(".").join("/") + ".hx";
-		var found:Null<{path:String, text:String, standard:Bool}> = null;
+		var found:Null<{path:String, text:String, standard:Bool, packageCode:Bool}> = null;
 		for (root in roots) {
 			var candidates = [relative];
 			if (root.packagePrefix != null) {
@@ -107,13 +115,14 @@ class ModuleSourceLoader {
 			if (found != null && found.path != path && !found.standard && !root.isStandardLibrary)
 				throw new InternalError('Module "$name" is in two source roots: ${found.path} and $path');
 			if (found == null)
-				found = {path: path, text: text, standard: root.isStandardLibrary};
+				found = {path: path, text: text, standard: root.isStandardLibrary, packageCode: root.packageCode};
 		}
 		if (found == null) {
 			missing.set(name, true);
 			return null;
 		}
 		var state = new ModuleState(name, new SourceFile(found.path, found.text, found.standard));
+		state.packageCode = found.packageCode;
 		modules.set(name, state);
 		return state;
 	}
@@ -230,8 +239,9 @@ class ModuleSourceLoader {
 						text = FileVersion.readSource(path);
 					if (declaresOther(text, packageName))
 						continue;
-					modules.set(moduleName,
-						new ModuleState(moduleName, new SourceFile(path, text, root.isStandardLibrary)));
+					var state = new ModuleState(moduleName, new SourceFile(path, text, root.isStandardLibrary));
+					state.packageCode = root.packageCode;
+					modules.set(moduleName, state);
 				}
 				if (result.indexOf(moduleName) < 0)
 					result.push(moduleName);
@@ -339,7 +349,8 @@ class ModuleSourceLoader {
 			result.roots.push({
 				path: root.path,
 				packagePrefix: root.packagePrefix,
-				isStandardLibrary: root.isStandardLibrary
+				isStandardLibrary: root.isStandardLibrary,
+				packageCode: root.packageCode
 			});
 		return result;
 	}

@@ -15,7 +15,7 @@ class CompilerArguments {
 		"--output", "--api-json", "--api-source", "--target", "--build-mode", "--entry", "--ir-output",
 		"--inputs-output", "--baseline",
 		"--baseline-output",
-		"--root", "--sources-file", "--package-root", "--ffi-header", "--ffi-library",
+		"--root", "--sources-file", "--package-root", "--dependency-root", "--ffi-header", "--ffi-library",
 		"--ffi-interface",
 		"--ffi-projection", "--define", "--dump-function", "--session", "--verbosity", "--diagnostic-format", "--color",
 		"--diagnostic-directory", "--stdlib", "--wasm-memory-base", "--wasm-memory-contract", "--export",
@@ -63,7 +63,7 @@ class CompilerArguments {
 			diagnosticFormat = DiagnosticFormat.Short,
 			color = false,
 			diagnosticDirectory:Null<String> = null;
-		var packageRoots:Array<PackageSourceRoot> = [];
+		var packageRoots:Array<PackageSourceRoot> = [], dependencyRoots:Array<String> = [];
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -107,6 +107,8 @@ class CompilerArguments {
 				}
 			} else if (StringTools.startsWith(argument, "--package-root="))
 				packageRoots.push(packageRoot(value(argument, "--package-root=")));
+			else if (StringTools.startsWith(argument, "--dependency-root="))
+				dependencyRoots.push(value(argument, "--dependency-root="));
 			else if (StringTools.startsWith(argument, "--ffi-header="))
 				ffiHeader = value(argument, "--ffi-header=");
 			else if (StringTools.startsWith(argument, "--ffi-library="))
@@ -274,6 +276,7 @@ class CompilerArguments {
 			roots: roots,
 			stdlib: stdlib,
 			packageRoots: packageRoots,
+			dependencyRoots: dependencyRoots,
 			paths: paths
 		};
 	}
