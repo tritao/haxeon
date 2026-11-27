@@ -122,6 +122,7 @@ Runtime and tools:
 - [0005](adr/0005-compilation-units.md): compilation units and the link step (proposed).
 - [0006](adr/0006-haxeon-only-compiler-source.md): the compiler's source may require Haxeon (accepted, gated).
 - [0007](adr/0007-standard-library-layout.md): the standard library under one `std` prefix, Haxe's API as a package (proposed).
+- [0008](adr/0008-native-layers.md): the native layers: the VM in the repository, one host library, NativeKit for apps (proposed).
 
 ## Reports
 

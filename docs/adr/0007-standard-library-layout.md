@@ -140,16 +140,22 @@ there is no receiver (`std.math.max(a, b)`).
 
 ### 8. `std.fs`
 
-The first package built to this layout, because files are where the three APIs and error styles meet:
+The first package built to this layout, because files are where the three APIs and error styles meet. Its natives are the
+runtime's own ([ADR 0008](0008-native-layers.md)):
 
-- **Handles to directories.** Every operation runs against a `Directory` (`root.remove("build/x")`), which `..` and
-  symbolic links cannot leave, as WASI and NativeKit's `FileSystemRoot` do. An absolute path is opened as a directory
-  first (`Directory.open(path)`, `Directory.current()`), so a script stays short. The Wasm in-memory filesystem, a
-  sandboxed app and a test's scratch tree are each another `Directory`, not a `#if wasm` branch.
+- **Paths as the operating system reads them.** `Files.read(path)`, `Files.remove(path)` and the rest take a path and
+  resolve it as the system does: absolute or against the working directory, `..` and symbolic links followed. That is
+  what the compiler, a build script and a tool need, and they are most callers.
+- **Confinement is opt-in.** `Root.open(path)` is a directory that nothing reached through it can leave: `..` and
+  symbolic links resolve only beneath it, or fail with `EscapesRoot`. It has the same operations, as methods
+  (`root.read(path)`), for code that serves files to someone it does not trust (a workspace server, a plugin host, a
+  sandboxed app). Confining every operation instead would make ordinary code open directories first, and fail where a
+  kernel lacks safe resolution; such a kernel fails only a `Root` (`Unsupported`). The Wasm in-memory filesystem
+  implements both, and a WASI target maps a `Root` to a preopened directory.
 - **A path type.** `Path` is an abstract over `String` that stays normalized and joins with `/`; no path is built by
   concatenation.
 - **Typed failures.** Each operation returns `Result<T, FileError>`: `NotFound`, `AlreadyExists`, `NotEmpty`,
-  `NotADirectory`, `IsADirectory`, `PermissionDenied`, `Io(code, message)`.
+  `NotADirectory`, `IsADirectory`, `PermissionDenied`, `EscapesRoot`, `Unsupported`, `Io(code, message)`.
 - **Operations named for what callers want.** `remove` succeeds when nothing is there ("make sure it is gone"), so no
   caller checks `exists` first, a check that races and costs a second call; `delete` returns `NotFound`. `createDirectory`
   makes the parents and succeeds when the directory exists. `removeTree` and `writeAtomic` replace the hand-written
@@ -174,7 +180,8 @@ The order:
    literals (`haxe.io.Bytes`, `haxe.Rest`, `haxeon.async.Future`, ...). They are gathered into one table first, so each
    later move changes the table, not the compiler. Done: `compiler.core.StdlibNames`, which a compiler test checks
    against the standard library's declarations.
-2. **`std.fs`**, built beside today's API and tested on HashLink and both Wasm targets; `haxeon.filesystem` folds into it.
+2. **`std.fs`**, built beside today's API and tested on HashLink and both Wasm targets; `haxeon.filesystem` folds into it
+   (`Root`), and the package is deleted.
 3. **The other `std` packages**, one domain per change, each with its documentation required (as the standard library's
    is today). A module moves, it is not copied: its old name becomes an adapter in the compatibility package in the same
    change.
