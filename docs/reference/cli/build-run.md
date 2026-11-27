@@ -156,9 +156,14 @@ are the API (`described`). A library needs no `entry`. Types are written as the 
 the names of the typedefs it uses. The format is Haxeon's own JSON, versioned. A package that requires its documentation
 fails `haxeon doc` as it fails `haxeon check`, on each public declaration without a doc comment.
 
+`haxeon doc --standard-library` describes the standard library instead, with no project: each of its modules for the
+target (the host's unless `--target` names another), into `build/api.json` of the directory it runs in, or to `--output`.
+The standard library belongs to no package, so its sources are given relative to the directory `stdlib` is in.
+
 ```sh
 haxeon doc
 haxeon doc --output docs/ui-api.json
+haxeon doc --standard-library --output std-api.json
 ```
 
 ## run

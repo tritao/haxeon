@@ -6,6 +6,15 @@ import build.HaxeonSdk;
 import build.TargetLayout;
 import project.ResolvedProject;
 
+/** What a check describes, and where it writes the API model (`haxeon doc`). */
+typedef ApiDescription = {
+	/** Where the API model (docs/design/API_MODEL.md) is written. */
+	final output:String;
+
+	/** Whether the standard library is described, each of its modules, instead of the root package (`--standard-library`). */
+	final standardLibrary:Bool;
+}
+
 /** Immutable inputs shared by all providers while lowering one build plan. */
 class LoweringContext {
 	public final environment:BuildEnvironment;
@@ -52,16 +61,16 @@ class LoweringContext {
 
 	public final webHost:Null<String>;
 
-	/** Where a check also writes the root package's API model (`haxeon doc`). */
-	public final apiJson:Null<String>;
+	/** What a check also describes, and where it writes that (`haxeon doc`); null for none. */
+	public final api:Null<ApiDescription>;
 
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String,
 			?compilerHome:String,
 			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession,
 			?nativeCache:String,
 			developmentMetadata:Bool = true, ?baseline:String, ?reportStyle:compiler.tools.ReportStyle,
-			?checkOnly:Bool, ?scriptModule:String, ?webHost:String, ?apiJson:String) {
-		this.apiJson = apiJson;
+			?checkOnly:Bool, ?scriptModule:String, ?webHost:String, ?api:ApiDescription) {
+		this.api = api;
 		this.webHost = webHost;
 		this.scriptModule = scriptModule;
 		this.checkOnly = checkOnly == true;

@@ -29,6 +29,7 @@ class CompilerArguments {
 			output = "out/main.hl",
 			apiJsonOutput:Null<String> = null,
 			apiSources:Array<String> = [],
+			apiStandardLibrary = false,
 			irOutput:Null<String> = null,
 			inputsOutput:Null<String> = null,
 			baseline:Null<String> = null,
@@ -78,6 +79,8 @@ class CompilerArguments {
 				apiJsonOutput = value(argument, "--api-json=");
 			else if (StringTools.startsWith(argument, "--api-source="))
 				apiSources.push(value(argument, "--api-source="));
+			else if (argument == "--api-standard-library")
+				apiStandardLibrary = true;
 			else if (StringTools.startsWith(argument, "--entry=")) {
 				entry = value(argument, "--entry=");
 				entryGiven = true;
@@ -173,7 +176,7 @@ class CompilerArguments {
 			throw new UsageError("--ffi-header and --ffi-library must be provided together");
 		if (roots.length == 0)
 			roots.push("src");
-		if (paths.length == 0)
+		if (paths.length == 0 && !apiStandardLibrary)
 			throw new UsageError("Haxeon compiler requires an explicit source manifest");
 		var backend = BackendTargets.parse(target);
 		if (backend == Wasm64)
@@ -200,6 +203,8 @@ class CompilerArguments {
 			throw new UsageError("--require-docs checks the sources' description without building them: use it with --no-output");
 		if (apiSources.length > 0 && !describes)
 			throw new UsageError("--api-source shapes what --api-json and --require-docs describe: use it with one of them");
+		if (apiStandardLibrary && (!describes || apiSources.length > 0))
+			throw new UsageError("--api-standard-library describes the standard library instead of --api-source: use it with --api-json or --require-docs");
 		if (describes && !entryGiven)
 			entry = compiler.modules.ModuleReachability.NO_ENTRY;
 		if (baseline != null && !live)
@@ -238,6 +243,7 @@ class CompilerArguments {
 			output: output,
 			apiJsonOutput: apiJsonOutput,
 			apiSources: apiSources,
+			apiStandardLibrary: apiStandardLibrary,
 			irOutput: irOutput,
 			inputsOutput: inputsOutput,
 			baseline: baseline,

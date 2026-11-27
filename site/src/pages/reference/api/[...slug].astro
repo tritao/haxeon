@@ -1,8 +1,8 @@
 ---
 /*
- * The API reference of a first-party package (api.mjs): its overview at /reference/api/<directory>/, and a page per Haxe
- * package of its API with every type and member, from what `haxeon doc` describes. Without the descriptions
- * (npm run build:api), each package's overview says so and links to its sources.
+ * The API reference of the standard library or of a first-party package (api.mjs): its overview at
+ * /reference/api/<directory>/, and a page per Haxe package of its API with every type and member, from what `haxeon doc`
+ * describes. Without the descriptions (npm run build:api), each overview says so and links to the sources.
  */
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import { createMarkdownProcessor } from '@astrojs/markdown-remark';
@@ -10,6 +10,8 @@ import { getCollection } from 'astro:content';
 import {
   apiBase,
   apiIndex,
+  apiStandardLibrary,
+  apiTitle,
   declarationHtml,
   documentationCoverage,
   haxePackages,
@@ -43,7 +45,11 @@ const entries = (await getCollection('api')).map((entry) => entry.data);
 const model = entries.find((entry) => entry.directory === directory)?.model ?? null;
 const groups = model ? haxePackages(model) : [];
 const index = apiIndex(entries);
-const packageName = model?.types.find((type) => model.described.includes(type.module))?.package ?? directory;
+const standardLibrary = directory === apiStandardLibrary;
+const packageName = standardLibrary
+  ? apiTitle(directory)
+  : (model?.types.find((type) => model.described.includes(type.module))?.package ?? directory);
+const sources = standardLibrary ? 'stdlib' : `packages/${directory}`;
 const current = group == null ? null : groups.find((entry) => entry.name === group);
 const markdown = await createMarkdownProcessor();
 const render = async (text) => (text ? (await markdown.render(text)).code : '');
@@ -77,9 +83,10 @@ const memberDocs = (member) => {
 const tagLabel = { param: 'Parameter', return: 'Returns', throws: 'Throws', see: 'See', deprecated: 'Deprecated', since: 'Since' };
 
 const title = current ? (current.name === '' ? `${packageName} (top level)` : current.name) : `${packageName} API`;
+const owner = standardLibrary ? 'the standard library' : `the ${packageName} package`;
 const description = current
-  ? `The types of ${current.name || 'the top level'} in the ${packageName} package.`
-  : `The public API of the ${packageName} package.`;
+  ? `The types of ${current.name || 'the top level'} in ${owner}.`
+  : `The public API of ${owner}.`;
 const headings = current
   ? [
       ...current.types.map((type) => ({ depth: 2, slug: typeAnchor(type.path), text: shortName(type.path) })),
@@ -92,8 +99,8 @@ const headings = current
   {
     !model && (
       <p>
-        This package's reference is generated from its sources by <code>npm run build:api</code>, which this build of the
-        site did not run. Its sources are in <a href={repositorySource(`packages/${directory}`)}>packages/{directory}</a>.
+        This reference is generated from its sources by <code>npm run build:api</code>, which this build of the site did
+        not run. Its sources are in <a href={repositorySource(sources)}>{sources}</a>.
       </p>
     )
   }
@@ -101,7 +108,8 @@ const headings = current
     model && !current && (
       <>
         <p>
-          The public API of <code>{packageName}</code>: its declarations except those written <code>internal</code>.
+          The public API of {standardLibrary ? 'the standard library' : <code>{packageName}</code>}: its declarations
+          except those written <code>internal</code>.
           A declaration without a doc comment is listed with its signature only.
         </p>
         <table>

@@ -83,6 +83,9 @@ private typedef BuildOptions = {
 
 	final gradleInputs:Null<String>;
 
+	/** `--standard-library` (`haxeon doc`): describe the standard library, not a project. */
+	final standardLibrary:Bool;
+
 	/**
 	 * `--watch` (`haxeon run`): rebuild on each edit and patch the running app in the live host when its entry class declares
 	 * the host's entry points (`LiveHostBuild.missingEntryPoints`), else relaunch it.
@@ -854,8 +857,23 @@ class HaxeonCli {
 	}
 
 	/** `haxeon build`, `run`, `test` and `check`, of the project the options name. */
-	static function build(arguments:Array<String>, command:BuildCommand):Int
-		return buildWith(parseBuildOptions(arguments), command);
+	static function build(arguments:Array<String>, command:BuildCommand):Int {
+		var options = parseBuildOptions(arguments);
+		if (options.standardLibrary && command != Doc)
+			throw new UsageError('Option "--standard-library" is only valid with "haxeon doc"');
+		return buildWith(options, command, options.standardLibrary ? standardLibraryProgram() : null);
+	}
+
+	/**
+	 * What `haxeon doc --standard-library` builds: a program with no sources of its own, whose description is the standard
+	 * library's, each module of it (`--api-standard-library`), written to `build/api.json` in the directory it was run from unless
+	 * `--output` says where.
+	 */
+	static function standardLibraryProgram():ProgramProject {
+		var directory = ProgramProject.directory("standard-library", null, "doc");
+		return new ProgramProject(directory,
+			PackageManifest.program("standard-library", null, [], [directory], true, [], null, []));
+	}
 
 	/**
 	 * Builds the project the options name, or `program`, a project made in memory (a script's, a Haxe command line's), which is
@@ -1243,11 +1261,9 @@ class HaxeonCli {
 	/**
 	 * `haxeon check`: types the project's program as a build would, for any target, and reports its diagnostics without writing a
 	 * module. Only the compile runs, with the FFI imports it reads; it shares the build's compiler session, so a check after a
-	 * build, or a build after a check, reuses what the other typed.
-	 */
-	/**
-	 * `haxeon check`, or with `describe` `haxeon doc`: the same typing, which also writes the project's API model to `--output`
-	 * (default `build/api.json`). A package's API is its own modules except those of a package named `internal`.
+	 * build, or a build after a check, reuses what the other typed. With `describe` it is `haxeon doc`, which also writes the
+	 * API model of the project's own modules, or of the standard library's (`--standard-library`), to `--output` (default
+	 * `build/api.json`, of the project or of the directory it was run from).
 	 */
 	static function check(options:BuildOptions, project:ResolvedProject, target:Target, resolutionMs:Float,
 			describe:Bool = false):Int {
@@ -1259,8 +1275,14 @@ class HaxeonCli {
 			throw new UsageError('haxeon $name takes only --project, --target, --build-mode, --define, --jobs, --timings, -v, --color'
 				+ (describe ? ', --diagnostic-format and --output' : ' and --diagnostic-format')
 				+ '. See \'haxeon $name --help\'.');
-		var apiJson = !describe ? null : options.output != null ? resolvePath(options.output, invokedFrom)
-			: Path.join([HaxeonProjectBuild.outputDirectory(project, false), "api.json"]);
+		var api:Null<build.lowering.LoweringContext.ApiDescription> = !describe ? null : {
+			output: options.output != null ? resolvePath(options.output, invokedFrom) : Path.join([
+				options.standardLibrary
+					? Path.join([invokedFrom, "build"]) : HaxeonProjectBuild.outputDirectory(project, false),
+				"api.json"
+			]),
+			standardLibrary: options.standardLibrary
+		};
 		var home = haxeonHome(),
 			webHost = target.isWasm() && project.manifest.app != null ? AppRunner.webHost(project, home) : null;
 		NativeTargetSupport.validate(project, target, webHost != null);
@@ -1273,8 +1295,8 @@ class HaxeonCli {
 				false,
 				options.timings, resolutionMs, false, Check, false, false, null, options.buildMode == "development",
 				target,
-				null, options.style, false, null, webHost, false, apiJson);
-		reportBuilt(options, apiJson, status, started, describe ? null : "No errors");
+				null, options.style, false, null, webHost, false, api);
+		reportBuilt(options, api == null ? null : api.output, status, started, describe ? null : "No errors");
 		return status;
 	}
 
@@ -1661,6 +1683,8 @@ class HaxeonCli {
 			quiet = false,
 			compilerOnly = false,
 			gradleInputs:Null<String> = null,
+			standardLibrary = false,
+			projectGiven = false,
 			watch = false,
 			restart = false,
 			patchable = false,
@@ -1692,6 +1716,8 @@ class HaxeonCli {
 				quiet = true;
 			else if (argument == "--compiler-only")
 				compilerOnly = true;
+			else if (argument == "--standard-library")
+				standardLibrary = true;
 			else if (argument == "--watch")
 				watch = true;
 			else if (argument == "--restart")
@@ -1743,6 +1769,7 @@ class HaxeonCli {
 				switch argument {
 					case "--project":
 						projectPath = value;
+						projectGiven = true;
 					case "--target":
 						target = value;
 					case "--build-mode":
@@ -1771,9 +1798,11 @@ class HaxeonCli {
 						jobs = parsedJobs;
 					case _:
 				}
-			} else if (StringTools.startsWith(argument, "--project="))
+			} else if (StringTools.startsWith(argument, "--project=")) {
 				projectPath = argument.substr("--project=".length);
-			else if (StringTools.startsWith(argument, "--target="))
+				projectGiven = true;
+			}
+				else if (StringTools.startsWith(argument, "--target="))
 				target = argument.substr("--target=".length);
 			else if (StringTools.startsWith(argument, "--build-mode=")) {
 				buildMode = argument.substr("--build-mode=".length);
@@ -1818,6 +1847,8 @@ class HaxeonCli {
 			throw new UsageError('Unknown build mode "$buildMode". Valid: development, release');
 		if (patchable && buildModeExplicit && buildMode != "development")
 			throw new UsageError("--patchable requires development build mode");
+		if (standardLibrary && projectGiven)
+			throw new UsageError('Option "--standard-library" describes the standard library, not a project: it takes no "--project"');
 		return {
 			projectPath: projectPath,
 			target: target,
@@ -1837,6 +1868,7 @@ class HaxeonCli {
 			quiet: quiet,
 			compilerOnly: compilerOnly,
 			gradleInputs: gradleInputs,
+			standardLibrary: standardLibrary,
 			watch: watch,
 			restart: restart,
 			patchable: patchable,
@@ -1881,6 +1913,7 @@ class HaxeonCli {
 			quiet: quiet,
 			compilerOnly: false,
 			gradleInputs: null,
+			standardLibrary: false,
 			watch: false,
 			restart: false,
 			patchable: false,

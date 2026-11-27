@@ -465,6 +465,24 @@ class Compiler {
 		state.inputs.addSourceRoot("package:" + packageName + "=" + path);
 	}
 
+	/**
+	 * Loads every module the standard library holds for this compiler's target, which no entry reaches in full, and returns their
+	 * names, sorted. The Wasm host's interface (`haxeon.wasm`) is the standard library's only on a Wasm target, which generates
+	 * the host modules it imports (`CompilerSession.hostInterfaces`).
+	 */
+	public function loadStandardLibrary():Array<String> {
+		var wasm = BackendTargets.isWasm(backendTarget),
+			names = [
+				for (name in sourceLoader.standardModuleNames())
+					if (wasm || !StringTools.startsWith(name, WASM_HOST_PACKAGE)) name
+			];
+		for (name in names)
+			sourceLoader.load(name, modules);
+		return names;
+	}
+
+	static inline final WASM_HOST_PACKAGE = "haxeon.wasm.";
+
 	public function compact(entryModule:String):CompileResult {
 		refreshEmbeddedInputs();
 		var hashLink = state.backend.hashLink();

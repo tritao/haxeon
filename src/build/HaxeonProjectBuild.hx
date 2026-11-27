@@ -50,7 +50,7 @@ class HaxeonProjectBuild {
 			live:Bool = false, instrument:Bool = false,
 			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String,
 			?style:ReportStyle, aheadOfTime:Bool = false, ?scriptModule:String, ?webHost:String,
-			consoleProgram:Bool = false, ?apiJson:String):Int {
+			consoleProgram:Bool = false, ?api:build.lowering.LoweringContext.ApiDescription):Int {
 		var shown = style == null ? ReportStyle.DEFAULT : style;
 		var buildTarget = target == null ? Target.detectHost() : target;
 		if (!buildTarget.isWasm() && !buildTarget.isAndroid() && !buildTarget.equals(Target.detectHost()))
@@ -87,7 +87,7 @@ class HaxeonProjectBuild {
 					scope == Check,
 					scriptModule,
 					webHost,
-					apiJson
+					api
 				));
 		switch scope {
 			case Full:

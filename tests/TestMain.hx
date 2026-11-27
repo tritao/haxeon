@@ -1695,10 +1695,21 @@ class TestMain {
 		if (apiRequest.apiJsonOutput != "out/api.json" || apiRequest.entry != ModuleReachability.NO_ENTRY
 			|| equalsApiRequest.apiJsonOutput != "out/equals.json" || equalsApiRequest.entry != "app.Main")
 			throw "Compiler CLI did not read --api-json, with or without an entry";
+		// The standard library's description has no sources of its own.
+		var standardLibraryRequest = CompilerArguments.parse([
+			"--no-output",
+			"--api-json=out/std.json",
+			"--api-standard-library"
+		]);
+		if (!standardLibraryRequest.apiStandardLibrary || standardLibraryRequest.paths.length != 0
+			|| apiRequest.apiStandardLibrary)
+			throw "Compiler CLI did not read --api-standard-library";
 		for (rejected in [
 			["source/Main.hx", "--no-output", "--api-json"],
 			["--api-json=out/api.json", "source/Main.hx"],
-			["--no-output", "--api-source=src", "source/Main.hx"]
+			["--no-output", "--api-source=src", "source/Main.hx"],
+			["--no-output", "--api-standard-library"],
+			["--no-output", "--api-json=out/std.json", "--api-standard-library", "--api-source=src"]
 		]) {
 			var refused = false;
 			try {
@@ -1707,7 +1718,7 @@ class TestMain {
 				refused = true;
 			}
 			if (!refused)
-				throw 'Compiler CLI accepted ${rejected.join(" ")}: --api-json needs a path and --no-output, --api-source needs --api-json';
+				throw 'Compiler CLI accepted ${rejected.join(" ")}: --api-json needs a path and --no-output, --api-source and --api-standard-library need --api-json, and not both';
 		}
 		var normalizedDocumentation =
 			DocumentationTools.normalize(" Adds values.\n * @param left First value.\n * @returns the sum.\n * @throws Overflow on failure.\n * @since 1.0");

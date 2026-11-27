@@ -27,7 +27,7 @@ class CompilerProvider {
 		// A description of a library's API has no program to start: it types the package's modules themselves. A check of a
 		// package that requires its documentation checks that description.
 		var requireDocs = context.checkOnly && project.manifest.documentationRequired,
-			describe = context.checkOnly && context.apiJson != null || requireDocs,
+			describe = context.checkOnly && context.api != null || requireDocs,
 			entry = project.manifest.entry;
 		if (entry == null && !describe)
 			throw new InternalError('Root package "${project.rootPackage.name}" must declare an "entry" for a build');
@@ -84,12 +84,16 @@ class CompilerProvider {
 				arguments.push(compiler.CompileOptions.PACKAGE_FRIEND + entry.name + "=" + friend);
 		}
 		if (describe) {
-			if (context.apiJson != null)
-				arguments.push("--api-json=" + context.apiJson);
+			var api = context.api;
+			if (api != null)
+				arguments.push("--api-json=" + api.output);
 			if (requireDocs)
 				arguments.push(compiler.CompileOptions.REQUIRE_DOCS);
-			for (root in project.rootPackage.sourceRoots)
-				arguments.push("--api-source=" + root);
+			if (api != null && api.standardLibrary)
+				arguments.push("--api-standard-library");
+			else
+				for (root in project.rootPackage.sourceRoots)
+					arguments.push("--api-source=" + root);
 		}
 		for (sourceRoot in compilerInputs.roots)
 			arguments.push("--root=" + sourceRoot);

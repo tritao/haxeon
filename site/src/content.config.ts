@@ -8,7 +8,7 @@ import { glob } from 'astro/loaders';
 import { i18nLoader } from '@astrojs/starlight/loaders';
 import { docsSchema, i18nSchema } from '@astrojs/starlight/schema';
 import {
-  apiPackages,
+  apiEntries,
   cliDirectory,
   cliGroupPages,
   cliOverview,
@@ -172,7 +172,8 @@ const docs = defineCollection({
 });
 
 /**
- * The first-party packages' API descriptions (scripts/build-api.sh, api.mjs): an entry per package, whose `model` is null
+ * The API descriptions of the standard library and the first-party packages (scripts/build-api.sh, api.mjs): an entry per
+ * reference, whose `model` is null
  * when this build did not describe it, so its reference says how to generate it.
  */
 const generatedApi = new URL('../generated/api/', import.meta.url);
@@ -182,7 +183,7 @@ const api = defineCollection({
     async load({ store, watcher, generateDigest }) {
       const read = () => {
         store.clear();
-        for (const directory of apiPackages) {
+        for (const directory of apiEntries) {
           const file = new URL(`${directory}.json`, generatedApi);
           const text = existsSync(file) ? readFileSync(file, 'utf8') : null;
           store.set({

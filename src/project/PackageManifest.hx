@@ -572,11 +572,11 @@ class PackageManifest {
 	}
 
 	/**
-	 * The manifest of a program the CLI builds with no manifest file of its own (a script, a Haxe command line's compilation): a host
+	 * The manifest of a program the CLI builds with no manifest file of its own (a script, a Haxe command line's compilation, the standard library's description): a host
 	 * project with these sources, source roots (absolute) and defines, built into `build` beside where it is resolved.
 	 * `scopeSourceRoots: false` lets its roots hold any package, as Haxe's class paths do.
 	 */
-	public static function program(name:String, entry:String, sources:Array<String>, sourceRoots:Array<String>,
+	public static function program(name:String, entry:Null<String>, sources:Array<String>, sourceRoots:Array<String>,
 			scopeSourceRoots:Bool, defines:Array<String>, inlineEnabled:Null<Bool>,
 			dependencies:Map<String, PackageSource>, ?nullSafetyRules:Array<NullSafetyRule>):PackageManifest {
 		var declared:Map<String, PackageDependency> = [];

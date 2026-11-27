@@ -164,6 +164,16 @@ class ModuleSourceLoader {
 		ancestors.pop();
 	}
 
+	/** The name of each module the standard library roots hold, sorted, whether or not this build loads it. */
+	public function standardModuleNames():Array<String> {
+		var seen:Map<String, ModuleState> = [], names:Array<String> = [], loader = copy();
+		for (root in loader.roots)
+			if (root.isStandardLibrary && root.packagePrefix == null)
+				loader.visitDirectory(root.path, "", null, _ -> true, seen, state -> names.push(state.name), []);
+		names.sort(Reflect.compare);
+		return names;
+	}
+
 	/** Whether a standard library root holds module `name`, whether or not this build loads it. */
 	public function isStandardModule(name:String):Bool {
 		var relative = name.split(".").join("/") + ".hx";

@@ -77,6 +77,16 @@ export const apiPackages = [
   ),
 ].sort();
 
+// The standard library's reference, beside the packages', at /reference/api/standard-library/ (haxeon doc
+// --standard-library). No package directory has that name: a package's is its name, and the standard library is no package.
+export const apiStandardLibrary = 'standard-library';
+
+/** Every API reference the site has: the standard library's, then each package's. */
+export const apiEntries = [apiStandardLibrary, ...apiPackages];
+
+/** What a reference is called: the standard library, or its package's directory. */
+export const apiTitle = (directory) => (directory === apiStandardLibrary ? 'Standard library' : directory);
+
 // A group lists its pages, or a directory whose unlisted pages follow, or nested groups.
 const groups = [
   ['Start here', ['guides/00-get-started.md', 'guides/01-first-app.md']],
@@ -115,7 +125,8 @@ const groups = [
         ],
       ],
       ['Platforms and runtime', ['reference/LIVE_PATCHING.md', 'reference/ANDROID.md', 'reference/WASM_BACKEND.md']],
-      ['Packages', apiPackages.map((directory) => ({ label: directory, link: `${apiBase}${directory}/` }))],
+      ['Standard library', [{ label: apiTitle(apiStandardLibrary), link: `${apiBase}${apiStandardLibrary}/` }]],
+      ['Packages', apiPackages.map((directory) => ({ label: apiTitle(directory), link: `${apiBase}${directory}/` }))],
       // A reference page not placed above still gets published.
       ['Other', [], 'reference/'],
     ],

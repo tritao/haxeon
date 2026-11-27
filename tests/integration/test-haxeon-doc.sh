@@ -168,4 +168,27 @@ assert area["overrides"] == "measured.Measured", area
 assert area["inherited"]["from"] == "measured.Measured", area
 assert area["inherited"]["documentation"]["markdown"] == "The area, in square units.", area
 PY
-echo "PASS: haxeon doc describes a library's own public modules, without an entry, and a package can require its documentation"
+# --standard-library describes each module of the standard library for the target, with no project, each source relative to
+# the directory the standard library is in; the Wasm host's interface is not the host target's.
+mkdir -p "$work/anywhere"
+cd "$work/anywhere"
+if "$haxeon" doc --standard-library --project "$work/library" > "$work/standard-project.log" 2>&1; then
+	echo "FAIL: haxeon doc took --standard-library with --project" >&2
+	exit 1
+fi
+"$haxeon" doc --standard-library
+python3 - build/api.json "$root" <<'PY'
+import json
+import sys
+
+model = json.load(open(sys.argv[1]))
+described = set(model["described"])
+for module in ["StringTools", "haxe.io.Bytes", "haxeon.reactive.Signal", "toml.TomlParser"]:
+    assert module in described, module
+assert not [module for module in described if module.startswith("haxeon.wasm.")], "the Wasm host interface was described"
+types = {entry["path"]: entry for entry in model["types"]}
+assert (types["StringTools"]["package"], types["StringTools"]["source"]["position"]["file"]) == (None, "stdlib/StringTools.hx")
+assert types["toml.TomlParser"]["source"]["position"]["file"] == "lib/haxeon-io/toml/TomlParser.hx"
+assert sys.argv[2] not in open(sys.argv[1]).read(), "this machine's path is in the description"
+PY
+echo "PASS: haxeon doc describes a library's own public modules, without an entry, a package can require its documentation, and the standard library is described"

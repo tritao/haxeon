@@ -1,9 +1,10 @@
-// The API reference of the first-party packages, from what `haxeon doc` describes (scripts/build-api.sh writes
-// generated/api/<directory>.json, which the `api` content collection loads; docs/design/API_MODEL.md is the format). A
-// package has an overview page, and a page per Haxe package of its API, each type with its members.
-import { apiBase, apiPackages, repositorySource } from './docs.mjs';
+// The API reference of the standard library and the first-party packages, from what `haxeon doc` describes
+// (scripts/build-api.sh writes generated/api/<directory>.json, which the `api` content collection loads;
+// docs/design/API_MODEL.md is the format). Each has an overview page, and a page per Haxe package of its API, each type
+// with its members.
+import { apiBase, apiEntries, apiPackages, apiStandardLibrary, apiTitle, repositorySource } from './docs.mjs';
 
-export { apiBase, apiPackages };
+export { apiBase, apiEntries, apiPackages, apiStandardLibrary, apiTitle };
 
 const haxePackageOf = (modulePath) => modulePath.split('.').slice(0, -1).join('.');
 const shortName = (path) => path.slice(path.lastIndexOf('.') + 1);
@@ -198,9 +199,16 @@ export function memberHtml(member, index) {
   }
 }
 
-/** Where a declaration's source is in the repository, when its package is one the build described. */
+const standardLibraryFile = /^(stdlib|lib\/haxeon-io)\//;
+
+/**
+ * Where a declaration's source is in the repository: in its package's directory, when the build described that package, or,
+ * for the standard library, which belongs to none, where the description gives it (relative to the directory `stdlib` is in).
+ */
 export function sourceUrl(packageName, position, index) {
-  const directory = packageName ? index.directories.get(packageName) : null;
+  if (!packageName)
+    return standardLibraryFile.test(position.file) ? `${repositorySource(position.file)}#L${position.line}` : null;
+  const directory = index.directories.get(packageName);
   return directory ? `${repositorySource(`packages/${directory}/${position.file}`)}#L${position.line}` : null;
 }
 

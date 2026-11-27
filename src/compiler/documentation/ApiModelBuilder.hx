@@ -47,17 +47,25 @@ class ApiModelBuilder {
 	/** The packages sources belong to. */
 	final packages:SourcePackages;
 
+	/** The directory the standard library's directory is in, the SDK's (or the checkout's), or null when not known. */
+	final standardLibraryHome:Null<String>;
+
 	/**
-	 * The model of `semantic`, whose `described` modules are the API. A source in one of `packages` is given relative to that
-	 * package's root; any other (the standard library's) relative to the source root of `roots` that holds it.
+	 * The model of `semantic`, whose `described` modules are the API. A source of the standard library is given relative to the
+	 * directory `standardLibrary` is in (`stdlib/StringTools.hx`, `lib/haxeon-io/toml/TomlParser.hx`), so a reader finds it in
+	 * the SDK or the repository. A source in one of `packages` is given relative to that package's root; any other relative to
+	 * the source root of `roots` that holds it.
 	 */
 	public static function build(semantic:SemanticProgram, modules:Map<String, ModuleState>, roots:Array<String>,
-			described:Array<String>, ?packages:SourcePackages):ApiModel
-		return new ApiModelBuilder(semantic, modules, roots, packages ?? new SourcePackages([])).model(described);
+			described:Array<String>, ?packages:SourcePackages, ?standardLibrary:String):ApiModel
+		return new ApiModelBuilder(semantic, modules, roots, packages ?? new SourcePackages([]),
+			standardLibrary).model(described);
 
 	function new(semantic:SemanticProgram, states:Map<String, ModuleState>, roots:Array<String>,
-			packages:SourcePackages) {
+			packages:SourcePackages, standardLibrary:Null<String>) {
 		this.semantic = semantic;
+		standardLibraryHome = standardLibrary == null ? null
+			: Path.addTrailingSlash(Path.directory(Path.removeTrailingSlashes(SourcePackages.absolute(standardLibrary))));
 		for (state in states)
 			modules.set(state.source.path, state.name);
 		this.roots = [for (root in roots) Path.addTrailingSlash(SourcePackages.absolute(root))];
@@ -164,7 +172,7 @@ class ApiModelBuilder {
 
 	/** A builder for describing declarations one at a time, from the semantic program an analysis keeps. */
 	public static function of(semantic:SemanticProgram, modules:Map<String, ModuleState>):ApiModelBuilder
-		return new ApiModelBuilder(semantic, modules, [], new SourcePackages([]));
+		return new ApiModelBuilder(semantic, modules, [], new SourcePackages([]), null);
 
 	function moduleVariables(storage:AstClass):Array<ApiMember>
 		return fields(ownerInfo(storage.name, storage.span, storage.typeParameters, storage.typeConstraints),
@@ -729,12 +737,18 @@ class ApiModelBuilder {
 		};
 	}
 
-	/** The package `file` belongs to, if any, and its path relative to that package's root, or else to its source root. */
+	/**
+	 * The package `file` belongs to, if any, and its path relative to that package's root, or else to its source root; the
+	 * standard library's belongs to none, relative to `standardLibraryHome`.
+	 */
 	function locate(file:SourceFile, module:String):{name:Null<String>, file:String} {
+		var path = SourcePackages.absolute(file.physicalPath), home = standardLibraryHome;
+		if (file.isStandardLibrarySource && home != null && StringTools.startsWith(path, home))
+			return {name: null, file: path.substr(home.length)};
 		var found = packages.locate(file.physicalPath);
 		return found != null ? {name: found.name, file: found.file} : {
 			name: null,
-			file: relativeFile(SourcePackages.absolute(file.physicalPath), module)
+			file: relativeFile(path, module)
 		};
 	}
 

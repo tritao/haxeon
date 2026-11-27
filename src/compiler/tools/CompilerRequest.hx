@@ -26,6 +26,12 @@ typedef CompilerRequest = {
 	/** The source roots whose modules the API model describes; every loaded module but the standard library's when empty. */
 	final apiSources:Array<String>;
 
+	/**
+	 * Whether the API model describes the standard library, each module its roots hold, instead of `apiSources`: its reference,
+	 * which no program's entry reaches in full.
+	 */
+	final apiStandardLibrary:Bool;
+
 	final irOutput:Null<String>;
 	/** Where to write the modules this compile read: one `[name, path, sha256 of its text]` per module, sorted by name. */
 	final inputsOutput:Null<String>;

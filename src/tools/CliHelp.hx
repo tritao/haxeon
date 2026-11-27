@@ -145,7 +145,10 @@ class CliHelp {
 						""
 					].concat(BUILD_OPTIONS.filter(line -> line.indexOf("--output") < 0
 						&& line.indexOf("--self-hosted") < 0))
-						.concat(["  --output PATH                Write the description to PATH (default: build/api.json)"])
+						.concat([
+							"  --output PATH                Write the description to PATH (default: build/api.json)",
+							"  --standard-library           Describe the standard library, each of its modules, instead of a project"
+						])
 				},
 				{
 					name: "run",

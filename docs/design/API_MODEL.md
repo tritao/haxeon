@@ -15,14 +15,17 @@ deleted.
 The model is built by an analysis, not a build: `--api-json` takes `--no-output`, so the sources are typed and nothing is
 generated. The modules it describes are the roots of that analysis, so the model covers all of them rather than what an
 entry reaches, and `--entry` is optional: a library has none. They are the modules loaded from the source roots given with
-`--api-source` (every module but the standard library's without it). What a package keeps to itself is written
+`--api-source` (every module but the standard library's without it), or with `--api-standard-library` every module of the
+standard library for the target (the Wasm host's interface, `haxeon.wasm`, only on a Wasm target, which generates the
+host modules it imports), which no program reaches in full. What a package keeps to itself is written
 `internal`, and described with that visibility (below). The roots belong to the one analysis, so a compile
 server's later builds are unchanged. The model also holds every declaration the described ones refer to, from
 dependencies and the standard library included, and lists the described modules (`described`), so a reader can tell the
 API from what it uses.
 
 `haxeon doc` runs this analysis for a project with the arguments its build uses, describing the root package's source
-roots, and writes `build/api.json` (or `--output`). The model is read from the semantic program
+roots, and writes `build/api.json` (or `--output`). `haxeon doc --standard-library` describes the standard library
+instead, as a program with no sources of its own, into `build/api.json` of the directory it was run from. The model is read from the semantic program
 the analysis keeps, not from the syntax tree, which cannot give resolved types, caller-visible nullability or inferred
 signatures.
 
@@ -66,10 +69,12 @@ kind has them (`ApiJsonWriter` writes them field by field, so the output is this
 | Declaration | `path`, `module`, `package`, `kind` (`class`, `interface`, `enum`, `abstract`, `typedef`, `extern`), `isExtern`, `source`, `typeParameters`, `supertypes`, `interfaces`, `underlying` (type or null), `from`, `to`, `members` |
 | Source | `visibility` (`public`, or `internal` for a declaration written `internal`, which only its own package may use), `position` (`file`, with `/` separators, and one-based `line`), `metadata` (`{name, arguments}`, arguments as source text), `documentation` (null or `{markdown, tags}`) |
 
-`package` is the name of the package whose sources hold the declaration (`--api-package=NAME=DIRECTORY`; `haxeon doc`
+`package` is the name of the package whose sources hold the declaration (`--source-package=NAME=DIRECTORY`; `haxeon doc`
 passes every package of the project), and a `file` is relative to that package's root, so a reader finds the source as
-the package's location joined with it. Without a package (the standard library, FFI modules generated into a build),
-`package` is null and the file is relative to its source root. No path in the model is this machine's.
+the package's location joined with it. The standard library belongs to no package: `package` is null and its file is
+relative to the directory `stdlib` is in, the SDK's or the repository's (`stdlib/StringTools.hx`,
+`lib/haxeon-io/toml/TomlParser.hx`). Without a package otherwise (FFI modules generated into a build), the file is
+relative to its source root. No path in the model is this machine's.
 | Tag | `name` (`param`, `return`, `throws`, `see`, `deprecated`, `since`), `parameter` (the name for `param`, otherwise null), `text` |
 | Type parameter | `name`, `constraints` (types) |
 | Member | `name`, `kind`, `isStatic`, `source`, then by kind: `field` has `isFinal`, `type`, `overrides` and `inherited`, `enumValue` has `type`; `property` has `type`, `get` and `set` (`default`, `null`, `never`, `get`, `set`, `dynamic`), `overrides` and `inherited`; `constructor`, `method`, `function` (a module's), `enumConstructor`, `conversion` and `operator` have `typeParameters`, `arguments` and `result`, with `overrides` and `inherited` for a method, `operatorText` for an operator, `conversion` (`from` or `to`) for a conversion, and `constants` for a case of an enum with per-case constants (each `name`, `value` as written, `isDefault` when the case leaves it at its default) |

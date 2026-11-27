@@ -38,7 +38,7 @@ class ProgramProject {
 	 * The directory of the program `key` names in the cache `name` (`~/.haxeon/cache/NAME`, or the directory `variable` gives),
 	 * created and marked as used now. The cache's other programs that have not been used for `UNUSED_SECONDS` are removed.
 	 */
-	public static function directory(name:String, variable:String, key:String):String {
+	public static function directory(name:String, variable:Null<String>, key:String):String {
 		var root = build.UserCache.directory(name, variable), directory = Path.join([root, key]);
 		// Parents too: the first program makes its cache.
 		if (!FileSystem.exists(directory))
