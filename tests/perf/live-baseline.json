@@ -43,7 +43,7 @@
 			"why": "The edited function, its callers and the adapter: deterministic."
 		},
 		"aot_small_server_live_bytes": {
-			"value": 8074035,
+			"value": 7759462,
 			"tolerance_abs": 262144,
 			"why": "The server's live data after the growth session's last edit: what a live session keeps from one edit to the next. From the heap census after each build's request (`request-done`, once the build's result and response are gone, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The slack is two and a half of those steps."
 		},
