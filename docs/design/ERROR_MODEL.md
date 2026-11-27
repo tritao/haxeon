@@ -81,11 +81,11 @@ enum Result<T, E> implements MustUse {
 - **Generic code stays valid when a type parameter is `Void`.** A binding of type `T` holds the unit value, and passing
   it where a `Void` argument goes is the same as omitting it. `T->U` with `T` as `Void` is `Void->U`, the function
   with no arguments, as Haxe writes it.
-- **Where an argument is left out.** A call with fewer arguments than parameters gets the unit value at each `Void`
-  parameter while more parameters remain than arguments, so `Both(42)` makes a `Both(first:Void, second:Int)`, and a
-  `Void` value written in its place still takes it. A pattern may leave out its trailing `Void` payloads (`case Ok():`),
-  and a lambda its `Void` arguments (`() -> 7` is a `Void->Int`). Function types compare and unify by their other
-  arguments, so a `function f():Void` is a `T->Void` at `T` = `Void`.
+- **Where a `Void` is left out.** Calls, lambdas and patterns follow one rule: where fewer are written than there are
+  parameters, each `Void` parameter takes the unit value while more parameters remain than are written, and a `Void` value
+  written in its place still takes it. So `Both(42)` makes a `Both(first:Void, second:Int)` and `case Both(n):` matches
+  it, `case Ok():` matches a `Result<Void, E>`, and `() -> 7` is a `Void->Int`. Function types compare and unify by their
+  other arguments, so a `function f():Void` is a `T->Void` at `T` = `Void`.
 - `Void` satisfies `Equatable` and `Hashable`: its one value equals itself and adds nothing to a hash, so a
   `Maybe<Void>` of an `enum Maybe<T:Equatable>` compares.
 - A `Void` value occupies no storage on any target. The type checker gives a call one argument per parameter, the unit

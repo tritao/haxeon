@@ -40,6 +40,12 @@ function second(pair:Pair<Void, Int>):Int
 		case Both(_, value): value;
 	}
 
+// A pattern leaves out a `Void` payload as the constructor call does.
+function secondLeftOut(pair:Pair<Void, Int>):Int
+	return switch pair {
+		case Both(value): value;
+	}
+
 function main():Int {
 	if (!save(true).isOk() || !save(false).isErr() || describe(save(true)) != "saved"
 		|| describe(save(false)) != "full")
@@ -67,7 +73,7 @@ function main():Int {
 	save(true).unwrapOr();
 	if (describe(save(true).map(() -> bump())) != "saved" || bumps != 1)
 		return 7;
-	if (second(Both(42)) != 42)
+	if (second(Both(42)) != 42 || secondLeftOut(Both(42)) != 42)
 		return 8;
 	var before = saves;
 	_ = save(true);

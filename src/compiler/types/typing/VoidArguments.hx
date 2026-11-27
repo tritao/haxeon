@@ -1,14 +1,12 @@
 package compiler.types.typing;
 
-import compiler.core.Source.SourceSpan;
-import compiler.syntax.Ast.AstArgument;
-import compiler.syntax.Ast.AstExpression;
 import compiler.types.Type.CompilerType;
 
 /**
- * `Void` as the unit type at calls (docs/design/ERROR_MODEL.md): a parameter whose type is `Void`, written or substituted for
- * a type parameter, takes no argument, so `Ok()` makes a `Result<Void, E>` and `() -> 1` is a `Void->Int`. The omitted
- * argument is the unit value (`EmptyExpression`), so a typed call still has one argument per parameter.
+ * `Void` as the unit type where something is written for each parameter (docs/design/ERROR_MODEL.md): a parameter whose
+ * type is `Void`, written or substituted for a type parameter, may be left out, so `Ok()` makes a `Result<Void, E>`,
+ * `case Ok():` matches it and `() -> 1` is a `Void->Int`. What is left out is filled in, so a typed call, lambda or pattern
+ * still has one item per parameter.
  */
 class VoidArguments {
 	public static function isVoid(type:Null<CompilerType>):Bool
@@ -48,27 +46,17 @@ class VoidArguments {
 		return any ? positions : null;
 	}
 
-	/** `arguments` of a call to parameters of `types`, with the unit value for each `Void` parameter they leave out. */
-	public static function fill(arguments:Array<AstExpression>, types:Array<CompilerType>,
-			span:SourceSpan):Array<AstExpression> {
-		var positions = unitPositions(arguments.length, types);
+	/**
+	 * What is written for parameters of `types` (a call's arguments, a lambda's arguments or a pattern's bindings), with
+	 * `unit` at each `Void` parameter it leaves out. One rule serves all three, so a case is matched as it is made.
+	 */
+	public static function fill<A>(written:Array<A>, types:Array<CompilerType>, unit:A):Array<A> {
+		var positions = unitPositions(written.length, types);
 		if (positions == null)
-			return arguments;
-		var filled:Array<AstExpression> = [], next = 0;
-		for (unit in positions)
-			filled.push(unit ? EmptyExpression(span) : arguments[next++]);
-		return filled;
-	}
-
-	/** A lambda's `arguments` for a function type of `types`, with an unused one for each `Void` argument they leave out. */
-	public static function fillParameters(arguments:Array<AstArgument>, types:Array<CompilerType>,
-			span:SourceSpan):Array<AstArgument> {
-		var positions = unitPositions(arguments.length, types);
-		if (positions == null)
-			return arguments;
-		var filled:Array<AstArgument> = [], next = 0;
-		for (unit in positions)
-			filled.push(unit ? {name: "_", type: InferredType, span: span} : arguments[next++]);
+			return written;
+		var filled:Array<A> = [], next = 0;
+		for (isUnit in positions)
+			filled.push(isUnit ? unit : written[next++]);
 		return filled;
 	}
 }

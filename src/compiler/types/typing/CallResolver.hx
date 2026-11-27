@@ -736,7 +736,7 @@ class CallResolver {
 		var parameters = callee.arguments,
 			declared = bodyTyper.argumentTypesOf(callee, substitutions),
 			required = parameters.length;
-		arguments = VoidArguments.fill(arguments, declared.slice(offset), span);
+		arguments = VoidArguments.fill(arguments, declared.slice(offset), EmptyExpression(span));
 		while (required > offset && AstPredicates.isOptionalArgument(parameters[required - 1]))
 			required--;
 		if (arguments.length + offset < required || arguments.length + offset > parameters.length) {
@@ -2175,7 +2175,7 @@ class CallResolver {
 			arguments = VoidArguments.fill(arguments, [
 				for (parameter in enumCase.params)
 					enumParameterType(enumCase.typeParameters, parameter, instance)
-			], span);
+			], EmptyExpression(span));
 		var required = requiredEnumParameters(enumCase.params);
 		if (arguments.length < required || arguments.length > enumCase.params.length)
 			fail(DiagnosticCode.CALL_FORM,

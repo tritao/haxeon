@@ -1264,15 +1264,16 @@ class BodyTyper implements BodyTyping {
 						bindings:[],
 						predicates:[]
 				};
-			case Call(name, arguments, span):
+			case Call(name, written, span):
 				var info = patternConstructor(name, span, expected, scope);
 				if (info == null)
 					return null;
 				var instanceType = enumInstance(expected) ?? TInstance(NominalKind.Enum, info.enumName, []);
-				var required = requiredEnumParameters(info.params, [
+				var arguments = VoidArguments.fill(written, [
 					for (parameter in info.params)
 						enumParameterType(info.typeParameters, parameter, instanceType)
-				]);
+				], Variable("_", span));
+				var required = requiredEnumParameters(info.params);
 				if (arguments.length < required || arguments.length > info.params.length)
 					fail(DiagnosticCode.PATTERN_OR_DEFER,
 						'Enum switch case "$name" expects $required to ${info.params.length} bindings', span);
@@ -2962,12 +2963,11 @@ class BodyTyper implements BodyTyping {
 		return session.representation.enumParameterType(typeParameters, parameter, instance);
 	}
 
-	/** How many bindings a pattern of a case with `parameters` needs: an optional one, or one whose type is `Void`, may be left out at the end. */
-	static function requiredEnumParameters(parameters:Array<compiler.syntax.Ast.AstEnumParameter>,
-			?types:Array<CompilerType>):Int {
+	/** How many bindings a pattern of a case with `parameters` needs: optional ones may be left out at the end. */
+	static function requiredEnumParameters(parameters:Array<compiler.syntax.Ast.AstEnumParameter>):Int {
 		var minimum = 0;
 		for (index in 0...parameters.length)
-			if (!parameters[index].optional && (types == null || !VoidArguments.isVoid(types[index])))
+			if (!parameters[index].optional)
 				minimum = index + 1;
 		return minimum;
 	}
