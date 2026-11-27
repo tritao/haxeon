@@ -40,7 +40,8 @@ under `#if wasm`, shared by both targets:
 - `sys.io.File`, `sys.io.AtomicFile`, `sys.FileSystem` and the `Sys` path
   operations use `runtime.MemoryFileSystem`, a session-only in-memory store
   that a host-backed store can later replace. Failures follow the HashLink
-  runtime's booleans and error messages.
+  runtime's booleans and error messages. `std.fs` uses the same store and
+  answers the same `FileError`s as on native targets.
 - `EReg` uses `runtime.Regex`, a backtracking engine for the common PCRE subset;
   unsupported syntax throws when the pattern is compiled.
 - `Std.random` is a fixed-seed xorshift generator; `Reflect.compare` follows

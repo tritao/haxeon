@@ -43,19 +43,23 @@ static int realtime_sync_parent( const char *path ) {
 }
 #endif
 
-/* Null means success; otherwise the returned string is the platform error. */
-HL_PRIM vstring *HL_NAME(__file_write_atomic)( vstring *path, realtime_bytes *content, bool replace ) {
+/* Writes `content` to a temporary file beside `path` and moves it into place, so a reader sees the old file or the new
+   one; without `replace`, an existing `path` is left as it is. Answers 0, or the system's error code (GetLastError's on
+   Windows, errno's elsewhere). */
+static int realtime_atomic_write( vstring *path, realtime_bytes *content, bool replace ) {
 #ifdef HL_WIN
-	if( content == NULL ) return realtime_string_from_utf8("content is null");
 	const wchar_t *target = (const wchar_t *)realtime_string_data(path);
 	DWORD attributes = GetFileAttributesW(target), error = ERROR_SUCCESS;
 	bool target_exists = attributes != INVALID_FILE_ATTRIBUTES;
-	if( target_exists && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ) return realtime_atomic_windows_error(ERROR_DIRECTORY);
-	if( !target_exists && GetLastError() != ERROR_FILE_NOT_FOUND ) return realtime_atomic_windows_error(GetLastError());
+	if( target_exists && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ) return ERROR_DIRECTORY;
+	if( !target_exists ) {
+		DWORD missing = GetLastError();
+		if( missing != ERROR_FILE_NOT_FOUND ) return (int)missing;
+	}
 
 	size_t target_length = wcslen(target);
 	wchar_t *temporary = malloc((target_length + 64) * sizeof(wchar_t));
-	if( temporary == NULL ) return realtime_atomic_windows_error(ERROR_NOT_ENOUGH_MEMORY);
+	if( temporary == NULL ) return ERROR_NOT_ENOUGH_MEMORY;
 	static LONG sequence = 0;
 	HANDLE file = INVALID_HANDLE_VALUE;
 	for( int attempt = 0; attempt < 128 && file == INVALID_HANDLE_VALUE; attempt++ ) {
@@ -89,19 +93,18 @@ HL_PRIM vstring *HL_NAME(__file_write_atomic)( vstring *path, realtime_bytes *co
 		}
 	}
 	if( error != ERROR_SUCCESS ) DeleteFileW(temporary);
-	vstring *result = error == ERROR_SUCCESS ? NULL : realtime_atomic_windows_error(error);
 	free(temporary);
-	return result;
+	return (int)error;
 #else
-	if( content == NULL ) return realtime_string_from_utf8("content is null");
 	char *target = realtime_utf8_copy(path);
 	char *temporary = malloc(strlen(target) + 16);
-	if( temporary == NULL ) { free(target); return realtime_atomic_error(ENOMEM); }
+	if( temporary == NULL ) { free(target); return ENOMEM; }
 	sprintf(temporary,"%s.XXXXXX",target);
 
 	struct stat metadata;
 	int target_status = stat(target,&metadata), error = 0;
 	if( target_status != 0 && errno != ENOENT ) error = errno;
+	else if( target_status == 0 && S_ISDIR(metadata.st_mode) ) error = EISDIR;
 	else if( target_status == 0 && !S_ISREG(metadata.st_mode) ) error = EINVAL;
 
 	int descriptor = error == 0 ? mkstemp(temporary) : -1;
@@ -126,9 +129,19 @@ HL_PRIM vstring *HL_NAME(__file_write_atomic)( vstring *path, realtime_bytes *co
 	if( error == 0 ) error = realtime_sync_parent(target);
 	if( error != 0 && descriptor >= 0 ) unlink(temporary);
 
-	vstring *result = error == 0 ? NULL : realtime_atomic_error(error);
 	free(temporary);
 	free(target);
-	return result;
+	return error;
+#endif
+}
+
+/* Null means success; otherwise the returned string is the platform error. */
+HL_PRIM vstring *HL_NAME(__file_write_atomic)( vstring *path, realtime_bytes *content, bool replace ) {
+	if( content == NULL ) return realtime_string_from_utf8("content is null");
+	int error = realtime_atomic_write(path,content,replace);
+#ifdef HL_WIN
+	return error == 0 ? NULL : realtime_atomic_windows_error((DWORD)error);
+#else
+	return error == 0 ? NULL : realtime_atomic_error(error);
 #endif
 }

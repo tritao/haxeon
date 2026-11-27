@@ -56,6 +56,12 @@ haxeon_compile_async \
 	--target=wasm-gc --output="$out_dir/wasm-gc-cli-memory-filesystem.wasm" --entry=wasm-memory-filesystem \
 	--root=tests/programs tests/programs/wasm-memory-filesystem.hx
 haxeon_compile_async \
+	--target=wasm32 --output="$out_dir/wasm-cli-std-fs.wasm" --entry=std-fs \
+	--root=tests/programs tests/programs/std-fs.hx
+haxeon_compile_async \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-std-fs.wasm" --entry=std-fs \
+	--root=tests/programs tests/programs/std-fs.hx
+haxeon_compile_async \
 	--target=wasm32 --output="$out_dir/wasm-cli-ereg-engine.wasm" --entry=wasm-ereg-engine \
 	--root=tests/programs tests/programs/wasm-ereg-engine.hx
 haxeon_compile_async \
@@ -240,6 +246,8 @@ const cases = [
 	["wasm-gc-cli-std-string-fields.wasm", 42],
 	["wasm-cli-memory-filesystem.wasm", 42],
 	["wasm-gc-cli-memory-filesystem.wasm", 42],
+	["wasm-cli-std-fs.wasm", 42],
+	["wasm-gc-cli-std-fs.wasm", 42],
 	["wasm-cli-ereg-engine.wasm", 42],
 	["wasm-gc-cli-ereg-engine.wasm", 42],
   ["wasm-backend-method.wasm", 42],
