@@ -24,5 +24,5 @@ class Threads {
 function nativeThreadName(name:String):Void {}
 #else
 @:hlNative("haxeon_runtime", "__sys_thread_set_name")
-extern function nativeThreadName(name:String):Void;
+internal extern function nativeThreadName(name:String):Void;
 #end

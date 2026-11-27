@@ -12,5 +12,5 @@ class ProfileCounter {
 function nativeProfileCounter(name:String, value:Float):Void {}
 #else
 @:hlNative("haxeon_runtime", "__sys_profile_counter")
-extern function nativeProfileCounter(name:String, value:Float):Void;
+internal extern function nativeProfileCounter(name:String, value:Float):Void;
 #end

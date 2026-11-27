@@ -4,7 +4,7 @@ import haxe.io.Bytes;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__sha256")
-extern function nativeMake(input:Bytes):Bytes;
+internal extern function nativeMake(input:Bytes):Bytes;
 #end
 
 /** SHA-256 over UTF-8 strings or byte buffers. */

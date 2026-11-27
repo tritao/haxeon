@@ -28,8 +28,8 @@ function nativeQpc():Float {
 }
 #else
 @:hlNative("haxeon_runtime", "native_trace_install")
-extern function nativeTraceInstall(library:String):Bool;
+internal extern function nativeTraceInstall(library:String):Bool;
 
 @:hlNative("haxeon_runtime", "native_qpc")
-extern function nativeQpc():Float;
+internal extern function nativeQpc():Float;
 #end

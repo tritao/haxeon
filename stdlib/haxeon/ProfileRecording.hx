@@ -31,8 +31,8 @@ function nativeSetRecording(on:Bool):Bool return false;
 function nativeRecording():Bool return false;
 #else
 @:hlNative("std", "prof_recording_set")
-extern function nativeSetRecording(on:Bool):Bool;
+internal extern function nativeSetRecording(on:Bool):Bool;
 
 @:hlNative("std", "prof_recording_get")
-extern function nativeRecording():Bool;
+internal extern function nativeRecording():Bool;
 #end

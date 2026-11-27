@@ -8,63 +8,63 @@ import haxe.io.Error;
 private typedef SocketHandle = hl.Abstract<"hl_socket">;
 
 @:hlNative("haxeon_runtime", "__socket_new")
-extern function socketNew(udp:Bool):Null<SocketHandle>;
+internal extern function socketNew(udp:Bool):Null<SocketHandle>;
 
 @:hlNative("haxeon_runtime", "__socket_close")
-extern function socketClose(s:SocketHandle):Void;
+internal extern function socketClose(s:SocketHandle):Void;
 
 @:hlNative("haxeon_runtime", "__socket_send_byte")
-extern function socketSendByte(s:SocketHandle, c:Int):Int;
+internal extern function socketSendByte(s:SocketHandle, c:Int):Int;
 
 @:hlNative("haxeon_runtime", "__socket_recv_byte")
-extern function socketRecvByte(s:SocketHandle):Int;
+internal extern function socketRecvByte(s:SocketHandle):Int;
 
 @:hlNative("haxeon_runtime", "__socket_send")
-extern function socketSend(s:SocketHandle, bytes:Bytes, pos:Int, len:Int):Int;
+internal extern function socketSend(s:SocketHandle, bytes:Bytes, pos:Int, len:Int):Int;
 
 @:hlNative("haxeon_runtime", "__socket_recv")
-extern function socketRecv(s:SocketHandle, bytes:Bytes, pos:Int, len:Int):Int;
+internal extern function socketRecv(s:SocketHandle, bytes:Bytes, pos:Int, len:Int):Int;
 
 @:hlNative("haxeon_runtime", "__socket_connect")
-extern function socketConnect(s:SocketHandle, host:Int, port:Int):Bool;
+internal extern function socketConnect(s:SocketHandle, host:Int, port:Int):Bool;
 
 @:hlNative("haxeon_runtime", "__socket_listen")
-extern function socketListen(s:SocketHandle, n:Int):Bool;
+internal extern function socketListen(s:SocketHandle, n:Int):Bool;
 
 @:hlNative("haxeon_runtime", "__socket_bind")
-extern function socketBind(s:SocketHandle, host:Int, port:Int):Bool;
+internal extern function socketBind(s:SocketHandle, host:Int, port:Int):Bool;
 
 @:hlNative("haxeon_runtime", "__socket_accept")
-extern function socketAccept(s:SocketHandle):Null<SocketHandle>;
+internal extern function socketAccept(s:SocketHandle):Null<SocketHandle>;
 
 @:hlNative("haxeon_runtime", "__socket_set_timeout")
-extern function socketSetTimeout(s:SocketHandle, timeout:Float):Bool;
+internal extern function socketSetTimeout(s:SocketHandle, timeout:Float):Bool;
 
 @:hlNative("haxeon_runtime", "__socket_shutdown")
-extern function socketShutdown(s:SocketHandle, read:Bool, write:Bool):Bool;
+internal extern function socketShutdown(s:SocketHandle, read:Bool, write:Bool):Bool;
 
 @:hlNative("haxeon_runtime", "__socket_set_blocking")
-extern function socketSetBlocking(s:SocketHandle, blocking:Bool):Bool;
+internal extern function socketSetBlocking(s:SocketHandle, blocking:Bool):Bool;
 
 @:hlNative("haxeon_runtime", "__socket_select")
-extern function socketSelect(read:Array<Null<SocketHandle>>, write:Array<Null<SocketHandle>>,
+internal extern function socketSelect(read:Array<Null<SocketHandle>>, write:Array<Null<SocketHandle>>,
 		others:Array<Null<SocketHandle>>,
 		timeout:Float):Bool;
 
 @:hlNative("haxeon_runtime", "__socket_set_fast_send")
-extern function socketSetFastSend(s:SocketHandle, fast:Bool):Bool;
+internal extern function socketSetFastSend(s:SocketHandle, fast:Bool):Bool;
 
 @:hlNative("haxeon_runtime", "__socket_host_ip")
-extern function socketHostIp(s:SocketHandle):Int;
+internal extern function socketHostIp(s:SocketHandle):Int;
 
 @:hlNative("haxeon_runtime", "__socket_host_port")
-extern function socketHostPort(s:SocketHandle):Int;
+internal extern function socketHostPort(s:SocketHandle):Int;
 
 @:hlNative("haxeon_runtime", "__socket_peer_ip")
-extern function socketPeerIp(s:SocketHandle):Int;
+internal extern function socketPeerIp(s:SocketHandle):Int;
 
 @:hlNative("haxeon_runtime", "__socket_peer_port")
-extern function socketPeerPort(s:SocketHandle):Int;
+internal extern function socketPeerPort(s:SocketHandle):Int;
 
 /** What a socket receives. A closed connection is the end of the input. */
 private class SocketInput extends haxe.io.Input {

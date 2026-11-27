@@ -2,31 +2,31 @@ package haxe.ds;
 
 #if !wasm
 @:hlNative("std", "hoalloc")
-extern function objectMapAlloc():hl.Abstract<"hl_obj_map">;
+internal extern function objectMapAlloc():hl.Abstract<"hl_obj_map">;
 
 @:hlNative("std", "hoset")
-extern function objectMapSet(map:hl.Abstract<"hl_obj_map">, key:Dynamic, value:Dynamic):Void;
+internal extern function objectMapSet(map:hl.Abstract<"hl_obj_map">, key:Dynamic, value:Dynamic):Void;
 
 @:hlNative("std", "hoget")
-extern function objectMapGet(map:hl.Abstract<"hl_obj_map">, key:Dynamic):Dynamic;
+internal extern function objectMapGet(map:hl.Abstract<"hl_obj_map">, key:Dynamic):Dynamic;
 
 @:hlNative("std", "hoexists")
-extern function objectMapExists(map:hl.Abstract<"hl_obj_map">, key:Dynamic):Bool;
+internal extern function objectMapExists(map:hl.Abstract<"hl_obj_map">, key:Dynamic):Bool;
 
 @:hlNative("std", "horemove")
-extern function objectMapRemove(map:hl.Abstract<"hl_obj_map">, key:Dynamic):Bool;
+internal extern function objectMapRemove(map:hl.Abstract<"hl_obj_map">, key:Dynamic):Bool;
 
 @:hlNative("std", "hokeys")
-extern function objectMapKeys(map:hl.Abstract<"hl_obj_map">):Array<Dynamic>;
+internal extern function objectMapKeys(map:hl.Abstract<"hl_obj_map">):Array<Dynamic>;
 
 @:hlNative("std", "hovalues")
-extern function objectMapValues(map:hl.Abstract<"hl_obj_map">):Array<Dynamic>;
+internal extern function objectMapValues(map:hl.Abstract<"hl_obj_map">):Array<Dynamic>;
 
 @:hlNative("std", "hoclear")
-extern function objectMapClear(map:hl.Abstract<"hl_obj_map">):Void;
+internal extern function objectMapClear(map:hl.Abstract<"hl_obj_map">):Void;
 
 @:hlNative("std", "hosize")
-extern function objectMapSize(map:hl.Abstract<"hl_obj_map">):Int;
+internal extern function objectMapSize(map:hl.Abstract<"hl_obj_map">):Int;
 
 #end
 

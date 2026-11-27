@@ -26,7 +26,7 @@ import runtime.Ryu;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__std_parse_float")
-extern function stdParseFloat(value:String):Float;
+internal extern function stdParseFloat(value:String):Float;
 #else
 // Wasm parses floats in Haxe with the HashLink runtime's C semantics (strtod).
 function stdParseFloat(value:String):Float {
@@ -137,7 +137,7 @@ function stdParseInt(value:Null<String>):Null<Int> {
 	return negative ? -result : result;
 }
 
-function skipSpace(value:String, position:Int):Int {
+internal function skipSpace(value:String, position:Int):Int {
 	while (position < value.length) {
 		var code = value.charCodeAt(position);
 		if (code != 32 && (code < 9 || code > 13))
@@ -147,18 +147,18 @@ function skipSpace(value:String, position:Int):Int {
 	return position;
 }
 
-function digitValue(code:Int):Int
+internal function digitValue(code:Int):Int
 	return code >= "0".code && code <= "9".code ? code - "0".code : code >= "a".code
 		&& code <= "z".code ? code - "a".code + 10 : code >= "A".code
 		&& code <= "Z".code ? code - "A".code + 10 : 99;
 
 
 @:hlNative("haxeon_runtime", "__std_int_f64")
-extern function stdIntFloat(value:Float):Int;
+internal extern function stdIntFloat(value:Float):Int;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__std_random")
-extern function stdRandom(limit:Int):Int;
+internal extern function stdRandom(limit:Int):Int;
 #else
 /**
  * Wasm draws from a xorshift32 generator with a fixed seed, so every session sees the same sequence. HashLink seeds its
@@ -183,7 +183,7 @@ private class RandomState {
 #end
 
 @:hlNative("haxeon_runtime", "__std_string")
-extern function stdString(value:Dynamic):String;
+internal extern function stdString(value:Dynamic):String;
 
 /** Supported core conversions backed by the stable runtime ABI. */
 class Std {

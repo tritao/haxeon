@@ -77,16 +77,16 @@ class StringBuf {
 private typedef StringBufferHandle = hl.Abstract<"realtime_string_buffer">;
 
 @:hlNative("haxeon_runtime", "__string_buffer_new")
-extern function stringBufferNew():StringBufferHandle;
+internal extern function stringBufferNew():StringBufferHandle;
 
 @:hlNative("haxeon_runtime", "__string_buffer_add")
-extern function stringBufferAdd(buffer:StringBufferHandle, value:String):Void;
+internal extern function stringBufferAdd(buffer:StringBufferHandle, value:String):Void;
 
 @:hlNative("haxeon_runtime", "__string_buffer_length")
-extern function stringBufferLength(buffer:StringBufferHandle):Int;
+internal extern function stringBufferLength(buffer:StringBufferHandle):Int;
 
 @:hlNative("haxeon_runtime", "__string_buffer_to_string")
-extern function stringBufferToString(buffer:StringBufferHandle):String;
+internal extern function stringBufferToString(buffer:StringBufferHandle):String;
 
 /**
  * An efficient mutable buffer for incrementally constructing strings. Characters are copied into one growing

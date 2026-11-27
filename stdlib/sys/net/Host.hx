@@ -2,16 +2,16 @@ package sys.net;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__host_resolve")
-extern function hostResolve(name:String):Int;
+internal extern function hostResolve(name:String):Int;
 
 @:hlNative("haxeon_runtime", "__host_to_string")
-extern function hostToString(ip:Int):String;
+internal extern function hostToString(ip:Int):String;
 
 @:hlNative("haxeon_runtime", "__host_reverse")
-extern function hostReverse(ip:Int):Null<String>;
+internal extern function hostReverse(ip:Int):Null<String>;
 
 @:hlNative("haxeon_runtime", "__host_local")
-extern function hostLocal():Null<String>;
+internal extern function hostLocal():Null<String>;
 #end
 
 /** An IPv4 host, as in Haxe: its name and the address it resolves to. */

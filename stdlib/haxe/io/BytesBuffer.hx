@@ -3,10 +3,10 @@
 package haxe.io;
 
 @:hlNative("haxeon_runtime", "__string_utf8_length")
-extern function stringUtf8Length(value:String):Int;
+internal extern function stringUtf8Length(value:String):Int;
 
 @:hlNative("haxeon_runtime", "__bytes_set_utf8")
-extern function bytesSetUtf8(bytes:Bytes, pos:Int, value:String):Void;
+internal extern function bytesSetUtf8(bytes:Bytes, pos:Int, value:String):Void;
 
 /**
  * An append-only buffer of bytes, as in Haxe: build a `Bytes` from pieces, then take it with `getBytes`. Numbers are added

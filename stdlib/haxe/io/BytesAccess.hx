@@ -13,21 +13,21 @@ function fill(bytes:Bytes, pos:Int, len:Int, value:Int):Void {
 		bytes.set(index, value);
 }
 
-function getUInt16(bytes:Bytes, pos:Int):Int
+internal function getUInt16(bytes:Bytes, pos:Int):Int
 	return pos < 0 || pos > bytes.length - 2 ? 0 : bytes.get(pos) | (bytes.get(pos + 1) << 8);
 
-function setUInt16(bytes:Bytes, pos:Int, value:Int):Void {
+internal function setUInt16(bytes:Bytes, pos:Int, value:Int):Void {
 	if (pos < 0 || pos > bytes.length - 2)
 		throw Error.OutsideBounds;
 	bytes.set(pos, value);
 	bytes.set(pos + 1, value >> 8);
 }
 
-function getInt64(bytes:Bytes, pos:Int):haxe.Int64
+internal function getInt64(bytes:Bytes, pos:Int):haxe.Int64
 	return pos < 0 || pos > bytes.length - 8 ? haxe.Int64.ofInt(0) : haxe.Int64.make(bytes.getInt32(pos + 4),
 		bytes.getInt32(pos));
 
-function setInt64(bytes:Bytes, pos:Int, value:haxe.Int64):Void {
+internal function setInt64(bytes:Bytes, pos:Int, value:haxe.Int64):Void {
 	if (pos < 0 || pos > bytes.length - 8)
 		throw Error.OutsideBounds;
 	bytes.setInt32(pos + 4, value.high);

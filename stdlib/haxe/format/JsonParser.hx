@@ -3,7 +3,7 @@ package haxe.format;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__reflect_dynamic_object")
-extern function jsonDynamicObject():Dynamic;
+internal extern function jsonDynamicObject():Dynamic;
 #else
 function jsonDynamicObject():Dynamic
 	return new runtime.DynamicObject();

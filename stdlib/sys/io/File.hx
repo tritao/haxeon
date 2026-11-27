@@ -26,25 +26,25 @@ import haxe.io.Bytes;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__file_get_content")
-extern function fileGetContent(path:String):String;
+internal extern function fileGetContent(path:String):String;
 
 @:hlNative("haxeon_runtime", "__file_get_bytes")
-extern function fileGetBytes(path:String):Bytes;
+internal extern function fileGetBytes(path:String):Bytes;
 
 @:hlNative("haxeon_runtime", "__file_save_content")
-extern function fileSaveContent(path:String, content:String):Void;
+internal extern function fileSaveContent(path:String, content:String):Void;
 
 @:hlNative("haxeon_runtime", "__file_append_content")
-extern function fileAppendContent(path:String, content:String):Void;
+internal extern function fileAppendContent(path:String, content:String):Void;
 
 @:hlNative("haxeon_runtime", "__file_save_bytes")
-extern function fileSaveBytes(path:String, bytes:Bytes):Void;
+internal extern function fileSaveBytes(path:String, bytes:Bytes):Void;
 
 @:hlNative("haxeon_runtime", "__file_input_open")
-extern function fileInputOpen(path:String, binary:Bool):hl.Abstract<"realtime_file_input">;
+internal extern function fileInputOpen(path:String, binary:Bool):hl.Abstract<"realtime_file_input">;
 
 @:hlNative("haxeon_runtime", "__file_output_open")
-extern function fileOutputOpen(path:String, mode:Int, binary:Bool):hl.Abstract<"realtime_file_output">;
+internal extern function fileOutputOpen(path:String, mode:Int, binary:Bool):hl.Abstract<"realtime_file_output">;
 #else
 // Wasm keeps files in the session's in-memory filesystem (runtime.MemoryFileSystem).
 function fileGetContent(path:String):String

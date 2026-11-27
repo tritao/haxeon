@@ -4,13 +4,13 @@ package haxe.format;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__json_value_kind")
-extern function jsonValueKind(value:Dynamic):Int;
+internal extern function jsonValueKind(value:Dynamic):Int;
 
 @:hlNative("haxeon_runtime", "__reflect_array_get")
-extern function jsonArrayGet(value:Dynamic, index:Int):Dynamic;
+internal extern function jsonArrayGet(value:Dynamic, index:Int):Dynamic;
 
 @:hlNative("haxeon_runtime", "__reflect_array_length")
-extern function jsonArrayLength(value:Dynamic):Int;
+internal extern function jsonArrayLength(value:Dynamic):Int;
 #else
 function jsonValueKind(value:Dynamic):Int {
 	if (value == null) return 0;

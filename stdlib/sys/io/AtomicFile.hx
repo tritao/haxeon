@@ -4,7 +4,7 @@ import haxe.io.Bytes;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__file_write_atomic")
-extern function writeAtomicBytes(path:String, content:Bytes, replace:Bool):Null<String>;
+internal extern function writeAtomicBytes(path:String, content:Bytes, replace:Bool):Null<String>;
 #else
 /** Wasm publishes into the session's in-memory filesystem, where a single store is atomic. */
 function writeAtomicBytes(path:String, content:Bytes, replace:Bool):Null<String>

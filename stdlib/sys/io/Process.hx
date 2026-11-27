@@ -28,31 +28,31 @@ class Process {
 private typedef ProcessHandle = hl.Abstract<"hl_process">;
 
 @:hlNative("haxeon_runtime", "__process_open")
-extern function processOpen(command:String, arguments:Null<Array<String>>, detached:Bool):ProcessHandle;
+internal extern function processOpen(command:String, arguments:Null<Array<String>>, detached:Bool):ProcessHandle;
 
 @:hlNative("haxeon_runtime", "__process_stdout_read")
-extern function processStdoutRead(process:ProcessHandle, bytes:Bytes, pos:Int, len:Int):Int;
+internal extern function processStdoutRead(process:ProcessHandle, bytes:Bytes, pos:Int, len:Int):Int;
 
 @:hlNative("haxeon_runtime", "__process_stderr_read")
-extern function processStderrRead(process:ProcessHandle, bytes:Bytes, pos:Int, len:Int):Int;
+internal extern function processStderrRead(process:ProcessHandle, bytes:Bytes, pos:Int, len:Int):Int;
 
 @:hlNative("haxeon_runtime", "__process_stdin_write")
-extern function processStdinWrite(process:ProcessHandle, bytes:Bytes, pos:Int, len:Int):Int;
+internal extern function processStdinWrite(process:ProcessHandle, bytes:Bytes, pos:Int, len:Int):Int;
 
 @:hlNative("haxeon_runtime", "__process_stdin_close")
-extern function processStdinClose(process:ProcessHandle):Bool;
+internal extern function processStdinClose(process:ProcessHandle):Bool;
 
 @:hlNative("haxeon_runtime", "__process_exit")
-extern function processExit(process:ProcessHandle, block:Bool):Int;
+internal extern function processExit(process:ProcessHandle, block:Bool):Int;
 
 @:hlNative("haxeon_runtime", "__process_pid")
-extern function processPid(process:ProcessHandle):Int;
+internal extern function processPid(process:ProcessHandle):Int;
 
 @:hlNative("haxeon_runtime", "__process_close")
-extern function processClose(process:ProcessHandle):Void;
+internal extern function processClose(process:ProcessHandle):Void;
 
 @:hlNative("haxeon_runtime", "__process_kill")
-extern function processKill(process:ProcessHandle):Void;
+internal extern function processKill(process:ProcessHandle):Void;
 
 /** What the child writes to its standard output or error; the end of the input once it closes the stream. */
 private class ProcessOutput extends haxe.io.Input {

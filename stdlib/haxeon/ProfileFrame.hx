@@ -17,5 +17,5 @@ class ProfileFrame {
 function nativeProfileFrame(kind:Int, frameSet:Int):Void {}
 #else
 @:hlNative("haxeon_runtime", "__sys_profile_frame")
-extern function nativeProfileFrame(kind:Int, frameSet:Int):Void;
+internal extern function nativeProfileFrame(kind:Int, frameSet:Int):Void;
 #end

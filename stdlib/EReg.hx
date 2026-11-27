@@ -7,19 +7,19 @@ private typedef ERegMatch = {
 private typedef RegexHandle = hl.Abstract<"ereg">;
 
 @:hlNative("haxeon_runtime", "__regexp_new")
-extern function regexpNew(pattern:String, options:String):RegexHandle;
+internal extern function regexpNew(pattern:String, options:String):RegexHandle;
 
 @:hlNative("haxeon_runtime", "__regexp_match")
-extern function regexpMatch(expression:RegexHandle, value:String, position:Int, length:Int):Bool;
+internal extern function regexpMatch(expression:RegexHandle, value:String, position:Int, length:Int):Bool;
 
 @:hlNative("haxeon_runtime", "__regexp_matched_pos")
-extern function regexpMatchedPos(expression:RegexHandle, group:Int):Int;
+internal extern function regexpMatchedPos(expression:RegexHandle, group:Int):Int;
 
 @:hlNative("haxeon_runtime", "__regexp_matched_length")
-extern function regexpMatchedLength(expression:RegexHandle, group:Int):Int;
+internal extern function regexpMatchedLength(expression:RegexHandle, group:Int):Int;
 
 @:hlNative("haxeon_runtime", "__regexp_matched_num")
-extern function regexpMatchedNum(expression:RegexHandle):Int;
+internal extern function regexpMatchedNum(expression:RegexHandle):Int;
 #else
 // Wasm has no PCRE2: runtime.Regex matches in Haxe. See it for the supported syntax.
 private typedef RegexHandle = runtime.Regex;

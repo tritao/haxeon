@@ -20,5 +20,5 @@ internal class ReactiveHash {
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__reactive_hash")
-extern function reactiveHash(source:Dynamic):Int;
+internal extern function reactiveHash(source:Dynamic):Int;
 #end

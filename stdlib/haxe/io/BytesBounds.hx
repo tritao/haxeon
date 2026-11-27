@@ -1,10 +1,10 @@
 package haxe.io;
 
 @:hlNative("haxeon_runtime", "__bytes_sub")
-extern function copyRange(bytes:Bytes, pos:Int, len:Int):Bytes;
+internal extern function copyRange(bytes:Bytes, pos:Int, len:Int):Bytes;
 
 @:hlNative("haxeon_runtime", "__bytes_get_string")
-extern function decodeRange(bytes:Bytes, pos:Int, len:Int):String;
+internal extern function decodeRange(bytes:Bytes, pos:Int, len:Int):String;
 
 /**
  * The Bytes methods that check a range and throw Haxe's `haxe.io.Error.OutsideBounds` outside it, written in Haxe once for every
@@ -58,11 +58,11 @@ function getString(bytes:Bytes, pos:Int, len:Int, ?encoding:Encoding):String {
 	return decodeRange(utf8, 0, size);
 }
 
-function codeUnit(bytes:Bytes, pos:Int, len:Int, index:Int):Int
+internal function codeUnit(bytes:Bytes, pos:Int, len:Int, index:Int):Int
 	return bytes.get(pos + index) | (index + 1 < len ? bytes.get(pos + index + 1) << 8 : 0);
 
 @:deprecated("readString is deprecated, use getString instead")
-function readString(bytes:Bytes, pos:Int, len:Int):String
+internal function readString(bytes:Bytes, pos:Int, len:Int):String
 	return getString(bytes, pos, len);
 
 /** What the writers the runtime checks (`set`, `setInt32`, `setFloat`, `setDouble`, `blit`) throw outside the bytes. */

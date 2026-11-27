@@ -262,14 +262,16 @@ private class ReactiveCreationLog {
 }
 
 #if !wasm
-@:hlNative("haxeon_runtime", "__reactive_is_tracking") extern function reactiveIsTracking():Bool;
+@:hlNative("haxeon_runtime", "__reactive_is_tracking") internal extern function reactiveIsTracking():Bool;
 
-@:hlNative("haxeon_runtime", "__reactive_claim_owner") extern function reactiveClaimOwner():Bool;
+@:hlNative("haxeon_runtime", "__reactive_claim_owner") internal extern function reactiveClaimOwner():Bool;
 
-@:hlNative("haxeon_runtime", "__reactive_is_owner") extern function reactiveIsOwner():Bool;
+@:hlNative("haxeon_runtime", "__reactive_is_owner") internal extern function reactiveIsOwner():Bool;
 
-@:hlNative("haxeon_runtime", "__reactive_current_collector") extern function reactiveCurrentCollector():Dynamic;
+@:hlNative("haxeon_runtime",
+	"__reactive_current_collector") internal extern function reactiveCurrentCollector():Dynamic;
 
-@:hlNative("haxeon_runtime", "__reactive_set_collector") extern function reactiveSetCollector(value:Dynamic):Void;
+@:hlNative("haxeon_runtime",
+	"__reactive_set_collector") internal extern function reactiveSetCollector(value:Dynamic):Void;
 
 #end

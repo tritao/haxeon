@@ -130,25 +130,25 @@ private class HostOutput extends FileOutput {
 private typedef OutputHandle = hl.Abstract<"realtime_file_output">;
 
 @:hlNative("haxeon_runtime", "__file_output_write_byte")
-extern function fileOutputWriteByte(output:OutputHandle, value:Int):Void;
+internal extern function fileOutputWriteByte(output:OutputHandle, value:Int):Void;
 
 @:hlNative("haxeon_runtime", "__file_output_write_bytes")
-extern function fileOutputWriteBytes(output:OutputHandle, bytes:Bytes, pos:Int, len:Int):Int;
+internal extern function fileOutputWriteBytes(output:OutputHandle, bytes:Bytes, pos:Int, len:Int):Int;
 
 @:hlNative("haxeon_runtime", "__file_output_write_string")
-extern function fileOutputWriteString(output:OutputHandle, value:String):Void;
+internal extern function fileOutputWriteString(output:OutputHandle, value:String):Void;
 
 @:hlNative("haxeon_runtime", "__file_output_flush")
-extern function fileOutputFlush(output:OutputHandle):Void;
+internal extern function fileOutputFlush(output:OutputHandle):Void;
 
 @:hlNative("haxeon_runtime", "__file_output_tell")
-extern function fileOutputTell(output:OutputHandle):Int;
+internal extern function fileOutputTell(output:OutputHandle):Int;
 
 @:hlNative("haxeon_runtime", "__file_output_seek")
-extern function fileOutputSeek(output:OutputHandle, position:Int, kind:Int):Bool;
+internal extern function fileOutputSeek(output:OutputHandle, position:Int, kind:Int):Bool;
 
 @:hlNative("haxeon_runtime", "__file_output_close")
-extern function fileOutputClose(output:OutputHandle):Void;
+internal extern function fileOutputClose(output:OutputHandle):Void;
 
 /** A writable host stream: a file `File.write` or `File.append` opened, or standard output or error. */
 class FileOutput extends haxe.io.Output {

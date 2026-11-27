@@ -21,24 +21,24 @@
  */
 @:pure
 @:hlNative("haxeon_runtime", "__string_starts_with")
-extern function stringToolsStartsWith(s:String, start:String):Bool;
+internal extern function stringToolsStartsWith(s:String, start:String):Bool;
 
 @:pure
 @:hlNative("haxeon_runtime", "__string_ends_with")
-extern function stringToolsEndsWith(s:String, end:String):Bool;
+internal extern function stringToolsEndsWith(s:String, end:String):Bool;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__string_replace")
-extern function stringToolsReplace(s:String, sub:String, by:String):String;
+internal extern function stringToolsReplace(s:String, sub:String, by:String):String;
 
 @:hlNative("haxeon_runtime", "__string_ltrim")
-extern function stringToolsLtrim(s:String):String;
+internal extern function stringToolsLtrim(s:String):String;
 
 @:hlNative("haxeon_runtime", "__string_trim")
-extern function stringToolsTrim(s:String):String;
+internal extern function stringToolsTrim(s:String):String;
 
 @:hlNative("haxeon_runtime", "__string_is_space")
-extern function stringToolsIsSpace(s:String, pos:Int):Bool;
+internal extern function stringToolsIsSpace(s:String, pos:Int):Bool;
 #else
 // Wasm implements these in Haxe with the HashLink runtime's semantics.
 function stringToolsReplace(s:String, sub:String, by:String):String

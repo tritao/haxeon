@@ -18,5 +18,5 @@ class ProfileSpan {
 function nativeProfileSpan(code:Int, name:String):Void {}
 #else
 @:hlNative("haxeon_runtime", "__sys_profile_span")
-extern function nativeProfileSpan(code:Int, name:String):Void;
+internal extern function nativeProfileSpan(code:Int, name:String):Void;
 #end

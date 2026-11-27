@@ -20,183 +20,187 @@
  * IN THE SOFTWARE.
  */
 @:hlNative("std", "sys_time")
-extern function sysTime():Float;
+internal extern function sysTime():Float;
 
 @:hlNative("haxeon_runtime", "__sys_monotonic_time")
-extern function sysMonotonicTime():Float;
+internal extern function sysMonotonicTime():Float;
 
 @:hlNative("std", "sys_cpu_time")
-extern function sysCpuTime():Float;
+internal extern function sysCpuTime():Float;
 
 @:hlNative("std", "sys_thread_cpu_time")
-extern function sysThreadCpuTime():Float;
+internal extern function sysThreadCpuTime():Float;
 
 @:hlNative("std", "sys_process_memory")
-extern function sysProcessMemory():Float;
+internal extern function sysProcessMemory():Float;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__sys_get_cwd")
-extern function sysGetCwd():String;
+internal extern function sysGetCwd():String;
 
 @:hlNative("haxeon_runtime", "__sys_full_path")
-extern function sysFullPath(path:String):String;
+internal extern function sysFullPath(path:String):String;
 
 @:hlNative("haxeon_runtime", "__sys_exe_path")
-extern function sysExecutablePath():String;
+internal extern function sysExecutablePath():String;
 
 @:hlNative("haxeon_runtime", "__sys_program_path")
-extern function sysProgramPath():String;
+internal extern function sysProgramPath():String;
 
 @:hlNative("haxeon_runtime", "__sys_get_env")
-extern function sysGetEnv(name:String):Null<String>;
+internal extern function sysGetEnv(name:String):Null<String>;
 
 @:hlNative("haxeon_runtime", "__sys_environment")
-extern function sysEnvironment():Array<String>;
+internal extern function sysEnvironment():Array<String>;
 
 @:hlNative("haxeon_runtime", "__sys_system_name")
-extern function sysSystemName():String;
+internal extern function sysSystemName():String;
 
 @:hlNative("haxeon_runtime", "__sys_exists")
-extern function sysExists(path:String):Bool;
+internal extern function sysExists(path:String):Bool;
 
 @:hlNative("haxeon_runtime", "__sys_is_dir")
-extern function sysIsDir(path:String):Bool;
+internal extern function sysIsDir(path:String):Bool;
 
 @:hlNative("haxeon_runtime", "__sys_read_dir")
-extern function sysReadDir(path:String):Array<String>;
+internal extern function sysReadDir(path:String):Array<String>;
 #else
 // Wasm has no host process: the path operations use the session's in-memory filesystem, the
 // environment is empty, and there is no executable path.
-function sysGetCwd():String
+internal function sysGetCwd():String
 	return runtime.MemoryFileSystem.getCwd();
 
-function sysFullPath(path:String):String
+internal function sysFullPath(path:String):String
 	return runtime.MemoryFileSystem.normalize(path);
 
-function sysExecutablePath():String
+internal function sysExecutablePath():String
 	return "";
 
-function sysProgramPath():String
+internal function sysProgramPath():String
 	return "";
 
-function sysGetEnv(name:String):Null<String>
+internal function sysGetEnv(name:String):Null<String>
 	return null;
 
-function sysEnvironment():Array<String>
+internal function sysEnvironment():Array<String>
 	return [];
 
-function sysSystemName():String
+internal function sysSystemName():String
 	return "Web";
 
-function sysExists(path:String):Bool
+internal function sysExists(path:String):Bool
 	return runtime.MemoryFileSystem.exists(path);
 
-function sysIsDir(path:String):Bool
+internal function sysIsDir(path:String):Bool
 	return runtime.MemoryFileSystem.isDirectory(path);
 
-function sysReadDir(path:String):Array<String>
+internal function sysReadDir(path:String):Array<String>
 	return runtime.MemoryFileSystem.readDirectory(path);
 #end
 
 @:hlNative("std", "sys_getpid")
-extern function sysGetPid():Int;
+internal extern function sysGetPid():Int;
 
 @:hlNative("std", "sys_exit")
-extern function sysExit(code:Int):Void;
+internal extern function sysExit(code:Int):Void;
 
 #if wasmgc
 // The host's arguments are strings in linear memory, which a Wasm GC program does not have.
-function sysArgs():Array<String>
+internal function sysArgs():Array<String>
 	return [];
 #elseif wasm
-function sysArgs():Array<String>
+internal function sysArgs():Array<String>
 	return [for (index in 0...haxeon.wasm.HaxeonHost.argument_count()) haxeon.wasm.HaxeonHost.argument(index)];
 #else
 @:hlNative("haxeon_runtime", "__sys_args")
-extern function sysArgs():Array<String>;
+internal extern function sysArgs():Array<String>;
 #end
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__sys_set_cwd")
-extern function sysSetCwd(path:String):Bool;
+internal extern function sysSetCwd(path:String):Bool;
 #else
-function sysSetCwd(path:String):Bool
+internal function sysSetCwd(path:String):Bool
 	return runtime.MemoryFileSystem.setCwd(path);
 #end
 
 @:hlNative("haxeon_runtime", "__sys_put_env")
-extern function sysPutEnv(name:String, value:String):Bool;
+internal extern function sysPutEnv(name:String, value:String):Bool;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__sys_create_dir")
-extern function sysCreateDir(path:String, mode:Int):Bool;
+internal extern function sysCreateDir(path:String, mode:Int):Bool;
 
 @:hlNative("haxeon_runtime", "__sys_remove_dir")
-extern function sysRemoveDir(path:String):Bool;
+internal extern function sysRemoveDir(path:String):Bool;
 
 @:hlNative("haxeon_runtime", "__sys_delete")
-extern function sysDelete(path:String):Bool;
+internal extern function sysDelete(path:String):Bool;
 
 @:hlNative("haxeon_runtime", "__sys_rename")
-extern function sysRename(path:String, newPath:String):Bool;
+internal extern function sysRename(path:String, newPath:String):Bool;
 #else
 
 /** `mkdir` semantics: the parent must already exist. The mode is ignored. */
-function sysCreateDir(path:String, mode:Int):Bool
+internal function sysCreateDir(path:String, mode:Int):Bool
 	return runtime.MemoryFileSystem.createDirectory(path, false);
 
-function sysRemoveDir(path:String):Bool
+internal function sysRemoveDir(path:String):Bool
 	return runtime.MemoryFileSystem.deleteDirectory(path);
 
-function sysDelete(path:String):Bool
+internal function sysDelete(path:String):Bool
 	return runtime.MemoryFileSystem.deleteFile(path);
 
-function sysRename(path:String, newPath:String):Bool
+internal function sysRename(path:String, newPath:String):Bool
 	return runtime.MemoryFileSystem.rename(path, newPath);
 #end
 
 @:hlNative("haxeon_runtime", "__sys_command")
-extern function sysCommand(command:String):Int;
+internal extern function sysCommand(command:String):Int;
 
 @:hlNative("std", "sys_sleep")
-extern function sysSleep(seconds:Float):Void;
+internal extern function sysSleep(seconds:Float):Void;
 
 @:hlNative("std", "sys_get_char")
-extern function sysGetChar(echo:Bool):Int;
+internal extern function sysGetChar(echo:Bool):Int;
 
 #if wasm
-function sysPrint(value:String):Void
+internal function sysPrint(value:String):Void
 	haxeon.wasm.HaxeonHost.print(value);
 #else
 @:hlNative("haxeon_runtime", "__sys_print")
-extern function sysPrint(value:String):Void;
+internal extern function sysPrint(value:String):Void;
 #end
 
 #if wasm
-function sysStdout():sys.io.FileOutput
+internal function sysStdout():sys.io.FileOutput
 	return sys.io.FileOutput.host(false);
 
-function sysStderr():sys.io.FileOutput
+internal function sysStderr():sys.io.FileOutput
 	return sys.io.FileOutput.host(true);
 #else
 @:hlNative("haxeon_runtime", "__sys_stdout")
-extern function sysStdoutHandle():hl.Abstract<"realtime_file_output">;
+internal extern function sysStdoutHandle():hl.Abstract<"realtime_file_output">;
 
 @:hlNative("haxeon_runtime", "__sys_stderr")
-extern function sysStderrHandle():hl.Abstract<"realtime_file_output">;
+internal extern function sysStderrHandle():hl.Abstract<"realtime_file_output">;
 
-function sysStdout():sys.io.FileOutput
+internal function sysStdout():sys.io.FileOutput
 	return new sys.io.FileOutput(sysStdoutHandle());
 
-function sysStderr():sys.io.FileOutput
+internal function sysStderr():sys.io.FileOutput
 	return new sys.io.FileOutput(sysStderrHandle());
 
 @:hlNative("haxeon_runtime", "__sys_stdin")
-extern function sysStdinHandle():hl.Abstract<"realtime_file_input">;
+internal extern function sysStdinHandle():hl.Abstract<"realtime_file_input">;
 #end
 
-/** Supported host and process operations exposed through HashLink. */
+/** The process and its host: time, environment, files and directories, the console, and running commands. */
 class Sys {
+	/**
+	 * The current time, in seconds since the Unix epoch, with a fractional part. It follows the system clock, which can
+	 * jump: measure elapsed time with `monotonicTime`.
+	 */
 	public static inline function time():Float
 		return sysTime();
 
@@ -204,18 +208,26 @@ class Sys {
 	public static inline function monotonicTime():Float
 		return sysMonotonicTime();
 
+	/** The CPU time the process has used, user and system, in seconds. */
 	public static inline function cpuTime():Float
 		return sysCpuTime();
 
+	/** The CPU time the calling thread has used, in seconds. */
 	public static inline function threadCpuTime():Float
 		return sysThreadCpuTime();
 
+	/**
+	 * The process's resident memory (its working set), in bytes, on Windows; 0 on the other platforms, which do not
+	 * report it.
+	 */
 	public static inline function processMemory():Float
 		return sysProcessMemory();
 
+	/** The working directory, as an absolute path. On Wasm it is the session's in-memory filesystem's. */
 	public static inline function getCwd():String
 		return sysGetCwd();
 
+	/** `path` as an absolute, normalized path, resolved against the working directory. */
 	public static inline function fullPath(path:String):String
 		return sysFullPath(path);
 
@@ -223,9 +235,17 @@ class Sys {
 	public static inline function programPath():String
 		return sysProgramPath();
 
+	/**
+	 * The path of the executable running the program: the VM on HashLink, the app's own executable when it embeds one.
+	 * Empty on Wasm.
+	 */
 	public static inline function executablePath():String
 		return sysExecutablePath();
 
+	/**
+	 * The value of the environment variable `name`, or null when it is not set. Always null on Wasm, which has no
+	 * environment.
+	 */
 	public static inline function getEnv(name:String):Null<String>
 		return sysGetEnv(name);
 
@@ -240,18 +260,26 @@ class Sys {
 		return result;
 	}
 
+	/**
+	 * The operating system: `"Windows"`, `"Mac"` (iOS too), `"Linux"` (Android too), `"BSD"`, or `"Unknown"`; `"Web"` on
+	 * Wasm.
+	 */
 	public static inline function systemName():String
 		return sysSystemName();
 
+	/** Whether a file or directory exists at `path`. */
 	public static inline function exists(path:String):Bool
 		return sysExists(path);
 
+	/** Whether `path` is a directory. */
 	public static inline function isDir(path:String):Bool
 		return sysIsDir(path);
 
+	/** The names of the entries of the directory at `path`, without `.` and `..`, in no particular order. */
 	public static inline function readDir(path:String):Array<String>
 		return sysReadDir(path);
 
+	/** The process's id. */
 	public static inline function getPid():Int
 		return sysGetPid();
 
@@ -259,27 +287,44 @@ class Sys {
 	public static inline function exit(code:Int):Void
 		sysExit(code);
 
+	/** The arguments the program was started with, without the program's own path. */
 	public static inline function args():Array<String>
 		return sysArgs();
 
+	/** Makes `path` the working directory. Returns whether it could. */
 	public static inline function setCwd(path:String):Bool
 		return sysSetCwd(path);
 
+	/**
+	 * Sets the environment variable `name` to `value` for this process and those it starts. Returns whether it could.
+	 */
 	public static inline function putEnv(name:String, value:String):Bool
 		return sysPutEnv(name, value);
 
+	/**
+	 * Creates the directory `path`, whose parent must exist, with the POSIX permission bits `mode` (ignored on Windows
+	 * and Wasm). Returns whether it was created. `sys.FileSystem.createDirectory` also creates the missing parents.
+	 */
 	public static inline function createDir(path:String, mode:Int):Bool
 		return sysCreateDir(path, mode);
 
+	/** Removes the empty directory `path`. Returns whether it was removed. */
 	public static inline function removeDir(path:String):Bool
 		return sysRemoveDir(path);
 
+	/** Deletes the file `path`. Returns whether it was deleted. */
 	public static inline function delete(path:String):Bool
 		return sysDelete(path);
 
+	/** Moves the file or directory `path` to `newPath`, replacing a file there. Returns whether it was moved. */
 	public static inline function rename(path:String, newPath:String):Bool
 		return sysRename(path, newPath);
 
+	/**
+	 * Runs `command` through the system's shell and waits for it, returning its exit code. Each of `args` is quoted for
+	 * the shell, so it reaches the command as one argument; without them, `command` is passed to the shell as written.
+	 * `sys.io.Process` runs a program without a shell and reads its output.
+	 */
 	public static function command(command:String, ?args:Array<String>):Int {
 		if (args == null || args.length == 0)
 			return sysCommand(command);
@@ -297,24 +342,34 @@ class Sys {
 		return "'" + argument.split("'").join("'\\''") + "'";
 	}
 
+	/** Suspends the calling thread for `seconds`. */
 	public static inline function sleep(seconds:Float):Void
 		sysSleep(seconds);
 
+	/**
+	 * Reads one character from the terminal without waiting for a line, echoing it when `echo` is true, and returns its
+	 * code.
+	 */
 	public static inline function getChar(echo:Bool):Int
 		return sysGetChar(echo);
 
+	/** Writes `value`, as `Std.string` gives it, to the standard output. */
 	public static inline function print(value:Dynamic):Void
 		sysPrint(Std.string(value));
 
+	/** Writes `value`, as `Std.string` gives it, and a newline to the standard output. */
 	public static inline function println(value:Dynamic):Void
 		sysPrint(Std.string(value) + "\n");
 
+	/** The standard output, to write to as a stream. */
 	public static inline function stdout():sys.io.FileOutput
 		return sysStdout();
 
+	/** The standard error output, to write to as a stream. */
 	public static inline function stderr():sys.io.FileOutput
 		return sysStderr();
 
+	/** The standard input, to read from as a stream. */
 	public static function stdin():sys.io.FileInput {
 		#if wasm
 		return new sys.io.FileInput();

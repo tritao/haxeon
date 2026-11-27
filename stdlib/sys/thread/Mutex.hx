@@ -31,11 +31,11 @@ class Mutex {
 }
 
 @:hlNative("std", "mutex_alloc")
-extern function nativeMutexAlloc(gcThread:Bool):hl.Abstract<"hl_mutex">;
+internal extern function nativeMutexAlloc(gcThread:Bool):hl.Abstract<"hl_mutex">;
 @:hlNative("std", "mutex_acquire")
-extern function nativeMutexAcquire(mutex:hl.Abstract<"hl_mutex">):Void;
+internal extern function nativeMutexAcquire(mutex:hl.Abstract<"hl_mutex">):Void;
 @:hlNative("std", "mutex_try_acquire")
-extern function nativeMutexTryAcquire(mutex:hl.Abstract<"hl_mutex">):Bool;
+internal extern function nativeMutexTryAcquire(mutex:hl.Abstract<"hl_mutex">):Bool;
 @:hlNative("std", "mutex_release")
-extern function nativeMutexRelease(mutex:hl.Abstract<"hl_mutex">):Void;
+internal extern function nativeMutexRelease(mutex:hl.Abstract<"hl_mutex">):Void;
 #end

@@ -21,7 +21,7 @@
  */
 #if !wasm
 @:hlNative("haxeon_runtime", "__reflect_compare")
-extern function reflectCompare(left:Dynamic, right:Dynamic):Int;
+internal extern function reflectCompare(left:Dynamic, right:Dynamic):Int;
 #else
 
 @:hlNative("haxeon_runtime", "__reflect_is_enum")
@@ -84,26 +84,26 @@ private class DynamicOrder {
 #end
 
 @:hlNative("std", "fun_compare")
-extern function reflectCompareMethods(left:Dynamic, right:Dynamic):Bool;
+internal extern function reflectCompareMethods(left:Dynamic, right:Dynamic):Bool;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__reflect_field")
-extern function reflectField(object:Dynamic, field:String):Dynamic;
+internal extern function reflectField(object:Dynamic, field:String):Dynamic;
 
 @:hlNative("haxeon_runtime", "__reflect_set_field")
-extern function reflectSetField(object:Dynamic, field:String, value:Dynamic):Void;
+internal extern function reflectSetField(object:Dynamic, field:String, value:Dynamic):Void;
 
 @:hlNative("haxeon_runtime", "__reflect_has_field")
-extern function reflectHasField(object:Dynamic, field:String):Bool;
+internal extern function reflectHasField(object:Dynamic, field:String):Bool;
 
 @:hlNative("haxeon_runtime", "__reflect_delete_field")
-extern function reflectDeleteField(object:Dynamic, field:String):Bool;
+internal extern function reflectDeleteField(object:Dynamic, field:String):Bool;
 
 @:hlNative("haxeon_runtime", "__reflect_field_count")
-extern function reflectFieldCount(object:Dynamic):Int;
+internal extern function reflectFieldCount(object:Dynamic):Int;
 
 @:hlNative("haxeon_runtime", "__reflect_field_name")
-extern function reflectFieldName(object:Dynamic, index:Int):String;
+internal extern function reflectFieldName(object:Dynamic, index:Int):String;
 #else
 @:hlNative("haxeon_runtime", "__reflect_object_copy")
 extern function reflectObjectCopy(object:Dynamic):Dynamic;
@@ -167,14 +167,14 @@ function reflectFieldName(object:Dynamic, index:Int):String {
 #end
 
 @:hlNative("haxeon_runtime", "__reflect_is_function")
-extern function reflectIsFunction(value:Dynamic):Bool;
+internal extern function reflectIsFunction(value:Dynamic):Bool;
 
 @:hlNative("haxeon_runtime", "__reflect_is_object")
-extern function reflectIsObject(value:Dynamic):Bool;
+internal extern function reflectIsObject(value:Dynamic):Bool;
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__reflect_copy")
-extern function reflectCopy(object:Dynamic):Dynamic;
+internal extern function reflectCopy(object:Dynamic):Dynamic;
 #end
 
 /** Supported reflection helpers backed by the stable runtime ABI. */

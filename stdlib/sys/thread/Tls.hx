@@ -62,9 +62,9 @@ class Tls<T> {
 }
 
 @:hlNative("std", "tls_alloc")
-extern function nativeTlsAlloc(gcValue:Bool):hl.Abstract<"hl_tls">;
+internal extern function nativeTlsAlloc(gcValue:Bool):hl.Abstract<"hl_tls">;
 @:hlNative("std", "tls_get")
-extern function nativeTlsGet(tls:hl.Abstract<"hl_tls">):Dynamic;
+internal extern function nativeTlsGet(tls:hl.Abstract<"hl_tls">):Dynamic;
 @:hlNative("std", "tls_set")
-extern function nativeTlsSet(tls:hl.Abstract<"hl_tls">, value:Dynamic):Void;
+internal extern function nativeTlsSet(tls:hl.Abstract<"hl_tls">, value:Dynamic):Void;
 #end

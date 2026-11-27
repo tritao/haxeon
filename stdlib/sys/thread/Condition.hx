@@ -31,17 +31,17 @@ class Condition {
 }
 
 @:hlNative("std", "condition_alloc")
-extern function nativeConditionAlloc():hl.Abstract<"hl_condition">;
+internal extern function nativeConditionAlloc():hl.Abstract<"hl_condition">;
 @:hlNative("std", "condition_acquire")
-extern function nativeConditionAcquire(condition:hl.Abstract<"hl_condition">):Void;
+internal extern function nativeConditionAcquire(condition:hl.Abstract<"hl_condition">):Void;
 @:hlNative("std", "condition_release")
-extern function nativeConditionRelease(condition:hl.Abstract<"hl_condition">):Void;
+internal extern function nativeConditionRelease(condition:hl.Abstract<"hl_condition">):Void;
 @:hlNative("std", "condition_signal")
-extern function nativeConditionSignal(condition:hl.Abstract<"hl_condition">):Void;
+internal extern function nativeConditionSignal(condition:hl.Abstract<"hl_condition">):Void;
 @:hlNative("std", "condition_broadcast")
-extern function nativeConditionBroadcast(condition:hl.Abstract<"hl_condition">):Void;
+internal extern function nativeConditionBroadcast(condition:hl.Abstract<"hl_condition">):Void;
 @:hlNative("std", "condition_wait")
-extern function nativeConditionWait(condition:hl.Abstract<"hl_condition">):Void;
+internal extern function nativeConditionWait(condition:hl.Abstract<"hl_condition">):Void;
 @:hlNative("std", "condition_timed_wait")
-extern function nativeConditionTimedWait(condition:hl.Abstract<"hl_condition">, timeout:Float):Bool;
+internal extern function nativeConditionTimedWait(condition:hl.Abstract<"hl_condition">, timeout:Float):Bool;
 #end

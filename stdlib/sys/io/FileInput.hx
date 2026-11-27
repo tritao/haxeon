@@ -62,25 +62,25 @@ class FileInput extends haxe.io.Input {
 private typedef InputHandle = hl.Abstract<"realtime_file_input">;
 
 @:hlNative("haxeon_runtime", "__file_input_read_byte")
-extern function fileInputReadByte(input:InputHandle):Int;
+internal extern function fileInputReadByte(input:InputHandle):Int;
 
 @:hlNative("haxeon_runtime", "__file_input_read_bytes")
-extern function fileInputReadBytes(input:InputHandle, bytes:Bytes, pos:Int, len:Int):Int;
+internal extern function fileInputReadBytes(input:InputHandle, bytes:Bytes, pos:Int, len:Int):Int;
 
 @:hlNative("haxeon_runtime", "__file_input_read_line")
-extern function fileInputReadLine(input:InputHandle):Null<String>;
+internal extern function fileInputReadLine(input:InputHandle):Null<String>;
 
 @:hlNative("haxeon_runtime", "__file_input_eof")
-extern function fileInputEof(input:InputHandle):Bool;
+internal extern function fileInputEof(input:InputHandle):Bool;
 
 @:hlNative("haxeon_runtime", "__file_input_tell")
-extern function fileInputTell(input:InputHandle):Int;
+internal extern function fileInputTell(input:InputHandle):Int;
 
 @:hlNative("haxeon_runtime", "__file_input_seek")
-extern function fileInputSeek(input:InputHandle, position:Int, kind:Int):Bool;
+internal extern function fileInputSeek(input:InputHandle, position:Int, kind:Int):Bool;
 
 @:hlNative("haxeon_runtime", "__file_input_close")
-extern function fileInputClose(input:InputHandle):Void;
+internal extern function fileInputClose(input:InputHandle):Void;
 
 /** A readable host stream: a file `File.read` opened, or standard input (`Sys.stdin()`). */
 class FileInput extends haxe.io.Input {
