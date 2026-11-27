@@ -56,18 +56,18 @@ class SettingsPanel implements View implements Observable implements Disposable 
 	public var selectedCategory(default, null):Null<String>;
 
 	/** Called after every change of the panel's state, so the host rebuilds. */
-	public var onChanged:Null<Void->Void>;
+	public final onChanged:Null<Void->Void>;
 
 	/** The width of the category tree, which the user can drag. */
 	@:unobservable public var treeWidth:Float;
 	/** The width of the settings' label column, unless `compact`. */
-	public var labelWidth:Float;
+	public final labelWidth:Float;
 
 	/** Which control edits each kind of setting; register the application's own here. */
 	public final editorRegistry = new haxeon.ui.properties.PropertyEditorRegistry();
 
 	/** Whether it lays out for a narrow window: the header stacked, and labels above their controls. */
-	public var compact:Bool = false;
+	public final compact:Bool;
 
 	@:unobservable final treeModel:SettingsTreeModel;
 	@:unobservable var inspector:Null<PropertyInspector>;
@@ -75,7 +75,8 @@ class SettingsPanel implements View implements Observable implements Disposable 
 	@:unobservable var unsubscribeStore:Null<Void->Void>;
 
 	/** A panel over the settings in `store`. Throws when `key` is empty. */
-	public function new(key:String, store:SettingsStore, ?onChanged:Void->Void) {
+	public function new(key:String, store:SettingsStore, ?onChanged:Void->Void, labelWidth:Float = 260.0,
+			compact:Bool = false) {
 		if (key == null || key.length == 0) throw "Settings panels require a stable key";
 		this.key = key;
 		catalog = new SettingsCatalog(store);
@@ -84,7 +85,6 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		selectedCategory = null;
 		this.onChanged = onChanged;
 		treeWidth = 220.0;
-		labelWidth = 260.0;
 		treeModel = new SettingsTreeModel();
 		inspector = null;
 		inspectorKey = "";
@@ -92,6 +92,8 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		var saved:Dynamic = store.getState(key + ":category");
 		if (Std.isOfType(saved, String)) select(cast saved);
 		unsubscribeStore = store.onChanged("", function(_) refresh());
+		this.labelWidth = labelWidth;
+		this.compact = compact;
 	}
 
 	/** Stops following the store; call when the panel closes. */
@@ -190,7 +192,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 				editorRegistry,
 				sections,
 				null,
-				SettingsCatalog.labelOf(selectedCategory) + " settings");
+				SettingsCatalog.labelOf(selectedCategory) + " settings", searchQuery: filter);
 			inspectorKey = nextKey;
 		}
 		return inspector;
@@ -252,9 +254,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 				== 0
 				? (modifiedOnly ? "No modified settings." : "No settings.") : "No settings match \"" + filter + "\".");
 		} else {
-			current.labelWidth = compact ? 100 : labelWidth;
-			current.stackedRows = compact;
-			current.searchQuery = filter;
+			current.setLabelLayout(compact ? 100 : labelWidth, compact);
 			var inspectorStyle = fill();
 			inspectorStyle.padding = new Insets(12.0, 0.0, 4.0, 0.0);
 			current.setStyle(inspectorStyle);

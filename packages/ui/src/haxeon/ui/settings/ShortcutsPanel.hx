@@ -48,12 +48,12 @@ class ShortcutsPanel implements View implements Observable {
 	public var notice(default, null):Null<String>;
 
 	/** Called after every change of the panel's state, so the host rebuilds. */
-	public var onChanged:Null<Void->Void>;
+	public final onChanged:Null<Void->Void>;
 	/** Width of each row's shortcut button. */
-	public var shortcutWidth:Float;
+	public final shortcutWidth:Float;
 
 	/** A panel editing `bindings`. Throws when `key` is empty. */
-	public function new(key:String, bindings:ShortcutBindings, ?onChanged:Void->Void) {
+	public function new(key:String, bindings:ShortcutBindings, ?onChanged:Void->Void, shortcutWidth:Float = 240.0) {
 		if (key == null || key.length == 0)
 			throw "Shortcut panels require a stable key";
 		this.key = key;
@@ -62,7 +62,7 @@ class ShortcutsPanel implements View implements Observable {
 		recordingId = null;
 		notice = null;
 		this.onChanged = onChanged;
-		shortcutWidth = 240.0;
+		this.shortcutWidth = shortcutWidth;
 	}
 
 	/** Filters the commands by name or shortcut. */

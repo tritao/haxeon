@@ -44,13 +44,13 @@ class PlotView implements View {
 	public var padding(default, null):Float;
 
 	/** Whether the plot takes pointer input. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 
 	/** Its accessible name; without one, assistive technology skips it. */
-	public var label:Null<String>;
+	public final label:Null<String>;
 
 	/** A plot of `model`. Throws when `key` is empty or there is no model. */
-	public function new(key:String, model:PlotModel, ?style:LayoutStyle, ?label:String) {
+	public function new(key:String, model:PlotModel, ?style:LayoutStyle, ?label:String, enabled:Bool = true) {
 		if (key == null || key.length == 0 || model == null) throw "Plots require a stable key and model";
 		this.key = key;
 		this.model = model;
@@ -60,8 +60,8 @@ class PlotView implements View {
 		axisColor = Color.rgba(0.55, 0.58, 0.64, 0.9);
 		gridDivisions = 8;
 		padding = 12.0;
-		enabled = true;
 		this.label = label == null ? "Plot" : label;
+		this.enabled = enabled;
 	}
 
 	/**

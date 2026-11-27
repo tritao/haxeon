@@ -29,18 +29,19 @@ class CommandMenu implements View {
 	public final y:Float;
 
 	/** Called when the menu closes without a choice. */
-	public var onDismiss:Null<Void->Void>;
+	public final onDismiss:Null<Void->Void>;
 
 	/** Called with the outcome of each command run. */
-	public var onResult:Null<CommandResult->Void>;
+	public final onResult:Null<CommandResult->Void>;
 
 	/** Whether the first enabled command is selected when the menu opens, as when it is opened from the keyboard. */
-	public var selectFirstOnOpen:Bool = false;
+	public final selectFirstOnOpen:Bool;
 
 	/** A menu of the commands `commandIds` at (`x`, `y`). */
 	public function new(key:String, commandIds:Array<String>, x:Float = 0.0, y:Float = 0.0,
 			?registry:CommandRegistry, ?invocationContext:CommandContext,
-			?onDismiss:Void->Void, ?onResult:CommandResult->Void) {
+			?onDismiss:Void->Void, ?onResult:CommandResult->Void,
+			selectFirstOnOpen:Bool = false) {
 		if (key == null || key.length == 0)
 			throw "Command menus require a stable key";
 		this.key = key;
@@ -51,6 +52,7 @@ class CommandMenu implements View {
 		this.invocationContext = invocationContext;
 		this.onDismiss = onDismiss;
 		this.onResult = onResult;
+		this.selectFirstOnOpen = selectFirstOnOpen;
 	}
 
 	public function build(context:BuildContext):ViewRoot {
@@ -68,8 +70,7 @@ class CommandMenu implements View {
 					onResult(result);
 			}, command.isEnabled(actualContext)));
 		}
-		var menu = new Menu(key, items, x, y, onDismiss);
-		menu.selectFirstOnOpen = selectFirstOnOpen;
+		var menu = new Menu(key, items, x, y, onDismiss, selectFirstOnOpen:);
 		return menu.build(context);
 	}
 }

@@ -60,20 +60,20 @@ class ListView implements View {
 	public var selectedIndex(default, null):Int;
 
 	/** Called with the newly selected index when the user selects an item. */
-	public var onSelectionChanged:Null<Int->Void>;
+	public final onSelectionChanged:Null<Int->Void>;
 
 	/**
 	 * Called with an item's index when the user activates it, by Enter or Space, or by a primary click with
 	 * `activateOnClick`.
 	 */
-	public var onItemActivated:Null<Int->Void>;
+	public final onItemActivated:Null<Int->Void>;
 	/** Opt in for launcher lists whose primary click invokes the selected item. */
-	public var activateOnClick:Bool = false;
+	public final activateOnClick:Bool;
 	/** Optional observed owner selection; -1 clears it. Only input notifies the owner. */
-	public var selectionProvider:Null<Void->Int> = null;
+	public final selectionProvider:Null<Void->Int>;
 
 	/** Called with each scroll event the list handles. */
-	public var onScroll:Null<UiEvent->Void> = null;
+	public final onScroll:Null<UiEvent->Void>;
 
 	final fallbackViewportHeight:Float;
 	var selectedState:Null<State<Int>>;
@@ -100,7 +100,10 @@ class ListView implements View {
 			?onSelectionChanged:Int->Void,
 			?onItemActivated:Int->Void,
 			?virtualization:VirtualizationPolicy,
-			?itemMetadata:ListViewItemMetadata) {
+			?itemMetadata:ListViewItemMetadata,
+			activateOnClick:Bool = false,
+			?selectionProvider:Void->Int,
+			?onScroll:UiEvent->Void) {
 		if (key == null || key.length == 0 || model == null || viewportHeight <= 0.0 || !finite(viewportHeight)
 			|| selectedIndex < -1) throw "ListView requires a stable key, model, and valid viewport height";
 		this.key = key;
@@ -127,6 +130,9 @@ class ListView implements View {
 		extentIndex = null;
 		itemIds = new Map();
 		itemKeys = new Map();
+		this.activateOnClick = activateOnClick;
+		this.selectionProvider = selectionProvider;
+		this.onScroll = onScroll;
 	}
 
 	/** Selects an item, or clears selection with -1. */

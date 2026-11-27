@@ -38,16 +38,17 @@ class Menu implements View {
 	/** Its top edge, in its parent's coordinates. */
 	public final y:Float;
 	/** Optional outside-click routing for associated menu triggers. */
-	public var onOutsideClick:Null<haxeon.ui.core.UiEvent->Bool> = null;
+	public final onOutsideClick:Null<haxeon.ui.core.UiEvent->Bool>;
 
 	/** Called when the menu closes without a choice, by Escape or a click outside. */
-	public var onDismiss:Void->Void;
+	public final onDismiss:Void->Void;
 	internal var hasDismissHandler(default, null):Bool;
 	/** Keyboard invocation selects an item; pointer invocation focuses only the menu. */
-	public var selectFirstOnOpen:Bool = false;
+	public final selectFirstOnOpen:Bool;
 
 	/** A menu of `items` at (`x`, `y`). */
-	public function new(key:String, items:Array<MenuItem>, x:Float = 0.0, y:Float = 0.0, ?onDismiss:Void->Void) {
+	public function new(key:String, items:Array<MenuItem>, x:Float = 0.0, y:Float = 0.0, ?onDismiss:Void->Void,
+			?onOutsideClick:haxeon.ui.core.UiEvent->Bool, selectFirstOnOpen:Bool = false) {
 		this.key = key;
 		this.items = items == null ? [] : items.copy();
 		this.x = x;
@@ -55,6 +56,8 @@ class Menu implements View {
 		hasDismissHandler = onDismiss != null;
 		this.onDismiss = onDismiss == null ? function() {}
 			: onDismiss;
+		this.onOutsideClick = onOutsideClick;
+		this.selectFirstOnOpen = selectFirstOnOpen;
 	}
 
 	public function build(context:BuildContext):haxeon.ui.core.ViewRoot {

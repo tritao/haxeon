@@ -66,16 +66,16 @@ class TableView implements View {
 	public var sortAscending(default, null):Bool;
 
 	/** Called with the newly selected row. */
-	public var onRowSelected:Null<Int->Void>;
+	public final onRowSelected:Null<Int->Void>;
 
 	/** Called with the row and column of the newly selected cell. */
-	public var onCellSelected:Null<Int->Int->Void>;
+	public final onCellSelected:Null<Int->Int->Void>;
 
 	/** Called with the column and direction when the user clicks a header to sort; the caller reorders its rows. */
-	public var onSort:Null<Int->Bool->Void>;
+	public final onSort:Null<Int->Bool->Void>;
 
 	/** Called with a column's index and new width when the user resizes it. */
-	public var onColumnResized:Null<Int->Float->Void>;
+	public final onColumnResized:Null<Int->Float->Void>;
 	final cellBuilder:Int->TableColumn->View;
 	final rowKeyForIndex:Null<Int->String>;
 	final fallbackViewportWidth:Float;

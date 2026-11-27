@@ -45,27 +45,27 @@ class PropertyInspector implements View {
 	public var controller(default, null):ScrollController;
 
 	/** Whether the rows take input. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 
 	/** The label column's width, in logical pixels. */
-	public var labelWidth:Float;
+	public var labelWidth(default, null):Float;
 
 	/** Whether labels sit above their controls rather than beside them, for narrow panes. */
-	public var stackedRows:Bool = false;
+	public var stackedRows(default, null):Bool;
 
 	/** Text that filters the rows by label. */
-	public var searchQuery:String = "";
+	public final searchQuery:String;
 	/** Disable when a parent pane already owns scrolling. */
-	public var scrollable:Bool;
+	public final scrollable:Bool;
 
 	/** Whether the scrollbar is shown when the content overflows. */
-	public var showScrollbar:Bool;
+	public final showScrollbar:Bool;
 
 	/** The inspector's accessible name. */
-	public var label:Null<String>;
+	public final label:Null<String>;
 
 	/** Called with a section's ID and whether it is now expanded, when the user toggles it. */
-	public var onSectionExpanded:Null<String->Bool->Void>;
+	public final onSectionExpanded:Null<String->Bool->Void>;
 	final editors:Map<String, PropertyEditor>;
 	final sectionByDescriptor:Map<String, PropertyEditor>;
 	final initialExpanded:Array<Bool>;
@@ -79,7 +79,14 @@ class PropertyInspector implements View {
 			?registry:PropertyEditorRegistry,
 			?sections:Array<PropertyInspectorSection>,
 			?controller:ScrollController,
-			?label:String) {
+			?label:String,
+			enabled:Bool = true,
+			labelWidth:Float = 140.0,
+			stackedRows:Bool = false,
+			searchQuery:String = "",
+			scrollable:Bool = true,
+			showScrollbar:Bool = true,
+			?onSectionExpanded:String->Bool->Void) {
 		if (key == null || key.length == 0) throw "Property inspectors require a stable key";
 		this.key = key;
 		this.registry = registry == null ? new PropertyEditorRegistry() : registry;
@@ -92,12 +99,7 @@ class PropertyInspector implements View {
 		initialScrollX = this.controller.offsetX;
 		initialScrollY = this.controller.offsetY;
 		initialExpanded = [for (section in this.sections) section.expanded];
-		this.enabled = true;
-		this.labelWidth = 140.0;
-		this.scrollable = true;
-		this.showScrollbar = true;
 		this.label = label == null ? "Inspector" : label;
-		this.onSectionExpanded = null;
 		this.editors = new Map();
 		this.sectionByDescriptor = new Map();
 		for (section in this.sections) {
@@ -111,12 +113,28 @@ class PropertyInspector implements View {
 				sectionByDescriptor.set(descriptor.id, editor);
 			}
 		}
+		this.enabled = enabled;
+		this.labelWidth = labelWidth;
+		this.stackedRows = stackedRows;
+		this.searchQuery = searchQuery;
+		this.scrollable = scrollable;
+		this.showScrollbar = showScrollbar;
+		this.onSectionExpanded = onSectionExpanded;
 	}
 
 	/** Updates the container style without discarding editor drafts or section state. */
 	public function setStyle(next:LayoutStyle):Void {
 		if (next == null) throw "Property inspector style cannot be null";
 		style = next.copy();
+	}
+
+	/**
+	 * Sets the label column's width and whether rows stack their label above the editor, for an owner whose layout changes
+	 * (a narrow panel), keeping editor drafts and section state as `setStyle` does.
+	 */
+	public function setLabelLayout(labelWidth:Float, stackedRows:Bool):Void {
+		this.labelWidth = labelWidth;
+		this.stackedRows = stackedRows;
 	}
 
 	/** Changes a section's expansion state for the next submitted frame. */

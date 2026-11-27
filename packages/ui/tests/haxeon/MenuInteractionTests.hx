@@ -21,14 +21,17 @@ class MenuInteractionTests {
 			return focused == null || focused.semantics == null ? "" : focused.semantics.label;
 		};
 		var pointerDismissals = 0;
-		var pointerMenu = new Menu("pointer-menu-smoke",
-			[new MenuItem("disabled-first", "Unavailable", null, false), new MenuItem("first", "First", function() {
-				pointerChoice = "first";
-			}), new MenuItem("disabled-middle", "Unavailable", null, false), new MenuItem("last", "Last", function() {
-			pointerChoice = "last";
-		})], 16.0, 16.0, function() {
-			pointerDismissals++;
-		});
+		function pointerMenuView(selectFirstOnOpen:Bool):Menu
+			return new Menu("pointer-menu-smoke",
+				[new MenuItem("disabled-first", "Unavailable", null, false), new MenuItem("first", "First", function() {
+					pointerChoice = "first";
+				}), new MenuItem("disabled-middle", "Unavailable", null, false),
+					new MenuItem("last", "Last", function() {
+				pointerChoice = "last";
+			})], 16.0, 16.0, function() {
+				pointerDismissals++;
+			}, selectFirstOnOpen:);
+		var pointerMenu = pointerMenuView(false);
 		var pointerRoot = context.submit(pointerMenu, dialogFrame);
 		if (context.focus.focusedId == null || !context.focus.focusedId.equals(pointerRoot.id))
 			throw "Pointer menu must focus the menu without selecting an item";
@@ -68,7 +71,8 @@ class MenuInteractionTests {
 		context.key(UiEventKind.KeyDown, UiKey.Escape);
 		if (pointerDismissals != 2) throw "Escape must dismiss an unactivated menu";
 		context.submit(returnFocusView, dialogFrame);
-		pointerMenu.selectFirstOnOpen = true;
+		// Opened from the keyboard, the same menu selects its first enabled action.
+		pointerMenu = pointerMenuView(true);
 		context.submit(pointerMenu, dialogFrame);
 		if (menuFocusLabel() != "First") throw "Keyboard invocation must select the first enabled action";
 		context.pointerMove(1.0, 1.0);

@@ -2791,8 +2791,7 @@ class FrameworkSmoke {
 			selectedMenuItem = "open";
 		}), new MenuItem("disabled", "Unavailable", null, false)], 32.0, 24.0, function() {
 			menuDismissals++;
-		});
-		menu.selectFirstOnOpen = true;
+		}, selectFirstOnOpen: true);
 		var menuRoot = context.submit(menu, dialogFrame);
 		var menuGeometry:ResolvedLayoutItem = cast menuRoot.children[2].resolved;
 		if (context.focus.focusedId == null
@@ -2830,8 +2829,7 @@ class FrameworkSmoke {
 				overflowChoice = choice;
 			}));
 		}
-		var overflowMenu = new Menu("overflow-menu-smoke", overflowMenuItems, 250.0, 115.0);
-		overflowMenu.selectFirstOnOpen = true;
+		var overflowMenu = new Menu("overflow-menu-smoke", overflowMenuItems, 250.0, 115.0, selectFirstOnOpen: true);
 		var overflowMenuFrame = new LayoutFrame(256.0, 120.0);
 		var overflowMenuRoot = context.submit(overflowMenu, overflowMenuFrame);
 		var overflowMenuBounds = overflowMenuRoot.children[2].resolved;
@@ -5331,18 +5329,16 @@ class FrameworkSmoke {
 			|| !PropertyValue.same(PropertyValue.Float(2.0),
 			PropertyValue.Float(2.0))) return false;
 		var sectionChanges = 0;
-		var composedInspector = new PropertyInspector("composed-inspector",
-			[massProperty, modeProperty, mixedProperty],
-			null,
-			null,
-			[
-				new PropertyInspectorSection("physics", "Physics", [massProperty]),
-				new PropertyInspectorSection("display", "Display", [modeProperty, mixedProperty])
-			]);
+		function composed(scrollable:Bool):PropertyInspector
+			return new PropertyInspector("composed-inspector", [massProperty, modeProperty, mixedProperty], null, null,
+				[
+					new PropertyInspectorSection("physics", "Physics", [massProperty]),
+					new PropertyInspectorSection("display", "Display", [modeProperty, mixedProperty])
+				], scrollable: scrollable, onSectionExpanded: function(id, expanded) {
+					if (id == "display" && !expanded) sectionChanges++;
+				});
+		var composedInspector = composed(true);
 		if (!composedInspector.isPristine()) return false;
-		composedInspector.onSectionExpanded = function(id, expanded) {
-			if (id == "display" && !expanded) sectionChanges++;
-		};
 		var composedRoot = uiContext.submit(composedInspector, new LayoutFrame(480.0, 320.0));
 		if (composedRoot == null || composedRoot.semantics == null
 			|| composedRoot.semantics.label != "Inspector"
@@ -5352,7 +5348,7 @@ class FrameworkSmoke {
 		composedRoot = uiContext.submit(composedInspector, new LayoutFrame(480.0, 320.0));
 		if (composedRoot == null || composedRoot.children.length == 0 || composedRoot.children[0].children.length == 0
 			|| composedRoot.children[0].children[0].children.length != 3) return false;
-		composedInspector.scrollable = false;
+		composedInspector = composed(false);
 		composedRoot = uiContext.submit(composedInspector, new LayoutFrame(480.0, 320.0));
 		if (composedRoot.styleType != "column" || composedRoot.semantics == null || composedRoot.semantics.role
 			!= AccessibilityRole.Group || composedRoot.semantics.label != "Inspector") return false;
@@ -5552,8 +5548,8 @@ class FrameworkSmoke {
 			-1,
 			-1,
 			1) || surfaceRuns != 1) return false;
-		var commandMenu = new CommandMenu("surface-menu", ["surface.run", "surface.stop"], 24.0, 24.0, surfaceRegistry);
-		commandMenu.selectFirstOnOpen = true;
+		var commandMenu = new CommandMenu("surface-menu", ["surface.run", "surface.stop"], 24.0, 24.0, surfaceRegistry,
+			selectFirstOnOpen: true);
 		var menuRoot = uiContext.submit(commandMenu, new LayoutFrame(480.0, 320.0));
 		if (menuRoot == null
 			|| menuRoot.semantics == null || menuRoot.semantics.role != AccessibilityRole.Menu) return false;

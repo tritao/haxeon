@@ -80,8 +80,7 @@ class OverlayHost {
 			}),
 				new MenuItem("menu-disabled", "Unavailable action", null, false)], menuX, menuY, function() {
 				explorer.state.overlays.menuOpen = false;
-			});
-			menu.selectFirstOnOpen = openedWithoutPointer;
+			}, selectFirstOnOpen: openedWithoutPointer);
 			layers.push(new StackChild("menu-layer", menu, 0.0, 0.0, 20));
 		}
 	}

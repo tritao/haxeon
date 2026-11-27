@@ -30,21 +30,21 @@ class ImageView implements View {
 	public final style:LayoutStyle;
 
 	/** How the image fills its box. */
-	public var fit:ImageFit;
+	public final fit:ImageFit;
 
 	/** A view showing `image`. */
-	public function new(key:String, image:Image, ?label:String, ?style:LayoutStyle) {
+	public function new(key:String, image:Image, ?label:String, ?style:LayoutStyle, fit:ImageFit = ImageFit.Stretch) {
 		if (key == null || key.length == 0
 			|| image == null || image.isDisposed()) throw "Image views require a stable key and live image";
 		this.key = key;
 		this.image = image;
 		this.label = label;
-		fit = ImageFit.Stretch;
 		if (style == null) {
 			this.style = new LayoutStyle();
 			this.style.width = LayoutAxis.fixed(image.width);
 			this.style.height = LayoutAxis.fixed(image.height);
 		} else this.style = style.copy();
+		this.fit = fit;
 	}
 
 	public function build(context:BuildContext):ViewRoot {

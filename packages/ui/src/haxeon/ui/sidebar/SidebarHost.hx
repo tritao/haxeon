@@ -19,19 +19,21 @@ class SidebarHost implements View {
 	final iconProvider:Null<String->Null<haxeon.ui.icons.IconName>>;
 	final activeOnly:Bool;
 	/** Optional fixed header actions for the active destination. */
-	public var headerActions:Null<String->Null<View>> = null;
+	public final headerActions:Null<String->Null<View>>;
 
 	/**
 	 * A sidebar showing `model`'s selected destination under a strip of its destinations, calling `onSelect` with the
 	 * one the user picks; `iconProvider` gives each an icon.
 	 */
 	public function new(key:String, model:SidebarModel, onSelect:String->Void,
-			?iconProvider:String->Null<haxeon.ui.icons.IconName>, activeOnly:Bool = false) {
+			?iconProvider:String->Null<haxeon.ui.icons.IconName>, activeOnly:Bool = false,
+			?headerActions:String->Null<View>) {
 		this.activeOnly = activeOnly;
 		this.iconProvider = iconProvider;
 		this.key = key;
 		this.model = model;
 		this.onSelect = onSelect;
+		this.headerActions = headerActions;
 	}
 	public function build(context:BuildContext):ViewRoot {
 		if (!model.visible) return new haxeon.ui.widgets.layout.Spacer(key, LayoutAxis.fixed(0),

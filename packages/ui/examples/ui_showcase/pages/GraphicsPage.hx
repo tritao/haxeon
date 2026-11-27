@@ -180,8 +180,7 @@ class GraphicsPage {
 			fit:ImageFit):Column {
 		var key = label.toLowerCase().split(" ").join("-");
 		var image = new ImageView(key + "-image", source,
-			label + " image preview", imageSampleStyle(explorer));
-		image.fit = fit;
+			label + " image preview", imageSampleStyle(explorer), fit:);
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.percent(0.32);
 		style.childGap = 6.0;

@@ -979,13 +979,11 @@ private class PopupHost implements View {
 			style.width = LayoutAxis.grow();
 			var requested = inputs.height;
 			style.height = LayoutAxis.fixed(inputs.fractional ? requested / 3.14159 : requested);
-			var list = new haxeon.ui.widgets.collections.ListView("rows", new WindowItems(), style, controller, 300);
-			list.selectionProvider = () -> selected.value;
-			list.onSelectionChanged = index -> {
-				selected.value = index;
-				notifications++;
-			};
-			return list;
+			return new haxeon.ui.widgets.collections.ListView("rows", new WindowItems(), style, controller, 300,
+				onSelectionChanged: index -> {
+					selected.value = index;
+					notifications++;
+				}, selectionProvider: () -> selected.value);
 		});
 		var build = () -> view;
 		for (nextHeight in [480, 137, 341, 1, 480]) {

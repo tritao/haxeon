@@ -27,18 +27,18 @@ class CommandButton implements View {
 	/** The button's box; the default when null. */
 	public final style:Null<LayoutStyle>;
 	/** Defaults to Secondary; callers mark primary commands explicitly. */
-	public var variant:ButtonVariant;
+	public final variant:ButtonVariant;
 
 	/** Text shown in place of the command's label. */
-	public var displayLabel:Null<String>;
+	public final displayLabel:Null<String>;
 
 	/** An icon before the label. */
-	public var leadingIcon:Null<IconName>;
+	public final leadingIcon:Null<IconName>;
 	/** Additional presentation classes for toolbar and other command surfaces. */
-	public var classes:Array<String>;
+	public final classes:Array<String>;
 
 	/** Called with the outcome of each command run. */
-	public var onResult:Null<CommandResult->Void>;
+	public final onResult:Null<CommandResult->Void>;
 
 	/** A button running the command `commandId`. */
 	public function new(key:String,
@@ -46,7 +46,10 @@ class CommandButton implements View {
 			?registry:CommandRegistry,
 			?invocationContext:CommandContext,
 			?style:LayoutStyle,
-			?onResult:CommandResult->Void) {
+			?onResult:CommandResult->Void,
+			variant:ButtonVariant = ButtonVariant.Secondary,
+			?displayLabel:String,
+			?leadingIcon:IconName, ?classes:Array<String>) {
 		if (key == null || key.length == 0
 			|| commandId == null || commandId.length == 0) throw "Command buttons require stable keys and command IDs";
 		this.key = key;
@@ -54,11 +57,11 @@ class CommandButton implements View {
 		this.registry = registry;
 		this.invocationContext = invocationContext;
 		this.style = style == null ? null : style.copy();
-		variant = ButtonVariant.Secondary;
-		displayLabel = null;
-		leadingIcon = null;
-		classes = [];
+		this.classes = classes == null ? [] : classes.copy();
 		this.onResult = onResult;
+		this.variant = variant;
+		this.displayLabel = displayLabel;
+		this.leadingIcon = leadingIcon;
 	}
 
 	public function build(context:BuildContext):ViewRoot {

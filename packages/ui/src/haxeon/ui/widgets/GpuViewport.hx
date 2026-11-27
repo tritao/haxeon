@@ -59,13 +59,13 @@ class GpuViewport implements View {
 	/** Whether the grid is drawn. */
 	public var gridEnabled(default, null):Bool;
 	/** Native pointer button used to pan; defaults to the primary button. */
-	public var panButton:Int = 0;
+	public final panButton:Int;
 
 	/** Whether the viewport takes input: panning, zooming and the added handlers. */
-	public var enabled:Bool;
+	public final enabled:Bool;
 
 	/** Its accessible name; without one, assistive technology skips it. */
-	public var label:Null<String>;
+	public final label:Null<String>;
 
 	/** Paints over the content, in viewport coordinates; set with `setOverlay`. */
 	public var overlay(default, null):Null<Canvas->ResolvedLayoutItem->Void>;
@@ -82,7 +82,9 @@ class GpuViewport implements View {
 
 	/** A viewport showing `content` through `camera`. Throws when `key` is empty or there is no content. */
 	public function new(key:String, content:ViewportContent, ?camera:ViewportCamera, ?style:LayoutStyle,
-			?label:String) {
+			?label:String,
+			panButton:Int = 0,
+			enabled:Bool = true) {
 		if (key == null || key.length == 0 || content == null) throw "GPU viewports require a stable key and content";
 		this.key = key;
 		this.content = content;
@@ -95,7 +97,6 @@ class GpuViewport implements View {
 		this.gridColor = Color.rgba(0.18, 0.21, 0.26, 0.7);
 		this.gridSize = 1.0;
 		this.gridEnabled = true;
-		this.enabled = true;
 		this.label = label == null ? "GPU viewport" : label;
 		this.overlay = null;
 		overlayRevision = 1;
@@ -103,6 +104,8 @@ class GpuViewport implements View {
 		draggingPointer = null;
 		lastPointerX = 0.0;
 		lastPointerY = 0.0;
+		this.panButton = panButton;
+		this.enabled = enabled;
 	}
 
 	/** A viewport showing a GPU `surface` whose content is `width` by `height`. */

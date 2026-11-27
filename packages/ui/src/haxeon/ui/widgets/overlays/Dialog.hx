@@ -26,17 +26,18 @@ class Dialog implements View {
 	public final width:Float;
 
 	/** Whether a click outside it dismisses it. */
-	public var dismissOnOutside:Bool;
+	public final dismissOnOutside:Bool;
 
 	/** Whether Escape dismisses it. */
-	public var dismissOnEscape:Bool;
+	public final dismissOnEscape:Bool;
 
 	/** Called when the user dismisses it; the caller removes it. */
-	public var onDismiss:Void->Void;
+	public final onDismiss:Void->Void;
 	internal var hasDismissHandler(default, null):Bool;
 
 	/** A modal dialog titled `title` showing `content`, `width` pixels wide. */
-	public function new(key:String, title:String, content:View, ?onDismiss:Void->Void, width:Float = 440.0) {
+	public function new(key:String, title:String, content:View, ?onDismiss:Void->Void, width:Float = 440.0,
+			dismissOnOutside:Bool = true, dismissOnEscape:Bool = true) {
 		if (content == null || !finite(width)
 			|| width <= 0.0) throw "Dialog requires content and a positive finite width";
 		this.key = new Key(key);
@@ -46,8 +47,8 @@ class Dialog implements View {
 		hasDismissHandler = onDismiss != null;
 		this.onDismiss = onDismiss == null ? function() {}
 			: onDismiss;
-		dismissOnOutside = true;
-		dismissOnEscape = true;
+		this.dismissOnOutside = dismissOnOutside;
+		this.dismissOnEscape = dismissOnEscape;
 	}
 
 	public function build(context:BuildContext):ViewRoot {
