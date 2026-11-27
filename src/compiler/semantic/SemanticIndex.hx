@@ -20,6 +20,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstExpression;
 import compiler.core.CancellationToken;
+import compiler.core.StdlibNames;
 
 abstract SemanticSymbolId(String) from String to String {
 	public inline function new(module:String, declaration:String)
@@ -1351,7 +1352,7 @@ class SemanticIndex {
 			case TDynamic: "Dynamic";
 			case TTypeParameter(_, name): name;
 			case TInt: "Int";
-			case TInt64: "haxe.Int64";
+			case TInt64: StdlibNames.INT64;
 			case TFloat: "Float";
 			case TBool: "Bool";
 			case TString: "String";

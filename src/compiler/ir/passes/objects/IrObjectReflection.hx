@@ -1,6 +1,7 @@
 package compiler.ir.passes.objects;
 
 import compiler.core.InternalError;
+import compiler.core.StdlibNames;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
@@ -183,12 +184,12 @@ class IrObjectReflection {
 				continue;
 			switch symbol {
 				case "__reflect_copy", "__reflect_object_copy":
-					result.set(RECORD_CREATION, true);
+					result.set(StdlibNames.RECORD_OBSERVABLE_CREATION, true);
 				case "__reflect_set_field", "__reflect_delete_field", "__reflect_object_set_field",
 					"__reflect_object_delete_field":
 					var bits = layout.observableBits;
 					if (bits != null && Lambda.exists(layout.fields, field -> bits.exists(field.name)))
-						result.set(WRITE_STATUS, true);
+						result.set(StdlibNames.OBSERVABLE_WRITE_STATUS, true);
 				default:
 			}
 		}
@@ -234,17 +235,14 @@ class IrObjectReflection {
 	/** The name prefix of the native a layout-specific HashLink helper falls back to for any other value. */
 	static inline final OPTIONAL_PREFIX = "$" + "optional-reflect-native:";
 
-	/** What the set and delete helpers of an observable layout call before a write (`guardObservableWrite`). */
-	static inline final WRITE_STATUS = "haxeon.reactive.ReactiveRuntime.observableWriteStatus";
-
 	/**
 	 * Every function a generated reflection helper calls that is not itself a generated helper or a runtime native: the one list, for the helper
 	 * bodies, for the walk (`dependencies`) and for the check-mode assertion in `generate`.
 	 */
-	static final HELPER_CALLEES:Array<String> = [RECORD_CREATION, WRITE_STATUS];
-
-	/** What the copy helper of an observable layout calls (`recordObservableCreation`). */
-	static inline final RECORD_CREATION = "haxeon.reactive.ReactiveRuntime.recordObservableCreation";
+	static final HELPER_CALLEES:Array<String> = [
+		StdlibNames.RECORD_OBSERVABLE_CREATION,
+		StdlibNames.OBSERVABLE_WRITE_STATUS
+	];
 
 	/** Every `IrNative.symbol` whose declaration `generate` replaces with generated code. */
 	public static function helperSymbols():Array<String>
@@ -287,10 +285,10 @@ class IrObjectReflection {
 		if (!isObservableClass(objects, className))
 			return [];
 		var needed = switch symbol {
-			case "__reflect_copy", "__reflect_object_copy": [RECORD_CREATION];
+			case "__reflect_copy", "__reflect_object_copy": [StdlibNames.RECORD_OBSERVABLE_CREATION];
 			case "__reflect_set_field", "__reflect_delete_field", "__reflect_object_set_field",
 				"__reflect_object_delete_field":
-				observableBits.exists(className) ? [WRITE_STATUS] : [];
+				observableBits.exists(className) ? [StdlibNames.OBSERVABLE_WRITE_STATUS] : [];
 			default: [];
 		};
 		for (name in needed)
@@ -503,7 +501,7 @@ class IrObjectReflection {
 		}, builder -> builder.constNull(Dyn));
 
 	static function recordObservableCreation(builder:IrBuilder, object:IrValue):Void
-		builder.call(RECORD_CREATION, [builder.toDyn(object)], Void);
+		builder.call(StdlibNames.RECORD_OBSERVABLE_CREATION, [builder.toDyn(object)], Void);
 
 	static function field(native:IrNative, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>,
 			derived:IrDerivedHelpers):IrFunction
@@ -584,8 +582,8 @@ class IrObjectReflection {
 		var bit = layout.observableBits == null ? null : layout.observableBits.get(field);
 		if (bit == null)
 			return;
-		var source = builder.fieldGet(object, "$haxeonObservableState", Obj("haxeon.reactive.ObservableSource"));
-		var status = builder.call("haxeon.reactive.ReactiveRuntime.observableWriteStatus", [
+		var source = builder.fieldGet(object, "$haxeonObservableState", Obj(StdlibNames.OBSERVABLE_SOURCE));
+		var status = builder.call(StdlibNames.OBSERVABLE_WRITE_STATUS, [
 			source,
 			builder.constInt(bit),
 			builder.toDyn(object)

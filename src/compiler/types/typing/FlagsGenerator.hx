@@ -12,6 +12,7 @@ import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.InlineConstantEvaluator;
+import compiler.core.StdlibNames;
 
 /** Closed integer sets have value-returning operations; no reader or mutation wrapper is needed. */
 @:access(compiler.types.typing.BodyTyper)
@@ -21,7 +22,7 @@ class FlagsGenerator {
 	public static function conforms(session:TypingSession, declaration:AstAbstract):Bool
 		return DeclaredConformance.has(session,
 			TAbstract(declaration.name, [], session.declarations.resolve(declaration.underlying, declaration.span)),
-			"Flags");
+			StdlibNames.FLAGS);
 
 	public static function isMember(method:String, isStatic:Bool):Bool
 		return isStatic ? method == "empty" || method == "fromRaw" : switch method {

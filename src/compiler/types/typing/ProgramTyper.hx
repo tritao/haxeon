@@ -9,8 +9,6 @@ import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiAbi.HxiTypeLayout;
 import compiler.ffi.NativeLayout;
-import compiler.runtime.RuntimeType;
-import compiler.runtime.RuntimeType;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.semantic.InitializerUnit;
 import compiler.semantic.InterfaceFieldAccessors;
@@ -39,6 +37,7 @@ import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.AbstractConstructorNormalizer;
 import compiler.types.analysis.Scope;
 import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
+import compiler.core.StdlibNames;
 
 /**
  * What a warm build takes of the declarations from the session: each module's declaration keys, and the signatures of unannotated
@@ -172,9 +171,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			for (classDecl in program.classes) {
 				var defaultLibrary = externTyper.nativeLibrary(classDecl.name, classDecl.metadata),
 					externClass = classDecl.isExtern == true || defaultLibrary != null;
-				// An extern class's methods are natives, and so is an `extern` method without a body in any other class.
+				requireIntrinsics(classDecl);
+				// An extern class's methods are natives, and so is an `extern` method without a body in any other class,
+				// except an intrinsic: the compiler expands each call, so there is no native to bind.
 				for (method in classDecl.methods)
-					if (externClass || method.isExtern == true) {
+					if (!externClass && method.isExtern == true && isIntrinsic(classDecl, method))
+						continue;
+					else if (externClass || method.isExtern == true) {
 						if (!method.isStatic)
 							BodyTyper.fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
 								'Extern instance method "${classDecl.name}.${method.name}" is not supported yet',
@@ -272,9 +275,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				name: enumDecl.name,
 				isRecursive: session.enumRepresentations.isRecursive(enumDecl.name),
 				equatable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []),
-					"Equatable"),
+					StdlibNames.EQUATABLE),
 				hashable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []),
-					"Hashable"),
+					StdlibNames.HASHABLE),
 				metadata: enumDecl.metadata,
 				cases: [for (caseDecl in enumDecl.cases)
 					{
@@ -823,7 +826,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				for (parameter in classDecl.typeParameters)
 					TTypeParameter(classDecl.name, parameter)
 			]);
-			for (capability in ["Hashable", "Equatable"])
+			for (capability in [StdlibNames.HASHABLE, StdlibNames.EQUATABLE])
 				if (session.relations.isAssignable(actual, TInstance(NominalKind.Interface, capability, [])))
 					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 						'Class "${classDecl.name}" cannot conform to $capability; use a struct for value equality',
@@ -1021,20 +1024,20 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	function validateObservable(classDecl:AstClass, declaredType:CompilerType,
 			classSemanticSubstitutions:Map<String, CompilerType>, isValue:Bool,
 			isNativeValue:Bool):Void {
-		if (!DeclaredConformance.has(session, declaredType, "Observable"))
+		if (!DeclaredConformance.has(session, declaredType, StdlibNames.OBSERVABLE))
 			return;
 		// Observable field access is generated after typing. Its per-object source is
 		// therefore an implicit module dependency even when user code imports none of
 		// the reactive runtime classes.
-		session.runtimeDependencyTracker.record(classDecl.name + ".new", RuntimeType.OBSERVABLE_SOURCE);
-		session.runtimeDependencyTracker.record(classDecl.name + ".new", RuntimeType.REACTIVE_RUNTIME);
+		session.runtimeDependencyTracker.record(classDecl.name + ".new", StdlibNames.OBSERVABLE_SOURCE);
+		session.runtimeDependencyTracker.record(classDecl.name + ".new", StdlibNames.REACTIVE_RUNTIME);
 		if (isValue || isNativeValue)
 			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 				'Observable conformance is only supported on classes with identity: "${classDecl.name}"',
 				classDecl.span);
 		if (classDecl.base != null) {
 			var baseType = session.declarations.resolve(classDecl.base, classDecl.span, classSemanticSubstitutions);
-			if (!DeclaredConformance.has(session, baseType, "Observable"))
+			if (!DeclaredConformance.has(session, baseType, StdlibNames.OBSERVABLE))
 				BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 					'Observable class "${classDecl.name}" must extend an Observable base class',
 					classDecl.span);
@@ -1056,7 +1059,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			classSemanticSubstitutions:Map<String, CompilerType>):Void {
 		if (!session.relations.isStruct(declaredType))
 			return;
-		if (DeclaredConformance.has(session, declaredType, "Equatable")) {
+		if (DeclaredConformance.has(session, declaredType, StdlibNames.EQUATABLE)) {
 			var hasEquals = false, hasHash = false;
 			for (method in classDecl.methods)
 				if (method.name == "equals") {
@@ -1070,7 +1073,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
 							'Method "${classDecl.name}.equals" must have signature equals(other:${classDecl.name}):Bool',
 							method.span);
-				} else if (method.name == "hash" && DeclaredConformance.has(session, declaredType, "Hashable")) {
+				} else if (method.name == "hash"
+					&& DeclaredConformance.has(session, declaredType, StdlibNames.HASHABLE)) {
 					hasHash = true;
 					if (method.isStatic
 						|| method.arguments.length != 0
@@ -1088,7 +1092,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 							'Cannot synthesize Equatable for "${classDecl.name}": field "${field.name}" does not conform to Equatable',
 							field.span);
 				}
-			if (DeclaredConformance.has(session, declaredType, "Hashable") && !hasHash) {
+			if (DeclaredConformance.has(session, declaredType, StdlibNames.HASHABLE) && !hasHash) {
 				if (hasEquals)
 					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 						'Cannot synthesize Hashable for "${classDecl.name}" with a handwritten equals; provide hash():Int',
@@ -1153,8 +1157,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			}
 		var type:CompilerType = TInstance(NominalKind.Enum, declaration.name,
 			[for (parameter in declaration.typeParameters) substitutions.get(parameter)]),
-			equatable = DeclaredConformance.has(session, type, "Equatable"),
-			hashable = DeclaredConformance.has(session, type, "Hashable"),
+			equatable = DeclaredConformance.has(session, type, StdlibNames.EQUATABLE),
+			hashable = DeclaredConformance.has(session, type, StdlibNames.HASHABLE),
 			hasEquals = false,
 			hasHash = false;
 		var hasPayload = false;
@@ -1203,7 +1207,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 							session.relations.recursiveAnonymousField(type, [],
 							null) == null ? 'Enum "${declaration.name}" must declare Hashable to define hash'
 							: DeclaredConformance.capabilityError(session,
-							type, "Hashable"),
+							type, StdlibNames.HASHABLE),
 							method.span);
 					if (method.isStatic
 						|| method.arguments.length != 0
@@ -2519,6 +2523,35 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				DeclarationIndex.comparedArgumentType(rightArguments[i], session.relations)))
 				return false;
 		return true;
+	}
+
+	/**
+	 * Whether `method` is an intrinsic the standard library declares (`StdlibNames.isIntrinsic`): an `extern` without a body
+	 * or a native binding. The compiler expands a call by the function's qualified name, so no other declaration can be one.
+	 */
+	static function isIntrinsic(classDecl:AstClass, method:AstFunction):Bool {
+		var name = classDecl.name + "." + method.name;
+		if (!StdlibNames.isIntrinsic(name) || AstFunctions.hasMetadata(method, "hlNative")
+			|| AstFunctions.hasMetadata(method, "cNative"))
+			return false;
+		if (method.statements.length != 0)
+			BodyTyper.fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+				'Intrinsic "$name" cannot have a body: the compiler expands each call', method.span);
+		return true;
+	}
+
+	/**
+	 * Each intrinsic `classDecl` declares is an `extern` without a body: the compiler expands its calls, so a body would
+	 * never run. (That the standard library declares every intrinsic, `StdlibNamesMain` checks.)
+	 */
+	static function requireIntrinsics(classDecl:AstClass):Void {
+		var members = StdlibNames.intrinsicsOf(classDecl.name);
+		if (members.length > 0)
+			for (method in classDecl.methods)
+				if (method.isExtern != true && members.indexOf(method.name) >= 0)
+					BodyTyper.fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+						'Intrinsic "${classDecl.name}.${method.name}" must be declared extern, without a body: the compiler expands each call',
+						method.span);
 	}
 
 	static function rejectNativeBinding(fn:compiler.syntax.Ast.AstFunction, name:String):Void {

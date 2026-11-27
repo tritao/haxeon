@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.Source.SourceSpan;
+import compiler.core.StdlibNames;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -23,8 +24,9 @@ class EnumDynamicBox {
 			case TInstance(NominalKind.Enum, _, arguments):
 				if (!session.representation.containsTypeParameter(type, [])) {
 					EnumEqualityGenerator.requestReflective(session, type, origin, span);
-					if (DeclaredConformance.has(session, type, "Equatable")) EnumEqualityGenerator.request(session,
-						type, origin, span);
+					if (DeclaredConformance.has(session, type, StdlibNames.EQUATABLE))
+						EnumEqualityGenerator.request(session,
+							type, origin, span);
 				}
 				for (argument in arguments) requestReflectedTypes(session, argument, origin, span, seen);
 			case TInstance(_, _, arguments): for (argument in arguments) requestReflectedTypes(session, argument,
@@ -53,7 +55,7 @@ class EnumDynamicBox {
 	public static function view(session:TypingSession, array:TypedExpression, type:CompilerType,
 			span:SourceSpan):TypedExpression {
 		EnumEqualityGenerator.requestReflective(session, type, session.currentContext.name, span);
-		if (DeclaredConformance.has(session, type, "Equatable"))
+		if (DeclaredConformance.has(session, type, StdlibNames.EQUATABLE))
 			EnumEqualityGenerator.request(session, type, session.currentContext.name, span);
 		return new TypedExpression(TEnumDynamicView(array, type), array.type, span);
 	}
@@ -61,7 +63,7 @@ class EnumDynamicBox {
 	public static function box(session:TypingSession, value:TypedExpression, type:CompilerType,
 			span:SourceSpan):TypedExpression {
 		EnumEqualityGenerator.requestReflective(session, type, session.currentContext.name, span);
-		if (DeclaredConformance.has(session, type, "Equatable"))
+		if (DeclaredConformance.has(session, type, StdlibNames.EQUATABLE))
 			EnumEqualityGenerator.request(session, type, session.currentContext.name, span);
 		return new TypedExpression(TEnumDynamicBox(value, type), TDynamic, span);
 	}

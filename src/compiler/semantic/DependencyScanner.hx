@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.core.StdlibNames;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
@@ -15,7 +16,7 @@ class DependencyScanner {
 			case UninitializedDeclaration(_, type, _):
 				scanAnnotation(type, dependencies, typeParameters);
 			case ScopedDeclaration(_, type, e, _):
-				dependencies.required.set("Disposable", true);
+				dependencies.required.set(StdlibNames.DISPOSABLE, true);
 				if (type != null)
 					scanAnnotation(type, dependencies, typeParameters);
 				scanExpression(e, dependencies, typeParameters);
@@ -44,7 +45,7 @@ class DependencyScanner {
 					// A typed catch tests what haxe.Exception's catch helpers make of the thrown value (TypedCatchSubject),
 					// when the standard library has them.
 					if (!catchClause.type.match(NamedType("Dynamic")))
-						dependencies.optional.set(compiler.runtime.RuntimeType.EXCEPTION, true);
+						dependencies.optional.set(StdlibNames.EXCEPTION, true);
 					for (x in catchClause.statements)
 						scanStatement(x, dependencies, typeParameters);
 				}
@@ -79,7 +80,7 @@ class DependencyScanner {
 			case Switch(expression, cases, defaultBranch, hasDefault, _):
 				// A switch without a default may cover a closed set, whose implicit default throws an UnmatchedValue.
 				if (!hasDefault)
-					dependencies.optional.set(compiler.runtime.RuntimeType.UNMATCHED_VALUE, true);
+					dependencies.optional.set(StdlibNames.UNMATCHED_VALUE, true);
 				scanExpression(expression, dependencies, typeParameters);
 				for (switchCase in cases) {
 					for (pattern in switchCase.patterns)
@@ -146,7 +147,7 @@ class DependencyScanner {
 				scanExpression(written, dependencies, typeParameters);
 			case SwitchExpression(subject, cases, fallback, _):
 				if (fallback == null)
-					dependencies.optional.set(compiler.runtime.RuntimeType.UNMATCHED_VALUE, true);
+					dependencies.optional.set(StdlibNames.UNMATCHED_VALUE, true);
 				scanExpression(subject, dependencies, typeParameters);
 				for (switchCase in cases) {
 					for (pattern in switchCase.patterns)
@@ -202,12 +203,12 @@ class DependencyScanner {
 					scanExpression(a, dependencies, typeParameters);
 			case Call(name, args, _):
 				if (compiler.runtime.ArrayLibrary.providesLastOf(name))
-					dependencies.required.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
+					dependencies.required.set(StdlibNames.ARRAY_METHODS, true);
 				if (compiler.runtime.MapLibrary.providesLastOf(name))
-					dependencies.required.set(compiler.runtime.MapLibrary.CLASS_NAME, true);
-				// The stdlib may implement it in Haxe (`RuntimeType.STRING_FROM_CHAR_CODE`).
+					dependencies.required.set(StdlibNames.MAP_METHODS, true);
+				// The stdlib may implement it in Haxe (`haxe.StringCodes.fromCharCode`).
 				if (name == "String.fromCharCode")
-					dependencies.optional.set(compiler.runtime.RuntimeType.STRING_CODES, true);
+					dependencies.optional.set(StdlibNames.STRING_CODES, true);
 				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);
@@ -267,9 +268,9 @@ class DependencyScanner {
 	/** A call that may be an array or map method implemented in the stdlib needs that module loaded. */
 	static function scanLibraryMethod(methodName:String, dependencies:ScannedDependencies):Void {
 		if (compiler.runtime.ArrayLibrary.provides(methodName))
-			dependencies.required.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
+			dependencies.required.set(StdlibNames.ARRAY_METHODS, true);
 		if (compiler.runtime.MapLibrary.provides(methodName))
-			dependencies.required.set(compiler.runtime.MapLibrary.CLASS_NAME, true);
+			dependencies.required.set(StdlibNames.MAP_METHODS, true);
 	}
 
 	static function scanQualifiedDependency(name:String, dependencies:ScannedDependencies):Void {

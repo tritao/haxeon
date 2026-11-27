@@ -19,6 +19,7 @@ import compiler.semantic.DeclarationFacts;
 import compiler.semantic.DeclarationFacts.FactAspect;
 import compiler.semantic.DeclarationPrints;
 import compiler.semantic.DeclarationTable;
+import compiler.core.StdlibNames;
 
 /** Where typing stood before a body: see `TypingSession.checkpoint`. */
 typedef TypingCheckpoint = {
@@ -927,7 +928,7 @@ class TypingSession {
 		for (key in dependencies)
 			// Typing a string conversion clears no facts either, so neither does depending on one.
 			if (key != compiler.types.analysis.PurityInference.TO_STRING
-				&& key != "Std.string"
+				&& key != StdlibNames.STD_STRING
 				&& !(isPureCall(key) || isNoReturnCall(key)))
 				return false;
 		return true;
@@ -995,18 +996,18 @@ class TypingSession {
 		return isPayloadEnumKey(key) ? key : RuntimeType.specializedMapKey(key);
 
 	public function mapOwner(key:CompilerType, value:CompilerType):Null<String> {
-		var hashable = DeclaredConformance.has(this, key, "Hashable");
+		var hashable = DeclaredConformance.has(this, key, StdlibNames.HASHABLE);
 		// Payload enum keys use their declared hash and equality.
 		if (isPayloadEnumKey(key))
-			return hashable ? RuntimeType.SPECIALIZED_MAP : null;
+			return hashable ? StdlibNames.HASH_MAP : null;
 		if (!hashable && RuntimeType.mapName(key, value) == null)
 			return switch key {
 				case TInstance(NominalKind.Class | NominalKind.Interface, _, _) if (!relations.isStruct(key)):
-					RuntimeType.OBJECT_MAP;
+					StdlibNames.OBJECT_MAP;
 				default: null;
 			};
 		return RuntimeType.usesSpecializedMap(key, value, mapValueType, _ -> hashable)
-			? RuntimeType.SPECIALIZED_MAP : null;
+			? StdlibNames.HASH_MAP : null;
 	}
 
 	function mapValueType(type:CompilerType):Bool

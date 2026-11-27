@@ -568,6 +568,15 @@ provides `haxeon_runtime`'s natives), so the body is not a Wasm fallback: code
 that needs one there selects it with `#if wasm`. `@:cNative` still binds only
 an extern function (`E1021` names a body, which would run instead).
 
+An `extern` function without a body or a native binding is a compiler
+intrinsic: the standard library declares it (`Diff.copy`, `Hashing.hash`,
+`MessagePack.decode`, ...) for its signature and documentation, and the
+compiler expands each call. The compiler lists its intrinsics by qualified name
+(`compiler.core.StdlibNames`), so no other declaration is one: elsewhere an
+`extern` without a binding is still an error. An intrinsic declared with a body
+is an error (`E1021`), as is an intrinsic used as a function value, which has
+nothing to refer to (`E1009`): call it in a lambda.
+
 An extern class or abstract can provide a default library for all its methods.
 The method name is used as the native symbol unless the method carries its own
 two-argument `@:hlNative` binding:

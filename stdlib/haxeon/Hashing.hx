@@ -2,12 +2,11 @@ package haxeon;
 
 /** Hash operations for values with declared Hashable conformance. */
 class Hashing {
-	/** Compiler intrinsic: the selected conformance supplies one hash for all uses of a value. */
-	public static function hash<T:Hashable>(value:T):Int throw "Hashing.hash must be lowered by the compiler";
+	/** The hash of `value`, from its `Hashable` conformance, the same for all uses of the value. */
+	public static extern function hash<T:Hashable>(value:T):Int;
 
-	/** Compiler intrinsic: map keys use a reflexive equivalence, including all Float NaNs. */
-	public static function keyEquals<T:Hashable>(left:T,
-			right:T):Bool throw "Hashing.keyEquals must be lowered by the compiler";
+	/** Whether `left` and `right` are the same map key: a reflexive equivalence, under which every Float NaN is the same. */
+	public static extern function keyEquals<T:Hashable>(left:T, right:T):Bool;
 
 	/** `hash` combined with `value`, as `hash * 31 + value`: what a conformance's hash folds each field into. */
 	public static inline function mix(hash:Int, value:Int):Int

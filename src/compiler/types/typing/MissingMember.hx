@@ -3,6 +3,7 @@ package compiler.types.typing;
 import compiler.core.Diagnostic;
 import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
+import compiler.core.StdlibNames;
 import compiler.semantic.SemanticSignature;
 import compiler.types.FunctionTypes;
 import compiler.types.Monomorphs;
@@ -37,7 +38,7 @@ class MissingMember extends CompileError {
 	 */
 	public static function haxeType(type:CompilerType):String
 		return switch Monomorphs.follow(type) {
-			case TBytes: "haxe.io.Bytes";
+			case TBytes: StdlibNames.BYTES;
 			case TNullable(element): 'Null<${haxeType(element)}>';
 			case TArray(element): 'Array<${haxeType(element)}>';
 			case TIterator(element): 'Iterator<${haxeType(element)}>';

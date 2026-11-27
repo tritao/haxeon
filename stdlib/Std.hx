@@ -267,18 +267,12 @@ class Std {
 		return stdRandom(limit);
 	}
 
-	/** Runtime type test lowered intrinsically by the Haxeon compiler. */
-	public static function isOfType(value:Dynamic, type:Dynamic):Bool {
-		return false;
-	}
+	/** Whether `value` is an instance of `type`, a class, interface or enum, or of a type extending it. */
+	public static extern function isOfType(value:Dynamic, type:Dynamic):Bool;
 
-	/** The value as the requested class or interface when it is an instance of it, else null; lowered by the compiler. */
-	public static function downcast(value:Dynamic, type:Dynamic):Dynamic {
-		return null;
-	}
+	/** `value` as the class or interface `type` when it is an instance of it, else null. */
+	public static extern function downcast(value:Dynamic, type:Dynamic):Dynamic;
 
 	/** True only when the runtime class is exactly the requested class. */
-	public static function isExactType(value:Dynamic, type:Dynamic):Bool {
-		return false;
-	}
+	public static extern function isExactType(value:Dynamic, type:Dynamic):Bool;
 }

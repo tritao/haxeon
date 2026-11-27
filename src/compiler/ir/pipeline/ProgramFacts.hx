@@ -1,6 +1,7 @@
 package compiler.ir.pipeline;
 
 import compiler.core.InternalError;
+import compiler.core.StdlibNames;
 import compiler.ir.model.Ir.IrType;
 import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedEnum;
@@ -147,7 +148,7 @@ class ProgramFacts {
 		return parts.join(".");
 	}
 
-	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */
+	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `runtime.DynamicObject`. */
 	/** Supply the program's classes: which are value classes (see `isHeaderlessValueClass`) and what each extends (see `isUpcast`). */
 	function bindClasses(classes:Array<TypedClass>, ?interfaces:Array<TypedInterface>,
 			?ownerAliases:Map<String, String>):Void {
@@ -181,7 +182,7 @@ class ProgramFacts {
 				classBases.set(Std.string(classDecl.name), classDecl.base);
 		}
 		function extendsEquatable(name:String, visiting:Map<String, Bool>):Bool {
-			if (name == "Equatable" || name == "Hashable")
+			if (name == StdlibNames.EQUATABLE || name == StdlibNames.HASHABLE)
 				return true;
 			if (visiting.exists(name))
 				return false;
@@ -216,7 +217,7 @@ class ProgramFacts {
 		for (classDecl in classes)
 			classIsEquatable(classDecl.name, []);
 		function extendsObservable(name:String, visiting:Map<String, Bool>):Bool {
-			if (name == "Observable")
+			if (name == StdlibNames.OBSERVABLE)
 				return true;
 			if (visiting.exists(name))
 				return false;

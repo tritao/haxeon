@@ -19,10 +19,8 @@ class JsonWire {
 		}, source);
 
 	/** Encodes a value as JSON. Haxeon generates the codec for the value's concrete type. */
-	public static function encode<T>(value:T):String
-		throw new haxe.Exception("JsonWire.encode must be lowered by the compiler");
+	public static extern function encode<T>(value:T):String;
 
 	/** Decodes one JSON value, or gives why the source is not one. Haxeon generates the codec from the expected result type. */
-	public static function decode<T>(source:String):Result<T, WireError>
-		throw new haxe.Exception("JsonWire.decode must be lowered by the compiler");
+	public static extern function decode<T>(source:String):Result<T, WireError>;
 }

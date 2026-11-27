@@ -20,6 +20,7 @@ import compiler.semantic.DeclarationFacts;
 import compiler.semantic.DeclarationFacts.FactAspect;
 import compiler.semantic.DeclarationReads;
 import compiler.semantic.DeclarationTable;
+import compiler.core.StdlibNames;
 
 /** Stable category used to identify a source declaration semantically. */
 enum abstract DeclarationKind(String) {
@@ -550,9 +551,9 @@ class DeclarationIndex {
 			case NamedType(name):
 				switch name {
 					case "Dynamic", "Any": TDynamic;
-					case "haxe.Int64", "Int64": TInt64;
-					case "haxe.io.Bytes": TBytes;
-					case "hl.Bytes": THlBytes;
+					case StdlibNames.INT64, "Int64": TInt64;
+					case StdlibNames.BYTES: TBytes;
+					case StdlibNames.HL_BYTES: THlBytes;
 					case "Int8": TNativeScalar("i8");
 					case "UInt8": TNativeScalar("u8");
 					case "Int16": TNativeScalar("i16");
@@ -1067,14 +1068,14 @@ class DeclarationIndex {
 	public static function typeKey(type:CompilerType):String
 		return switch type {
 			case TInt: "Int";
-			case TInt64: "haxe.Int64";
+			case TInt64: StdlibNames.INT64;
 			case TBool: "Bool";
 			case TFloat: "Float";
 			case TString: "String";
 			case TBytes: "Bytes";
-			case THlBytes: "hl.Bytes";
+			case THlBytes: StdlibNames.HL_BYTES;
 			case TDynamic: "Dynamic";
-			case TNativeAbstract(name): 'hl.Abstract<$name>';
+			case TNativeAbstract(name): '${StdlibNames.HL_ABSTRACT}<$name>';
 			case TNativeScalar(abiName): 'native-scalar:$abiName';
 			case TNever: "Never";
 			case TRange: "Range";

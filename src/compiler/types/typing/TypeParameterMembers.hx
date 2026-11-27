@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
+import compiler.core.StdlibNames;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -56,8 +57,8 @@ class TypeParameterMembers {
 		}
 		for (bound in session.declarations.typeParameterBounds(self))
 			switch bound {
-				case TInstance(NominalKind.Interface, "Flags", _) if (FlagsGenerator.isMember(name, false)):
-					var signature = FlagsGenerator.signature("Flags", name);
+				case TInstance(NominalKind.Interface, StdlibNames.FLAGS, _) if (FlagsGenerator.isMember(name, false)):
+					var signature = FlagsGenerator.signature(StdlibNames.FLAGS, name);
 					return {arguments: [for (index in 1...signature.arguments.length) self],
 						result: switch signature.result {
 							case TAbstract(_, _, _): self;

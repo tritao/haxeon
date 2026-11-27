@@ -19,7 +19,7 @@ class TargetProfile {
 	/** HashLink stores value classes as headerless structs; Wasm represents them as ordinary references. */
 	public final headerlessValueClasses:Bool;
 
-	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */
+	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `runtime.DynamicObject`. */
 	public final dynamicObjectLiterals:Bool;
 
 	/** Array accesses are checked by the generated code (the runtime natives do it elsewhere). */

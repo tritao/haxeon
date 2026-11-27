@@ -49,7 +49,7 @@ function main():Int {
 	target.visible = false;
 	var applied = Diff.apply(target, a, b);
 	if (applied != mask || target.width != 4 || target.mode != Bold || target.visible) return 7;
-	if (Diff.all(Style) != 63) return 8;
+	if (Diff.all<Style>() != 63) return 8;
 	var p = new Point(), q = new Point();
 	q.y = 1.0;
 	if (p == q) return 9;

@@ -2,6 +2,7 @@ package compiler.runtime;
 
 import compiler.Compiler;
 import compiler.Compiler.NativeFunction;
+import compiler.core.StdlibNames;
 import compiler.types.Type.CompilerType;
 
 /** Native operations emitted directly by primitive and language lowering. */
@@ -55,8 +56,8 @@ class CompilerIntrinsics {
 		definitions.push(native("__std_int_f64", "haxeon_runtime", "__std_int_f64", [TFloat], TInt));
 		definitions.push(native("__std_int_dynamic", "haxeon_runtime", "__std_int_dynamic", [TDynamic], TInt));
 		definitions.push(native("__std_string", "haxeon_runtime", "__std_string", [TDynamic], TString, [
-			"runtime.Ryu.format",
-			"Std.arrayString"
+			StdlibNames.RYU_FORMAT,
+			StdlibNames.STD_ARRAY_STRING
 		]));
 		definitions.push(native("__dynamic_equal", "haxeon_runtime", "__dynamic_equal", [TDynamic, TDynamic], TBool));
 		definitions.push(native("__iterator_new", "haxeon_runtime", "__iterator_new", [TDynamic],

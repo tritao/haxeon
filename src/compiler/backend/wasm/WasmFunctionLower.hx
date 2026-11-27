@@ -26,6 +26,7 @@ import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.core.StdlibNames;
 
 /** One open Wasm structured-control instruction, innermost last. */
 private enum StructureFrame {
@@ -2191,7 +2192,7 @@ class WasmFunctionLower {
 			name:String,
 			arguments:Array<IrValue>,
 			values:Map<Int, Int>):Bool {
-		if (name == "haxe.Int64.ofInt") {
+		if (name == StdlibNames.INT64_OF_INT) {
 			if (arguments.length != 1 || (switch (arguments[0].type) {
 				case I32:
 					false;
@@ -2208,7 +2209,7 @@ class WasmFunctionLower {
 			body.push(LocalSet(requiredLocal(values, output.id)));
 			return true;
 		}
-		if (name == "haxe.Int64.fromFloat") {
+		if (name == StdlibNames.INT64_FROM_FLOAT) {
 			if (arguments.length != 1 || (switch (arguments[0].type) {
 				case F64:
 					false;
@@ -2225,7 +2226,7 @@ class WasmFunctionLower {
 			body.push(LocalSet(requiredLocal(values, output.id)));
 			return true;
 		}
-		if (name == "haxe.Int64.toInt") {
+		if (name == StdlibNames.INT64_TO_INT) {
 			if (arguments.length != 1 || (switch (output.type) {
 				case I32:
 					false;
@@ -2237,7 +2238,7 @@ class WasmFunctionLower {
 			body.push(LocalSet(requiredLocal(values, output.id)));
 			return true;
 		}
-		if (name == "haxe.Int64.compare") {
+		if (name == StdlibNames.INT64_COMPARE) {
 			if (arguments.length != 2 || (switch (output.type) {
 				case I32:
 					false;
@@ -2269,7 +2270,7 @@ class WasmFunctionLower {
 			body.push(End);
 			return true;
 		}
-		if (name == "haxe.Int64.shl" || name == "haxe.Int64.shr" || name == "haxe.Int64.ushr") {
+		if (name == StdlibNames.INT64_SHL || name == StdlibNames.INT64_SHR || name == StdlibNames.INT64_USHR) {
 			if (arguments.length != 2 || (switch (output.type) {
 				case I64:
 					false;
@@ -2290,7 +2291,7 @@ class WasmFunctionLower {
 			body.push(I32Eqz);
 			body.push(I32Or);
 			body.push(If(null));
-			if (name == "haxe.Int64.shr") {
+			if (name == StdlibNames.INT64_SHR) {
 				body.push(LocalGet(valueLocal));
 				body.push(I64Const(0));
 				body.push(I64LtS);
@@ -2309,30 +2310,30 @@ class WasmFunctionLower {
 			body.push(LocalGet(valueLocal));
 			body.push(LocalGet(shiftLocal));
 			body.push(I64ExtendI32U);
-			body.push(name == "haxe.Int64.shl" ? I64Shl : name == "haxe.Int64.shr" ? I64ShrS : I64ShrU);
+			body.push(name == StdlibNames.INT64_SHL ? I64Shl : name == StdlibNames.INT64_SHR ? I64ShrS : I64ShrU);
 			body.push(LocalSet(outputLocal));
 			body.push(End);
 			return true;
 		}
 		var operation = switch name {
-			case "haxe.Int64.add":
+			case StdlibNames.INT64_ADD:
 				I64Add;
-			case "haxe.Int64.sub":
+			case StdlibNames.INT64_SUB:
 				I64Sub;
-			case "haxe.Int64.mul":
+			case StdlibNames.INT64_MUL:
 				I64Mul;
-			case "haxe.Int64.and":
+			case StdlibNames.INT64_AND:
 				I64And;
-			case "haxe.Int64.or":
+			case StdlibNames.INT64_OR:
 				I64Or;
-			case "haxe.Int64.xor":
+			case StdlibNames.INT64_XOR:
 				I64Xor;
 			case _:
 				null;
 		};
 		// Haxe's truncating division and its remainder. A zero divisor traps, Wasm's division by zero; the minimum divided by -1,
 		// which i64.div_s also traps on, is negated instead (wrapping to the minimum), and its remainder is 0.
-		if (name == "haxe.Int64.div" || name == "haxe.Int64.mod") {
+		if (name == StdlibNames.INT64_DIV || name == StdlibNames.INT64_MOD) {
 			if (arguments.length != 2 || (switch (output.type) {
 				case I64:
 					false;
@@ -2342,7 +2343,7 @@ class WasmFunctionLower {
 			var dividend = requiredLocal(values, arguments[0].id),
 				divisor = requiredLocal(values, arguments[1].id),
 				result = requiredLocal(values, output.id),
-				division = name == "haxe.Int64.div";
+				division = name == StdlibNames.INT64_DIV;
 			body.push(LocalGet(divisor));
 			body.push(I64Const(-1));
 			body.push(I64Eq);
@@ -2362,7 +2363,7 @@ class WasmFunctionLower {
 			body.push(End);
 			return true;
 		}
-		if (name == "haxe.Int64.neg") {
+		if (name == StdlibNames.INT64_NEG) {
 			if (arguments.length != 1 || (switch (output.type) {
 				case I64:
 					false;
@@ -2375,7 +2376,7 @@ class WasmFunctionLower {
 			body.push(LocalSet(requiredLocal(values, output.id)));
 			return true;
 		}
-		if (name == "haxe.Int64.make") {
+		if (name == StdlibNames.INT64_MAKE) {
 			if (arguments.length != 2 || (switch (output.type) {
 				case I64:
 					false;

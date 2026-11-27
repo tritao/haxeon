@@ -18,6 +18,7 @@ import compiler.ir.reuse.IrStageMemos;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
+import compiler.core.StdlibNames;
 import compiler.ir.model.Ir;
 import compiler.ir.model.SourceProvenance.Located;
 
@@ -201,7 +202,7 @@ class IrCheckedDynamicCasts extends IrFunctionPass {
 					allowNull: true
 				} : null;
 			case RawPtr:
-				{checked: type, name: "hl.Bytes", allowNull: true};
+				{checked: type, name: StdlibNames.HL_BYTES, allowNull: true};
 			case Function(_, _) if (checkFunctionCasts):
 				{checked: type, name: IrTypeIdentity.text(type), allowNull: false};
 			case Nullable(inner = Function(_, _)) if (checkFunctionCasts):

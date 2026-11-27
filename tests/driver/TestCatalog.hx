@@ -221,6 +221,7 @@ class TestCatalog {
 		"SemanticWorkspaceMain",
 		"SemanticProgramMain",
 		"TyperBoundaryMain",
+		"StdlibNamesMain",
 		"FunctionModifiersMain",
 		"AbiMatrixMain",
 		"AddedFunctionLayoutMain",

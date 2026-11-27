@@ -3,6 +3,7 @@ package compiler.modules;
 import compiler.compilation.CompilationContext;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
+import compiler.core.StdlibNames;
 import compiler.core.TextDigest;
 import sys.FileSystem;
 import sys.io.File;
@@ -19,7 +20,6 @@ import sys.io.File;
  * the only thing the incremental compiler sees change; nothing that merely reads an identity needs retyping.
  */
 class CodeIdentityTable {
-	public static inline final MODULE = "haxeon.build.CodeIdentityTable";
 	static inline final BEGIN = "/*IDENTITY-BEGIN*/";
 	static inline final END = "/*IDENTITY-END*/";
 
@@ -27,10 +27,10 @@ class CodeIdentityTable {
 	public static function refresh(context:CompilationContext, names:Array<String>, rollback:Map<String, ModuleState>,
 			entry:String,
 			body:Map<String, Bool>, signatures:Map<String, Bool>, structural:Map<String, Bool>):Void {
-		if (names.indexOf(MODULE) < 0)
+		if (names.indexOf(StdlibNames.CODE_IDENTITY_TABLE) < 0)
 			return;
 		var modules = context.state.modules;
-		var state = modules.get(MODULE);
+		var state = modules.get(StdlibNames.CODE_IDENTITY_TABLE);
 		if (state == null)
 			return;
 		var salt = context.identitySalt();
@@ -39,7 +39,7 @@ class CodeIdentityTable {
 		var text = render(state.source.text, computed);
 		if (text == state.source.text)
 			return;
-		state = context.state.writableState(MODULE, rollback);
+		state = context.state.writableState(StdlibNames.CODE_IDENTITY_TABLE, rollback);
 		state.render(new SourceFile(state.source.path, text, state.source.isStandardLibrarySource,
 			state.source.physicalPath));
 		context.parse(state, entry, body, signatures, structural);
@@ -73,7 +73,7 @@ class CodeIdentityTable {
 	public static function render(template:String, identities:Map<String, String>):String {
 		var begin = template.indexOf(BEGIN), end = template.indexOf(END);
 		if (begin < 0 || end < begin)
-			throw new InternalError('Module "$MODULE" has no identity markers');
+			throw new InternalError('Module "${StdlibNames.CODE_IDENTITY_TABLE}" has no identity markers');
 		var names = [for (name in identities.keys()) name];
 		names.sort(Reflect.compare);
 		var lines = new StringBuf();
@@ -90,7 +90,7 @@ class CodeIdentityTable {
 	public static function identities(modules:Map<String, ModuleState>, names:Array<String>,
 			salt:String):Map<String, String> {
 		var known:Map<String, Bool> = [], edges:Map<String, Array<String>> = [];
-		var members = [for (name in names) if (name != MODULE && modules.exists(name)) name];
+		var members = [for (name in names) if (name != StdlibNames.CODE_IDENTITY_TABLE && modules.exists(name)) name];
 		members.sort(Reflect.compare);
 		for (name in members)
 			known.set(name, true);

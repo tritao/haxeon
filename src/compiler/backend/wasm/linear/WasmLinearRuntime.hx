@@ -16,6 +16,7 @@ import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmLocalRef;
 import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.EnumStringDescriptors;
+import compiler.core.StdlibNames;
 
 class WasmLinearRuntime {
 	public static function addImports(context:WasmLinearContext, used:Map<String, Bool>):Void {
@@ -3650,7 +3651,7 @@ class WasmLinearRuntime {
 			});
 		}
 		// Enum payload recursion must retain Std.string's array behavior too.
-		var arrayString = functions == null ? null : functions.get("Std.arrayString");
+		var arrayString = functions == null ? null : functions.get(StdlibNames.STD_ARRAY_STRING);
 		if (arrayString != null) {
 			builder.localGet(value);
 			builder.emit(I32Load(0));
@@ -3927,7 +3928,7 @@ class WasmLinearRuntime {
 
 	public static function finalizeDynamicString(context:WasmLinearContext):Void {
 		var dynamicString = context.functions.get("__std_string"),
-			floatString = context.functions.get("runtime.Ryu.format");
+			floatString = context.functions.get(StdlibNames.RYU_FORMAT);
 		if (dynamicString == null)
 			return;
 		var integerString = context.functions.get("__haxeon_i32_to_string"),

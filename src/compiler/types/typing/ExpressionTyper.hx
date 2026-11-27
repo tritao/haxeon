@@ -3,8 +3,6 @@ package compiler.types.typing;
 import compiler.core.DiagnosticCode;
 import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.InternalError;
-import compiler.runtime.PlatformAbi;
-import compiler.runtime.RuntimeType;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
@@ -50,12 +48,10 @@ import compiler.types.IterationProtocol;
 import compiler.types.StructProperties;
 import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.Scope.LocalBinding;
+import compiler.core.StdlibNames;
 
 /** Dispatches source expressions and owns their expression-specific typing rules. */
 class ExpressionTyper {
-	/** The root package's `Result`, whose `Err` a `try` without `catch` returns. */
-	static inline final RESULT = "Result";
-
 	final session:TypingSession;
 	final conversionResolver:ConversionResolver;
 	final callResolver:CallResolver;
@@ -1291,7 +1287,7 @@ class ExpressionTyper {
 		};
 		// Targets without native dynamic objects (Wasm) allocate the stdlib's dynamic object class.
 		if (isDynamic)
-			session.runtimeDependencyTracker.record(session.currentContext.name, PlatformAbi.DYNAMIC_OBJECT_CLASS);
+			session.runtimeDependencyTracker.record(session.currentContext.name, StdlibNames.DYNAMIC_OBJECT);
 		anonymousTypeRegistry.register(resolvedResult);
 		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic),
 			isDynamic ? TDynamic : resolvedResult, span);
@@ -1780,8 +1776,11 @@ class ExpressionTyper {
 		return switch typedArray.type {
 			case TDynamic:
 				// `dynamicValue[i]`: read when the program runs, as Haxe/HL reads the array the value holds.
-				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
-				new TypedExpression(TCall("haxeon.DynamicOps.index", [typedArray, bodyTyper.dynamicIndex(typedIndex)]),
+				session.runtimeDependencyTracker.record(session.currentContext.name, StdlibNames.DYNAMIC_OPS);
+				new TypedExpression(TCall(StdlibNames.DYNAMIC_OPS_INDEX, [
+					typedArray,
+					bodyTyper.dynamicIndex(typedIndex)
+				]),
 					TDynamic, span);
 			case TMap(key, value):
 				DeclaredConformance.requireMapRuntime(session, key, value, span);
@@ -2051,7 +2050,6 @@ class ExpressionTyper {
 			default: false;
 		};
 
-
 	static function isArraySwitchable(type:CompilerType):Bool
 		return switch type {
 			case TArray(_): true;
@@ -2222,10 +2220,10 @@ class ExpressionTyper {
 				return null;
 		if (!dynamicOperand)
 			return null;
-		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
+		session.runtimeDependencyTracker.record(session.currentContext.name, StdlibNames.DYNAMIC_OPS);
 		var boxed = [for (operand in operands) bodyTyper.coerce(operand, TDynamic, "dynamic operand",
 			DiagnosticCode.OPERATOR_OR_STRING_CONVERSION)];
-		return new TypedExpression(TCall("haxeon.DynamicOps." + name, boxed), result, span);
+		return new TypedExpression(TCall(StdlibNames.DYNAMIC_OPS + "." + name, boxed), result, span);
 	}
 
 	public function negate(value:AstExpression, span:SourceSpan, scope:Scope,
@@ -2273,14 +2271,14 @@ class ExpressionTyper {
 		var held = bodyTyper.typeExpression(value, scope, propagatedExpectation(expectedType, span)),
 			heldType = compiler.types.Monomorphs.follow(held.type);
 		var error = switch heldType {
-			case TInstance(NominalKind.Enum, name, [_, error]) if (name == RESULT): error;
+			case TInstance(NominalKind.Enum, name, [_, error]) if (name == StdlibNames.RESULT): error;
 			default:
 				throw new CompileError(new Diagnostic(DiagnosticCode.TYPE_CONSTRAINT,
 					'"try" without "catch" takes a Result, got ${MissingMember.haxeType(held.type)}', span));
 		};
-		var resultType = propagatedResult(error, span), declaration = session.enumDecls.get(RESULT);
+		var resultType = propagatedResult(error, span), declaration = session.enumDecls.get(StdlibNames.RESULT);
 		if (declaration == null)
-			fail(DiagnosticCode.TYPE_CONSTRAINT, 'Cannot resolve enum "$RESULT"', span);
+			fail(DiagnosticCode.TYPE_CONSTRAINT, 'Cannot resolve enum "${StdlibNames.RESULT}"', span);
 		var temporary = new TemporaryLocal("__haxeon_try" + span.start),
 			binding = new Scope(scope).define(temporary.name, heldType, span, true, null, false, null, null,
 				temporary);
@@ -2300,7 +2298,7 @@ class ExpressionTyper {
 			};
 		}
 		var ok = payload("Ok"), err = payload("Err");
-		var returned = new TypedExpression(TEnumConstruct(RESULT, err.index, [
+		var returned = new TypedExpression(TEnumConstruct(StdlibNames.RESULT, err.index, [
 			representation.boundaryCast(err.value,
 				representation.enumStorageType(declaration.typeParameters, declaration.cases[err.index].params[0],
 				resultType))
@@ -2322,12 +2320,12 @@ class ExpressionTyper {
 			return null;
 		var context = session.currentContext, declared = context.expectedReturnType ?? context.inferredResult;
 		var error = declared == null ? null : switch compiler.types.Monomorphs.follow(declared) {
-			case TInstance(NominalKind.Enum, name, [_, error]) if (name == RESULT): error;
+			case TInstance(NominalKind.Enum, name, [_, error]) if (name == StdlibNames.RESULT): error;
 			default: null;
 		};
 		if (error == null)
 			error = session.monomorphs.create('the error of the Result that "try" takes', span);
-		return error == null ? null : TInstance(NominalKind.Enum, RESULT, [expectedType, error]);
+		return error == null ? null : TInstance(NominalKind.Enum, StdlibNames.RESULT, [expectedType, error]);
 	}
 
 	/**
@@ -2344,7 +2342,7 @@ class ExpressionTyper {
 			if (value == null)
 				fail(DiagnosticCode.TYPE_CONSTRAINT,
 					'Cannot infer the result of a function that uses "try"; declare it as a Result', span);
-			var result = TInstance(NominalKind.Enum, RESULT, [value, error]);
+			var result = TInstance(NominalKind.Enum, StdlibNames.RESULT, [value, error]);
 			if (declared == null)
 				context.inferredResult = result;
 			else
@@ -2352,7 +2350,7 @@ class ExpressionTyper {
 			return result;
 		}
 		return switch compiler.types.Monomorphs.follow(declared) {
-			case TInstance(NominalKind.Enum, name, [_, returned]) if (name == RESULT):
+			case TInstance(NominalKind.Enum, name, [_, returned]) if (name == StdlibNames.RESULT):
 				if (compiler.types.Monomorphs.isUnbound(returned))
 					compiler.types.Monomorphs.unify(returned, error);
 				else if (!TypeRelations.equals(compiler.types.Monomorphs.follow(returned),
@@ -2930,7 +2928,7 @@ class ExpressionTyper {
 				if (!payload)
 					return comparison;
 				var type = left.type;
-				if (!DeclaredConformance.has(session, type, "Equatable"))
+				if (!DeclaredConformance.has(session, type, StdlibNames.EQUATABLE))
 					fail(DiagnosticCode.CONFORMANCE, 'Enum "$name" does not conform to Equatable', comparison.span);
 				var keyed = EnumEqualityGenerator.request(session, type, session.currentContext.name, comparison.span);
 				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(keyed), [left, right]), TBool,

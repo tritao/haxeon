@@ -2,7 +2,6 @@ package compiler.types.typing;
 
 import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
-import compiler.runtime.RuntimeType;
 import compiler.types.Monomorphs;
 
 import compiler.types.TypedAst.TypedFunctionRole;
@@ -18,6 +17,7 @@ import compiler.types.TypedAst.TypedCapture;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.NullSafety.NullSafetyUse;
+import compiler.core.StdlibNames;
 
 /** Applies the conversion plan selected by the compilation's type relations. */
 class ConversionResolver {
@@ -406,7 +406,7 @@ class ConversionResolver {
 				"Recursive Dynamic to anonymous structure conversion is not supported; convert the recursive fields explicitly",
 				value.span);
 		var origin = session.currentContext.name;
-		session.runtimeDependencyTracker.record(origin, RuntimeType.REFLECT);
+		session.runtimeDependencyTracker.record(origin, StdlibNames.REFLECT);
 		new AnonymousTypeRegistry(session).register(target);
 		var converted =
 			new TypedExpression(TCall(DynamicStructureGenerator.request(session, target, origin, value.span),
@@ -460,7 +460,8 @@ class ConversionResolver {
 				for (field in fields) {
 					var key = new TypedExpression(TStringLiteral(field.name), TString, span);
 					if (!field.optional) {
-						var present = new TypedExpression(TCall("Reflect.hasField", [source, key]), TBool, span);
+						var present = new TypedExpression(TCall(StdlibNames.REFLECT_HAS_FIELD, [source, key]), TBool,
+							span);
 						var message =
 							new TypedExpression(TStringLiteral('Missing required field "${field.name}" in dynamic structure conversion'),
 							TString, span);
@@ -469,7 +470,7 @@ class ConversionResolver {
 					}
 					var fieldLocal = "$field:" + field.name;
 					statements.push(TVar(fieldLocal,
-						new TypedExpression(TCall("Reflect.field", [source, key]), TDynamic, span), span));
+						new TypedExpression(TCall(StdlibNames.REFLECT_FIELD, [source, key]), TDynamic, span), span));
 					var read = new TypedExpression(TLocal(fieldLocal), TDynamic, span);
 					var matches = dynamicFieldMatches(read, field.type);
 					if (matches != null) {
@@ -527,7 +528,7 @@ class ConversionResolver {
 			case TInt64, TBool, TString: typeTest(type);
 			case TArray(_): typeTest(TArray(TDynamic));
 			case TInstance(_, _, _): typeTest(type);
-			case TFunction(_, _, _): new TypedExpression(TCall("Reflect.isFunction", [value]), TBool, span);
+			case TFunction(_, _, _): new TypedExpression(TCall(StdlibNames.REFLECT_IS_FUNCTION, [value]), TBool, span);
 			default: null;
 		};
 		if (matches != null

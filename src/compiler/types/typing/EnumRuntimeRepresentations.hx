@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.InternalError;
+import compiler.core.StdlibNames;
 import compiler.syntax.Ast.AstEnumParameter;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -82,8 +83,8 @@ class EnumRuntimeRepresentations {
 			specializationOrigin: origin,
 			specializationArguments: arguments,
 			isRecursive: isRecursive(origin),
-			equatable: DeclaredConformance.has(session, type, "Equatable"),
-			hashable: DeclaredConformance.has(session, type, "Hashable"),
+			equatable: DeclaredConformance.has(session, type, StdlibNames.EQUATABLE),
+			hashable: DeclaredConformance.has(session, type, StdlibNames.HASHABLE),
 			metadata: source.metadata,
 			cases: [for (constructor in source.cases) {
 				name: constructor.name, metadata: constructor.metadata, span: constructor.span,

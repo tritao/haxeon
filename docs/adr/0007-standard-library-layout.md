@@ -170,9 +170,10 @@ The compiler's source must keep compiling with stock Haxe until the gates of
 standard library. Haxe's API therefore keeps working, as the compatibility package, for as long as the compiler uses it.
 The order:
 
-1. **One table of the names the compiler knows.** The compiler names about 75 standard-library declarations in string
+1. **One table of the names the compiler knows.** The compiler names about 130 standard-library declarations in string
    literals (`haxe.io.Bytes`, `haxe.Rest`, `haxeon.async.Future`, ...). They are gathered into one table first, so each
-   later move changes the table, not the compiler.
+   later move changes the table, not the compiler. Done: `compiler.core.StdlibNames`, which a compiler test checks
+   against the standard library's declarations.
 2. **`std.fs`**, built beside today's API and tested on HashLink and both Wasm targets; `haxeon.filesystem` folds into it.
 3. **The other `std` packages**, one domain per change, each with its documentation required (as the standard library's
    is today). A module moves, it is not copied: its old name becomes an adapter in the compatibility package in the same

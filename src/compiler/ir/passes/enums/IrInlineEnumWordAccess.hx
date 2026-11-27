@@ -1,6 +1,7 @@
 package compiler.ir.passes.enums;
 
 import compiler.core.InternalError;
+import compiler.core.StdlibNames;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.passes.scalars.IrScalarWordBits;
@@ -48,7 +49,13 @@ class IrInlineEnumWordAccess {
 			arguments: [I64],
 			result: F64
 		},
-		{name: "haxe.Int64.toInt", library: "haxeon_runtime", symbol: "__int64_to_int", arguments: [I64], result: I32}
+		{
+			name: StdlibNames.INT64_TO_INT,
+			library: "haxeon_runtime",
+			symbol: "__int64_to_int",
+			arguments: [I64],
+			result: I32
+		}
 	];
 
 	/** The caller initializes the destination's words before storing any payload leaves. */
@@ -111,7 +118,7 @@ class IrInlineEnumWordAccess {
 		case I32: bits == 32 ? value : builder.intToInt64(value);
 		case RawPtr, TypeRef, Abstract("native_callback"):
 			var encoded = builder.call(IrScalarWordBits.PACK, [value], I64);
-			bits == 64 ? encoded : builder.call("haxe.Int64.toInt", [encoded], I32);
+			bits == 64 ? encoded : builder.call(StdlibNames.INT64_TO_INT, [encoded], I32);
 		case I64 if (bits == 64): value;
 		case F64 if (bits == 64): builder.call("__f64_to_i64_bits", [value], I64);
 		case F32: var encoded = builder.call("__f32_to_i32_bits", [value], I32);
@@ -132,14 +139,14 @@ class IrInlineEnumWordAccess {
 
 	function decode(builder:IrBuilder, value:IrValue, type:IrType):IrValue return switch type {
 		case EnumTag(_): builder.call(IrScalarWordBits.UNPACK,
-			[bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32)], type);
-		case I32: bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32);
+			[bits == 32 ? value : builder.call(StdlibNames.INT64_TO_INT, [value], I32)], type);
+		case I32: bits == 32 ? value : builder.call(StdlibNames.INT64_TO_INT, [value], I32);
 		case RawPtr, TypeRef, Abstract("native_callback"):
 			builder.call(IrScalarWordBits.UNPACK, [bits == 64 ? value : builder.intToInt64(value)], type);
 		case I64 if (bits == 64): value;
 		case F64 if (bits == 64): builder.call("__i64_to_f64_bits", [value], F64);
 		case F32: builder.call("__i32_to_f32_bits",
-			[bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32)], F32);
+			[bits == 32 ? value : builder.call(StdlibNames.INT64_TO_INT, [value], I32)], F32);
 		case Bool: builder.equal(builder.equal(value, builder.constInt(0, wordType)), builder.constBool(false));
 		default: throw new InternalError('Unsupported enum scalar payload $type');
 	};

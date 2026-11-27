@@ -1,6 +1,7 @@
 package compiler.semantic;
 
 import compiler.core.InternalError;
+import compiler.core.StdlibNames;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
@@ -70,14 +71,14 @@ class SemanticSignature {
 			return [for (part in types) spell(part, provisional)].join(",");
 		return switch semanticType {
 			case TInt: "Int";
-			case TInt64: "haxe.Int64";
+			case TInt64: StdlibNames.INT64;
 			case TBool: "Bool";
 			case TFloat: "Float";
 			case TString: "String";
 			case TBytes: "Bytes";
-			case THlBytes: "hl.Bytes";
+			case THlBytes: StdlibNames.HL_BYTES;
 			case TDynamic: "Dynamic";
-			case TNativeAbstract(name): 'hl.Abstract<"$name">';
+			case TNativeAbstract(name): '${StdlibNames.HL_ABSTRACT}<"$name">';
 			case TNativeScalar(name): 'native-scalar:$name';
 			case TNever: "Never";
 			case TRange: "Range";
@@ -117,14 +118,14 @@ class SemanticSignature {
 	public static function display(semanticType:CompilerType):String
 		return switch semanticType {
 			case TInt: "Int";
-			case TInt64: "haxe.Int64";
+			case TInt64: StdlibNames.INT64;
 			case TBool: "Bool";
 			case TFloat: "Float";
 			case TString: "String";
 			case TBytes: "Bytes";
-			case THlBytes: "hl.Bytes";
+			case THlBytes: StdlibNames.HL_BYTES;
 			case TDynamic: "Dynamic";
-			case TNativeAbstract(name): 'hl.Abstract<"$name">';
+			case TNativeAbstract(name): '${StdlibNames.HL_ABSTRACT}<"$name">';
 			case TNativeScalar(name): name;
 			case TNever: "Never";
 			case TRange: "Range";

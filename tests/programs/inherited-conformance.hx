@@ -48,7 +48,7 @@ function main():Int {
 		|| haxeon.Diff.fingerprint(a) != haxeon.Diff.fingerprint(c)) return 2;
 	var before = new InheritedEditable(1, 4), after = new InheritedEditable(2, 5), target = new InheritedEditable(1, 4);
 	if (haxeon.Diff.mask(before, after) != 3 || haxeon.Diff.bit(\InheritedEditable.base) != 1
-		|| haxeon.Diff.bit(\InheritedEditable.child) != 2 || haxeon.Diff.all(InheritedEditable) != 3) return 3;
+		|| haxeon.Diff.bit(\InheritedEditable.child) != 2 || haxeon.Diff.all<InheritedEditable>() != 3) return 3;
 	if (haxeon.Diff.apply(target, before, after) != 3 || target.base != 2 || target.child != 5) return 4;
 	if (haxeon.Diff.fingerprint(before) == haxeon.Diff.fingerprint(new InheritedEditable(2, 4))) return 5;
 	var original = new InheritedCopy();

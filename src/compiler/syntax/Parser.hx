@@ -27,6 +27,7 @@ import compiler.syntax.Token.TokenKind;
 import compiler.syntax.TokenTable.TokenId;
 import compiler.core.Diagnostic.CompileError;
 import haxe.Int64;
+import compiler.core.StdlibNames;
 
 typedef RecoveredParse = {
 	final program:AstProgram;
@@ -1000,7 +1001,7 @@ class Parser {
 	function rejectEarlyRest(arguments:Array<AstArgument>):Void
 		for (index in 0...arguments.length - 1)
 			switch arguments[index].type {
-				case AppliedType("haxe.Rest", _):
+				case AppliedType(StdlibNames.REST, _):
 					throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR,
 						"Rest should only be used for the last function argument",
 						arguments[index].span));
@@ -1009,7 +1010,7 @@ class Parser {
 
 	/** A rest parameter's type, `...values:T`, is `haxe.Rest<T>`, as in Haxe. */
 	static function restType(rest:Bool, type:AstType):AstType
-		return rest ? AppliedType("haxe.Rest", [type]) : type;
+		return rest ? AppliedType(StdlibNames.REST, [type]) : type;
 
 	function parseCallArguments(callee:String):Array<AstExpression> {
 		var arguments:Array<AstExpression> = [];
@@ -2687,7 +2688,7 @@ class Parser {
 				delimiter = textOf(token).lastIndexOf("/"),
 				pattern = StringTools.replace(textOf(token).substring(2, delimiter), "\\/", "/"),
 				options = textOf(token).substring(delimiter + 1);
-			return parsePostfix(New("EReg", [
+			return parsePostfix(New(StdlibNames.EREG, [
 				StringLiteral(pattern, spanOf(token)),
 				StringLiteral(options, spanOf(token))
 			],
@@ -4273,7 +4274,7 @@ class Parser {
 			}
 			var expression = parseInterpolatedExpression(text.substring(expressionStart, expressionEnd), spanOf(token),
 				haxe.io.Bytes.ofString(text.substring(0, expressionStart)).length);
-			parts.push(Call("Std.string", [expression], expressionSpan(expression)));
+			parts.push(Call(StdlibNames.STD_STRING, [expression], expressionSpan(expression)));
 		}
 		appendStringLiteral(parts, literal.toString(), spanOf(token));
 		var result = parts[0];

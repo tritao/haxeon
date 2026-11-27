@@ -7,6 +7,7 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.core.StdlibNames;
 
 /** Writes to values must reach owned storage, rather than a discarded temporary copy. */
 class ValuePlaceRules {
@@ -55,7 +56,7 @@ class ValuePlaceRules {
 
 	/** Match the same stored, non-@:unobservable fields that receive reactive instrumentation. */
 	public static function isObservableField(session:TypingSession, type:CompilerType, name:String):Bool {
-		if (!DeclaredConformance.has(session, type, "Observable")) return false;
+		if (!DeclaredConformance.has(session, type, StdlibNames.OBSERVABLE)) return false;
 		function find(current:CompilerType):Bool {
 			return switch current {
 				case TNullable(element): find(element);

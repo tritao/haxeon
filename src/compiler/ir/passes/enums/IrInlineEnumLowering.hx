@@ -3,6 +3,7 @@ package compiler.ir.passes.enums;
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
+import compiler.core.StdlibNames;
 import compiler.ir.gen.IrGenerator;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
@@ -238,7 +239,7 @@ class IrInlineEnumLowering {
 			lowered.scanNatives(fn.encodedBody(builder), null);
 		var existing = [for (native in result.natives) native.name => true];
 		for (native in IrInlineEnumWordAccess.natives())
-			if (native.name != "haxe.Int64.toInt" && lowered.called.exists(native.name)
+			if (native.name != StdlibNames.INT64_TO_INT && lowered.called.exists(native.name)
 				&& !existing.exists(native.name))
 				result.natives.push(native);
 		return result;

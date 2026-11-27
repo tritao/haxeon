@@ -15,7 +15,6 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.runtime.PlatformAbi;
-import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstCatch;
 import compiler.syntax.Ast.AstStatement;
@@ -40,6 +39,7 @@ import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.analysis.Scope.LocalBinding;
 import compiler.types.typing.NullSafety.NullSafetyUse;
+import compiler.core.StdlibNames;
 
 typedef StaticFieldInfo = {owner:String, type:CompilerType};
 
@@ -428,7 +428,7 @@ class StatementTyper {
 				case TInstance(_, _, _): true;
 				default: false;
 			};
-		if (nominal && DeclaredConformance.has(session, type, "MustUse"))
+		if (nominal && DeclaredConformance.has(session, type, StdlibNames.MUST_USE))
 			fail(DiagnosticCode.DROPPED_MUST_USE,
 				'A value of type ${MissingMember.haxeType(type)} must be used: handle it, or drop it with "_ = value;"',
 				span);
@@ -758,8 +758,9 @@ class StatementTyper {
 					value = bodyTyper.coerce(stored(assigned, assignedValue, assignedValue), TDynamic, "array element",
 						DiagnosticCode.ASSIGNMENT_OR_BINDING);
 				scope.invalidateExpressionNamespace("array-entry:");
-				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
-				TExpression(new TypedExpression(TCall("haxeon.DynamicOps.setIndex", [typedArray, index, value]), TVoid,
+				session.runtimeDependencyTracker.record(session.currentContext.name, StdlibNames.DYNAMIC_OPS);
+				TExpression(new TypedExpression(TCall(StdlibNames.DYNAMIC_OPS_SET_INDEX, [typedArray, index, value]),
+					TVoid,
 					span), span);
 			case TMap(key, mapValue):
 				DeclaredConformance.requireMapRuntime(session, key, mapValue, span);
@@ -811,9 +812,9 @@ class StatementTyper {
 
 	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression,
 			span:SourceSpan):TypedStatement {
-		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
+		session.runtimeDependencyTracker.record(session.currentContext.name, StdlibNames.REFLECT);
 		var boxed = bodyTyper.coerce(value, TDynamic, 'field "$fieldName"', DiagnosticCode.ASSIGNMENT_OR_BINDING),
-			call = new TypedExpression(TCall("Reflect.setField", [
+			call = new TypedExpression(TCall(StdlibNames.REFLECT_SET_FIELD, [
 				object,
 				new TypedExpression(TStringLiteral(fieldName), TString, span),
 				boxed
@@ -1016,9 +1017,9 @@ class StatementTyper {
 	function catchSubject(type:CompilerType):TypedCatchSubject {
 		if (type.match(TDynamic))
 			return Thrown;
-		if (session.declarations.inheritance.project(type, RuntimeType.EXCEPTION) != null)
+		if (session.declarations.inheritance.project(type, StdlibNames.EXCEPTION) != null)
 			return Caught;
-		return session.declarations.classes.exists(RuntimeType.EXCEPTION) ? Unwrapped : Thrown;
+		return session.declarations.classes.exists(StdlibNames.EXCEPTION) ? Unwrapped : Thrown;
 	}
 
 	public function typeIf(predicate:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>,

@@ -2,7 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
-import compiler.runtime.RuntimeType;
+import compiler.core.StdlibNames;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Monomorphs;
 import compiler.types.Type.CompilerType;
@@ -38,7 +38,7 @@ class ThrownValue {
 			case TNever: true;
 			case TNullable(element): isException(session, element);
 			case instance = TInstance(_, _, _): session.declarations.inheritance.project(instance,
-				RuntimeType.EXCEPTION) != null;
+				StdlibNames.EXCEPTION) != null;
 			default: false;
 		};
 }

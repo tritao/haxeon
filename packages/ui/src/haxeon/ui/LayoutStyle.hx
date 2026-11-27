@@ -95,7 +95,7 @@ class LayoutStyle implements Diffable {
 	public var assigned(default, null):Int;
 
 	/** The Diff bits of the fields that describe the box: every field but `assigned`, which records them. */
-	public static final valueFields:Int = haxeon.Diff.all(LayoutStyle) & ~haxeon.Diff.bit(\LayoutStyle.assigned);
+	public static final valueFields:Int = haxeon.Diff.all<LayoutStyle>() & ~haxeon.Diff.bit(\LayoutStyle.assigned);
 
 	/** Insets, Color and Transform2D are immutable, so every style can start from the same default values. */
 	static final DefaultPadding:Insets = new Insets(0.0, 0.0, 0.0, 0.0);

@@ -40,6 +40,7 @@ import compiler.types.DeclarationIndex;
 import compiler.semantic.SemanticSignature;
 import compiler.semantic.StaticExtensionTable.StaticExtensionOwnerKind;
 import compiler.syntax.Ast.TemporaryLocal;
+import compiler.core.StdlibNames;
 
 typedef EnumConstructorInfo = {
 	?aliasType:CompilerType,
@@ -563,9 +564,9 @@ class CallResolver {
 			return new TypedExpression(TCall(method.nativeName, call), method.result, span);
 		// The check stays at the call site, so a write inside the bytes calls no Haxe function.
 		session.runtimeDependencyTracker.record(session.currentContext.name,
-			PlatformAbi.sourceModule(PlatformAbi.OUTSIDE_BOUNDS));
+			PlatformAbi.sourceModule(StdlibNames.BYTES_OUTSIDE_BOUNDS));
 		var stored = new TypedExpression(TCall(method.nativeName, call), CompilerType.TBool, span),
-			outside = new TypedExpression(TCall(PlatformAbi.OUTSIDE_BOUNDS, []), CompilerType.TVoid, span);
+			outside = new TypedExpression(TCall(StdlibNames.BYTES_OUTSIDE_BOUNDS, []), CompilerType.TVoid, span);
 		return new TypedExpression(TBlockExpression([
 			TIf(new TypedExpression(TNot(stored), CompilerType.TBool, span), [TExpression(outside, span)], [], span)
 		], new TypedExpression(TVoidLiteral, CompilerType.TVoid, span)), method.result, span);
@@ -1160,8 +1161,8 @@ class CallResolver {
 	 */
 	function resolveDynamicMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope):TypedExpression {
-		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
-		var callee = new TypedExpression(TCall("Reflect.field", [
+		session.runtimeDependencyTracker.record(session.currentContext.name, StdlibNames.REFLECT);
+		var callee = new TypedExpression(TCall(StdlibNames.REFLECT_FIELD, [
 			receiver,
 			new TypedExpression(TStringLiteral(name), TString, span)
 		]), TDynamic, span),
@@ -1284,7 +1285,7 @@ class CallResolver {
 			method = session.signatures.get(methodKey);
 		if (method == null)
 			fail(DiagnosticCode.DECLARATION_OR_MODIFIER, 'Missing signature for method "$methodKey"', span);
-		if (methodInfo.owner == RpcServiceTyping.CONNECTION && (method.name == "serve" || method.name == "of"))
+		if (methodInfo.owner == StdlibNames.RPC_CONNECTION && (method.name == "serve" || method.name == "of"))
 			return RpcServiceTyping.typeCall(session, bodyTyper, receiver, methodKey, method.name, arguments, span,
 				scope);
 		if (session.relations.isValueClass(receiver.type) && !session.isPureCall(methodKey)
@@ -1561,15 +1562,16 @@ class CallResolver {
 	 */
 	public function equalityCall(name:String, left:TypedExpression, right:TypedExpression,
 			span:SourceSpan):TypedExpression {
-		var mapKeyEquality = name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals";
-		if ((name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange") && (switch left.type {
+		var mapKeyEquality = StdlibNames.names(name, StdlibNames.HASHING_KEY_EQUALS);
+		if ((StdlibNames.names(name, StdlibNames.EQUALITY_SAME_FOR_CHANGE)) && (switch left.type {
 			case TTypeParameter(_, _) | TDynamic: true;
 			default: false;
 		}))
 			return new TypedExpression(TCall("$reactive.changeEquals", [left, right]), TBool, span);
 		if (mapKeyEquality && !DeclaredConformance.supportsHash(session, left.type))
-			fail(DiagnosticCode.CONFORMANCE, DeclaredConformance.capabilityError(session, left.type, "Hashable"), span);
-		if ((mapKeyEquality || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange")
+			fail(DiagnosticCode.CONFORMANCE,
+				DeclaredConformance.capabilityError(session, left.type, StdlibNames.HASHABLE), span);
+		if ((mapKeyEquality || StdlibNames.names(name, StdlibNames.EQUALITY_SAME_FOR_CHANGE))
 			&& isFloatingMapKey(left.type))
 			return new TypedExpression(TCall("$map.floatKeyEquals", [left, right]), TBool, span);
 		if ((switch (left.type) {
@@ -1580,9 +1582,10 @@ class CallResolver {
 				left,
 				bodyTyper.coerce(right, TDynamic, "dynamic equality operand", DiagnosticCode.ASSIGNMENT_OR_BINDING)
 			]), TBool, span);
-		var explicitEquality = name == "Equality.equals" || name == "haxeon.Equality.equals";
+		var explicitEquality = StdlibNames.names(name, StdlibNames.EQUALITY_EQUALS);
 		if (explicitEquality && !DeclaredConformance.supportsEquality(session, left.type))
-			fail(DiagnosticCode.CONFORMANCE, DeclaredConformance.capabilityError(session, left.type, "Equatable"),
+			fail(DiagnosticCode.CONFORMANCE,
+				DeclaredConformance.capabilityError(session, left.type, StdlibNames.EQUATABLE),
 				span);
 		if (explicitEquality) {
 			// A plain abstract compares as its representation, as its == does.
@@ -2593,17 +2596,17 @@ class CallResolver {
 
 	public function typeRuntimeDataCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope):Null<TypedExpression> {
-		if (name == "RuntimeData.address" || name == "runtime.RuntimeData.address") {
+		if (StdlibNames.names(name, StdlibNames.RUNTIME_DATA_ADDRESS)) {
 			if (arguments.length != 1)
 				fail(DiagnosticCode.CALL_FORM, 'RuntimeData.address expects 1 argument, got ${arguments.length}', span);
 			return new TypedExpression(TRuntimeDataAddress(runtimeDataBytes(arguments[0], span)), TInt, span);
 		}
-		if (name == "RuntimeData.loadI32" || name == "runtime.RuntimeData.loadI32") {
+		if (StdlibNames.names(name, StdlibNames.RUNTIME_DATA_LOAD_I32)) {
 			if (arguments.length != 1)
 				fail(DiagnosticCode.CALL_FORM, 'RuntimeData.loadI32 expects 1 argument, got ${arguments.length}', span);
 			var address = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TInt, "runtime data address",
 				DiagnosticCode.ASSIGNMENT_OR_BINDING);
-			return new TypedExpression(TCall("runtime.RuntimeData.loadI32", [address]), TInt, span);
+			return new TypedExpression(TCall(StdlibNames.RUNTIME_DATA_LOAD_I32, [address]), TInt, span);
 		}
 		return null;
 	}
@@ -2612,9 +2615,9 @@ class CallResolver {
 	function typeWireCall(name:String, method:AstFunction, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope, expectedType:Null<CompilerType>):Null<TypedExpression> {
 		var json = switch name {
-			case "haxeon.wire.JsonWire.encode", "haxeon.wire.JsonWire.decode": true;
-			case "haxeon.wire.MessagePack.encode", "haxeon.wire.MessagePack.decode": false;
-			case "haxeon.rpc.RpcMethod.wire": false;
+			case StdlibNames.JSON_WIRE_ENCODE, StdlibNames.JSON_WIRE_DECODE: true;
+			case StdlibNames.MESSAGE_PACK_ENCODE, StdlibNames.MESSAGE_PACK_DECODE: false;
+			case StdlibNames.RPC_METHOD_WIRE: false;
 			default: return null;
 		};
 		// Type arguments written for the call (`MessagePack.decode<User>(bytes)`) name the type; else the value or the
@@ -2624,9 +2627,9 @@ class CallResolver {
 			named:Null<Array<CompilerType>> = null;
 		if (bindTypeArguments(method.name, parameters, written, span))
 			named = [for (parameter in parameters) requiredMapValue(written, parameter)];
-		if (name == "haxeon.rpc.RpcMethod.wire")
+		if (name == StdlibNames.RPC_METHOD_WIRE)
 			return typeRpcDescriptor(name, arguments, span, scope,
-				named == null ? expectedType : TInstance(NominalKind.Class, RpcServiceTyping.METHOD, named), false);
+				named == null ? expectedType : TInstance(NominalKind.Class, StdlibNames.RPC_METHOD, named), false);
 		if (arguments.length != 1)
 			fail(DiagnosticCode.CALL_FORM, 'Function "$name" expects 1 argument, got ${arguments.length}', span);
 		var format = json ? "JsonWire" : "MessagePack";
@@ -2665,7 +2668,7 @@ class CallResolver {
 			new TypedExpression(TFunctionRef(decoder), TFunction([inputType], valueType, []), span)),
 			input = hold("__haxeon_wire_input", source),
 			settled = bodyTyper.typeExpression(AnnotatedExpression(PrivateAccess,
-				Call("haxeon.wire.WireFailure.settle", [decode, input], span), span), inner, expectedType);
+				Call(StdlibNames.WIRE_FAILURE_SETTLE, [decode, input], span), span), inner, expectedType);
 		return new TypedExpression(TBlockExpression(statements, settled), settled.type, span, false, null, null, name);
 	}
 
@@ -2674,7 +2677,7 @@ class CallResolver {
 			span:SourceSpan):Null<CompilerType>
 		return switch expectedType == null ? null : compiler.types.Monomorphs.follow(expectedType) {
 			case null, TNull: null;
-			case TInstance(NominalKind.Enum, result, [value, _]) if (result == "Result"): value;
+			case TInstance(NominalKind.Enum, result, [value, _]) if (result == StdlibNames.RESULT): value;
 			default: throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION,
 				'$format.decode gives a Result<T, WireError>; expect one, or take its value with try', span));
 		};
@@ -2685,7 +2688,7 @@ class CallResolver {
 		if (arguments.length != count)
 			fail(DiagnosticCode.CALL_FORM, 'Function "$name" expects $count argument(s), got ${arguments.length}',
 				span);
-		var owner = RpcServiceTyping.METHOD;
+		var owner = StdlibNames.RPC_METHOD;
 		switch expectedType {
 			case TInstance(NominalKind.Class, methodOwner, [request, response]) if (methodOwner == owner):
 				var id = bodyTyper.coerceArgument(bodyTyper.typeExpression(arguments[0], scope, TInt), TInt, name,
@@ -2704,7 +2707,7 @@ class CallResolver {
 					bodyTyper.bindCell(binding, value.type);
 					statements.push(TVar(binding.id, value, span));
 					constructorArguments.push(bodyTyper.typeExpression(AnnotatedExpression(PrivateAccess,
-						Call("haxeon.wire.WireFailure.decoding", [TemporaryVariable(decoder, span)], span), span),
+						Call(StdlibNames.WIRE_FAILURE_DECODING, [TemporaryVariable(decoder, span)], span), span),
 						inner));
 				}
 				var methodName = serviceMethod ? arguments[1] : NullLiteral(span);
@@ -2759,12 +2762,9 @@ class CallResolver {
 			return new TypedExpression(TCall("$value.place", [value]), value.type, span);
 		}
 
-		if (name == "Equality.equals"
-			|| name == "haxeon.Equality.equals"
-			|| name == "Equality.sameForChange"
-			|| name == "haxeon.Equality.sameForChange"
-			|| name == "Hashing.keyEquals"
-			|| name == "haxeon.Hashing.keyEquals") {
+		if (StdlibNames.names(name, StdlibNames.EQUALITY_EQUALS)
+			|| StdlibNames.names(name, StdlibNames.EQUALITY_SAME_FOR_CHANGE)
+			|| StdlibNames.names(name, StdlibNames.HASHING_KEY_EQUALS)) {
 			if (arguments.length != 2)
 				fail(DiagnosticCode.CALL_FORM, 'Function "$name" expects 2 arguments, got ${arguments.length}', span);
 			var left = typeExpressionValue(arguments[0], scope),
@@ -2775,23 +2775,29 @@ class CallResolver {
 				return new TypedExpression(TParameterOperation(Equality(name), [left, right]), TBool, span);
 			return equalityCall(name, left, right, span);
 		}
-		if (name == "Hashing.hash" || name == "haxeon.Hashing.hash") {
+		if (StdlibNames.names(name, StdlibNames.HASHING_HASH)) {
 			if (arguments.length != 1)
 				fail(DiagnosticCode.CALL_FORM, 'Function "$name" expects 1 argument, got ${arguments.length}', span);
 			var value = typeExpressionValue(arguments[0], scope);
 			if (!DeclaredConformance.supportsHash(session, value.type))
-				fail(DiagnosticCode.CONFORMANCE, DeclaredConformance.capabilityError(session, value.type, "Hashable"),
+				fail(DiagnosticCode.CONFORMANCE,
+					DeclaredConformance.capabilityError(session, value.type, StdlibNames.HASHABLE),
 					span);
 			// A type parameter's value hashes as its representation does: the elaboration pass chooses the helper.
 			if (TypeRepresentation.mentionsTypeParameter(value.type))
 				return new TypedExpression(TParameterOperation(Hash, [value]), TInt, span);
 			return hashCall(value, span);
 		}
-		if (DiffIntrinsics.handles(name))
-			return bodyTyper.typeExpression(DiffIntrinsics.expand(session, name, arguments, span,
+		if (DiffIntrinsics.handles(name)) {
+			// `Diff.all<T>()` names its type as a type argument.
+			var written:Map<String, CompilerType> = [];
+			if (StdlibNames.names(name, StdlibNames.DIFF_ALL))
+				bindTypeArguments(name, ["T"], written, span);
+			return bodyTyper.typeExpression(DiffIntrinsics.expand(session, name, written.get("T"), arguments, span,
 				function(argument) return typeExpressionValue(argument, scope).type,
 				function(argument) return typeExpressionValue(argument, scope)),
 				scope, expectedType);
+		}
 		if (EnumCreation.handles(name))
 			return bodyTyper.typeExpression(EnumCreation.expand(session, name, arguments, span, expectedType), scope,
 				expectedType);
@@ -2806,15 +2812,15 @@ class CallResolver {
 			return typeEnumValueFunction(name, typeExpressionValue(arguments[0], scope), arguments.slice(1), span,
 				scope);
 		}
-		if (StringTools.startsWith(name, StaticExtensions.ENUM_VALUE_TOOLS + ".")) {
+		if (StringTools.startsWith(name, StdlibNames.ENUM_VALUE_TOOLS + ".")) {
 			var typeFunction =
-				StaticExtensions.enumValueTool(name.substr(StaticExtensions.ENUM_VALUE_TOOLS.length + 1));
+				StaticExtensions.enumValueTool(name.substr(StdlibNames.ENUM_VALUE_TOOLS.length + 1));
 			if (typeFunction != null)
 				return typeBuiltinCall(typeFunction, arguments, span, scope, expectedType);
 		}
 		if (name == "$rpc.method")
 			return typeRpcDescriptor(name, arguments, span, scope, expectedType, true);
-		if (name == "Std.isOfType" || name == "Std.isExactType") {
+		if (name == StdlibNames.STD_IS_OF_TYPE || name == StdlibNames.STD_IS_EXACT_TYPE) {
 			if (arguments.length != 2)
 				fail(DiagnosticCode.CALL_FORM, 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}',
 					span);
@@ -2826,7 +2832,7 @@ class CallResolver {
 			};
 			if (bodyTyper.localAt(arguments[1], scope) != null)
 				fail(DiagnosticCode.VALUE_CONVERSION, "Std.isOfType expects a type as its second argument", span);
-			if (name == "Std.isExactType" && !session.classDecls.exists(targetName))
+			if (name == StdlibNames.STD_IS_EXACT_TYPE && !session.classDecls.exists(targetName))
 				fail(DiagnosticCode.VALUE_CONVERSION, "Std.isExactType expects a class as its second argument", span);
 			var targetType:CompilerType = switch targetName {
 				case "Int": TInt;
@@ -2869,12 +2875,13 @@ class CallResolver {
 			var value = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TDynamic, "Std.isOfType value",
 				DiagnosticCode.ASSIGNMENT_OR_BINDING),
 				target = new TypedExpression(TClassRef(targetName), targetType, span);
-			return new TypedExpression(TCall(name == "Std.isExactType" ? "__std_is_exact_type" : "__std_is_of_type", [
-				value,
-				target
-			]), TBool, span);
+			return new TypedExpression(TCall(name == StdlibNames.STD_IS_EXACT_TYPE
+				? "__std_is_exact_type" : "__std_is_of_type", [
+					value,
+					target
+				]), TBool, span);
 		}
-		if (name == "Std.downcast") {
+		if (name == StdlibNames.STD_DOWNCAST) {
 			if (arguments.length != 2)
 				fail(DiagnosticCode.CALL_FORM, 'Function "Std.downcast" expects 2 arguments, got ${arguments.length}',
 					span);
@@ -2891,14 +2898,14 @@ class CallResolver {
 					"Std.downcast expects a class or interface as its second argument", span);
 			// `value` is evaluated once: test the held copy, then cast it or yield null.
 			var held = new TemporaryLocal('$' + 'downcast:${span.start}'),
-				test = Call("Std.isOfType", [TemporaryVariable(held, span), arguments[1]], span);
+				test = Call(StdlibNames.STD_IS_OF_TYPE, [TemporaryVariable(held, span), arguments[1]], span);
 			return bodyTyper.typeExpression(BlockExpression([TemporaryDeclaration(held, null, arguments[0], span)],
 				Conditional(test, Cast(TemporaryVariable(held, span), NamedType(targetName), span), NullLiteral(span),
 				span),
 				span),
 				scope, expectedType);
 		}
-		if (name == "Reflect.compare") {
+		if (name == StdlibNames.REFLECT_COMPARE) {
 			if (arguments.length != 2)
 				fail(DiagnosticCode.CALL_FORM,
 					'Function "Reflect.compare" expects 2 arguments, got ${arguments.length}', span);
@@ -2908,7 +2915,7 @@ class CallResolver {
 				return new TypedExpression(TCall("__string_compare_full", [left, right]), TInt, span);
 			return null;
 		}
-		if (name == "Reflect.isObject") {
+		if (name == StdlibNames.REFLECT_IS_OBJECT) {
 			if (arguments.length != 1)
 				fail(DiagnosticCode.CALL_FORM,
 					'Function "Reflect.isObject" expects 1 argument, got ${arguments.length}', span);
@@ -2916,7 +2923,7 @@ class CallResolver {
 				DiagnosticCode.ASSIGNMENT_OR_BINDING);
 			return new TypedExpression(TCall("__reflect_is_object", [value]), TBool, span);
 		}
-		if (name == "Math.ceil") {
+		if (name == StdlibNames.MATH_CEIL) {
 			if (arguments.length != 1)
 				fail(DiagnosticCode.CALL_FORM, 'Function "Math.ceil" expects 1 argument, got ${arguments.length}',
 					span);
@@ -2925,7 +2932,7 @@ class CallResolver {
 				ParameterOf("ceil", "v"));
 			return new TypedExpression(TCall("__math_ceil", [value]), TInt, span);
 		}
-		if (name == "Math.floor") {
+		if (name == StdlibNames.MATH_FLOOR) {
 			if (arguments.length != 1)
 				fail(DiagnosticCode.CALL_FORM, 'Function "Math.floor" expects 1 argument, got ${arguments.length}',
 					span);
@@ -2934,11 +2941,11 @@ class CallResolver {
 				ParameterOf("floor", "v"));
 			return new TypedExpression(TCall("__math_floor", [value]), TInt, span);
 		}
-		if (name == "Std.int" || name == "Std.stdIntFloat") {
+		if (name == StdlibNames.STD_INT || name == StdlibNames.STD_INT_FLOAT) {
 			if (arguments.length != 1)
 				fail(DiagnosticCode.CALL_FORM, 'Function "Std.int" expects 1 argument, got ${arguments.length}', span);
 			var value = ConversionResolver.plainValue(bodyTyper.typeExpression(arguments[0], scope,
-				name == "Std.stdIntFloat" ? TFloat : null), bodyTyper);
+				name == StdlibNames.STD_INT_FLOAT ? TFloat : null), bodyTyper);
 			return switch value.type {
 				case TInt: value;
 				case TFloat: new TypedExpression(TCall("__std_int_f64", [value]), TInt, span);
@@ -2950,10 +2957,10 @@ class CallResolver {
 		}
 		// Std.string, and the string interpolation that lowers to it, convert as concatenation does. Dynamic is the expected
 		// type, as the stdlib signature gives it, so mixed branches such as `cond ? "a" : 1` still join.
-		if (name == "Std.string" && arguments.length == 1)
+		if (name == StdlibNames.STD_STRING && arguments.length == 1)
 			return StringConversion.convert(session, bodyTyper.typeExpression(arguments[0], scope, TDynamic),
 				bodyTyper, scope);
-		if (name == "Std.stdString") {
+		if (name == StdlibNames.STD_STD_STRING) {
 			if (arguments.length != 1)
 				fail(DiagnosticCode.CALL_FORM, 'Function "Std.string" expects 1 argument, got ${arguments.length}',
 					span);
@@ -2986,11 +2993,12 @@ class CallResolver {
 				fail(DiagnosticCode.CALL_FORM,
 					'Function "String.fromCharCode" expects 1 argument, got ${arguments.length}', span);
 			// Where the runtime has no native for it (Wasm), the stdlib implements it in Haxe.
-			var library = session.signatures.get(RuntimeType.STRING_FROM_CHAR_CODE);
+			var library = session.signatures.get(StdlibNames.STRING_CODES_FROM_CHAR_CODE);
 			if (library != null) {
-				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.STRING_CODES);
-				return new TypedExpression(TCall(RuntimeType.STRING_FROM_CHAR_CODE,
-					typeDeclaredCallArguments(arguments, library, scope, RuntimeType.STRING_FROM_CHAR_CODE, span)),
+				session.runtimeDependencyTracker.record(session.currentContext.name, StdlibNames.STRING_CODES);
+				return new TypedExpression(TCall(StdlibNames.STRING_CODES_FROM_CHAR_CODE,
+					typeDeclaredCallArguments(arguments, library, scope, StdlibNames.STRING_CODES_FROM_CHAR_CODE,
+					span)),
 					TString, span);
 			}
 			var code = ConversionResolver.plainValue(bodyTyper.typeExpression(arguments[0], scope, TInt),
@@ -3250,7 +3258,7 @@ class CallResolver {
 			default: false;
 		};
 		if (enumValue) {
-			if (!DeclaredConformance.has(session, value, "Equatable"))
+			if (!DeclaredConformance.has(session, value, StdlibNames.EQUATABLE))
 				fail(DiagnosticCode.CONFORMANCE,
 					'Enum "${compiler.semantic.SemanticSignature.display(value)}" does not conform to Equatable', span);
 			EnumEqualityGenerator.request(session, element, session.currentContext.name, span);
@@ -3258,7 +3266,7 @@ class CallResolver {
 		}
 		if (!session.relations.isValueClass(value))
 			return;
-		if (!DeclaredConformance.has(session, value, "Equatable"))
+		if (!DeclaredConformance.has(session, value, StdlibNames.EQUATABLE))
 			fail(DiagnosticCode.CONFORMANCE,
 				'Struct "${compiler.semantic.SemanticSignature.display(value)}" does not conform to Equatable', span);
 		ValueEqualityGenerator.request(session, element, session.currentContext.name, span);
@@ -3497,7 +3505,8 @@ class CallResolver {
 			return deferred ? new TypedExpression(TParameterOperation(ArraySearch("contains"), [receiver, value]),
 				TBool, span) : arraySearch("contains", receiver, value, span, false);
 		}
-		var library = ArrayLibrary.provides(name) ? typeLibraryMethod(ArrayLibrary.CLASS_NAME, "Array", receiver, name,
+		var library = ArrayLibrary.provides(name) ? typeLibraryMethod(StdlibNames.ARRAY_METHODS, "Array", receiver,
+			name,
 			arguments, span, scope) : null;
 		if (library != null)
 			return library;
@@ -3592,9 +3601,9 @@ class CallResolver {
 
 	public function stringifyMap(receiver:TypedExpression, span:SourceSpan, scope:Scope):Null<TypedExpression> {
 		// Implicit conversion sites are identified by typing, so use the already seeded Std module.
-		var call = typeLibraryMethod(RuntimeType.STD, "Map", receiver, "stringifyMap", [], span, scope);
+		var call = typeLibraryMethod(StdlibNames.STD, "Map", receiver, "stringifyMap", [], span, scope);
 		if (call != null)
-			session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.STD);
+			session.runtimeDependencyTracker.record(session.currentContext.name, StdlibNames.STD);
 		return call;
 	}
 
@@ -3654,13 +3663,13 @@ class CallResolver {
 				fail(DiagnosticCode.CALL_FORM, "Map.size expects no arguments", span);
 			return new TypedExpression(TCollectionCall(receiver, "size", []), TInt, span);
 		}
-		if (name == "toString" && session.signatures.exists(RuntimeType.STD + ".stringifyMap")) {
+		if (name == "toString" && session.signatures.exists(StdlibNames.STD + ".stringifyMap")) {
 			if (arguments.length != 0)
 				fail(DiagnosticCode.CALL_FORM, "Map.toString expects no arguments", span);
 			return stringifyMap(receiver, span, scope);
 		}
 		if (name != "exists" && name != "remove" && name != "get") {
-			var library = MapLibrary.provides(name) ? typeLibraryMethod(MapLibrary.CLASS_NAME, "Map", receiver, name,
+			var library = MapLibrary.provides(name) ? typeLibraryMethod(StdlibNames.MAP_METHODS, "Map", receiver, name,
 				arguments, span, scope) : null;
 			if (library != null)
 				return library;
@@ -3996,7 +4005,7 @@ class CallResolver {
 
 	public static function isPosInfosParameter(argument:AstArgument):Bool
 		return argument.optional == true && switch argument.type {
-			case NamedType("haxe.PosInfos"): true;
+			case NamedType(StdlibNames.POS_INFOS): true;
 			default: false;
 		};
 

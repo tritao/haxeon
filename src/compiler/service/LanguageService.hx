@@ -35,6 +35,7 @@ import compiler.syntax.TokenTable;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
+import compiler.core.StdlibNames;
 
 /** Editor-facing declaration summary, optionally marked as stale. */
 typedef DocumentSymbol = {
@@ -2458,7 +2459,7 @@ class LanguageService {
 			case TDynamic: "Dynamic";
 			case TTypeParameter(_, name): name;
 			case TInt: "Int";
-			case TInt64: "haxe.Int64";
+			case TInt64: StdlibNames.INT64;
 			case TFloat: "Float";
 			case TBool: "Bool";
 			case TString: "String";

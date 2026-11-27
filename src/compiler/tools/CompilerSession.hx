@@ -6,6 +6,7 @@ import compiler.backend.BackendTargets;
 import compiler.compilation.BackendArtifact.HlArtifact;
 import compiler.core.FileVersion;
 import compiler.core.InternalError;
+import compiler.core.StdlibNames;
 import compiler.ffi.FfiRegistry.FfiConfiguration;
 import compiler.ffi.FfiRegistry.FfiInterfaceSource;
 import compiler.ffi.FfiRegistry.FfiProjectionSource;
@@ -110,8 +111,8 @@ class CompilerSession {
 	 */
 	static function hostModules(request:CompilerRequest):Array<String>
 		return switch BackendTargets.parse(request.target) {
-			case Wasm32: ["haxeon.wasm.HostError"];
-			case WasmGc if (request.importMemory == true): ["haxeon.wasm.HostError"];
+			case Wasm32: [StdlibNames.WASM_HOST_ERROR];
+			case WasmGc if (request.importMemory == true): [StdlibNames.WASM_HOST_ERROR];
 			case _: [];
 		};
 

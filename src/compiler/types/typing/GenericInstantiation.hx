@@ -17,6 +17,7 @@ import compiler.types.IterationProtocol;
 import compiler.types.Monomorphs;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.analysis.Scope;
+import compiler.core.StdlibNames;
 
 /** Resolves generic substitutions and requests/reuses emitted function specializations. */
 class GenericInstantiation {
@@ -527,7 +528,7 @@ class GenericInstantiation {
 				}
 			case AppliedType(name, patternArguments):
 				// A rest parameter's arguments arrive packed in an array (`RestArguments`): its element fixes the type's.
-				if (name == "haxe.Rest" && patternArguments.length == 1)
+				if (name == StdlibNames.REST && patternArguments.length == 1)
 					switch actual {
 						case TArray(actualElement):
 							inferTypeParameters(patternArguments[0], actualElement, parameters, substitutions, span);

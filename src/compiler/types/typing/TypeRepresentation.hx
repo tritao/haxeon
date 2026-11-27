@@ -20,6 +20,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypeRelations;
+import compiler.core.StdlibNames;
 
 /** Semantic and physical types for one ABI-sensitive operation. */
 typedef TypeRepresentationResult = {
@@ -456,7 +457,7 @@ class TypeRepresentation {
 	/** Record the typer's selected map representation under the source Map type as well as its generic owner. */
 	public function specializedMapOwner(className:String, key:CompilerType, value:CompilerType):Void {
 		var owner = genericOwner(TInstance(NominalKind.Class, className, [
-			className == RuntimeType.OBJECT_MAP ? key : session.specializedMapKey(key),
+			className == StdlibNames.OBJECT_MAP ? key : session.specializedMapKey(key),
 			value
 		]));
 		if (owner != null) ownerAliases.set(SemanticSignature.type(TMap(key, value)), owner.name);
@@ -1032,7 +1033,7 @@ class TypeRepresentation {
 
 	function mapStorageName(key:CompilerType, value:CompilerType):Null<String> {
 		var name = session.mapName(key, value);
-		return (name == RuntimeType.SPECIALIZED_MAP || name == RuntimeType.OBJECT_MAP)
+		return (name == StdlibNames.HASH_MAP || name == StdlibNames.OBJECT_MAP)
 			? ownerAliases.get(SemanticSignature.type(TMap(key, value))) : name;
 	}
 

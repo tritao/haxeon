@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
+import compiler.core.StdlibNames;
 import compiler.semantic.StaticExtensionTable.StaticExtensionOwner;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
@@ -38,9 +39,6 @@ typedef StaticExtension = {
  * as a runtime value and is not modelled yet.
  */
 class StaticExtensions {
-	/** The class `haxe.EnumTools.EnumValueTools` is, as Haxeon names a module's secondary type. */
-	public static inline final ENUM_VALUE_TOOLS = "haxe.EnumValueTools";
-
 	/** The `Type` function Haxe's `EnumValueTools.name` calls, or null for another name. */
 	public static function enumValueTool(name:String):Null<String>
 		return switch name {
@@ -83,7 +81,7 @@ class StaticExtensions {
 	static function enumValueTools(receiver:CompilerType, name:String):Null<StaticExtension> {
 		var tool = enumValueTool(name);
 		return tool == null || EnumReflection.enumType(receiver) == null ? null : {
-			owner: {name: ENUM_VALUE_TOOLS, kind: ClassStatics},
+			owner: {name: StdlibNames.ENUM_VALUE_TOOLS, kind: ClassStatics},
 			key: tool,
 			fn: null
 		};
@@ -155,7 +153,7 @@ class StaticExtensions {
 		if (seen.exists(seenKey))
 			return null;
 		seen.set(seenKey, true);
-		if (owner.name == ENUM_VALUE_TOOLS && owner.kind == ClassStatics)
+		if (owner.name == StdlibNames.ENUM_VALUE_TOOLS && owner.kind == ClassStatics)
 			return enumValueTools(receiver, name);
 		var fn = session.signatures.get(key);
 		if (fn == null || fn.arguments.length == 0 || !isStatic(owner, key, fn) || hasMetadata(fn, "noUsing")

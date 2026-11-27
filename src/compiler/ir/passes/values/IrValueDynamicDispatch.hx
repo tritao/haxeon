@@ -2,6 +2,7 @@ package compiler.ir.passes.values;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
+import compiler.core.StdlibNames;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
@@ -149,7 +150,7 @@ class IrValueDynamicDispatch extends IrFunctionPass {
 			default: null;
 		};
 		while (current != null) {
-			if (current.interfaces.indexOf("Equatable") >= 0)
+			if (current.interfaces.indexOf(StdlibNames.EQUATABLE) >= 0)
 				return true;
 			current = current.base == null ? null : objectsByName.get(current.base);
 		}

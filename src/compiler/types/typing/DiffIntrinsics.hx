@@ -15,6 +15,7 @@ import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.typing.KeyPathTyping.KeyPathField;
+import compiler.core.StdlibNames;
 
 /** A stored field and its semantic type in the instantiation that declared it. */
 typedef ConformanceField = {
@@ -32,21 +33,18 @@ typedef ConformanceMethod = {
 class DiffIntrinsics {
 
 	public static function handles(name:String):Bool
-		return switch name {
-			case "Diff.copy", "haxeon.Diff.copy", "Diff.mask", "haxeon.Diff.mask", "Diff.apply", "haxeon.Diff.apply",
-				"Diff.bit",
-				"haxeon.Diff.bit", "Diff.all", "haxeon.Diff.all", "Diff.fingerprint", "haxeon.Diff.fingerprint": true;
-			default: false;
-		};
+		return isConstant(name)
+			|| StdlibNames.names(name, StdlibNames.DIFF_COPY)
+			|| StdlibNames.names(name, StdlibNames.DIFF_MASK)
+			|| StdlibNames.names(name, StdlibNames.DIFF_APPLY)
+			|| StdlibNames.names(name, StdlibNames.DIFF_FINGERPRINT);
 
 	/** `bit` and `all` are constants of the type's declaration: a call reads and changes nothing. */
 	public static function isConstant(name:String):Bool
-		return switch name {
-			case "Diff.bit", "haxeon.Diff.bit", "Diff.all", "haxeon.Diff.all": true;
-			default: false;
-		};
+		return StdlibNames.names(name, StdlibNames.DIFF_BIT) || StdlibNames.names(name, StdlibNames.DIFF_ALL);
 
-	public static function expand(session:TypingSession, name:String, arguments:Array<AstExpression>, span:SourceSpan,
+	public static function expand(session:TypingSession, name:String, typeArgument:Null<CompilerType>,
+			arguments:Array<AstExpression>, span:SourceSpan,
 			typeOf:AstExpression->CompilerType,
 			pathOf:AstExpression->compiler.types.TypedAst.TypedExpression):AstExpression {
 		var operation = name.substr(name.lastIndexOf(".") + 1);
@@ -69,7 +67,7 @@ class DiffIntrinsics {
 							'Cannot synthesize Diff.fingerprint for "${compiler.semantic.SemanticSignature.display(type)}": field "${field.name}" does not conform to Hashable',
 							field.span);
 					var fieldValue = synthesized(Member(TemporaryVariable(value, span), field.name, span), span),
-						fieldHash = Call("haxeon.Hashing.hash", [fieldValue], span),
+						fieldHash = Call(StdlibNames.HASHING_HASH, [fieldValue], span),
 						mixed = Add(Mul(TemporaryVariable(hash, span), IntegerLiteral(31, span), span), fieldHash,
 							span);
 					statements.push(TemporaryAssignment(hash, mixed, span));
@@ -99,8 +97,10 @@ class DiffIntrinsics {
 					if (fields[index].name == field) return IntegerLiteral(1 << index, span);
 				throw new InternalError("Resolved key path field is absent from Diffable layout");
 			case "all":
-				expectArguments(name, arguments, 1, span);
-				var declaration = classNamed(session, typeName(arguments[0], name, span), span);
+				expectArguments(name, arguments, 0, span);
+				if (typeArgument == null)
+					fail(DiagnosticCode.CALL_FORM, '$name takes the type as a type argument: Diff.all<T>()', span);
+				var declaration = classOf(session, typeArgument, name, span);
 				requireDiffable(session, declaration, name, span);
 				var count = maskedFields(session, declaration, name, span).length;
 				return IntegerLiteral(count >= 32 ? -1 : (1 << count) - 1, span);
@@ -285,7 +285,7 @@ class DiffIntrinsics {
 	static function classOf(session:TypingSession, type:CompilerType, name:String, span:SourceSpan):AstClass {
 		var className = switch type {
 			case TInstance(NominalKind.Class, className,
-				_) if (DeclaredConformance.has(session, type, "Diffable")): className;
+				_) if (DeclaredConformance.has(session, type, StdlibNames.DIFFABLE)): className;
 			default:
 				fail(DiagnosticCode.VALUE_CONVERSION,
 					'$name requires Diffable conformance for "${compiler.semantic.SemanticSignature.display(type)}"',
@@ -297,7 +297,7 @@ class DiffIntrinsics {
 
 	static function requireDiffable(session:TypingSession, declaration:AstClass, name:String, span:SourceSpan):Void {
 		var type = TInstance(NominalKind.Class, declaration.name, []);
-		if (!DeclaredConformance.has(session, type, "Diffable"))
+		if (!DeclaredConformance.has(session, type, StdlibNames.DIFFABLE))
 			fail(DiagnosticCode.VALUE_CONVERSION, '$name requires Diffable conformance for "${declaration.name}"',
 				span);
 	}
@@ -309,14 +309,6 @@ class DiffIntrinsics {
 				UnresolvedNameKind.WantedClass, name, span));
 		return declaration;
 	}
-
-	static function typeName(argument:AstExpression, name:String, span:SourceSpan):String
-		return switch argument {
-			case Variable(value, _): value;
-			default:
-				fail(DiagnosticCode.VALUE_CONVERSION, '$name expects a class as its first argument', span);
-				"";
-		};
 
 	static function expectArguments(name:String, arguments:Array<AstExpression>, count:Int, span:SourceSpan):Void
 		if (arguments.length != count)

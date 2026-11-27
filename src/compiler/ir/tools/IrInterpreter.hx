@@ -1,5 +1,6 @@
 package compiler.ir.tools;
 
+import compiler.core.StdlibNames;
 import compiler.ir.analysis.IrExactTypeFacts;
 import compiler.ir.model.Ir.IrBlock;
 import compiler.ir.model.Ir.IrInstruction;
@@ -560,23 +561,23 @@ class IrInterpreter {
 			case "__string_to_lower_case": Std.string(arguments[0]).toLowerCase();
 			case "__string_to_upper_case": Std.string(arguments[0]).toUpperCase();
 			case "__f32_to_i32_bits", "__float_to_f32_bits",
-				"runtime.FloatBits.toInt32": haxe.io.FPHelper.floatToI32(arguments[0]);
+				StdlibNames.FLOAT_BITS_TO_INT32: haxe.io.FPHelper.floatToI32(arguments[0]);
 			case "__i32_to_f32_bits", "__f32_bits_to_float",
-				"runtime.FloatBits.fromInt32": haxe.io.FPHelper.i32ToFloat(arguments[0]);
-			case "runtime.FloatBits.toInt64", "__f64_to_i64_bits": haxe.io.FPHelper.doubleToI64(arguments[0]);
-			case "runtime.FloatBits.fromInt64", "__i64_to_f64_bits":
+				StdlibNames.FLOAT_BITS_FROM_INT32: haxe.io.FPHelper.i32ToFloat(arguments[0]);
+			case StdlibNames.FLOAT_BITS_TO_INT64, "__f64_to_i64_bits": haxe.io.FPHelper.doubleToI64(arguments[0]);
+			case StdlibNames.FLOAT_BITS_FROM_INT64, "__i64_to_f64_bits":
 				var bits:haxe.Int64 = cast arguments[0];
 				haxe.io.FPHelper.i64ToDouble(bits.low, bits.high);
-			case "haxe.Int64.make": haxe.Int64.make(arguments[0], arguments[1]);
-			case "haxe.Int64.ofInt": haxe.Int64.ofInt(arguments[0]);
-			case "haxe.Int64.ushr": haxe.Int64.ushr(cast arguments[0], Std.int(arguments[1]));
-			case "haxe.Int64.xor": haxe.Int64.xor(cast arguments[0], cast arguments[1]);
-			case "haxe.Int64.mul": haxe.Int64.mul(cast arguments[0], cast arguments[1]);
-			case "haxe.Int64.div": haxe.Int64.div(cast arguments[0], cast arguments[1]);
-			case "haxe.Int64.mod": haxe.Int64.mod(cast arguments[0], cast arguments[1]);
-			case "haxe.Int64.and": haxe.Int64.and(cast arguments[0], cast arguments[1]);
-			case "haxe.Int64.compare": haxe.Int64.compare(cast arguments[0], cast arguments[1]);
-			case "haxe.Int64.toInt":
+			case StdlibNames.INT64_MAKE: haxe.Int64.make(arguments[0], arguments[1]);
+			case StdlibNames.INT64_OF_INT: haxe.Int64.ofInt(arguments[0]);
+			case StdlibNames.INT64_USHR: haxe.Int64.ushr(cast arguments[0], Std.int(arguments[1]));
+			case StdlibNames.INT64_XOR: haxe.Int64.xor(cast arguments[0], cast arguments[1]);
+			case StdlibNames.INT64_MUL: haxe.Int64.mul(cast arguments[0], cast arguments[1]);
+			case StdlibNames.INT64_DIV: haxe.Int64.div(cast arguments[0], cast arguments[1]);
+			case StdlibNames.INT64_MOD: haxe.Int64.mod(cast arguments[0], cast arguments[1]);
+			case StdlibNames.INT64_AND: haxe.Int64.and(cast arguments[0], cast arguments[1]);
+			case StdlibNames.INT64_COMPARE: haxe.Int64.compare(cast arguments[0], cast arguments[1]);
+			case StdlibNames.INT64_TO_INT:
 				var bits:haxe.Int64 = cast arguments[0];
 				haxe.Int64.toInt(haxe.Int64.shr(haxe.Int64.shl(bits, 32), 32));
 			case "__std_int_f64": Std.int(arguments[0]);
@@ -585,7 +586,7 @@ class IrInterpreter {
 			case "__math_floor": Std.int(Math.floor(arguments[0]));
 			case "__std_string": Std.string(arguments[0]);
 			case "__dynamic_equal": dynamicEqual(arguments[0], arguments[1]);
-			case "__reactive_hash", "haxeon.reactive.ReactiveHash.reactiveHash":
+			case "__reactive_hash", StdlibNames.REACTIVE_HASH:
 				var source:InterpObject = cast arguments[0];
 				if (reactiveHashes.exists(source)) reactiveHashes.get(source) else {
 					var hash = reactiveHashState;

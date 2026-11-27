@@ -7,8 +7,6 @@ package compiler.runtime;
 	not implement natively to the class's generic functions.
 **/
 class ArrayLibrary {
-	public static inline var CLASS_NAME = "haxeon.ArrayMethods";
-
 	/** Keep in step with the functions in `stdlib/haxeon/ArrayMethods.hx`. */
 	static final METHODS:Array<String> = ["filter", "map", "join", "lastIndexOf", "keyValueIterator"];
 

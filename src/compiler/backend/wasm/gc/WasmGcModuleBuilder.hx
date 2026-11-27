@@ -41,6 +41,7 @@ import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmModule.WasmDataSegment;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.core.StdlibNames;
 
 /** Owns construction and lowering of a complete Wasm GC module. */
 class WasmGcModuleBuilder {
@@ -905,8 +906,9 @@ class WasmGcModuleBuilder {
 				"__array_join_bytes", "__math_ceil", "__math_floor",
 				"__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_abs", "__math_min",
 				"__math_max", "__math_atan2",
-				"__math_fmod", "__math_round", "__math_exp", "__math_log", "Math.mathIsFinite", "__math_is_finite",
-				"Math.mathIsNaN", "__math_is_nan",
+				"__math_fmod", "__math_round", "__math_exp", "__math_log", StdlibNames.MATH_IS_FINITE,
+				"__math_is_finite",
+				StdlibNames.MATH_IS_NAN, "__math_is_nan",
 				"__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type", "__std_is_exact_type",
 				"__exception_matches",
 				"__closure_is_of_type", "__reflect_is_object", "__dynamic_equal", "__dynamic_object_type_id",
@@ -915,13 +917,15 @@ class WasmGcModuleBuilder {
 				"__reflect_object_field_count",
 				"__reflect_object_field_name", "__reflect_object_delete_field", "__f64_to_i64_bits",
 				"__i64_to_f64_bits", "__f32_to_i32_bits",
-				"__i32_to_f32_bits", "__float_to_f32_bits", "__f32_bits_to_float", "runtime.FloatBits.toInt32",
-				"runtime.FloatBits.fromInt32",
-				"haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub", "haxe.Int64.mul", "haxe.Int64.div",
-				"haxe.Int64.mod", "haxe.Int64.neg", "haxe.Int64.and",
-				"haxe.Int64.or", "haxe.Int64.xor",
-				"haxe.Int64.shl", "haxe.Int64.shr", "haxe.Int64.compare", "haxe.Int64.make", "haxe.Int64.ofInt",
-				"haxe.Int64.fromFloat", "haxe.Int64.toInt",
+				"__i32_to_f32_bits", "__float_to_f32_bits", "__f32_bits_to_float", StdlibNames.FLOAT_BITS_TO_INT32,
+				StdlibNames.FLOAT_BITS_FROM_INT32,
+				StdlibNames.INT64_USHR, StdlibNames.INT64_ADD, StdlibNames.INT64_SUB, StdlibNames.INT64_MUL,
+				StdlibNames.INT64_DIV,
+				StdlibNames.INT64_MOD, StdlibNames.INT64_NEG, StdlibNames.INT64_AND,
+				StdlibNames.INT64_OR, StdlibNames.INT64_XOR,
+				StdlibNames.INT64_SHL, StdlibNames.INT64_SHR, StdlibNames.INT64_COMPARE, StdlibNames.INT64_MAKE,
+				StdlibNames.INT64_OF_INT,
+				StdlibNames.INT64_FROM_FLOAT, StdlibNames.INT64_TO_INT,
 				"__bytes_alloc", "__bytes_of_string", "__string_utf8_length", "__bytes_set_utf8", "__bytes_length",
 				"__bytes_get", "__bytes_try_set",
 				"__bytes_try_blit", "__bytes_get_i32", "__bytes_get_float", "__bytes_get_double", "__bytes_try_set_i32",

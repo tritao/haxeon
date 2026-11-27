@@ -6,8 +6,6 @@ package compiler.runtime;
 	it does not implement natively to the class's generic functions.
 **/
 class MapLibrary {
-	public static inline var CLASS_NAME = "haxeon.MapMethods";
-
 	/** Keep in step with the functions in `stdlib/haxeon/MapMethods.hx`. */
 	static final METHODS:Array<String> = ["keyValueIterator"];
 

@@ -32,9 +32,9 @@ class DeclaredEqualityInliningMain {
 			compiler.update("Hashable.hx", "interface Hashable extends Equatable {}\n");
 			compiler.update("Diffable.hx", "interface Diffable {}\n");
 			compiler.update("haxeon/Diff.hx",
-				"package haxeon; class Diff { public static function fingerprint<T:Diffable>(value:T):Int throw \"intrinsic\"; }\n");
+				"package haxeon; class Diff { public static extern function fingerprint<T:Diffable>(value:T):Int; }\n");
 			compiler.update("haxeon/Hashing.hx",
-				"package haxeon; class Hashing { public static function hash<T:Hashable>(value:T):Int throw \"intrinsic\"; public static function mix(hash:Int, value:Int):Int return hash * 31 + value; }\n");
+				"package haxeon; class Hashing { public static extern function hash<T:Hashable>(value:T):Int; public static function mix(hash:Int, value:Int):Int return hash * 31 + value; }\n");
 			compiler.update("Main.hx", source);
 			compiler.configure(inlineEnabled ? "inline-on" : "inline-off", "test",
 				[]);

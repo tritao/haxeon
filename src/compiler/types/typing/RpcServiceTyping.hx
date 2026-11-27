@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
+import compiler.core.StdlibNames;
 import compiler.semantic.ImplicitConstructors;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
@@ -16,10 +17,6 @@ import compiler.types.analysis.Scope;
 /** Lowers service calls to typed descriptors and ordinary closure-backed stub fields. */
 @:access(compiler.types.typing.BodyTyper)
 class RpcServiceTyping {
-	public static inline final CONNECTION = "haxeon.rpc.RpcConnection";
-	public static inline final METHOD = "haxeon.rpc.RpcMethod";
-	static inline final FUTURE = "haxeon.async.Future";
-
 	public static function typeCall(session:TypingSession, body:BodyTyping, receiver:TypedExpression, methodKey:String,
 			operation:String,
 			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
@@ -77,7 +74,10 @@ class RpcServiceTyping {
 				asyncResponse = futurePayload(session, method.result),
 				responseType = asyncResponse ?? method.result,
 				descriptor = new TemporaryLocal("$rpc:method:" + method.name);
-			bindings.push(TemporaryDeclaration(descriptor, AppliedType(METHOD, [requestType, responseType]),
+			bindings.push(TemporaryDeclaration(descriptor, AppliedType(StdlibNames.RPC_METHOD, [
+				requestType,
+				responseType
+			]),
 				Call("$rpc.method", [IntegerLiteral(methodIds[index], at), StringLiteral(name, at)], at), at));
 			var descriptorValue = TemporaryVariable(descriptor, at),
 				request = new TemporaryLocal("$rpc:request"),
@@ -90,7 +90,7 @@ class RpcServiceTyping {
 						asyncResponse == null ? "respond" : "respondFuture", [response], at),
 					handler = Lambda([
 						parameter(request, requestType, at),
-						parameter(context, AppliedType("haxeon.rpc.RpcContext", [responseType]), at)
+						parameter(context, AppliedType(StdlibNames.RPC_CONTEXT, [responseType]), at)
 					],
 						[Expression(asyncResponse == null ? respond : AnnotatedExpression(PrivateAccess, respond, at),
 						at)],
@@ -116,7 +116,7 @@ class RpcServiceTyping {
 	static function futurePayload(session:TypingSession, result:AstType):Null<AstType> {
 		var name:String, arguments:Array<AstType>;
 		switch result {
-			case AppliedType(owner, [value]) if (owner == FUTURE): return value;
+			case AppliedType(owner, [value]) if (owner == StdlibNames.FUTURE): return value;
 			case AppliedType(owner, parameters): name = owner;
 				arguments = parameters;
 			case NamedType(owner): name = owner;

@@ -25,6 +25,7 @@ import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.gc.WasmGcContext;
 import compiler.backend.wasm.gc.WasmGcFunctionContext;
 import compiler.backend.wasm.gc.WasmGcTypePlan;
+import compiler.core.StdlibNames;
 
 /** Native Wasm GC representation: engine references and declared struct/array fields. */
 class WasmGcRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmCallRepresentation implements WasmModelRepresentation {
@@ -1453,7 +1454,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		body = body.concat(dynamicFloatString(valueLocal, outputLocal));
 		body = body.concat(dynamicBooleanString(valueLocal, outputLocal));
 		// Std.string handles arrays in shared Haxeon source; use the same path for nested payloads.
-		var arrayString = gc.functions.get("Std.arrayString"),
+		var arrayString = gc.functions.get(StdlibNames.STD_ARRAY_STRING),
 			elements = plan.arrayElementTypes();
 		if (arrayString != null && elements.length > 0) {
 			var arrayType = plan.arrayType(elements[0]);
@@ -2155,7 +2156,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function dynamicFloatString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
 		var boxType = plan.boxedPrimitiveType(F64),
-			formatter = gc.functions.get("runtime.Ryu.format");
+			formatter = gc.functions.get(StdlibNames.RYU_FORMAT);
 		if (formatter == null)
 			return [];
 		return [
@@ -2382,7 +2383,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>):WasmLoweringResult {
-		if (name == "__runtime_string_from_ascii" || name == "runtime.RuntimeData.stringFromAscii") {
+		if (name == "__runtime_string_from_ascii" || name == StdlibNames.RUNTIME_DATA_STRING_FROM_ASCII) {
 			if ((switch (output.type) {
 				case Bytes: false;
 				default: true;
@@ -2401,7 +2402,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw new InternalError("Invalid Wasm GC runtime string.fromAscii signature");
 			return stringFromAscii(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
-		if (name == "__wasm_memory_load_i32" || name == "runtime.RuntimeData.loadI32") {
+		if (name == "__wasm_memory_load_i32" || name == StdlibNames.RUNTIME_DATA_LOAD_I32) {
 			if ((switch (output.type) {
 				case I32: false;
 				default: true;
@@ -2413,7 +2414,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			return staticDataLoadI32(argumentLocals[0], outputLocal);
 		}
 		// Float32 values live in f64 locals, so a Float rounded to 32 bits (FloatBits.toInt32) converts the same way.
-		if (name == "__f32_to_i32_bits" || name == "__float_to_f32_bits" || name == "runtime.FloatBits.toInt32") {
+		if (name == "__f32_to_i32_bits" || name == "__float_to_f32_bits" || name == StdlibNames.FLOAT_BITS_TO_INT32) {
 			if (!compiler.ir.verify.IrVerifier.sameType(output.type, I32)
 				|| arguments.length != 1
 				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, name == "__f32_to_i32_bits" ? F32 : F64)
@@ -2426,7 +2427,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(outputLocal)
 			];
 		}
-		if (name == "__i32_to_f32_bits" || name == "__f32_bits_to_float" || name == "runtime.FloatBits.fromInt32") {
+		if (name == "__i32_to_f32_bits" || name == "__f32_bits_to_float" || name == StdlibNames.FLOAT_BITS_FROM_INT32) {
 			if (!compiler.ir.verify.IrVerifier.sameType(output.type, name == "__i32_to_f32_bits" ? F32 : F64)
 				|| arguments.length != 1
 				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, I32)
@@ -2439,7 +2440,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(outputLocal)
 			];
 		}
-		if (name == "__f64_to_i64_bits" || name == "runtime.FloatBits.toInt64") {
+		if (name == "__f64_to_i64_bits" || name == StdlibNames.FLOAT_BITS_TO_INT64) {
 			if ((switch (output.type) {
 				case I64: false;
 				default: true;
@@ -2450,7 +2451,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw new InternalError("Invalid Wasm GC FloatBits.toInt64 signature");
 			return [LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)];
 		}
-		if (name == "__i64_to_f64_bits" || name == "runtime.FloatBits.fromInt64") {
+		if (name == "__i64_to_f64_bits" || name == StdlibNames.FLOAT_BITS_FROM_INT64) {
 			if ((switch (output.type) {
 				case F64: false;
 				default: true;
@@ -2461,7 +2462,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw new InternalError("Invalid Wasm GC FloatBits.fromInt64 signature");
 			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];
 		}
-		if (name == "Math.mathIsFinite" || name == "__math_is_finite") {
+		if (name == StdlibNames.MATH_IS_FINITE || name == "__math_is_finite") {
 			if ((switch (output.type) {
 				case Bool: false;
 				default: true;
@@ -2482,7 +2483,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(outputLocal)
 			];
 		}
-		if (name == "Math.mathIsNaN" || name == "__math_is_nan") {
+		if (name == StdlibNames.MATH_IS_NAN || name == "__math_is_nan") {
 			if ((switch (output.type) {
 				case Bool: false;
 				default: true;

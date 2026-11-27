@@ -1785,6 +1785,22 @@ class TestMain {
 			'Extern function "missing" requires @:hlNative(library, symbol)');
 		expectCompileError('@:hlNative("std") extern function malformed():Int; function main():Int return 42;',
 			"@:hlNative requires a library and symbol string");
+		// An intrinsic is declared without a body, and the compiler expands each call, so it has no function value.
+		expectCompileError('function main():Int { var hash = haxeon.Hashing.hash; return 0; }',
+			'"haxeon.Hashing.hash" is expanded by the compiler at each call and has no function value; call it in a lambda',
+			true);
+		try {
+			var compiler = new Compiler(null, CompilerIntrinsics.configuration());
+			compiler.update("haxeon/Diff.hx",
+				"package haxeon; class Diff { public static function copy<T>(value:T):T return value; }");
+			compiler.update("Main.hx", "function main():Int return haxeon.Diff.copy(1);");
+			compiler.compile("Main");
+			throw "compiler accepted an intrinsic with a body";
+		} catch (error:CompileError) {
+			if (error.diagnostic.message
+				!= 'Intrinsic "haxeon.Diff.copy" must be declared extern, without a body: the compiler expands each call')
+				throw error;
+		}
 		expectCompileError('@:hlNative("one", "two") extern class Native { public static function read():Int; } function main():Int return 42;',
 			"Declaration @:hlNative requires one library string");
 		expectCompileError('@:hlNative(42) extern class Native { public static function read():Int; } function main():Int return 42;',

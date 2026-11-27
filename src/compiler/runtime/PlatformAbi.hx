@@ -1,20 +1,15 @@
 package compiler.runtime;
 
+import compiler.core.StdlibNames;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 
 /** Host types whose implementation is supplied by the HashLink/Haxe platform. */
 class PlatformAbi {
-	/** Stdlib class implementing `{...}` literals typed as Dynamic where the runtime has no dynamic objects. */
-	public static inline final DYNAMIC_OBJECT_CLASS = "runtime.DynamicObject";
-
-	/** The module declaring `haxe.io.Bytes`, whose methods the platform implements. */
-	public static inline final BYTES = "haxe.io.Bytes";
-
 	static final types:Map<String, Bool> = [
-		"haxe.io.Encoding" => true,
-		"haxe.Json" => true,
-		"sys.io.File" => true,
+		StdlibNames.ENCODING => true,
+		StdlibNames.JSON => true,
+		StdlibNames.FILE => true,
 		"Type.ValueType" => true
 	];
 
@@ -34,10 +29,11 @@ class PlatformAbi {
 	 * They come with the declaring module, so the typer finds them loaded: the graph has them before any call is typed.
 	 */
 	public static function implementationModules(module:String):Array<String> {
-		if (module != BYTES)
+		if (module != StdlibNames.BYTES)
 			return [];
 		var modules:Map<String, Bool> = [];
-		for (nativeName in [OUTSIDE_BOUNDS].concat([for (method in bytesMethods) method.nativeName])) {
+		var nativeNames = [StdlibNames.BYTES_OUTSIDE_BOUNDS].concat([for (method in bytesMethods) method.nativeName]);
+		for (nativeName in nativeNames) {
 			var implementation = sourceModule(nativeName);
 			if (implementation != null)
 				modules.set(implementation, true);
@@ -52,7 +48,7 @@ class PlatformAbi {
 
 	/** Whether a platform-owned type may carry a compile-time native ABI tag. */
 	public static function acceptsNativeTag(name:String):Bool
-		return name == "hl.Abstract";
+		return name == StdlibNames.HL_ABSTRACT;
 
 	public static function constructorArguments(name:String):Null<Array<CompilerType>>
 		return switch name {
@@ -82,9 +78,9 @@ class PlatformAbi {
 			} : null;
 			// Haxe source in the stdlib (haxe/Int64.hx), the same on every target.
 			case CompilerType.TInt64: name == "low" ? {
-				type: CompilerType.TInt, get: "haxe.Int64.int64Low", set: null
+				type: CompilerType.TInt, get: StdlibNames.INT64_LOW, set: null
 			} : name == "high" ? {
-				type: CompilerType.TInt, get: "haxe.Int64.int64High", set: null
+				type: CompilerType.TInt, get: StdlibNames.INT64_HIGH, set: null
 			} : null;
 			case CompilerType.TAbstract(_, _, underlying): field(underlying, name);
 			default: null;
@@ -116,17 +112,17 @@ class PlatformAbi {
 		"compare" => platformMethod([TBytes], TInt, "__bytes_compare"),
 		"toString" => platformMethod([], TString, "__bytes_to_string"),
 		// Haxe source in the stdlib (haxe/io/BytesBounds.hx), the same on every target.
-		"sub" => platformMethod([TInt, TInt], TBytes, "haxe.io.BytesBounds.sub"),
-		"getString" => platformMethod([TInt, TInt], TString, "haxe.io.BytesBounds.getString"),
-		"readString" => platformMethod([TInt, TInt], TString, "haxe.io.BytesBounds.readString"),
+		"sub" => platformMethod([TInt, TInt], TBytes, StdlibNames.BYTES_SUB),
+		"getString" => platformMethod([TInt, TInt], TString, StdlibNames.BYTES_GET_STRING),
+		"readString" => platformMethod([TInt, TInt], TString, StdlibNames.BYTES_READ_STRING),
 		// Haxe source in the stdlib (haxe/io/BytesAccess.hx), the same on every target.
-		"fill" => platformMethod([TInt, TInt, TInt], TVoid, "haxe.io.BytesAccess.fill"),
-		"getUInt16" => platformMethod([TInt], TInt, "haxe.io.BytesAccess.getUInt16"),
-		"setUInt16" => platformMethod([TInt, TInt], TVoid, "haxe.io.BytesAccess.setUInt16"),
-		"getInt64" => platformMethod([TInt], TInt64, "haxe.io.BytesAccess.getInt64"),
-		"setInt64" => platformMethod([TInt, TInt64], TVoid, "haxe.io.BytesAccess.setInt64"),
+		"fill" => platformMethod([TInt, TInt, TInt], TVoid, StdlibNames.BYTES_FILL),
+		"getUInt16" => platformMethod([TInt], TInt, StdlibNames.BYTES_GET_UINT16),
+		"setUInt16" => platformMethod([TInt, TInt], TVoid, StdlibNames.BYTES_SET_UINT16),
+		"getInt64" => platformMethod([TInt], TInt64, StdlibNames.BYTES_GET_INT64),
+		"setInt64" => platformMethod([TInt, TInt64], TVoid, StdlibNames.BYTES_SET_INT64),
 		// Haxe source in the stdlib (haxe/io/BytesHex.hx), the same on every target.
-		"toHex" => platformMethod([], TString, "haxe.io.BytesHex.toHex")
+		"toHex" => platformMethod([], TString, StdlibNames.BYTES_TO_HEX)
 	];
 
 	/**
@@ -139,9 +135,6 @@ class PlatformAbi {
 				"__bytes_try_blit": true;
 			default: false;
 		};
-
-	/** The stdlib function that throws Haxe's `haxe.io.Error.OutsideBounds`. */
-	public static inline final OUTSIDE_BOUNDS = "haxe.io.BytesBounds.outsideBounds";
 
 	static function platformMethod(arguments:Array<CompilerType>, result:CompilerType, nativeName:String):PlatformMethod
 		return {arguments: arguments, result: result, nativeName: nativeName};

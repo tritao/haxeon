@@ -7,6 +7,7 @@ import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstType;
+import compiler.core.StdlibNames;
 
 /**
  * Haxe's rest parameters (`function f(...values:Int)`): a last parameter of type `haxe.Rest<T>` receives the arguments from its
@@ -17,7 +18,7 @@ class RestArguments {
 	/** Whether `type` is a rest parameter's, `haxe.Rest<T>`. */
 	public static function isRest(type:AstType):Bool
 		return switch type {
-			case AppliedType("haxe.Rest", [_]): true;
+			case AppliedType(StdlibNames.REST, [_]): true;
 			default: false;
 		};
 
@@ -37,7 +38,7 @@ class RestArguments {
 	/** Whether a function type's argument is a rest parameter's, `haxe.Rest<T>`: a function value is called as its function is. */
 	public static function isRestValue(type:compiler.types.Type.CompilerType):Bool
 		return switch type {
-			case TAbstract("haxe.Rest", [_], _): true;
+			case TAbstract(StdlibNames.REST, [_], _): true;
 			default: false;
 		};
 

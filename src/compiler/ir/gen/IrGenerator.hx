@@ -21,7 +21,6 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
 import compiler.runtime.RuntimeType;
-import compiler.runtime.PlatformAbi;
 import compiler.types.typing.ValueEqualityGenerator;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
@@ -41,6 +40,7 @@ import compiler.ir.model.Ir.IrValue;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.Ir.IrObject;
 import compiler.ir.model.Ir.IrObjectField;
+import compiler.core.StdlibNames;
 
 /** A function's generated arguments, result type, blocks and debug bindings. */
 private typedef GeneratedBody = {
@@ -111,7 +111,6 @@ class IrGenerator {
 	public final facts:ProgramFacts;
 	public final profile:TargetProfile;
 
-
 	/** Working storage of the SSA construction, reused from one function to the next. */
 	final ssaScratch = new IrSsaScratch();
 
@@ -149,8 +148,6 @@ class IrGenerator {
 	}
 
 	static inline final ObservableStateField:String = "$haxeonObservableState";
-	static inline final ObservableSourceClass:String = "haxeon.reactive.ObservableSource";
-	static inline final ReactiveRuntimeClass:String = "haxeon.reactive.ReactiveRuntime";
 
 	/** Field bit in the flattened, declaration-ordered observable layout. */
 	public function observableFieldBit(type:CompilerType, fieldName:String):Null<Int> {
@@ -809,14 +806,14 @@ class IrGenerator {
 								madeCaught = true;
 								localTypes.set(caughtLocal, Dyn);
 								builder.store(caughtLocal,
-									builder.toDyn(builder.call(RuntimeType.EXCEPTION_CAUGHT,
+									builder.toDyn(builder.call(StdlibNames.EXCEPTION_CAUGHT,
 									[builder.load(exceptionLocal, Dyn)],
-									lowerType(TInstance(NominalKind.Class, RuntimeType.EXCEPTION, [])))));
+									lowerType(TInstance(NominalKind.Class, StdlibNames.EXCEPTION, [])))));
 							case Unwrapped if (!madeUnwrapped):
 								madeUnwrapped = true;
 								localTypes.set(unwrappedLocal, Dyn);
 								builder.store(unwrappedLocal,
-									builder.call(RuntimeType.EXCEPTION_CAUGHT_VALUE,
+									builder.call(StdlibNames.EXCEPTION_CAUGHT_VALUE,
 									[builder.load(exceptionLocal, Dyn)], Dyn));
 							default:
 						}
@@ -832,7 +829,7 @@ class IrGenerator {
 						// `catch (e:Dynamic)` and `catch (e:haxe.Exception)` catch every value.
 						var catchesAll = switch catchClause.type {
 							case TDynamic: true;
-							case TInstance(_, name, _): name == RuntimeType.EXCEPTION;
+							case TInstance(_, name, _): name == StdlibNames.EXCEPTION;
 							default: false;
 						};
 						if (!catchesAll) {
@@ -1453,7 +1450,7 @@ class IrGenerator {
 		var owner = specializedMapOwner(key, value);
 		// Collection lowering consumes snapshots, while ObjectMap.keys() returns an iterator.
 		if (compiler.semantic.GeneratedNames.specializedFunction(owner)
-			== compiler.semantic.GeneratedNames.ownerOrigin(RuntimeType.OBJECT_MAP))
+			== compiler.semantic.GeneratedNames.ownerOrigin(StdlibNames.OBJECT_MAP))
 			operation = switch operation {
 				case "keys": "keyArray";
 				case "values": "valueArray";
@@ -2647,7 +2644,7 @@ class IrGenerator {
 				[iterator]): builder.iteratorHasNext(lowerExpression(iterator, builder, localTypes));
 			case TCall("__iterator_next", [iterator]): builder.iteratorNext(lowerExpression(iterator, builder,
 				localTypes), lowerType(expression.type));
-			case TCall("__std_string" | "Std.string",
+			case TCall("__std_string" | StdlibNames.STD_STRING,
 				[argument]) if (profile.nativeStringFastPaths && stringifiedPrimitive(argument) != null):
 				var primitive = stringifiedPrimitive(argument);
 				if (primitive == null)
@@ -2842,7 +2839,7 @@ class IrGenerator {
 				}) && (switch (target) {
 					case I32: true;
 					default: false;
-				})) builder.call("haxe.Int64.toInt", [source], I32);
+				})) builder.call(StdlibNames.INT64_TO_INT, [source], I32);
 				else if ((switch (source.type) {
 					case I32: true;
 					default: false;
@@ -3115,7 +3112,7 @@ class IrGenerator {
 					localTypes.set(objectName, objectType);
 					builder.store(objectName, object);
 					if (facts.observableStateOwner(physicalName) != null)
-						builder.call(ReactiveRuntimeClass + ".recordObservableCreation",
+						builder.call(StdlibNames.REACTIVE_RUNTIME + ".recordObservableCreation",
 							[builder.toDyn(builder.load(objectName, objectType))], Void);
 					if (hasConstructor) {
 						var loweredArguments = lowerOperands(args, builder, localTypes),
@@ -3147,14 +3144,14 @@ class IrGenerator {
 					builder.load(objectName, IrType.Dyn);
 				} else if (isDynamic) {
 					// Targets without native dynamic objects (Wasm) use the stdlib's runtime.DynamicObject.
-					var objectType:IrType = Obj(PlatformAbi.DYNAMIC_OBJECT_CLASS),
-						object = builder.call('${PlatformAbi.DYNAMIC_OBJECT_CLASS}.create', [], objectType),
+					var objectType:IrType = Obj(StdlibNames.DYNAMIC_OBJECT),
+						object = builder.call('${StdlibNames.DYNAMIC_OBJECT}.create', [], objectType),
 						objectName = builder.internalName('dynamic-object-literal');
 					localTypes.set(objectName, objectType);
 					builder.store(objectName, object);
 					for (field in fields) {
 						var fieldValue = lowerExpression(field.value, builder, localTypes);
-						builder.call('${PlatformAbi.DYNAMIC_OBJECT_CLASS}.initialize', [
+						builder.call('${StdlibNames.DYNAMIC_OBJECT}.initialize', [
 							builder.load(objectName, objectType),
 							builder.constString(field.name),
 							builder.toDyn(fieldValue)
@@ -3175,7 +3172,7 @@ class IrGenerator {
 						builder.fieldSet(builder.load(objectName, objectType), field.name, fieldValue);
 					}
 					if (facts.observableStateOwner(physicalName) != null)
-						builder.call(ReactiveRuntimeClass + ".recordObservableCreation",
+						builder.call(StdlibNames.REACTIVE_RUNTIME + ".recordObservableCreation",
 							[builder.toDyn(builder.load(objectName, objectType))], Void);
 					builder.load(objectName, objectType);
 				}
@@ -4787,13 +4784,13 @@ class IrGenerator {
 			receiverValue = lowerExpression(object, builder, localTypes),
 			receiverName = '$' + 'observable-read-owner:$serial',
 			sourceName = '$' + 'observable-read-source:$serial',
-			sourceType:IrType = Obj(ObservableSourceClass);
+			sourceType:IrType = Obj(StdlibNames.OBSERVABLE_SOURCE);
 		localTypes.set(receiverName, receiverValue.type);
 		localTypes.set(sourceName, sourceType);
 		builder.store(receiverName, receiverValue);
 		var trackingBlock = builder.createBlock(),
 			readBlock = builder.createBlock();
-		builder.branch(builder.call(ReactiveRuntimeClass + ".isTracking", [], Bool), trackingBlock, readBlock);
+		builder.branch(builder.call(StdlibNames.REACTIVE_RUNTIME + ".isTracking", [], Bool), trackingBlock, readBlock);
 		builder.select(trackingBlock);
 		builder.store(sourceName,
 			builder.fieldGet(builder.load(receiverName, receiverValue.type), ObservableStateField, sourceType));
@@ -4804,12 +4801,13 @@ class IrGenerator {
 		builder.select(initializeBlock);
 		var count = builder.methodCall(builder.load(receiverName, receiverValue.type), "$haxeonObservableFieldCount",
 			[], I32);
-		builder.store(sourceName, builder.call(ReactiveRuntimeClass + ".createObservableSource", [count], sourceType));
+		builder.store(sourceName,
+			builder.call(StdlibNames.REACTIVE_RUNTIME + ".createObservableSource", [count], sourceType));
 		builder.fieldSet(builder.load(receiverName, receiverValue.type), ObservableStateField,
 			builder.load(sourceName, sourceType));
 		builder.jump(recordBlock);
 		builder.select(recordBlock);
-		builder.call(ReactiveRuntimeClass + ".recordObservableRead", [
+		builder.call(StdlibNames.REACTIVE_RUNTIME + ".recordObservableRead", [
 			builder.load(sourceName, sourceType),
 			builder.constInt(fieldBit)
 		], Void);
@@ -4879,14 +4877,14 @@ class IrGenerator {
 			doneBlock = builder.createBlock();
 		localTypes.set(changedName, Bool);
 		builder.store(changedName, changed);
-		var sourceType:IrType = Obj(ObservableSourceClass),
+		var sourceType:IrType = Obj(StdlibNames.OBSERVABLE_SOURCE),
 			sourceName = '$' + 'observable-write-source:$serial';
 		localTypes.set(sourceName, sourceType);
 		builder.store(sourceName,
 			builder.fieldGet(builder.load(receiverName, receiver.type), ObservableStateField, sourceType));
 		var statusName = '$' + 'observable-write-status:$serial';
 		localTypes.set(statusName, I32);
-		builder.store(statusName, builder.call(ReactiveRuntimeClass + ".observableWriteStatus", [
+		builder.store(statusName, builder.call(StdlibNames.REACTIVE_RUNTIME + ".observableWriteStatus", [
 			builder.load(sourceName, sourceType),
 			builder.constInt(fieldBit),
 			builder.toDyn(builder.load(receiverName, receiver.type))
@@ -4914,7 +4912,7 @@ class IrGenerator {
 		var invalidateBlock = builder.createBlock();
 		builder.branch(builder.load(changedName, Bool), invalidateBlock, doneBlock);
 		builder.select(invalidateBlock);
-		builder.call(ReactiveRuntimeClass + ".invalidateObservable", [
+		builder.call(StdlibNames.REACTIVE_RUNTIME + ".invalidateObservable", [
 			builder.load(sourceName, sourceType),
 			builder.constInt(fieldBit)
 		], Void);

@@ -1,6 +1,7 @@
 package compiler.types;
 
 import compiler.core.InternalError;
+import compiler.core.StdlibNames;
 import compiler.types.StructProperties;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -470,7 +471,7 @@ class TypeRelations {
 			case TAnonymous(name, fields):
 				if (visiting.exists(name)) {
 					switch expected {
-						case TInstance(NominalKind.Interface, "Hashable", _): false;
+						case TInstance(NominalKind.Interface, StdlibNames.HASHABLE, _): false;
 						default: true;
 					}
 				} else {
@@ -486,7 +487,7 @@ class TypeRelations {
 				}
 			case TNullable(element): structuralCapability(element, expected, visiting);
 			case TArray(element): (switch expected {
-					case TInstance(NominalKind.Interface, "Equatable", _): true;
+					case TInstance(NominalKind.Interface, StdlibNames.EQUATABLE, _): true;
 					default: false;
 				}) && structuralCapability(element, expected, visiting);
 			default: satisfiesConstraint(actual, expected);
@@ -503,7 +504,8 @@ class TypeRelations {
 			case _:
 		}
 		var valueCapability = switch expected {
-			case TInstance(NominalKind.Interface, name, _) if (name == "Equatable" || name == "Hashable"): true;
+			case TInstance(NominalKind.Interface, name,
+				_) if (name == StdlibNames.EQUATABLE || name == StdlibNames.HASHABLE): true;
 			default: false;
 		};
 		// `Void` is the unit type: its one value equals itself, and a payload of it adds nothing to a hash.
@@ -525,7 +527,7 @@ class TypeRelations {
 		if (valueCapability && (switch actual {
 			case TAnonymous(_, _): true;
 			case TInstance(NominalKind.Class, _, _) | TInstance(NominalKind.Enum, _, _): switch expected {
-					case TInstance(NominalKind.Interface, "Hashable", _): true;
+					case TInstance(NominalKind.Interface, StdlibNames.HASHABLE, _): true;
 					default: false;
 				};
 			default: false;
@@ -548,7 +550,7 @@ class TypeRelations {
 					return structuralCapability(actual, expected, []);
 				case TArray(element):
 					return (switch expected {
-						case TInstance(NominalKind.Interface, "Equatable", _): true;
+						case TInstance(NominalKind.Interface, StdlibNames.EQUATABLE, _): true;
 						default: false;
 					}) && satisfiesConstraint(element, expected);
 				case TInstance(NominalKind.Enum, name, _):
@@ -616,7 +618,8 @@ class TypeRelations {
 
 	public function recursiveCapabilityFailure(actual:CompilerType, expected:CompilerType):Bool {
 		var capability = switch expected {
-			case TInstance(NominalKind.Interface, name, _) if (name == "Equatable" || name == "Hashable"): true;
+			case TInstance(NominalKind.Interface, name,
+				_) if (name == StdlibNames.EQUATABLE || name == StdlibNames.HASHABLE): true;
 			default: false;
 		};
 		return capability && recursiveAnonymousField(actual, [], null) != null;

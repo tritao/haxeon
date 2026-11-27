@@ -1,6 +1,7 @@
 package compiler.syntax;
 
 import compiler.core.Source.SourceSpan;
+import compiler.core.StdlibNames;
 import compiler.syntax.Ast.AstInterface;
 
 class RpcServiceDeclaration {
@@ -13,7 +14,7 @@ class RpcServiceDeclaration {
 		for (method in declaration.methods)
 			if (method.isStatic || (method.typeParameters != null && method.typeParameters.length != 0)
 				|| method.arguments.length != 1 || AstPredicates.isOptionalArgument(method.arguments[0])
-				|| method.arguments[0].type.match(AppliedType("haxe.Rest", _))
+				|| method.arguments[0].type.match(AppliedType(StdlibNames.REST, _))
 				|| method.result.match(VoidType))
 				fail('RPC method "${declaration.name}.${method.name}" must take one required request and return one response',
 					method.span);

@@ -5,7 +5,7 @@ import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
-import compiler.runtime.RuntimeType;
+import compiler.core.StdlibNames;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -79,10 +79,11 @@ class HashGenerator {
 			case TInt, TBool, TNativeScalar(_):
 				statements.push(TReturn(primitiveHash(type, value, span), span));
 			case TInt64:
-				statements.push(TReturn(new TypedExpression(TCall("haxe.Int64.toInt", [value]), TInt, span), span));
+				statements.push(TReturn(new TypedExpression(TCall(StdlibNames.INT64_TO_INT, [value]), TInt, span),
+					span));
 			case TFloat:
-				session.runtimeDependencyTracker.record(req.origin, RuntimeType.FLOAT_BITS);
-				session.runtimeDependencyTracker.record(req.origin, RuntimeType.INT64);
+				session.runtimeDependencyTracker.record(req.origin, StdlibNames.FLOAT_BITS);
+				session.runtimeDependencyTracker.record(req.origin, StdlibNames.INT64);
 				statements = floatHashStatements(value, span);
 			case TString:
 				statements = stringHashStatements(value, span);
@@ -248,17 +249,17 @@ class HashGenerator {
 			zero = new TypedExpression(TFloatLiteral(0.0), TFloat, span),
 			isZero = new TypedExpression(TEqual(value, zero), TBool, span),
 			bits = new TypedExpression(TLocal("$float-hash-bits"), TInt64, span),
-			shifted = new TypedExpression(TCall("haxe.Int64.ushr", [
+			shifted = new TypedExpression(TCall(StdlibNames.INT64_USHR, [
 				bits,
 				new TypedExpression(TIntLiteral(32), TInt, span)
 			]), TInt64, span),
-			folded = new TypedExpression(TCall("haxe.Int64.xor", [bits, shifted]), TInt64, span),
-			hash = new TypedExpression(TCall("haxe.Int64.toInt", [folded]), TInt, span);
+			folded = new TypedExpression(TCall(StdlibNames.INT64_XOR, [bits, shifted]), TInt64, span),
+			hash = new TypedExpression(TCall(StdlibNames.INT64_TO_INT, [folded]), TInt, span);
 		return [
 			TIf(new TypedExpression(TNot(same), TBool, span),
 				[TReturn(new TypedExpression(TIntLiteral(0x7ff80000), TInt, span), span)], [], span),
 			TIf(isZero, [TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span)], [], span),
-			TVar("$float-hash-bits", new TypedExpression(TCall("runtime.FloatBits.toInt64", [value]), TInt64, span),
+			TVar("$float-hash-bits", new TypedExpression(TCall(StdlibNames.FLOAT_BITS_TO_INT64, [value]), TInt64, span),
 				span),
 			TReturn(hash, span)
 		];

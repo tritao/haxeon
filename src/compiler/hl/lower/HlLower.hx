@@ -33,6 +33,7 @@ import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.ir.model.SourceProvenance;
 import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
+import compiler.core.StdlibNames;
 
 typedef HlLowerMetrics = {
 	final allocationPhases:Array<PhaseAllocation>;
@@ -3072,7 +3073,7 @@ class HlLower {
 	}
 
 	static function isValueCapability(name:String):Bool
-		return name == "Equatable" || name == "Hashable" || name == "Diffable";
+		return name == StdlibNames.EQUATABLE || name == StdlibNames.HASHABLE || name == StdlibNames.DIFFABLE;
 
 	function closeInterfaces(names:Array<String>):Array<String> {
 		var result:Array<String> = [], seen:Map<String, Bool> = [];

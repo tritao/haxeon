@@ -12,6 +12,7 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.PeakProbe;
 import compiler.core.PhaseCollections;
+import compiler.core.StdlibNames;
 import compiler.ir.gen.IrGenerator;
 import compiler.ir.model.Ir.IrCNative;
 import compiler.ir.model.Ir.IrEnum;
@@ -27,7 +28,6 @@ import compiler.ir.pipeline.IrProgramAssembler;
 import compiler.ir.tools.IrInstrumentation.IrInstrumentationScope;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
-import compiler.runtime.PlatformAbi;
 import compiler.semantic.LambdaName;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.SemanticAssembly;
@@ -2800,7 +2800,7 @@ class FrontendCompilation {
 			if (!compiler.runtime.RuntimeType.isTypedDependency(dependency.target))
 				throw new InternalError('Typing made "${dependency.functionName}" call "${dependency.target}", which RuntimeType does not declare, so the graph does not add it');
 			// Only targets without native dynamic objects (Wasm) call the stdlib's class; elsewhere the dependency is unused.
-			if (dependency.target == PlatformAbi.DYNAMIC_OBJECT_CLASS && !context.isWasmTarget())
+			if (dependency.target == StdlibNames.DYNAMIC_OBJECT && !context.isWasmTarget())
 				continue;
 			var module = context.moduleAnalyzer.loadSourceModuleDependency(dependency.target);
 			if (module == null || !program.exists(module))

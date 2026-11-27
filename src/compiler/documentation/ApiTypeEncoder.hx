@@ -1,5 +1,6 @@
 package compiler.documentation;
 
+import compiler.core.StdlibNames;
 import compiler.documentation.ApiModel.ApiType;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
@@ -12,12 +13,12 @@ class ApiTypeEncoder {
 	static function encodeWithin(type:CompilerType, active:Array<Array<AnonymousField>>):ApiType
 		return switch type {
 			case TInt: builtin("Int");
-			case TInt64: builtin("haxe.Int64");
+			case TInt64: builtin(StdlibNames.INT64);
 			case TBool: builtin("Bool");
 			case TFloat: builtin("Float");
 			case TString: builtin("String");
 			case TBytes: builtin("Bytes");
-			case THlBytes: builtin("hl.Bytes");
+			case THlBytes: builtin(StdlibNames.HL_BYTES);
 			case TDynamic: builtin("Dynamic");
 			case TNever: builtin("Never");
 			case TRange: builtin("Range");

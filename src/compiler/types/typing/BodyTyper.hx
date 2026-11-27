@@ -2,7 +2,6 @@ package compiler.types.typing;
 
 import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
-import compiler.runtime.RuntimeType;
 import compiler.semantic.EnumConstants;
 import compiler.semantic.TypeStatics;
 import compiler.syntax.Ast.AstArgument;
@@ -48,6 +47,7 @@ import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.types.typing.NullSafety.NullSafetyUse;
+import compiler.core.StdlibNames;
 
 /** Types function and expression bodies using the current compilation session. */
 @:allow(compiler.types.typing.ProgramTyper)
@@ -958,7 +958,7 @@ class BodyTyper implements BodyTyping {
 						case TNullable(inner): inner;
 						default: boundType;
 					};
-					var contract = lowerType(NamedType("Disposable"), span);
+					var contract = lowerType(NamedType(StdlibNames.DISPOSABLE), span);
 					if (!satisfiesDisposable(element, contract))
 						fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 							'Scoped binding "$name" requires Disposable conformance', span);
@@ -2023,7 +2023,7 @@ class BodyTyper implements BodyTyping {
 				return typeMember(Variable("this", span), name, span, scope);
 			var functionName = localMethod == null ? name : localMethod.owner + "." + name;
 			var expectedFunction = expectedFunctionType(expectedType);
-			if (name == "Reflect.compare"
+			if (name == StdlibNames.REFLECT_COMPARE
 				&& expectedFunction != null
 				&& expectedFunction.arguments.length == 2
 				&& sameType(expectedFunction.arguments[0], TString)
@@ -2034,6 +2034,10 @@ class BodyTyper implements BodyTyping {
 			else if (session.signatures.exists(functionName)) {
 				var fn = session.signatures.required(functionName),
 					methodInfo = session.methodInfoOf(functionName);
+				if (fn.isExtern == true && StdlibNames.isIntrinsic(functionName))
+					fail(DiagnosticCode.VALUE_CONVERSION,
+						'"$functionName" is expanded by the compiler at each call and has no function value; call it in a lambda',
+						span);
 				// A static method value of a class or abstract (`C.m`); a module function has no method info.
 				if (methodInfo == null && fn.visibility.isInternal())
 					compiler.types.InternalAccess.require(session.declarations.sourcePackages, functionName, fn.span,
@@ -2601,8 +2605,8 @@ class BodyTyper implements BodyTyping {
 		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic. Unlike `Reflect.field`, which
 		// gives null, reading a field of null throws, as reading any other field does.
 		if (sameType(typedObject.type, TDynamic)) {
-			session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
-			return new TypedExpression(TCall("Reflect.field", [
+			session.runtimeDependencyTracker.record(session.currentContext.name, StdlibNames.REFLECT);
+			return new TypedExpression(TCall(StdlibNames.REFLECT_FIELD, [
 				new TypedExpression(TCall("$receiver.checked", [typedObject]), TDynamic, typedObject.span),
 				new TypedExpression(TStringLiteral(name), TString, span)
 			]), TDynamic, span);
@@ -3425,10 +3429,10 @@ class BodyTyper implements BodyTyping {
 		var message =
 			new TypedExpression(TStringLiteral('Unmatched ${compiler.semantic.SemanticSignature.display(type)} value'),
 			TString, span);
-		if (!session.classDecls.exists(RuntimeType.UNMATCHED_VALUE))
+		if (!session.classDecls.exists(StdlibNames.UNMATCHED_VALUE))
 			return message;
-		return new TypedExpression(TNew(RuntimeType.UNMATCHED_VALUE, [message], true),
-			TInstance(NominalKind.Class, RuntimeType.UNMATCHED_VALUE, []), span);
+		return new TypedExpression(TNew(StdlibNames.UNMATCHED_VALUE, [message], true),
+			TInstance(NominalKind.Class, StdlibNames.UNMATCHED_VALUE, []), span);
 	}
 
 	/** What a switch over `type` that leaves out `missing` reports: a raw-value enum's are cases, as any enum's. */

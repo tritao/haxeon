@@ -27,7 +27,7 @@ import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstTypeAlias;
 import compiler.syntax.Ast.AstMetadata;
 import compiler.types.typing.HelperRequests.WireCodecRequest;
-
+import compiler.core.StdlibNames;
 
 private typedef WireField = {
 	final field:TypedField;
@@ -50,10 +50,6 @@ class WireCodecGenerator {
 	static inline final INT_COMPARE_NAME:String = "$wire:map-int-compare";
 	static inline final STRING_COMPARE_NAME:String = "$wire:map-string-compare";
 	static inline final ENUM_COMPARE_PREFIX:String = "$wire:map-enum-compare:";
-	static inline final WRITER:String = "haxeon.wire.MessagePackWriter";
-	static inline final READER:String = "haxeon.wire.MessagePackReader";
-	static inline final JSON_WRITER:String = "haxeon.wire.JsonWireWriter";
-	static inline final JSON_READER:String = "haxeon.wire.JsonWireReader";
 	/** Whether this generation makes the JSON codecs (`generateJson`) rather than the binary ones (`generate`). */
 	final jsonMode:Bool;
 
@@ -61,10 +57,10 @@ class WireCodecGenerator {
 		this.jsonMode = jsonMode;
 
 	inline function writerClassName():String
-		return jsonMode ? JSON_WRITER : WRITER;
+		return jsonMode ? StdlibNames.JSON_WIRE_WRITER : StdlibNames.MESSAGE_PACK_WRITER;
 
 	inline function readerClassName():String
-		return jsonMode ? JSON_READER : READER;
+		return jsonMode ? StdlibNames.JSON_WIRE_READER : StdlibNames.MESSAGE_PACK_READER;
 
 	static inline final DEFAULT_MAX_BYTES:Int = 16 * 1024 * 1024;
 	static inline final DEFAULT_MAX_CONTAINER:Int = 1000000;
@@ -632,7 +628,7 @@ class WireCodecGenerator {
 	function stringComparator(request:WireCodecRequest):TypedFunction {
 		var left = local("left", TString, request.span),
 			right = local("right", TString, request.span),
-			result = new TypedExpression(TCall("haxeon.wire.MessagePackWriter.compareUtf8", [left, right]), TInt,
+			result = new TypedExpression(TCall(StdlibNames.MESSAGE_PACK_COMPARE_UTF8, [left, right]), TInt,
 				request.span);
 		return generatedFunction(stringCompareName(), [{name: "left", type: TString}, {name: "right", type: TString}],
 			TInt, [TReturn(result, request.span)],
@@ -662,7 +658,7 @@ class WireCodecGenerator {
 			leftKey = enumKeyExpression(left, cases, request.span),
 			rightKey = enumKeyExpression(right, cases, request.span),
 			result = leftKey.type == TString
-				? new TypedExpression(TCall("haxeon.wire.MessagePackWriter.compareUtf8", [leftKey, rightKey]), TInt,
+				? new TypedExpression(TCall(StdlibNames.MESSAGE_PACK_COMPARE_UTF8, [leftKey, rightKey]), TInt,
 				request.span)
 				: new TypedExpression(TConditional(new TypedExpression(TLess(leftKey, rightKey), TBool, request.span),
 				intLiteral(-1, request.span),
@@ -1204,11 +1200,11 @@ class WireCodecGenerator {
 	function defaultValue(type:CompilerType, span:SourceSpan):TypedExpression
 		return switch type {
 			case TInt: intLiteral(0, span);
-			case TInt64: new TypedExpression(TCall("haxe.Int64.ofInt", [intLiteral(0, span)]), TInt64, span);
+			case TInt64: new TypedExpression(TCall(StdlibNames.INT64_OF_INT, [intLiteral(0, span)]), TInt64, span);
 			case TFloat: new TypedExpression(TFloatLiteral(0.0), TFloat, span);
 			case TBool: new TypedExpression(TBoolLiteral(false), TBool, span);
 			case TString: stringLiteral("", span);
-			case TBytes: new TypedExpression(TCall("haxe.io.Bytes.alloc", [intLiteral(0, span)]), TBytes, span);
+			case TBytes: new TypedExpression(TCall(StdlibNames.BYTES_ALLOC, [intLiteral(0, span)]), TBytes, span);
 			case TNullable(_): nullValue(type, span);
 			case TArray(element): new TypedExpression(TNewArray(element, intLiteral(0, span)), type, span);
 			case TMap(key, value): new TypedExpression(TNewMap(key, value), type, span);

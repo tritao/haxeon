@@ -39,6 +39,7 @@ import compiler.ir.model.Ir.IrObjectMethod;
 import compiler.ir.model.Ir.IrInterface;
 import compiler.ir.model.Ir.IrEnum;
 import compiler.ir.model.Ir.IrStaticField;
+import compiler.core.StdlibNames;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
@@ -401,7 +402,7 @@ class IrProgramAssembler {
 				if (generator.facts.observableStateOwner(classDecl.name) == classDecl.name)
 					fields.push({
 						name: "$haxeonObservableState",
-						type: generator.lowerType(TInstance(NominalKind.Class, "haxeon.reactive.ObservableSource", []))
+						type: generator.lowerType(TInstance(NominalKind.Class, StdlibNames.OBSERVABLE_SOURCE, []))
 					});
 				var dynamicSlots:Map<String, Bool> = [];
 				var current = classDecl;
@@ -835,9 +836,9 @@ class IrProgramAssembler {
 				arguments: [Dyn],
 				result: I32
 			});
-		if (needsInt64ToInt && !hasNative(natives, "haxe.Int64.toInt"))
+		if (needsInt64ToInt && !hasNative(natives, StdlibNames.INT64_TO_INT))
 			program.natives.push({
-				name: "haxe.Int64.toInt",
+				name: StdlibNames.INT64_TO_INT,
 				library: "haxeon_runtime",
 				symbol: "__int64_to_int",
 				arguments: [I64],
@@ -1435,7 +1436,7 @@ class IrRuntimeNeeds {
 						var name = body.symbol(row).name;
 						if (cNativeNames.exists(name))
 							flags |= C_NATIVES;
-						if (name == "haxe.Int64.toInt")
+						if (name == StdlibNames.INT64_TO_INT)
 							flags |= INT64_TO_INT;
 						if (name == "__exception_matches")
 							flags |= EXCEPTION;

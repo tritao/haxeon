@@ -78,6 +78,5 @@ class RpcMethod<Request, Response> {
 		Creates a method with a positive numeric ID. Haxeon generates MessagePack codecs for the request
 		and response types of the expected RpcMethod.
 	 */
-	public static function wire<Req, Res>(id:Int):RpcMethod<Req, Res>
-		throw new haxe.Exception("RpcMethod.wire must be lowered by the compiler");
+	public static extern function wire<Req, Res>(id:Int):RpcMethod<Req, Res>;
 }

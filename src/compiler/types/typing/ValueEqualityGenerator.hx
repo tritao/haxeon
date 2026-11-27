@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
+import compiler.core.StdlibNames;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -91,7 +92,7 @@ class ValueEqualityGenerator {
 			case TAbstract(_, _, representation) if (DeclaredConformance.usesEquality(session, representation)):
 				requests.add(ValueEqualityHelper(name, {type: type, origin: root.origin, span: root.span}));
 				collect(session, representation, root, requests, seen);
-			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")
+			case TNullable(element) if (DeclaredConformance.has(session, element, StdlibNames.EQUATABLE)
 				|| DeclaredConformance.usesEquality(session, element)):
 				requests.add(ValueEqualityHelper(name, {type: type, origin: root.origin, span: root.span}));
 				collect(session, element, root, requests, seen);
@@ -105,7 +106,7 @@ class ValueEqualityGenerator {
 					if (needsHelper(session, field.type))
 						collect(session, field.type, root, requests, seen);
 			case TInstance(NominalKind.Class, className, arguments)
-				if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable")):
+				if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, StdlibNames.EQUATABLE)):
 				var declaration = session.classDecls.get(className);
 				if (declaration == null)
 					throw new InternalError('Missing value type declaration "$className"');
@@ -125,12 +126,12 @@ class ValueEqualityGenerator {
 		return switch type {
 			case TKeyPath(_, _, _): true;
 			case TAbstract(_, _, representation): DeclaredConformance.usesEquality(session, representation);
-			case TNullable(element): DeclaredConformance.has(session, element, "Equatable")
+			case TNullable(element): DeclaredConformance.has(session, element, StdlibNames.EQUATABLE)
 				|| DeclaredConformance.usesEquality(session, element);
 			case TArray(element): DeclaredConformance.supportsEquality(session, element);
 			case TAnonymous(_, _): DeclaredConformance.supportsEquality(session, type);
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type)
-				&& DeclaredConformance.has(session, type, "Equatable");
+				&& DeclaredConformance.has(session, type, StdlibNames.EQUATABLE);
 			default: false;
 		};
 
@@ -159,7 +160,7 @@ class ValueEqualityGenerator {
 				new AnonymousTypeRegistry(session).register(type);
 				statements.push(TReturn(compare(new TypedExpression(TField(left, "$key"), TString, span),
 					new TypedExpression(TField(right, "$key"), TString, span), span), span));
-			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")
+			case TNullable(element) if (DeclaredConformance.has(session, element, StdlibNames.EQUATABLE)
 				|| DeclaredConformance.usesEquality(session, element)):
 				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type,
 					span),
@@ -214,7 +215,7 @@ class ValueEqualityGenerator {
 				}
 				statements.push(TReturn(new TypedExpression(TBoolLiteral(true), TBool, span), span));
 			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type)
-				&& DeclaredConformance.has(session, type, "Equatable")):
+				&& DeclaredConformance.has(session, type, StdlibNames.EQUATABLE)):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null)
 					throw new InternalError('Missing value type declaration "$name"');

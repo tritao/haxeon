@@ -438,14 +438,13 @@ class RpcConnection {
 	}
 
 	/** Registers a service implementation. Haxeon generates dispatch and codecs for the supplied interface. */
-	public function serve<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end,
-			implementation:Service):Void
-		throw new haxe.Exception("RpcConnection.serve must be lowered by the compiler");
+	public extern function serve<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end,
+			implementation:Service):Void;
 
 	/**
 		Returns a client stub whose methods take one request and return a `Future<Result<Response, RpcError>>`, as `call`
 		does. Haxeon generates the stub and codecs for the supplied interface. The default timeout is 1000 milliseconds.
 	 */
-	public function of<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end, ?timeoutMs:Int):Dynamic
-		throw new haxe.Exception("RpcConnection.of must be lowered by the compiler");
+	public extern function of<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end,
+			?timeoutMs:Int):Dynamic;
 }

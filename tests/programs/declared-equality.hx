@@ -189,7 +189,7 @@ function main():Int {
 		&& haxeon.Diff.fingerprint(genericFingerprint) == haxeon.Hashing.mix(17,
 		haxeon.Hashing.hash(genericFingerprint.value))
 		&& haxeon.Diff.fingerprint(genericFingerprint) == haxeon.Diff.fingerprint(genericFingerprintCopy)
-		&& haxeon.Diff.all(Editable) == 3 && zero == negativeZero
+		&& haxeon.Diff.all<Editable>() == 3 && zero == negativeZero
 		&& haxeon.Hashing.hash(zero) == haxeon.Hashing.hash(negativeZero)
 		&& haxeon.Hashing.hash(optionalZero) == haxeon.Hashing.hash(zero) && haxeon.Hashing.hash(absentScalar) == 0
 		&& nan != nan

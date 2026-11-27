@@ -6,6 +6,7 @@ import compiler.types.Type.NominalKind;
 import compiler.core.Source.SourceSpan;
 import compiler.runtime.RuntimeType;
 import compiler.types.TypedAst;
+import compiler.core.StdlibNames;
 
 /** Queries declared value capabilities using the same inheritance graph as interface bounds. */
 class DeclaredConformance {
@@ -40,10 +41,10 @@ class DeclaredConformance {
 			case TAbstract(name, _, representation): !session.declarations.declaresEqualityOperator(name)
 				&& usesEquality(session, representation);
 			case TArray(element): supportsEquality(session, element);
-			case TAnonymous(_, _): has(session, type, "Equatable");
+			case TAnonymous(_, _): has(session, type, StdlibNames.EQUATABLE);
 			case TNullable(element): usesEquality(session, element);
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type)
-				&& has(session, type, "Equatable");
+				&& has(session, type, StdlibNames.EQUATABLE);
 			default: false;
 		};
 
@@ -55,10 +56,10 @@ class DeclaredConformance {
 				&& supportsEquality(session, representation);
 			case TNullable(element): supportsEquality(session, element);
 			case TArray(element): supportsEquality(session, element);
-			case TAnonymous(_, _): has(session, type, "Equatable");
+			case TAnonymous(_, _): has(session, type, StdlibNames.EQUATABLE);
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type)
-				&& has(session, type, "Equatable");
-			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Equatable");
+				&& has(session, type, StdlibNames.EQUATABLE);
+			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, StdlibNames.EQUATABLE);
 			default: false;
 		};
 
@@ -93,9 +94,10 @@ class DeclaredConformance {
 			case TAbstract(name, _, representation): !session.declarations.declaresEqualityOperator(name)
 				&& supportsHash(session, representation);
 			case TNullable(element): supportsHash(session, element);
-			case TAnonymous(_, _): has(session, type, "Hashable");
-			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Hashable");
-			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Hashable");
+			case TAnonymous(_, _): has(session, type, StdlibNames.HASHABLE);
+			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type)
+				&& has(session, type, StdlibNames.HASHABLE);
+			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, StdlibNames.HASHABLE);
 			default: false;
 		};
 
@@ -124,7 +126,7 @@ class DeclaredConformance {
 				|| TypeRepresentation.mentionsTypeParameter(knownValue))
 				return;
 			var runtime = session.mapName(knownKey, knownValue);
-			if (runtime != RuntimeType.OBJECT_MAP)
+			if (runtime != StdlibNames.OBJECT_MAP)
 				requestHashableMapKey(session, knownKey, span);
 			if (runtime == null)
 				BodyTyper.fail(DiagnosticCode.RUNTIME_SUPPORT,
@@ -135,23 +137,23 @@ class DeclaredConformance {
 	public static function requestHashableMapKey(session:TypingSession, type:CompilerType, span:SourceSpan):Void {
 		switch type {
 			case TAbstract(_, _, _) if (!supportsHash(session, type)):
-				BodyTyper.fail(DiagnosticCode.CONFORMANCE, capabilityError(session, type, "Hashable"), span);
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE, capabilityError(session, type, StdlibNames.HASHABLE), span);
 			default:
 		}
 		if (session.isPayloadEnumKey(type)) {
-			if (!has(session, type, "Hashable"))
-				BodyTyper.fail(DiagnosticCode.CONFORMANCE, capabilityError(session, type, "Hashable"), span);
+			if (!has(session, type, StdlibNames.HASHABLE))
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE, capabilityError(session, type, StdlibNames.HASHABLE), span);
 			HashGenerator.request(session, type, session.currentContext.name, span);
 			EnumEqualityGenerator.request(session, type, session.currentContext.name, span);
 			return;
 		}
 		if (RuntimeType.mapName(type, TInt) == null) {
-			if (has(session, type, "Hashable")) {
+			if (has(session, type, StdlibNames.HASHABLE)) {
 				HashGenerator.request(session, type, session.currentContext.name, span);
 				if (usesEquality(session, type))
 					ValueEqualityGenerator.request(session, type, session.currentContext.name, span);
 			} else
-				BodyTyper.fail(DiagnosticCode.CONFORMANCE, capabilityError(session, type, "Hashable"), span);
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE, capabilityError(session, type, StdlibNames.HASHABLE), span);
 		}
 	}
 }

@@ -30,13 +30,11 @@ class MessagePack {
 		}, bytes);
 
 	/** Encodes a value as MessagePack. Haxeon generates the codec for the value's concrete type. */
-	public static function encode<T>(value:T):Bytes
-		throw new haxe.Exception("MessagePack.encode must be lowered by the compiler");
+	public static extern function encode<T>(value:T):Bytes;
 
 	/**
 	 * Decodes one MessagePack value, or gives why the bytes are not one. Haxeon generates the codec from the expected result
 	 * type: `var user:Result<User, WireError> = MessagePack.decode(bytes)`, or `var user:User = try MessagePack.decode(bytes)`.
 	 */
-	public static function decode<T>(bytes:Bytes):Result<T, WireError>
-		throw new haxe.Exception("MessagePack.decode must be lowered by the compiler");
+	public static extern function decode<T>(bytes:Bytes):Result<T, WireError>;
 }

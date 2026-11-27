@@ -8,6 +8,7 @@ import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
+import compiler.core.StdlibNames;
 
 /** Canonicalizes module-relative syntax into compiler-wide declaration names. */
 class ModuleCanonicalizer {
@@ -887,7 +888,8 @@ class ModuleCanonicalizer {
 	}
 
 	static inline function isTypeTestCall(name:String):Bool
-		return name == "Std.isOfType" || name == "Std.isExactType" || name == "Std.downcast";
+		return name == StdlibNames.STD_IS_OF_TYPE || name == StdlibNames.STD_IS_EXACT_TYPE
+			|| name == StdlibNames.STD_DOWNCAST;
 
 	/**
 	 * The second argument of `Std.isOfType` and its siblings names a type. A bare name reaches here as an expression, so

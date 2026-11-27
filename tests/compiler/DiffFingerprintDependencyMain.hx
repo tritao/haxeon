@@ -9,7 +9,7 @@ class DiffFingerprintDependencyMain {
 			var compiler = new Compiler();
 			compiler.update("Diffable.hx", "interface Diffable {}");
 			compiler.update("haxeon/Diff.hx",
-				'package haxeon; class Diff { public static function fingerprint<T:Diffable>(value:T):Int throw "intrinsic"; }');
+				'package haxeon; class Diff { public static extern function fingerprint<T:Diffable>(value:T):Int; }');
 			compiler.update("Main.hx",
 				'class Snapshot implements Diffable { public var value:Int; public function new(value:Int) this.value=value; } '
 				+ 'function main():Int { var a=new Snapshot(42), b=new Snapshot(43); '

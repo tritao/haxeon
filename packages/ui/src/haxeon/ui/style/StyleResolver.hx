@@ -285,9 +285,9 @@ internal class StyleResolver {
 		var transformFields = haxeon.Diff.bit(\Transform2D.a) | haxeon.Diff.bit(\Transform2D.b)
 			| haxeon.Diff.bit(\Transform2D.c) | haxeon.Diff.bit(\Transform2D.d)
 			| haxeon.Diff.bit(\Transform2D.tx) | haxeon.Diff.bit(\Transform2D.ty);
-		return colorFields == haxeon.Diff.all(Color) && axisFields == haxeon.Diff.all(LayoutAxis)
-			&& insetsFields == haxeon.Diff.all(Insets)
-			&& transformFields == haxeon.Diff.all(Transform2D);
+		return colorFields == haxeon.Diff.all<Color>() && axisFields == haxeon.Diff.all<LayoutAxis>()
+			&& insetsFields == haxeon.Diff.all<Insets>()
+			&& transformFields == haxeon.Diff.all<Transform2D>();
 	}
 
 

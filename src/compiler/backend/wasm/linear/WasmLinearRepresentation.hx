@@ -23,6 +23,7 @@ import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
 import compiler.backend.wasm.WasmRepresentation.WasmValueRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmModelRepresentation;
 import compiler.backend.wasm.WasmModule.WasmLocal;
+import compiler.core.StdlibNames;
 
 /** Linear32 representation: managed references remain i32 pointers into the custom heap. */
 class WasmLinearRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmInteropRepresentation implements WasmModelRepresentation {
@@ -886,7 +887,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
 		}
 		// Float32 values live in f64 locals, so a Float rounded to 32 bits (FloatBits.toInt32) converts the same way.
-		if (name == "__f32_to_i32_bits" || name == "__float_to_f32_bits" || name == "runtime.FloatBits.toInt32") {
+		if (name == "__f32_to_i32_bits" || name == "__float_to_f32_bits" || name == StdlibNames.FLOAT_BITS_TO_INT32) {
 			if (!compiler.ir.verify.IrVerifier.sameType(output.type, I32)
 				|| arguments.length != 1
 				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, name == "__f32_to_i32_bits" ? F32 : F64)
@@ -899,7 +900,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				LocalSet(outputLocal)
 			];
 		}
-		if (name == "__i32_to_f32_bits" || name == "__f32_bits_to_float" || name == "runtime.FloatBits.fromInt32") {
+		if (name == "__i32_to_f32_bits" || name == "__f32_bits_to_float" || name == StdlibNames.FLOAT_BITS_FROM_INT32) {
 			if (!compiler.ir.verify.IrVerifier.sameType(output.type, name == "__i32_to_f32_bits" ? F32 : F64)
 				|| arguments.length != 1
 				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, I32)
@@ -912,7 +913,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				LocalSet(outputLocal)
 			];
 		}
-		if (name == "__f64_to_i64_bits" || name == "runtime.FloatBits.toInt64") {
+		if (name == "__f64_to_i64_bits" || name == StdlibNames.FLOAT_BITS_TO_INT64) {
 			if ((switch (output.type) {
 				case I64: false;
 				default: true;
@@ -923,7 +924,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				throw new InternalError("Invalid Wasm FloatBits.toInt64 signature");
 			return [LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)];
 		}
-		if (name == "__i64_to_f64_bits" || name == "runtime.FloatBits.fromInt64") {
+		if (name == "__i64_to_f64_bits" || name == StdlibNames.FLOAT_BITS_FROM_INT64) {
 			if ((switch (output.type) {
 				case F64: false;
 				default: true;

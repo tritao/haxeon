@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.StdlibNames;
 import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -51,7 +52,7 @@ class TypedProgramAssembler {
 					classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin,
 					classDecl.specializationArguments == null ? [] : classDecl.specializationArguments);
 				if (!session.representation.containsTypeParameter(type, [])
-					&& DeclaredConformance.has(session, type, "Equatable"))
+					&& DeclaredConformance.has(session, type, StdlibNames.EQUATABLE))
 					ValueEqualityGenerator.request(session, type, origin, classDecl.span);
 			}
 			for (field in classDecl.fields)

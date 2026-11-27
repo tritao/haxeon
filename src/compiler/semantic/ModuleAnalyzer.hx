@@ -3,6 +3,7 @@ package compiler.semantic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.DiagnosticCode;
 import compiler.core.QualifiedName;
+import compiler.core.StdlibNames;
 import compiler.core.UnresolvedNameKind;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleSourceLoader;
@@ -826,9 +827,10 @@ class ModuleAnalyzer {
 
 	static function isPlatformDependency(path:String):Bool {
 		var root = QualifiedName.first(path);
-		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math"
-			|| root == "Reflect"
-			|| root == "Std" || root == "StringTools" || root == "Type";
+		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String"
+			|| root == StdlibNames.MATH
+			|| root == StdlibNames.REFLECT
+			|| root == StdlibNames.STD || root == StdlibNames.STRING_TOOLS || root == "Type";
 	}
 
 	static function mergeChanges(target:Map<String, Bool>, source:Map<String, Bool>):Void

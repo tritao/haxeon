@@ -45,6 +45,7 @@ import compiler.modules.ModuleSourceLoader;
 import compiler.semantic.SemanticWorkspace;
 import compiler.ffi.FfiRegistry;
 import compiler.ffi.FfiRegistry.FfiConfiguration;
+import compiler.core.StdlibNames;
 
 /** Public alias for a host-native declaration accepted by the compiler. */
 typedef NativeFunction = NativeDefinition;
@@ -483,14 +484,12 @@ class Compiler {
 		var wasm = BackendTargets.isWasm(backendTarget),
 			names = [
 				for (name in sourceLoader.standardModuleNames())
-					if (wasm || !StringTools.startsWith(name, WASM_HOST_PACKAGE)) name
+					if (wasm || !StringTools.startsWith(name, StdlibNames.WASM_HOST_PACKAGE)) name
 			];
 		for (name in names)
 			sourceLoader.load(name, modules);
 		return names;
 	}
-
-	static inline final WASM_HOST_PACKAGE = "haxeon.wasm.";
 
 	public function compact(entryModule:String):CompileResult {
 		refreshEmbeddedInputs();

@@ -1,6 +1,7 @@
 package compiler.runtime;
 
 import compiler.core.InternalError;
+import compiler.core.StdlibNames;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 
@@ -13,35 +14,6 @@ import compiler.types.Type.NominalKind;
  * covered by an end-to-end runtime test.
  */
 class RuntimeType {
-	public static inline final OBJECT_MAP = "haxe.ds.ObjectMap";
-	public static inline final SPECIALIZED_MAP = "haxeon.collections.HashMap";
-
-	/** The operators whose operand is Dynamic, which the typer calls where an operand is Dynamic. */
-	public static inline final DYNAMIC_OPS = "haxeon.DynamicOps";
-
-	/** Field access and method calls on a Dynamic value, and its copy into an anonymous structure, call `Reflect`. */
-	public static inline final REFLECT = "Reflect";
-
-	/** `Std.string`, which converts a Float or a Dynamic value to a String. */
-	public static inline final STD = "Std";
-
-	/** The bits of a Float, which a generated hash of a Float reads as an Int64. */
-	public static inline final FLOAT_BITS = "runtime.FloatBits";
-
-	public static inline final INT64 = "haxe.Int64";
-
-	/** The interface an observable class implements, and the reactive runtime its generated field access calls. */
-	public static inline final OBSERVABLE = "Observable";
-
-	public static inline final OBSERVABLE_SOURCE = "haxeon.reactive.ObservableSource";
-	public static inline final REACTIVE_RUNTIME = "haxeon.reactive.ReactiveRuntime";
-
-	/** The stdlib module that implements `String.fromCharCode` in Haxe on a target whose runtime does not (Wasm). */
-	public static inline final STRING_CODES = "haxe.StringCodes";
-
-	/** `String.fromCharCode` in `STRING_CODES`, which the typer calls where that module defines it. */
-	public static inline final STRING_FROM_CHAR_CODE = "haxe.StringCodes.fromCharCode";
-
 	/** An intrinsic `Std`'s body calls (`Std.int` of a Float), registered with the compiler's other intrinsics or not at all. */
 	static inline final STD_INTRINSIC = "__std_int_f64";
 
@@ -57,18 +29,19 @@ class RuntimeType {
 		var intrinsics = hasNative(STD_INTRINSIC);
 		var modules = [
 			for (module in [
-				SPECIALIZED_MAP,
-				DYNAMIC_OPS,
-				REFLECT,
-				STD,
-				FLOAT_BITS,
-				INT64
+				StdlibNames.HASH_MAP,
+				StdlibNames.DYNAMIC_OPS,
+				StdlibNames.REFLECT,
+				StdlibNames.STD,
+				StdlibNames.FLOAT_BITS,
+				StdlibNames.INT64
 			])
-				if (intrinsics || (module != DYNAMIC_OPS && module != REFLECT && module != STD)) module
+				if (intrinsics || (module != StdlibNames.DYNAMIC_OPS && module != StdlibNames.REFLECT
+				&& module != StdlibNames.STD)) module
 		];
 		// Only targets without native dynamic objects allocate the stdlib's class for a Dynamic object literal.
 		if (wasm)
-			modules.push(PlatformAbi.DYNAMIC_OBJECT_CLASS);
+			modules.push(StdlibNames.DYNAMIC_OBJECT);
 		return modules;
 	}
 
@@ -79,40 +52,28 @@ class RuntimeType {
 	 */
 	public static function companionModules(module:String):Array<String>
 		return switch module {
-			case OBSERVABLE: [OBSERVABLE_SOURCE, REACTIVE_RUNTIME];
-			case "KeyValueIterable": [ArrayLibrary.CLASS_NAME, MapLibrary.CLASS_NAME];
-			case "Map": [OBJECT_MAP];
+			case StdlibNames.OBSERVABLE: [StdlibNames.OBSERVABLE_SOURCE, StdlibNames.REACTIVE_RUNTIME];
+			case "KeyValueIterable": [StdlibNames.ARRAY_METHODS, StdlibNames.MAP_METHODS];
+			case "Map": [StdlibNames.OBJECT_MAP];
 			default: PlatformAbi.implementationModules(module);
 		};
 
 	/** The implicit ObjectMap implementation uses Std, which requires the compiler intrinsics. */
 	public static function hasCompanion(module:String, hasNative:String->Bool):Bool
-		return module != OBJECT_MAP || hasNative(STD_INTRINSIC);
+		return module != StdlibNames.OBJECT_MAP || hasNative(STD_INTRINSIC);
 
 	/**
-	 * Whether the graph adds `module` before typing when typing can call it: a program module, a companion, or `STRING_CODES`, which
+	 * Whether the graph adds `module` before typing when typing can call it: a program module, a companion, or `haxe.StringCodes`, which
 	 * the dependency scan adds where a source names `String.fromCharCode`. Typing may call no other module the source does not name.
 	 */
 	public static function isTypedDependency(module:String):Bool {
-		if (module == STRING_CODES || programModules(true, _ -> true).indexOf(module) >= 0)
+		if (module == StdlibNames.STRING_CODES || programModules(true, _ -> true).indexOf(module) >= 0)
 			return true;
-		for (owner in [OBSERVABLE, PlatformAbi.BYTES, "KeyValueIterable", "Map"])
+		for (owner in [StdlibNames.OBSERVABLE, StdlibNames.BYTES, "KeyValueIterable", "Map"])
 			if (companionModules(owner).indexOf(module) >= 0)
 				return true;
 		return false;
 	}
-
-	/** The class whose statics turn a thrown value into what a catch clause tests (`TypedCatchSubject`). */
-	public static inline final EXCEPTION = "haxe.Exception";
-
-	/** What a switch over a closed set throws for a value none of its cases name (`BodyTyper.unmatchedValue`). */
-	public static inline final UNMATCHED_VALUE = "haxeon.UnmatchedValue";
-
-	/** `haxe.Exception.caught(value)`: the thrown exception, or a `haxe.ValueException` wrapping any other value. */
-	public static inline final EXCEPTION_CAUGHT = "haxe.Exception.caught";
-
-	/** `haxe.Exception.caughtValue(value)`: what `caught(value).unwrap()` gives, without wrapping a value that is no exception. */
-	public static inline final EXCEPTION_CAUGHT_VALUE = "haxe.Exception.caughtValue";
 
 	/** Nullary enum keys use their existing integer representation in the generic map. */
 	public static function specializedMapKey(key:CompilerType):CompilerType
