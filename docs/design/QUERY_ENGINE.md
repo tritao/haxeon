@@ -257,15 +257,15 @@ Everything below keeps results across builds outside the engine. Lines are the f
 |---|---|---|---|---|
 | `IrStageMemo`, `IrStageMemos`, `IrStageEntry` | 526 (the file, with `IrLineage` and the contribution memos) | stage and function slot; input version, fact reads, output, summary, helper requests; dropped when the stage's last run did not use it | `IrFunctionStages.run`, the ~25 `IrFunctionPass` stages | a computed kind per stage, keyed by function symbol; done for every per-function stage (slice 3) and the inliner (slice 5) |
 | ~~`IrLineage`, `IrFunctionSlots`~~ | (above), 95 | slot → function object and version; a version is never given twice; slots swept when cells exceed twice the functions | every stage (`settle`, `versionOf`), `IrStage` | done (slice 3): a version is the function object's own number (`IrFunction.version`), settling is early cutoff in the stages' kinds |
-| `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests); the passes' facts are done (slice 3: `IrStageFacts`, `IrFactReader` reads it), the inliner's (slice 5); `IrFacts` stays for verification (6) and lowering (7) |
+| `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests); the passes' facts are done (slice 3: `IrStageFacts`, `IrFactReader` reads it), the inliner's (slice 5); verification's (slice 6); `IrFacts` stays for lowering (7) |
 | Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemos.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the requests and enum mentions done (summaries, slice 3), the walk summaries done (`IrWalkMemo`), the enum dispatch's encodings a kind by type id; `lastResult` and the memos the choices and escape reaches read done (slice 4, steps); the inliner's done (slice 5: its call edges a step's summaries, its forms a kind); the array types and the value array lane check done ("The value array rewrite as built"); left: the runtime needs, closure uses, initialization calls and stores (4), the verifier's (6) |
-| `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | a kind per walk (`IrWalkMemo`); done for the walks before the encode point (slice 3) and past it (slice 4, steps); the record stays for `HlPlainBuild` (6) |
+| `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | a kind per walk (`IrWalkMemo`); done for the walks before the encode point (slice 3), past it (slice 4, steps) and the plain build's (slice 6); the record is gone |
 | Reuse code inside passes | ~750 lines naming the above in 49 files; est. 1,000–1,400 with the code around them | — | — | query declarations (est. a third of it); fact reads stay as engine reads |
 | ~~`IrGeneratedFunctions` (structure printers, initializers)~~ | 95 | key and identity of the input objects; swept when untouched | `FrontendCompilation`, `IrProgramAssembler` | done (slice 2): results in the generation kind with their reads |
 | ~~`objectCache`, `canonicalObjectCache` (`SessionState`)~~ | ~40 in `FrontendCompilation` | class name; while the declaration is unchanged | frontend, walks' table copies | done (slice 2): objects by name in a computed kind, one made the same is last build's; the object set stays state (below) |
-| `IrFunctionMemo` and its users: ~~`irTypeMentions`, `irCalls`, `staticReferences`~~, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo` | 46; 41 (`HlFunctionSummaries`), ~12, ~25 | `IrFunction` identity; one build past last use | frontend, `StaticInitializationOrder`, `RuntimeAbi`, `IrReachability`, `HlLower`, `IrNonNullFields` | contribution queries; the frontend's three are (slice 2) |
+| ~~`IrFunctionMemo` and its users: `irTypeMentions`, `irCalls`, `staticReferences`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`~~ | 46; 41 (`HlFunctionSummaries`), ~12, ~25 | `IrFunction` identity; one build past last use | frontend, `StaticInitializationOrder`, `RuntimeAbi`, `IrReachability`, `HlLower`, `IrNonNullFields` | contribution queries; the frontend's three are (slice 2), the backend's (slice 6: `IrFunctionValues`, `HlFunctionQueries`) |
 | `IrSourceRehash`, `irSources` | 130 | function → file hashes its locations name | frontend | gone with relative positions (the hash is added at encode), else a derived query |
-| `IrVerifyMemo` | 190 | function name → function and answer facts | `IrVerifier` | computed query per function |
+| ~~`IrVerifyMemo`~~ | 190 | function name → function and answer facts | `IrVerifier` | computed query per function; done (slice 6: a stage of the driver, `IrVerifyStage`) |
 | `IrInlineCache` and the inliner's memo plumbing | ~170, ~100 | name → original body, instrumented form, published form, object facts, positional prints; maps replaced per run | `IrInliner`, `Compiler` (published) | inlined form per function; done (slice 5: a kind of forms, the components a step, the original bodies gone); `published`, the instrumented forms and the positional prints stay, live state |
 | `PipelineSnapshot` | 157 | tables' encoding, functions' identity, environment text; last plain build | `CompilationPipeline`, backends | the root query (final IR, module) verifies; deleted with its check |
 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts | 83, 45, 162 | name and lowering environment; the build's entries; facts never swept | `HlLower` | computed query per function: relocatable code, reading object facts as engine reads |
@@ -337,7 +337,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 | 3 | Assembly stages before the encode point; **done** (below, two parts): the stage driver for every per-function stage, facts as a kind, the lineage gone; held keys visited only when their facts changed; the walks, requests and mentions before the encode point on the engine | −2,000 / +500; first part built −~700 / +~650 (below) | `IrStageMemo`, `IrLineage`, `IrFacts`, `IrFactReader`, `IrFunctionSlots`, `IrWalkRecord`, contribution memos, memo paths of `IrFunctionStages` and `IrStage`; first part: `IrLineage`, `IrFunctionSlots`, the stage memos of the per-function stages, the memo paths of `IrFunctionStages` and `IrStage` | 0.05 / 0.4 / 0.05; first part: body edit −0.7%, no-op 0, signature edit +0.5% | 2 |
 | 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4); two parts built (below) | −400 / +250; built −401 / +508 and −53 / +257 | their whole-program rereads | 0.2 / 1.2 / 0.2; built 0.11 / 0 / not measured and 0.02 / 0.39 / not measured | 3 |
 | 5 | Inliner; **done** (below) | −300 / +150; built −739 / +545 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A; built 0.06 / 0.06 / not measured | 4 |
-| 6 | Verification and final-IR summaries | −450 / +100 | `IrVerifyMemo`, `IrFunctionMemo`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, plain-build reach record | 0.1 / 0.3 / 0.05 | 5 |
+| 6 | Verification and final-IR summaries; **done** (below) | −450 / +100; built −754 / +861 | `IrVerifyMemo`, `IrFunctionMemo`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, plain-build reach record | 0.1 / 0.3 / 0.05; built 0.04 / 0.06 / not measured | 5 |
 | 7 | Lowering, debug metadata and encoding as queries; root query | −850 / +300 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts, `HlDebugMetadataCache`, `HlWriterCache` encodings, `PipelineSnapshot`, Wasm module reuse | small; no-op must stay at 0.29 s | B, 6 |
 
 B touches only `hl/` and can land beside 1–3. The largest part of the signature edit, typing and IR generation (6.8G), is
@@ -1036,6 +1036,79 @@ Left, each about 1 ms per element type and build: the resolution of the helpers 
 (`IrEnumTagLowering.resolveGenerated`, whose escape rewrite indexes the program's functions, objects and adapters) runs on the helpers
 made fresh before their derived memos keep last build's; a held helper needs the adapters its resolution added, so skipping it
 needs those adapters replayed as requests. And the element's layout and registries are made every build.
+
+### Slice 6 as built
+
+Verification and the HashLink backend's steps over the final IR are on the session's database.
+
+- **Verification is a per-function stage** (`IrVerifyStage`, run by the stage driver, `IrFunctionStages.run`): the check of a
+  function is the memo of the stage's kind, and its reads are facts of the verifier's space of `IrStageFacts`, one per table entry
+  a check reads (`IrVerifyProgram`: a signature, an object, an interface, an enum, a global, a scalar function, a carrier slot, a
+  physical value, a closure cast) and one for what the inline enum check reads besides the function. The program-level checks run in
+  full every build (`IrVerifier.prepare`). A fact's value is a number that keeps while its answer is the same part by part as the
+  one it was last worked out from, and changes otherwise (`IrVerifyAnswers`, by fact, the session's; `IrFactSource.factOf` gives a
+  source the value it had): no text of an answer is made. A held function is taken without reading its facts when none changed
+  since the stage's last run, as every stage's is. A compile that keeps no session verifies everything and records nothing.
+- **What a step reads of one final function is a kind of the database** (`IrFunctionValues`, by the number of the function's name):
+  the ABI text of a function (`RuntimeAbi.describe`), the runtime natives its rows call (`HlLower.discoverRuntimeNatives`), its field
+  stores (`IrNonNullFields`), its form with the shared runtime calls (`IrSharedRuntimeCalls`), each held while the function is the
+  same object (`IrFunction.version`). Nothing reads such a value through the database, so the kind keeps three columns by key, the
+  value, the version and the last revision it was asked for, which its sweep reads; a rollback leaves them, as a value is right for
+  its function whichever build made it. The enums a function may need boxed descriptors of are a summary
+  (`IrContributionSummary`, `hl-enum-uses`).
+- **The runtime ABI's declarations** (objects, interfaces, enums) keep their text while each is the same object
+  (`RuntimeAbiTexts`), and a table equal to the last description's is that table, found without building a map.
+- **The plain build's walk and trim are a step** (`HlFunctionQueries.plainReach`, an `IrWalkMemo` whose summary of a function is
+  `IrBodyEdges`), whose names a build takes while no key it read changed: the tables, the entry, each function's role, the summaries
+  and signatures of the functions it reached. A function in blocks names itself in its edges, which then equal only its own.
+- **A walk makes a function's summary the first time a walk reads it** (`IrWalkMemo.summary`), not as it settles: a function no walk
+  reached has none, so the walks keep no summaries of unreached functions, and a function given as another object is compared
+  only when a walk read the old one.
+- **A compile that keeps no session keeps none of it**: the backend is given no queries (`HashLinkBackendSession.assemble`), and the
+  stage memos are off as before, so the one-shot compile walks, describes and verifies without recording.
+
+The HashLink steps' kinds are one object the session state's copies share (`HlFunctionQueries`, `SessionState.hlFunctions`), which
+the backend gives the assembler and the lowering (`HlModuleAssembler.queries`); `HlLoweredCache` keeps only the lowered functions,
+their requests and facts, the tables and the sections.
+
+Deleted: `IrVerifyMemo` (and `Compiler.verifyMemo`, `SessionState.verifyMemo`, `IrPipelineContext.verifyMemo`), `IrFunctionMemo`,
+`HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, `IrWalkRecord`; `IrVerifyMemoMain` is `IrVerifyStageMain`, the same
+cases on the stage.
+
+Design changes from the plan, with the reasons:
+
+- **The verifier is a stage of the driver, not a query of its own.** A check reads facts and gives back its function, which is
+  what the driver's kind holds; its held path and its marking of the readers of changed facts are the per-function stages'.
+- **A function made again equal is checked again.** The memo compared a new function with the one it accepted
+  (`IrFunctionStateEquality.same`) and skipped it when equal; the stage verifies a function the inliner made again, which reads the
+  function once, as the comparison did.
+- **The non-null fields are not a step.** Holding the table while no contribution changed (an `IrWalkMemo` over the field stores)
+  saved about 0.02G on the body edit, but the step's columns and the table it kept added about 1 MB of live data to the server; the
+  contributions are kept and the table is combined every build.
+- **`IrFunctionValues` is not a computed kind.** Its first version kept the values in a `ComputedQueryKind`, whose revisions and
+  reads columns nothing used: 0.3 MB of live data per kind more than the lean columns. Its sweep runs only when a key gained a value
+  since the last one; one that ran every build cost the no-op 8M instructions.
+- **Piece 4 of the typer's per-build state is not part of this slice.** Its tables are the publication's (`SessionState.objects`,
+  `irObjects`) and the frontend's prune, which no step over the final IR reads: they first meet the backend's in lowering's object
+  facts (`HlLoweringView`), slice 7.
+
+Measured on the compiler's own sources (perf-guard, one machine, against origin/main measured the same way): the no-op rebuild
+0.529G → 0.528G instructions, the body edit 1.460G → 1.417G (−2.9%), the signature edit 16.743G → 16.687G (−0.3%); allocation of the
+body edit 165.2 → 164.6 MB, of the signature edit 859.2 → 852.8 MB, of the late body edit 183.9 → 177.7 MB; the server's live data
+705.7 → 704.9 MB. The cold self-compile, which now keeps nothing of these steps: 51.48G → 51.27G instructions, allocation 2,270 →
+2,245 MB, live data at the backend 258.4 → 247.7 MB, the tables and IR unchanged. The UI app's live session (census at the last
+build's write) 304.9 → 304.8 MB, the small project's unchanged (7.9 MB). A cold small-project build costs 0.1% more on the VM
+(11.43G → 11.44G instructions, the check 11.04G → 11.05G: more classes to compile at startup) and the same ahead of time (1.552G →
+1.548G), allocating within 0.2%. The self-compile is byte-identical, warm builds equal fresh ones with and without
+`--check-reuse`, the edit replay and the test driver pass.
+
+The plan's estimate was not reached: the body edit's 0.1G assumed the verifier memo and the identity maps cost more than they did.
+What a held function cost them was a few lookups each; what is left of the steps on that edit is their whole-program part, the
+non-null fields' combination and the plain program's copy among it.
+
+Lines in `src/`: 754 deleted and 861 added, against the estimated −450 / +100: the verifier's split into the program's part and the
+function's (`IrVerifier.prepare`, `IrVerifyProgram`, about 150 lines moved), the stage and its answers (about 120), the kinds over the
+final IR and their holder (about 160), and the runtime ABI's kept texts (about 80, beyond the plan).
 
 ## Prior art
 

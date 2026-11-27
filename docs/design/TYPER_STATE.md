@@ -66,7 +66,9 @@ estimate from the phase times above, to be measured per piece.
 
 ## Decided
 
-- Piece 4 lands with engine slices 6 and 7, which hold the same object tables.
+- Piece 4 lands with engine slices 6 and 7, which hold the same object tables. Slice 6 shares none of them: its steps read the
+  final IR's tables, which the publication's (`SessionState.objects`, `irObjects`) first meet in lowering's object facts
+  (`HlLoweringView`), so piece 4 lands with slice 7 ([QUERY_ENGINE.md](QUERY_ENGINE.md), "Slice 6 as built").
 - Piece 1 keys by module parse: a module's re-parse replaces all its `AstFunction` nodes, so a finer key would gain nothing.
 
 ## As built
