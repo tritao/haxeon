@@ -31,35 +31,11 @@ enum NativeKitError {
 	/** The surface was lost, as when its window closed or its device was reset. */
 	SurfaceLost;
 
-	/** A decoder or parser refused its input. */
+	/** The content given is malformed, or in a format the operation does not read (a decoder refused it). */
 	InvalidData(reason:String);
 
-	/** A host name did not resolve. */
-	HostNotFound;
-
-	/** A connection could not be made, or broke. */
-	ConnectionFailed(reason:String);
-
-	/** A connection or a request took longer than its deadline. */
-	TimedOut;
-
-	/** The TLS handshake or a certificate check failed. */
-	TlsFailed(reason:String);
-
-	/** The peer broke the protocol (HTTP, or the transport's framing). */
-	ProtocolViolation(reason:String);
-
-	/** The connection was closed. */
-	Closed;
-
-	/** The address to listen on is already in use. */
-	AddressInUse;
-
-	/** A request was redirected more times than allowed. */
-	TooManyRedirects;
-
-	/** The proxy refused or failed the request. */
-	ProxyFailed(reason:String);
+	/** A network operation failed: an HTTP request or a transport's connection. */
+	Network(error:NetworkError);
 
 	/** Any other failure: NativeKit's result `code` and its explanation. */
 	Failed(code:Int, reason:String);
@@ -76,15 +52,7 @@ enum NativeKitError {
 			case OutOfMemory: "out of memory";
 			case SurfaceLost: "surface lost";
 			case InvalidData(reason): explained("invalid data", reason);
-			case HostNotFound: "host not found";
-			case ConnectionFailed(reason): explained("connection failed", reason);
-			case TimedOut: "timed out";
-			case TlsFailed(reason): explained("TLS failed", reason);
-			case ProtocolViolation(reason): explained("protocol violation", reason);
-			case Closed: "closed";
-			case AddressInUse: "address in use";
-			case TooManyRedirects: "too many redirects";
-			case ProxyFailed(reason): explained("proxy failed", reason);
+			case Network(error): error.describe();
 			case Failed(code, reason): explained('failed ($code)', reason);
 		}
 

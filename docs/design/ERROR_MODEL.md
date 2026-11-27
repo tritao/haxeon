@@ -135,9 +135,9 @@ ui's argument checks, stay exceptions. Other APIs change when they are next work
   `InvalidRequest`, `BufferTooSmall`, and the GPU's `WrongState` and `BufferOverflow`. Any other code is the
   environment's answer, an error enum's case: `NativeKitError` (`Unsupported(reason)`, `NotFound`,
   `PermissionDenied(reason)`, `Cancelled`, `Busy`, `TooLarge`, `OutOfMemory`, `SurfaceLost`, `InvalidData(reason)`,
-  the network's `HostNotFound`, `ConnectionFailed(reason)`, `TimedOut`, `TlsFailed(reason)`,
-  `ProtocolViolation(reason)`, `Closed`, `AddressInUse`, `TooManyRedirects`, `ProxyFailed(reason)`, and `Failed(code,
-  reason)` for the rest) and `GpuError` (`Unsupported(reason)`, `DeviceLost`, `OutOfMemory`, `Failed(code, reason)`).
+  `Network(NetworkError)` for an HTTP request's or a transport's failure (`HostNotFound`, `ConnectionFailed(reason)`,
+  `TimedOut`, `TlsFailed(reason)`, `ProtocolViolation(reason)`, `Closed`, `AddressInUse`, `TooManyRedirects`,
+  `ProxyFailed(reason)`), and `Failed(code, reason)` for the rest) and `GpuError` (`Unsupported(reason)`, `DeviceLost`, `OutOfMemory`, `Failed(code, reason)`).
   NativeKit keeps the two apart at the source: `INVALID_ARGUMENT` is only ever the caller's mistake, content a decoder
   cannot read is `INVALID_DATA`, and a path with nothing there is `NOT_FOUND`. These return a `Result`: platform
   requests, the audio device (`Mixer.configureDevice`, `startDevice`, `restartDevice`, `DspEngine.attachToDevice`),

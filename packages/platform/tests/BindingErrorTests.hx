@@ -1,5 +1,7 @@
 import haxeon.platform.BindingError;
 import haxeon.platform.BindingErrorKind;
+import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import haxeon.platform.PlatformError;
 import haxeon.platform.event.EventBytes;
 import haxeon.platform.interop.TransportInterop;
@@ -27,6 +29,17 @@ class BindingErrorTests {
 			backend = error.kind == BindingErrorKind.Disposed && error.operation == "TransportInterop.receive"
 				&& error.diagnostic != null && error.diagnostic.indexOf("NativeKit result -3") >= 0;
 		}
-		return argument && malformed && base && backend;
+		// An environment's answer is an error case: a network failure under Network, content under InvalidData.
+		var answers = NativeKitStatus.error(Result.HttpDns, "test", null).match(Network(HostNotFound))
+			&& NativeKitStatus.error(Result.TransportClosed, "test", null).match(Network(Closed))
+			&& NativeKitStatus.error(Result.HttpTls, "test",
+			"bad certificate").match(Network(TlsFailed("bad certificate")))
+			&& NativeKitStatus.error(Result.HttpCanceled, "test", null).match(Cancelled)
+			&& NativeKitStatus.error(Result.ErrorInvalidData, "test", "not audio").match(InvalidData("not audio"))
+			&& NativeKitStatus.error(Result.HttpDns, "test", null).describe() == "host not found";
+		var misuse = false;
+		try _ = NativeKitStatus.error(Result.ErrorInvalidArgument, "test", null) catch (error:BindingError)
+			misuse = error.kind == BindingErrorKind.InvalidArgument;
+		return argument && malformed && base && backend && answers && misuse;
 	}
 }

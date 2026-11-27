@@ -104,8 +104,9 @@ NativeKit's result codes come in two kinds. A code that is the program's mistake
 handle, the wrong thread, a call before initialization) throws a `BindingError`, as the managed argument,
 lifecycle and event-data checks do (domain `haxeon-bindings`, `kind` `InvalidArgument`, `InvalidState`,
 `Disposed` or `InvalidData`). Any other code is the environment's answer, a `NativeKitError` case
-(`Unsupported`, `NotFound`, `PermissionDenied`, `SurfaceLost`, the network's `HostNotFound`,
-`ConnectionFailed`, `TimedOut`, ..., and `Failed(code, reason)`): what a request's or a setup call's `Result`
+(`Unsupported`, `NotFound`, `PermissionDenied`, `SurfaceLost`, `InvalidData`, `Network(NetworkError)` for an
+HTTP request's or a transport's failure (`HostNotFound`, `ConnectionFailed`, `TimedOut`, ...), and
+`Failed(code, reason)`): what a request's or a setup call's `Result`
 holds as its `Err`, and what a `NativeKitException` carries where an API throws instead. `NativeKitStatus`
 tells the two apart for the packages built on NativeKit; GPU statuses work the same way with `GpuError` and
 `GpuException`. `BindingError`, `NativeKitException` and `GpuException` extend `PlatformError`, which exposes

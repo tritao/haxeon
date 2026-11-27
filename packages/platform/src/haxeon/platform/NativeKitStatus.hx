@@ -66,15 +66,15 @@ class NativeKitStatus {
 				TooLarge;
 			case NativeResult.ErrorOutOfMemory: OutOfMemory;
 			case NativeResult.ErrorSurfaceLost: SurfaceLost;
-			case NativeResult.HttpDns, NativeResult.TransportDns: HostNotFound;
-			case NativeResult.HttpConnection, NativeResult.TransportConnection: ConnectionFailed(reason);
-			case NativeResult.HttpTimeout, NativeResult.TransportTimeout: TimedOut;
-			case NativeResult.HttpTls: TlsFailed(reason);
-			case NativeResult.HttpProtocol, NativeResult.TransportProtocol: ProtocolViolation(reason);
-			case NativeResult.TransportClosed: Closed;
-			case NativeResult.TransportAddressInUse: AddressInUse;
-			case NativeResult.HttpRedirect: TooManyRedirects;
-			case NativeResult.HttpProxy: ProxyFailed(reason);
+			case NativeResult.HttpDns, NativeResult.TransportDns: Network(HostNotFound);
+			case NativeResult.HttpConnection, NativeResult.TransportConnection: Network(ConnectionFailed(reason));
+			case NativeResult.HttpTimeout, NativeResult.TransportTimeout: Network(TimedOut);
+			case NativeResult.HttpTls: Network(TlsFailed(reason));
+			case NativeResult.HttpProtocol, NativeResult.TransportProtocol: Network(ProtocolViolation(reason));
+			case NativeResult.TransportClosed: Network(Closed);
+			case NativeResult.TransportAddressInUse: Network(AddressInUse);
+			case NativeResult.HttpRedirect: Network(TooManyRedirects);
+			case NativeResult.HttpProxy: Network(ProxyFailed(reason));
 			case _: Failed(status.rawValue, reason);
 		}
 	}
