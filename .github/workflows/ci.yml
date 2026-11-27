@@ -134,6 +134,8 @@ jobs:
           cmake --build out/cmake/windows-msvc --target haxeon-command
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:HAXEON_NATIVE_READY = "1"
+          # A session directory of the step's own, so a failure can show the workers it started and their logs.
+          $env:HAXEON_COMPILER_SESSION_DIR = Join-Path $env:RUNNER_TEMP "compiler-sessions"
           $haxeon = (Resolve-Path ./scripts/haxeon.ps1).Path
           $project = Join-Path $env:RUNNER_TEMP "compile-server"
           New-Item -ItemType Directory -Force -Path $project | Out-Null
@@ -142,6 +144,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $haxeon build --verbosity=normal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $workers = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'serve|CompilerServer' } |
+            ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" } | Out-String
+          $sessions = Get-ChildItem $env:HAXEON_COMPILER_SESSION_DIR -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Name) $($_.Length)" } | Out-String
           (Get-Content src/Main.hx -Raw) -replace 'Hello', 'Hello again' | Set-Content src/Main.hx
           $second = & $haxeon build --verbosity=normal 2>&1 | Out-String
           $status = $LASTEXITCODE
@@ -149,6 +154,12 @@ jobs:
           Write-Output $second
           if ($status -ne 0) { exit $status }
           if ($second -notmatch 'reusing compiler session') {
+            Write-Output "Workers after the first build:`n$workers"
+            Write-Output "Session directory after the first build:`n$sessions"
+            Get-ChildItem $env:HAXEON_COMPILER_SESSION_DIR -Filter *.json -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Output "== $($_.Name)"; Get-Content $_.FullName }
+            Get-ChildItem $env:HAXEON_COMPILER_SESSION_DIR -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Output "== $($_.Name)"; Get-Content $_.FullName -Tail 40 }
             Write-Error "The second build did not reuse the compile server"
             exit 1
           }
