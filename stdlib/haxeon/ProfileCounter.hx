@@ -2,6 +2,9 @@ package haxeon;
 
 /** Program-defined counters recorded in a HashLink diagnostics profiler capture; each name becomes its own counter track. */
 class ProfileCounter {
+	/**
+	 * Records `value` for the counter `name` at this moment. Without a capture running, and on Wasm, it does nothing.
+	 */
 	public static function set(name:String, value:Float):Void {
 		nativeProfileCounter(name, value);
 	}

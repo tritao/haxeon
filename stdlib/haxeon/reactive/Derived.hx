@@ -7,6 +7,7 @@ class Derived<T> extends ReactiveDependencySet {
 	var initialized:Bool = false;
 	var computing:Bool = false;
 
+	/** A value `compute` gives, computed on its first read and again on a read after something it read changed. */
 	public function new(compute:Void->T) {
 		super();
 		if (compute == null)
@@ -14,6 +15,10 @@ class Derived<T> extends ReactiveDependencySet {
 		this.compute = compute;
 	}
 
+	/**
+	 * The current value, computed first when it is not current. Reading it inside a tracked computation makes that
+	 * computation depend on it. Throws what `compute` throws, and for a computation that reads its own value.
+	 */
 	public var value(get, never):T;
 	function get_value():T {
 		if (computing) throw new DerivedCycleError();
@@ -55,6 +60,7 @@ class Derived<T> extends ReactiveDependencySet {
 		}
 	}
 
+	/** Drops the value's dependencies, so changes to them no longer reach it. */
 	public function dispose():Void
 		clearDependencies();
 }

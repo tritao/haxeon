@@ -2,12 +2,14 @@ package haxeon.reactive;
 
 /** A versioned source with intrusive links to the computations that read it. */
 class ReactiveSource {
+	/** A counter that advances each time the source changes. */
 	public var version(default, null):Int = 0;
 	@:allow(haxeon.reactive.ReactiveDependencySet)
 	@:allow(haxeon.reactive.ReactiveIdentityIndex)
 	final identityHash:Int;
 	var observerHead:ReactiveEdge;
 
+	/** A source nothing reads yet. */
 	public function new() identityHash = ReactiveHash.next(this);
 
 	/** Ordinary reactive sources have one dependency; Observable sources have field bits. */
@@ -78,6 +80,7 @@ class ReactiveSource {
 		}
 	}
 
+	/** Whether a computation depends on the field `fieldBit` of this source. */
 	public function hasFieldReaders(fieldBit:Int):Bool {
 		var edge = observerHead;
 		while (edge != null) {

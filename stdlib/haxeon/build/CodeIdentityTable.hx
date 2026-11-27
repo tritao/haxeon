@@ -6,10 +6,12 @@ package haxeon.build;
  * themselves are made by `compiler.modules.CodeIdentityTable`. Read it through `CodeIdentity`.
  */
 class CodeIdentityTable {
+	/** The table as the compiler wrote it: one `module<TAB>identity` line per module. */
 	public static final data:String = /*IDENTITY-BEGIN*/"" /*IDENTITY-END*/;
 
 	static var index:Null<Map<String, String>>;
 
+	/** The code identity of the module `name`, or null when the program was not built from it. */
 	public static function lookup(name:String):Null<String> {
 		var known = index;
 		if (known == null) {

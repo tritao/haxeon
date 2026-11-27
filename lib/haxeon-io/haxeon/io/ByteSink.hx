@@ -22,6 +22,7 @@ class ByteSink {
 	var used = 0;
 	var nextChunk:Int = FIRST_CHUNK;
 
+	/** An empty sink. */
 	public function new() {}
 
 	/** Bytes written so far. */
@@ -50,6 +51,7 @@ class ByteSink {
 		}
 	}
 
+	/** Writes the byte `value`, its low 8 bits. */
 	public function writeByte(value:Int):Void {
 		room();
 		chunk.set(used++, value);
@@ -104,6 +106,7 @@ class ByteSink {
 		}
 	}
 
+	/** Writes `value` as 4 bytes, little-endian. */
 	public function writeInt32(value:Int):Void {
 		scratch.set(0, value & 0xFF);
 		scratch.set(1, (value >> 8) & 0xFF);
@@ -112,6 +115,7 @@ class ByteSink {
 		writeBytes(scratch, 0, 4);
 	}
 
+	/** Writes `value` as a 64-bit IEEE float, little-endian. */
 	public function writeDouble(value:Float):Void {
 		scratch.setDouble(0, value);
 		writeBytes(scratch, 0, 8);

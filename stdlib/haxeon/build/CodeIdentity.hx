@@ -62,6 +62,7 @@ class CodeIdentity {
 		return Sha256.encode(entries.join("\n"));
 	}
 
+	/** The SHA-256 digest of the file `path`'s bytes, in lowercase hexadecimal. */
 	public static function fileDigest(path:String):String {
 		var digest = Sha256.make(File.getBytes(path)), hex = "";
 		for (index in 0...digest.length)

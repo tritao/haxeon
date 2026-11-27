@@ -18,6 +18,11 @@ class ReactiveRuntime {
 	static var flushHasError:Bool = false;
 	/** Additional failures from the last non-empty flush, after the first error. */
 	public static var lastFlushSuppressedErrors(default, null):Int = 0;
+
+	/**
+	 * A counter `changed` advances, for retained computations outside the dependency graph to tell that something
+	 * changed.
+	 */
 	public static var version(default, null):Int = 0;
 
 	/** A single pending effect needs no first-use backing-store allocation. */
@@ -115,11 +120,18 @@ class ReactiveRuntime {
 		return new TrackingFrame(previous, previousStart, previousCount);
 	}
 
+	/**
+	 * Restores the tracking `enterTracking` returned `frame` from. Call it whether the tracked code succeeded or threw.
+	 */
 	public static function leaveTracking(frame:TrackingFrame):Void {
 		setCollector(frame.previous);
 		finishCreationScope(frame.previousStart, frame.previousCount, frame.previous);
 	}
 
+	/**
+	 * Runs `run` with `collector` recording the sources it reads, and returns its result; the previous tracking comes
+	 * back after, also when `run` throws.
+	 */
 	public static function withTracking<T>(collector:ReactiveCollector, run:Void->T):T {
 		if (run == null) throw "Reactive tracking requires a computation";
 		var frame = enterTracking(collector);

@@ -7,6 +7,7 @@ package haxeon;
 	and shift operators are Int, and the comparisons are Bool.
 **/
 class DynamicOps {
+	/** `left + right`: the strings joined when either is a string, an `Int` when both are, a `Float` otherwise. */
 	public static function add(left:Dynamic, right:Dynamic):Dynamic {
 		if (Std.isOfType(left, String) || Std.isOfType(right, String))
 			return Std.string(left) + Std.string(right);
@@ -17,36 +18,47 @@ class DynamicOps {
 		return number(left) + number(right);
 	}
 
+	/** `left - right`, as `Float`s. */
 	public static function sub(left:Dynamic, right:Dynamic):Float
 		return number(left) - number(right);
 
+	/** `left * right`, as `Float`s. */
 	public static function mul(left:Dynamic, right:Dynamic):Float
 		return number(left) * number(right);
 
+	/** `left / right`, as `Float`s. */
 	public static function div(left:Dynamic, right:Dynamic):Float
 		return number(left) / number(right);
 
+	/** `left % right`, as `Float`s. */
 	public static function mod(left:Dynamic, right:Dynamic):Float
 		return number(left) % number(right);
 
+	/** `-value`, as a `Float`. */
 	public static function neg(value:Dynamic):Float
 		return -number(value);
 
+	/** `left & right`, as `Int`s. */
 	public static function bitAnd(left:Dynamic, right:Dynamic):Int
 		return integer(left) & integer(right);
 
+	/** `left | right`, as `Int`s. */
 	public static function bitOr(left:Dynamic, right:Dynamic):Int
 		return integer(left) | integer(right);
 
+	/** `left ^ right`, as `Int`s. */
 	public static function bitXor(left:Dynamic, right:Dynamic):Int
 		return integer(left) ^ integer(right);
 
+	/** `left << right`, as `Int`s. */
 	public static function shiftLeft(left:Dynamic, right:Dynamic):Int
 		return integer(left) << integer(right);
 
+	/** `left >> right`, as `Int`s, keeping the sign. */
 	public static function shiftRight(left:Dynamic, right:Dynamic):Int
 		return integer(left) >> integer(right);
 
+	/** `left >>> right`, as `Int`s, filling with zeros. */
 	public static function unsignedShiftRight(left:Dynamic, right:Dynamic):Int
 		return integer(left) >>> integer(right);
 
@@ -59,6 +71,7 @@ class DynamicOps {
 		return order != UNORDERED && order < 0;
 	}
 
+	/** `left <= right`; values that do not order compare false. */
 	public static function lessEqual(left:Dynamic, right:Dynamic):Bool {
 		var order = Reflect.compare(left, right);
 		return order != UNORDERED && order <= 0;

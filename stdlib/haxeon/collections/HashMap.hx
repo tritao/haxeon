@@ -3,7 +3,11 @@ package haxeon.collections;
 import Hashable;
 import haxeon.Hashing;
 
-/** Dense entries and open-addressed buckets for keys with declared value equality. */
+/**
+ * A map whose keys are compared by value, through their `Hashable` conformance: two equal keys are one key. Entries are
+ * kept dense, in the order they were added except that removing one moves the last into its place, with open-addressed
+ * buckets over them.
+ */
 class HashMap < K:Hashable, V > {
 	var keySlots:Null<Array<K>>;
 	var valueSlots:Null<Array<V>>;
@@ -11,6 +15,7 @@ class HashMap < K:Hashable, V > {
 	var buckets:Null<Array<Int>>;
 	var occupied:Int;
 
+	/** An empty map. */
 	public function new() {
 		keySlots = null;
 		valueSlots = null;
@@ -53,6 +58,7 @@ class HashMap < K:Hashable, V > {
 		return next;
 	}
 
+	/** Maps `key` to `value`, replacing what an equal key mapped to. */
 	public function set(key:K, value:V):Void {
 		var keys = keySlots, values = valueSlots, currentHashes = hashes, currentBuckets = buckets;
 		if (currentBuckets == null) {
@@ -83,6 +89,7 @@ class HashMap < K:Hashable, V > {
 		currentHashes.push(hash);
 	}
 
+	/** What `key` maps to, or null when it maps to nothing. */
 	public function get(key:K):Null<V> {
 		var at = bucketFor(key, Hashing.hash(key));
 		if (at < 0) return null;
@@ -91,8 +98,10 @@ class HashMap < K:Hashable, V > {
 		return values[currentBuckets[at] - 1];
 	}
 
+	/** Whether `key` maps to a value. */
 	public function exists(key:K):Bool return bucketFor(key, Hashing.hash(key)) >= 0;
 
+	/** Removes `key`. Returns whether it mapped to a value. */
 	public function remove(key:K):Bool {
 		var at = bucketFor(key, Hashing.hash(key));
 		if (at < 0) return false;
@@ -115,6 +124,7 @@ class HashMap < K:Hashable, V > {
 		return true;
 	}
 
+	/** Removes every key. */
 	public function clear():Void {
 		var keys = keySlots, values = valueSlots, currentHashes = hashes, currentBuckets = buckets;
 		if (currentBuckets == null) return;
@@ -126,19 +136,25 @@ class HashMap < K:Hashable, V > {
 		occupied = 0;
 	}
 
+	/** How many keys the map has. */
 	public function size():Int {
 		var keys = keySlots;
 		return keys == null ? 0 : keys.length;
 	}
+
+	/** The keys, in a new array, in entry order. */
 	public function keys():Array<K> {
 		var keys = keySlots;
 		return keys == null ? [] : keys.copy();
 	}
+
+	/** The values, in a new array, in the order of `keys`. */
 	public function values():Array<V> {
 		var values = valueSlots;
 		return values == null ? [] : values.copy();
 	}
 
+	/** A new map with the same keys and values. */
 	public function copy():HashMap<K, V> {
 		var result = new HashMap<K, V>(), keys = keySlots, values = valueSlots;
 		if (keys == null) return result;

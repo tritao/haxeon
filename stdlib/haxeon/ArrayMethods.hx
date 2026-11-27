@@ -7,6 +7,7 @@ package haxeon;
 	means adding a generic function here.
 **/
 class ArrayMethods {
+	/** `values.filter(predicate)`: a new array of the values `predicate` accepts, in order. */
 	public static function filter<T>(values:Array<T>, predicate:T->Bool):Array<T> {
 		var result:Array<T> = [];
 		for (value in values)
@@ -15,6 +16,7 @@ class ArrayMethods {
 		return result;
 	}
 
+	/** `values.map(transform)`: a new array of what `transform` gives for each value, in order. */
 	public static function map<T, S>(values:Array<T>, transform:T->S):Array<S> {
 		var result:Array<S> = [];
 		for (value in values)

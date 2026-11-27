@@ -9,6 +9,7 @@ class Hashing {
 	public static function keyEquals<T:Hashable>(left:T,
 			right:T):Bool throw "Hashing.keyEquals must be lowered by the compiler";
 
+	/** `hash` combined with `value`, as `hash * 31 + value`: what a conformance's hash folds each field into. */
 	public static inline function mix(hash:Int, value:Int):Int
 		return hash * 31 + value;
 }

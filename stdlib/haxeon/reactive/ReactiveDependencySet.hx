@@ -1,6 +1,9 @@
 package haxeon.reactive;
 
-/** Reusable dependency edges for a derived value, effect or retained computation. */
+/**
+ * The sources a computation read, kept from one run to the next: what `Derived` and `Effect` are built on. Each run tracks
+ * the sources it reads, once each, and a change to one of them marks the computation stale.
+ */
 class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector {
 	static inline var Clean:Int = 0;
 	static inline var MaybeStale:Int = 1;
@@ -9,6 +12,9 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	static inline var MaxStamp:Int = 0x7fffffff;
 	static inline var IndexThreshold:Int = 1024;
 
+	/**
+	 * Whether the set only records what a computation reads, for its owner to read back, instead of subscribing to it.
+	 */
 	public final captureOnly:Bool;
 	var readerHead:ReactiveEdge;
 	// The capture-only form has no edge tail and uses this slot for its index.
@@ -30,9 +36,13 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		if (captureOnly) readerTail = index else captureSources = index;
 	}
 
+	/** Whether a source the computation read has changed since it last ran, checked now: `validateIfNeeded`. */
 	public var dirty(get, never):Bool;
+
+	/** Whether a source the computation read has changed since it last ran: `validateIfNeeded`. */
 	public function get_dirty():Bool return validateIfNeeded();
 
+	/** An empty set, subscribing to what is tracked unless `captureOnly`. */
 	public function new(captureOnly:Bool = false) {
 		super();
 		this.captureOnly = captureOnly;
@@ -121,7 +131,13 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		edgeCount++;
 	}
 
+	/** How many sources the set holds. */
 	public function dependencyCount():Int return captureOnly ? pendingCount() : edgeCount;
+
+	/**
+	 * A position in what the set has recorded, to give `truncatePending` later; for a capturing set, it also starts a
+	 * new slice that dependencies are told apart within.
+	 */
 	public function dependencyMarker():Int {
 		if (!captureOnly) return edgeCount;
 		var marker = pendingCount();
@@ -199,6 +215,10 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		return false;
 	}
 
+	/**
+	 * Whether the computation must run again: it is dirty or failed, or a source that may be stale proves changed.
+	 * Marks it clean otherwise.
+	 */
 	public function validateIfNeeded():Bool {
 		if (status == Clean) return false;
 		if (status == Dirty || status == Failed) return true;
@@ -210,9 +230,16 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		return false;
 	}
 
+	/** Whether a source the computation read may have changed, not yet checked. */
 	public function hasMaybeStaleInputs():Bool return status == MaybeStale;
+
+	/** Whether the computation is known to need running again: dirty, or failed last time. */
 	public function isDirtyState():Bool return status == Dirty || status == Failed;
+
+	/** Marks the computation current. */
 	public function markClean():Void status = Clean;
+
+	/** Marks the computation as having failed, so it runs again on its next read. */
 	public function markFailed():Void status = Failed;
 
 	/** Publishes a changed computed value after its dependencies have been refreshed. */
@@ -221,6 +248,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		invalidateReaders();
 	}
 
+	/** Marks the computation as needing to run again, and invalidates what read it. */
 	public function markDirty():Void {
 		if (status == Dirty) return;
 		status = Dirty;
@@ -246,6 +274,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		invalidateReaders();
 	}
 
+	/** Called when a source the computation read may have changed; an `Effect` queues itself here. */
 	public function onMaybeStale():Void {}
 
 	override public function ensureCurrent():Void
@@ -261,15 +290,19 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		finishDependencies();
 	}
 
+	/** How many sources a capturing set has recorded; 0 for a subscribing one. */
 	public function pendingCount():Int
 		return !captureOnly || captureSources == null ? 0 : captureArray().length;
 
+	/** The source a capturing set recorded at `index`. */
 	public function pendingSourceAt(index:Int):ReactiveSource
 		return captureArray()[index];
 
+	/** The field of the source a capturing set recorded at `index`. */
 	public function pendingFieldBitAt(index:Int):Int
 		return captureFieldBits[index];
 
+	/** Forgets what a capturing set recorded after `marker`, a `dependencyMarker`. */
 	public function truncatePending(marker:Int):Void {
 		if (!captureOnly) return;
 		var identityIndex = getIdentityIndex();
@@ -282,6 +315,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		} else captureSliceStart = 0;
 	}
 
+	/** Forgets everything a capturing set recorded. */
 	public function clearPending():Void {
 		if (!captureOnly) return;
 		var identityIndex = getIdentityIndex();
@@ -291,6 +325,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		captureSliceStart = 0;
 	}
 
+	/** Tracks each of this set's sources in `target` too. */
 	public function appendDependenciesTo(target:ReactiveDependencySet):Void {
 		if (captureOnly) {
 			if (captureSources != null) {

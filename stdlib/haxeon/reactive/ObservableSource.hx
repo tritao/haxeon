@@ -3,14 +3,18 @@ package haxeon.reactive;
 /** One lazily allocated dependency source shared by every observable field on an object. */
 class ObservableSource extends ReactiveSource {
 	final fieldLimit:Int;
+
+	/** The source of an object with `fieldCount` observable fields, numbered from 0. */
 	public function new(fieldCount:Int) {
 		super();
 		fieldLimit = fieldCount;
 	}
 
+	/** Records that the running tracked computation read the field `fieldBit`. */
 	public function recordFieldRead(fieldBit:Int):Void
 		ReactiveRuntime.trackField(this, fieldBit);
 
+	/** Invalidates the computations that read the field `fieldBit`. Throws for a field outside the object's. */
 	public function invalidateField(fieldBit:Int):Void {
 		checkRange(fieldBit);
 		if (!hasFieldReaders(fieldBit))

@@ -9,6 +9,7 @@ import haxe.io.Bytes;
  * handed to a `ByteSink` as shared, because several byte strings may refer to them.
  */
 class SegmentedBytes {
+	/** The empty byte string. */
 	public static final EMPTY = new SegmentedBytes([], [], 0);
 
 	/** Total length in bytes. */
@@ -24,9 +25,11 @@ class SegmentedBytes {
 		this.length = length;
 	}
 
+	/** A byte string of the one segment `bytes`, which must not change after. */
 	public static function ofBytes(bytes:Bytes):SegmentedBytes
 		return bytes.length == 0 ? EMPTY : new SegmentedBytes([bytes], [bytes.length], bytes.length);
 
+	/** How many segments the string has. */
 	public var segmentCount(get, never):Int;
 
 	function get_segmentCount():Int
@@ -36,6 +39,7 @@ class SegmentedBytes {
 	public function segmentBytes(index:Int):Bytes
 		return segments[index];
 
+	/** How many bytes of the segment `index` belong to the string, from its start. */
 	public function segmentLength(index:Int):Int
 		return lengths[index];
 

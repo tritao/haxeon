@@ -16,6 +16,7 @@ class Future<T> {
 	@:allow(haxeon.async.Promise)
 	private function new() {}
 
+	/** Calls `callback` with the outcome once the future settles, or now when it has. Returns the future, to chain. */
 	public function onComplete(callback:Outcome<T>->Void):Future<T> {
 		if (callback == null) throw new haxe.Exception("Future callback cannot be null");
 		if (outcome != null) callback(outcome);
@@ -23,8 +24,15 @@ class Future<T> {
 		return this;
 	}
 
+	/** Whether the future has settled: succeeded, failed or been cancelled. */
 	public function isComplete():Bool return outcome != null;
+
+	/**
+	 * Whether `cancel` would make a request: the future is pending, its producer can cancel it, and none was made yet.
+	 */
 	public function canCancel():Bool return outcome == null && cancellation != null && !cancellationRequested;
+
+	/** Whether `cancel` made a request the producer has not yet settled the future for. */
 	public function isCancellationRequested():Bool return cancellationRequested;
 
 	/** Requests cancellation; the producer settles the future. False means no request was made. */

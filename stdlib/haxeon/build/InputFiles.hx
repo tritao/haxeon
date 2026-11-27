@@ -95,35 +95,35 @@ class InputFiles {
 		}
 	}
 
-	public static function bytesRead(path:String, bytes:Bytes):Void
+	internal static function bytesRead(path:String, bytes:Bytes):Void
 		note(path, "bytes", digest(bytes));
 
-	public static function textRead(path:String, text:String):Void
+	internal static function textRead(path:String, text:String):Void
 		note(path, "text", digest(Bytes.ofString(text)));
 
 	/** A read that failed: the file is missing (or unreadable) now, and appearing later must invalidate. */
-	public static function readFailed(path:String):Void {
+	internal static function readFailed(path:String):Void {
 		note(path, "bytes", "missing");
 		note(path, "text", "missing");
 	}
 
-	public static function existsQuery(path:String, result:Bool):Void
+	internal static function existsQuery(path:String, result:Bool):Void
 		note(path, "exists", result ? "1" : "0");
 
-	public static function directoryQuery(path:String, result:Bool):Void
+	internal static function directoryQuery(path:String, result:Bool):Void
 		note(path, "directory", result ? "1" : "0");
 
-	public static function listingRead(path:String, names:Array<String>):Void {
+	internal static function listingRead(path:String, names:Array<String>):Void {
 		var sorted = names.copy();
 		sorted.sort((a, b) -> a < b ? -1 : a > b ? 1 : 0);
 		note(path, "listing", digest(Bytes.ofString(sorted.join("\n"))));
 	}
 
-	public static function listingFailed(path:String):Void
+	internal static function listingFailed(path:String):Void
 		note(path, "listing", "missing");
 
 	/** The program wrote `path`: whatever it reads there afterwards, or before, is its own output. */
-	public static function wrote(path:String):Void {
+	internal static function wrote(path:String):Void {
 		if (isRecording() && written != null) {
 			var full = absolute(path);
 			acquire();
@@ -203,7 +203,7 @@ class InputFiles {
 	}
 
 	/** Whether recording leaves `path` out (the kernel's cache, `/proc`, `/sys`, `/dev`, or a file ignored on purpose). */
-	public static function ignores(path:String):Bool {
+	internal static function ignores(path:String):Bool {
 		if (!isRecording() || ignored == null)
 			return true;
 		var full = absolute(path);
