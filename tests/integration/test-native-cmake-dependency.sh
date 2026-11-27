@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A CMake package built on another's (as UI, audio, credentials and filesystem build on the nativekit package): outside an app's
+# A CMake package built on another's (as UI, audio and credentials build on the nativekit package): outside an app's
 # graph each has its own tree in the shared native cache, the dependent's configure finds the dependency's build with
 # find_package through CMAKE_PREFIX_PATH, the dependency is built once, and the published libraries share one copy of it.
 set -euo pipefail

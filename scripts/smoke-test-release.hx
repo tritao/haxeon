@@ -241,24 +241,22 @@ function appRound(root:String, haxeon:String, projects:String):Void {
 	if (!FileSystem.isDirectory(nativeCache))
 		fail("the native package was not built in the user's cache");
 
-	// A NativeKit module's package (filesystem), whose CMake project builds the module on the nativekit package's build
+	// A NativeKit module's package (credentials), whose CMake project builds the module on the nativekit package's build
 	// that the program above left in the cache.
-	Sys.println("== a program with a NativeKit module's package (filesystem) from the release's registry");
-	// The module confines a root with the kernel's root-relative resolution, and reports Unsupported where the kernel has
-	// none (macOS before it): that is its answer there, not a failure of the package.
-	var module = consoleProject(haxeon, Path.join([projects, "module-program"]), "filesystem",
-		'function main():Int {\n\tvar root:haxeon.filesystem.FileSystemRoot;\n'
-		+ '\ttry root = new haxeon.filesystem.FileSystemRoot(Sys.getCwd()) catch (error:haxeon.platform.NativeKitError) {\n'
-		+ '\t\tif (error.result != nativekit.ffi.NativeKitTypes.Result.ErrorUnsupported) throw error;\n'
-		+ '\t\tSys.println("module program ok unsupported");\n\t\treturn 0;\n\t}\n'
-		+ '\tSys.println("module program ok " + (root.stat("").get_kind() == nativekit.ffi.NativeKitFilesystemTypes.FileSystemEntryKind.Directory));\n'
-		+ '\troot.close();\n\treturn 0;\n}\n');
+	Sys.println("== a program with a NativeKit module's package (credentials) from the release's registry");
+	// Looking up a missing secret runs the module; a machine without a credential store (a headless runner) answers an
+	// error instead, which ran it too.
+	var module = consoleProject(haxeon, Path.join([projects, "module-program"]), "credentials",
+		'function main():Int {\n\ttry {\n'
+		+ '\t\tvar found = haxeon.credentials.Credentials.get("haxeon-release-smoke", "nobody");\n'
+		+ '\t\tSys.println("module program ok " + (found == null));\n'
+		+ '\t} catch (error:haxeon.platform.NativeKitError) {\n\t\tSys.println("module program ok store");\n\t}\n'
+		+ '\treturn 0;\n}\n');
 	must("haxeon build of a program with a NativeKit module's package", haxeon, ["build"], module);
 	output = stdout("haxeon run of a program with a NativeKit module's package", haxeon, ["run", "--quiet"], module);
 	final moduleResult = lastLines(output, 1);
-	if (moduleResult != "module program ok true"
-		&& !(PLATFORM == "macos" && moduleResult == "module program ok unsupported"))
-		fail('the program with filesystem printed: $output');
+	if (moduleResult != "module program ok true" && moduleResult != "module program ok store")
+		fail('the program with credentials printed: $output');
 	var trees = 0;
 	for (entry in FileSystem.readDirectory(nativeCache)) {
 		var directory = Path.join([nativeCache, entry]);

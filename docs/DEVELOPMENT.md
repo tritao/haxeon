@@ -467,7 +467,7 @@ runs, checking that the running program prints the new value and that the edit a
 runner for the platform it also creates the app, whose UI package comes from the release's registry, builds it through its runner
 in development and release mode, running each for three frames with a capture (a C toolchain, and on Linux GTK's development
 files, are needed), patches the app running under `run --watch` (headless under `xvfb-run` on Linux; not on Windows), and
-builds and runs programs with `nativekit` and with `filesystem` from the same registry, checking that NativeKit was built once. It
+builds and runs programs with `nativekit` and with `credentials` from the same registry, checking that NativeKit was built once. It
 checks that no compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler.
 With `--aot` it times the same cold build without `bin/haxeon-aot`, which also exercises the bytecode fallback.
 

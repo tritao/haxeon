@@ -17,8 +17,8 @@ manifest says `"publish": false`; its `publish` section says what a release leav
 ([MANIFEST.md](../docs/reference/MANIFEST.md)). A checkout resolves them from these folders as they are.
 
 Animation is renderer-independent; its optional `animation/native` provider builds glTF/ozz support.
-Audio and GPU depend on platform. NativeKit is built once, by the `nativekit` package; UI builds on it, and audio,
-credentials and filesystem each build their NativeKit module on it (`nativekit_add_module`, in
+Audio and GPU depend on platform. NativeKit is built once, by the `nativekit` package; UI builds on it, and audio and
+credentials each build their NativeKit module on it (`nativekit_add_module`, in
 `nativekit/cmake/NativeKitPackage.cmake`), so a program or app using several of them has one NativeKit core.
 UI depends on platform, GPU, editor and nativekit. The editor
 package is independent of UI and native services. SceneKit remains in Materia,

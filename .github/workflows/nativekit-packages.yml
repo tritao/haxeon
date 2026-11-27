@@ -19,7 +19,6 @@ jobs:
       - name: Check the package bindings no test script checks
         run: |
           ./packages/credentials/tools/update-haxeon-hxi.sh --check
-          ./packages/filesystem/tools/update-haxeon-hxi.sh --check
           ./packages/animation/native/tools/update-haxeon-hxi.sh --check
       - run: ./packages/platform/tools/test-haxe-bindings.sh
 

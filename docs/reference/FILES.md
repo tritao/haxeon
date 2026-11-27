@@ -55,9 +55,34 @@ words.
 `remove` is for "make sure it is gone": there is no need to check that a file exists before removing it, which would
 race with other processes and cost a second call.
 
+## Confined to a directory
+
+`Root.open(path)` opens a directory that nothing reached through it can leave. A root has the same operations as
+`Files`, as methods, with paths relative to it (`.` is the root itself):
+
+```haxe
+import std.fs.Root;
+
+function serve(workspace:String, request:String):Result<String, std.fs.FileError> {
+	var root = try Root.open(workspace);
+	var text = root.readText(request);
+	root.close();
+	return text;
+}
+```
+
+- `..` and absolute paths fail with `EscapesRoot`, as does a symbolic link that leads out of the directory. A link
+  that stays inside is followed.
+- The kernel resolves each path: `openat2` with `RESOLVE_BENEATH` on Linux 5.6 or later, `O_RESOLVE_BENEATH` on
+  macOS. On Windows a path is kept only when it resolved inside the directory, and what an operation creates, deletes
+  or renames is named relative to a directory checked that way.
+- Where the system has none of these, `Root.open` fails with `Unsupported` rather than resolve paths in a way that
+  could leave the directory.
+- The root itself cannot be removed or renamed through it (`PermissionDenied`).
+- A root holds its directory open until `close`, which a `scoped` binding calls at the end of its scope. Using it
+  after that throws.
+
 ## Not yet
 
 - Open files (streams, seeking) and the working directory: `sys.io.File` and `Sys` still provide them.
-- `Root`, a directory that `..` and symbolic links cannot leave, for code that serves files to someone it does not
-  trust.
 - Forms returning `Future<Result<T, FileError>>`, for code on a UI thread.

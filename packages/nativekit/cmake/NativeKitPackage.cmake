@@ -21,7 +21,7 @@ set(NATIVEKIT_VERSION "${_nativekit_version}" CACHE INTERNAL "NativeKit's versio
 
 #   nativekit_add_module(<module>)
 #
-# Adds NativeKit's module (audio, credentials, filesystem) to the calling package's project as the library
+# Adds NativeKit's module (audio, credentials) to the calling package's project as the library
 # nativekit_<module>, built on this package's NativeKit. Only the module's directory is added, with what NativeKit's own
 # CMakeLists.txt sets for its modules, so NativeKit is neither configured nor built again for it.
 function(nativekit_add_module module)

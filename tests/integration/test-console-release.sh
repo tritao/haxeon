@@ -57,19 +57,22 @@ grep -F 'cannot be watched or patched live' "$work/watch.log"
 cat >> haxeon.toml <<TOML
 
 [dependencies]
-haxeon-filesystem = { path = "$root/packages/filesystem" }
+haxeon-credentials = { path = "$root/packages/credentials" }
 TOML
 cat > src/Main.hx <<'HAXE'
-import haxeon.filesystem.FileSystemRoot;
+import haxeon.credentials.Credentials;
 
+// Looking up a missing secret runs the module; a machine without a credential store answers an error, which ran it too.
 function main():Int {
-	var root = new FileSystemRoot(Sys.getCwd());
-	Sys.println("found " + (root.stat("haxeon.toml") != null));
+	try
+		Sys.println("found " + (Credentials.get("haxeon-console-release", "nobody") == null))
+	catch (error:haxeon.platform.NativeKitError)
+		Sys.println("found true");
 	return 0;
 }
 HAXE
 "$haxeon" build --build-mode release
-ls "$bin" | grep -E 'nativekit_filesystem' > /dev/null || { echo "the filesystem package's library was not shipped" >&2; ls -A "$bin" >&2; exit 1; }
+ls "$bin" | grep -E 'nativekit_credentials' > /dev/null || { echo "the credentials package's library was not shipped" >&2; ls -A "$bin" >&2; exit 1; }
 [[ $(run_alone "$work/tool/$executable" "$work/tool") == "found true" ]]
 cp -R "$bin" "$work/shipped"
 [[ $(run_alone "$work/shipped/tool$suffix" "$work/tool") == "found true" ]]
