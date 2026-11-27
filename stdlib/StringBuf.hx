@@ -26,8 +26,13 @@ class StringBuf {
 	var parts:Array<String>;
 	var totalLength:Int;
 
+	/**
+	 * How many code units the buffer holds, as `String.length` counts them: UTF-16 units on HashLink, UTF-8 bytes on
+	 * Wasm.
+	 */
 	public var length(get, never):Int;
 
+	/** An empty buffer. */
 	public inline function new() {
 		parts = [];
 		totalLength = 0;
@@ -37,24 +42,28 @@ class StringBuf {
 		return totalLength;
 	}
 
+	/** Appends `x`, as `Std.string` gives it. */
 	public inline function add<T>(x:T):Void {
 		var value = Std.string(x);
 		parts.push(value);
 		totalLength += value.length;
 	}
 
+	/** Appends the character whose code is `c`. */
 	public inline function addChar(c:Int):Void {
 		var value = String.fromCharCode(c);
 		parts.push(value);
 		totalLength += value.length;
 	}
 
+	/** Appends `len` characters of `s` from `pos`, or the rest of `s` without `len`, as `substr` takes them. */
 	public inline function addSub(s:String, pos:Int, ?len:Int):Void {
 		var value = len == null ? s.substr(pos) : s.substr(pos, len);
 		parts.push(value);
 		totalLength += value.length;
 	}
 
+	/** What the buffer holds, as a string. The buffer is unchanged and can be appended to. */
 	public function toString():String {
 		// Wasm array joins concatenate the growing prefix. Copy UTF-8 chunks once instead.
 		var chunks:Array<haxe.io.Bytes> = [];
@@ -95,8 +104,13 @@ internal extern function stringBufferToString(buffer:StringBufferHandle):String;
 class StringBuf {
 	var buffer:StringBufferHandle;
 
+	/**
+	 * How many code units the buffer holds, as `String.length` counts them: UTF-16 units on HashLink, UTF-8 bytes on
+	 * Wasm.
+	 */
 	public var length(get, never):Int;
 
+	/** An empty buffer. */
 	public inline function new() {
 		buffer = stringBufferNew();
 	}
@@ -105,18 +119,22 @@ class StringBuf {
 		return stringBufferLength(buffer);
 	}
 
+	/** Appends `x`, as `Std.string` gives it. */
 	public inline function add<T>(x:T):Void {
 		stringBufferAdd(buffer, Std.string(x));
 	}
 
+	/** Appends the character whose code is `c`. */
 	public inline function addChar(c:Int):Void {
 		stringBufferAdd(buffer, String.fromCharCode(c));
 	}
 
+	/** Appends `len` characters of `s` from `pos`, or the rest of `s` without `len`, as `substr` takes them. */
 	public inline function addSub(s:String, pos:Int, ?len:Int):Void {
 		stringBufferAdd(buffer, len == null ? s.substr(pos) : s.substr(pos, len));
 	}
 
+	/** What the buffer holds, as a string. The buffer is unchanged and can be appended to. */
 	public inline function toString():String {
 		return stringBufferToString(buffer);
 	}

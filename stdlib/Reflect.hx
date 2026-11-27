@@ -177,8 +177,9 @@ internal extern function reflectIsObject(value:Dynamic):Bool;
 internal extern function reflectCopy(object:Dynamic):Dynamic;
 #end
 
-/** Supported reflection helpers backed by the stable runtime ABI. */
+/** Reading and writing the fields of values by name, and comparing values whose types are not known statically. */
 class Reflect {
+	/** A shallow copy of the anonymous object `object`, with the same fields and values; null for null. */
 	public static function copy(object:Dynamic):Dynamic {
 		#if wasm
 		if (object == null)
@@ -196,6 +197,10 @@ class Reflect {
 		#end
 	}
 
+	/**
+	 * The value of the field `field` of `object`, or null when it has none. A string's or an array's `length`, and a
+	 * string's methods, are fields too.
+	 */
 	public static inline function field(object:Dynamic, field:String):Dynamic {
 		if (field == "$haxeonObservableState") return null;
 		if (Std.isOfType(object, String)) {
@@ -210,11 +215,13 @@ class Reflect {
 		return reflectField(object, field);
 	}
 
+	/** Sets the field `field` of `object` to `value`, adding it to an anonymous object that lacks it. */
 	public static inline function setField(object:Dynamic, field:String, value:Dynamic):Void {
 		if (field == "$haxeonObservableState") return;
 		reflectSetField(object, field, value);
 	}
 
+	/** Whether `object` has the field `field`. */
 	public static inline function hasField(object:Dynamic, field:String):Bool
 		return field == "$haxeonObservableState" ? false : reflectHasField(object, field);
 
@@ -222,6 +229,7 @@ class Reflect {
 	public static inline function deleteField(object:Dynamic, field:String):Bool
 		return field == "$haxeonObservableState" ? false : reflectDeleteField(object, field);
 
+	/** The names of the fields of `object`: an anonymous object's, or an instance's own variables. */
 	public static function fields(object:Dynamic):Array<String> {
 		var result:Array<String> = [];
 		for (index in 0...reflectFieldCount(object)) {
@@ -231,15 +239,25 @@ class Reflect {
 		return result;
 	}
 
+	/** Whether `value` is a function. */
 	public static inline function isFunction(value:Dynamic):Bool
 		return reflectIsFunction(value);
 
+	/**
+	 * Whether `value` is an object: an anonymous object, a class instance, an array, an enum value or a class; not a string,
+	 * a number, a `Bool` or a function.
+	 */
 	public static inline function isObject(value:Dynamic):Bool
 		return reflectIsObject(value);
 
+	/**
+	 * Compares `left` and `right`, numbers by value and strings by their code units: negative when `left` is less, 0 when
+	 * equal, positive when greater. Enum values have no order: comparing one gives a value that is not 0.
+	 */
 	public static inline function compare(left:Dynamic, right:Dynamic):Int
 		return reflectCompare(left, right);
 
+	/** Whether `left` and `right` are the same function: the same method of the same object, or the same closure. */
 	public static inline function compareMethods(left:Dynamic, right:Dynamic):Bool
 		return reflectCompareMethods(left, right);
 }

@@ -287,7 +287,7 @@ class Xml {
 		Returns an iterator of all child nodes.
 		Only works if the current node is an Element or a Document.
 	**/
-	public #if !cppia inline #end function iterator():Iterator<Xml> {
+	public inline function iterator():Iterator<Xml> {
 		ensureElementType();
 		return children.iterator();
 	}
@@ -318,7 +318,7 @@ class Xml {
 	/**
 		Returns the first child node.
 	**/
-	public #if !cppia inline #end function firstChild():Xml {
+	public inline function firstChild():Xml {
 		ensureElementType();
 		return children[0];
 	}
@@ -382,7 +382,7 @@ class Xml {
 	/**
 		Returns a String representation of the Xml node.
 	**/
-	public #if !cppia inline #end function toString():String {
+	public inline function toString():String {
 		return haxe.xml.Printer.print(this);
 	}
 

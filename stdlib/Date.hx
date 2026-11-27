@@ -155,15 +155,17 @@ class Date {
 	}
 }
 #else
-/** Supported date value backed by the stable runtime ABI; local time is the host's. */
+/** A date and time, to the second, in the host's local time zone or in UTC. Months count from 0. */
 extern abstract Date(hl.Abstract<"realtime_date">) {
 	/** The local time `year`-`month`-`day` `hour`:`min`:`sec` (months from 0), as Haxe's Date. */
 	@:hlNative("haxeon_runtime", "__date_new")
 	public function new(year:Int, month:Int, day:Int, hour:Int, min:Int, sec:Int);
 
+	/** The current date and time. */
 	@:hlNative("haxeon_runtime", "__date_now")
 	public static function now():Date;
 
+	/** The date as milliseconds since the Unix epoch. */
 	@:hlNative("haxeon_runtime", "__date_get_time")
 	public function getTime():Float;
 
@@ -171,20 +173,46 @@ extern abstract Date(hl.Abstract<"realtime_date">) {
 	@:hlNative("haxeon_runtime", "__date_from_time")
 	public static function fromTime(t:Float):Date;
 
+	/** The year, in local time, as four digits. */
 	@:hlNative("haxeon_runtime", "__date_get_full_year") public function getFullYear():Int;
+
+	/** The month, in local time, from 0 for January to 11. */
 	@:hlNative("haxeon_runtime", "__date_get_month") public function getMonth():Int;
+
+	/** The day of the month, in local time, from 1. */
 	@:hlNative("haxeon_runtime", "__date_get_date") public function getDate():Int;
-	/** The day of the week, 0 for Sunday. */
+
+	/** The day of the week, in local time, 0 for Sunday. */
 	@:hlNative("haxeon_runtime", "__date_get_day") public function getDay():Int;
+
+	/** The hour, in local time, from 0 to 23. */
 	@:hlNative("haxeon_runtime", "__date_get_hours") public function getHours():Int;
+
+	/** The minutes, in local time, from 0 to 59. */
 	@:hlNative("haxeon_runtime", "__date_get_minutes") public function getMinutes():Int;
+
+	/** The seconds, in local time, from 0 to 59. */
 	@:hlNative("haxeon_runtime", "__date_get_seconds") public function getSeconds():Int;
+
+	/** The year, in UTC, as four digits. */
 	@:hlNative("haxeon_runtime", "__date_get_utc_full_year") public function getUTCFullYear():Int;
+
+	/** The month, in UTC, from 0 for January to 11. */
 	@:hlNative("haxeon_runtime", "__date_get_utc_month") public function getUTCMonth():Int;
+
+	/** The day of the month, in UTC, from 1. */
 	@:hlNative("haxeon_runtime", "__date_get_utc_date") public function getUTCDate():Int;
+
+	/** The day of the week, in UTC, 0 for Sunday. */
 	@:hlNative("haxeon_runtime", "__date_get_utc_day") public function getUTCDay():Int;
+
+	/** The hour, in UTC, from 0 to 23. */
 	@:hlNative("haxeon_runtime", "__date_get_utc_hours") public function getUTCHours():Int;
+
+	/** The minutes, in UTC, from 0 to 59. */
 	@:hlNative("haxeon_runtime", "__date_get_utc_minutes") public function getUTCMinutes():Int;
+
+	/** The seconds, in UTC, from 0 to 59. */
 	@:hlNative("haxeon_runtime", "__date_get_utc_seconds") public function getUTCSeconds():Int;
 
 	/** "YYYY-MM-DD HH:MM:SS" in local time, as Haxe's. */

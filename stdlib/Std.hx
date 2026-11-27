@@ -185,8 +185,12 @@ private class RandomState {
 @:hlNative("haxeon_runtime", "__std_string")
 internal extern function stdString(value:Dynamic):String;
 
-/** Supported core conversions backed by the stable runtime ABI. */
+/** Conversions between values and strings, numbers, and types, and the random generator. */
 class Std {
+	/**
+	 * `value` as a string: a string itself, `"null"` for null, a number as Haxe prints it, an object through its
+	 * `toString` when it has one.
+	 */
 	public static inline function string(value:Dynamic):String {
 		#if wasm
 		if (Std.isOfType(value, Float))
@@ -197,6 +201,7 @@ class Std {
 		return stdString(value);
 	}
 
+	/** `map` as `Map.toString` prints it, `[key => value, ...]`, or `"null"`. */
 	public static function stringifyMap<K, V>(map:Null<Map<K, V>>):String
 		return map == null ? "null" : formatMapEntries(map.keys(), map.iterator());
 
@@ -234,6 +239,9 @@ class Std {
 	}
 	#end
 
+	/**
+	 * `value` truncated toward zero to an `Int`. A value outside the `Int` range, or NaN, gives an unspecified result.
+	 */
 	public static inline function int(value:Float):Int {
 		return stdIntFloat(value);
 	}
@@ -243,10 +251,18 @@ class Std {
 		return stdParseInt(value);
 	}
 
+	/**
+	 * The number `value` starts with, after leading whitespace, as `strtod` reads it (`"2.5px"` gives 2.5), or NaN when
+	 * it does not start with one.
+	 */
 	public static inline function parseFloat(value:String):Float {
 		return stdParseFloat(value);
 	}
 
+	/**
+	 * A pseudo-random `Int` from 0 to `limit - 1`, or 0 when `limit` is not positive. The generator is seeded from the
+	 * time and the process when first used; it is not for cryptography.
+	 */
 	public static inline function random(limit:Int):Int {
 		return stdRandom(limit);
 	}

@@ -68,28 +68,40 @@ function stringToolsIsSpace(s:String, pos:Int):Bool {
 }
 #end
 
-/** Common string helpers backed by the stable runtime ABI where necessary. */
+/**
+ * Helpers for strings: tests, trimming, padding, replacing, escaping and number formatting. Use them as `s.trim()` with
+ * `using StringTools`.
+ */
 class StringTools {
+	/** Whether `value` occurs in `s`. */
 	public static inline function contains(s:String, value:String):Bool {
 		return s.indexOf(value) != -1;
 	}
 
+	/** Whether `s` begins with `start`. */
 	public static inline function startsWith(s:String, start:String):Bool {
 		return stringToolsStartsWith(s, start);
 	}
 
+	/** Whether `s` ends with `end`. */
 	public static inline function endsWith(s:String, end:String):Bool {
 		return stringToolsEndsWith(s, end);
 	}
 
+	/**
+	 * `s` with each occurrence of `sub` replaced by `by`, left to right without overlap. An empty `sub` puts `by`
+	 * between every two characters.
+	 */
 	public static inline function replace(s:String, sub:String, by:String):String {
 		return stringToolsReplace(s, sub, by);
 	}
 
+	/** `s` without its leading characters up to space (code 32 and below). */
 	public static inline function ltrim(s:String):String {
 		return stringToolsLtrim(s);
 	}
 
+	/** `s` without its trailing whitespace, as `isSpace` defines it. */
 	public static function rtrim(s:String):String {
 		var length = s.length;
 		var removed = 0;
@@ -98,10 +110,12 @@ class StringTools {
 		return removed == 0 ? s : s.substr(0, length - removed);
 	}
 
+	/** `s` without its leading and trailing characters up to space (code 32 and below). */
 	public static inline function trim(s:String):String {
 		return stringToolsTrim(s);
 	}
 
+	/** `s` with `c` repeated before it until it is at least `length` long; `s` itself when `c` is empty. */
 	public static function lpad(s:String, c:String, length:Int):String {
 		if (c.length == 0)
 			return s;
@@ -113,6 +127,7 @@ class StringTools {
 		return buffer.toString();
 	}
 
+	/** `s` with `c` repeated after it until it is at least `length` long; `s` itself when `c` is empty. */
 	public static function rpad(s:String, c:String, length:Int):String {
 		if (c.length == 0)
 			return s;
@@ -123,6 +138,10 @@ class StringTools {
 		return buffer.toString();
 	}
 
+	/**
+	 * `n` in uppercase hexadecimal, a negative one as its unsigned 32-bit value, padded with zeros to `digits` when
+	 * given.
+	 */
 	public static function hex(n:Int, ?digits:Int):String {
 		var result = "";
 		var characters = "0123456789ABCDEF";
@@ -136,6 +155,10 @@ class StringTools {
 		return result;
 	}
 
+	/**
+	 * Whether the character at `pos` of `s` is whitespace: a tab, line feed, vertical tab, form feed, carriage return
+	 * or space. False outside `s`.
+	 */
 	public static inline function isSpace(s:String, pos:Int):Bool {
 		return stringToolsIsSpace(s, pos);
 	}

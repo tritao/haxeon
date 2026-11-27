@@ -92,15 +92,19 @@ class DateTools {
 		return leap ? 29 : 28;
 	}
 
+	/** `n` seconds in milliseconds, the unit `Date.getTime` counts in. */
 	public static inline function seconds(n:Float):Float
 		return n * 1000.0;
 
+	/** `n` minutes in milliseconds. */
 	public static inline function minutes(n:Float):Float
 		return n * 60.0 * 1000.0;
 
+	/** `n` hours in milliseconds. */
 	public static inline function hours(n:Float):Float
 		return n * 60.0 * 60.0 * 1000.0;
 
+	/** `n` days of 24 hours in milliseconds. */
 	public static inline function days(n:Float):Float
 		return n * 24.0 * 60.0 * 60.0 * 1000.0;
 }

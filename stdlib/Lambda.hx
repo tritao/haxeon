@@ -1,5 +1,6 @@
-/** Compatibility helpers for iterable-style collection operations. */
+/** Operations on any `Iterable`: searching, counting, mapping, filtering and folding. Use them with `using Lambda`. */
 class Lambda {
+	/** Whether one of `values` is `expected`, compared with `==`. */
 	public static function has<T>(values:Iterable<T>, expected:T):Bool {
 		for (value in values)
 			if (value == expected)
@@ -7,6 +8,7 @@ class Lambda {
 		return false;
 	}
 
+	/** The first of `values` that `predicate` accepts, or null. */
 	public static function find<T>(values:Iterable<T>, predicate:T->Bool):Null<T> {
 		for (value in values)
 			if (predicate(value))
@@ -14,6 +16,7 @@ class Lambda {
 		return null;
 	}
 
+	/** Whether `predicate` accepts one of `values`. */
 	public static function exists<T>(values:Iterable<T>, predicate:T->Bool):Bool {
 		for (value in values)
 			if (predicate(value))

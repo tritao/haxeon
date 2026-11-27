@@ -40,13 +40,21 @@ function regexpMatchedNum(expression:RegexHandle):Int
 	return expression.matchedNum();
 #end
 
-/** PCRE2-backed regular expressions with Haxe-compatible global iteration. */
+/**
+ * A regular expression, in PCRE2 syntax, written `~/pattern/options` or made with `new EReg`. It remembers its last match,
+ * which `matched` and the others read. With the `g` option, `replace`, `split` and `map` act on every match, not the first.
+ */
 class EReg {
 	final expression:RegexHandle;
 	final global:Bool;
 	var last:String = "";
 	var hasMatch:Bool = false;
 
+	/**
+	 * A regular expression of `pattern` with `options`: `i` ignores case, `m` makes `^` and `$` match at each line, `s`
+	 * lets `.` match a newline, `u` matches Unicode, `g` makes `replace`, `split` and `map` global. Throws for another
+	 * option or an invalid pattern.
+	 */
 	public function new(pattern:String, options:String) {
 		global = options.indexOf("g") >= 0;
 		var nativeOptions = "";
@@ -60,9 +68,14 @@ class EReg {
 		expression = regexpNew(pattern, nativeOptions);
 	}
 
+	/** Whether the expression matches somewhere in `value`, remembered for `matched` and the others. */
 	public function match(value:String):Bool
 		return matchSub(value, 0);
 
+	/**
+	 * Whether the expression matches in the `length` characters of `value` from `position` (the rest of it when
+	 * `length` is negative). Positions the match reports are in `value`.
+	 */
 	public function matchSub(value:String, position:Int, length:Int = -1):Bool {
 		if (position < 0 || position > value.length) {
 			hasMatch = false;
@@ -75,33 +88,45 @@ class EReg {
 		return hasMatch;
 	}
 
+	/**
+	 * The text of capture group `group` in the last match (0 for the whole match), or "" when the group took no part.
+	 * Throws when there is no match.
+	 */
 	public function matched(group:Int):String {
 		requireMatch();
 		var position = regexpMatchedPos(expression, group), length = regexpMatchedLength(expression, group);
 		return position < 0 || length < 0 ? "" : last.substr(position, length);
 	}
 
+	/** The text before the last match. Throws when there is no match. */
 	public function matchedLeft():String {
 		requireMatch();
 		return last.substr(0, regexpMatchedPos(expression, 0));
 	}
 
+	/** The text after the last match. Throws when there is no match. */
 	public function matchedRight():String {
 		requireMatch();
 		var position = regexpMatchedPos(expression, 0), length = regexpMatchedLength(expression, 0);
 		return last.substr(position + length);
 	}
 
+	/** Where the last match is in the string: its position and length. Throws when there is no match. */
 	public function matchedPos():ERegMatch {
 		requireMatch();
 		return {pos: regexpMatchedPos(expression, 0), len: regexpMatchedLength(expression, 0)};
 	}
 
+	/** How many groups the last match has, the whole match counted. Throws when there is no match. */
 	public function matchedNum():Int {
 		requireMatch();
 		return regexpMatchedNum(expression);
 	}
 
+	/**
+	 * `value` with the first match replaced by `replacement`, or every match with `g`. In `replacement`, `$1` to `$9`
+	 * stand for a group and `$$` for `$`.
+	 */
 	public function replace(value:String, replacement:String):String {
 		var output = new StringBuf(), offset = 0;
 		while (offset <= value.length && matchSub(value, offset)) {
@@ -128,6 +153,7 @@ class EReg {
 		return output.toString();
 	}
 
+	/** `value` split at the first match, or at every match with `g`, without the matched text. */
 	public function split(value:String):Array<String> {
 		var result:Array<String> = [], offset = 0;
 		while (offset <= value.length && matchSub(value, offset)) {
@@ -208,6 +234,7 @@ class EReg {
 			&& value.charCodeAt(offset + 1) <= 0xDFFF ? offset + 2 : offset + 1;
 	}
 
+	/** `value` with each character that is special in a pattern escaped, so the expression matches it literally. */
 	public static function escape(value:String):String {
 		var output = new StringBuf();
 		for (index in 0...value.length) {
