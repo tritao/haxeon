@@ -83,7 +83,7 @@ class Smoke {
 			var future = requests.readClipboardText();
 			future.onComplete(function(outcome) {
 				payloadOk = switch outcome {
-					case Success(text): text == "nativekit ffi";
+					case Success(Ok(text)): text == "nativekit ffi";
 					case _: false;
 				};
 				completed = true;

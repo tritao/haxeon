@@ -101,9 +101,10 @@ enum Result<T, E> implements MustUse {
 
 ### Asynchronous operations
 
-An asynchronous operation whose failures are expected settles a `Future<Result<T, E>>`. `Outcome.Failure(Exception)`
-then means only that the producer threw, which is a bug, as in synchronous code; `Cancelled` and `Stopped` keep their
-meaning ([ASYNC.md](../reference/ASYNC.md)).
+An asynchronous operation whose failures are expected settles a `Future<Result<T, E>>`. `Outcome` has no failure case:
+a producer's bug throws where it happens, in the poll or tick that runs it, as in synchronous code, so no observer
+handles one. `Cancelled` and `Stopped` keep their meaning ([ASYNC.md](../reference/ASYNC.md)). Platform requests settle
+`Future<Result<T, NativeKitError>>`; `NativeKitError` stays a class, since audio and GPU throw it too.
 
 ## Migration
 

@@ -6,9 +6,12 @@ A `haxeon.async.Future<T>` represents one eventual outcome. Consumers register
 | Outcome | Meaning |
 | --- | --- |
 | `Success(value)` | The producer completed with a value. |
-| `Failure(error)` | The operation failed with a `haxe.Exception`. |
 | `Cancelled` | The producer settled the operation as cancelled. |
 | `Stopped` | Observation ended. The work may continue. |
+
+An operation whose failures are expected settles a `Future<Result<T, E>>`: its
+error is a value, as in synchronous code. A bug in the producer throws where it
+happens, in the poll or tick that runs it, rather than settling the future.
 
 The first terminal outcome wins. An observer added after completion runs
 immediately. A producer can install a cancellation hook and an optional

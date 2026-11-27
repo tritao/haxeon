@@ -24,7 +24,7 @@ class Future<T> {
 		return this;
 	}
 
-	/** Whether the future has settled: succeeded, failed or been cancelled. */
+	/** Whether the future has settled: succeeded, been cancelled or stopped. */
 	public function isComplete():Bool return outcome != null;
 
 	/**

@@ -29,7 +29,7 @@ class NativeKitLifetimeTests {
 		var value = 0;
 		var future = requests.trackTask(task, function(bytes) return bytes.length);
 		future.onComplete(function(outcome) switch outcome {
-			case Success(length): value = length;
+			case Success(Ok(length)): value = length;
 			case _: value = -1;
 		});
 		var progress = requests.handle(TaskProgress(source, haxe.io.Bytes.alloc(0)));
@@ -38,16 +38,18 @@ class NativeKitLifetimeTests {
 		if (value != 7 || !future.isComplete() || requests.pending() != 0) return false;
 		if (requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(7)))) return false;
 
-		var decodingFailed = false;
+		// A decoder that throws has a bug: the future stops, and the exception reaches the event pump.
+		var decodingFailed = false, badStopped = false;
 		var bad = requests.trackTask(task, function(bytes):Int {
 			throw new haxe.Exception("bad payload");
 		});
 		bad.onComplete(function(outcome) switch outcome {
-			case Failure(error): decodingFailed = error.message == "bad payload";
+			case Stopped: badStopped = true;
 			case _:
 		});
-		requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(0)));
-		if (!decodingFailed || !bad.isComplete() || requests.pending() != 0) return false;
+		try requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(0))) catch (error:haxe.Exception)
+			decodingFailed = error.message == "bad payload";
+		if (!decodingFailed || !badStopped || requests.pending() != 0) return false;
 
 		var cancelled = false;
 		var cancelling = requests.trackTask(task, function(bytes) return bytes.length);
@@ -83,7 +85,7 @@ class NativeKitLifetimeTests {
 		var rawValue = 0;
 		var raw = requests.trackNative(id, function(event):Outcome<Int> switch event {
 			case ClipboardText(_, result, text): Success(text.length);
-			case _: Failure(haxeon.platform.BindingError.invalidData("test.decode", "wrong event"));
+			case _: Cancelled;
 		});
 		raw.onComplete(function(outcome) switch outcome {
 			case Success(n): rawValue = n;
@@ -111,17 +113,14 @@ class NativeKitLifetimeTests {
 		requests.handle(ClipboardText(id, Result.Ok, "done"));
 		if (!racing.isComplete() || racing.cancel() || requests.pending() != 0) return false;
 
-		// Structured decoder errors retain their original identity and metadata.
+		// A decoder's exception reaches the event pump as it was thrown.
 		var expectedError = haxeon.platform.BindingError.invalidData("test.decode", "bad format");
 		var errorPreserved = false;
 		var malformed = requests.trackNative(id, function(_):Outcome<Int> {
 			throw expectedError;
 		});
-		malformed.onComplete(function(outcome) switch outcome {
-			case Failure(error): errorPreserved = error == expectedError;
-			case _:
-		});
-		requests.handle(ClipboardText(id, Result.Ok, "bad"));
+		try requests.handle(ClipboardText(id, Result.Ok, "bad")) catch (error:haxeon.platform.BindingError)
+			errorPreserved = error == expectedError;
 		if (!errorPreserved || !malformed.isComplete() || requests.pending() != 0) return false;
 
 		// Reusing a native ID while decoding must not let the old future detach its replacement.

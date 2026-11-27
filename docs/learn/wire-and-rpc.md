@@ -47,7 +47,7 @@ function main():Void {
 	client.call(echo, restored.unwrap(), 1000).onComplete(outcome -> switch outcome {
 		case Success(Ok(answer)): Sys.println(answer.text);
 		case Success(Err(error)): Sys.println('Call failed: ${error.code()}');
-		case Failure(_) | Cancelled | Stopped:
+		case Cancelled | Stopped:
 	});
 	server.poll();
 	client.poll();

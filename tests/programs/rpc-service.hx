@@ -34,8 +34,11 @@ class GreeterImpl implements Greeter {
 
 	public function new() {}
 
-	public function greet(request:Query):Answer
+	public function greet(request:Query):Answer {
+		if (request.name == "")
+			throw new haxe.Exception("a greeting needs a name");
 		return {text: "Hello " + request.name};
+	}
 
 	public function measure(request:Array<Int>):Int
 		return request.length;
@@ -124,14 +127,13 @@ function main():Int {
 	implementation.pending.complete({text: "unobserved"});
 	client.poll();
 
-	// A handler's failed future is a bug on the peer: the call fails with HandlerFailed, which may have run.
+	// A handler that throws has a bug on the peer: the call fails with HandlerFailed, which may have run.
 	var remoteError:Null<RpcError> = null;
-	stub.later({name: "Ada"}).onComplete(outcome -> switch outcome {
+	stub.greet({name: ""}).onComplete(outcome -> switch outcome {
 		case Success(Err(error)): remoteError = error;
 		case _:
 	});
 	server.poll();
-	implementation.pending.fail(new haxe.Exception("greeting broke"));
 	client.poll();
 	if (remoteError == null || !remoteError.match(HandlerFailed) || !remoteError.mayHaveRun())
 		return 11;

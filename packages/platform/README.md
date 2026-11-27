@@ -49,17 +49,18 @@ var window = runtime.createWindow(options);
 var dialog = new MessageDialogOptions("Continue?");
 runtime.events.requests.messageDialog(window, dialog).onComplete(function(outcome) {
     switch outcome {
-        case Success(button): trace(button);
+        case Success(Ok(button)): trace(button);
+        case Success(Err(error)): trace(error.message);
         case Cancelled: trace("Cancelled");
         case Stopped: trace("Observation stopped");
-        case Failure(error): trace(error.message);
     }
 });
 // Pump runtime.events until the application exits, then call runtime.dispose().
 ```
 
-Request methods return `Future<T>`, with one terminal `Success`,
-`Failure(error)`, `Cancelled`, or `Stopped` outcome. All operations share one
+Request methods return `Future<Result<T, NativeKitError>>`, with one terminal
+`Success`, `Cancelled`, or `Stopped` outcome; a request NativeKit fails settles
+`Success(Err(error))`. All operations share one
 tracking registry; request IDs and task handles have separate key namespaces.
 
 `canCancel()` reports whether native cancellation can currently be requested.
@@ -77,9 +78,8 @@ also available for operations which cannot be cancelled natively. Late native
 events remain visible to event listeners but do not complete a stopped future
 again. The caller still owns any native task or stream associated with the work.
 
-Decoder exceptions become structured `Failure` outcomes. Existing `PlatformError`
-instances are preserved; other decoder exceptions become `BindingError` with
-kind `InvalidData`. All completion observers run even if one throws; the first
+A decoder that throws has a bug: its future settles as `Stopped`, and the
+exception propagates from `Requests.handle` to the event pump. All completion observers run even if one throws; the first
 observer exception is propagated after the remaining observers run. Observer
 exceptions do not replace an operation's already settled outcome.
 
@@ -107,8 +107,8 @@ Codes belong to their domain and must not be compared across platform and GPU.
 
 Managed argument, lifecycle, and event-data validation failures use `BindingError`
 (domain `haxeon-bindings`). Its typed `kind` is `InvalidArgument`, `InvalidState`,
-`Disposed`, or `InvalidData`; it also extends `PlatformError`. Async `Failure(error)`
-uses the same error objects, preserving domain, code, operation, and diagnostic.
+`Disposed`, or `InvalidData`; it also extends `PlatformError`. A request's
+`Err(error)` is a `NativeKitError`, preserving domain, code, operation, and diagnostic.
 Native result codes are retained for backend failures, including transport errors.
 
 ## Application loop

@@ -18,7 +18,7 @@ import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.MessageResult;
 import nativekit.ffi.NativeKitTypes.ResourceStreamHandle;
-import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 
 /** One registry owns completion, cancellation, and detachment for every request and task. */
 class Requests {
@@ -29,7 +29,7 @@ class Requests {
 	private function new() {}
 
 	/** Reads the clipboard's text. */
-	public function readClipboardText():Future<String> {
+	public function readClipboardText():Future<Result<String, NativeKitError>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_clipboard_read_text_checked(), function(value, _) switch value {
 			case ClipboardText(_, result, text): resultOutcome(result, text, "Requests.readClipboardText");
@@ -38,7 +38,7 @@ class Requests {
 	}
 
 	/** Reads the clipboard's file paths. */
-	public function readClipboardFiles():Future<Array<String>> {
+	public function readClipboardFiles():Future<Result<Array<String>, NativeKitError>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_clipboard_read_files_checked(), function(value, _) switch value {
 			case ClipboardFiles(_, result, paths): resultOutcome(result, paths, "Requests.readClipboardFiles");
@@ -47,7 +47,7 @@ class Requests {
 	}
 
 	/** Reads the clipboard's resources. */
-	public function readClipboardResources():Future<Array<Resource>> {
+	public function readClipboardResources():Future<Result<Array<Resource>, NativeKitError>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_clipboard_read_resources_checked(), function(value, _) switch value {
 			case Resources(_, _, result, _, items): resultOutcome(result, items, "Requests.readClipboardResources");
@@ -56,7 +56,8 @@ class Requests {
 	}
 
 	/** Asks the user to pick resources to open. */
-	public function openResource(parent:Window, options:FileDialogOptions):Future<Array<Resource>> {
+	public function openResource(parent:Window,
+			options:FileDialogOptions):Future<Result<Array<Resource>, NativeKitError>> {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.openResource",
 			"Parent and options cannot be null");
@@ -65,7 +66,8 @@ class Requests {
 	}
 
 	/** Asks the user where to save. */
-	public function saveResource(parent:Window, options:FileDialogOptions):Future<Array<Resource>> {
+	public function saveResource(parent:Window,
+			options:FileDialogOptions):Future<Result<Array<Resource>, NativeKitError>> {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.saveResource",
 			"Parent and options cannot be null");
@@ -74,7 +76,8 @@ class Requests {
 	}
 
 	/** Asks the user to pick a directory. */
-	public function selectResourceDirectory(parent:Window, options:FileDialogOptions):Future<Array<Resource>> {
+	public function selectResourceDirectory(parent:Window,
+			options:FileDialogOptions):Future<Result<Array<Resource>, NativeKitError>> {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.selectResourceDirectory",
 			"Parent and options cannot be null");
@@ -82,8 +85,8 @@ class Requests {
 			.rawValue), options.nativeValue()));
 	}
 
-	/** Commits a raw writable stream; Success(true) means a download was initiated. */
-	public function commitResourceNative(stream:ResourceStreamHandle):Future<Bool> {
+	/** Commits a raw writable stream; `Ok(true)` means a download was initiated. */
+	public function commitResourceNative(stream:ResourceStreamHandle):Future<Result<Bool, NativeKitError>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_resource_commit_checked(stream), function(value, _) switch value {
 			case ResourceCommit(_, result, downloadInitiated): resultOutcome(result, downloadInitiated,
@@ -93,7 +96,8 @@ class Requests {
 	}
 
 	/** Shows a message dialog and resolves with the button chosen. */
-	public function messageDialog(parent:Window, options:MessageDialogOptions):Future<MessageResult> {
+	public function messageDialog(parent:Window,
+			options:MessageDialogOptions):Future<Result<MessageResult, NativeKitError>> {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.messageDialog",
 			"Parent and options cannot be null");
@@ -106,19 +110,22 @@ class Requests {
 	}
 
 	/** Runs `script` in a web view and resolves with its result as JSON. */
-	public function evaluateWebView(webview:WebView, script:String):Future<String> {
+	public function evaluateWebView(webview:WebView, script:String):Future<Result<String, NativeKitError>> {
 		ensureLive();
 		if (webview == null || script == null) throw BindingError.invalidArgument("Requests.evaluateWebView",
 			"WebView and script cannot be null");
 		return registerRequest(NativeKit.nk_webview_eval_checked(webview.nativeHandle(), script),
 			function(value, _) switch value {
 				case WebViewEvaluation(_, _, result, json): resultOutcome(result, json, "Requests.evaluateWebView",
-					result == Result.Ok ? null : json);
+					result == NativeResult.Ok ? null : json);
 				case _: wrongEvent("WebView evaluation");
 			});
 	}
 
-	/** Explicit interop for a native request; decoder failures become terminal Failure outcomes. */
+	/**
+	 * Explicit interop for a native request, whose `decode` gives its outcome. A decoder that throws has a bug: the future
+	 * settles as `Stopped` and the exception reaches the event pump.
+	 */
 	public function trackNative<T>(request:haxe.Int64, decode:PlatformEvent->Outcome<T>,
 			?cancelNative:Void->Void):Future<T> {
 		ensureLive();
@@ -127,23 +134,23 @@ class Requests {
 	}
 
 	/** Observes a native task without installing a managed worker callback. The caller owns the task. */
-	public function trackTask<T>(task:Task, decode:haxe.io.Bytes->T):Future<T> {
+	public function trackTask<T>(task:Task, decode:haxe.io.Bytes->T):Future<Result<T, NativeKitError>> {
 		ensureLive();
 		if (task == null || decode == null) throw BindingError.invalidArgument("Requests.trackTask",
 			"Task and decoder cannot be null");
 		return register("task:" + Std.string(task.nativeHandle().rawValue), function(value, _) switch value {
 			case TaskComplete(_, result, data):
 				// register() catches decoder exceptions separately from completion-observer exceptions.
-				if (result == Result.Ok) Success(decode(data));
-				else if (result == Result.ErrorCancelled) Cancelled;
-				else Failure(new NativeKitError(result, "Requests.trackTask", null));
-			case TaskFailed(_, result, _): Failure(new NativeKitError(result, "Requests.trackTask", null));
+				if (result == NativeResult.Ok) Success(Ok(decode(data)));
+				else if (result == NativeResult.ErrorCancelled) Cancelled;
+				else Success(Err(new NativeKitError(result, "Requests.trackTask", null)));
+			case TaskFailed(_, result, _): Success(Err(new NativeKitError(result, "Requests.trackTask", null)));
 			case TaskCancelled(_, _, _): Cancelled;
 			case _: wrongEvent("task");
 		}, task.cancel);
 	}
 
-	function resourceDialog(request:haxe.Int64):Future<Array<Resource>> {
+	function resourceDialog(request:haxe.Int64):Future<Result<Array<Resource>, NativeKitError>> {
 		return registerRequest(request, function(value, _) switch value {
 			case Resources(EventKind.DialogResourcesComplete, _, result, accepted, items): acceptedOutcome(result,
 				accepted, items);
@@ -164,17 +171,15 @@ class Requests {
 		if (entries.exists(key)) throw BindingError.invalidState("Requests.register", "Operation is already tracked");
 		var promise = new Promise<T>();
 		var entry = new NativeRequestEntry(function(value) {
+			// A decoder that throws has a bug, which the event pump reports; the future's observers learn it ended.
 			var outcome:Outcome<T>;
 			try {
 				outcome = decode(value, promise.future.isCancellationRequested());
-				if (outcome == null || outcome.match(Failure(null)))
-					throw BindingError.invalidData("Requests.decode", "Decoder did not return a valid outcome");
-			} catch (error:haxe.Exception) {
-				promise.fail(error);
-				return;
+				if (outcome == null)
+					throw BindingError.invalidData("Requests.decode", "Decoder did not return an outcome");
 			} catch (error:Dynamic) {
-				promise.fail(BindingError.invalidData("Requests.decode", Std.string(error)));
-				return;
+				promise.resolve(Stopped);
+				throw error;
 			}
 			promise.resolve(outcome);
 		}, promise.cancel);
@@ -248,26 +253,26 @@ class Requests {
 		return key == null || key == "0" ? null : "request:" + key;
 	}
 
-	static function resultOutcome<T>(result:Result, value:T, operation:String,
-			?message:Null<String>):Outcome<T> {
-		return result == Result.Ok ? Success(value) : result == Result.ErrorCancelled
-			? Cancelled : Failure(new NativeKitError(result, operation, message));
+	static function resultOutcome<T>(result:NativeResult, value:T, operation:String,
+			?message:Null<String>):Outcome<Result<T, NativeKitError>> {
+		return result == NativeResult.Ok ? Success(Ok(value)) : result == NativeResult.ErrorCancelled
+			? Cancelled : Success(Err(new NativeKitError(result, operation, message)));
 	}
 
-	static function acceptedOutcome<T>(result:Result, accepted:Bool,
-			value:T):Outcome<T> {
-		if (result == Result.ErrorCancelled) return Cancelled;
-		if (result != Result.Ok)
-			return Failure(new NativeKitError(result, "Requests.resourceDialog", null));
-		return accepted ? Success(value) : Cancelled;
+	static function acceptedOutcome<T>(result:NativeResult, accepted:Bool,
+			value:T):Outcome<Result<T, NativeKitError>> {
+		if (result == NativeResult.ErrorCancelled) return Cancelled;
+		if (result != NativeResult.Ok)
+			return Success(Err(new NativeKitError(result, "Requests.resourceDialog", null)));
+		return accepted ? Success(Ok(value)) : Cancelled;
 	}
 
-	static function messageOutcome(result:Result, button:MessageResult,
-			cancellationRequested:Bool):Outcome<MessageResult> {
-		if (result == Result.ErrorCancelled) return Cancelled;
-		if (result != Result.Ok)
-			return Failure(new NativeKitError(result, "Requests.messageDialog", null));
-		return cancellationRequested || button == MessageResult.None ? Cancelled : Success(button);
+	static function messageOutcome(result:NativeResult, button:MessageResult,
+			cancellationRequested:Bool):Outcome<Result<MessageResult, NativeKitError>> {
+		if (result == NativeResult.ErrorCancelled) return Cancelled;
+		if (result != NativeResult.Ok)
+			return Success(Err(new NativeKitError(result, "Requests.messageDialog", null)));
+		return cancellationRequested || button == MessageResult.None ? Cancelled : Success(Ok(button));
 	}
 
 	@:noReturn

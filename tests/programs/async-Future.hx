@@ -41,15 +41,15 @@ function main():Int {
 		|| detached.future.cancel())
 		return 4;
 
-	var failed = new Promise<Int>();
-	var exception = new haxe.Exception("failure");
-	var sameException = false;
-	failed.fail(exception);
+	// An expected failure is the future's value.
+	var failed = new Promise<Result<Int, String>>();
+	var reason = "";
+	failed.complete(Err("refused"));
 	failed.future.onComplete(outcome -> switch outcome {
-		case Failure(error): sameException = error == exception;
+		case Success(Err(why)): reason = why;
 		case _:
 	});
-	if (!sameException)
+	if (reason != "refused")
 		return 5;
 
 	// A promise of no value completes with none, and its success carries none.

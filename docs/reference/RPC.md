@@ -25,7 +25,7 @@ var greeting = greeter.greet({name: "Ada"});
 greeting.onComplete(outcome -> switch outcome {
     case Success(Ok(answer)): Sys.println(answer.text);
     case Success(Err(error)): Sys.println('Greeting failed: ${error.code()}');
-    case Failure(_) | Cancelled | Stopped:
+    case Cancelled | Stopped:
 });
 ```
 
@@ -138,7 +138,7 @@ server.register(method, function(request, context) {
 client.call(method, {name: "workspace"}, 1000).onComplete(outcome -> switch outcome {
     case Success(Ok(answer)): Sys.println(answer.text);
     case Success(Err(error)): Sys.println('Call failed: ${error.code()}');
-    case Failure(_) | Cancelled | Stopped:
+    case Cancelled | Stopped:
 });
 ```
 
