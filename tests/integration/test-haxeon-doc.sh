@@ -169,7 +169,8 @@ assert area["inherited"]["from"] == "measured.Measured", area
 assert area["inherited"]["documentation"]["markdown"] == "The area, in square units.", area
 PY
 # --standard-library describes each module of the standard library for the target, with no project, each source relative to
-# the directory the standard library is in; the Wasm host's interface is not the host target's.
+# the directory the standard library is in; the Wasm host's interface is not the host target's. The standard library requires
+# its documentation, on every target: the description of each fails on an undocumented declaration.
 mkdir -p "$work/anywhere"
 cd "$work/anywhere"
 if "$haxeon" doc --standard-library --project "$work/library" > "$work/standard-project.log" 2>&1; then
@@ -191,4 +192,13 @@ assert (types["StringTools"]["package"], types["StringTools"]["source"]["positio
 assert types["toml.TomlParser"]["source"]["position"]["file"] == "lib/haxeon-io/toml/TomlParser.hx"
 assert sys.argv[2] not in open(sys.argv[1]).read(), "this machine's path is in the description"
 PY
+for target in wasm32 wasm-gc; do
+	"$haxeon" doc --standard-library --target "$target" --output "$work/standard-$target.json"
+	python3 - "$work/standard-$target.json" <<'PY'
+import json
+import sys
+
+assert "haxeon.wasm.Callbacks" in json.load(open(sys.argv[1]))["described"], "a Wasm target's description lacks its host interface"
+PY
+done
 echo "PASS: haxeon doc describes a library's own public modules, without an entry, a package can require its documentation, and the standard library is described"

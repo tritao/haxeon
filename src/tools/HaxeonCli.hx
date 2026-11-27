@@ -867,12 +867,12 @@ class HaxeonCli {
 	/**
 	 * What `haxeon doc --standard-library` builds: a program with no sources of its own, whose description is the standard
 	 * library's, each module of it (`--api-standard-library`), written to `build/api.json` in the directory it was run from unless
-	 * `--output` says where.
+	 * `--output` says where. The standard library requires its documentation, as a package that says so does.
 	 */
 	static function standardLibraryProgram():ProgramProject {
 		var directory = ProgramProject.directory("standard-library", null, "doc");
 		return new ProgramProject(directory,
-			PackageManifest.program("standard-library", null, [], [directory], true, [], null, []));
+			PackageManifest.program("standard-library", null, [], [directory], true, [], null, [], null, true));
 	}
 
 	/**

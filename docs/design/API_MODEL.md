@@ -25,7 +25,8 @@ API from what it uses.
 
 `haxeon doc` runs this analysis for a project with the arguments its build uses, describing the root package's source
 roots, and writes `build/api.json` (or `--output`). `haxeon doc --standard-library` describes the standard library
-instead, as a program with no sources of its own, into `build/api.json` of the directory it was run from. The model is read from the semantic program
+instead, as a program with no sources of its own, into `build/api.json` of the directory it was run from; the standard
+library requires its documentation, so that fails on each public declaration without a doc comment. The model is read from the semantic program
 the analysis keeps, not from the syntax tree, which cannot give resolved types, caller-visible nullability or inferred
 signatures.
 

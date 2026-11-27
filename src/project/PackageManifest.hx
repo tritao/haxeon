@@ -572,13 +572,15 @@ class PackageManifest {
 	}
 
 	/**
-	 * The manifest of a program the CLI builds with no manifest file of its own (a script, a Haxe command line's compilation, the standard library's description): a host
-	 * project with these sources, source roots (absolute) and defines, built into `build` beside where it is resolved.
-	 * `scopeSourceRoots: false` lets its roots hold any package, as Haxe's class paths do.
+	 * The manifest of a program the CLI builds with no manifest file of its own (a script, a Haxe command line's compilation,
+	 * the standard library's description): a host project with these sources, source roots (absolute) and defines, built into
+	 * `build` beside where it is resolved. `scopeSourceRoots: false` lets its roots hold any package, as Haxe's class paths do.
+	 * `documentationRequired` is what `package.documentation = "required"` states for a package.
 	 */
 	public static function program(name:String, entry:Null<String>, sources:Array<String>, sourceRoots:Array<String>,
 			scopeSourceRoots:Bool, defines:Array<String>, inlineEnabled:Null<Bool>,
-			dependencies:Map<String, PackageSource>, ?nullSafetyRules:Array<NullSafetyRule>):PackageManifest {
+			dependencies:Map<String, PackageSource>, ?nullSafetyRules:Array<NullSafetyRule>,
+			documentationRequired:Bool = false):PackageManifest {
 		var declared:Map<String, PackageDependency> = [];
 		for (dependency => source in dependencies)
 			declared.set(dependency, new PackageDependency(new PackageId(dependency), source));
@@ -586,7 +588,8 @@ class PackageManifest {
 			"build",
 			declared, null, null, new PackageCompatibility(), inlineEnabled,
 			NullSafetyMode.Off,
-			nullSafetyRules == null ? [] : nullSafetyRules);
+			nullSafetyRules == null ? [] : nullSafetyRules, null, null, null, null, null, null, null,
+			documentationRequired);
 	}
 
 	/** A Java package name with at least two parts, as Android requires of an application ID. */
