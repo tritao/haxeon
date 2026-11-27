@@ -31,50 +31,62 @@ class Popup implements View {
 	/** The popup's box. */
 	public final style:LayoutStyle;
 	/** Optional live anchor in logical screen coordinates; placement uses measured panel size. */
-	public var anchorRectProvider:Null<Void->Null<Rect>>;
+	public final anchorRectProvider:Null<Void->Null<Rect>>;
 
 	/** The popup's accessible name. */
-	public var label:Null<String>;
+	public final label:Null<String>;
 
 	/** Whether it keeps keyboard focus within itself. */
-	public var modal:Bool;
+	public final modal:Bool;
 
 	/** Whether the rest of the UI is dimmed behind it. */
-	public var dimBackdrop:Bool;
+	public final dimBackdrop:Bool;
 
 	/** Whether a click outside it dismisses it. */
-	public var dismissOnOutside:Bool;
+	public final dismissOnOutside:Bool;
 
 	/** Whether Escape dismisses it. */
-	public var dismissOnEscape:Bool;
+	public final dismissOnEscape:Bool;
 
 	/** The color of the dimmed backdrop; the theme's when null. */
-	public var backdropColor:Null<Color>;
+	public final backdropColor:Null<Color>;
 	/** Absolute layer shared by the backdrop; content paints one layer above it. */
-	public var layerZIndex:Int;
+	public final layerZIndex:Int;
 	/** Paint a square menu surface and its shadow beneath the popup content. */
-	public var menuSurface:Bool;
+	public final menuSurface:Bool;
 	/** Space kept between an anchored popup and the window edges. */
-	public var viewportMargin:Float = 0.0;
+	public final viewportMargin:Float;
 	/**
 	 * Open to the left of the anchor when the popup does not fit to its right
 	 * but fits to its left, as native context menus do. Otherwise the popup is
 	 * shifted to stay inside the layer.
 	 */
-	public var flipHorizontally:Bool;
+	public final flipHorizontally:Bool;
 	/** Handle an outside click (for example, a sibling menu trigger); true skips default dismissal. */
-	public var onOutsideClick:Null<UiEvent->Bool> = null;
+	public final onOutsideClick:Null<UiEvent->Bool>;
 
 	/** Called when the user dismisses it; the caller removes it. */
-	public var onDismiss:Void->Void;
+	public final onDismiss:Void->Void;
 	internal var hasDismissHandler(default, null):Bool;
 
 	/**
-	 * A popup showing `child` at (`x`, `y`) in its parent. Throws without content or with a position that is not
-	 * finite.
+	 * A popup showing `child` at (`x`, `y`) in its parent; the rest is given by name (`label: "Menu", modal: false`).
+	 * Throws without content or with a position that is not finite.
 	 */
 	public function new(key:String,
-			child:View, x:Float = 0.0, y:Float = 0.0, ?style:LayoutStyle, ?onDismiss:Void->Void) {
+			child:View, x:Float = 0.0, y:Float = 0.0, ?style:LayoutStyle, ?onDismiss:Void->Void,
+			?anchorRectProvider:Void->Null<Rect>,
+			?label:String,
+			modal:Bool = true,
+			dimBackdrop:Bool = true,
+			dismissOnOutside:Bool = true,
+			dismissOnEscape:Bool = true,
+			?backdropColor:Color,
+			layerZIndex:Int = 0,
+			menuSurface:Bool = false,
+			viewportMargin:Float = 0.0,
+			flipHorizontally:Bool = false,
+			?onOutsideClick:UiEvent->Bool) {
 		if (child == null || !finite(x)
 			|| !finite(y)) throw "Popup requires content and a finite parent-relative position";
 		this.key = new Key(key);
@@ -82,19 +94,21 @@ class Popup implements View {
 		this.x = x;
 		this.y = y;
 		this.style = style == null ? new LayoutStyle() : style.copy();
-		label = null;
-		anchorRectProvider = null;
-		modal = true;
-		dimBackdrop = true;
-		dismissOnOutside = true;
-		dismissOnEscape = true;
-		backdropColor = null;
-		layerZIndex = 0;
-		menuSurface = false;
-		flipHorizontally = false;
 		hasDismissHandler = onDismiss != null;
 		this.onDismiss = onDismiss == null ? function() {}
 			: onDismiss;
+		this.anchorRectProvider = anchorRectProvider;
+		this.label = label;
+		this.modal = modal;
+		this.dimBackdrop = dimBackdrop;
+		this.dismissOnOutside = dismissOnOutside;
+		this.dismissOnEscape = dismissOnEscape;
+		this.backdropColor = backdropColor;
+		this.layerZIndex = layerZIndex;
+		this.menuSurface = menuSurface;
+		this.viewportMargin = viewportMargin;
+		this.flipHorizontally = flipHorizontally;
+		this.onOutsideClick = onOutsideClick;
 	}
 
 	public function build(context:BuildContext):ViewRoot {

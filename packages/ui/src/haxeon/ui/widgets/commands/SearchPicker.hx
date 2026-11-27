@@ -224,12 +224,8 @@ class SearchPicker implements View {
 			centered ? Math.max(0, (context.viewportWidth - actualWidth) / 2) : x,
 			y,
 			panelStyle,
-			onDismiss);
-		popup.dimBackdrop = dimBackdrop;
-		popup.menuSurface = menuSurface;
-		popup.modal = modal;
-		popup.label = label;
-		popup.layerZIndex = layerZIndex;
+			onDismiss, label: label, modal: modal, dimBackdrop: dimBackdrop, layerZIndex: layerZIndex,
+			menuSurface: menuSurface);
 		var modifier = new haxeon.ui.core.RootModifier();
 		modifier.on(UiEventKind.Scroll, function(_) {
 			state.tooltipDismissRevision++;

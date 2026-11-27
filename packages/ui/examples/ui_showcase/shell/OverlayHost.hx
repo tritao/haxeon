@@ -52,9 +52,7 @@ class OverlayHost {
 			var popup = new Popup("showcase-popup", popupContent,
 				popupX, popupY, null, function() {
 					explorer.state.overlays.popupOpen = false;
-				});
-			popup.label = "Quick actions";
-			popup.modal = false;
+				}, label: "Quick actions", modal: false);
 			layers.push(new StackChild("popup-layer", popup, 0.0, 0.0, 20));
 		} else if (explorer.state.overlays.menuOpen) {
 			var menuWidth = 236.0;
