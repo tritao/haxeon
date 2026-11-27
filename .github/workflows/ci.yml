@@ -23,20 +23,19 @@ jobs:
       # Each platform reports its own result: one failing platform must not hide the others behind cancellations.
       fail-fast: false
       matrix:
-        # Each limit leaves room for a slow runner and still stops a hung job: Linux x86 takes 77 to 88 minutes, Apple Silicon
-        # 59 to 73, Intel 117 to 134 and Windows about 60, and slow runners pushed each past its limit (90, 90, 150, 60) with
-        # every suite passing.
+        # Each limit leaves room for a slow runner and still stops a hung job; a limit a passing run reaches is raised, not met
+        # by dropping suites.
         include:
           - name: test
             platform: test
             os: linux
             runs_on: ubuntu-24.04
-            timeout: 120
+            timeout: 150
           - name: linux-arm64
             platform: linux-arm64
             os: linux
             runs_on: ubuntu-24.04-arm
-            timeout: 90
+            timeout: 150
             test_jobs: 4
           - name: windows
             platform: windows
