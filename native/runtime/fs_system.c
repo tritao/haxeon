@@ -290,6 +290,28 @@ static wchar_t *realtime_fs_nt_name( const wchar_t *full ) {
 	return realtime_fs_concat(L"\\??\\",full,L"");
 }
 
+/* Windows answers "path not found" where a part of the way to `path` is a file; POSIX answers ENOTDIR, which is what the
+   failure is. `path` is a Win32 path, or an NT name (`\??\...`), which `\\?\` names for the Win32 calls. */
+static void realtime_fs_classify_missing( const wchar_t *path ) {
+	if( realtime_fs_code != ERROR_PATH_NOT_FOUND ) return;
+	wchar_t *prefix = wcsncmp(path,L"\\??\\",4) == 0 ? realtime_fs_concat(L"\\\\?\\",path + 4,L"")
+		: realtime_fs_concat(path,L"",L"");
+	if( prefix == NULL ) return;
+	for(;;) {
+		wchar_t *cut = NULL;
+		for( wchar_t *at = prefix; *at; at++ )
+			if( *at == L'\\' || *at == L'/' ) cut = at;
+		if( cut == NULL || cut == prefix ) break;
+		*cut = 0;
+		DWORD attributes = GetFileAttributesW(prefix);
+		if( attributes != INVALID_FILE_ATTRIBUTES ) {
+			if( (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ) realtime_fs_kind = REALTIME_FS_NOT_A_DIRECTORY;
+			break;
+		}
+	}
+	free(prefix);
+}
+
 static bool realtime_fs_final_path( HANDLE handle, wchar_t **out ) {
 	DWORD capacity = 512;
 	for(;;) {
@@ -380,8 +402,9 @@ static HANDLE realtime_fs_open( realtime_fs_directory *root, const wchar_t *path
 		DWORD error = GetLastError();
 		/* A process that holds the file without sharing it (a scanner, an indexer) lets go within a moment. */
 		if( (error != ERROR_SHARING_VIOLATION && error != ERROR_LOCK_VIOLATION) || attempt == 20 ) {
-			free(owned);
 			realtime_fs_fail(error);
+			realtime_fs_classify_missing(target);
+			free(owned);
 			return INVALID_HANDLE_VALUE;
 		}
 		Sleep(attempt < 5 ? 10 : 50);
@@ -436,6 +459,13 @@ static bool realtime_fs_place_of( realtime_fs_directory *root, const wchar_t *pa
 		free(parent);
 	}
 	if( directory == INVALID_HANDLE_VALUE ) return false;
+	/* CreateFileW opens a file as readily as a directory; names are looked up only in a directory. */
+	FILE_ATTRIBUTE_TAG_INFO tag;
+	bool described = realtime_fs_attributes_of(directory,&tag);
+	if( !described || (tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ) {
+		CloseHandle(directory);
+		return described ? realtime_fs_fail(ERROR_DIRECTORY) : false;
+	}
 	place->directory = directory;
 	place->name = realtime_fs_concat(name,L"",L"");
 	if( place->name == NULL ) {
@@ -472,7 +502,9 @@ static bool realtime_fs_open_at( const realtime_fs_place *place, const wchar_t *
 		REALTIME_FS_SHARE_ALL,disposition,options | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_FOR_BACKUP_INTENT,NULL,0);
 	if( result < 0 ) {
 		*out = INVALID_HANDLE_VALUE;
-		return realtime_fs_fail(realtime_fs_status_error(result));
+		realtime_fs_fail(realtime_fs_status_error(result));
+		if( place->directory == NULL ) realtime_fs_classify_missing(object);
+		return false;
 	}
 	return true;
 }

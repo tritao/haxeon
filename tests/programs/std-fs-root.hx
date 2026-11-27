@@ -55,6 +55,8 @@ function confined(root:Root):Int {
 		return 19;
 	if (failure(root.removeTree("deep")) != "ok" || failure(root.metadata("deep")) != "not found")
 		return 20;
+	if (failure(root.writeText("copy.txt/inner.txt", "x")) != "not a directory")
+		return 21;
 	return 0;
 }
 
