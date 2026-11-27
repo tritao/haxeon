@@ -35,8 +35,14 @@ function main():Int {
 			break;
 		}
 	}
-	if (!finished || Gc.incrementalReclaiming() || Gc.incrementalPending() || Gc.collections() != before + 1.0)
+	if (!finished)
 		return 2;
+	if (Gc.incrementalReclaiming())
+		return 7;
+	if (Gc.incrementalPending())
+		return 8;
+	if (Gc.collections() != before + 1.0)
+		return 9;
 	var count = 0;
 	var cursor = head;
 	while (cursor != null) {
