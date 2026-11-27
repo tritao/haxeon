@@ -47,6 +47,14 @@ class ModuleState {
 	public var lastGoodSource:Null<SourceFile>;
 	public var lastGoodRevision:Int = 0;
 	public var dependencies:Array<String> = [];
+
+	/**
+	 * What resolving `dependencies` read of the set of modules besides the modules it found: the names it looked for and did not
+	 * find, and the packages it listed, as `pack.*` (`ModuleAnalyzer.resolveSourceDependencies`), each by its key
+	 * (`ModuleAnalyzer.resolutionReadKey`). A module that enters or leaves the program under one of these names, or under a
+	 * dependency's, makes the resolution stale (`SessionState.moduleSetChanges`).
+	 */
+	public var resolutionReads:Array<Int> = [];
 	public var conditionalDefines:Array<String> = [];
 	public var embeddedInputs:Array<compiler.core.EmbeddedText.EmbeddedInput> = [];
 	public var diagnostics:Array<Diagnostic> = [];
@@ -186,6 +194,7 @@ class ModuleState {
 		result.lastGoodSource = lastGoodSource;
 		result.lastGoodRevision = lastGoodRevision;
 		result.dependencies = dependencies.copy();
+		result.resolutionReads = resolutionReads;
 		result.conditionalDefines = conditionalDefines.copy();
 		result.embeddedInputs = embeddedInputs.copy();
 		result.diagnostics = diagnostics.copy();

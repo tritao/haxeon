@@ -12,6 +12,7 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.PeakProbe;
 import compiler.core.PhaseCollections;
+import compiler.core.QualifiedName;
 import compiler.core.StdlibNames;
 import compiler.ir.gen.IrGenerator;
 import compiler.ir.model.Ir.IrCNative;
@@ -29,6 +30,7 @@ import compiler.ir.tools.IrInstrumentation.IrInstrumentationScope;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
 import compiler.semantic.LambdaName;
+import compiler.semantic.ModuleAnalyzer;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.SemanticAssembly;
 import compiler.semantic.SemanticAssembly.SemanticAssemblyResult;
@@ -433,6 +435,7 @@ class FrontendCompilation {
 		build.bodyChanged = bodyChanged;
 		build.signatureChanged = signatureChanged;
 		build.structuralChanged = structuralChanged;
+		resolveAgainAfterModuleSetChanges(build);
 		// The graph walk parses what it reaches one module at a time; with `--parse-threads`, every module that needs it is parsed first,
 		// on that many threads.
 		if (context.options.parseThreads > 1)
@@ -492,6 +495,43 @@ class FrontendCompilation {
 			signatureChanged, structuralChanged);
 		build.frontendGraphDoneAt = now();
 		build.allocationAfterGraph = AllocationMeter.sample();
+	}
+
+	/**
+	 * Resolves again, from their kept syntax trees, the dependencies of the modules whose resolution read the name of a module that
+	 * has since entered or left the program: one looked for and not found, a package listed, or a dependency found
+	 * (`ModuleState.resolutionReads`). An unchanged module that names `Extra` through `import Util` depends on a module `Extra` once
+	 * one appears, as a fresh build finds. Nothing is walked in a build where no module came or went.
+	 */
+	static function resolveAgainAfterModuleSetChanges(build:FrontendBuild):Void {
+		var context = build.context, session = context.state, changes = session.moduleSetChanges;
+		if (changes.length == 0)
+			return;
+		session.moduleSetChanges = [];
+		var changed:Map<String, Bool> = [], keys:Map<Int, Bool> = [];
+		for (name in changes) {
+			changed.set(name, true);
+			keys.set(ModuleAnalyzer.resolutionReadKey(name), true);
+			keys.set(ModuleAnalyzer.resolutionReadKey(QualifiedName.parentOrEmpty(name) + ".*"),
+				true);
+		}
+		var modules = session.modules;
+		for (name in sortedModuleNames(modules)) {
+			var state = modules.get(name);
+			if (state == null || state.ast == null || !readsAny(state, changed, keys))
+				continue;
+			context.moduleAnalyzer.resolveAgain(session.writableState(name, build.rollbackModules));
+		}
+	}
+
+	static function readsAny(state:ModuleState, names:Map<String, Bool>, keys:Map<Int, Bool>):Bool {
+		for (key in state.resolutionReads)
+			if (keys.exists(key))
+				return true;
+		for (name in state.dependencies)
+			if (names.exists(name))
+				return true;
+		return false;
 	}
 
 	/** Parses a module the graph reached without a syntax tree and records its type dependencies, timing each. */

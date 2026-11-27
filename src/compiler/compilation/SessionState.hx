@@ -196,6 +196,12 @@ class SessionState {
 	public var backend:BackendSession;
 
 	public var reachabilityCache(default, null):Map<String, ReachabilityCache> = [];
+
+	/**
+	 * The names of the modules that entered or left the program (`Compiler.update`, `Compiler.remove`) since a build last resolved
+	 * again the modules whose dependencies read them (`ModuleState.resolutionReads`, `FrontendCompilation.resolveAgainAfterModuleSetChanges`).
+	 */
+	public var moduleSetChanges:Array<String> = [];
 	public var declarationOwners(default, null):DeclarationOwners = new DeclarationOwners();
 
 	/**
@@ -293,6 +299,7 @@ class SessionState {
 			state.declarationTypeDigests = [];
 			state.inferredSignatures = [];
 			state.keyPathUses = [];
+			state.resolutionReads = [];
 		}
 	}
 
@@ -388,6 +395,7 @@ class SessionState {
 		result.inlineCache = inlineCache.copy();
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.reachabilityCache = reachabilityCache.copy();
+		result.moduleSetChanges = moduleSetChanges.copy();
 		result.declarationOwners = declarationOwners.copy();
 		return result;
 	}

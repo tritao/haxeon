@@ -77,10 +77,6 @@ class WarmEditCatalogueMain {
 		var util =
 			"class Util { public static function one():Int return 1; } class Extra { public function new() {} public function n():Int return 5; }";
 		var level = "enum abstract Level(Int) to Int { var Low = 1; var High = 2; }";
-		// A bare name a module neither declares nor finds a module for is taken to come from its imports (`ModuleAnalyzer.parse`), and
-		// the module is not scanned again when a module of that name appears: the warm graph never reaches it.
-		var staleImportedName =
-			"a module's dependencies are not resolved again when a module for a name it uses appears";
 		return [
 			{
 				kind: "remove a function",
@@ -538,8 +534,40 @@ class WarmEditCatalogueMain {
 				edit: [
 					"Util.hx" => "class Util { public static function one():Int return 1; }",
 					"Extra.hx" => "class Extra { public function new() {} public function n():Int return 5; }"
+				]
+			},
+			{
+				kind: "move a class into a module an unchanged module imports, out of the module of its own",
+				files: [
+					"Util.hx" => "class Util { public static function one():Int return 1; }",
+					"Extra.hx" => "class Extra { public function new() {} public function n():Int return 5; }",
+					"User.hx"
+						=> "import Util; class User { public static function use():Int return new Extra().n() + Util.one(); }",
+					"Main.hx" => "class Main { static function main():Int return User.use(); }"
 				],
-				known: [Plain => staleImportedName, Live => staleImportedName]
+				edit: ["Util.hx" => util, "Extra.hx" => null]
+			},
+			{
+				kind: "remove a module of an unchanged module's package, whose name then resolves to the root package",
+				files: [
+					"Helper.hx" => "class Helper { public static function id():Int return 1; }",
+					"pack/Helper.hx" => "package pack; class Helper { public static function id():Int return 2; }",
+					"pack/User.hx"
+						=> "package pack; class User { public static function use():Int return Helper.id(); }",
+					"Main.hx" => "import pack.User; class Main { static function main():Int return User.use(); }"
+				],
+				edit: ["pack/Helper.hx" => null]
+			},
+			{
+				kind: "add a module to a package an unchanged module imports with a wildcard, which a name then resolves to",
+				files: [
+					"Helper.hx" => "class Helper { public static function id():Int return 1; }",
+					"pack/Tools.hx" => "package pack; class Tools { public static function two():Int return 2; }",
+					"User.hx"
+						=> "import pack.*; class User { public static function use():Int return Helper.id() + Tools.two(); }",
+					"Main.hx" => "class Main { static function main():Int return User.use(); }"
+				],
+				edit: ["pack/Helper.hx" => "package pack; class Helper { public static function id():Int return 3; }"]
 			},
 			{
 				kind: "change an inline function an unchanged module calls",

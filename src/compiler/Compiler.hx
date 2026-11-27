@@ -525,6 +525,7 @@ class Compiler {
 		} else {
 			state = new ModuleState(name, file);
 			modules.set(name, state);
+			this.state.moduleSetChanges.push(name);
 		}
 		state.packageCode = packageCode || isStandardLibrarySource;
 		this.state.inputs.setSource(name, file);
@@ -549,6 +550,7 @@ class Compiler {
 		if (!modules.exists(name))
 			return false;
 		modules.remove(name);
+		state.moduleSetChanges.push(name);
 		state.declarationOwners.release(name);
 		graph.rebuild(modules);
 		state.inputs.removeSource(name);
@@ -663,9 +665,10 @@ class Compiler {
 		var file = new SourceFile(path, source,
 			current != null && current.source.path == path && current.source.isStandardLibrarySource,
 			current == null ? null : current.source.physicalPath);
-		if (current == null)
+		if (current == null) {
 			candidate.modules.set(name, new ModuleState(name, file));
-		else {
+			candidate.moduleSetChanges.push(name);
+		} else {
 			var module = current.copy();
 			module.update(file);
 			candidate.modules.set(name, module);

@@ -41,6 +41,12 @@ class ModuleAnalyzer {
 
 	final scriptModule:Null<String>;
 
+	/**
+	 * What the dependency resolution in progress read of the set of modules besides the modules it found
+	 * (`resolveSourceDependencies`, `addTypeDependencies`), or null.
+	 */
+	var resolutionReads:Null<Map<Int, Bool>> = null;
+
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool,
 			defines:Map<String, String>,
 			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:DeclarationOwners,
@@ -163,6 +169,34 @@ class ModuleAnalyzer {
 			state.diagnostics.push(error.diagnostic);
 			throw error;
 		}
+		resolveSourceDependencies(state);
+		var ast = state.parsedAst(), typeAliases = AliasTable.of(importAliases(ast.imports));
+		ModuleCanonicalizer.addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
+		var changes = ModuleChangeAnalyzer.analyze(state, entry, typeAliases, types, compiledOnce);
+		mergeChanges(bodyChanged, changes.bodyChanged);
+		mergeChanges(signatureChanged, changes.signatureChanged);
+		mergeChanges(structuralChanged, changes.structuralChanged);
+		ModuleChangeAnalyzer.publish(state, changes);
+		state.dirty = false;
+	}
+
+	/**
+	 * Resolves the module's dependencies again from its kept syntax tree, without parsing it: a module whose resolution read a name
+	 * that has since entered or left the program (`ModuleState.resolutionReads`).
+	 */
+	public function resolveAgain(state:ModuleState):Void {
+		resolveSourceDependencies(state);
+		addTypeDependencies(state);
+	}
+
+	/**
+	 * The modules the module's syntax tree names (`state.dependencies`): what it imports and what its bodies name, resolved against
+	 * the modules there are; `addTypeDependencies` adds what its declarations name. The names they looked for and did not find, and
+	 * the packages they listed (as `pack.*`), are recorded with them (`ModuleState.resolutionReads`): with the dependencies found,
+	 * that is what the resolution read of the set of modules.
+	 */
+	function resolveSourceDependencies(state:ModuleState):Void {
+		resolutionReads = [];
 		var ast = state.parsedAst(), scanned = new ScannedDependencies(), dependencies = scanned.required;
 		for (imported in ast.imports) {
 			var importPath = imported.path;
@@ -295,14 +329,31 @@ class ModuleAnalyzer {
 		}
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
-		var typeAliases = AliasTable.of(importAliases(ast.imports));
-		ModuleCanonicalizer.addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
-		var changes = ModuleChangeAnalyzer.analyze(state, entry, typeAliases, types, compiledOnce);
-		mergeChanges(bodyChanged, changes.bodyChanged);
-		mergeChanges(signatureChanged, changes.signatureChanged);
-		mergeChanges(structuralChanged, changes.structuralChanged);
-		ModuleChangeAnalyzer.publish(state, changes);
-		state.dirty = false;
+		state.resolutionReads = takeResolutionReads();
+	}
+
+	/** What the resolution since `resolutionReads` was set read, which it stops recording. */
+	function takeResolutionReads():Array<Int> {
+		var reads = resolutionReads;
+		resolutionReads = null;
+		return reads == null ? [] : [for (key in reads.keys()) key];
+	}
+
+	/**
+	 * The key a read of the set of modules records for `name` (`ModuleState.resolutionReads`): a 32-bit hash, which a module keeps
+	 * instead of the name. Two names with one key only make a module resolve again when it need not.
+	 */
+	public static function resolutionReadKey(name:String):Int {
+		var hash:Int = cast 0x811C9DC5;
+		for (index in 0...name.length)
+			hash = (hash ^ StringTools.fastCodeAt(name, index)) * 16777619;
+		return hash;
+	}
+
+	inline function recordRead(name:String):Void {
+		var reads = resolutionReads;
+		if (reads != null)
+			reads.set(resolutionReadKey(name), true);
 	}
 
 	/**
@@ -312,6 +363,7 @@ class ModuleAnalyzer {
 	 * declaration fails with an unknown type whenever no other reachable module happens to name it.
 	 */
 	public function addTypeDependencies(state:ModuleState):Void {
+		resolutionReads = [for (key in state.resolutionReads) key => true];
 		var dependencies:Map<String, Bool> = [];
 		for (name in state.dependencies)
 			dependencies.set(name, true);
@@ -371,6 +423,7 @@ class ModuleAnalyzer {
 		addCompanionDependencies(state.name, dependencies);
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
+		state.resolutionReads = takeResolutionReads();
 	}
 
 	function addCompanionDependencies(owner:String, dependencies:Map<String, Bool>):Void {
@@ -793,6 +846,7 @@ class ModuleAnalyzer {
 			sourceLoader.load(candidate, modules);
 			if (modules.exists(candidate))
 				return candidate;
+			recordRead(candidate);
 			var parent = QualifiedName.parentOrEmpty(candidate);
 			if (parent.length == 0)
 				return null;
@@ -811,6 +865,10 @@ class ModuleAnalyzer {
 		sourceLoader.load(modulePath, modules);
 		if (modules.exists(modulePath))
 			return [modulePath];
+		if (resolutionReads != null) {
+			recordRead(modulePath);
+			recordRead(modulePath + ".*");
+		}
 		return sourceLoader.loadPackage(modulePath, modules);
 	}
 
