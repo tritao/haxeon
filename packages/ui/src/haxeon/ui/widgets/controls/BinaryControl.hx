@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import Observable;
 
@@ -17,7 +18,6 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 
 /**
@@ -96,26 +96,15 @@ class BinaryControl implements ScopeView implements Observable {
 
 	function buildControl(context:BuildContext,
 			nodeId:haxeon.ui.core.WidgetId):RenderNode {
-		// The indicator and its mark take the row's hover and press, so the body depends on every state.
-		var flags = context.interactionStates.get(nodeId);
-		flags = (checked ? flags.insert(StyleState.Checked) : flags.remove(StyleState.Checked));
-		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
-		var target = new StyleTarget(toggle ? "toggle" : "checkbox",
-			key,
-			key,
-			null,
-			[toggle ? "toggle" : "checkbox"],
-			flags);
-		var computed = context.styleResolver.resolve(target,
-			context.inheritedStyle,
-			context.theme.styles,
-			context.styleSheet,
-			style,
-			context.environment);
+		// The indicator and its thumb take the control's states.
+		var authored = StyleState.empty();
+		if (checked) authored |= StyleState.Checked;
+		if (!enabled) authored |= StyleState.Disabled;
+		var identity = new StyleIdentity(toggle ? "toggle" : "checkbox", key, key, null,
+			[toggle ? "toggle" : "checkbox"]);
+		var computed = context.resolveStyled(nodeId, identity, style, authored);
 		var node = context.createNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
-		node.setStyleIdentity(toggle ? "toggle" : "checkbox", key, key, null, [toggle ? "toggle" : "checkbox"]);
-		node.states = flags;
-		node.computedStyle = computed;
+		context.applyStyled(node, identity, computed, authored);
 		node.focusable = enabled;
 		node.enabled = enabled;
 		var semantics = new Semantics(toggle ? AccessibilityRole.Switch : AccessibilityRole.Checkbox,
@@ -138,46 +127,25 @@ class BinaryControl implements ScopeView implements Observable {
 			indicatorStyle.padding = new Insets(2.0, 2.0, 2.0, 2.0);
 			indicatorStyle.childAlignY = LayoutAlignmentY.Center;
 		}
-		var indicatorTarget = new StyleTarget(toggle ? "toggle-indicator" : "checkbox-indicator",
-			key + ":indicator",
-			null,
-			null,
-			null,
-			flags);
-		var indicatorComputed = context.styleResolver.resolve(indicatorTarget,
-			null,
-			context.theme.styles,
-			context.styleSheet,
-			indicatorStyle,
-			context.environment);
+		// The indicator resolves as its target always did, without the control's tag.
+		var indicatorIdentity = new StyleIdentity(toggle ? "toggle-indicator" : "checkbox-indicator",
+			key + ":indicator");
+		var indicatorComputed = context.resolveStyled(nodeId, indicatorIdentity, indicatorStyle, authored, null, false);
 		var indicator = context.createNode(context.rootId("indicator"),
 			toggle ? LayoutVisualKind.Box : LayoutVisualKind.Custom,
 			indicatorComputed.toLayoutStyle());
-		indicator.setStyleIdentity(toggle ? "toggle-indicator" : "checkbox-indicator",
-			key + ":indicator",
-			null,
-			null,
-			[toggle ? "toggle" : "checkbox"]);
-		indicator.states = flags;
-		indicator.computedStyle = indicatorComputed;
+		context.applyStyled(indicator, indicatorIdentity, indicatorComputed, authored, nodeId);
 		if (toggle) {
 			var thumbStyle = new LayoutStyle();
 			thumbStyle.width = LayoutAxis.fixed(15.0);
 			thumbStyle.height = LayoutAxis.fixed(15.0);
 			thumbStyle.radiusTopLeft = thumbStyle.radiusTopRight = 7.5;
 			thumbStyle.radiusBottomLeft = thumbStyle.radiusBottomRight = 7.5;
-			var thumbComputed = context.styleResolver.resolve(new StyleTarget("toggle-thumb", key + ":thumb", null,
-				null, ["toggle"], flags),
-				null,
-				context.theme.styles,
-				context.styleSheet,
-				thumbStyle,
-				context.environment);
+			var thumbIdentity = new StyleIdentity("toggle-thumb", key + ":thumb", null, null, ["toggle"]);
+			var thumbComputed = context.resolveStyled(nodeId, thumbIdentity, thumbStyle, authored, null, false);
 			var thumb = context.createNode(context.rootId("thumb"), LayoutVisualKind.Box,
 				thumbComputed.toLayoutStyle());
-			thumb.setStyleIdentity("toggle-thumb", key + ":thumb", null, null, ["toggle"]);
-			thumb.states = flags;
-			thumb.computedStyle = thumbComputed;
+			context.applyStyled(thumb, thumbIdentity, thumbComputed, authored, nodeId);
 			indicator.add(thumb);
 		}
 		if (!toggle) {

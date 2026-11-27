@@ -201,29 +201,14 @@ class RenderNode {
 		decorationCacheKeys = null;
 	}
 
-	/** Publishes the typed selector identity associated with this render node. */
-	public function setStyleIdentity(type:String,
-			?key:String, ?id:String, ?classes:Array<String>, ?tags:Array<String>):RenderNode {
-		if (type == null || type.length == 0) throw "Styled render nodes require a type";
-		styleType = type;
-		styleKey = key;
-		styleId = id;
-		styleClasses = classes == null || classes.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(classes);
-		styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
+	/** Records what its style rules select on; `BuildContext.styled` does this for a styled node. */
+	public function setStyleIdentity(identity:haxeon.ui.style.StyleIdentity):RenderNode {
+		styleType = identity.type;
+		styleKey = identity.key;
+		styleId = identity.id;
+		styleClasses = identity.classes;
+		styleTags = identity.tags;
 		return this;
-	}
-
-	/** Takes an independently built class list; the style resolver already owns a separate snapshot. */
-	@:allow(haxeon.ui.widgets.controls.Button) function setStyleIdentityWithOwnedClasses(type:String,
-			key:String,
-			id:String,
-			classes:Array<String>,
-			tags:Array<String>):Void {
-		styleType = type;
-		styleKey = key;
-		styleId = id;
-		styleClasses = classes;
-		styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
 	}
 
 	/**

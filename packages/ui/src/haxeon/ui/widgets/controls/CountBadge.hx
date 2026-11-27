@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.LayoutNode;
 
@@ -29,7 +30,7 @@ class CountBadge implements View {
 		style.background = context.theme.tokens.surfaceHover;
 		style.radiusTopLeft = style.radiusTopRight = style.radiusBottomLeft = style.radiusBottomRight = 9;
 		var node = context.createNode(context.rootId("count-badge"), LayoutVisualKind.Box, style);
-		node.setStyleIdentity("count-badge", "count-badge");
+		node.setStyleIdentity(new StyleIdentity("count-badge", "count-badge"));
 		node.add(new Text(Std.string(count),
 			null,
 			context.theme.tokens.textPrimary,

@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.text;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutNode;
@@ -44,13 +45,10 @@ class Text implements View {
 	/** The text node itself, for a widget that composes text into a node of its own, as highlighted or shortened text does. */
 	public function makeNode(context:BuildContext):RenderNode {
 		var id = context.rootId("text");
-		var computed = context.resolveStyle(context.styleTarget(id, "text", null, null, null, ["text"]),
-			style,
-			color);
+		var identity = new StyleIdentity("text", null, null, null, ["text"]);
+		var computed = context.resolveStyled(id, identity, style, null, color);
 		var node = createNode(context, id, computed.toLayoutStyle());
-		node.setStyleIdentity("text", null, null, null, ["text"]);
-		node.states = context.interactionStates.peek(id);
-		node.computedStyle = computed;
+		context.applyStyled(node, identity, computed);
 		node.layout.text = value;
 		var resolved = context.resolveTextRole(role, textStyle);
 		var colorSource = computed.source(StyleProperty.TextColor);

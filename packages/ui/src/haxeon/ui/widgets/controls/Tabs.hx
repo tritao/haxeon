@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.reactive.Signal;
 import haxeon.ui.Insets;
@@ -16,7 +17,6 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.ComputedStyle;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
@@ -158,17 +158,10 @@ class Tabs implements ScopeView {
 			if (handler != null) handler(next);
 		};
 
-		var rootFlags = context.styleStates(rootId, "tabs", key, key, null, ["tabs"]);
-		var rootComputed = context.styleResolver.resolve(new StyleTarget("tabs", key, key, null, ["tabs"], rootFlags),
-			context.inheritedStyle,
-			context.theme.styles,
-			context.styleSheet,
-			style,
-			context.environment);
+		var rootIdentity = new StyleIdentity("tabs", key, key, null, ["tabs"]);
+		var rootComputed = context.resolveStyled(rootId, rootIdentity, style);
 		var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-		root.setStyleIdentity("tabs", key, key, null, ["tabs"]);
-		root.states = rootFlags;
-		root.computedStyle = rootComputed;
+		context.applyStyled(root, rootIdentity, rootComputed);
 		var tabsSemantics = new Semantics(AccessibilityRole.TabList, "Tabs");
 		tabsSemantics.orientation = AccessibilityOrientation.Horizontal;
 		root.semantics = tabsSemantics;

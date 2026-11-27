@@ -1,5 +1,6 @@
 package haxeon.ui.widgets;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Image;
 import haxeon.ui.LayoutStyle;
@@ -64,9 +65,8 @@ class NineSliceView implements View {
 	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("nine-slice");
-			var computed = context.resolveStyle(context.styleTarget(nodeId, "nine-slice", key, key, null,
-				["nine-slice"]),
-				style);
+			var identity = new StyleIdentity("nine-slice", key, key, null, ["nine-slice"]);
+			var computed = context.resolveStyled(nodeId, identity, style);
 			var resolvedDecorations = computed.getDecorations();
 			var decorationSource = computed.source(StyleProperty.Decorations);
 			if ((resolvedDecorations == null || resolvedDecorations.decorations.length == 0)
@@ -75,9 +75,7 @@ class NineSliceView implements View {
 				computed.setDecorations(DecorationChain.of([new NineSliceDecoration(image, left, top, right, bottom)]),
 					new StyleSource("framework", "nine-slice", -1, "default"));
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-			node.setStyleIdentity("nine-slice", key, key, null, ["nine-slice"]);
-			node.states = context.interactionStates.peek(nodeId);
-			node.computedStyle = computed;
+			context.applyStyled(node, identity, computed);
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Image, label);
 			return node;
 		});

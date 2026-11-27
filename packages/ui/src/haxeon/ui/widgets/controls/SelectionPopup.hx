@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 import haxeon.ui.widgets.scroll.ScrollController;
 
 import haxeon.ui.Insets;
@@ -149,16 +150,9 @@ internal class SelectionPopup implements ScopeView {
 		dropdownStyle.childGap = 2.0;
 		dropdownStyle.radiusTopLeft = dropdownStyle.radiusTopRight = 5.0;
 		dropdownStyle.radiusBottomLeft = dropdownStyle.radiusBottomRight = 5.0;
-		var dropdownComputed = context.resolveStyle(context.styleTarget(dropdownId, "selection-popup",
-			"options",
-			"options",
-			null,
-			["selection-popup"]),
-			dropdownStyle);
-		var dropdown = context.createNode(dropdownId, LayoutVisualKind.Custom, dropdownComputed.toLayoutStyle());
-		dropdown.setStyleIdentity("selection-popup", "options", "options", null, ["selection-popup"]);
-		dropdown.states = context.interactionStates.peek(dropdownId);
-		dropdown.computedStyle = dropdownComputed;
+		var dropdown = context.styled(dropdownId, LayoutVisualKind.Custom,
+			new StyleIdentity("selection-popup", "options", "options", null, ["selection-popup"]), dropdownStyle);
+		var dropdownComputed = dropdown.computedStyle;
 		var popupDecorations = dropdownComputed.getDecorations();
 		var popupDecorationSource = dropdownComputed.source(StyleProperty.Decorations);
 		if ((popupDecorations == null || popupDecorations.decorations.length == 0)

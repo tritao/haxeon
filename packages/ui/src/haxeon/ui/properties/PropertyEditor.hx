@@ -1,5 +1,6 @@
 package haxeon.ui.properties;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import Observable;
 import haxeon.ui.widgets.KeyedView;
@@ -487,12 +488,9 @@ private class PropertyEditorRowContent implements View {
 			style:LayoutStyle):RenderNode {
 		return context.withScope(RootKey, function() {
 			var rootId = id == null ? context.id("column") : id;
-			var computed = context.resolveStyle(context.styleTarget(rootId, "column", "row", "row", null, ["column"]),
-				style);
-			var node = context.createNode(rootId, LayoutVisualKind.Box, computed.toLayoutStyle());
-			node.setStyleIdentity("column", "row", "row", null, ["column"]);
-			node.states = context.interactionStates.peek(rootId);
-			node.computedStyle = computed;
+			var node = context.styled(rootId, LayoutVisualKind.Box,
+				new StyleIdentity("column", "row", "row", null, ["column"]), style);
+			var computed = node.computedStyle;
 			for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
 			return node;
 		});

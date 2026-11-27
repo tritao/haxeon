@@ -147,8 +147,10 @@ The rules the whole UI follows:
   (the caller passes the value and is told of changes).
 - **Every read is a dependency, interaction states included.** A component runs again exactly when something it read
   changed.
-- **Styling.** A widget gives its style identity once, as a `StyleIdentity` struct, to one styled-node factory, which
-  reads only the states some rule selects for it and resolves the style. Routing owns `RenderNode.states`; the widget
+- **Styling.** A widget gives its style identity once, as a `StyleIdentity` struct, to one styled-node factory
+  (`BuildContext.styled`), which reads only the states some rule selects for it and resolves the style from exactly
+  those and the widget's authored states. A part of a control (a check box's indicator) resolves from the control's
+  states (`resolveStyled` with the control's ID, `applyStyled` with `statesOf`). Routing owns `RenderNode.states`; the widget
   supplies only its authored states (disabled, selected, checked). Small values (`TextSelection`, `Insets`, `Color`,
   `Rect`) are structs; `LayoutStyle` becomes one only if measurements allow.
 - **Roots.** A view's build returns a `ViewRoot`, which a caller can place and read (`walk` gives read-only `NodeInfo`)
@@ -169,7 +171,8 @@ defers in favour of the runtime checks.
 
 ## Next steps
 
-1. Without compiler work: the read-only root type (done: `ViewRoot`); the `StyleIdentity` struct with the styled-node factory, where
+1. Without compiler work: the read-only root type (done: `ViewRoot`); the `StyleIdentity` struct with the styled-node factory
+   (done: `BuildContext.styled`, `resolveStyled`, `applyStyled`), where
    routing owns `RenderNode.states`; inputs structs for `TextField` and `Tabs` with handwritten constructors.
 2. Haxeon: named arguments, then the memberwise initializer and `with` ([NAMED_ARGUMENTS.md](../../../docs/design/NAMED_ARGUMENTS.md)).
    Then move every component's configuration into an inputs struct.

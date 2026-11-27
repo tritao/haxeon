@@ -514,7 +514,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    interaction read added signals and dependency edges for text/layout nodes and regressed the pilot census; it was
    removed. Per-node interaction signals have since landed in a narrower form: `InteractionStateStore` keeps one
    observable source per widget, with a field each for hovered, pressed, focused and the authored states, and a build
-   depends on the fields it read. Style reads go through `BuildContext.styleStates`, which depends only on the states some
+   depends on the fields it read. Style reads go through `BuildContext.styled`/`resolveStyled`, which depend only on the states some
    rule for that identity selects on (`StateRuleIndex`), so text and layout nodes that no stateful rule names read
    nothing and get no source. A component scope is woken by those subscriptions; interaction routing no longer marks
    it. Derived style values remain part of the later widget migration.

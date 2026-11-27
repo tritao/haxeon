@@ -1,5 +1,6 @@
 package haxeon.ui.widgets;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import Observable;
 import haxeon.ui.Canvas;
@@ -175,16 +176,13 @@ class GpuViewport implements View {
 	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("viewport");
-			var computed = context.resolveStyle(context.styleTarget(nodeId, "gpu-viewport", key, key, null,
-				["gpu-viewport"]),
-				style);
+			var identity = new StyleIdentity("gpu-viewport", key, key, null, ["gpu-viewport"]);
+			var computed = context.resolveStyled(nodeId, identity, style);
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-			node.setStyleIdentity("gpu-viewport", key, key, null, ["gpu-viewport"]);
-			node.states = context.interactionStates.peek(nodeId);
+			context.applyStyled(node, identity, computed);
 			node.enabled = enabled;
 			node.hitTestSelf = enabled;
 			node.cachePolicy = CachePolicy.Raster;
-			node.computedStyle = computed;
 			node.semantics = new Semantics(AccessibilityRole.Group, label == null ? "GPU viewport" : label);
 			var cacheKey = "viewport:" + content.revision()
 				+ ":camera:" + camera.revision + ":fit:" + (fitMargin == null ? "off" : Std.string(fitMargin))

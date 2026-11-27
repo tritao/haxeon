@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
@@ -10,7 +11,6 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.widgets.Icon;
 
 /** Accessible icon-only button with a required non-visual label. */
@@ -66,17 +66,14 @@ class IconButton implements ScopeView {
 	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-		var flags = context.styleStates(id, "button", key, key, ["icon-button"], ["button", "icon-button"]);
-		flags = !enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled);
-		var computed = context.resolveStyle(new StyleTarget("button", key, key, ["icon-button"], [
+		var authored = enabled ? StyleState.empty() : StyleState.Disabled;
+		var identity = new StyleIdentity("button", key, key, ["icon-button"], [
 			"button",
 			"icon-button"
-		], flags),
-			style);
+		]);
+		var computed = context.resolveStyled(id, identity, style, authored, null);
 		var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-		node.setStyleIdentity("button", key, key, ["icon-button"], ["button", "icon-button"]);
-		node.states = flags;
-		node.computedStyle = computed;
+		context.applyStyled(node, identity, computed, authored);
 		node.focusable = enabled;
 		node.enabled = enabled;
 		var semantics = new Semantics(AccessibilityRole.Button, label);

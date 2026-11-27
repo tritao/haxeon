@@ -1,5 +1,6 @@
 package haxeon.ui.docking;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Tabs;
@@ -857,7 +858,7 @@ private class DockDropTargetView implements View {
 			var previewNode = context.createNode(context.rootId("drop-preview:" + targetPanelId),
 				LayoutVisualKind.Custom,
 				previewStyle);
-			previewNode.setStyleIdentity("dock-drop-preview", targetPanelId);
+			previewNode.setStyleIdentity(new StyleIdentity("dock-drop-preview", targetPanelId));
 			previewNode.hitTestSelf = false;
 			var previewKey = activePreview.sourcePanelId
 				+ ":" + activePreview.targetPanelId + ":" + Std.string(activePreview.zone);

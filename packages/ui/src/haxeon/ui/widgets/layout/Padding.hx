@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.layout;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutNode;
@@ -31,13 +32,9 @@ class Padding implements View {
 	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var id = context.rootId("padding");
-			var computed = context.resolveStyle(context.styleTarget(id, "padding",
-				key.rawValue, key.rawValue, null, ["padding"]),
-				style);
-			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			node.setStyleIdentity("padding", key.rawValue, key.rawValue, null, ["padding"]);
-			node.states = context.interactionStates.peek(id);
-			node.computedStyle = computed;
+			var node = context.styled(id, LayoutVisualKind.Box,
+				new StyleIdentity("padding", key.rawValue, key.rawValue, null, ["padding"]), style);
+			var computed = node.computedStyle;
 			var content = context.withStyleParent(computed, function() {
 				return context.withScope(new Key("content"), function() return child.build(context));
 			});

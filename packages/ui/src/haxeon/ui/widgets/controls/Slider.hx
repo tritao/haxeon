@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import Observable;
 
@@ -17,7 +18,6 @@ import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleTarget;
 
 /**
  * Horizontal value slider with Haxe-owned pointer, keyboard, and semantic behavior. It draws only its track and thumb:
@@ -95,18 +95,11 @@ class Slider implements ScopeView implements Observable {
 	public function buildBody(context:BuildContext):ViewRoot return buildControl(context, context.rootId("slider"));
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
-		var flags = context.styleStates(nodeId, "slider", key, key, null, ["slider"]);
-		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
-		var computed = context.styleResolver.resolve(new StyleTarget("slider", key, key, null, ["slider"], flags),
-			context.inheritedStyle,
-			context.theme.styles,
-			context.styleSheet,
-			style,
-			context.environment);
+		var authored = enabled ? StyleState.empty() : StyleState.Disabled;
+		var identity = new StyleIdentity("slider", key, key, null, ["slider"]);
+		var computed = context.resolveStyled(nodeId, identity, style, authored, null);
 		var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-		node.setStyleIdentity("slider", key, key, null, ["slider"]);
-		node.states = flags;
-		node.computedStyle = computed;
+		context.applyStyled(node, identity, computed, authored);
 		node.focusable = enabled;
 		node.enabled = enabled;
 		var semantics = new Semantics(AccessibilityRole.Slider, accessibleName, Std.string(value));

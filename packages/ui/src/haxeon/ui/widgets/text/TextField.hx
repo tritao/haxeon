@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.text;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.platform.input.TextEdit;
 import haxeon.ui.TextLayout.TextPosition;
@@ -320,22 +321,14 @@ class TextField implements ScopeView {
 		editor.updateStyle(resolved.textStyle, paragraph);
 		editor.configurePresentation(colorRangeProvider, decorationProvider, presentationRevision);
 
-		var flags = context.styleStates(id, "text-field", key, key, classes, ["text-field"]);
-		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
-		var computed = context.styleResolver.resolve(new StyleTarget("text-field", key, key, classes, ["text-field"],
-			flags),
-			context.inheritedStyle,
-			context.theme.styles,
-			context.styleSheet,
-			style,
-			context.environment);
+		var authored = enabled ? StyleState.empty() : StyleState.Disabled;
+		var identity = new StyleIdentity("text-field", key, key, classes, ["text-field"]);
+		var computed = context.resolveStyled(id, identity, style, authored, null);
 		if (textColor != null) computed.setColor(StyleProperty.TextColor,
 			textColor,
 			new StyleSource("local", "text-field", -1, "local"));
 		var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-		node.setStyleIdentity("text-field", key, key, classes, ["text-field"]);
-		node.states = flags;
-		node.computedStyle = computed;
+		context.applyStyled(node, identity, computed, authored);
 		node.focusable = enabled;
 		node.enabled = enabled;
 		var semantics = new Semantics(semanticRole, label == null ? key : label);

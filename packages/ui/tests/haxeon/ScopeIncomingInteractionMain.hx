@@ -12,6 +12,7 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.core.ViewRoot;
 import haxeon.ui.core.WidgetId;
+import haxeon.ui.style.StyleIdentity;
 import haxeon.ui.style.StyleState;
 
 /** A retained incoming owner must receive interactions queued against the outgoing physical instance. */
@@ -146,7 +147,7 @@ import haxeon.ui.style.StyleState;
 		builds++;
 		var id = context.rootId("leaf");
 		var node = context.createNode(id, LayoutVisualKind.Box);
-		node.setStyleIdentity("button", "fixture", "fixture", null, ["button"]);
+		node.setStyleIdentity(new StyleIdentity("button", "fixture", "fixture", null, ["button"]));
 		node.states = context.interactionStates.get(id);
 		node.layout.style.zIndex = node.states.contains(flag) ? 2 : 1;
 		return node;

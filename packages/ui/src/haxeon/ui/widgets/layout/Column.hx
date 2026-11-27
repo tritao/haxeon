@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.layout;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 import haxeon.ui.widgets.KeyedView;
 
 import haxeon.ui.LayoutNode;
@@ -33,13 +34,9 @@ class Column implements View {
 	/** Build with an ID already claimed by a self-updating owner. */
 	public function buildWithId(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		return context.withScope(key, function() {
-			var computed = context.resolveStyle(context.styleTarget(id, "column", key.rawValue, key.rawValue, null,
-				["column"]),
-				style);
-			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			node.setStyleIdentity("column", key.rawValue, key.rawValue, null, ["column"]);
-			node.states = context.interactionStates.peek(id);
-			node.computedStyle = computed;
+			var node = context.styled(id, LayoutVisualKind.Box,
+				new StyleIdentity("column", key.rawValue, key.rawValue, null, ["column"]), style);
+			var computed = node.computedStyle;
 			for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
 			return node;
 		});

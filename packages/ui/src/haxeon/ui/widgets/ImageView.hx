@@ -1,5 +1,6 @@
 package haxeon.ui.widgets;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Image;
@@ -49,17 +50,10 @@ class ImageView implements View {
 	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("image");
-			var computed = context.styleResolver.resolve(context.styleTarget(nodeId, "image", key, key, null,
-				["image"]),
-				context.inheritedStyle,
-				context.theme.styles,
-				context.styleSheet,
-				style,
-				context.environment);
+			var identity = new StyleIdentity("image", key, key, null, ["image"]);
+			var computed = context.resolveStyled(nodeId, identity, style);
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-			node.setStyleIdentity("image", key, key, null, ["image"]);
-			node.states = context.interactionStates.peek(nodeId);
-			node.computedStyle = computed;
+			context.applyStyled(node, identity, computed);
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Image, label);
 			node.onPaint(function(canvas:Canvas, geometry:ResolvedLayoutItem) {
 				if (image.isDisposed() || geometry.width <= 0.0 || geometry.height <= 0.0) return;

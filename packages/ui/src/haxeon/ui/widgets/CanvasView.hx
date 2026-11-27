@@ -1,5 +1,6 @@
 package haxeon.ui.widgets;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.LayoutAxis;
@@ -91,12 +92,8 @@ class CanvasView implements View {
 	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("canvas");
-			var computed = context.resolveStyle(context.styleTarget(nodeId, "canvas", key, key, null, ["canvas"]),
-				style);
-			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-			node.setStyleIdentity("canvas", key, key, null, ["canvas"]);
-			node.states = context.interactionStates.peek(nodeId);
-			node.computedStyle = computed;
+			var node = context.styled(nodeId, LayoutVisualKind.Custom,
+				new StyleIdentity("canvas", key, key, null, ["canvas"]), style);
 			node.hitTestSelf = hitTestSelf;
 			node.cachePolicy = cachePolicy;
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Group, label);

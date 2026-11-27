@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -13,7 +14,6 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 
 /** Selectable radio option; use RadioGroup for exclusive selection and arrow keys. */
@@ -76,21 +76,14 @@ class Radio implements ScopeView {
 	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildRadio(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
-		// The indicator and its dot take the row's hover and press, so the body depends on every state.
-		var flags = context.interactionStates.get(nodeId);
-		flags = (selected ? flags.insert(StyleState.Selected) : flags.remove(StyleState.Selected));
-		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
-		var computed = context.styleResolver.resolve(new StyleTarget("radio", key.rawValue, key.rawValue, null,
-			["radio"], flags),
-			context.inheritedStyle,
-			context.theme.styles,
-			context.styleSheet,
-			style,
-			context.environment);
+		// The indicator, its dot and its mark take the row's states.
+		var authored = StyleState.empty();
+		if (selected) authored |= StyleState.Selected;
+		if (!enabled) authored |= StyleState.Disabled;
+		var identity = new StyleIdentity("radio", key.rawValue, key.rawValue, null, ["radio"]);
+		var computed = context.resolveStyled(nodeId, identity, style, authored, null);
 		var node = context.createNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
-		node.setStyleIdentity("radio", key.rawValue, key.rawValue, null, ["radio"]);
-		node.states = flags;
-		node.computedStyle = computed;
+		context.applyStyled(node, identity, computed, authored);
 		node.focusable = enabled;
 		node.enabled = enabled;
 		var semantics = new Semantics(AccessibilityRole.Radio, label, value);
@@ -106,19 +99,13 @@ class Radio implements ScopeView {
 		indicatorStyle.childAlignX = LayoutAlignmentX.Center;
 		indicatorStyle.childAlignY = LayoutAlignmentY.Center;
 		indicatorStyle.childDistribution = LayoutDistribution.Center;
-		var indicatorComputed = context.styleResolver.resolve(new StyleTarget("radio-indicator",
-			key.rawValue + ":indicator", null, null, ["radio"], flags),
-			null,
-			context.theme.styles,
-			context.styleSheet,
-			indicatorStyle,
-			context.environment);
+		var indicatorIdentity = new StyleIdentity("radio-indicator", key.rawValue + ":indicator", null, null,
+			["radio"]);
+		var indicatorComputed = context.resolveStyled(nodeId, indicatorIdentity, indicatorStyle, authored, null, false);
 		var indicator = context.createNode(context.rootId("indicator"),
 			LayoutVisualKind.Box,
 			indicatorComputed.toLayoutStyle());
-		indicator.setStyleIdentity("radio-indicator", key.rawValue + ":indicator", null, null, ["radio"]);
-		indicator.states = flags;
-		indicator.computedStyle = indicatorComputed;
+		context.applyStyled(indicator, indicatorIdentity, indicatorComputed, authored, nodeId);
 		var dotStyle = new LayoutStyle();
 		dotStyle.width = LayoutAxis.fixed(12.0);
 		dotStyle.height = LayoutAxis.fixed(12.0);
@@ -127,33 +114,19 @@ class Radio implements ScopeView {
 		dotStyle.childAlignX = LayoutAlignmentX.Center;
 		dotStyle.childAlignY = LayoutAlignmentY.Center;
 		dotStyle.childDistribution = LayoutDistribution.Center;
-		var dotComputed = context.styleResolver.resolve(new StyleTarget("radio-dot", key.rawValue + ":dot", null,
-			null, ["radio"], flags),
-			null,
-			context.theme.styles,
-			context.styleSheet,
-			dotStyle,
-			context.environment);
+		var dotIdentity = new StyleIdentity("radio-dot", key.rawValue + ":dot", null, null, ["radio"]);
+		var dotComputed = context.resolveStyled(nodeId, dotIdentity, dotStyle, authored, null, false);
 		var dot = context.createNode(context.rootId("dot"), LayoutVisualKind.Box, dotComputed.toLayoutStyle());
-		dot.setStyleIdentity("radio-dot", key.rawValue + ":dot", null, null, ["radio"]);
-		dot.states = flags;
-		dot.computedStyle = dotComputed;
+		context.applyStyled(dot, dotIdentity, dotComputed, authored, nodeId);
 		var markStyle = new LayoutStyle();
 		markStyle.width = LayoutAxis.fixed(6.0);
 		markStyle.height = LayoutAxis.fixed(6.0);
 		markStyle.radiusTopLeft = markStyle.radiusTopRight = 3.0;
 		markStyle.radiusBottomLeft = markStyle.radiusBottomRight = 3.0;
-		var markComputed = context.styleResolver.resolve(new StyleTarget("radio-mark", key.rawValue + ":mark", null,
-			null, ["radio"], flags),
-			null,
-			context.theme.styles,
-			context.styleSheet,
-			markStyle,
-			context.environment);
+		var markIdentity = new StyleIdentity("radio-mark", key.rawValue + ":mark", null, null, ["radio"]);
+		var markComputed = context.resolveStyled(nodeId, markIdentity, markStyle, authored, null, false);
 		var mark = context.createNode(context.rootId("mark"), LayoutVisualKind.Box, markComputed.toLayoutStyle());
-		mark.setStyleIdentity("radio-mark", key.rawValue + ":mark", null, null, ["radio"]);
-		mark.states = flags;
-		mark.computedStyle = markComputed;
+		context.applyStyled(mark, markIdentity, markComputed, authored, nodeId);
 		dot.add(mark);
 		indicator.add(dot);
 		node.add(indicator);

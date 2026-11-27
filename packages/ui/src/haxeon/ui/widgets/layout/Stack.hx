@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.layout;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -28,13 +29,9 @@ class Stack implements View {
 	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var id = context.rootId("stack");
-			var computed = context.resolveStyle(context.styleTarget(id, "stack", key.rawValue, key.rawValue, null,
-				["stack"]),
-				style);
-			var root = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			root.setStyleIdentity("stack", key.rawValue, key.rawValue, null, ["stack"]);
-			root.states = context.interactionStates.peek(id);
-			root.computedStyle = computed;
+			var root = context.styled(id, LayoutVisualKind.Box,
+				new StyleIdentity("stack", key.rawValue, key.rawValue, null, ["stack"]), style);
+			var computed = root.computedStyle;
 			for (layer in layers) {
 				var child = context.withStyleParent(computed,
 					function() return context.withScope(new Key(layer.key), function() {

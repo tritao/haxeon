@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.layout;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
@@ -14,7 +15,6 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityRequest;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.StyleTarget;
 
 /**
 	Two-pane composition with a controlled, draggable leading or trailing
@@ -116,20 +116,11 @@ class SplitView implements View {
 
 			if (dividerExtent > 0.0) {
 				var dividerId = context.id("divider");
-				var dividerStates = context.styleStates(dividerId, "split-divider", key.rawValue,
-					key.rawValue + ":divider", null, ["split-divider"]);
-				var dividerComputed = context.resolveStyle(new StyleTarget("split-divider",
-					key.rawValue,
-					key.rawValue + ":divider",
-					null,
-					["split-divider"],
-					dividerStates),
-					dividerLayoutStyle(horizontal));
-				var divider = context.createNode(dividerId, LayoutVisualKind.Box, dividerComputed.toLayoutStyle());
-				divider.setStyleIdentity("split-divider", key.rawValue, key.rawValue + ":divider", null,
+				var dividerIdentity = new StyleIdentity("split-divider", key.rawValue, key.rawValue + ":divider", null,
 					["split-divider"]);
-				divider.states = dividerStates;
-				divider.computedStyle = dividerComputed;
+				var dividerComputed = context.resolveStyled(dividerId, dividerIdentity, dividerLayoutStyle(horizontal));
+				var divider = context.createNode(dividerId, LayoutVisualKind.Box, dividerComputed.toLayoutStyle());
+				context.applyStyled(divider, dividerIdentity, dividerComputed);
 				if (dividerHairline) {
 					var color = divider.layout.style.background;
 					divider.layout.style.background = Color.rgba(0, 0, 0, 0);

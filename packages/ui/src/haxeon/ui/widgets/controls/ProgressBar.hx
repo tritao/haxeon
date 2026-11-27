@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import Observable;
 
@@ -88,17 +89,10 @@ class ProgressBar implements ScopeView implements Observable {
 	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
-		var computed = context.styleResolver.resolve(context.styleTarget(nodeId, "progress-bar", key, key, null,
-			["progress-bar"]),
-			context.inheritedStyle,
-			context.theme.styles,
-			context.styleSheet,
-			style,
-			context.environment);
+		var identity = new StyleIdentity("progress-bar", key, key, null, ["progress-bar"]);
+		var computed = context.resolveStyled(nodeId, identity, style);
 		var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-		node.setStyleIdentity("progress-bar", key, key, null, ["progress-bar"]);
-		node.states = context.interactionStates.peek(nodeId);
-		node.computedStyle = computed;
+		context.applyStyled(node, identity, computed);
 		var indeterminate = mode == ProgressMode.Indeterminate;
 		var semantics = new Semantics(AccessibilityRole.ProgressBar,
 			label,

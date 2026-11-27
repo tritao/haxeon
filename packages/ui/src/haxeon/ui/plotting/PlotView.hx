@@ -1,5 +1,6 @@
 package haxeon.ui.plotting;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
@@ -83,15 +84,13 @@ class PlotView implements View {
 	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("plot");
-			var computed = context.resolveStyle(context.styleTarget(nodeId, "plot", key, key, null, ["plot"]),
-				style);
+			var identity = new StyleIdentity("plot", key, key, null, ["plot"]);
+			var computed = context.resolveStyled(nodeId, identity, style);
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-			node.setStyleIdentity("plot", key, key, null, ["plot"]);
-			node.states = context.interactionStates.peek(nodeId);
+			context.applyStyled(node, identity, computed);
 			node.enabled = enabled;
 			node.hitTestSelf = enabled;
 			node.cachePolicy = CachePolicy.Raster;
-			node.computedStyle = computed;
 			node.semantics = new Semantics(AccessibilityRole.Group, label == null ? "Plot" : label);
 			var watch = context.resourceState(context.id("plot-paint-watch"),
 				function() return new PlotPaintWatch(model),

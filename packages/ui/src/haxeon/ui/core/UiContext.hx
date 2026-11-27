@@ -1,4 +1,5 @@
 package haxeon.ui.core;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.style.Density;
 import haxeon.reactive.ReactiveRuntime;
@@ -1349,7 +1350,7 @@ class UiContext implements Disposable {
 		var id = buildContext.withScope(new haxeon.ui.core.Key("__devtools_inspection"),
 			function() return buildContext.id("overlay"));
 		var node = new RenderNode(id, haxeon.ui.LayoutNode.LayoutVisualKind.Custom, style);
-		node.setStyleIdentity("devtools-overlay", null, null);
+		node.setStyleIdentity(new StyleIdentity("devtools-overlay", null, null));
 		node.hitTestSelf = false;
 		node.onPaint(function(canvas, geometry) {
 			if (inspectionHighlight <= 0 || root == null) return;

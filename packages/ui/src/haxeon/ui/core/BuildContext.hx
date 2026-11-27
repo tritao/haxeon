@@ -9,6 +9,7 @@ import haxeon.ui.animation.AnimationScheduler;
 import haxeon.ui.gestures.GestureArena;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleEnvironment;
+import haxeon.ui.style.StyleIdentity;
 import haxeon.ui.style.StyleResolver;
 import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleState;
@@ -244,19 +245,56 @@ class BuildContext implements Disposable {
 		localTextColor);
 
 	/**
-	 * The widget `id`'s states, to style it with this identity. A build that calls this depends only on the states some rule
-	 * for the identity selects on, since no other change can restyle it; the rest are returned to be recorded on the node.
+	 * A node of `kind` styled as `identity`: the one way a widget makes a styled node. Resolves its style
+	 * (`resolveStyled`) and records the identity, the computed style and the states on it (`applyStyled`).
 	 */
-	public function styleStates(id:WidgetId, type:String, ?key:String, ?styleId:String, ?classes:Array<String>,
-			?tags:Array<String>):StyleState {
-		return interactionStates.read(id, stateRules.states(theme.styles, styleSheet, styleRevision, type, key, styleId,
-			StyleTarget.shared(classes), StyleTarget.shared(tags)));
+	public function styled(id:WidgetId, kind:haxeon.ui.LayoutNode.LayoutVisualKind, identity:StyleIdentity,
+			?local:LayoutStyle, ?authored:StyleState, ?localTextColor:haxeon.ui.Color, inherit:Bool = true):RenderNode {
+		var computed = resolveStyled(id, identity, local, authored, localTextColor, inherit);
+		var node = createNode(id, kind, computed.toLayoutStyle());
+		applyStyled(node, identity, computed, authored);
+		return node;
 	}
 
-	/** A style target for the widget `id` with this identity and its styleStates. */
-	public function styleTarget(id:WidgetId, type:String, ?key:String, ?styleId:String, ?classes:Array<String>,
-			?tags:Array<String>):StyleTarget {
-		return new StyleTarget(type, key, styleId, classes, tags, styleStates(id, type, key, styleId, classes, tags));
+	/**
+	 * The style of the widget `id` as `identity`, with `local` over the rules. It resolves from the widget's states that some
+	 * rule for the identity selects on, which are all a build that calls this depends on, and from the `authored` states its
+	 * widget sets itself (disabled, selected, checked). `inherit` false resolves without the inherited style, as an
+	 * indicator inside a control does.
+	 */
+	public function resolveStyled(id:WidgetId, identity:StyleIdentity, ?local:LayoutStyle, ?authored:StyleState,
+			?localTextColor:haxeon.ui.Color, inherit:Bool = true):ComputedStyle {
+		var target = new StyleTarget(identity.type, identity.key, identity.id, identity.classes, identity.tags,
+			styleStates(id, identity, authored));
+		return styleResolver.resolve(target, inherit ? styleParent : null, theme.styles, styleSheet, local, environment,
+			localTextColor);
+	}
+
+	/**
+	 * The states the style of the widget `id` as `identity` resolves from: those of its states some rule for the identity
+	 * selects on, which are all a build that calls this depends on, and the `authored` ones its widget sets itself. For a
+	 * widget that resolves its own targets; `resolveStyled` does this for the others.
+	 */
+	public function styleStates(id:WidgetId, identity:StyleIdentity, ?authored:StyleState):StyleState {
+		var selected = stateRules.states(theme.styles, styleSheet, styleRevision, identity.type, identity.key,
+			identity.id,
+			identity.classes, identity.tags);
+		var states = interactionStates.read(id, selected) & selected;
+		return authored == null ? states : states | authored;
+	}
+
+	/**
+	 * Records `identity`, `computed` and its states on `node`, a node the widget made itself: routing keeps the routed
+	 * states (hovered, pressed, focused) current on it afterwards, and the `authored` ones are the widget's. The states are
+	 * the node's own, or those of `statesOf`.
+	 */
+	public function applyStyled(node:RenderNode, identity:StyleIdentity, computed:ComputedStyle, ?authored:StyleState,
+			?statesOf:WidgetId):Void {
+		node.setStyleIdentity(identity);
+		// A part of a control (a check box's indicator) takes the states of the control it belongs to.
+		var states = interactionStates.peek(statesOf == null ? node.id : statesOf);
+		node.states = authored == null ? states : states | authored;
+		node.computedStyle = computed;
 	}
 
 	final stateRules = new StateRuleIndex();

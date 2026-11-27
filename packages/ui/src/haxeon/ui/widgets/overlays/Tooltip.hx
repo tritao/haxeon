@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.overlays;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -146,16 +147,9 @@ class Tooltip implements View {
 			});
 			var root = context.withScope(new Key("layers"), function() {
 				var rootId = context.rootId("stack");
-				var rootComputed = context.resolveStyle(context.styleTarget(rootId, "tooltip-layer",
-					key.rawValue,
-					key.rawValue,
-					null,
-					["tooltip-layer"]),
-					rootStyle);
-				var result = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-				result.setStyleIdentity("tooltip-layer", key.rawValue, key.rawValue, null, ["tooltip-layer"]);
-				result.states = context.interactionStates.peek(rootId);
-				result.computedStyle = rootComputed;
+				var result = context.styled(rootId, LayoutVisualKind.Box,
+					new StyleIdentity("tooltip-layer", key.rawValue, key.rawValue, null, ["tooltip-layer"]), rootStyle);
+				var rootComputed = result.computedStyle;
 				var anchorNode = context.withStyleParent(rootComputed,
 					function() return context.withScope(new Key("anchor"),
 					function() return context.build(anchor, anchorModifier)));
@@ -284,15 +278,10 @@ class Tooltip implements View {
 			tipStyle.visible = focused.value || (hoverGroup == null ? state.value : groupVisible);
 			tipStyle.padding = new Insets(PADDING, 7, PADDING, 7);
 			var tipId = context.id("tooltip");
-			var computed = context.resolveStyle(context.styleTarget(tipId, "tooltip",
-				key.rawValue,
-				key.rawValue,
-				null,
-				["tooltip"]),
-				tipStyle);
+			var identity = new StyleIdentity("tooltip", key.rawValue, key.rawValue, null, ["tooltip"]);
+			var computed = context.resolveStyled(tipId, identity, tipStyle);
 			var tip = context.createNode(tipId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-			tip.computedStyle = computed;
-			tip.setStyleIdentity("tooltip", key.rawValue, key.rawValue, null, ["tooltip"]);
+			context.applyStyled(tip, identity, computed);
 			// A hidden tooltip builds no content: showing it rebuilds, and the layout feedback below positions it that frame.
 			// The tooltip owns the box around its content, whose width placement limits; the content's own root is the
 			// content view's.
@@ -373,13 +362,9 @@ private class AnonymousTooltipContent implements View {
 
 	public function build(context:BuildContext):ViewRoot {
 		var nodeId = context.rootId("tooltip");
-		var computed = context.resolveStyle(context.styleTarget(nodeId, "tooltip", "tooltip", "tooltip", null,
-			["tooltip"]),
-			style);
-		var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-		node.setStyleIdentity("tooltip", "tooltip", "tooltip", null, ["tooltip"]);
-		node.states = context.interactionStates.peek(nodeId);
-		node.computedStyle = computed;
+		var node = context.styled(nodeId, LayoutVisualKind.Custom,
+			new StyleIdentity("tooltip", "tooltip", "tooltip", null, ["tooltip"]), style);
+		var computed = node.computedStyle;
 		if (showContent) {
 			var child = context.withStyleParent(computed,
 				function() return context.withScope(new Key("content"), function() return content.build(context)));

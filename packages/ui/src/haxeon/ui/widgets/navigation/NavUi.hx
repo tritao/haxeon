@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.navigation;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutNode;
@@ -8,7 +9,6 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.widgets.text.Text;
 
 /** Phone design tokens (docs/phone-ui/CONTRACTS.md) and small node builders shared by the navigation widgets. */
@@ -34,12 +34,10 @@ internal class NavUi {
 	/** A styled box node under the current scope with the given widget type. */
 	public static function box(context:BuildContext, id:WidgetId, type:String, key:String, style:LayoutStyle,
 			?classes:Array<String>):RenderNode {
-		var flags = context.styleStates(id, type, key, key, classes, [type]);
-		var computed = context.resolveStyle(new StyleTarget(type, key, key, classes, [type], flags), style);
+		var identity = new StyleIdentity(type, key, key, classes, [type]);
+		var computed = context.resolveStyled(id, identity, style);
 		var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-		node.setStyleIdentity(type, key, key, classes, [type]);
-		node.states = flags;
-		node.computedStyle = computed;
+		context.applyStyled(node, identity, computed);
 		return node;
 	}
 

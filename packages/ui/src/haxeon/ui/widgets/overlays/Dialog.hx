@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.overlays;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
@@ -57,16 +58,8 @@ class Dialog implements View {
 			rootStyle.positioning = LayoutPositioning.Absolute;
 			rootStyle.overlay = true;
 			var rootId = context.rootId("dialog");
-			var rootComputed = context.resolveStyle(context.styleTarget(rootId, "dialog",
-				key.rawValue,
-				key.rawValue,
-				null,
-				["dialog"]),
-				rootStyle);
-			var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-			root.setStyleIdentity("dialog", key.rawValue, key.rawValue, null, ["dialog"]);
-			root.states = context.interactionStates.peek(rootId);
-			root.computedStyle = rootComputed;
+			var root = context.styled(rootId, LayoutVisualKind.Box,
+				new StyleIdentity("dialog", key.rawValue, key.rawValue, null, ["dialog"]), rootStyle);
 			root.focusTrap = true;
 			root.hitTestSelf = false;
 			var semantics = new Semantics(AccessibilityRole.Dialog, title);
@@ -79,16 +72,8 @@ class Dialog implements View {
 			backdropStyle.height = LayoutAxis.grow();
 			backdropStyle.positioning = LayoutPositioning.Absolute;
 			var backdropId = context.id("backdrop");
-			var backdropComputed = context.resolveStyle(context.styleTarget(backdropId, "dialog-backdrop",
-				"backdrop",
-				"backdrop",
-				null,
-				["dialog"]),
-				backdropStyle);
-			var backdrop = context.createNode(backdropId, LayoutVisualKind.Box, backdropComputed.toLayoutStyle());
-			backdrop.setStyleIdentity("dialog-backdrop", "backdrop", "backdrop", null, ["dialog"]);
-			backdrop.states = context.interactionStates.peek(backdropId);
-			backdrop.computedStyle = backdropComputed;
+			var backdrop = context.styled(backdropId, LayoutVisualKind.Box,
+				new StyleIdentity("dialog-backdrop", "backdrop", "backdrop", null, ["dialog"]), backdropStyle);
 			if (dismissOnOutside && hasDismissHandler) backdrop.on(UiEventKind.Click, function(event) {
 				onDismiss();
 				event.stopPropagation();
@@ -104,39 +89,24 @@ class Dialog implements View {
 			centerStyle.childAlignY = LayoutAlignmentY.Center;
 			centerStyle.childDistribution = LayoutDistribution.Center;
 			var centerId = context.id("dialog-center");
-			var centerComputed = context.resolveStyle(context.styleTarget(centerId, "dialog-center", "center", "center",
-				null,
-				["dialog"]),
-				centerStyle);
-			var center = context.createNode(centerId, LayoutVisualKind.Box, centerComputed.toLayoutStyle());
-			center.setStyleIdentity("dialog-center", "center", "center", null, ["dialog"]);
-			center.states = context.interactionStates.peek(centerId);
-			center.computedStyle = centerComputed;
+			var center = context.styled(centerId, LayoutVisualKind.Box,
+				new StyleIdentity("dialog-center", "center", "center", null, ["dialog"]), centerStyle);
 			var panelStyle = new LayoutStyle();
 			panelStyle.width = LayoutAxis.fixed(width);
 			var panelId = context.id("dialog-panel");
-			var panelComputed = context.resolveStyle(context.styleTarget(panelId, "dialog-panel", "panel", "panel",
-				null, ["dialog"]),
-				panelStyle);
-			var panel = context.createNode(panelId, LayoutVisualKind.Box, panelComputed.toLayoutStyle());
-			panel.setStyleIdentity("dialog-panel", "panel", "panel", null, ["dialog"]);
-			panel.states = context.interactionStates.peek(panelId);
-			panel.computedStyle = panelComputed;
+			var panel = context.styled(panelId, LayoutVisualKind.Box,
+				new StyleIdentity("dialog-panel", "panel", "panel", null, ["dialog"]), panelStyle);
+			var panelComputed = panel.computedStyle;
 			if (title.length > 0) {
 				var heading = context.withStyleParent(panelComputed,
 					function() return context.withScope(new Key("title"), function() {
 						var headingId = context.id("heading");
-						var headingComputed = context.resolveStyle(context.styleTarget(headingId, "dialog-heading",
-							"title",
-							"title",
-							null,
-							["dialog-heading"]),
-							new LayoutStyle());
+						var headingIdentity = new StyleIdentity("dialog-heading", "title", "title", null,
+							["dialog-heading"]);
+						var headingComputed = context.resolveStyled(headingId, headingIdentity, new LayoutStyle());
 						var node = context.createNode(headingId, LayoutVisualKind.Text,
 							headingComputed.toLayoutStyle());
-						node.setStyleIdentity("dialog-heading", "title", "title", null, ["dialog-heading"]);
-						node.states = context.interactionStates.peek(headingId);
-						node.computedStyle = headingComputed;
+						context.applyStyled(node, headingIdentity, headingComputed);
 						node.layout.text = title;
 						node.layout.textColor = headingComputed.getColor(haxeon.ui.style.StyleProperty.TextColor);
 						node.layout.textStyle =

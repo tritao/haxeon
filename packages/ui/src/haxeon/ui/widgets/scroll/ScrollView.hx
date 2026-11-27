@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.scroll;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
@@ -18,7 +19,6 @@ import haxeon.ui.core.View;
 import haxeon.ui.gestures.GestureRecognizer;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleTarget;
 
 /** Clipped Haxe scroll container translated from its persistent controller offset. */
 class ScrollView implements View {
@@ -80,14 +80,11 @@ class ScrollView implements View {
 		return context.withScope(key, function() {
 			var viewportStyle = style.copy();
 			var id = context.rootId("scroll");
-			var flags = context.styleStates(id, "scroll-view", key.rawValue, key.rawValue, null, ["scroll-view"]);
-			var computed = context.resolveStyle(new StyleTarget("scroll-view", key.rawValue, key.rawValue, null,
-				["scroll-view"], flags),
-				viewportStyle);
-			var viewport = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			viewport.setStyleIdentity("scroll-view", key.rawValue, key.rawValue, null, ["scroll-view"]);
-			viewport.states = flags;
-			viewport.computedStyle = computed;
+			var viewport = context.styled(id, LayoutVisualKind.Box,
+				new StyleIdentity("scroll-view", key.rawValue, key.rawValue, null, ["scroll-view"]), viewportStyle);
+			var computed = viewport.computedStyle;
+			// The scrollbars follow hover through the listeners below; a build only starts them from the current state.
+			var hovered = context.interactionStates.peek(id).contains(StyleState.Hovered);
 			viewport.focusable = true;
 			var semantics = new Semantics(AccessibilityRole.ScrollArea, label);
 			semantics.actions = AccessibilityAction.ScrollForward | AccessibilityAction.ScrollBackward;
@@ -123,7 +120,7 @@ class ScrollView implements View {
 			visibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden,
 				context.environment.reducedMotion);
 
-			visibility.value.setViewportHovered(flags.contains(StyleState.Hovered));
+			visibility.value.setViewportHovered(hovered);
 			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) {
 				if (event.target.equals(viewport.id)) visibility.value.setViewportHovered(true);
 			});
@@ -151,7 +148,7 @@ class ScrollView implements View {
 			horizontalVisibility.value.bindSource(controller);
 			horizontalVisibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden,
 				context.environment.reducedMotion);
-			horizontalVisibility.value.setViewportHovered(flags.contains(StyleState.Hovered));
+			horizontalVisibility.value.setViewportHovered(hovered);
 			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) {
 				if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(true);
 			});
@@ -370,13 +367,19 @@ class ScrollView implements View {
 		trackStyle.radiusTopLeft = trackStyle.radiusTopRight = ScrollbarHitWidth * 0.5;
 		trackStyle.radiusBottomLeft = trackStyle.radiusBottomRight = ScrollbarHitWidth * 0.5;
 		var track = context.createNode(context.rootId(name + "-scrollbar-track"), LayoutVisualKind.Box, trackStyle);
-		track.setStyleIdentity("scrollbar-track", key.rawValue, key.rawValue, null, ["scrollbar", name]);
+		track.setStyleIdentity(new StyleIdentity("scrollbar-track", key.rawValue, key.rawValue, null, [
+			"scrollbar",
+			name
+		]));
 		var thumbStyle = new LayoutStyle();
 		thumbStyle.positioning = LayoutPositioning.Absolute;
 		thumbStyle.zIndex = 5;
 		var thumbId = context.id(name + "-scrollbar-thumb");
 		var thumb = context.createNode(thumbId, LayoutVisualKind.Box, thumbStyle);
-		thumb.setStyleIdentity("scrollbar-thumb", key.rawValue, key.rawValue, null, ["scrollbar", name]);
+		thumb.setStyleIdentity(new StyleIdentity("scrollbar-thumb", key.rawValue, key.rawValue, null, [
+			"scrollbar",
+			name
+		]));
 		var semantics = new Semantics(AccessibilityRole.Slider,
 			vertical ? "Vertical scroll position" : "Horizontal scroll position");
 		semantics.actions = AccessibilityAction.Increment | AccessibilityAction.Decrement;

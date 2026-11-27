@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.layout;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 import haxeon.ui.widgets.KeyedView;
 
 import haxeon.ui.LayoutNode;
@@ -28,13 +29,9 @@ class Row implements View {
 	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(key, function() {
 			var id = context.rootId("row");
-			var computed = context.resolveStyle(context.styleTarget(id, "row", key.rawValue, key.rawValue, null,
-				["row"]),
-				style);
-			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			node.setStyleIdentity("row", key.rawValue, key.rawValue, null, ["row"]);
-			node.states = context.interactionStates.peek(id);
-			node.computedStyle = computed;
+			var node = context.styled(id, LayoutVisualKind.Box,
+				new StyleIdentity("row", key.rawValue, key.rawValue, null, ["row"]), style);
+			var computed = node.computedStyle;
 			for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
 			return node;
 		});

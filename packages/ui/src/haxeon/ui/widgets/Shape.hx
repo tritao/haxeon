@@ -1,5 +1,6 @@
 package haxeon.ui.widgets;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.LayoutAxis;
@@ -149,12 +150,8 @@ class Shape implements View {
 	public function build(context:BuildContext):ViewRoot {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.rootId("shape");
-			var computed = context.resolveStyle(context.styleTarget(nodeId, "shape", key, key, null, ["shape"]),
-				style);
-			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-			node.setStyleIdentity("shape", key, key, null, ["shape"]);
-			node.states = context.interactionStates.peek(nodeId);
-			node.computedStyle = computed;
+			var node = context.styled(nodeId, LayoutVisualKind.Custom,
+				new StyleIdentity("shape", key, key, null, ["shape"]), style);
 			node.hitTestSelf = hitTestSelf;
 			node.cachePolicy = cachePolicy;
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Group, label);

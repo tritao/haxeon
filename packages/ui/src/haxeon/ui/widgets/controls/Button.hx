@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.core.ViewRoot;
+import haxeon.ui.style.StyleIdentity;
 
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
@@ -68,6 +69,7 @@ class Button implements ScopeView {
 	/** Selector snapshots are immutable inside the resolver; hover commonly alternates between the same states. */
 	var firstTarget:Null<StyleTarget> = null;
 	var otherTargets:Null<Array<StyleTarget>> = null;
+	var identity:Null<StyleIdentity> = null;
 
 	/**
 	 * A button showing `label`. Every other argument is optional: `variant` picks the theme's treatment (Secondary by
@@ -143,13 +145,12 @@ class Button implements ScopeView {
 	public function build(context:BuildContext):ViewRoot return context.mountComponent(this);
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-		var resolvedClasses = classes.copy();
-		if (variant == ButtonVariant.Navigation) resolvedClasses.push("navigation");
-		else if (variant == ButtonVariant.Secondary) resolvedClasses.push("secondary");
-		var flags:StyleState = context.styleStates(id, "button", key, key, resolvedClasses, ["button"]);
-		flags = (selected ? flags.insert(StyleState.Selected) : flags.remove(StyleState.Selected));
-		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
-		var target = styleTarget(resolvedClasses, flags);
+		var identity = styleIdentity();
+		var authored = StyleState.empty();
+		if (selected) authored |= StyleState.Selected;
+		if (!enabled) authored |= StyleState.Disabled;
+		var flags = context.styleStates(id, identity, authored);
+		var target = styleTarget(identity.classes, flags);
 		var computed = context.styleResolver.resolve(target,
 			context.inheritedStyle,
 			context.theme.styles,
@@ -158,9 +159,7 @@ class Button implements ScopeView {
 			context.environment);
 		var resolvedStyle = computed.toLayoutStyle();
 		var node = context.createNode(id, LayoutVisualKind.Box, resolvedStyle);
-		node.setStyleIdentityWithOwnedClasses("button", key, key, resolvedClasses, ["button"]);
-		node.states = flags;
-		node.computedStyle = computed;
+		context.applyStyled(node, identity, computed, authored);
 		node.focusable = enabled;
 		node.enabled = enabled;
 		node.semantics = semanticDescription;
@@ -228,6 +227,18 @@ class Button implements ScopeView {
 
 	static function defaultStyle():LayoutStyle {
 		return new LayoutStyle();
+	}
+
+	/** The button's identity, the same for every build of this description: its classes with its variant's. */
+	function styleIdentity():StyleIdentity {
+		var known = identity;
+		if (known != null) return known;
+		var resolvedClasses = classes.copy();
+		if (variant == ButtonVariant.Navigation) resolvedClasses.push("navigation");
+		else if (variant == ButtonVariant.Secondary) resolvedClasses.push("secondary");
+		var made = new StyleIdentity("button", key, key, resolvedClasses, ["button"]);
+		identity = made;
+		return made;
 	}
 
 	function styleTarget(resolvedClasses:Array<String>, flags:StyleState):StyleTarget {
