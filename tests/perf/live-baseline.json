@@ -53,7 +53,7 @@
 			"why": "Live data growth over the growth session's edits after those that fill the session, from the same census. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack is two and a half of the census's 0.1 MB steps."
 		},
 		"aot_ui_server_live_bytes": {
-			"value": 322961408,
+			"value": 305450189,
 			"tolerance": 0.001,
 			"why": "The server's live data after the growth session's last edit: what a live session keeps from one edit to the next. From the heap census after each build's request (`request-done`, once the build's result and response are gone, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The publications kept to take back share the string and global tables with the current state, each seeing its own prefix. The slack is about five of the census's steps."
 		},
