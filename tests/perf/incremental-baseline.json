@@ -7,13 +7,12 @@
 			"why": "A cold build in a session that keeps its state: deterministic for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"first_noop_allocated_bytes": {
-			"value": 107111768,
+			"value": 101227520,
 			"tolerance": 0.02,
-			"why": "The first rebuild after the cold build, with nothing changed: deterministic. It should cost what the next no-op costs; while it does more, a fix shows here as an improvement.",
-			"raise_reason": "The first rebuild after the cold build builds the read filters (ReadFilter) of the units and purity nodes the cold build recorded, once, so that edits find the readers of a change without walking every record: 105007888 -> 107111768"
+			"why": "The first rebuild after the cold build, with nothing changed: deterministic. It should cost what the next no-op costs; while it does more, a fix shows here as an improvement."
 		},
 		"noop_allocated_bytes": {
-			"value": 66483408,
+			"value": 60693480,
 			"tolerance": 0.02,
 			"why": "A no-op rebuild of a warm session: deterministic; it reads and compares the sources and reuses the module."
 		},
@@ -28,7 +27,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"body_edit_allocated_bytes": {
-			"value": 172865160,
+			"value": 168427040,
 			"tolerance": 0.02,
 			"why": "A body-only edit of the entry module: deterministic for a given source tree."
 		},
@@ -63,7 +62,7 @@
 			"why": "Deterministic; the slack absorbs new callers."
 		},
 		"late_body_edit_allocated_bytes": {
-			"value": 191842248,
+			"value": 187403496,
 			"tolerance": 0.02,
 			"why": "The body edit again after the signature edit: the session holds the rewrites of the constructor's callers, which an edit elsewhere must reuse. Deterministic for a given source tree."
 		},
@@ -83,12 +82,12 @@
 			"why": "Growth of the live data over the last two body edits, after the session has settled: steady to a fraction of a megabyte between runs. Keeping each build's compile result, whose IR mostly shares the session's, adds about eight megabytes a build, so the slack is a few megabytes."
 		},
 		"noop_instructions": {
-			"value": 585276624,
+			"value": 539089755,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of a no-op rebuild of a warm session, measured as body_edit_instructions is (the median of three): the floor every build in the server pays, reading and comparing the sources and reusing the module."
 		},
 		"body_edit_instructions": {
-			"value": 1522749998,
+			"value": 1471979106,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of the body edit, from perf, in a session of its own without the census and invalidation reports, from a server settled after the build before: what an edit costs before the user can run it. The median of three edits; compared only where perf is installed and allowed."
 		},
