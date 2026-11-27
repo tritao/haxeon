@@ -1891,7 +1891,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				var physical = genericDynamic ? DynamicMethods.eraseParameters(method, substitutions) : substitutions,
 					typedMethod = if (!typeBody)
 						methodSignature(method, classDecl.name, physical);
-				else if (genericDynamic || elaborateGenerics && classDecl.typeParameters.length > 0)
+				else if (genericDynamic || elaborateGenerics && classDecl.typeParameters.length > 0
+					&& !VoidArguments.anyVoid(specialization == null ? null : specialization.typeArguments))
 					elaboratedMethod(classDecl.name, classDecl.typeParameters, method, physical, specialization);
 				else
 					bodyTyper.typeFunction(method, classDecl.name, method.isStatic, physical,

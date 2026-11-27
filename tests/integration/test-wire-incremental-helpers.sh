@@ -15,9 +15,9 @@ import haxeon.wire.JsonWire;
 @:wire enum Envelope { @:id(1) Value(detail:Detail); }
 class Protocol {
  public static function encode(value:Envelope):Bytes return MessagePack.encode(value);
- public static function decode(bytes:Bytes):Envelope return MessagePack.decode(bytes);
+ public static function decode(bytes:Bytes):Envelope return (MessagePack.decode(bytes) : Result<Envelope, haxeon.wire.WireError>).unwrap();
  public static function encodeJson(value:Envelope):String return JsonWire.encode(value);
- public static function decodeJson(text:String):Envelope return JsonWire.decode(text);
+ public static function decodeJson(text:String):Envelope return (JsonWire.decode(text) : Result<Envelope, haxeon.wire.WireError>).unwrap();
 }
 HX
 cat > "$project_dir/src/Main.hx" <<'HX'
@@ -27,8 +27,8 @@ import haxeon.wire.JsonWire;
 @:wire typedef Answer = { @:id(1) var result:String; }
 class Main {
  static function main():Void {
-  var answer:Answer = MessagePack.decode(MessagePack.encode(({result: "ok"}:Answer)));
-  var diagnosticAnswer:Answer = JsonWire.decode(JsonWire.encode(answer));
+  var answer:Answer = (MessagePack.decode(MessagePack.encode(({result: "ok"}:Answer))) : Result<Answer, haxeon.wire.WireError>).unwrap();
+  var diagnosticAnswer:Answer = (JsonWire.decode(JsonWire.encode(answer)) : Result<Answer, haxeon.wire.WireError>).unwrap();
   var decoded = Protocol.decode(Protocol.encode(Value({code: 42})));
   switch decoded { case Value(detail): if (detail.code != 42 || answer.result != "ok") throw "bad round trip"; }
   var diagnostic = Protocol.decodeJson(Protocol.encodeJson(Value({code: 43})));
@@ -62,8 +62,8 @@ function main():Void {
  var method:RpcMethod<Wrapped, Task> = RpcMethod.wire(100);
  var json = JsonWire.encode(envelope);
  var bytes = MessagePack.encode(envelope);
- var decodedJson:Envelope = JsonWire.decode(json);
- var decodedBytes:Envelope = MessagePack.decode(bytes);
+ var decodedJson:Envelope = (JsonWire.decode(json) : Result<Envelope, haxeon.wire.WireError>).unwrap();
+ var decodedBytes:Envelope = (MessagePack.decode(bytes) : Result<Envelope, haxeon.wire.WireError>).unwrap();
  Sys.println(JsonWire.encode(decodedJson));
  Sys.println(MessagePack.encode(decodedBytes).toHex());
  Sys.println(method.encodeRequest(method.decodeRequest(method.encodeRequest(wrapped))).toHex());

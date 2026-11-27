@@ -15,6 +15,19 @@ class VoidArguments {
 		return type != null && compiler.types.Monomorphs.follow(type).match(TVoid);
 
 	/**
+	 * Whether a specialization's type arguments include `Void`. Its body is then typed again rather than elaborated
+	 * (`CompileOptions.elaborateGenerics`): where a type parameter is `Void`, the typer leaves arguments out and reads
+	 * payloads as the unit value, which substituting types in the body typed once does not do.
+	 */
+	public static function anyVoid(types:Null<Array<CompilerType>>):Bool {
+		if (types != null)
+			for (type in types)
+				if (isVoid(type))
+					return true;
+		return false;
+	}
+
+	/**
 	 * Where the unit value goes when `written` arguments are given for parameters of `types`: at a `Void` parameter while
 	 * more parameters remain than arguments, so a `Void` value written in its place still takes it. Null when none does.
 	 */
