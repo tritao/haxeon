@@ -55,15 +55,6 @@ internal extern function sysEnvironment():Array<String>;
 
 @:hlNative("haxeon_runtime", "__sys_system_name")
 internal extern function sysSystemName():String;
-
-@:hlNative("haxeon_runtime", "__sys_exists")
-internal extern function sysExists(path:String):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_is_dir")
-internal extern function sysIsDir(path:String):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_read_dir")
-internal extern function sysReadDir(path:String):Array<String>;
 #else
 // Wasm has no host process: the path operations use the session's in-memory filesystem, the
 // environment is empty, and there is no executable path.
@@ -87,15 +78,6 @@ internal function sysEnvironment():Array<String>
 
 internal function sysSystemName():String
 	return "Web";
-
-internal function sysExists(path:String):Bool
-	return runtime.MemoryFileSystem.exists(path);
-
-internal function sysIsDir(path:String):Bool
-	return runtime.MemoryFileSystem.isDirectory(path);
-
-internal function sysReadDir(path:String):Array<String>
-	return runtime.MemoryFileSystem.readDirectory(path);
 #end
 
 @:hlNative("std", "sys_getpid")
@@ -126,34 +108,6 @@ internal function sysSetCwd(path:String):Bool
 
 @:hlNative("haxeon_runtime", "__sys_put_env")
 internal extern function sysPutEnv(name:String, value:String):Bool;
-
-#if !wasm
-@:hlNative("haxeon_runtime", "__sys_create_dir")
-internal extern function sysCreateDir(path:String, mode:Int):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_remove_dir")
-internal extern function sysRemoveDir(path:String):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_delete")
-internal extern function sysDelete(path:String):Bool;
-
-@:hlNative("haxeon_runtime", "__sys_rename")
-internal extern function sysRename(path:String, newPath:String):Bool;
-#else
-
-/** `mkdir` semantics: the parent must already exist. The mode is ignored. */
-internal function sysCreateDir(path:String, mode:Int):Bool
-	return runtime.MemoryFileSystem.createDirectory(path, false);
-
-internal function sysRemoveDir(path:String):Bool
-	return runtime.MemoryFileSystem.deleteDirectory(path);
-
-internal function sysDelete(path:String):Bool
-	return runtime.MemoryFileSystem.deleteFile(path);
-
-internal function sysRename(path:String, newPath:String):Bool
-	return runtime.MemoryFileSystem.rename(path, newPath);
-#end
 
 @:hlNative("haxeon_runtime", "__sys_command")
 internal extern function sysCommand(command:String):Int;
@@ -267,18 +221,6 @@ class Sys {
 	public static inline function systemName():String
 		return sysSystemName();
 
-	/** Whether a file or directory exists at `path`. */
-	public static inline function exists(path:String):Bool
-		return sysExists(path);
-
-	/** Whether `path` is a directory. */
-	public static inline function isDir(path:String):Bool
-		return sysIsDir(path);
-
-	/** The names of the entries of the directory at `path`, without `.` and `..`, in no particular order. */
-	public static inline function readDir(path:String):Array<String>
-		return sysReadDir(path);
-
 	/** The process's id. */
 	public static inline function getPid():Int
 		return sysGetPid();
@@ -300,25 +242,6 @@ class Sys {
 	 */
 	public static inline function putEnv(name:String, value:String):Bool
 		return sysPutEnv(name, value);
-
-	/**
-	 * Creates the directory `path`, whose parent must exist, with the POSIX permission bits `mode` (ignored on Windows
-	 * and Wasm). Returns whether it was created. `sys.FileSystem.createDirectory` also creates the missing parents.
-	 */
-	public static inline function createDir(path:String, mode:Int):Bool
-		return sysCreateDir(path, mode);
-
-	/** Removes the empty directory `path`. Returns whether it was removed. */
-	public static inline function removeDir(path:String):Bool
-		return sysRemoveDir(path);
-
-	/** Deletes the file `path`. Returns whether it was deleted. */
-	public static inline function delete(path:String):Bool
-		return sysDelete(path);
-
-	/** Moves the file or directory `path` to `newPath`, replacing a file there. Returns whether it was moved. */
-	public static inline function rename(path:String, newPath:String):Bool
-		return sysRename(path, newPath);
 
 	/**
 	 * Runs `command` through the system's shell and waits for it, returning its exit code. Each of `args` is quoted for

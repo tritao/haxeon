@@ -11,8 +11,8 @@ function host():Int {
 		return 1;
 	#end
 	return Sys.getEnv("HOME") == null && Sys.getCwd() == "/" && Sys.systemName() == "Web" && Sys.executablePath() == ""
-		&& Sys.exists("/")
-		&& Sys.isDir("/") ? 0 : 1;
+		&& FileSystem.exists("/")
+		&& FileSystem.isDirectory("/") ? 0 : 1;
 }
 
 function files():Int {
@@ -71,11 +71,26 @@ function failures():Int {
 		textBinary = true;
 	if (!missingRead || !missingParent || !directoryWrite || !textBinary)
 		return 8;
-	// Sys.createDir is mkdir: no missing parents, and an existing path fails.
-	if (Sys.createDir("/a/b", 493) || !Sys.createDir("/a", 493) || Sys.createDir("/a", 493)
-		|| !Sys.createDir("/a/b", 493))
+	// A delete that cannot happen throws: a directory with entries, or a path with nothing there.
+	FileSystem.createDirectory("/a/b");
+	var nonEmpty = false, missingDirectory = false, missingFile = false;
+	try
+		FileSystem.deleteDirectory("/a")
+	catch (error:String)
+		nonEmpty = true;
+	if (!nonEmpty || !FileSystem.isDirectory("/a/b"))
 		return 9;
-	if (Sys.removeDir("/a") || !Sys.removeDir("/a/b") || !Sys.removeDir("/a") || Sys.exists("/a"))
+	FileSystem.deleteDirectory("/a/b");
+	FileSystem.deleteDirectory("/a");
+	try
+		FileSystem.deleteDirectory("/a")
+	catch (error:String)
+		missingDirectory = true;
+	try
+		FileSystem.deleteFile("/a")
+	catch (error:String)
+		missingFile = true;
+	if (!missingDirectory || !missingFile || FileSystem.exists("/a"))
 		return 10;
 	return 0;
 }
@@ -91,8 +106,10 @@ function moves():Int {
 		FileSystem.rename("/projects/renamed", "/projects/renamed/inside")
 	catch (error:String)
 		rejected = true;
-	if (!rejected || !Sys.rename("/projects/renamed/scene.json", "/projects/scene.json")
-		|| Sys.exists("/projects/renamed/scene.json"))
+	if (!rejected)
+		return 17;
+	FileSystem.rename("/projects/renamed/scene.json", "/projects/scene.json");
+	if (FileSystem.exists("/projects/renamed/scene.json"))
 		return 17;
 	if (!Sys.setCwd("/projects")
 		|| Sys.getCwd() != "/projects/"

@@ -70,13 +70,13 @@ internal class MemoryFileSystem {
 		return names;
 	}
 
-	/** Creates a directory; `recursive` also creates missing parents, as `mkdir -p` does. */
-	public static function createDirectory(path:String, recursive:Bool):Bool {
+	/** Creates a directory whose parent exists, as `mkdir` does. */
+	public static function createDirectory(path:String):Bool {
 		var target = normalize(path);
 		if (entries.exists(target))
 			return false;
 		var parent = parentOf(target);
-		if (!isDirectoryAt(parent) && (!recursive || !createDirectory(parent, true)))
+		if (!isDirectoryAt(parent))
 			return false;
 		entries.set(target, new MemoryEntry(null, ++clock));
 		if (observer != null)

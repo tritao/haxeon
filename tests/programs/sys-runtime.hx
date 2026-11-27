@@ -9,7 +9,6 @@ function main():Int {
 	var systemName = Sys.systemName();
 	if (cwd.length == 0
 		|| ["Windows", "Mac", "Linux", "BSD", "Unknown"].indexOf(systemName) < 0
-		|| !Sys.exists(cwd)
 		|| !sys.FileSystem.exists(cwd)
 		|| !sys.FileSystem.isDirectory(cwd)
 		|| sys.FileSystem.fullPath(".").length == 0
@@ -19,15 +18,17 @@ function main():Int {
 	var renamed = "out/sys-runtime-renamed-é";
 	var file = renamed + "/value-ß.txt";
 	var bytesFile = renamed + "/bytes-ç.txt";
-	if (Sys.exists(file))
-		Sys.delete(file);
-	if (Sys.exists(bytesFile))
-		Sys.delete(bytesFile);
-	if (Sys.exists(directory))
-		Sys.removeDir(directory);
-	if (Sys.exists(renamed))
-		Sys.removeDir(renamed);
-	if (!Sys.createDir(directory, 493) || !Sys.rename(directory, renamed))
+	if (sys.FileSystem.exists(file))
+		sys.FileSystem.deleteFile(file);
+	if (sys.FileSystem.exists(bytesFile))
+		sys.FileSystem.deleteFile(bytesFile);
+	if (sys.FileSystem.exists(directory))
+		sys.FileSystem.deleteDirectory(directory);
+	if (sys.FileSystem.exists(renamed))
+		sys.FileSystem.deleteDirectory(renamed);
+	sys.FileSystem.createDirectory(directory);
+	sys.FileSystem.rename(directory, renamed);
+	if (!sys.FileSystem.isDirectory(renamed))
 		return 1;
 	sys.io.File.saveContent(file, "42");
 	var savedBytes = haxe.io.Bytes.alloc(4);
@@ -37,16 +38,32 @@ function main():Int {
 	savedBytes.set(3, 128);
 	sys.io.File.saveBytes(bytesFile, savedBytes);
 	var loadedBytes = sys.io.File.getBytes(bytesFile);
-	if (!Sys.exists(file)
+	if (!sys.FileSystem.exists(file)
 		|| sys.io.File.getContent(file) != "42"
 		|| loadedBytes.length != 4
 		|| loadedBytes.get(0) != 0
 		|| loadedBytes.get(1) != 255
 		|| loadedBytes.get(2) != 42
 		|| loadedBytes.get(3) != 128
-		|| Sys.readDir(renamed).indexOf("value-ß.txt") < 0)
+		|| sys.FileSystem.readDirectory(renamed).indexOf("value-ß.txt") < 0)
 		return 2;
-	if (!Sys.delete(file) || !Sys.delete(bytesFile) || !Sys.removeDir(renamed))
+	var nonEmpty = false, missingFile = false, missingDirectory = false;
+	try
+		sys.FileSystem.deleteDirectory(renamed)
+	catch (_:String)
+		nonEmpty = true;
+	sys.FileSystem.deleteFile(file);
+	sys.FileSystem.deleteFile(bytesFile);
+	sys.FileSystem.deleteDirectory(renamed);
+	try
+		sys.FileSystem.deleteFile(file)
+	catch (_:String)
+		missingFile = true;
+	try
+		sys.FileSystem.deleteDirectory(renamed)
+	catch (_:String)
+		missingDirectory = true;
+	if (!nonEmpty || !missingFile || !missingDirectory || sys.FileSystem.exists(renamed))
 		return 3;
 	if (!Sys.setCwd("out"))
 		return 4;

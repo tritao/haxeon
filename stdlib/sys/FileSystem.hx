@@ -82,7 +82,7 @@ internal function fileSystemMetadata(path:String):Null<Array<Int>>
 
 /** Creates missing parents too, as the Haxe API documents. The mode is ignored. */
 function fileSystemCreateDirectory(path:String, mode:Int):Bool
-	return runtime.MemoryFileSystem.createDirectory(path, true);
+	return runtime.MemoryFileSystem.createDirectory(path);
 
 internal function fileSystemDeleteFile(path:String):Bool
 	return runtime.MemoryFileSystem.deleteFile(path);
@@ -201,16 +201,13 @@ class FileSystem {
 				throw 'Failed to create directory $part';
 	}
 
-	/** Deletes the file `path`. Unlike Haxe's, it does not report a failure: check with `exists` when it matters. */
+	/** Deletes the file `path`. Throws when it cannot. */
 	public static inline function deleteFile(path:String):Void
-		fileSystemDeleteFile(path);
+		if (!fileSystemDeleteFile(path)) throw 'Could not delete file "$path"';
 
-	/**
-	 * Removes the empty directory `path`. Unlike Haxe's, it does not report a failure: check with `exists` when it
-	 * matters.
-	 */
+	/** Removes the empty directory `path`. Throws when it cannot. */
 	public static inline function deleteDirectory(path:String):Void
-		fileSystemDeleteDirectory(path);
+		if (!fileSystemDeleteDirectory(path)) throw 'Could not delete directory "$path"';
 
 	/** Moves the file or directory `path` to `newPath`, replacing a file there. Throws when it cannot. */
 	public static inline function rename(path:String, newPath:String):Void
