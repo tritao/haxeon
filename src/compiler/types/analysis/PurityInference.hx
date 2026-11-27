@@ -907,7 +907,7 @@ private class PurityWalker {
 			case AnnotatedExpression(_, inner, _): expression(inner);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_), BreakExpression(_), ContinueExpression(_),
-				NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _), NewMap(_, _, _):
+				NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _), NewMap(_, _, _), DefaultArgument(_):
 				true;
 			case Lambda(_, _, _, _): freshReceiver == null;
 			case New(typeName, arguments, _):
@@ -947,7 +947,8 @@ private class PurityWalker {
 				Index(left, right, _): expression(left) && expression(right);
 			case Negate(value, _), Not(value, _), Propagate(value, _), ThrowExpression(value, _), Cast(value, _, _),
 				CheckType(value, _, _), GenericCall(value, _, _),
-				NewArray(_, value, _), Capture(_, value, _), Spread(value, _): expression(value);
+				NewArray(_, value, _), Capture(_, value, _), Spread(value, _),
+				NamedArgument(_, value, _): expression(value);
 			case Extractor(source, pattern, _): expression(source) && expression(pattern);
 			case Conditional(test, yes, no, _): expression(test) && expression(yes) && expression(no);
 			case AssignmentValue(store, _): statement(store);

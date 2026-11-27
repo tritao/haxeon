@@ -29,7 +29,7 @@ enum NullSafetyUse {
 	Argument(callee:String, position:Int);
 
 	/** A builtin method's argument, named as Haxe's standard library names it (`push`'s `x`). */
-	NamedArgument(callee:String, name:String);
+	ParameterOf(callee:String, name:String);
 
 	Return(span:SourceSpan);
 
@@ -420,7 +420,7 @@ class NullSafety {
 					return;
 				report('Cannot pass nullable value to not-nullable argument${parameter == "" ? "" : ' "$parameter"'}'
 					+ ' of function "${displayName(callee)}".', value.span);
-			case NamedArgument(callee, name):
+			case ParameterOf(callee, name):
 				report('Cannot pass nullable value to not-nullable argument "$name" of function "$callee".',
 					value.span);
 			case Return(span):

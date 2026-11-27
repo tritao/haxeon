@@ -1,14 +1,14 @@
 # Named arguments, default values and memberwise initializers
 
-Status: decided direction (2026-11-27), not implemented. The call syntax needs a parser check before implementation
-(see [Open question](#open-question)). Recorded in [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md); the idea first appeared as
-item 10 of [FUTURE_LANGUAGE.md](FUTURE_LANGUAGE.md), and this is the part that lands as a Haxeon extension.
+Status: named arguments implemented (2026-11-27); the memberwise initializer and `with` are next. Recorded in
+[LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md) and [LANGUAGE_SUPPORT.md](../reference/LANGUAGE_SUPPORT.md); the idea first
+appeared as item 10 of [FUTURE_LANGUAGE.md](FUTURE_LANGUAGE.md), and this is the part that lands as a Haxeon extension.
 
 ## What it adds
 
 1. **Named arguments.** A call may name its arguments: `f(width: 10, height: 20)`.
-2. **Default values that are expressions.** `style:LayoutStyle = defaultStyle()`, evaluated at the call site when the
-   argument is omitted, where Haxe allows only constants.
+2. **Defaults for skipped parameters.** A parameter skipped before a named one takes its default, typed in the callee's
+   declaration scope as an omitted trailing one is.
 3. **A memberwise initializer for structs.** A struct without a constructor of its own gets one whose parameters are
    its fields in declaration order, each defaulting to the field's initializer:
    `new Rect(x: 0, y: 0, width: 10, height: 10)`.
@@ -38,14 +38,14 @@ arguments covers construction and copying.
 
 ## Rules
 
-- **Order.** Named arguments may follow positional ones, never precede them. Among named arguments any order is
-  accepted.
-- **Evaluation.** Arguments are evaluated left to right as written, then bound to their parameters; omitted ones then
-  take their defaults, in parameter order.
-- **Errors.** An unknown name, a name given twice, a name also given positionally, or a missing required parameter is a
-  compile error naming the parameter.
-- **Defaults.** Any expression the declaration's scope can type. It may refer to earlier parameters. It is evaluated on
-  each call that omits the argument.
+- **Order.** Named arguments follow the positional ones and name parameters in the order they are declared, as in
+  Swift. A call reads like its declaration, and binding never reorders, so arguments are evaluated in the order written
+  without temporaries. Any order (C#, Kotlin) was considered and left out for that reason.
+- **Skipping.** A parameter skipped before a named one must be optional and takes its default; for an overridden method,
+  the default of the method that runs. Trailing parameters are omitted as without names.
+- **Errors.** An unknown name, a name given twice or out of order, a name also given positionally, a positional argument
+  after a named one, a skipped required parameter, a named rest parameter, or a named argument to a function value (which
+  has no parameter names) is a compile error naming the parameter.
 - **Names are API.** A parameter's name is part of its function's signature: renaming it is a visible change, and
   incremental compilation treats it as one for callers that name it.
 - **Synthesis.** The memberwise initializer and `with` are synthesized only when the struct declares no constructor or
@@ -54,11 +54,19 @@ arguments covers construction and copying.
 - **Haxe compatibility.** Every call Haxe accepts keeps its meaning, including skipping optional arguments by type;
   named arguments are only new syntax. Removing skip-by-type is a separate decision for the language after Haxe.
 
-## Open question
+## Syntax
 
-The call syntax. `f(key = "x")` is already valid Haxe (an assignment to a local named `key`), so it is out.
-`f(key: "x")`, as in Swift, C# and Dart, is the intended form; check that it cannot be confused with Haxe's type check
-`(expr : Type)` inside an argument list before implementing it.
+`f(key: "x")`, as in Swift, C# and Dart. `f(key = "x")` is already valid Haxe (an assignment to a local named `key`).
+An identifier then a colon starts nothing else in an argument list: Haxe's type check `(expr : Type)` has its own
+parentheses, a ternary's colon follows its `?`, and an object literal starts with a brace.
+
+## Implementation
+
+The parser makes `NamedArgument(name, value)`; `NamedArguments.bind` puts each at its parameter's position and a
+`DefaultArgument` in the place of each skipped one, before rest packing, in the three paths that type a declared callee's
+arguments (declared calls, generic calls and constructors) and for enum constructors. A skipped parameter's default is
+typed where an omitted trailing one is, after inference for a generic call. A named argument that reaches ordinary
+expression typing belongs to a call with no parameter names, which is the function-value error.
 
 ## Consumers
 
@@ -75,6 +83,7 @@ The call syntax. `f(key = "x")` is already valid Haxe (an assignment to a local 
 
 ## Checks
 
-Focused programs on HashLink, Wasm32 and Wasm GC: named and positional mixes, evaluation order with side effects,
-expression defaults referring to earlier parameters, every error case, the synthesized initializer and `with` on
-structs with nested struct, nullable and array fields, and incremental recompilation after a parameter rename.
+`tests/programs/named-arguments.hx` covers functions, methods and overrides, interface calls, static extensions,
+constructors, generic functions and constructors, enum constructors and evaluation order; `NamedArgumentsMain` covers
+every error cold and incrementally and a parameter rename reaching a caller that names it. The initializer and `with` will
+add structs with nested struct, nullable and array fields.

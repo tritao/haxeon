@@ -19,13 +19,14 @@ class AstChildren {
 				ErrorExpression(_), Variable(_, _), TemporaryVariable(_, _), DeclaredVariable(_, _, _),
 				NativeLayoutQuery(_, _, _, _),
 				KeyPathLiteral(_, _, _),
-				NewMap(_, _, _), Lambda(_, _, _, _):
+				NewMap(_, _, _), Lambda(_, _, _, _), DefaultArgument(_):
 			case AssignmentValue(store, _):
 				visitStatement(store, visitor);
 			case Member(value, _, _), Negate(value, _), Not(value, _), Propagate(value, _), ThrowExpression(value, _),
 				Cast(value, _, _),
 				CheckType(value, _, _), GenericCall(value, _, _), NewArray(_, value, _),
-				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _), Spread(value, _):
+				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _), Spread(value, _),
+				NamedArgument(_, value, _):
 				visitor.visitChild(value);
 			case Extractor(expression, pattern, _):
 				visitor.visitChild(expression);
@@ -119,13 +120,13 @@ class AstChildren {
 				ErrorExpression(_), Variable(_, _), TemporaryVariable(_, _), DeclaredVariable(_, _, _),
 				NativeLayoutQuery(_, _, _, _),
 				KeyPathLiteral(_, _, _),
-				NewMap(_, _, _), Lambda(_, _, _, _): [];
+				NewMap(_, _, _), Lambda(_, _, _, _), DefaultArgument(_): [];
 			case AssignmentValue(store, _): statementExpressions(store);
 			case Member(value, _, _), Negate(value, _), Not(value, _), Propagate(value, _), ThrowExpression(value, _),
 				Cast(value, _, _),
 				CheckType(value, _, _), GenericCall(value, _, _), NewArray(_, value, _),
 				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _),
-				Spread(value, _): [value];
+				Spread(value, _), NamedArgument(_, value, _): [value];
 			case Extractor(expression, pattern, _): [expression, pattern];
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _),
 				BitOr(a, b, _), ShiftLeft(a, b, _),

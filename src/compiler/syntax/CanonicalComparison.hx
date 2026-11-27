@@ -456,6 +456,14 @@ class CanonicalComparison {
 						&& span(l1, r1);
 					default: false;
 				};
+			case NamedArgument(l0, l1, l2): switch right {
+					case NamedArgument(r0, r1, r2): l0 == r0 && astExpression(l1, r1) && span(l2, r2);
+					default: false;
+				};
+			case DefaultArgument(l0): switch right {
+					case DefaultArgument(r0): span(l0, r0);
+					default: false;
+				};
 			case ThrowExpression(l0, l1): switch right {
 					case ThrowExpression(r0, r1): astExpression(l0, r0)
 						&& span(l1, r1);

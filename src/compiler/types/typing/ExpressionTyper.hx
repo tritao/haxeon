@@ -159,6 +159,13 @@ class ExpressionTyper {
 				fail(DiagnosticCode.CALL_FORM, "A spread `...values` passes a rest argument, as a call's last argument",
 					span);
 				null;
+			case NamedArgument(name, _, span):
+				fail(DiagnosticCode.CALL_FORM,
+					'A named argument `$name:` passes a declared function\'s parameter; this call has no parameter names',
+					span);
+				null;
+			case DefaultArgument(span):
+				throw new InternalError("A default argument placeholder reached expression typing");
 			case Extractor(_, _, span):
 				fail(DiagnosticCode.PATTERN_OR_DEFER,
 					"An extractor `expression => pattern` matches only as a switch case", span);
@@ -1381,9 +1388,9 @@ class ExpressionTyper {
 				resolvedValue = valueType;
 			typedEntries.push({
 				key: bodyTyper.coerce(key, resolvedKey, "map key", DiagnosticCode.TYPE_CONSTRAINT,
-					NamedArgument("set", "k")),
+					ParameterOf("set", "k")),
 				value: bodyTyper.coerce(value, resolvedValue, "map value", DiagnosticCode.TYPE_CONSTRAINT,
-					NamedArgument("set", "v"))
+					ParameterOf("set", "v"))
 			});
 		}
 		// With nothing expected, `new Map()` has type variables for its key and value, which the first use that fixes them
@@ -1712,10 +1719,10 @@ class ExpressionTyper {
 			resultValue = expected == null ? typedValue.type : expected.value;
 		session.currentContext.loopDepth--;
 		typedKey = bodyTyper.coerce(typedKey, resultKey, "map comprehension key", DiagnosticCode.TYPE_CONSTRAINT,
-			NamedArgument("set", "k"));
+			ParameterOf("set", "k"));
 		typedValue = bodyTyper.coerce(typedValue, resultValue, "map comprehension value",
 			DiagnosticCode.TYPE_CONSTRAINT,
-			NamedArgument("set", "v"));
+			ParameterOf("set", "v"));
 		DeclaredConformance.requireMapRuntime(session, resultKey, resultValue, span);
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
 			var resultType = TMap(resultKey, resultValue),
@@ -1779,7 +1786,7 @@ class ExpressionTyper {
 			case TMap(key, value):
 				DeclaredConformance.requireMapRuntime(session, key, value, span);
 				var typedKey = bodyTyper.coerce(typedIndex, key, "map key", DiagnosticCode.ASSIGNMENT_OR_BINDING,
-					NamedArgument("get", "k")),
+					ParameterOf("get", "k")),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
 				new TypedExpression(TMapGet(typedArray, typedKey),

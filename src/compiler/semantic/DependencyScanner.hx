@@ -128,7 +128,7 @@ class DependencyScanner {
 				scanExpression(value, dependencies, typeParameters);
 			case AssignmentValue(store, _):
 				scanStatement(store, dependencies, typeParameters);
-			case ThrowExpression(value, _), Capture(_, value, _), Spread(value, _):
+			case ThrowExpression(value, _), Capture(_, value, _), Spread(value, _), NamedArgument(_, value, _):
 				scanExpression(value, dependencies, typeParameters);
 			case Extractor(expression, pattern, _):
 				scanExpression(expression, dependencies, typeParameters);

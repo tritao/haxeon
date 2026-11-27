@@ -261,6 +261,7 @@ class TestCatalog {
 		"ExpectedEnumContextMain",
 		"ArrayLookupContextMain",
 		"InterfaceOptionalArgumentsMain",
+		"NamedArgumentsMain",
 		"PlatformMethodArityMain",
 		"GenericCallableAbiMain",
 		"DependencyKeyMain",

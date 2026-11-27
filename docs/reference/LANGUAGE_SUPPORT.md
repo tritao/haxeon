@@ -274,6 +274,13 @@ The current subset includes:
   only the full path names the variable, so the extension never changes code Haxe accepts. `haxeon lint --only
   module-namespace` names each use of it, for code that must also compile with Haxe.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
+- Named arguments (a Haxeon extension, so stock Haxe rejects them): after its positional arguments, a call to a declared
+  function, method, constructor, static extension or enum constructor may name the parameters it passes, in the order they
+  are declared: `area(2, scale: 10)`, `new Box("x", count: 4)`, `Rect(3, label: "r")`. A parameter skipped before a named
+  one must be optional and takes its default (for an overridden method, the overriding method's own); trailing ones are
+  omitted as without names. Arguments are evaluated in the order written. An unknown name, a name given twice or out of
+  order, a positional argument after a named one, a skipped required parameter, a named rest parameter or a named argument
+  to a function value is an error. A parameter's name is part of its function's signature.
 - Rest parameters, as in Haxe: the last argument of a function, method, constructor, local function or static extension
   may be `...values:T`, a `haxe.Rest<T>` (`values[i]`, `values.length`, `for (value in values)`, `toArray()`, `append`,
   `prepend`, `haxe.Rest.of(array)`). A call passes the arguments from its position on one by one (`sum(1, 2, 3)`, `sum()`),

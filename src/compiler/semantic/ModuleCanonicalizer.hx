@@ -603,7 +603,7 @@ class ModuleCanonicalizer {
 				span): AnnotatedExpression(metadata, canonicalExpression(inner, module, entry, locals, aliases), span);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_), BreakExpression(_), ContinueExpression(_),
-				ErrorExpression(_), TemporaryVariable(_, _), DeclaredVariable(_, _, _): e;
+				ErrorExpression(_), TemporaryVariable(_, _), DeclaredVariable(_, _, _), DefaultArgument(_): e;
 			case Variable(name, span):
 				var imported = importedReference(name, locals, aliases),
 					resolved = imported != null ? storedImport(name, imported, aliases,
@@ -679,6 +679,8 @@ class ModuleCanonicalizer {
 			case Capture(name, pattern, s): Capture(name, canonicalExpression(pattern, module, entry, locals, aliases),
 				s);
 			case Spread(value, s): Spread(canonicalExpression(value, module, entry, locals, aliases), s);
+			case NamedArgument(name, value, s):
+				NamedArgument(name, canonicalExpression(value, module, entry, locals, aliases), s);
 			case Extractor(expression, pattern, s):
 				Extractor(canonicalExpression(expression, module, entry, locals, aliases),
 					canonicalExpression(pattern, module, entry, locals, aliases), s);

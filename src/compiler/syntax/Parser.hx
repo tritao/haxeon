@@ -1015,12 +1015,25 @@ class Parser {
 		var arguments:Array<AstExpression> = [];
 		if (!check(TokenKind.RightParen)) {
 			do {
-				// `...values`: an array whose elements a rest parameter receives.
-				var spreadStart = current(), spread = matchEllipsis();
-				lambdaPath.pushArgument(callee, arguments.length);
-				var argument = parseExpression();
-				lambdaPath.pop();
-				arguments.push(spread ? Spread(argument, spanFrom(spreadStart, expressionSpan(argument))) : argument);
+				// `name: value`: the argument of the parameter `name`. An identifier then a colon starts nothing else here: a
+				// type check `(value : T)` has its own parentheses and an object literal starts with a brace.
+				if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon) {
+					var nameToken = current(), name = textOf(nameToken);
+					advance();
+					advance();
+					lambdaPath.pushArgument(callee, arguments.length);
+					var value = parseExpression();
+					lambdaPath.pop();
+					arguments.push(NamedArgument(name, value, spanFrom(nameToken, expressionSpan(value))));
+				} else {
+					// `...values`: an array whose elements a rest parameter receives.
+					var spreadStart = current(), spread = matchEllipsis();
+					lambdaPath.pushArgument(callee, arguments.length);
+					var argument = parseExpression();
+					lambdaPath.pop();
+					arguments.push(spread ? Spread(argument,
+						spanFrom(spreadStart, expressionSpan(argument))) : argument);
+				}
 			} while (match(TokenKind.Comma));
 		}
 		return arguments;
@@ -4078,7 +4091,8 @@ class Parser {
 				Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
 				ThrowExpression(_, span), Propagate(_, span), BreakExpression(span), ContinueExpression(span),
 				SwitchExpression(_, _, _, span), Cast(_, _, span), CheckType(_, _, span),
-				Capture(_, _, span), Extractor(_, _, span), Spread(_, span): span;
+				Capture(_, _, span), Extractor(_, _, span), Spread(_, span), NamedArgument(_, _, span),
+				DefaultArgument(span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span),
 				ArrayComprehension(_, _, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;

@@ -764,11 +764,11 @@ class StatementTyper {
 			case TMap(key, mapValue):
 				DeclaredConformance.requireMapRuntime(session, key, mapValue, span);
 				typedIndex = bodyTyper.coerce(typedIndex, key, "map key", DiagnosticCode.ASSIGNMENT_OR_BINDING,
-					NamedArgument("set", "k"));
+					ParameterOf("set", "k"));
 				var assignedValue = bodyTyper.typeExpression(expression, scope, mapValue),
 					value = stored(assigned,
 						bodyTyper.coerce(assignedValue, mapValue, "map value", DiagnosticCode.ASSIGNMENT_OR_BINDING,
-						NamedArgument("set", "v")),
+						ParameterOf("set", "v")),
 						assignedValue),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedIndex);
 				if (entryPath != null)

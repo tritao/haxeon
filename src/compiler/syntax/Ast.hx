@@ -390,6 +390,15 @@ enum AstExpression {
 	/** `...values` as a call's last argument: the array whose elements a rest parameter receives. Only valid there. */
 	Spread(expression:AstExpression, span:SourceSpan);
 
+	/**
+	 * `name: value` as a call's argument: the value of the declared function's parameter `name`. Only valid in a call to a
+	 * declared function; `NamedArguments` binds it to its parameter.
+	 */
+	NamedArgument(name:String, value:AstExpression, span:SourceSpan);
+
+	/** A parameter a call skipped by naming a later one: it takes its default. Made by `NamedArguments`, never parsed. */
+	DefaultArgument(span:SourceSpan);
+
 	ThrowExpression(expression:AstExpression, span:SourceSpan);
 
 	/**
