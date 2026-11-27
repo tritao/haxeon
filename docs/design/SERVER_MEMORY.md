@@ -100,8 +100,27 @@ which warm-equals-cold already checks.
    it, or under an LRU bound, and recomputed when a later edit needs it. The engine knows which memos read which, so dropping
    a value keeps its digest and reads; a reader that finds it gone recomputes it. The edit replay and `--check-reuse` cover a
    recomputed value equal to the dropped one; the stage benchmark and perf-guard cover the cost of recomputing.
-5. **Disk, for restarts only.** Persisting the engine's state across server restarts (rustc's model) is a separate feature
-   with a format of its own; restarts are rare next to edits. Not planned now.
+   **Package code is a tier of its own.** In the UI session about 99% of the live data is package code (the UI library 49%,
+   NativeKit's bindings 16%, stdlib 12%, generated functions 11%, platform/editor/gpu 6%), the app's own code about 1 MB. A
+   package's sources change rarely, so the server keeps for them only what other code and the output need: declarations and
+   signatures (to type the code that uses them), final section bytes, digests (to notice a change) and the small inlinable
+   forms the inliner reads; their tokens, ASTs, typed bodies and intermediate IR are evicted after the build that made them.
+   Unreached package declarations keep their declaration, not their front-end state: NativeKit's 14 binding modules have as
+   many tokens as the whole UI library but reach 660 functions. A package is validated by its files' digests once per build,
+   as rust-analyzer's durable inputs are. An edit to a package file still hot-reloads: that package's intermediates are
+   recomputed, so the first patch after it is slower, and warm-equals-cold covers that the recomputed values are the ones
+   evicted. The tier is the eviction policy, not a second mode: the user's own sources keep everything, as now. Which roots are
+   packages comes from the project's package roots (`PackageSourceRoot`), the stdlib included.
+5. **Narrow columns.** The pointer-free blocks are the largest type in the census (188 MB of the 461 at `write-done` before
+   slice 4c): the IR body rows, HashLink opcode arrays and token tables store every value as 32 bits. Per column, a value range
+   that fits gets 8 or 16 bits (opcode kinds and flags, register and local indices), yes/no columns become bitsets, positions
+   deltas, with a wide form for the function that needs it. Bool fields in objects are not worth packing: objects are 20–36
+   bytes and the collector rounds an allocation to its size class. First measure each large column's value range and what it
+   keeps alone; build only the columns where the narrow form saves. Also here: positions as a column of the body's rows instead
+   of a `Located` object per instruction and terminator (475k objects), and interning repeated strings, spans and provenance.
+6. **Disk, for restarts only.** Persisting the engine's state across server restarts (rustc's model) is a separate feature
+   with a format of its own; restarts are rare next to edits. Not planned now. Package section bytes cached on disk by content
+   digest, shared across projects and restarts, is where disk pays first, once the package tier exists.
 
 Spilling live objects to disk to save memory is not planned: reading a function's IR back costs about what recomputing it
 does (about a millisecond), and the large stable data (section bytes) is already compact after step 2.
@@ -121,6 +140,8 @@ intermediate keeps alone is to be measured the same way before it is built.
 - Step 4's policy: drop after every build (simplest, a body edit then recomputes the few functions the inliner reads from
   callers), or an LRU bound (keeps recent ones, a knob to tune). Measure the first; add the bound only if edits slow down.
 - Whether step 1 changes the gate's baseline enough to re-record it: yes, by 9 MB, re-recorded with the reason.
+- Order of the package tier and the narrow columns: the tier first, since it removes most of what narrowing would shrink;
+  narrow what is left, measured after the tier.
 
 ## As built
 
