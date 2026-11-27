@@ -2651,13 +2651,22 @@ class CallResolver {
 			case TInstance(NominalKind.Class, methodOwner, [request, response]) if (methodOwner == owner):
 				var id = bodyTyper.coerceArgument(bodyTyper.typeExpression(arguments[0], scope, TInt), TInt, name,
 					1);
-				var constructorArguments = [id];
+				var constructorArguments = [id], inner = new Scope(scope), statements:Array<TypedStatement> = [];
 				for (type in [request, response]) {
 					var keyed = WireCodecGenerator.request(session, type, session.currentContext.name, span);
 					constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.encodeName(keyed)),
 						TFunction([keyed], TBytes, []), span));
-					constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.decodeName(keyed)),
-						TFunction([TBytes], keyed, []), span));
+					// The generated decoder throws a `WireFailure`; the method's decoder returns it as the `Err`.
+					var decoder =
+						new TemporaryLocal("__haxeon_rpc_decoder" + constructorArguments.length + "_" + span.start),
+						value = new TypedExpression(TFunctionRef(WireCodecGenerator.decodeName(keyed)),
+							TFunction([TBytes], keyed, []), span),
+						binding = inner.define(decoder.name, value.type, span, true, null, false, null, null, decoder);
+					bodyTyper.bindCell(binding, value.type);
+					statements.push(TVar(binding.id, value, span));
+					constructorArguments.push(bodyTyper.typeExpression(AnnotatedExpression(PrivateAccess,
+						Call("haxeon.wire.WireFailure.decoding", [TemporaryVariable(decoder, span)], span), span),
+						inner));
 				}
 				var methodName = serviceMethod ? arguments[1] : NullLiteral(span);
 				constructorArguments.push(bodyTyper.coerceArgument(typeExpressionValue(methodName, scope),
@@ -2666,8 +2675,9 @@ class CallResolver {
 				var typed = session.representation.adaptConstructorArguments(expectedType, owner, constructor,
 					constructorArguments);
 				session.invalidateUnknownCall(scope);
-				return new TypedExpression(TNew(owner, typed, true), expectedType, span, false, null, null,
-					serviceMethod ? null : name);
+				return new TypedExpression(TBlockExpression(statements,
+					new TypedExpression(TNew(owner, typed, true), expectedType, span)), expectedType, span, false,
+					null, null, serviceMethod ? null : name);
 			default:
 				throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION,
 					"RpcMethod.wire needs its request and response types: write them, RpcMethod.wire<Request, Response>(id), or expect an RpcMethod<Request, Response>",

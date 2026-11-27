@@ -15,10 +15,17 @@ typedef Answer = {
 
 typedef Deferred<T> = Future<T>;
 
+// An error the service expects to give is in its response type; RpcError is the call's.
+enum Checked {
+	Accepted(answer:Answer);
+	TooLong(limit:Int);
+}
+
 interface Greeter {
 	function greet(request:Query):Answer;
 	function measure(request:Array<Int>):Int;
 	function later(request:Query):Deferred<Answer>;
+	function check(request:Query):Checked;
 }
 
 class GreeterImpl implements Greeter {
@@ -32,6 +39,9 @@ class GreeterImpl implements Greeter {
 
 	public function measure(request:Array<Int>):Int
 		return request.length;
+
+	public function check(request:Query):Checked
+		return request.name.length > 3 ? TooLong(3) : Accepted({text: request.name});
 
 	public function later(request:Query):Future<Answer> {
 		var promise = new Promise<Answer>();
@@ -55,22 +65,22 @@ function main():Int {
 	var greeting = "";
 	var count = 0;
 	var failures = 0;
-	var first:Future<Answer> = stub.greet({name: "Ada"});
+	var first:Future<Result<Answer, RpcError>> = stub.greet({name: "Ada"});
 	first.onComplete(outcome -> switch outcome {
-		case Success(answer): greeting = answer.text;
+		case Success(Ok(answer)): greeting = answer.text;
 		case _: failures++;
 	});
 	var message = pair.server.receive();
 	if (message == null)
 		return 1;
 	switch RpcProtocol.decode(message, 4096) {
-		case Request(1, Name("Greeter.greet"), 1000, _):
+		case Ok(Request(1, Name("Greeter.greet"), 1000, _)):
 		default: return 2;
 	}
 	if (!pair.client.send(message))
 		return 3;
 	client.of(Greeter, 25).measure([1, 2, 3]).onComplete(outcome -> switch outcome {
-		case Success(answer): count = answer;
+		case Success(Ok(answer)): count = answer;
 		case _: failures++;
 	});
 	server.poll();
@@ -78,9 +88,9 @@ function main():Int {
 	if (greeting != "Hello Ada" || count != 3 || failures != 0)
 		return 4;
 
-	var later:Future<Answer> = stub.later({name: "Grace"});
+	var later:Future<Result<Answer, RpcError>> = stub.later({name: "Grace"});
 	later.onComplete(outcome -> switch outcome {
-		case Success(answer): greeting = answer.text;
+		case Success(Ok(answer)): greeting = answer.text;
 		case _: failures++;
 	});
 	server.poll();
@@ -114,24 +124,35 @@ function main():Int {
 	implementation.pending.complete({text: "unobserved"});
 	client.poll();
 
-	var remoteError:RpcError = null;
+	// A handler's failed future is a bug on the peer: the call fails with HandlerFailed, which may have run.
+	var remoteError:Null<RpcError> = null;
 	stub.later({name: "Ada"}).onComplete(outcome -> switch outcome {
-		case Failure(error) if (Std.isOfType(error, RpcError)): remoteError = cast error;
+		case Success(Err(error)): remoteError = error;
 		case _:
 	});
 	server.poll();
-	implementation.pending.fail(new RpcError("rejected", "Greeting rejected", true));
+	implementation.pending.fail(new haxe.Exception("greeting broke"));
 	client.poll();
-	if (remoteError == null || remoteError.code != "rejected" || remoteError.message != "Greeting rejected"
-		|| !remoteError.ambiguous)
+	if (remoteError == null || !remoteError.match(HandlerFailed) || !remoteError.mayHaveRun())
 		return 11;
 
+	var refused:Null<Checked> = null;
+	stub.check({name: "Grace"}).onComplete(outcome -> switch outcome {
+		case Success(Ok(reply)): refused = reply;
+		case _:
+	});
+	server.poll();
+	client.poll();
+	if (refused == null || !refused.match(TooLong(3)))
+		return 12;
+
+	remoteError = null;
 	stub.later({name: "Ada"}).onComplete(outcome -> switch outcome {
-		case Failure(error): remoteError = cast error;
-		case _: remoteError = null;
+		case Success(Err(error)): remoteError = error;
+		case _:
 	});
 	server.poll();
 	server.close();
 	client.poll();
-	return remoteError != null && remoteError.code == "disconnected" && implementation.cancellations == 2 ? 42 : 12;
+	return remoteError != null && remoteError.match(Disconnected(true)) && implementation.cancellations == 2 ? 42 : 13;
 }

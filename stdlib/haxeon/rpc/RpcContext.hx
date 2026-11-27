@@ -38,21 +38,18 @@ class RpcContext<Response> {
 		future.onComplete(function(outcome) {
 			if (!state.isActive())
 				return;
+			// A failed future is a bug in the handler: an answer the service expects to give is in its response type.
 			try {
 				switch outcome {
 					case Success(value): respond(value);
-					case Failure(error):
-						if (Std.isOfType(error, RpcError))
-							fail(cast error);
-						else
-							fail(new RpcError("handler_failed", "handler_failed", true));
-					case Cancelled: fail(new RpcError("cancelled", "cancelled", true));
-					case Stopped: fail(new RpcError("stopped", "stopped", true));
+					case Failure(_): fail(HandlerFailed);
+					case Cancelled: fail(HandlerCancelled);
+					case Stopped: fail(HandlerStopped);
 				}
 			} catch (error:Dynamic) {
 				if (!state.isActive())
 					throw error;
-				fail(new RpcError("handler_failed", "handler_failed", true));
+				fail(HandlerFailed);
 			}
 		});
 	}

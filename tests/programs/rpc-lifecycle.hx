@@ -14,8 +14,8 @@ class Connector implements RpcConnector {
 		this.transport = transport;
 	}
 
-	public function connect(complete:RpcConnectResult->Void):RpcConnectAttempt {
-		complete(Opened(transport));
+	public function connect(complete:Result<MessageTransport, RpcError>->Void):RpcConnectAttempt {
+		complete(Ok(transport));
 		return new Attempt();
 	}
 }
@@ -44,9 +44,9 @@ function main():Int {
 	if (hex != "8101940201A9666978747572652F3191A472656164")
 		return 2;
 	var method = new RpcMethod<String, String>(100, text -> Bytes.ofString(text),
-		function(bytes:Bytes) return bytes.toString(),
+		function(bytes:Bytes) return Ok(bytes.toString()),
 		text -> Bytes.ofString(text),
-		function(bytes:Bytes) return bytes.toString());
+		function(bytes:Bytes) return Ok(bytes.toString()));
 	var service = server.connection;
 	var active = client.current();
 	if (service == null || active == null)
@@ -56,7 +56,7 @@ function main():Int {
 	});
 	var answer = "";
 	active.call(method, "hello", 25).onComplete(outcome -> switch outcome {
-		case Success(value): answer = value;
+		case Success(Ok(value)): answer = value;
 		case _:
 	});
 	service.poll();
@@ -65,7 +65,8 @@ function main():Int {
 		return 4;
 	pair.server.close();
 	client.poll();
-	if (client.isCurrent(1) || client.nextWakeAt() != 10)
+	var dropped = client.lastError;
+	if (client.isCurrent(1) || client.nextWakeAt() != 10 || dropped == null || !dropped.match(Disconnected(false)))
 		return 5;
 	now = 10;
 	pair = MemoryTransport.pair(4096, 16);
@@ -90,8 +91,22 @@ function main():Int {
 	var refusal = pair.client.receive();
 	if (refusal == null || server.connection != null)
 		return 9;
-	return switch RpcProtocol.decode(refusal, 1024) {
-		case Refused(error) if (error.code == "unsupported_protocol"): 42;
-		default: 10;
-	};
+	switch RpcProtocol.decode(refusal, 1024) {
+		case Ok(Refused(error)) if (error.code == "unsupported_protocol"):
+		default: return 10;
+	}
+	// A refusal the server's policy gives reaches the client as the error it chose, and ends the client.
+	pair = MemoryTransport.pair(4096, 16);
+	connector.transport = pair.client;
+	var refusing = new RpcClient(connector, clock, function() return 1.0, options, function(_, _, _) {}, 10, 40, 30);
+	server = RpcHandshake.server(pair.server, clock, options,
+		(application, capabilities) -> Err(AuthorizationFailed("fixture is not allowed")));
+	for (index in 0...8) {
+		refusing.poll();
+		server.poll();
+	}
+	var refused = refusing.lastError;
+	if (refusing.state != Closed || refused == null || !refused.match(AuthorizationFailed("fixture is not allowed")))
+		return 11;
+	return 42;
 }

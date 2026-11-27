@@ -45,9 +45,9 @@ function main():Void {
 		context.respond({text: request.text.toUpperCase()});
 	});
 	client.call(echo, restored.unwrap(), 1000).onComplete(outcome -> switch outcome {
-		case Success(answer): Sys.println(answer.text);
-		case Failure(error): throw error;
-		case Cancelled | Stopped:
+		case Success(Ok(answer)): Sys.println(answer.text);
+		case Success(Err(error)): Sys.println('Call failed: ${error.code()}');
+		case Failure(_) | Cancelled | Stopped:
 	});
 	server.poll();
 	client.poll();

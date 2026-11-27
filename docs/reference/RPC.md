@@ -23,9 +23,9 @@ server.serve(Greeter, new MyGreeter());
 var greeter = client.of(Greeter, 1000);
 var greeting = greeter.greet({name: "Ada"});
 greeting.onComplete(outcome -> switch outcome {
-    case Success(answer): Sys.println(answer.text);
-    case Failure(error): Sys.println(error.message);
-    case Cancelled | Stopped:
+    case Success(Ok(answer)): Sys.println(answer.text);
+    case Success(Err(error)): Sys.println('Greeting failed: ${error.code()}');
+    case Failure(_) | Cancelled | Stopped:
 });
 ```
 
@@ -34,7 +34,7 @@ interface. Each method takes one required request parameter and declares
 either a response type or `Future<Response>`. The request and response values
 use the compiler's [MessagePack wire profile](MESSAGEPACK.md). The compiler
 generates typed dispatch and a client stub whose methods take the request and
-return a [Future](ASYNC.md) in both cases. The stub captures its connection and
+return a [Future](ASYNC.md) of a `Result<Response, RpcError>` in both cases. The stub captures its connection and
 timeout, which defaults to 1000 milliseconds.
 
 Poll both connections to dispatch requests and deliver replies. A synchronous
@@ -43,7 +43,10 @@ implementation returns a future and settles it on the server's event loop when
 the response is ready. For example, a method declared as
 `function greet(request:Query):Future<Answer>` can start work and return its
 promise's future. The server sends the response when that future succeeds.
-A failed future sends an RPC error. A client cancellation requests cancellation
+A failed future is a bug in the implementation, which the caller sees as
+`HandlerFailed`. A failure the service expects to report belongs in its
+response type, such as an enum with a case for each answer; a generic enum such
+as `Result<Answer, E>` is not yet a wire type. A client cancellation requests cancellation
 on the server future when the server processes the cancellation message.
 Streaming can use a separate type in the future.
 
@@ -88,8 +91,9 @@ var client = new RpcClient(connector, monotonicMilliseconds, randomUnit, options
     });
 ```
 
-A `RpcConnector` completes with an owned transport or a structured failure and
-returns a cancellable attempt. Completion may be synchronous. Cancellation after
+A `RpcConnector` completes with `Ok(transport)`, which the client then owns, or
+`Err(error)`, usually `ConnectFailed(reason, retryable)`, and returns a
+cancellable attempt. Completion may be synchronous. Cancellation after
 completion must not close a transferred transport. Late completions are fenced;
 a stale newly opened transport is closed. Each new attempt has a fresh generation,
 handshake and connection. Disconnect fails accepted calls with ambiguity; no calls
@@ -117,24 +121,24 @@ accepted refusal. Handshake polling processes at most one send and one receive.
 
 For a hand-built protocol, give each low-level method a permanent positive
 integer ID. For wire types,
-`RpcMethod.wire(id)` uses the expected `RpcMethod<Request, Response>` type to
-generate MessagePack codecs for both types. The descriptor preserves both types
+`RpcMethod.wire<Request, Response>(id)` generates MessagePack codecs for both
+types, which the call names or an expected `RpcMethod<Request, Response>` gives. The descriptor preserves both types
 through `call` and `register` without reflection or `Dynamic` in the codecs.
 
 ```haxe
 typedef Query = { var name:String; }
 typedef Answer = { var text:String; }
 
-var method:RpcMethod<Query, Answer> = RpcMethod.wire(100);
+var method = RpcMethod.wire<Query, Answer>(100);
 
 server.register(method, function(request, context) {
     // Retaining context for later asynchronous completion is supported.
     context.respond({text: request.name});
 });
 client.call(method, {name: "workspace"}, 1000).onComplete(outcome -> switch outcome {
-    case Success(answer): Sys.println(answer.text);
-    case Failure(error): Sys.println(error.message);
-    case Cancelled | Stopped:
+    case Success(Ok(answer)): Sys.println(answer.text);
+    case Success(Err(error)): Sys.println('Call failed: ${error.code()}');
+    case Failure(_) | Cancelled | Stopped:
 });
 ```
 
@@ -142,7 +146,8 @@ Request and response schemas are inferred recursively. Fields and enum construct
 use names by default.
 
 For custom codecs, pass the functions explicitly to
-`new RpcMethod<Query, Answer>(100, encodeQuery, decodeQuery, encodeAnswer, decodeAnswer)`.
+`new RpcMethod<Query, Answer>(100, encodeQuery, decodeQuery, encodeAnswer, decodeAnswer)`,
+whose decoders return a `Result<T, WireError>`.
 
 Poll each endpoint from its event loop. Inject a monotonic clock returning
 milliseconds; `RpcContext.deadline()` uses the same clock domain. Polling is
@@ -166,13 +171,17 @@ Method IDs are independent of request and response member IDs.
 
 ## Failure semantics
 
-A call can return an already settled `Failure` if the connection is closed,
-busy, or the timeout expires during encoding. Invalid local arguments or failing
-local encoders throw before dispatch.
+A call settles its future with `Ok(response)` or `Err(error)`, an `RpcError`.
+It can return one already settled with `Disconnected(false)`, `Busy` or
+`TimedOut(false)` when the connection is closed, busy, or the timeout expires
+during encoding. Invalid local arguments or failing local encoders throw before
+dispatch.
 
-Timeouts, transport loss and remote errors settle the caller's future with
-`Failure(RpcError)`. Its `code` identifies the failure and `ambiguous` indicates
-whether the request may have executed. Cancel the future to send a cancellation
+Timeouts, transport loss and the peer's errors settle with an `RpcError` case
+too: `TimedOut`, `Disconnected`, `UnknownMethod`, `InvalidRequest`,
+`HandlerFailed`, or `Remote(code, message, mayHaveRun)` for a code of the
+peer's own. `mayHaveRun()` says whether the request may have executed, so that
+retrying it may run it twice; `code()` names the failure as the wire does. Cancel the future to send a cancellation
 message and settle locally as `Cancelled`. Cancellation provides no rollback
 guarantee. Call `stopObserving()` to settle locally as `Stopped` and drop late
 replies while allowing the server to continue. The runtime never replays
@@ -180,10 +189,10 @@ requests. Mutations need application-owned operation IDs and reconciliation when
 their replies are lost.
 
 Unknown methods, overload and malformed request payloads fail without invoking
-the handler. A handler exception or an asynchronous failure with an ordinary
-exception becomes a generic `handler_failed` error. To return public error details,
-fail the server promise with an `RpcError`. Malformed envelopes or notifications close
-the connection; `closeReason` identifies the local cause. Application callback
+the handler. A handler exception or a failed future becomes `HandlerFailed` at the caller.
+A low-level handler returns an error of its own with `context.fail(Remote(code,
+message, mayHaveRun))`. Malformed envelopes or notifications close the
+connection; `closeError` says why (`ProtocolViolation(code)`). Application callback
 exceptions remain visible to the polling caller. Closing retires all pending
 waiters even when a failure callback throws.
 

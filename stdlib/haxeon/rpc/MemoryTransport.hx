@@ -14,7 +14,7 @@ class MemoryTransport implements MessageTransport {
 
 	private function new(maxBytes:Int, maxMessages:Int) {
 		if (maxBytes < 1 || maxMessages < 1)
-			throw "Invalid memory transport limits";
+			throw new haxe.Exception("Invalid memory transport limits");
 		this.maxBytes = maxBytes;
 		this.maxMessages = maxMessages;
 	}
@@ -53,7 +53,7 @@ class MemoryTransport implements MessageTransport {
 	/** Queues `message` at the other end: false when either end is closed or the other end's queue is full. */
 	public function send(message:Bytes):Bool {
 		if (message == null)
-			throw "Message is required";
+			throw new haxe.Exception("Message is required");
 		var destination = peer;
 		if (!open
 			|| destination == null

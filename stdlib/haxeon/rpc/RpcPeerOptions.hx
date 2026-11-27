@@ -32,13 +32,13 @@ class RpcPeerOptions {
 		RpcProtocol.validate(Hello(RpcProtocol.VERSION, RpcProtocol.CODEC_VERSION, application, requirements));
 		for (capability in requirements)
 			if (capabilities.indexOf(capability) < 0)
-				throw "Required capability must be offered";
+				throw new haxe.Exception("Required capability must be offered");
 		if (timeoutMs <= 0
 			|| maxMessageBytes < 128
 			|| maxCalls < 1
 			|| maxQueuedBytes < maxMessageBytes
 			|| maxQueuedBytes > 0x7fffffff - maxMessageBytes)
-			throw "Invalid RPC peer limits";
+			throw new haxe.Exception("Invalid RPC peer limits");
 		RpcProtocol.encode(Hello(RpcProtocol.VERSION, RpcProtocol.CODEC_VERSION, application, capabilities),
 			maxMessageBytes);
 		this.application = application;

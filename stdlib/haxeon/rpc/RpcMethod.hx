@@ -1,6 +1,7 @@
 package haxeon.rpc;
 
 import haxe.io.Bytes;
+import haxeon.wire.WireError;
 
 internal typedef RpcRoute = {
 	final selectors:Array<RpcMethodKey>;
@@ -24,26 +25,26 @@ class RpcMethod<Request, Response> {
 	/** Encodes a request. */
 	public final encodeRequest:Request->Bytes;
 
-	/** Decodes a request; throws for bytes that are not one. */
-	public final decodeRequest:Bytes->Request;
+	/** Decodes a request, or gives why the bytes are not one. */
+	public final decodeRequest:Bytes->Result<Request, WireError>;
 
 	/** Encodes a response. */
 	public final encodeResponse:Response->Bytes;
 
-	/** Decodes a response; throws for bytes that are not one. */
-	public final decodeResponse:Bytes->Response;
+	/** Decodes a response, or gives why the bytes are not one. */
+	public final decodeResponse:Bytes->Result<Response, WireError>;
 
 	/** A qualified service method uses zero for name routing or a positive ID scoped to its interface. */
-	public function new(id:Int, encodeRequest:Request->Bytes, decodeRequest:Bytes->Request,
-			encodeResponse:Response->Bytes, decodeResponse:Bytes->Response, ?name:String) {
+	public function new(id:Int, encodeRequest:Request->Bytes, decodeRequest:Bytes->Result<Request, WireError>,
+			encodeResponse:Response->Bytes, decodeResponse:Bytes->Result<Response, WireError>, ?name:String) {
 		if (name == null) {
 			if (id <= 0)
-				throw "RPC method id must be positive";
+				throw new haxe.Exception("RPC method id must be positive");
 			key = Id(id);
 		} else {
 			var separator = name.lastIndexOf(".");
 			if (id < 0 || separator <= 0 || separator == name.length - 1)
-				throw "Invalid RPC service method";
+				throw new haxe.Exception("Invalid RPC service method");
 			key = id == 0 ? Name(name) : ServiceId(name.substring(0, separator), id);
 		}
 		this.name = name;
@@ -60,14 +61,12 @@ class RpcMethod<Request, Response> {
 		if (id > 0 && name != null)
 			selectors.push(Name(name));
 		var handle = function(payload:Bytes, state:RpcRequestState) {
-			var request:Request;
-			try
-				request = decodeRequest(payload)
-			catch (_:Dynamic) {
-				var code = "invalid_request";
-				finish(state, Bytes.alloc(0), new RpcError(code, code, false));
-				return;
-			}
+			var request = switch decodeRequest(payload) {
+				case Ok(request): request;
+				case Err(_):
+					finish(state, Bytes.alloc(0), InvalidRequest);
+					return;
+			};
 			var context = new RpcContext(state, encodeResponse,
 				function(bytes, error) return finish(state, bytes, error));
 			handler(request, context);

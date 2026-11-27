@@ -4,6 +4,7 @@ import haxe.io.Bytes;
 import haxeon.async.Future;
 import haxeon.async.Promise;
 import haxeon.rpc.RpcMethod.RpcRoute;
+import haxeon.wire.WireError;
 
 private typedef PendingCall = {
 	var deadline:Float;
@@ -17,8 +18,11 @@ private typedef PendingCall = {
  * A request is sent once and never replayed. Clock values and deadlines are monotonic milliseconds.
  */
 class RpcConnection {
-	/** Why the connection closed, once it has: the reason given to `close`, or the protocol error that closed it. */
-	public var closeReason(default, null):Null<String>;
+	/**
+	 * Why the connection closed, once it has: `Disconnected(false)` when this side or the transport closed it, or the
+	 * `ProtocolViolation` of a peer that broke the protocol.
+	 */
+	public var closeError(default, null):Null<RpcError>;
 
 	final transport:MessageTransport;
 	final clock:Void->Float;
@@ -52,7 +56,7 @@ class RpcConnection {
 			|| maxCalls < 1
 			|| maxQueuedBytes < maxMessageBytes
 			|| maxQueuedBytes > 0x7fffffff - maxMessageBytes)
-			throw "Invalid RPC connection limits";
+			throw new haxe.Exception("Invalid RPC connection limits");
 		this.transport = transport;
 		this.clock = clock;
 		this.maxMessageBytes = maxMessageBytes;
@@ -104,7 +108,7 @@ class RpcConnection {
 			for (selector in route.selectors) {
 				var key = methodKey(selector);
 				if (handlers.exists(key) || incoming.exists(key))
-					throw "Duplicate RPC method";
+					throw new haxe.Exception("Duplicate RPC method");
 				incoming.set(key, route.handle);
 			}
 		for (key => handler in incoming)
@@ -122,18 +126,12 @@ class RpcConnection {
 	 * Handles the peer's notifications `id` with `handler`, decoding each with `decode`; one that does not decode
 	 * closes the connection. Throws when `id` is not positive or is already handled.
 	 */
-	public function onNotification<T>(id:Int, decode:Bytes->T, handler:T->Void):Void {
+	public function onNotification<T>(id:Int, decode:Bytes->Result<T, WireError>, handler:T->Void):Void {
 		if (id <= 0 || notifications.exists(id))
-			throw "Invalid or duplicate notification id";
-		notifications.set(id, function(bytes) {
-			var value:T;
-			try
-				value = decode(bytes)
-			catch (_:Dynamic) {
-				close("invalid_notification");
-				return;
-			}
-			handler(value);
+			throw new haxe.Exception("Invalid or duplicate notification id");
+		notifications.set(id, function(bytes) switch decode(bytes) {
+			case Ok(value): handler(value);
+			case Err(_): closeWith(ProtocolViolation("invalid_notification"));
 		});
 	}
 
@@ -147,44 +145,37 @@ class RpcConnection {
 		return enqueue(Notification(id, encode(value)));
 	}
 
-	/** Sends one request and observes its terminal outcome. */
+	/**
+	 * Sends one request: its future settles with the response, or with the error that ended the call. Cancelling the
+	 * future asks the peer to stop the request. Throws when `timeoutMs` is not positive.
+	 */
 	public function call<Request, Response>(method:RpcMethod<Request, Response>, request:Request,
-			timeoutMs:Int):Future<Response> {
-		var promise = new Promise<Response>();
-		if (!isOpen()) {
-			promise.fail(error("disconnected", false));
+			timeoutMs:Int):Future<Result<Response, RpcError>> {
+		var promise = new Promise<Result<Response, RpcError>>();
+		function fail(error:RpcError):Future<Result<Response, RpcError>> {
+			promise.complete(Err(error));
 			return promise.future;
 		}
+		if (!isOpen())
+			return fail(Disconnected(false));
 		if (timeoutMs <= 0)
 			throw new haxe.Exception("RPC timeout must be positive");
-		if (pendingCount >= maxCalls || nextId == 0x7fffffff || outgoing.length > 0) {
-			promise.fail(error("busy", false));
-			return promise.future;
-		}
+		if (pendingCount >= maxCalls || nextId == 0x7fffffff || outgoing.length > 0)
+			return fail(Busy);
 		var id = nextId++;
 		var deadline = clock() + timeoutMs;
 		var bytes = RpcProtocol.encode(Request(id, method.key, timeoutMs, method.encodeRequest(request)),
 			maxMessageBytes);
-		if (clock() >= deadline) {
-			promise.fail(error("timeout", false));
-			return promise.future;
-		}
-		if (!trySend(bytes)) {
-			promise.fail(error(isOpen() ? "busy" : "disconnected", false));
-			return promise.future;
-		}
+		if (clock() >= deadline)
+			return fail(TimedOut(false));
+		if (!trySend(bytes))
+			return fail(isOpen() ? Busy : Disconnected(false));
 		pending.set(id, {deadline: deadline,
-			response: function(bytes) {
-				var value:Response;
-				try
-					value = method.decodeResponse(bytes)
-				catch (_:Dynamic) {
-					promise.fail(error("invalid_response", true));
-					return;
-				}
-				promise.complete(value);
-			},
-				failure: promise.fail});
+			response: bytes -> promise.complete(switch method.decodeResponse(bytes) {
+				case Ok(value): Ok(value);
+				case Err(_): Err(InvalidResponse);
+			}),
+				failure: error -> promise.complete(Err(error))});
 		pendingCount++;
 		promise.setControls(function() {
 			takePending(id);
@@ -216,7 +207,7 @@ class RpcConnection {
 		if (!open || !state.isActive() || active.get(state.id) != state)
 			return false;
 		var encoded = RpcProtocol.encode(failure == null ? Response(state.id, bytes) : Failed(state.id,
-			@:privateAccess failure.toWire()),
+			RpcProtocol.errorToWire(failure)),
 			maxMessageBytes);
 		active.remove(state.id);
 		activeCount--;
@@ -237,7 +228,7 @@ class RpcConnection {
 		if (outgoing.length == 0 && trySend(bytes))
 			return true;
 		if (outgoing.length >= maxCalls || bytes.length > maxQueuedBytes - queuedBytes) {
-			close();
+			closeWith(Busy);
 			return false;
 		}
 		outgoing.push(bytes);
@@ -257,14 +248,16 @@ class RpcConnection {
 		return true;
 	}
 
-	/**
-	 * Closes the connection and its transport, for `reason`: pending calls fail and the peer's requests are cancelled.
-	 */
-	public function close(reason:String = "disconnected"):Void {
+	/** Closes the connection and its transport: pending calls fail and the peer's requests are cancelled. */
+	public function close():Void
+		closeWith(Disconnected(false));
+
+	/** `close`, recording `error` as why. */
+	function closeWith(error:RpcError):Void {
 		if (!open)
 			return;
 		open = false;
-		closeReason = reason;
+		closeError = error;
 		transport.close();
 		held = null;
 		outgoing.resize(0);
@@ -288,7 +281,7 @@ class RpcConnection {
 			}
 		for (call in calls)
 			try
-				call.failure(error(reason, true))
+				call.failure(Disconnected(true))
 			catch (failure:Dynamic) {
 				if (!callbackFailed)
 					callbackError = failure;
@@ -303,9 +296,9 @@ class RpcConnection {
 	public function poll(messageBudget:Int = 32, ?byteBudget:Int):Int {
 		var bytes = byteBudget == null ? maxMessageBytes : byteBudget;
 		if (polling)
-			throw "RPC poll is not reentrant";
+			throw new haxe.Exception("RPC poll is not reentrant");
 		if (messageBudget < 1 || bytes < maxMessageBytes)
-			throw "Invalid RPC poll budget";
+			throw new haxe.Exception("Invalid RPC poll budget");
 		polling = true;
 		#if !haxe_ver
 		defer polling = false;
@@ -347,7 +340,7 @@ class RpcConnection {
 		for (id in expired) {
 			var call = takePending(id);
 			if (call != null)
-				sendCancellation(id, () -> call.failure(error("timeout", true)));
+				sendCancellation(id, () -> call.failure(TimedOut(true)));
 		}
 		var expiredRequests:Array<Int> = [];
 		for (id => state in active)
@@ -359,7 +352,7 @@ class RpcConnection {
 				active.remove(id);
 				activeCount--;
 				state.finish(true);
-				enqueue(Failed(id, @:privateAccess error("timeout", true).toWire()));
+				enqueue(Failed(id, RpcProtocol.errorToWire(TimedOut(true))));
 			}
 		}
 		var count = 0, used = 0;
@@ -370,7 +363,7 @@ class RpcConnection {
 			if (bytes == null)
 				break;
 			if (bytes.length > maxMessageBytes) {
-				close("oversized_message");
+				closeWith(ProtocolViolation("oversized_message"));
 				break;
 			}
 			if (bytes.length > byteBudget - used) {
@@ -380,14 +373,12 @@ class RpcConnection {
 			held = null;
 			used += bytes.length;
 			count++;
-			var message:RpcEnvelope;
-			try
-				message = RpcProtocol.decode(bytes, maxMessageBytes)
-			catch (_:Dynamic) {
-				close("invalid_envelope");
-				break;
+			switch RpcProtocol.decode(bytes, maxMessageBytes) {
+				case Ok(message): dispatch(message);
+				case Err(_):
+					closeWith(ProtocolViolation("invalid_envelope"));
+					break;
 			}
-			dispatch(message);
 		}
 		return count;
 	}
@@ -398,15 +389,14 @@ class RpcConnection {
 				var call = takePending(id);
 				if (call != null) {
 					if (clock() >= call.deadline)
-						call.failure(error("timeout", true));
+						call.failure(TimedOut(true));
 					else
 						call.response(bytes);
 				}
 			case Failed(id, failure):
 				var call = takePending(id);
 				if (call != null)
-					call.failure(clock() >= call.deadline ? error("timeout",
-						true) : @:privateAccess RpcError.fromWire(failure));
+					call.failure(clock() >= call.deadline ? TimedOut(true) : RpcProtocol.errorFromWire(failure));
 			case Cancel(id):
 				var state = active.get(id);
 				if (state != null) {
@@ -417,17 +407,17 @@ class RpcConnection {
 			case Request(id, method, timeoutMs, bytes):
 				// Enforce monotonically increasing ids, preventing duplicate execution.
 				if (id <= lastRequestId) {
-					close("duplicate_request");
+					closeWith(ProtocolViolation("duplicate_request"));
 					return;
 				}
 				lastRequestId = id;
 				var handler = handlers.get(methodKey(method));
 				if (handler == null) {
-					enqueue(Failed(id, @:privateAccess error("unknown_method", false).toWire()));
+					enqueue(Failed(id, RpcProtocol.errorToWire(UnknownMethod)));
 					return;
 				}
 				if (activeCount >= maxCalls) {
-					enqueue(Failed(id, @:privateAccess error("busy", false).toWire()));
+					enqueue(Failed(id, RpcProtocol.errorToWire(Busy)));
 					return;
 				}
 				var state = new RpcRequestState(id, clock() + timeoutMs, clock);
@@ -436,19 +426,16 @@ class RpcConnection {
 				try
 					handler(bytes, state)
 				catch (_:Dynamic) {
-					finish(state, Bytes.alloc(0), error("handler_failed", true));
+					finish(state, Bytes.alloc(0), HandlerFailed);
 				}
 			case Notification(method, bytes):
 				var handler = notifications.get(method);
 				if (handler != null)
 					handler(bytes);
 			default:
-				close("unexpected_handshake"); // Forbidden after establishment.
+				closeWith(ProtocolViolation("unexpected_handshake")); // Forbidden after establishment.
 		}
 	}
-
-	static function error(code:String, ambiguous:Bool):RpcError
-		return new RpcError(code, code, ambiguous);
 
 	/** Registers a service implementation. Haxeon generates dispatch and codecs for the supplied interface. */
 	public function serve<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end,
@@ -456,9 +443,8 @@ class RpcConnection {
 		throw new haxe.Exception("RpcConnection.serve must be lowered by the compiler");
 
 	/**
-		Returns a client stub whose methods take one request and return a Future of the response.
-		Haxeon generates the stub and codecs for the supplied interface.
-		The default timeout is 1000 milliseconds.
+		Returns a client stub whose methods take one request and return a `Future<Result<Response, RpcError>>`, as `call`
+		does. Haxeon generates the stub and codecs for the supplied interface. The default timeout is 1000 milliseconds.
 	 */
 	public function of<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end, ?timeoutMs:Int):Dynamic
 		throw new haxe.Exception("RpcConnection.of must be lowered by the compiler");

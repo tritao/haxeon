@@ -133,9 +133,9 @@ final client = new RpcConnection(pair.client, () -> 0.0);
 server.serve(Greeter, new Hello());
 
 client.of(Greeter).greet({name: "Ada"}).onComplete(outcome -> switch outcome {
-	case Success(answer): Sys.println(answer.text);
-	case Failure(error): Sys.println(error.message);
-	case Cancelled | Stopped:
+	case Success(Ok(answer)): Sys.println(answer.text);
+	case Success(Err(error)): Sys.println('Call failed: \${error.code()}');
+	case Failure(_) | Cancelled | Stopped:
 });
 
 server.poll();

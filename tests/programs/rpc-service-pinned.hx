@@ -40,9 +40,9 @@ function main():Int {
 
 	var total = 0;
 	var failures = 0;
-	var observe = function(outcome:haxeon.async.Outcome<Int>):Void {
+	var observe = function(outcome:haxeon.async.Outcome<Result<Int, haxeon.rpc.RpcError>>):Void {
 		switch outcome {
-			case Success(answer): total += answer;
+			case Success(Ok(answer)): total += answer;
 			case _: failures++;
 		}
 	};
@@ -53,7 +53,7 @@ function main():Int {
 	if (first == null)
 		return 1;
 	switch RpcProtocol.decode(first, 4096) {
-		case Request(1, ServiceId("Pinned", 1), _, _):
+		case Ok(Request(1, ServiceId("Pinned", 1), _, _)):
 		default: return 2;
 	}
 	if (!pair.client.send(first))
@@ -62,9 +62,9 @@ function main():Int {
 	client.of(OtherService).next(6).onComplete(observe);
 
 	var legacyName = new RpcMethod<String, Int>(0, value -> MessagePack.encode(value),
-		bytes -> MessagePack.decode<String>(bytes).unwrap(),
+		bytes -> MessagePack.decode<String>(bytes),
 		value -> MessagePack.encode(value),
-		bytes -> MessagePack.decode<Int>(bytes).unwrap(),
+		bytes -> MessagePack.decode<Int>(bytes),
 		"Pinned.length");
 	client.call(legacyName, "Grace", 25).onComplete(observe);
 

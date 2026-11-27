@@ -118,10 +118,15 @@ ui's argument checks, stay exceptions. Other APIs change when they are next work
   the `Err`; writers throw only for misuse. The codec is generated for the decoded type, which the call names
   (`MessagePack.decode<User>(bytes)`, [CALL_TYPE_ARGUMENTS.md](CALL_TYPE_ARGUMENTS.md)) or an expected `Result` gives:
   a typed local, or `try` (whose value is then expected to be a `Result` of the expected type).
-- **RPC (next).** `RpcConnection.call` and a typed service's client methods settle `Future<Result<Response,
-  RpcError>>`, so `Outcome.Failure` means a bug; the connector's `RpcConnectResult` becomes a `Result` of the transport.
-  Open: whether `RpcError` becomes an enum, since its codes include a peer's own and `ambiguous` says whether the
-  request may have run, and where `retryable` lives once the connector's failure is an error value.
+- **RPC (done).** `RpcConnection.call` and a typed service's client methods settle `Future<Result<Response,
+  RpcError>>`. `RpcError` is an enum: named cases for this side's failures (`Disconnected(mayHaveRun)`, `Busy`,
+  `TimedOut(mayHaveRun)`, `ConnectFailed(reason, retryable)`, `HandshakeFailed(reason)`, ...), the peer's handler
+  outcomes (`HandlerFailed`, `HandlerCancelled`, `HandlerStopped`), and `Remote(code, message, mayHaveRun)` for a code
+  of the peer's own; `mayHaveRun()` and `code()` read every case. The connector completes with `Result<MessageTransport,
+  RpcError>` (`RpcConnectResult` is gone), the server's authorization returns `Result<Void, RpcError>`, envelopes,
+  method codecs and notification decoders return `Result<T, WireError>`, and `closeError` says why a connection
+  closed. A typed service's own expected failures belong in its response type; generic enums such as `Result` are not
+  yet wire types.
 
 The compiler's own source uses none of this until the gates of [ADR 0006](../adr/0006-haxeon-only-compiler-source.md)
 hold: stock Haxe parses neither enum methods nor `try` without `catch`. Its failures are diagnostics or bugs anyway.

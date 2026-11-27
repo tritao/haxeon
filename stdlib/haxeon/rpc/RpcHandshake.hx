@@ -15,7 +15,7 @@ internal class RpcHandshake {
 	final options:RpcPeerOptions;
 	final initiator:Bool;
 	final offered:Array<String>;
-	final authorize:Null<(String, Array<String>) -> Null<RpcError>>;
+	final authorize:Null<(String, Array<String>) -> Result<Void, RpcError>>;
 	var negotiated:Array<String> = [];
 	var outgoing:Null<Bytes>;
 	var helloSent:Bool = false;
@@ -25,7 +25,7 @@ internal class RpcHandshake {
 
 	private function new(transport:MessageTransport, clock:Void->Float, options:RpcPeerOptions, initiator:Bool,
 			offered:Array<String>,
-			authorize:Null<(String, Array<String>) -> Null<RpcError>>) {
+			authorize:Null<(String, Array<String>) -> Result<Void, RpcError>>) {
 		this.transport = transport;
 		this.clock = clock;
 		this.options = options;
@@ -43,14 +43,15 @@ internal class RpcHandshake {
 			offered:Array<String>):RpcHandshake {
 		for (capability in offered)
 			if (options.offered().indexOf(capability) < 0)
-				throw "Handshake cannot widen policy";
+				throw new haxe.Exception("Handshake cannot widen policy");
 		return new RpcHandshake(transport, clock, options, true, offered, null);
 	}
 
-	/** Authorization authenticates application-level policy; transport authentication
-	 * must be completed by the adapter before this handshake is constructed. */
+	/** Authorization authenticates application-level policy: `authorize` takes the peer's application and the agreed
+	 * capabilities, and refuses with an error (usually `AuthorizationFailed(reason)`). Transport authentication must be
+	 * completed by the adapter before this handshake is constructed. */
 	public static function server(transport:MessageTransport, clock:Void->Float, options:RpcPeerOptions,
-			?authorize:(String, Array<String>) -> Null<RpcError>):RpcHandshake {
+			?authorize:(String, Array<String>) -> Result<Void, RpcError>):RpcHandshake {
 		return new RpcHandshake(transport, clock, options, false, options.offered(), authorize);
 	}
 
@@ -69,32 +70,34 @@ internal class RpcHandshake {
 			transport.close();
 	}
 
-	function fail(code:String):Void {
-		failure = new RpcError(code, code, false);
+	function fail(error:RpcError):Void {
+		failure = error;
 		close();
 	}
 
 	function reject(error:RpcError):Void {
 		failure = error;
-		outgoing = RpcProtocol.encode(Refused(@:privateAccess error.toWire()), options.maxMessageBytes);
+		outgoing = RpcProtocol.encode(Refused(RpcProtocol.errorToWire(error)), options.maxMessageBytes);
+	}
+
+	/** Fails the handshake with `error`: the client closes, and the server refuses the client with it. */
+	function refuse(error:RpcError):Void {
+		if (initiator)
+			fail(error);
+		else
+			reject(error);
 	}
 
 	function negotiate(protocol:Int, codec:Int, application:String, capabilities:Array<String>):Bool {
-		var code:Null<String> = protocol != RpcProtocol.VERSION ? "unsupported_protocol" : codec
-			!= RpcProtocol.CODEC_VERSION
-			? "unsupported_codec" : null;
-		if (code != null) {
-			if (initiator)
-				fail(code);
-			else
-				reject(new RpcError(code, code, false));
+		if (protocol != RpcProtocol.VERSION || codec != RpcProtocol.CODEC_VERSION) {
+			refuse(HandshakeFailed(protocol != RpcProtocol.VERSION ? "unsupported_protocol" : "unsupported_codec"));
 			return false;
 		}
 		remoteApplication = application;
 		if (initiator) {
 			for (capability in capabilities)
 				if (offered.indexOf(capability) < 0) {
-					fail("capability_widening");
+					fail(HandshakeFailed("capability_widening"));
 					return false;
 				}
 			negotiated = capabilities.copy();
@@ -105,10 +108,7 @@ internal class RpcHandshake {
 		}
 		for (capability in options.requirements())
 			if (negotiated.indexOf(capability) < 0) {
-				if (initiator)
-					fail("missing_capability");
-				else
-					reject(new RpcError("missing_capability", "missing_capability", false));
+				refuse(MissingCapability(capability));
 				return false;
 			}
 		return true;
@@ -125,13 +125,13 @@ internal class RpcHandshake {
 			return;
 		if (!transport.isOpen()) {
 			if (failure == null)
-				failure = new RpcError("disconnected", "disconnected", false);
+				failure = Disconnected(false);
 			close();
 			return;
 		}
 		if (clock() >= deadline) {
 			if (failure == null)
-				failure = new RpcError("handshake_timeout", "handshake_timeout", false);
+				failure = HandshakeTimeout;
 			close();
 			return;
 		}
@@ -155,35 +155,36 @@ internal class RpcHandshake {
 		bytes = transport.receive();
 		if (bytes == null)
 			return;
-		var message:RpcEnvelope;
-		try
-			message = RpcProtocol.decode(bytes, options.maxMessageBytes)
-		catch (_:Dynamic) {
-			fail("invalid_handshake");
-			return;
-		}
+		var message = switch RpcProtocol.decode(bytes, options.maxMessageBytes) {
+			case Ok(message): message;
+			case Err(_):
+				fail(HandshakeFailed("invalid_handshake"));
+				return;
+		};
 		switch message {
 			case Welcome(protocol, codec, application, capabilities) if (initiator && helloSent):
 				if (negotiate(protocol, codec, application, capabilities))
 					establish();
 			case Refused(error) if (initiator && helloSent):
-				failure = @:privateAccess RpcError.fromWire(error);
+				failure = RpcProtocol.errorFromWire(error);
 				close();
 			case Hello(protocol, codec, application, capabilities) if (!initiator):
 				if (!negotiate(protocol, codec, application, capabilities))
 					return;
 				var policy = authorize;
 				if (policy != null) {
-					var refusal:Null<RpcError>;
+					var decision:Result<Void, RpcError>;
 					try
-						refusal = policy(application, negotiated.copy())
+						decision = policy(application, negotiated.copy())
 					catch (_:Dynamic) {
-						reject(new RpcError("authorization_failed", "authorization_failed", false));
+						reject(AuthorizationFailed("the authorization policy failed"));
 						return;
 					}
-					if (refusal != null) {
-						reject(refusal);
-						return;
+					switch decision {
+						case Ok():
+						case Err(refusal):
+							reject(refusal);
+							return;
 					}
 				}
 				accepted = true;
@@ -191,7 +192,7 @@ internal class RpcHandshake {
 					options.application, negotiated),
 					options.maxMessageBytes);
 			default:
-				fail("invalid_handshake");
+				fail(HandshakeFailed("invalid_handshake"));
 		}
 	}
 }

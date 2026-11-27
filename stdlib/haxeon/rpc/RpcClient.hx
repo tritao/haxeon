@@ -51,7 +51,7 @@ class RpcClient {
 			ready:(RpcConnection, Int, Array<String>) -> Void, baseBackoffMs:Int = 100, maxBackoffMs:Int = 10000,
 			connectTimeoutMs:Int = 10000) {
 		if (baseBackoffMs < 1 || maxBackoffMs < baseBackoffMs || connectTimeoutMs < 1)
-			throw "Invalid RPC reconnect limits";
+			throw new haxe.Exception("Invalid RPC reconnect limits");
 		this.connector = connector;
 		this.clock = clock;
 		this.random = random;
@@ -103,7 +103,7 @@ class RpcClient {
 		if (state != Disconnected) {
 			if (!redial)
 				return;
-			failed(new RpcError("network_changed", "network_changed", false), true);
+			failed(NetworkChanged);
 			if (state == Closed)
 				return;
 		}
@@ -134,19 +134,20 @@ class RpcClient {
 			transport.close();
 	}
 
-	static function terminal(code:String):Bool {
-		return code == "unauthorized" || code == "authentication_refused" || code == "authorization_failed"
-			|| code == "unsupported_protocol"
-			|| code == "unsupported_codec" || code == "missing_capability" || code == "capability_widening"
-			|| code == "invalid_handshake"
-			|| code == "invalid_envelope" || code == "invalid_notification" || code == "duplicate_request"
-			|| code == "unexpected_handshake"
-			|| code == "oversized_message";
-	}
+	/**
+	 * Whether connecting again may succeed after `error`: a dropped or slow connection, as the connector says for its own
+	 * failure. A refusal, a protocol or capability mismatch and a broken protocol are terminal.
+	 */
+	static function retryable(error:RpcError):Bool
+		return switch error {
+			case ConnectFailed(_, again): again;
+			case Disconnected(_), TimedOut(_), Busy, ConnectTimeout, HandshakeTimeout, NetworkChanged: true;
+			default: false;
+		}
 
-	function failed(error:RpcError, retryable:Bool):Void {
+	function failed(error:RpcError):Void {
 		lastError = error;
-		if (!retryable || terminal(error.code)) {
+		if (!retryable(error)) {
 			close();
 			return;
 		}
@@ -159,7 +160,7 @@ class RpcClient {
 		}
 		if (!Math.isFinite(sample) || sample < 0 || sample > 1) {
 			close();
-			throw "RPC random source must return a value in [0,1]";
+			throw new haxe.Exception("RPC random source must return a value in [0,1]");
 		}
 		state = Disconnected;
 		var pending = attempt;
@@ -184,7 +185,7 @@ class RpcClient {
 
 	function start():Void {
 		if (generation == 0x7fffffff) {
-			failed(new RpcError("generation_exhausted", "generation_exhausted", false), false);
+			failed(GenerationExhausted);
 			return;
 		}
 		generation++;
@@ -196,31 +197,31 @@ class RpcClient {
 			pending = connector.connect(function(result) {
 				if (generation != token || state != Connecting || clock() >= connectDeadline) {
 					switch result {
-						case Opened(transport):
+						case Ok(transport):
 							if (transport != activeTransport)
 								transport.close();
-						case Failed(_, _):
+						case Err(_):
 					}
 					return;
 				}
 				attempt = null;
 				switch result {
-					case Opened(transport):
+					case Ok(transport):
 						if (!transport.isOpen()) {
-							failed(new RpcError("disconnected", "disconnected", false), true);
+							failed(Disconnected(false));
 							return;
 						}
 						activeTransport = transport;
 						handshake = RpcHandshake.client(transport, clock, options, ceiling);
 						state = Handshaking;
-					case Failed(error, retryable):
-						failed(error, retryable);
+					case Err(error):
+						failed(error);
 				}
 			})
 				catch (error:Dynamic) {
 			if (generation != token || state != Connecting)
 				throw error;
-			failed(new RpcError("connect_failed", "connect_failed", false), true);
+			failed(ConnectFailed("the connector threw", true));
 			return;
 		}
 		if (generation == token && state == Connecting)
@@ -236,9 +237,9 @@ class RpcClient {
 	public function poll(messageBudget:Int = 32, ?byteBudget:Int):Void {
 		var bytes = byteBudget == null ? options.maxMessageBytes : byteBudget;
 		if (messageBudget < 1 || bytes < options.maxMessageBytes)
-			throw "Invalid RPC client poll budget";
+			throw new haxe.Exception("Invalid RPC client poll budget");
 		if (polling)
-			throw "RPC client poll is not reentrant";
+			throw new haxe.Exception("RPC client poll is not reentrant");
 		polling = true;
 		defer polling = false;
 		pollInternal(messageBudget, bytes);
@@ -251,18 +252,16 @@ class RpcClient {
 					start();
 			case Connecting:
 				if (clock() >= connectDeadline)
-					failed(new RpcError("connect_timeout", "connect_timeout", false), true);
+					failed(ConnectTimeout);
 			case Handshaking:
 				var negotiating = handshake;
 				if (negotiating == null)
-					throw "Missing RPC handshake";
+					throw new haxe.Exception("Missing RPC handshake");
 				negotiating.poll();
 				if (negotiating.isFinished()) {
 					var established = negotiating.connection;
 					if (established == null) {
-						var failure = negotiating.failure;
-						failed(failure == null ? new RpcError("handshake_failed", "handshake_failed", false) : failure,
-							failure == null || failure.code == "disconnected" || failure.code == "handshake_timeout");
+						failed(negotiating.failure ?? Disconnected(false));
 					} else {
 						handshake = null;
 						connection = established;
@@ -277,7 +276,7 @@ class RpcClient {
 			case Connected:
 				var established = connection;
 				if (established == null)
-					throw "Missing RPC connection";
+					throw new haxe.Exception("Missing RPC connection");
 				if (established.isOpen())
 					established.poll(messageBudget, byteBudget);
 				if (state != Connected || connection != established)
@@ -285,9 +284,7 @@ class RpcClient {
 				if (!established.isOpen()) {
 					if (clock() - connectedAt >= maxBackoffMs)
 						retryStep = baseBackoffMs;
-					var reason = established.closeReason;
-					failed(new RpcError(reason == null ? "disconnected" : reason,
-						reason == null ? "disconnected" : reason, false), true);
+					failed(established.closeError ?? Disconnected(false));
 				}
 			case Closed:
 		}

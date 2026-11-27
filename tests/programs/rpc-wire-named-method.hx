@@ -23,7 +23,7 @@ function main():Int {
 	var result = 1;
 	var future = client.call(method, {name: "workspace"}, 25);
 	future.onComplete(outcome -> switch outcome {
-		case Success(answer): result = answer.text == "Hello workspace" && answer.length == 9 ? 42 : 2;
+		case Success(Ok(answer)): result = answer.text == "Hello workspace" && answer.length == 9 ? 42 : 2;
 		case _: result = 3;
 	});
 	if (!future.canCancel())

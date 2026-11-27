@@ -19,6 +19,12 @@ class WireFailure extends haxe.Exception {
 	}
 
 	/** What `decode` gives for `input`, or the error it fails with: the entry points' and the generated decoders' `Result`. */
+	/** `decode` as a function that returns its `Result` (`settle`): what an RPC method's generated decoder is. */
+	@:allow(haxeon.wire)
+	@:allow(haxeon.rpc)
+	static function decoding<I, T>(decode:I->T):I->Result<T, WireError>
+		return input -> settle(decode, input);
+
 	@:allow(haxeon.wire)
 	static function settle<I, T>(decode:I->T, input:I):Result<T, WireError> {
 		try {
