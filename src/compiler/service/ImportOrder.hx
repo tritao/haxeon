@@ -9,7 +9,7 @@ import compiler.syntax.Token.TokenKind;
 
 /** A run of import lines that is not in order, with the same lines sorted, or why it is left as written. */
 typedef ImportBlock = {
-	/** Source offsets of the whole lines the run occupies, from the start of its first line to the end of its last (no newline). */
+	/** Byte offsets of the whole lines the run occupies, from the start of its first line to the end of its last (no newline). */
 	final start:Int;
 
 	final end:Int;
@@ -43,8 +43,8 @@ class ImportOrder {
 	/** The runs of `source` that are out of order; `tokens` come from `tokens(path, source)`. */
 	public static function find(source:String, tokens:Array<Token>,
 			resolve:String->Null<ImportTarget>):Array<ImportBlock> {
-		var blocks:Array<ImportBlock> = [];
-		for (run in runs(source, tokens)) {
+		var blocks:Array<ImportBlock> = [], file = new SourceFile("", source);
+		for (run in runs(file, tokens)) {
 			var keys = run.map(line -> line.key);
 			var ordered = keys.copy();
 			ordered.sort(compare);
@@ -57,7 +57,7 @@ class ImportOrder {
 			if (unsafe == null) {
 				var lines = run.copy();
 				lines.sort((a, b) -> compare(a.key, b.key));
-				sorted = lines.map(line -> source.substring(line.start, line.end)).join("\n");
+				sorted = lines.map(line -> file.slice(line.start, line.end)).join("\n");
 			}
 			blocks.push({
 				start: start,
@@ -71,19 +71,18 @@ class ImportOrder {
 
 	/** `source` with every run that can be sorted safely sorted. */
 	public static function sort(source:String, tokens:Array<Token>, resolve:String->Null<ImportTarget>):String {
-		var blocks = find(source, tokens, resolve).filter(block -> block.sorted != null);
-		blocks.sort((a, b) -> b.start - a.start);
-		var result = source;
-		for (block in blocks)
-			result = result.substr(0, block.start) + block.sorted + result.substr(block.end);
-		return result;
+		var edits = new SourceEdits(new SourceFile("", source));
+		for (block in find(source, tokens, resolve))
+			if (block.sorted != null)
+				edits.replace(block.start, block.end, block.sorted);
+		return edits.apply();
 	}
 
 	static function compare(a:String, b:String):Int
 		return a < b ? -1 : a > b ? 1 : 0;
 
 	/** Consecutive whole-line import statements, as runs of at least two. */
-	static function runs(source:String, tokens:Array<Token>):Array<Array<ImportLine>> {
+	static function runs(file:SourceFile, tokens:Array<Token>):Array<Array<ImportLine>> {
 		var result:Array<Array<ImportLine>> = [], current:Array<ImportLine> = [], index = 0;
 		function close() {
 			if (current.length > 1)
@@ -114,12 +113,10 @@ class ImportOrder {
 			}
 			var statementStart = tokens[first].span.start,
 				statementEnd = tokens[index].span.end;
-			var lineStart = source.lastIndexOf("\n", statementStart - 1) + 1,
-				lineEnd = source.indexOf("\n", statementEnd);
-			if (lineEnd < 0)
-				lineEnd = source.length;
-			var alone = StringTools.trim(source.substring(lineStart, statementStart)) == ""
-				&& StringTools.trim(source.substring(statementEnd, lineEnd)) == "";
+			var lineStart = SourceEdits.lineStartAt(file, statementStart),
+				lineEnd = SourceEdits.lineEndAt(file, statementEnd);
+			var alone = SourceEdits.isBlank(file, lineStart, statementStart)
+				&& SourceEdits.isBlank(file, statementEnd, lineEnd);
 			if (!alone) {
 				close();
 				continue;

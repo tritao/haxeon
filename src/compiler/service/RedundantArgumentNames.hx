@@ -10,7 +10,7 @@ typedef RedundantArgumentName = {
 	/** The offset of the argument's name, where it is reported. */
 	final start:Int;
 
-	/** The UTF-8 byte offsets to remove for the short form: from the end of the colon to the end of the repeated name. */
+	/** What to remove for the short form, from the end of the colon to the end of the repeated name (see SourceEdits). */
 	final removeStart:Int;
 
 	final removeEnd:Int;
@@ -51,21 +51,6 @@ class RedundantArgumentNames {
 			}
 		}
 		return found;
-	}
-
-	/** `source` with each of `found` in its short form. Token offsets count UTF-8 bytes, so the cuts are made in its bytes. */
-	public static function shorten(source:String, found:Array<RedundantArgumentName>):String {
-		if (found.length == 0)
-			return source;
-		var ordered = found.copy();
-		ordered.sort((left, right) -> left.removeStart - right.removeStart);
-		var bytes = haxe.io.Bytes.ofString(source), result = new haxe.io.BytesBuffer(), position = 0;
-		for (item in ordered) {
-			result.addBytes(bytes, position, item.removeStart - position);
-			position = item.removeEnd;
-		}
-		result.addBytes(bytes, position, bytes.length - position);
-		return result.getBytes().toString();
 	}
 
 	static inline function kindAt(tokens:TokenTable, index:Int):TokenKind

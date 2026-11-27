@@ -6,9 +6,9 @@ import compiler.formatter.ProjectFormat;
 import compiler.formatter.Formatter;
 import compiler.service.ImportOrder;
 import compiler.service.RedundantArgumentNames;
+import compiler.service.SourceEdits;
 import compiler.service.UnusedImports;
 import compiler.service.UnusedImports.ImportTarget;
-import compiler.service.UnusedImports.UnusedImport;
 import compiler.syntax.Ast.AstMetadata;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Lexer;
@@ -149,15 +149,20 @@ class LintCommand {
 				continue;
 			found += unused.length + unordered.length + redundant.length;
 			for (item in unused)
-				Sys.println('$path:${lineOf(source, item.start)}: unused import ${item.path}');
+				Sys.println('$path:${file.lineAt(item.start)}: unused import ${item.path}');
 			for (block in unordered)
-				Sys.println('$path:${lineOf(source, block.start)}: imports not in order');
+				Sys.println('$path:${file.lineAt(block.start)}: imports not in order');
 			for (item in redundant)
-				Sys.println('$path:${lineOf(source, item.start)}: argument "${item.name}: ${item.name}" is "${item.name}:"');
+				Sys.println('$path:${file.lineAt(item.start)}: argument "${item.name}: ${item.name}" is "${item.name}:"');
 			if (fix) {
 				var config = projects.forFile(path),
 					wasFormatted = Formatter.format(source, config) == source,
-					edited = remove(RedundantArgumentNames.shorten(source, redundant), unused);
+					edits = new SourceEdits(file);
+				for (item in redundant)
+					edits.replace(item.removeStart, item.removeEnd, "");
+				for (item in unused)
+					edits.removeStatement(item.start, item.end);
+				var edited = edits.apply();
 				// Sorted after the removal, which can join two runs or empty one.
 				if (orderTokens != null)
 					edited = ImportOrder.sort(edited, ImportOrder.tokens(path, edited), resolve);
@@ -388,32 +393,5 @@ class LintCommand {
 			catch (_:Dynamic) {}
 		programs.set(path, program);
 		return program;
-	}
-
-	static function lineOf(source:String, offset:Int):Int {
-		var line = 1;
-		for (index in 0...offset)
-			if (source.charCodeAt(index) == "\n".code)
-				line++;
-		return line;
-	}
-
-	/** Deletes whole statements, and the line when nothing else stays on it. */
-	static function remove(source:String, unused:Array<UnusedImport>):String {
-		var result = source, ordered = unused.copy();
-		ordered.sort((left, right) -> right.start - left.start);
-		for (item in ordered) {
-			var start = item.start, end = item.end;
-			var lineStart = result.lastIndexOf("\n", start - 1) + 1, lineEnd = result.indexOf("\n", end);
-			if (lineEnd < 0)
-				lineEnd = result.length;
-			if (StringTools.trim(result.substring(lineStart, start)) == ""
-				&& StringTools.trim(result.substring(end, lineEnd)) == "") {
-				start = lineStart;
-				end = Std.int(Math.min(lineEnd + 1, result.length));
-			}
-			result = result.substr(0, start) + result.substr(end);
-		}
-		return result;
 	}
 }
