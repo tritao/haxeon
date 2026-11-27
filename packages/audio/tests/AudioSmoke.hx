@@ -120,6 +120,52 @@ class AudioSmoke {
 			throw "SoundFontCache.acquire answered " + answers + " with " + stats;
 	}
 
+	/** Leases share a bank across spellings of its path and across threads, and a held lease pins the budget. */
+	static function verifySoundFontCache():Void {
+		var fixture = "vendor/nativekit/modules/audio/tests/fixtures/minimal.sf2";
+		var directory = "out/audio-smoke-soundfont-cache";
+		Files.removeTree(directory).unwrap();
+		Files.createDirectory(directory).unwrap();
+		Files.copy(fixture, '$directory/other.sf2').unwrap();
+		var cache = new SoundFontCache(1, 4096);
+		var first = cache.acquire(fixture).unwrap();
+		var again = cache.acquire("./" + fixture).unwrap();
+		var pinned = cache.acquire('$directory/other.sf2').match(Err(Pinned));
+		var presets = again.presets().length;
+		first.dispose();
+		again.dispose();
+		cache.acquire('$directory/other.sf2').unwrap().dispose();
+		var stats = cache.stats();
+		cache.dispose();
+		if (!pinned || presets != 1 || stats.loads != 2 || stats.hits != 1 || stats.evictions != 1 || stats.banks != 1)
+			throw 'SoundFontCache leases: pinned $pinned, presets $presets, $stats';
+
+		cache = new SoundFontCache();
+		var finished = new sys.thread.Lock();
+		var guard = new sys.thread.Mutex();
+		var leased = 0;
+		for (_ in 0...4)
+			sys.thread.Thread.create(() -> {
+				var outcome = cache.acquire(fixture);
+				guard.acquire();
+				switch outcome {
+					case Ok(lease):
+						leased++;
+						lease.dispose();
+					case Err(_):
+				}
+				guard.release();
+				finished.release();
+			});
+		for (_ in 0...4)
+			finished.wait();
+		stats = cache.stats();
+		cache.dispose();
+		Files.removeTree(directory).unwrap();
+		if (leased != 4 || stats.loads != 1 || stats.hits != 3)
+			throw 'SoundFontCache across threads: $leased leased, $stats';
+	}
+
 	static function main():Void {
 		var argument = false;
 		try new haxeon.audio.DspRenderTarget(0, 2) catch (error:haxeon.platform.BindingError) {
@@ -379,6 +425,7 @@ class AudioSmoke {
 			bus.clearSchedule();
 			verifyPcmClips();
 			verifyLoadErrors();
+			verifySoundFontCache();
 			clip = Clip.fromMemory(tinyWav()).unwrap();
 			var options = new VoiceOptions();
 			options.looping = true;

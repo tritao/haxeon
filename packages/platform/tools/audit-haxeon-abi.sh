@@ -7,6 +7,15 @@ nativekit_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
 platform_dir="$haxeon_dir/packages/platform"
 gpu_dir="$haxeon_dir/packages/gpu"
 
+# A relative --output names a path from where the script was run, not from the platform package it works in.
+arguments=()
+for argument in "$@"; do
+    if [[ $argument == --output=* && ${argument#--output=} != /* ]]; then
+        argument="--output=$PWD/${argument#--output=}"
+    fi
+    arguments+=("$argument")
+done
+
 cd "$platform_dir"
 
 "$haxeon_dir/scripts/haxeon" ffi audit \
@@ -22,5 +31,5 @@ cd "$platform_dir"
     --include="$nativekit_dir/include" \
     --source-label=bindings/haxe/nativekit_import.h \
     --exclude-header="$nativekit_dir/include/nativekit_net.h" \
-    "$@" \
+    ${arguments[@]+"${arguments[@]}"} \
     "$platform_dir/bindings/nativekit_import.h"

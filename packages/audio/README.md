@@ -250,8 +250,8 @@ bank.dispose(); // instrument retains its native sample data
 assets.dispose();
 ```
 
-Limits cover bank count and encoded source bytes, counted from when a bank's
-file has been read. They are not a measurement of total decoded or playback memory.
+Limits cover bank count and encoded source bytes, reserved at a file's size
+before it is read, so they also bound what concurrent loads read. They are not a measurement of total decoded or playback memory.
 Idle banks are evicted in least-recently-used order. Pinned banks cannot be
 evicted; insufficient capacity fails admission without removing useful idle
 banks unless the complete request can fit (`Pinned`). A file that cannot be read

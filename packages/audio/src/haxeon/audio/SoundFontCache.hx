@@ -5,6 +5,7 @@ import haxeon.platform.BindingError;
 import haxeon.platform.NativeKitError;
 
 import haxeon.audio.SoundFont.SoundFontPresetInfo;
+import std.fs.FileError;
 import std.fs.Files;
 import std.fs.Path;
 import sys.thread.Condition;
@@ -12,7 +13,7 @@ import sys.thread.Condition;
 private typedef CachedBank = {
 	var path:String;
 	var sourceBytes:Int;
-	/** Whether it counts against the limits: from when its file is read until it leaves the cache. */
+	/** Whether it counts against the limits: from before its file is read until it leaves the cache. */
 	var admitted:Bool;
 	var font:Null<SoundFont>;
 	var inventory:Array<SoundFontPresetInfo>;
@@ -38,7 +39,7 @@ typedef SoundFontCacheStats = {
 }
 
 /** Scoped immutable SF2 assets, shared by independent instruments. Never use on the audio thread.
- * Bounds resident banks and source bytes, counted from when a bank's file has been read;
+ * Bounds resident banks and source bytes, counted from before a bank's file is read;
  * decoded/playback memory is not measured by sourceBytes. Files are immutable within a cache scope. Idle banks are LRU
  * evicted, leased banks stay pinned. Concurrent requests for one canonical path share one load.
  * Close before NativeKit shutdown; outstanding leases remain usable until individually released.
@@ -152,19 +153,34 @@ class SoundFontCache implements Disposable {
 		return Ok(new SoundFontLease(this, entry));
 	}
 
-	/** Reads `entry`'s file, admits it within the limits, and decodes it. */
+	/**
+	 * Admits `entry` within the limits at its file's size, before reading it, so the limits also bound what is being
+	 * read; reads and decodes it. A file whose read differs from its size is admitted again at what was read.
+	 */
 	function load(entry:CachedBank):Result<SoundFont, SoundFontLoadError> {
+		var metadata = switch Files.metadata(entry.path) {
+			case Ok(found): found;
+			case Err(error): return Err(File(error));
+		};
+		if (metadata.isDirectory())
+			return Err(File(IsADirectory));
+		if (metadata.size > haxe.Int64.ofInt(maxSourceBytes))
+			return Err(TooLarge);
+		switch admit(entry, metadata.size.low) {
+			case Ok(victims): closeFonts(victims);
+			case Err(error): return Err(error);
+		}
 		var data:Bytes = switch Files.read(entry.path) {
 			case Ok(read): read;
 			case Err(error): return Err(File(error));
 		};
 		if (data.length == 0)
 			return Err(Decode(InvalidData("the file is empty")));
-		var victims = switch admit(entry, data.length) {
-			case Ok(evicted): evicted;
-			case Err(error): return Err(error);
-		};
-		closeFonts(victims);
+		if (data.length != entry.sourceBytes)
+			switch admit(entry, data.length) {
+				case Ok(victims): closeFonts(victims);
+				case Err(error): return Err(error);
+			}
 		return switch SoundFont.fromMemory(data) {
 			case Ok(font): Ok(font);
 			case Err(error): Err(Decode(error));
@@ -172,16 +188,17 @@ class SoundFontCache implements Disposable {
 	}
 
 	/**
-	 * Counts `entry`, of `bytes` bytes, against the limits, evicting the least recently used idle banks it needs room
-	 * from; answers them, to close outside the mutex. Evicts nothing unless the whole request fits.
+	 * Counts `entry`, of `bytes` bytes, against the limits (in place of what it counted, when it already did), evicting
+	 * the least recently used idle banks it needs room from; answers them, to close outside the mutex. Evicts nothing
+	 * unless the whole request fits.
 	 */
 	function admit(entry:CachedBank, bytes:Int):Result<Array<SoundFont>, SoundFontLoadError> {
 		if (bytes > maxSourceBytes)
 			return Err(TooLarge);
 		condition.acquire();
 		var selected:Array<CachedBank> = [];
-		var remainingBanks = bankCount;
-		var remainingBytes = sourceBytes;
+		var remainingBanks = bankCount - (entry.admitted ? 1 : 0);
+		var remainingBytes = sourceBytes - (entry.admitted ? entry.sourceBytes : 0);
 		while (remainingBanks >= maxBanks || remainingBytes + bytes > maxSourceBytes) {
 			var oldest:Null<CachedBank> = null;
 			for (other in entries) if (other.admitted && !other.loading && other.users == 0
@@ -200,9 +217,12 @@ class SoundFontCache implements Disposable {
 			victims.push(cast victim.font);
 			evictions++;
 		}
+		if (entry.admitted)
+			sourceBytes -= entry.sourceBytes;
+		else
+			bankCount++;
 		entry.admitted = true;
 		entry.sourceBytes = bytes;
-		bankCount++;
 		sourceBytes += bytes;
 		condition.release();
 		return Ok(victims);
