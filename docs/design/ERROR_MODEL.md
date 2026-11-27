@@ -96,7 +96,8 @@ enum Result<T, E> implements MustUse {
   is null, and a value read as `Void` is the unit value.
 - So `Result<Void, E>` (an operation that succeeds or fails with no value), `Future<Void>` and `Signal<Void>` work.
 - Not yet: a generic function does not infer `T` = `Void` from a lambda with fewer arguments than `T->U` has
-  (`apply(() -> 1)` for `apply<T>(f:T->Int)`), and `Null<Void>` and `Array<Void>`, which have no use, have no meaning.
+  (`apply(() -> 1)` for `apply<T>(f:T->Int)`; `apply<Void>(() -> 1)` once calls take type arguments), and
+  `Null<Void>` and `Array<Void>`, which have no use, have no meaning.
 
 ### Asynchronous operations
 
@@ -116,8 +117,9 @@ ui's argument checks, stay exceptions. Other APIs change when they are next work
   `IncompatibleSchema`). Inside a decode the readers and codecs throw a `WireFailure`, which the entry point returns as
   the `Err`; writers throw only for misuse. The codec is generated for the expected `Result`'s value type, so a decode
   needs an expected `Result`: a typed local, or `try` (whose value is then expected to be a `Result` of the expected
-  type). The subject of a `switch` or the receiver of `.mapErr(f)` has none, and needs the typed local; inferring the
-  decoded type through such a use is open.
+  type). The subject of a `switch` or the receiver of `.mapErr(f)` has none, and needs the typed local until a call
+  can name its type argument, `MessagePack.decode<User>(bytes)` ([CALL_TYPE_ARGUMENTS.md](CALL_TYPE_ARGUMENTS.md),
+  proposed).
 - **RPC (next).** `RpcConnection.call` and a typed service's client methods settle `Future<Result<Response,
   RpcError>>`, so `Outcome.Failure` means a bug; the connector's `RpcConnectResult` becomes a `Result` of the transport.
   Open: whether `RpcError` becomes an enum, since its codes include a peer's own and `ambiguous` says whether the
