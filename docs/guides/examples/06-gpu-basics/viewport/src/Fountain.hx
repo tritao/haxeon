@@ -5,6 +5,7 @@ import haxeon.gpu.Buffer;
 import haxeon.gpu.BufferDesc;
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
+import haxeon.gpu.GpuError;
 import haxeon.gpu.Image;
 import haxeon.gpu.ImageDesc;
 import haxeon.gpu.Pipeline;
@@ -39,10 +40,17 @@ class Fountain {
 	var time = 0.0;
 	var resetPending = false;
 
-	public function new(renderer:Renderer) {
+	/** The fountain's GPU work on `renderer`, or why the GPU cannot do it. */
+	public static function create(renderer:Renderer):Result<Fountain, GpuError> {
+		var step = try Pipeline.beginCompute(renderer, try Shader.create(renderer, Shaders.step)).compute().build();
+		var points = try Pipeline.begin(renderer, try Shader.create(renderer, Shaders.draw), VertexLayout.none).build();
+		return Ok(new Fountain(renderer, step, points));
+	}
+
+	function new(renderer:Renderer, step:Pipeline, points:Pipeline) {
 		this.renderer = renderer;
-		step = Pipeline.beginCompute(renderer, Shader.create(renderer, Shaders.step)).compute().build();
-		points = Pipeline.begin(renderer, Shader.create(renderer, Shaders.draw), VertexLayout.none).build();
+		this.step = step;
+		this.points = points;
 		particles = Buffer.create(renderer, new BufferDesc(count * particleBytes, BufferUsage.Storage));
 		image = Image.create(renderer, new ImageDesc(size, size, ImageFormat.Rgba8,
 			ImageUsage.Sampled | ImageUsage.RenderTarget));

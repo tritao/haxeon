@@ -54,7 +54,9 @@ based on upstream `dev`, with graph-clock synchronization fixes and regression t
 ## PCM clips
 
 Use `Clip.fromPcm(bytes, sampleRate, channels, format)` for generated or decoded
-PCM. Pass complete, interleaved mono or stereo frames with
+PCM. Like the other `Clip.from*` constructors and the device calls (`Mixer.configureDevice`, `startDevice`,
+`restartDevice`, `DspEngine.attachToDevice`), it returns a `Result` whose `Err` is a `NativeKitError`; an argument that is
+the program's mistake throws a `BindingError`. Pass complete, interleaved mono or stereo frames with
 `PcmFormat.Unsigned8`, `PcmFormat.Signed16LE`, or `PcmFormat.Float32LE`. The
 clip owns one copy of the samples, which its voices share. Use `AudioCue.fromClip` for reusable
 one-shot playback.
@@ -195,18 +197,19 @@ The provider stays private to NativeKit; score/playback code uses the same note
 identity, stealing, release and routing contracts for each kind.
 
 ```haxe
-var bank = SoundFont.fromFile("assets/instruments.sf2");
-var metadata = bank.presets(); // index, bank, program, name
-var definition = bank.preset(metadata[0].index, 0.5);
-var instrument = definition.createInstrument(engine);
-bank.dispose(); // Existing instruments retain decoded sample data.
-engine.attachToDevice();
-var token = engine.noteOn(instrument, 60, 0.8, Mixer.timeFrames() + haxe.Int64.ofInt(512),
-    haxe.Int64.ofInt(24000));
-// Later: retire the instrument; engine.collect() reclaims it after voices finish.
+function playBank(engine:DspEngine, bytes:Bytes):Result<Int64, NativeKitError> {
+    var bank = try SoundFont.fromMemory(bytes); // InvalidData when the bytes are not an SF2 bank
+    var metadata = bank.presets(); // index, bank, program, name
+    var definition = bank.preset(metadata[0].index, 0.5);
+    var instrument = definition.createInstrument(engine);
+    bank.dispose(); // Existing instruments retain decoded sample data.
+    try engine.attachToDevice(); // the device's answer, such as Unsupported where there is none
+    return Ok(engine.noteOn(instrument, 60, 0.8, Mixer.timeFrames() + Int64.ofInt(512), Int64.ofInt(24000)));
+    // Later: retire the instrument; engine.collect() reclaims it after voices finish.
+}
 ```
 
-`SoundFont.fromMemory(Bytes)` and `fromFile` decode uncompressed SF2 with the
+Read the bank's bytes with `std.fs.Files.read` when it is a file. `SoundFont.fromMemory(Bytes)` decodes uncompressed SF2 with the
 pinned MIT TinySoundFont backend. Preset selection uses a zero-based index;
 metadata separately exposes MIDI bank/program numbers. SF3, SF2 modulators and
 region chorus/reverb sends are unsupported. Use mixer effect sends explicitly.

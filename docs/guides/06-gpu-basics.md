@@ -47,7 +47,13 @@ class Main implements App {
 	}
 
 	public function ready():Void
-		scene = new Scene(surface);
+		switch Scene.create(surface) {
+			case Ok(created):
+				scene = created;
+			case Err(error):
+				Sys.println('The GPU cannot draw the scene: ${error.describe()}');
+				open = false;
+		}
 
 	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
 		var scene = this.scene;
@@ -56,7 +62,8 @@ class Main implements App {
 ```
 
 `ready` runs once, when the surface can render; that is when the GPU resources can be made, so the `Scene` is created
-there. `frame` then runs for every frame the surface draws. `shouldQuit` returns `true` once the window closes, and
+there. Making them can fail where the machine has no GPU backend the app can use, or a shader has no source for it:
+`Scene.create` returns a `Result`, and the app says why and quits. `frame` then runs for every frame the surface draws. `shouldQuit` returns `true` once the window closes, and
 `dispose` releases the scene.
 
 ## Write the shader
@@ -95,26 +102,29 @@ the dialect, uniforms, includes and variants.
 
 ## Set up once
 
-`Scene`'s constructor makes everything the frames reuse:
+`Scene.create` makes everything the frames reuse:
 
 ```haxe
-public function new(surface:Surface) {
-	renderer = Renderer.create(surface);
-	var shader = Triangle.create(renderer);
-	var pipeline = Pipeline.begin(renderer, shader, Triangle.Vertex.layout).build();
+public static function create(surface:Surface):Result<Scene, GpuError> {
+	var renderer = try Renderer.create(surface);
+	var shader = try Triangle.create(renderer);
+	var pipeline = try Pipeline.begin(renderer, shader, Triangle.Vertex.layout).build();
 	var vertices = Buffer.vertexFloats(renderer, [
 		// x, y, r, g, b
 		0.0, 0.6, 1.0, 0.4, 0.5,
 		-0.6, -0.5, 0.3, 0.9, 0.6,
 		0.6, -0.5, 0.4, 0.5, 1.0
 	]);
-	commands = renderer.commandBuffer(4);
+	var commands = renderer.commandBuffer(4);
 	commands.applyPipeline(pipeline);
 	commands.applyVertexBuffer(0, vertices, 0);
 	commands.draw(0, 3, 1);
+	return Ok(new Scene(renderer, commands));
 }
 ```
 
+Creating the renderer, the shader and the pipeline is where the device decides: each returns a `Result` whose `Err`
+is a `GpuError` (`Unsupported`, `DeviceLost`, `OutOfMemory`), and `try` returns that error from `create` as it is.
 The `Renderer` belongs to the surface. A `Pipeline` combines the shader with its vertex layout and render state. The
 vertex buffer holds three vertices of five floats each, in the order `Triangle.Vertex` gives: a position and a colour.
 
@@ -206,12 +216,19 @@ which has compute and storage buffers, and the generated `shaders.Particles` exp
 its layout is `VertexLayout.none`, and its commands are recorded once:
 
 ```haxe
-public function new(surface:Surface) {
-	renderer = Renderer.create(surface);
+public static function create(surface:Surface):Result<Scene, GpuError> {
+	var renderer = try Renderer.create(surface);
 	if (!renderer.features().compute)
-		throw "Particles needs compute shaders: OpenGL 4.3, Direct3D 11 or Metal";
-	step = Pipeline.beginCompute(renderer, Shader.create(renderer, Particles.step)).compute().build();
-	var points = Pipeline.begin(renderer, Shader.create(renderer, Particles.draw), VertexLayout.none).build();
+		return Err(Unsupported("Particles needs compute shaders: OpenGL 4.3, Direct3D 11 or Metal"));
+	var step = try Pipeline.beginCompute(renderer, try Shader.create(renderer, Particles.step)).compute().build();
+	var points = try Pipeline.begin(renderer, try Shader.create(renderer, Particles.draw),
+		VertexLayout.none).build();
+	return Ok(new Scene(renderer, step, points));
+}
+
+function new(renderer:Renderer, step:Pipeline, points:Pipeline) {
+	this.renderer = renderer;
+	this.step = step;
 	particles = Buffer.create(renderer, new BufferDesc(count * particleBytes, BufferUsage.Storage));
 	simulate = renderer.commandBuffer(8);
 	render = renderer.commandBuffer(4);
@@ -221,7 +238,8 @@ public function new(surface:Surface) {
 }
 ```
 
-`features()` says what the renderer supports; WebGL2 and OpenGL drivers older than 4.3 have no compute. Each frame
+`features()` says what the renderer supports; WebGL2 and OpenGL drivers older than 4.3 have no compute, which `create`
+answers as `Unsupported`, as the device would. Each frame
 records the step with this frame's uniforms and runs it in a compute pass before the window pass:
 
 ```haxe
@@ -261,7 +279,6 @@ ui = "^0.3"
 is that image. `Scene` hands the image to the UI:
 
 ```haxe
-fountain = new Fountain(renderer);
 picture = fountain.image.graphicsImage();
 content = new GraphicsSurfaceViewportContent(GraphicsSurface.fromImage(picture), Fountain.size, Fountain.size);
 var viewport = new GpuViewport("fountain", content).fitToView(0.0);

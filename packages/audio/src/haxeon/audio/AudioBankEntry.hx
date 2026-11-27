@@ -1,11 +1,13 @@
 package haxeon.audio;
 
 import haxeon.platform.BindingError;
+import haxeon.platform.NativeKitError;
 
 import haxeon.platform.resource.Resource;
 import haxeon.platform.resource.ResourceAsset;
 import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.Handle;
+import nativekit.ffi.NativeKitTypes.ResourceAssetLoadState;
 
 /**
  * One named resource in an AudioBank.
@@ -41,10 +43,10 @@ class AudioBankEntry {
 		return asset.loadState();
 	}
 
-	/** Returns the cache result without throwing for a failed load. */
-	public function loadResult():Result {
+	/** Why the entry failed to load, or null while it loads and once it is ready. */
+	public function loadError():Null<NativeKitError> {
 		ensureLive();
-		return asset.loadResult();
+		return asset.loadError();
 	}
 
 	/** Whether it is still loading. */
@@ -59,8 +61,8 @@ class AudioBankEntry {
 	public function isFailed():Bool
 		return loadState() == ResourceAssetLoadState.LoadFailed;
 
-	/** Creates a caller-owned clip from the ready cached bytes. */
-	public function createClip():Clip {
+	/** Creates a caller-owned clip from the ready cached bytes, or answers why they do not decode. */
+	public function createClip():Result<Clip, NativeKitError> {
 		ensureLive();
 		if (!isReady())
 			throw BindingError.invalidArgument("AudioBankEntry.createClip", "Audio bank entry is not ready: " + name);

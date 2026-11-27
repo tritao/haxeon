@@ -104,7 +104,7 @@ enum Result<T, E> implements MustUse {
 An asynchronous operation whose failures are expected settles a `Future<Result<T, E>>`. `Outcome` has no failure case:
 a producer's bug throws where it happens, in the poll or tick that runs it, as in synchronous code, so no observer
 handles one. `Cancelled` and `Stopped` keep their meaning ([ASYNC.md](../reference/ASYNC.md)). Platform requests settle
-`Future<Result<T, NativeKitError>>`; `NativeKitError` stays a class, since audio and GPU throw it too.
+`Future<Result<T, NativeKitError>>`.
 
 ## Migration
 
@@ -129,6 +129,26 @@ ui's argument checks, stay exceptions. Other APIs change when they are next work
   closed. A typed service's own expected failures belong in its response type; generic enums such as `Result` are not
   yet wire types.
 
+- **Platform, audio and GPU (done).** NativeKit and its GPU module answer one status code for two kinds of failure,
+  which `NativeKitStatus` and the GPU package tell apart. A code that is the program's mistake throws a `BindingError`:
+  `InvalidArgument`, `InvalidHandle` (as `Disposed`), `WrongThread`, `NotInitialized`, `AlreadyInitialized`,
+  `InvalidRequest`, `BufferTooSmall`, and the GPU's `WrongState` and `BufferOverflow`. Any other code is the
+  environment's answer, an error enum's case: `NativeKitError` (`Unsupported(reason)`, `NotFound`,
+  `PermissionDenied(reason)`, `Cancelled`, `Busy`, `TooLarge`, `OutOfMemory`, `SurfaceLost`, `InvalidData(reason)`,
+  the network's `HostNotFound`, `ConnectionFailed(reason)`, `TimedOut`, `TlsFailed(reason)`,
+  `ProtocolViolation(reason)`, `Closed`, `AddressInUse`, `TooManyRedirects`, `ProxyFailed(reason)`, and `Failed(code,
+  reason)` for the rest) and `GpuError` (`Unsupported(reason)`, `DeviceLost`, `OutOfMemory`, `Failed(code, reason)`).
+  Where NativeKit's `InvalidArgument` means something else at a call, the call says so (`InvalidArgumentMeans`): a
+  decoder's refused input is `InvalidData`, a path that names nothing is `NotFound`. These return a `Result`: platform
+  requests, the audio device (`Mixer.configureDevice`, `startDevice`, `restartDevice`, `DspEngine.attachToDevice`),
+  decoding audio (`Clip.from*`, `SoundFont.fromMemory`, `AudioBankEntry.createClip`), the credential store, and GPU
+  setup (`Renderer.create`, `Shader.create` and a generated shader module's `create`, a shader or pipeline builder's
+  `build`). Every other call throws: a misuse as `BindingError`, an environment code as `NativeKitException` or
+  `GpuException`, which carry the enum. The checked helpers the NativeKit bindings generate throw what
+  `NativeKitStatus.failure` gives, named by the projection's result policy (`"failure"`,
+  [C_HEADER_FFI.md](../reference/C_HEADER_FFI.md)). An asset's or audio bank entry's failed load is a
+  `NativeKitError` too (`loadError()`, `AudioBank.onFailed`).
+
 The compiler's own source uses none of this until the gates of [ADR 0006](../adr/0006-haxeon-only-compiler-source.md)
 hold: stock Haxe parses neither enum methods nor `try` without `catch`. Its failures are diagnostics or bugs anyway.
 
@@ -141,5 +161,5 @@ hold: stock Haxe parses neither enum methods nor `try` without `catch`. Its fail
 | 3 | `MustUse`, `E1033` and `_ = expr;` | Implemented |
 | 4 | `Void` as the unit type | Implemented |
 | 5 | `try` propagation | Implemented |
-| 6 | The migration above, with `Future<Result<T, E>>` for RPC and platform requests | |
+| 6 | The migration above, with `Future<Result<T, E>>` for RPC and platform requests | Implemented for wire, RPC, files, platform, audio and GPU |
 | 7 | Inline generic enums (STRUCTS.md E8), so returning a `Result` allocates nothing | |

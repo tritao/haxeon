@@ -41,11 +41,13 @@ class Renderer implements Disposable {
 		registration = surface.registerDependent(dispose);
 	}
 
-	/** A renderer drawing to `surface`, disposed with it. */
-	public static function create(surface:Surface):Renderer {
+	/**
+	 * A renderer drawing to `surface`, disposed with it, or why the device cannot give one (`Unsupported` where the
+	 * system has no backend the module was built with).
+	 */
+	public static function create(surface:Surface):Result<Renderer, GpuError> {
 		var made = NativeKitGpu.nkgpu_renderer_create(surface.nativeHandle());
-		GpuResult.check(made.status, "renderer.create");
-		return new Renderer(surface, made.out_renderer);
+		return GpuResult.made(made.status, "renderer.create", () -> new Renderer(surface, made.out_renderer));
 	}
 
 	internal function nativeHandle():nkgpu_renderer {

@@ -7,6 +7,7 @@ import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import haxeon.ui.FontCollection;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.Insets;
@@ -87,7 +88,7 @@ class WindowChromeDemo implements Disposable {
 		windowOptions.set_owner(owner);
 		windowOptions.set_kind(WindowKind.Utility);
 		var createdWindow = NativeKit.nk_window_create(windowOptions);
-		if (createdWindow.status != Result.Ok) throw new NativeKitError(createdWindow.status,
+		if (createdWindow.status != Result.Ok) throw NativeKitStatus.failure(createdWindow.status,
 			"window.create",
 			NativeKit.nk_last_error());
 		window = createdWindow.out_window.borrow();
@@ -106,7 +107,7 @@ class WindowChromeDemo implements Disposable {
 		surfaceOptions.set_width(width);
 		surfaceOptions.set_height(height);
 		var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue), surfaceOptions);
-		if (createdSurface.status != Result.Ok) throw new NativeKitError(createdSurface.status,
+		if (createdSurface.status != Result.Ok) throw NativeKitStatus.failure(createdSurface.status,
 			"surface.create",
 			NativeKit.nk_last_error());
 		surface = createdSurface.out_surface.borrow();
@@ -192,7 +193,7 @@ class WindowChromeDemo implements Disposable {
 		var activeSurface = nativeSurface;
 		if (activeSurface == null) throw "window chrome surface is unavailable";
 		var size = NativeKit.nk_surface_get_framebuffer_size(surface);
-		if (size.status != Result.Ok) throw new NativeKitError(size.status,
+		if (size.status != Result.Ok) throw NativeKitStatus.failure(size.status,
 			"surface.framebuffer_size",
 			NativeKit.nk_last_error());
 		ready = true;
@@ -247,7 +248,8 @@ class WindowChromeDemo implements Disposable {
 		limits.set_max_width(0);
 		limits.set_max_height(0);
 		var status = NativeKit.nk_window_set_size_limits(window, limits);
-		if (status != Result.Ok) throw new NativeKitError(status, "window.set_size_limits", NativeKit.nk_last_error());
+		if (status != Result.Ok) throw NativeKitStatus.failure(status, "window.set_size_limits",
+			NativeKit.nk_last_error());
 	}
 
 	function buildRoot():View {

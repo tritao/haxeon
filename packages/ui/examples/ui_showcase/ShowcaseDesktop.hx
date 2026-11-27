@@ -10,7 +10,7 @@ import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import haxeon.ui.FontCollection;
 
 import WindowChromeDemo;
-import haxeon.platform.NativeKitError;
+import haxeon.platform.PlatformError;
 import haxeon.ui.core.NativeInputAdapter;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
@@ -412,11 +412,9 @@ class ShowcaseDesktop {
 				Sys.println('nativekit_ui_showcase explorer_frames=${frameState.rendered}');
 			result = chromeTestResult < 0 ? (frameState.rendered > 0 ? 0 : 17) : chromeTestResult;
 		} catch (error:Dynamic) {
-			if (Std.isOfType(error, NativeKitError)) {
-				var nativeError:NativeKitError = cast error;
-				Sys.println('nativekit_ui_showcase: ${nativeError.operation} failed with result ${nativeError.result}'
-					+ (nativeError.diagnostic == null || nativeError.diagnostic.length == 0
-					? "" : ': ${nativeError.diagnostic}'));
+			if (Std.isOfType(error, PlatformError)) {
+				var platformError:PlatformError = cast error;
+				Sys.println('nativekit_ui_showcase: ${platformError.message}');
 			} else if (Std.isOfType(error, UiError)) {
 				var uiError:UiError = cast error;
 				Sys.println('nativekit_ui_showcase: ${uiError.operation} failed with status ${uiError.status}');

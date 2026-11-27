@@ -100,16 +100,16 @@ uses the same registry and retains caller ownership of the task. The old
 `*Callback`, ID-based `track`, `forget`, and `cancelDialog` APIs have been removed;
 use futures, `onComplete`, `stopObserving()`, and `cancel()` instead.
 
-Platform/audio backend failures throw `NativeKitError`, and GPU backend failures throw
-`haxeon.gpu.GpuError`. Both extend `PlatformError`, exposing `domain`, `code`,
-`operation`, and `diagnostic`; `NativeKitError` also preserves its typed `result`.
-Codes belong to their domain and must not be compared across platform and GPU.
-
-Managed argument, lifecycle, and event-data validation failures use `BindingError`
-(domain `haxeon-bindings`). Its typed `kind` is `InvalidArgument`, `InvalidState`,
-`Disposed`, or `InvalidData`; it also extends `PlatformError`. A request's
-`Err(error)` is a `NativeKitError`, preserving domain, code, operation, and diagnostic.
-Native result codes are retained for backend failures, including transport errors.
+NativeKit's result codes come in two kinds. A code that is the program's mistake (a bad argument or
+handle, the wrong thread, a call before initialization) throws a `BindingError`, as the managed argument,
+lifecycle and event-data checks do (domain `haxeon-bindings`, `kind` `InvalidArgument`, `InvalidState`,
+`Disposed` or `InvalidData`). Any other code is the environment's answer, a `NativeKitError` case
+(`Unsupported`, `NotFound`, `PermissionDenied`, `SurfaceLost`, the network's `HostNotFound`,
+`ConnectionFailed`, `TimedOut`, ..., and `Failed(code, reason)`): what a request's or a setup call's `Result`
+holds as its `Err`, and what a `NativeKitException` carries where an API throws instead. `NativeKitStatus`
+tells the two apart for the packages built on NativeKit; GPU statuses work the same way with `GpuError` and
+`GpuException`. `BindingError`, `NativeKitException` and `GpuException` extend `PlatformError`, which exposes
+`domain`, `code`, `operation` and `diagnostic`.
 
 ## Application loop
 
@@ -199,9 +199,9 @@ ABI storage at the call boundary; the managed state never exposes ABI setters.
 Use `updateResult` when explicitly handling unsupported platform IME backends.
 
 This layout replaces the former `NativeKit*`/`Native*` managed names without
-compatibility aliases. `NativeKitError` retains its backend-specific name because
-it carries NativeKit's typed result code. All binding and backend errors share
-`PlatformError` as their common base.
+compatibility aliases. `NativeKitError` and `NativeKitException` keep NativeKit's name
+because they are what NativeKit answers. The thrown errors share `PlatformError` as
+their common base.
 
 ## File watching
 

@@ -3,7 +3,8 @@ import haxeon.audio.Clip;
 import haxeon.audio.Mixer;
 import haxeon.audio.PcmFormat;
 import haxeon.audio.Voice;
-import haxeon.platform.PlatformError;
+import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitException;
 
 enum SoundEffect {
 	Pickup;
@@ -20,16 +21,22 @@ class Sounds implements Disposable {
 	var pending:Null<SoundEffect>;
 
 	public function new() {
-		try {
-			Mixer.startDevice();
-			started = true;
-			voices.set(Pickup, makeVoice([740, 1040], 0.035));
-			voices.set(Caught, makeVoice([310, 185, 110], 0.095));
-			voices.set(Clear, makeVoice([520, 660, 790, 1040], 0.085));
-			available = true;
-		} catch (error:PlatformError) {
-			reportUnavailable(error);
+		switch start() {
+			case Ok():
+				available = true;
+			case Err(error):
+				reportUnavailable(error.describe());
 		}
+	}
+
+	/** Starts the device and makes the game's voices, or answers why there is no sound. */
+	function start():Result<Void, NativeKitError> {
+		try Mixer.startDevice();
+		started = true;
+		voices.set(Pickup, try makeVoice([740, 1040], 0.035));
+		voices.set(Caught, try makeVoice([310, 185, 110], 0.095));
+		voices.set(Clear, try makeVoice([520, 660, 790, 1040], 0.085));
+		return Ok();
 	}
 
 	/** Coalesces cues from simulation ticks until the native frame callback returns. */
@@ -55,8 +62,8 @@ class Sounds implements Disposable {
 				voice.rewind();
 				voice.start();
 			}
-		} catch (error:PlatformError) {
-			reportUnavailable(error);
+		} catch (error:NativeKitException) {
+			reportUnavailable(error.error.describe());
 		}
 	}
 
@@ -68,8 +75,8 @@ class Sounds implements Disposable {
 			try {
 				for (voice in voices)
 					voice.stop();
-			} catch (error:PlatformError) {
-				reportUnavailable(error);
+			} catch (error:NativeKitException) {
+				reportUnavailable(error.error.describe());
 			}
 		}
 	}
@@ -81,12 +88,12 @@ class Sounds implements Disposable {
 			Mixer.stopDevice();
 	}
 
-	function reportUnavailable(error:PlatformError):Void {
+	function reportUnavailable(reason:String):Void {
 		available = false;
-		Sys.stderr().writeString("Circuit Run audio unavailable: " + Std.string(error) + "\n");
+		Sys.stderr().writeString("Circuit Run audio unavailable: " + reason + "\n");
 	}
 
-	static function makeVoice(notes:Array<Int>, noteSeconds:Float):Voice {
+	static function makeVoice(notes:Array<Int>, noteSeconds:Float):Result<Voice, NativeKitError> {
 		var noteFrames = Std.int(sampleRate * noteSeconds);
 		var pcm = Bytes.alloc(2 * noteFrames * notes.length);
 		var offset = 0;
@@ -101,7 +108,7 @@ class Sounds implements Disposable {
 			}
 		}
 
-		scoped var clip = Clip.fromPcm(pcm, sampleRate, 1, PcmFormat.Signed16LE);
-		return clip.createVoice();
+		scoped var clip = try Clip.fromPcm(pcm, sampleRate, 1, PcmFormat.Signed16LE);
+		return Ok(clip.createVoice());
 	}
 }

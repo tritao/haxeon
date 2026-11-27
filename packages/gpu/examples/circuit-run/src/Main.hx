@@ -63,7 +63,13 @@ class Main implements App {
 	}
 
 	public function ready():Void
-		renderer = new CircuitRenderer(surface);
+		switch CircuitRenderer.create(surface) {
+			case Ok(created):
+				renderer = created;
+			case Err(error):
+				Sys.println('Circuit Run cannot draw: ${error.describe()}');
+				running = false;
+		}
 
 	function handleKey(key:Key, scancode:Int, action:InputAction, modifiers:Modifiers):Bool {
 		if (action != InputAction.Press)

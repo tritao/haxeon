@@ -7,7 +7,8 @@ import nativekit.ffi.NativeKitTypes.FileDialogOptions as NativeFileDialogOptions
 import nativekit.ffi.NativeKitTypes.TextInputState as NativeTextInputState;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
-import haxeon.platform.NativeKitError;
+import haxeon.platform.BindingError;
+import haxeon.platform.BindingErrorKind;
 
 import NativeKitEventDecoderTests;
 import NativeKitFileWatchTests;
@@ -55,8 +56,8 @@ class Smoke {
 		var resultErrorOk = false;
 		try
 			NativeKit.nk_window_show_checked(WindowHandle.invalid(), true)
-		catch (error:NativeKitError)
-			resultErrorOk = error.result == Result.ErrorInvalidHandle && error.operation == "nk_window_show"
+		catch (error:BindingError)
+			resultErrorOk = error.kind == BindingErrorKind.Disposed && error.operation == "nk_window_show"
 			&& error.diagnostic != null;
 
 		var events = runtime.events;

@@ -52,7 +52,7 @@ class GraphicsImageRef implements Disposable {
 		var value = new GraphicsImage(id);
 		var queried = NativeKit.nk_graphics_image_get_info(value);
 		if (queried.status != Result.Ok)
-			throw new NativeKitError(queried.status, "GraphicsImageRef.fromBorrowedId", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(queried.status, "GraphicsImageRef.fromBorrowedId", NativeKit.nk_last_error());
 		return fromBorrowedHandle(value, width, height, queried.out_info.get_api());
 	}
 

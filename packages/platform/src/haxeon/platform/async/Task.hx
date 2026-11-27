@@ -1,7 +1,7 @@
 package haxeon.platform.async;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Result;
 import nativekit.ffi.NativeKitTypes.TaskHandle;
@@ -52,5 +52,5 @@ class Task implements Disposable {
 
 	static function check(status:Result, operation:String):Void
 		if (status != Result.Ok)
-			throw new NativeKitError(status, operation, NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(status, operation, NativeKit.nk_last_error());
 }

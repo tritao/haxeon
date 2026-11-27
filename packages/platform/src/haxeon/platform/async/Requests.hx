@@ -5,6 +5,7 @@ import haxeon.async.Outcome;
 import haxeon.async.Promise;
 import haxeon.platform.BindingError;
 import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import haxeon.platform.WebView;
 import haxeon.platform.Window;
 import haxeon.platform.async.Task;
@@ -143,8 +144,8 @@ class Requests {
 				// register() catches decoder exceptions separately from completion-observer exceptions.
 				if (result == NativeResult.Ok) Success(Ok(decode(data)));
 				else if (result == NativeResult.ErrorCancelled) Cancelled;
-				else Success(Err(new NativeKitError(result, "Requests.trackTask", null)));
-			case TaskFailed(_, result, _): Success(Err(new NativeKitError(result, "Requests.trackTask", null)));
+				else Success(Err(NativeKitStatus.error(result, "Requests.trackTask", null)));
+			case TaskFailed(_, result, _): Success(Err(NativeKitStatus.error(result, "Requests.trackTask", null)));
 			case TaskCancelled(_, _, _): Cancelled;
 			case _: wrongEvent("task");
 		}, task.cancel);
@@ -256,14 +257,14 @@ class Requests {
 	static function resultOutcome<T>(result:NativeResult, value:T, operation:String,
 			?message:Null<String>):Outcome<Result<T, NativeKitError>> {
 		return result == NativeResult.Ok ? Success(Ok(value)) : result == NativeResult.ErrorCancelled
-			? Cancelled : Success(Err(new NativeKitError(result, operation, message)));
+			? Cancelled : Success(Err(NativeKitStatus.error(result, operation, message)));
 	}
 
 	static function acceptedOutcome<T>(result:NativeResult, accepted:Bool,
 			value:T):Outcome<Result<T, NativeKitError>> {
 		if (result == NativeResult.ErrorCancelled) return Cancelled;
 		if (result != NativeResult.Ok)
-			return Success(Err(new NativeKitError(result, "Requests.resourceDialog", null)));
+			return Success(Err(NativeKitStatus.error(result, "Requests.resourceDialog", null)));
 		return accepted ? Success(Ok(value)) : Cancelled;
 	}
 
@@ -271,7 +272,7 @@ class Requests {
 			cancellationRequested:Bool):Outcome<Result<MessageResult, NativeKitError>> {
 		if (result == NativeResult.ErrorCancelled) return Cancelled;
 		if (result != NativeResult.Ok)
-			return Success(Err(new NativeKitError(result, "Requests.messageDialog", null)));
+			return Success(Err(NativeKitStatus.error(result, "Requests.messageDialog", null)));
 		return cancellationRequested || button == MessageResult.None ? Cancelled : Success(Ok(button));
 	}
 

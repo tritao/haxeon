@@ -3,12 +3,13 @@ package haxeon.audio;
 import haxeon.platform.BindingError;
 
 import haxe.io.Bytes;
+import haxeon.platform.InvalidArgumentMeans;
 import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import nativekit.ffi.NativeKitTypes;
-import sys.io.File;
+import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 
 /** One preset of a bank: its index, bank and program numbers, and name. */
 typedef SoundFontPresetInfo = {
@@ -31,21 +32,15 @@ class SoundFont implements Disposable {
 		value = owned.borrow();
 	}
 
-	/** Decodes an SF2 bank from `bytes`. */
-	public static function fromMemory(bytes:Bytes):SoundFont {
+	/** Decodes an SF2 bank from `bytes`, or answers why it cannot (`InvalidData` for what is not one). */
+	public static function fromMemory(bytes:Bytes):Result<SoundFont, NativeKitError> {
 		if (bytes == null || bytes.length == 0) throw BindingError.invalidArgument("SoundFont.fromMemory",
 			"SoundFont data must not be empty");
 		var result = NativeKitAudio.nk_audio_soundfont_load_memory(bytes);
-		AudioResult.check(result.status, "audio.soundfont.load");
-		return new SoundFont(result.out_soundfont);
+		return NativeKitStatus.made(result.status, "audio.soundfont.load", NativeKit.nk_last_error(),
+			() -> new SoundFont(result.out_soundfont), RefusedInput);
 	}
 
-	/** Decodes the SF2 bank at `path`. */
-	public static function fromFile(path:String):SoundFont {
-		if (path == null || path.length == 0) throw BindingError.invalidArgument("SoundFont.fromFile",
-			"SoundFont path must not be empty");
-		return fromMemory(File.getBytes(path));
-	}
 	internal function nativeHandle():SoundFontHandle {
 		if (disposed) throw BindingError.disposed("SoundFont.nativeHandle", "SoundFont has been disposed");
 		return value;
@@ -77,8 +72,8 @@ class SoundFont implements Disposable {
 		if (disposed) return;
 		var status = owned.close();
 		disposed = true;
-		if (status != null && status != Result.Ok)
-			throw new NativeKitError(status, "audio.soundfont.dispose", NativeKit.nk_last_error());
+		if (status != null && status != NativeResult.Ok)
+			throw NativeKitStatus.failure(status, "audio.soundfont.dispose", NativeKit.nk_last_error());
 	}
 }
 

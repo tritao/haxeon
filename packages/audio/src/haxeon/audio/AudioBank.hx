@@ -1,6 +1,7 @@
 package haxeon.audio;
 
 import haxeon.platform.BindingError;
+import haxeon.platform.NativeKitError;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
@@ -9,7 +10,8 @@ import haxeon.platform.resource.ResourceCacheLoad;
 import haxeon.platform.resource.Resource;
 import haxeon.platform.resource.ResourceCache;
 import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.Handle;
+import nativekit.ffi.NativeKitTypes.ResourceAssetLoadState;
 
 /**
  * Named audio resource catalog built on NativeKit's general ResourceCache.
@@ -28,7 +30,7 @@ class AudioBank implements Disposable {
 	/** Called once when an async or synchronous entry reaches the ready state. */
 	public var onReady:AudioBankEntry->Void = null;
 	/** Called once when an async entry fails to load. */
-	public var onFailed:AudioBankEntry->Result->Void = null;
+	public var onFailed:AudioBankEntry->NativeKitError->Void = null;
 
 	/** An empty bank loading through `cache`, told of finished loads by `events`. */
 	public function new(cache:ResourceCache, events:EventPump) {
@@ -89,8 +91,8 @@ class AudioBank implements Disposable {
 		return entry;
 	}
 
-	/** Creates a clip from a ready named entry. */
-	public function createClip(name:String):Clip
+	/** Creates a clip from a ready named entry, or answers why its bytes do not decode. */
+	public function createClip(name:String):Result<Clip, NativeKitError>
 		return get(name).createClip();
 
 	/** Whether it has an entry `name`. */
@@ -179,7 +181,7 @@ class AudioBank implements Disposable {
 					onReady(entry);
 			case ResourceAssetLoadState.LoadFailed:
 				if (entry.markFailedNotified() && onFailed != null)
-					onFailed(entry, entry.loadResult());
+					onFailed(entry, entry.loadError());
 			case ResourceAssetLoadState.Loading:
 		}
 	}

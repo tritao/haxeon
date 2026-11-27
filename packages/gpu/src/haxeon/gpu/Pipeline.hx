@@ -144,14 +144,13 @@ class PipelineBuilder {
 		return this;
 	}
 
-	/** Creates the pipeline. */
-	public function build():Pipeline {
+	/** Creates the pipeline, or answers why the device cannot. The builder is used up either way. */
+	public function build():Result<Pipeline, GpuError> {
 		ensureLive();
 		var made = NativeKitGpu.nkgpu_pipeline_end(value);
 		consumed = true;
 		registration.detach();
-		GpuResult.check(made.status, "pipeline.end");
-		return new Pipeline(renderer, made.out_pipeline);
+		return GpuResult.made(made.status, "pipeline.end", () -> new Pipeline(renderer, made.out_pipeline));
 	}
 
 	@:allow(haxeon.gpu.Renderer)

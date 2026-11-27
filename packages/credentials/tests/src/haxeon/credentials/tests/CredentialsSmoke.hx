@@ -16,17 +16,17 @@ class CredentialsSmoke {
 		var stored = false;
 		var read:Null<Bytes> = null;
 		try {
-			Credentials.set(service, account, secret);
+			Credentials.set(service, account, secret).unwrap();
 			stored = true;
-			read = Credentials.get(service, account);
+			read = Credentials.get(service, account).unwrap();
 			if (read == null || read.length != secret.length)
 				throw "credential round trip returned the wrong size";
 			for (index in 0...secret.length)
 				if (read.get(index) != secret.get(index))
 					throw "credential round trip changed the stored bytes";
-			Credentials.delete(service, account);
+			Credentials.delete(service, account).unwrap();
 			stored = false;
-			if (Credentials.get(service, account) != null)
+			if (Credentials.get(service, account).unwrap() != null)
 				throw "deleted credential remained available";
 		} catch (error:Dynamic) {
 			cleanup(service, account, stored, secret, read);
@@ -38,7 +38,7 @@ class CredentialsSmoke {
 	static function cleanup(service:String, account:String, stored:Bool, secret:Bytes, read:Null<Bytes>):Void {
 		try {
 			if (stored)
-				Credentials.delete(service, account);
+				_ = Credentials.delete(service, account);
 		} catch (error:Dynamic) {
 			wipe(secret);
 			wipe(read);

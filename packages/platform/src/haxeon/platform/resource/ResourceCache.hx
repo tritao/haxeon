@@ -1,7 +1,7 @@
 package haxeon.platform.resource;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import haxeon.platform.resource.ResourceCacheLoad;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.OwnedResourceCacheHandle;
@@ -77,7 +77,7 @@ class ResourceCache implements Disposable {
 		var status = owned.close();
 		disposed = true;
 		if (status != null && status != Result.Ok)
-			throw new NativeKitError(status, "resource.cache.dispose", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(status, "resource.cache.dispose", NativeKit.nk_last_error());
 	}
 
 	/** Whether it has been disposed. */

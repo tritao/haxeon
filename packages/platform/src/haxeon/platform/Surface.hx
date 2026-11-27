@@ -149,7 +149,7 @@ class Surface implements Disposable {
 		target.struct_size = SurfaceFrameTarget.byteSize();
 		var acquired = NativeKit.nk_surface_acquire_frame(value, target);
 		if (acquired.status != Result.Ok)
-			throw new NativeKitError(acquired.status, "surface.acquireFrame", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(acquired.status, "surface.acquireFrame", NativeKit.nk_last_error());
 		return new SurfaceFrame(this, acquired.out_frame, acquired.out_target);
 	}
 
@@ -161,7 +161,7 @@ class Surface implements Disposable {
 		if (feedback.status == Result.ErrorUnsupported)
 			return new SurfaceFrameTiming(this, null, started);
 		if (feedback.status != Result.Ok)
-			throw new NativeKitError(feedback.status, "surface.captureFrameTiming", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(feedback.status, "surface.captureFrameTiming", NativeKit.nk_last_error());
 		return new SurfaceFrameTiming(this, feedback.out_frame_id, started);
 	}
 
@@ -173,7 +173,7 @@ class Surface implements Disposable {
 		if (feedback.status == Result.ErrorUnsupported)
 			return null;
 		if (feedback.status != Result.Ok)
-			throw new NativeKitError(feedback.status, "surface.presentationSeconds", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(feedback.status, "surface.presentationSeconds", NativeKit.nk_last_error());
 		return feedback.out_presentation_seconds > 0.0 ? feedback.out_presentation_seconds : null;
 	}
 

@@ -66,7 +66,7 @@ class AudioSmoke {
 	}
 
 	static function verifyPcmClip(data:Bytes, channels:Int, format:PcmFormat, frames:Int):Void {
-		var clip = Clip.fromPcm(data, 48000, channels, format);
+		var clip = Clip.fromPcm(data, 48000, channels, format).unwrap();
 		var voice = clip.createVoice();
 		clip.dispose();
 		var duration = voice.lengthSeconds();
@@ -80,7 +80,7 @@ class AudioSmoke {
 		verifyPcmClip(Bytes.alloc(1920), 2, Signed16LE, 480);
 		verifyPcmClip(Bytes.alloc(3840), 2, Float32LE, 480);
 		var rejected = false;
-		try Clip.fromPcm(Bytes.alloc(3), 48000, 2, Signed16LE)
+		try _ = Clip.fromPcm(Bytes.alloc(3), 48000, 2, Signed16LE)
 		catch (error:haxeon.platform.BindingError) {
 			rejected = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument;
 		}
@@ -143,7 +143,7 @@ class AudioSmoke {
 			resourceCache = ResourceCache.create();
 			audioBank = new AudioBank(resourceCache, runtime.events);
 			var bankFailed = false;
-			var bankFailure = Result.Ok;
+			var bankFailure:Null<haxeon.platform.NativeKitError> = null;
 			audioBank.onFailed = function(entry, result) {
 				if (entry.name == "missing-audio") {
 					bankFailed = true;
@@ -160,8 +160,7 @@ class AudioSmoke {
 				NativeKit.nk_wait_events_timeout_checked(0.05);
 				while (runtime.events.poll()) {}
 			}
-			if (!bankFailed || !bankEntry.isFailed() || bankFailure == Result.Ok
-				|| bankEntry.loadResult() != bankFailure)
+			if (!bankFailed || !bankEntry.isFailed() || bankFailure == null || bankEntry.loadError() == null)
 				throw "Haxe audio bank did not deliver its async failure lifecycle";
 			if (audioBank.find("missing-audio") != bankEntry || !audioBank.unload("missing-audio")
 				|| audioBank.find("missing-audio") != null || audioBank.count() != 0)
@@ -181,16 +180,16 @@ class AudioSmoke {
 			deviceOptions.sampleRate = 48000;
 			deviceOptions.channels = 2;
 			deviceOptions.noAutoStart = true;
-			Mixer.configureDevice(deviceOptions);
+			Mixer.configureDevice(deviceOptions).unwrap();
 			if (Mixer.deviceState() != DeviceState.Uninitialized)
 				throw "Haxe audio device did not remain uninitialized before start";
-			Mixer.startDevice();
+			Mixer.startDevice().unwrap();
 			if (Mixer.deviceState() != DeviceState.Started)
 				throw "Haxe audio device did not start";
 			Mixer.stopDevice();
 			if (Mixer.deviceState() != DeviceState.Stopped)
 				throw "Haxe audio device did not stop";
-			Mixer.restartDevice();
+			Mixer.restartDevice().unwrap();
 			if (Mixer.deviceState() != DeviceState.Started)
 				throw "Haxe audio device did not restart";
 			if (Mixer.sampleRate() != 48000)
@@ -336,7 +335,7 @@ class AudioSmoke {
 			liveOptions.sampleRate = sampleRate;
 			liveOptions.channels = Mixer.channels();
 			var live = haxeon.audio.DspEngine.create(liveOptions);
-			live.attachToDevice();
+			live.attachToDevice().unwrap();
 			live.setBus(bus);
 			live.setBus(null);
 			live.dispose();
@@ -347,7 +346,7 @@ class AudioSmoke {
 			bus.scheduleStop(haxe.Int64.add(nowFrames, haxe.Int64.ofInt(sampleRate * 6)));
 			bus.clearSchedule();
 			verifyPcmClips();
-			clip = Clip.fromMemory(tinyWav());
+			clip = Clip.fromMemory(tinyWav()).unwrap();
 			var options = new VoiceOptions();
 			options.looping = true;
 			first = clip.createVoice(options);

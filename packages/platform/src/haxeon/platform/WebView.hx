@@ -1,7 +1,6 @@
 package haxeon.platform;
 
 import haxeon.platform.DisposalRegistration;
-import haxeon.platform.NativeKitError;
 import haxeon.platform.Window;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Handle;
@@ -84,6 +83,6 @@ class WebView implements Disposable {
 
 	static function check(status:Result, operation:String):Void {
 		if (status != Result.Ok)
-			throw new NativeKitError(status, operation, NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(status, operation, NativeKit.nk_last_error());
 	}
 }

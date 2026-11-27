@@ -48,14 +48,19 @@ void main() {
 ```
 
 Give the project a dependency on `haxeon-gpu`, then use the reflected
-vertex layout to create a pipeline.
+vertex layout to create a pipeline. Creating the shader and the pipeline
+returns a `Result` whose `Err` is a `GpuError`: `Unsupported` when the
+program has no source for the renderer's backend.
 
 ```haxe
+import haxeon.gpu.GpuError;
 import haxeon.gpu.Pipeline;
 import shaders.Quad;
 
-var shader = Quad.create(renderer);
-var pipeline = Pipeline.begin(renderer, shader, Quad.Vertex.layout).build();
+function quadPipeline(renderer:Renderer):Result<Pipeline, GpuError> {
+	var shader = try Quad.create(renderer);
+	return Pipeline.begin(renderer, shader, Quad.Vertex.layout).build();
+}
 ```
 
 Use `Quad.Vertex` for offsets and stride when writing vertices. The

@@ -64,10 +64,10 @@ import haxeon.credentials.Credentials;
 
 // Looking up a missing secret runs the module; a machine without a credential store answers an error, which ran it too.
 function main():Int {
-	try
-		Sys.println("found " + (Credentials.get("haxeon-console-release", "nobody") == null))
-	catch (error:haxeon.platform.NativeKitError)
-		Sys.println("found true");
+	Sys.println("found " + switch Credentials.get("haxeon-console-release", "nobody") {
+		case Ok(found): found == null;
+		case Err(_): true;
+	});
 	return 0;
 }
 HAXE

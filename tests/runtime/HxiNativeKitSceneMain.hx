@@ -177,7 +177,7 @@ class Main {
 		while (!ready && Sys.time() < deadline)
 			realRuntime.events.poll();
 		if (!ready) return 18;
-		var renderer:Renderer = Renderer.create(surface),
+		var renderer:Renderer = Renderer.create(surface).unwrap(),
 			realSceneRenderer = SceneRenderer.create(renderer),
 			realExecution = realSceneRenderer.render(snapshot, view);
 		if (realExecution.get_result() != NativeKitGpu.GpuStatus.Ok

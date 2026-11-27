@@ -3,6 +3,7 @@ import haxeon.gpu.Buffer;
 import haxeon.gpu.BufferDesc;
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
+import haxeon.gpu.GpuError;
 import haxeon.gpu.Pipeline;
 import haxeon.gpu.Renderer;
 import haxeon.gpu.Shader;
@@ -27,12 +28,20 @@ class Scene {
 	final params = Bytes.alloc(Particles.stepParams.size);
 	var time = 0.0;
 
-	public function new(surface:Surface) {
-		renderer = Renderer.create(surface);
+	/** The fountain drawn to `surface`, or why the GPU cannot draw it. */
+	public static function create(surface:Surface):Result<Scene, GpuError> {
+		var renderer = try Renderer.create(surface);
 		if (!renderer.features().compute)
-			throw "Particles needs compute shaders: OpenGL 4.3, Direct3D 11 or Metal";
-		step = Pipeline.beginCompute(renderer, Shader.create(renderer, Particles.step)).compute().build();
-		var points = Pipeline.begin(renderer, Shader.create(renderer, Particles.draw), VertexLayout.none).build();
+			return Err(Unsupported("Particles needs compute shaders: OpenGL 4.3, Direct3D 11 or Metal"));
+		var step = try Pipeline.beginCompute(renderer, try Shader.create(renderer, Particles.step)).compute().build();
+		var points = try Pipeline.begin(renderer, try Shader.create(renderer, Particles.draw),
+			VertexLayout.none).build();
+		return Ok(new Scene(renderer, step, points));
+	}
+
+	function new(renderer:Renderer, step:Pipeline, points:Pipeline) {
+		this.renderer = renderer;
+		this.step = step;
 		particles = Buffer.create(renderer, new BufferDesc(count * particleBytes, BufferUsage.Storage));
 		simulate = renderer.commandBuffer(8);
 		render = renderer.commandBuffer(4);

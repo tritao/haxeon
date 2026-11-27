@@ -1,7 +1,7 @@
 package haxeon.platform.resource;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.ResourceFlags;
 import nativekit.ffi.NativeKitTypes.ResourceValue;
@@ -47,6 +47,6 @@ class Resource {
 	public static function cancelLoad(request:haxe.Int64):Void {
 		var status = NativeKit.nk_resource_load_cancel(request);
 		if (status != Result.Ok)
-			throw new NativeKitError(status, "resource.cancelLoad", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(status, "resource.cancelLoad", NativeKit.nk_last_error());
 	}
 }

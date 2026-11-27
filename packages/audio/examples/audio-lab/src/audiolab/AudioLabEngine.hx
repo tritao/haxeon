@@ -13,6 +13,7 @@ import haxeon.audio.DspPatchBuilder;
 import haxeon.audio.DspRenderTarget;
 import haxeon.audio.EffectParameter;
 import haxeon.audio.Mixer;
+import haxeon.platform.NativeKitException;
 
 private class PendingNote {
 	public final voiceId:Int;
@@ -95,45 +96,54 @@ class AudioLabEngine implements Disposable {
 		for (_ in 0...64)
 			scope.push(0.0);
 		if (playback) {
-			try {
-				var device = new DeviceOptions();
-				device.sampleRate = SAMPLE_RATE;
-				device.channels = CHANNELS;
-				Mixer.configureDevice(device);
-				musicBus = Bus.create();
-				musicBus.setVolume(0.35);
-				roomBus = Bus.create();
-				reverb = roomBus.addReverb();
-				reverb.setParameter(EffectParameter.Dry, 0.0);
-				reverb.setParameter(EffectParameter.Wet, 1.0);
-				roomSend = musicBus.addSend(roomBus, reverbWet);
-				delayBus = Bus.create();
-				stereoDelay = delayBus.addStereoDelay();
-				stereoDelay.setParameter(EffectParameter.Dry, 0.0);
-				stereoDelay.setParameter(EffectParameter.Wet, 1.0);
-				stereoDelay.setParameter(EffectParameter.PingPong, 1.0);
-				stereoDelay.setDelayTempo(120.0, 0.5);
-				musicBus.addSend(delayBus, 0.1);
-				dynamics = musicBus.addDynamics();
-				liveDsp = DspEngine.create(options);
-				playbackStatus = "Live playback • monitor shows dry synth";
-			} catch (error:Dynamic) {
-				if (liveDsp != null) liveDsp.dispose();
-				liveDsp = null;
-				if (musicBus != null) musicBus.dispose();
-				if (roomBus != null) roomBus.dispose();
-				if (delayBus != null) delayBus.dispose();
-				musicBus = null;
-				roomBus = null;
-				delayBus = null;
-				roomSend = null;
-				stereoDelay = null;
-				reverb = null;
-				dynamics = null;
-				playbackStatus = "Playback unavailable: " + Std.string(error);
+			var device = new DeviceOptions();
+			device.sampleRate = SAMPLE_RATE;
+			device.channels = CHANNELS;
+			switch Mixer.configureDevice(device) {
+				case Err(error):
+					playbackStatus = "Playback unavailable: " + error.describe();
+				case Ok():
+					try {
+						musicBus = Bus.create();
+						musicBus.setVolume(0.35);
+						roomBus = Bus.create();
+						reverb = roomBus.addReverb();
+						reverb.setParameter(EffectParameter.Dry, 0.0);
+						reverb.setParameter(EffectParameter.Wet, 1.0);
+						roomSend = musicBus.addSend(roomBus, reverbWet);
+						delayBus = Bus.create();
+						stereoDelay = delayBus.addStereoDelay();
+						stereoDelay.setParameter(EffectParameter.Dry, 0.0);
+						stereoDelay.setParameter(EffectParameter.Wet, 1.0);
+						stereoDelay.setParameter(EffectParameter.PingPong, 1.0);
+						stereoDelay.setDelayTempo(120.0, 0.5);
+						musicBus.addSend(delayBus, 0.1);
+						dynamics = musicBus.addDynamics();
+						liveDsp = DspEngine.create(options);
+						playbackStatus = "Live playback • monitor shows dry synth";
+					} catch (error:NativeKitException) {
+						releasePlayback();
+						playbackStatus = "Playback unavailable: " + error.error.describe();
+					}
 			}
 		}
 		selectPreset(AudioLabPreset.Subtractive);
+	}
+
+	/** Drops what live playback had made, once the device cannot take it. */
+	function releasePlayback():Void {
+		if (liveDsp != null) liveDsp.dispose();
+		liveDsp = null;
+		if (musicBus != null) musicBus.dispose();
+		if (roomBus != null) roomBus.dispose();
+		if (delayBus != null) delayBus.dispose();
+		musicBus = null;
+		roomBus = null;
+		delayBus = null;
+		roomSend = null;
+		stereoDelay = null;
+		reverb = null;
+		dynamics = null;
 	}
 
 	public function selectPreset(next:AudioLabPresetId):Void {
@@ -148,11 +158,18 @@ class AudioLabEngine implements Disposable {
 		instrument = dsp.createInstrument(patch);
 		if (liveDsp != null) {
 			liveInstrument = liveDsp.createInstrument(patch);
-			liveDsp.attachToDevice();
-			liveDsp.setBus(musicBus);
-			nextLiveFrame = haxe.Int64.add(Mixer.timeFrames(), haxe.Int64.ofInt(LOOKAHEAD));
-			if (reverb != null) reverb.reset();
-			if (stereoDelay != null) stereoDelay.reset();
+			switch liveDsp.attachToDevice() {
+				case Ok():
+					liveDsp.setBus(musicBus);
+					nextLiveFrame = haxe.Int64.add(Mixer.timeFrames(), haxe.Int64.ofInt(LOOKAHEAD));
+					if (reverb != null) reverb.reset();
+					if (stereoDelay != null) stereoDelay.reset();
+				case Err(error):
+					liveInstrument.dispose();
+					liveInstrument = null;
+					releasePlayback();
+					playbackStatus = "Playback unavailable: " + error.describe();
+			}
 		}
 		preset = next;
 		filterCutoff = builder.filter.cutoffHz;

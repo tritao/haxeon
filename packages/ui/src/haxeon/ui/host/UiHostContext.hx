@@ -1,7 +1,7 @@
 package haxeon.ui.host;
 
 import haxe.Int64;
-import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import haxeon.platform.event.EventPump;
 import haxeon.ui.FontCollection;
 import haxeon.ui.host.UiHostOptions;
@@ -174,6 +174,6 @@ class WindowControls {
 	/** Asks to close the window, through the application's close confirmation (`UiHostContext.requestClose`). */
 	public function close():Void host.requestClose();
 	static function check(status:Result, operation:String):Void {
-		if (status != Result.Ok) throw new NativeKitError(status, operation, NativeKit.nk_last_error());
+		if (status != Result.Ok) throw NativeKitStatus.failure(status, operation, NativeKit.nk_last_error());
 	}
 }

@@ -91,7 +91,7 @@ class HxiAbiMain {
 			'interface NativeKit @target("x86_64-linux-gnu") @library("nativekit") { enum nk_result : i32 { NK_OK = 0; NK_ERROR = -1; } handle nk_window : u32 @destroy("nk_window_destroy"); extern fn nk_window_create(out_window: ptr<nk_window> @out @owned) -> nk_result; extern fn nk_window_destroy(window: nk_window) -> nk_result @symbol("nk_window_destroy"); extern fn nk_last_error() -> utf8; }');
 		HxiValidator.validate(nativeKitModel, []);
 		var nativeKitProfile = HxiProjectionProfile.parse("nativekit.hxmap",
-			'{"interface":"NativeKit","typePrefix":"nk_","typeNames":{"nk_window":"WindowHandle"},"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"NativeKitError","checkedSuffix":"_checked"}}}'),
+			'{"interface":"NativeKit","typePrefix":"nk_","typeNames":{"nk_window":"WindowHandle"},"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","failure":"NativeKitStatus.failure","checkedSuffix":"_checked"}}}'),
 			nativeKitPlan = HxiProjection.plan("nativekit.hxmap", nativeKitModel, null, null, null, nativeKitProfile),
 			windowCreate = Lambda.find(nativeKitPlan.functions, fn -> fn.nativeName == "nk_window_create");
 		if (windowCreate == null)

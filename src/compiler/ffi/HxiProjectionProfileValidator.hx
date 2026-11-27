@@ -155,7 +155,7 @@ class HxiProjectionProfileValidator {
 				'$entry does not match the result type of any function in this interface');
 			if (policy.checkedSuffix.length == 0)
 				HxiHaxeEmitter.profileError(path, '$entry.checkedSuffix must not be empty');
-			HxiHaxeEmitter.validateTypePath(path, '$entry.errorType', policy.errorType, false);
+			HxiHaxeEmitter.validateFunctionPath(path, '$entry.failure', policy.failure);
 			if (policy.diagnosticFunction != null) {
 				if (HxiHaxeEmitter.isOmitted(omitted, policy.diagnosticFunction))
 					HxiHaxeEmitter.profileError(path,

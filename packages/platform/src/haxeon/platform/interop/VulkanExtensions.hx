@@ -1,7 +1,7 @@
 package haxeon.platform.interop;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import haxeon.platform.Window;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Result;
@@ -13,7 +13,8 @@ class VulkanExtensions {
 	public static function requiredInstanceExtensions(window:Window):Array<String> {
 		var result = NativeKitVulkan.getRequiredInstanceExtensions(window.nativeHandle());
 		if (result.status != Result.Ok)
-			throw new NativeKitError(result.status, "vulkan.getRequiredInstanceExtensions", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(result.status, "vulkan.getRequiredInstanceExtensions",
+				NativeKit.nk_last_error());
 		var extensions:Array<String> = [];
 		for (extension in result.extensions) {
 			if (extension == null)

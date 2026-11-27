@@ -247,10 +247,11 @@ function appRound(root:String, haxeon:String, projects:String):Void {
 	// Looking up a missing secret runs the module; a machine without a credential store (a headless runner) answers an
 	// error instead, which ran it too.
 	var module = consoleProject(haxeon, Path.join([projects, "module-program"]), "credentials",
-		'function main():Int {\n\ttry {\n'
-		+ '\t\tvar found = haxeon.credentials.Credentials.get("haxeon-release-smoke", "nobody");\n'
-		+ '\t\tSys.println("module program ok " + (found == null));\n'
-		+ '\t} catch (error:haxeon.platform.NativeKitError) {\n\t\tSys.println("module program ok store");\n\t}\n'
+		'function main():Int {\n'
+		+ '\tSys.println("module program ok " + switch haxeon.credentials.Credentials.get("haxeon-release-smoke", "nobody") {\n'
+		+ '\t\tcase Ok(found): found == null ? "true" : "found";\n'
+		+ '\t\tcase Err(_): "store";\n'
+		+ '\t});\n'
 		+ '\treturn 0;\n}\n');
 	must("haxeon build of a program with a NativeKit module's package", haxeon, ["build"], module);
 	output = stdout("haxeon run of a program with a NativeKit module's package", haxeon, ["run", "--quiet"], module);

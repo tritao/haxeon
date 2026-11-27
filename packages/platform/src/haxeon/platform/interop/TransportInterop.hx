@@ -3,7 +3,7 @@ package haxeon.platform.interop;
 import haxe.Int64;
 import haxe.io.Bytes;
 import haxeon.platform.BindingError;
-import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import haxeon.platform.interop.TransportSendQueue;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.OwnedListenerHandle;
@@ -43,7 +43,7 @@ class TransportInterop {
 		value.flags = TransportFlags.ReuseAddress;
 		var result = NativeKit.nk_transport_listen(value);
 		if (result.status != Result.Ok)
-			throw new NativeKitError(result.status, "TransportInterop.listen", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(result.status, "TransportInterop.listen", NativeKit.nk_last_error());
 		return result.out_listener;
 	}
 
@@ -52,7 +52,7 @@ class TransportInterop {
 		var value = options(port, host);
 		var result = NativeKit.nk_transport_connect(value);
 		if (result.status != Result.Ok)
-			throw new NativeKitError(result.status, "TransportInterop.connect", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(result.status, "TransportInterop.connect", NativeKit.nk_last_error());
 		return result.out_transport;
 	}
 
@@ -69,7 +69,7 @@ class TransportInterop {
 		value.timeout_ms = Std.int(timeout * 1000);
 		var result = NativeKit.nk_transport_connect(value);
 		if (result.status != Result.Ok)
-			throw new NativeKitError(result.status, "TransportInterop.websocket", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(result.status, "TransportInterop.websocket", NativeKit.nk_last_error());
 		return result.out_transport;
 	}
 
@@ -82,13 +82,13 @@ class TransportInterop {
 		if (result.status == Result.ErrorPayloadTooLarge) {
 			var needed = Int64.toInt(result.out_received);
 			if (needed < 0 || needed > 4 * 1024 * 1024)
-				throw new NativeKitError(result.status, "TransportInterop.receiveMessage",
+				throw NativeKitStatus.failure(result.status, "TransportInterop.receiveMessage",
 					"NativeKit message exceeds receive limit");
 			buffer = Bytes.alloc(needed);
 			result = NativeKit.nk_transport_receive(transport, buffer);
 		}
 		if (result.status != Result.Ok)
-			throw new NativeKitError(result.status, "TransportInterop.receiveMessage", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(result.status, "TransportInterop.receiveMessage", NativeKit.nk_last_error());
 		return Bytes.view(buffer, 0, Int64.toInt(result.out_received));
 	}
 
@@ -111,7 +111,7 @@ class TransportInterop {
 	public static function sendQueue(transport:TransportHandle):TransportSendQueue {
 		var result = NativeKit.nk_transport_get_send_queue(transport);
 		if (result.status != Result.Ok)
-			throw new NativeKitError(result.status, "TransportInterop.sendQueue", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(result.status, "TransportInterop.sendQueue", NativeKit.nk_last_error());
 		return new TransportSendQueue(result.out_queued_bytes, result.out_capacity);
 	}
 
@@ -134,7 +134,7 @@ class TransportInterop {
 		if (result.status == Result.TransportWouldBlock)
 			return Bytes.alloc(0);
 		if (result.status != Result.Ok)
-			throw new NativeKitError(result.status, "TransportInterop.receive", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(result.status, "TransportInterop.receive", NativeKit.nk_last_error());
 		var count = Int64.toInt(result.out_received);
 		return count == 0 ? Bytes.alloc(0) : Bytes.view(buffer, 0, count);
 	}

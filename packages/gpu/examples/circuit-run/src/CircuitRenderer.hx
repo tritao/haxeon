@@ -4,6 +4,7 @@ import haxeon.gpu.Buffer;
 import haxeon.gpu.BufferDesc;
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
+import haxeon.gpu.GpuError;
 import haxeon.gpu.Pipeline;
 import haxeon.gpu.Renderer;
 import haxeon.platform.Surface;
@@ -39,11 +40,18 @@ class CircuitRenderer {
 	final pipeline:Pipeline;
 	final buffer:Buffer;
 
-	public function new(surface:Surface) {
-		renderer = Renderer.create(surface);
+	/** The game's drawing on `surface`, or why the GPU cannot do it. */
+	public static function create(surface:Surface):Result<CircuitRenderer, GpuError> {
+		var renderer = try Renderer.create(surface);
+		var shader = try Maze.create(renderer);
+		var pipeline = try Pipeline.begin(renderer, shader, Maze.Vertex.layout).build();
+		return Ok(new CircuitRenderer(renderer, pipeline));
+	}
+
+	function new(renderer:Renderer, pipeline:Pipeline) {
+		this.renderer = renderer;
+		this.pipeline = pipeline;
 		commands = renderer.commandBuffer(64);
-		var shader = Maze.create(renderer);
-		pipeline = Pipeline.begin(renderer, shader, Maze.Vertex.layout).build();
 		var desc = new BufferDesc(vertices.length, BufferUsage.Vertex);
 		desc.dynamicUpdate = true;
 		buffer = Buffer.create(renderer, desc);

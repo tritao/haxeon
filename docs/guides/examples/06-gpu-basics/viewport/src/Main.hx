@@ -29,7 +29,13 @@ class Main implements App {
 	}
 
 	public function ready():Void
-		scene = new Scene(surface);
+		switch Scene.create(surface) {
+			case Ok(created):
+				scene = created;
+			case Err(error):
+				Sys.println('The GPU cannot draw the scene: ${error.describe()}');
+				open = false;
+		}
 
 	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
 		var scene = this.scene;

@@ -3,6 +3,7 @@ package haxeon.platform.resource;
 import haxe.io.Bytes;
 import haxeon.platform.BindingError;
 import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.OwnedResourceAssetHandle;
 import nativekit.ffi.NativeKitTypes.ResourceAssetHandle;
@@ -42,10 +43,11 @@ class ResourceAsset implements Disposable {
 		return NativeKit.nk_resource_asset_get_load_state_checked(value);
 	}
 
-	/** Returns the underlying load result without throwing for a failed asset. */
-	public function loadResult():Result {
+	/** Why the asset failed to load, or null while it loads and once it is ready. */
+	public function loadError():Null<NativeKitError> {
 		ensureLive();
-		return NativeKit.nk_resource_asset_get_result_checked(value);
+		var result = NativeKit.nk_resource_asset_get_result_checked(value);
+		return result == Result.Ok ? null : NativeKitStatus.error(result, "resource.asset.load", null);
 	}
 
 	/** Returns the complete byte count once the asset is ready. */
@@ -73,7 +75,7 @@ class ResourceAsset implements Disposable {
 		var status = owned.close();
 		disposed = true;
 		if (status != null && status != Result.Ok)
-			throw new NativeKitError(status, "resource.asset.dispose", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(status, "resource.asset.dispose", NativeKit.nk_last_error());
 	}
 
 	/** Whether it has been disposed. */

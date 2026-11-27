@@ -121,6 +121,16 @@ class HxiHaxeEmitter {
 				profileError(path, '$entry projects to invalid Haxe type name "$projected"');
 	}
 
+	/** A function named by its full path (`pack.Type.function`), as a result policy's `failure` is. */
+	public static function validateFunctionPath(path:String, entry:String, projected:String):Void {
+		var parts:Array<String> = projected == null ? [] : projected.split(".");
+		if (parts.length < 2)
+			profileError(path, '$entry must name a function by its type or module, as "pack.Type.function"');
+		for (part in parts)
+			if (!isHaxeIdentifier(part))
+				profileError(path, '$entry names invalid Haxe function path "$projected"');
+	}
+
 	public static function validateIdentifier(path:String, entry:String, projected:String):Void
 		if (!isHaxeIdentifier(projected) || isHaxeBuiltinTypeName(projected))
 			profileError(path, '$entry projects to invalid Haxe identifier "$projected"');
@@ -1445,7 +1455,7 @@ class HxiHaxeEmitter {
 				profile),
 				checkedName = planned.name;
 
-		output.add('/** Calls $publicName and throws the configured error type when its result is not successful. */\n');
+		output.add('/** Calls $publicName and throws what the failure function of its result policy gives when its result is not successful. */\n');
 		output.add('function $checkedName(${arguments.join(", ")}):$returnType {\n');
 		output.add('\tvar __result = $publicName(${callArguments.join(", ")});\n');
 		if (hasOutputs) {
@@ -1455,7 +1465,7 @@ class HxiHaxeEmitter {
 		output.add('\tif ($statusField != ${enumTypeName(resultName, profile)}.$success) {\n');
 		if (policy.diagnosticFunction != null)
 			output.add('\t\tvar __diagnostic = $diagnostic();\n');
-		output.add('\t\tthrow new ${policy.errorType}($statusField, "${escape(publicName)}", ${policy.diagnosticFunction == null ? "null" : "__diagnostic"});\n');
+		output.add('\t\tthrow ${policy.failure}($statusField, "${escape(publicName)}", ${policy.diagnosticFunction == null ? "null" : "__diagnostic"});\n');
 		output.add('\t}\n');
 		if (hasOutputs)
 			output.add('\treturn $returnExpression;\n');

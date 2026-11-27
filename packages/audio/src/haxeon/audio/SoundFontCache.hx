@@ -1,6 +1,7 @@
 package haxeon.audio;
 
 import haxeon.platform.BindingError;
+import haxeon.platform.NativeKitException;
 
 import haxeon.audio.SoundFont.SoundFontPresetInfo;
 import sys.FileSystem;
@@ -138,7 +139,10 @@ class SoundFontCache implements Disposable {
 			var data = File.getBytes(key);
 			if (data.length != bytes) throw BindingError.invalidData("SoundFontCache.acquire",
 				"SoundFont changed during cache loading");
-			font = SoundFont.fromMemory(data);
+			font = switch SoundFont.fromMemory(data) {
+				case Ok(decoded): decoded;
+				case Err(error): throw new NativeKitException(error, "SoundFontCache.acquire", 0);
+			};
 			var inventory = font.presets();
 			var lease = new SoundFontLease(this, entry);
 			condition.acquire();

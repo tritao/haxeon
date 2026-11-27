@@ -97,12 +97,20 @@ class Triangle {
 	}
 
 	static function verifyStructuredErrors():Void {
-		var caught = false;
-		try haxeon.gpu.GpuResult.check(GpuStatus.ErrorInvalidHandle,
-			"test.invalidHandle") catch (error:haxeon.platform.PlatformError) {
-			caught = error.domain == "nativekit-gpu" && error.code == -3 && error.operation == "test.invalidHandle";
+		// A status that is the program's mistake throws a BindingError; one the device decides is a GpuError.
+		var misuse = false;
+		try haxeon.gpu.GpuResult.check(GpuStatus.ErrorInvalidHandle, "test.invalidHandle")
+		catch (error:haxeon.platform.BindingError) {
+			misuse = error.kind == haxeon.platform.BindingErrorKind.Disposed && error.operation == "test.invalidHandle";
 		}
-		if (!caught) throw "GPU errors must expose their domain, status, and operation";
+		if (!misuse) throw "GPU misuse statuses must throw BindingError with their operation";
+		var lost = false;
+		try haxeon.gpu.GpuResult.check(GpuStatus.ErrorDeviceLost, "test.deviceLost")
+		catch (error:haxeon.gpu.GpuException) {
+			lost = error.error.match(DeviceLost) && error.domain == "nativekit-gpu" && error.code == -5
+				&& error.operation == "test.deviceLost";
+		}
+		if (!lost) throw "GPU device statuses must throw GpuException with their GpuError, status and operation";
 		var argument = false;
 		try GpuSurfaceOptions.forGpu(0, 0) catch (error:haxeon.platform.BindingError) {
 			argument = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument
@@ -147,14 +155,14 @@ class Triangle {
 		return builder.uniformBlock(0, ShaderStage.Vertex, 16)
 			.uniform(0, 0, "offset", UniformType.Float2)
 			.texture(0, 0, ShaderStage.Fragment, "tex")
-			.build();
+			.build().unwrap();
 	}
 
 	static function createPipeline(renderer:Renderer, shader:Shader):Pipeline
 		return Pipeline.begin(renderer, shader, vertexLayout)
 			.depthStencil(true)
 			.indexType(IndexType.UInt16)
-			.build();
+			.build().unwrap();
 
 	static function applyFrameBindings(pipeline:Pipeline, buffer:Buffer, indexBuffer:Buffer,
 			image:Image, sampler:Sampler):Void {
@@ -274,8 +282,8 @@ class Triangle {
 				: "#version 430\nlayout(local_size_x=1, local_size_y=1, local_size_z=1) in; layout(std430, binding=0) buffer Data { uint value[]; }; void main(){ value[0] = 1u; }";
 			var computeShader = Shader.beginCompute(renderer, ShaderLanguage.Glsl, computeSource)
 				.storageBuffer(0, ShaderStage.Compute)
-				.build();
-			var computePipeline = Pipeline.beginCompute(renderer, computeShader).compute().build();
+				.build().unwrap();
+			var computePipeline = Pipeline.beginCompute(renderer, computeShader).compute().build().unwrap();
 			var computeBuffer = Buffer.create(renderer, new BufferDesc(4, BufferUsage.Storage));
 			renderer.beginPassFrame();
 			renderer.beginComputePass();
@@ -391,9 +399,9 @@ class Triangle {
 		while (running) {
 			runtime.events.poll();
 			if (!ready && surfaceReady) {
-				renderer = Renderer.create(surface);
-				scoped var reflectedShader = Fixture.create(renderer, FixtureVariant.Default);
-				scoped var previewShader = Fixture.create(renderer, FixtureVariant.Preview);
+				renderer = Renderer.create(surface).unwrap();
+				scoped var reflectedShader = Fixture.create(renderer, FixtureVariant.Default).unwrap();
+				scoped var previewShader = Fixture.create(renderer, FixtureVariant.Preview).unwrap();
 				if (Fixture.vsParams.slot != 0 || Fixture.vsParams.size != 48)
 					throw "Reflected uniform block slot or size changed";
 				commandBuffer = renderer.commandBuffer(64);
@@ -405,7 +413,7 @@ class Triangle {
 					Wrap.Repeat, Wrap.Repeat);
 				shader = createShader(renderer);
 				pipeline = createPipeline(renderer, shader);
-				var peerRenderer = Renderer.create(surface);
+				var peerRenderer = Renderer.create(surface).unwrap();
 				var wrongShaderRendererRejected = false;
 				try Pipeline.begin(peerRenderer, shader,
 					vertexLayout) catch (_:Dynamic) wrongShaderRendererRejected = true;
@@ -641,7 +649,7 @@ private class TriangleLoopApp implements App {
 	}
 
 	public function ready():Void
-		renderer = Renderer.create(surface);
+		renderer = Renderer.create(surface).unwrap();
 
 	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
 		if (renderer == null || tick.timeSeconds <= 0.0)
@@ -649,8 +657,8 @@ private class TriangleLoopApp implements App {
 		frames++;
 		if (frames == 1) {
 			var rejected = false;
-			try frame.submit([]) catch (error:haxeon.platform.NativeKitError) {
-				rejected = error.result == Result.ErrorInvalidArgument;
+			try frame.submit([]) catch (error:haxeon.platform.BindingError) {
+				rejected = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument;
 			}
 			if (!rejected || frame.isFinished())
 				throw "NativeKit did not reject an empty submission and leave the frame open";

@@ -6,10 +6,12 @@ import haxe.Int64;
 import haxe.io.Bytes;
 import haxeon.audio.DspTransport;
 import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitException;
+import haxeon.platform.NativeKitStatus;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 
 /** Owns a standalone native DSP renderer and its instruments. */
 class DspEngine implements Disposable {
@@ -88,8 +90,8 @@ class DspEngine implements Disposable {
 	public function noteOn(instrument:DspInstrument, note:Int, velocity:Float,
 			startFrame:Int64, holdFrames:Int64, priority:Int = 0):Int64 {
 		var token = tryNoteOn(instrument, note, velocity, startFrame, holdFrames, priority);
-		if (token == null) throw new NativeKitError(Result.ErrorQueueFull, "audio.dsp.engine.noteOn",
-			"DSP runtime command queue is full");
+		if (token == null) throw new NativeKitException(Busy, "audio.dsp.engine.noteOn",
+			NativeResult.ErrorQueueFull.rawValue);
 		return cast token;
 	}
 	/** Ordinary overload admission: null means the bounded ingress queue is full. */
@@ -106,7 +108,7 @@ class DspEngine implements Disposable {
 		options.hold_frames = holdFrames;
 		options.priority = priority;
 		var result = NativeKitAudio.nk_audio_dsp_engine_note_on(value, instrument.nativeHandle(), options);
-		if (result.status == Result.ErrorQueueFull) return null;
+		if (result.status == NativeResult.ErrorQueueFull) return null;
 		AudioResult.check(result.status, "audio.dsp.engine.noteOn");
 		return result.out_note_token;
 	}
@@ -216,14 +218,16 @@ class DspEngine implements Disposable {
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_reset(value), "audio.dsp.engine.reset");
 	}
 
-	/** Routes this renderer into the process-wide NativeKit playback device. */
-	public function attachToDevice():Void {
+	/** Routes this renderer into the process-wide NativeKit playback device, or answers why the device cannot take it. */
+	public function attachToDevice():Result<Void, NativeKitError> {
 		ensureLive();
 		if (deviceAttached)
-			return;
-		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_attach_device(value),
-			"audio.dsp.engine.attachDevice");
+			return Ok();
+		try NativeKitStatus.result(NativeKitAudio.nk_audio_dsp_engine_attach_device(value),
+			"audio.dsp.engine.attachDevice",
+			NativeKit.nk_last_error());
 		deviceAttached = true;
+		return Ok();
 	}
 
 	/** Routes live output through a bus, or directly to master when null.
@@ -332,8 +336,8 @@ class DspEngine implements Disposable {
 		instruments.resize(0);
 		var status = owned.close();
 		disposed = true;
-		if (status != null && status != Result.Ok)
-			throw new NativeKitError(status, "audio.dsp.engine.dispose", NativeKit.nk_last_error());
+		if (status != null && status != NativeResult.Ok)
+			throw NativeKitStatus.failure(status, "audio.dsp.engine.dispose", NativeKit.nk_last_error());
 	}
 
 	/** Whether it has been disposed. */

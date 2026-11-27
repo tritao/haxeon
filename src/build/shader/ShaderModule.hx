@@ -85,7 +85,7 @@ class ShaderModule {
 			if (entries.length == 1) {
 				declarations.push('public static final $field = ${descriptor(entries[0].program, target)};');
 				if (names.length == 1)
-					declarations.push('public static function create(renderer:Renderer):Shader return Shader.create(renderer, $field);');
+					declarations.push('public static function create(renderer:Renderer):Result<Shader, GpuError> return Shader.create(renderer, $field);');
 				continue;
 			}
 			var labels = [for (entry in entries) pascal(entry.variant)];
@@ -95,9 +95,9 @@ class ShaderModule {
 			var cases = [for (label in labels) 'case $label: $field$label;'];
 			declarations.push('public static function $field(variant:$variantType):ShaderProgram return switch variant { ${cases.join(" ")} };');
 			if (names.length == 1)
-				declarations.push('public static function create(renderer:Renderer, variant:$variantType):Shader return Shader.create(renderer, $field(variant));');
+				declarations.push('public static function create(renderer:Renderer, variant:$variantType):Result<Shader, GpuError> return Shader.create(renderer, $field(variant));');
 		}
-		return 'package ${parts.join(".")};\n\nimport haxeon.gpu.Enums;\nimport haxeon.gpu.Renderer;\nimport haxeon.gpu.Shader;\nimport haxeon.gpu.ShaderProgram;\nimport haxeon.gpu.ShaderUniformBlock;\nimport haxeon.gpu.VertexLayout;\n\n${definitions.join("\n")}\nclass $name {\n\t${declarations.join("\n\t")}\n}\n';
+		return 'package ${parts.join(".")};\n\nimport haxeon.gpu.Enums;\nimport haxeon.gpu.GpuError;\nimport haxeon.gpu.Renderer;\nimport haxeon.gpu.Shader;\nimport haxeon.gpu.ShaderProgram;\nimport haxeon.gpu.ShaderUniformBlock;\nimport haxeon.gpu.VertexLayout;\n\n${definitions.join("\n")}\nclass $name {\n\t${declarations.join("\n\t")}\n}\n';
 	}
 
 	static function descriptor(program:Program, target:String):String {

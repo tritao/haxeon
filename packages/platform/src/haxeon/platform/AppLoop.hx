@@ -58,7 +58,7 @@ class AppLoop implements Disposable {
 					else if (result == Result.ErrorCancelled || result == Result.ErrorSurfaceLost) {
 						if (!stopped && !app.shouldQuit()) surface.requestFrame();
 					} else
-						fail(new NativeKitError(result, "AppLoop.frame", "Rendering or presentation failed"));
+						fail(NativeKitStatus.failure(result, "AppLoop.frame", "Rendering or presentation failed"));
 					requestDeferredRedraw();
 				}
 			});
@@ -97,7 +97,7 @@ class AppLoop implements Disposable {
 		if (!started || stopped || surfaceLost || pending != null) return true;
 		var size = nativekit.ffi.NativeKit.nk_surface_get_framebuffer_size(surface.nativeHandle());
 		if (size.status != Result.Ok)
-			fail(new NativeKitError(size.status, "AppLoop.stepFrame", "Could not query the framebuffer"));
+			fail(NativeKitStatus.failure(size.status, "AppLoop.stepFrame", "Could not query the framebuffer"));
 		else draw(size.out_width, size.out_height, timeSeconds);
 		return advance(false);
 	}

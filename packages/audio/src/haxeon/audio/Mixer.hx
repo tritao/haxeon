@@ -1,18 +1,21 @@
 package haxeon.audio;
 
 import haxeon.platform.BindingError;
+import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
+import nativekit.ffi.NativeKit;
 
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 
 /** Process-wide NativeKit audio mixer controls. */
 class Mixer {
-	/** Configures the process-wide playback device before the first audio use. */
-	public static function configureDevice(options:DeviceOptions):Void {
+	/** Configures the process-wide playback device before the first audio use, or answers why it cannot be. */
+	public static function configureDevice(options:DeviceOptions):Result<Void, NativeKitError> {
 		if (options == null)
 			throw BindingError.invalidArgument("Mixer.configureDevice", "Audio device options must not be null");
-		AudioResult.check(NativeKitAudio.nk_audio_device_configure(options.nativeValue()),
-			"audio.device.configure");
+		return NativeKitStatus.result(NativeKitAudio.nk_audio_device_configure(options.nativeValue()),
+			"audio.device.configure", NativeKit.nk_last_error());
 	}
 
 	/** Returns the number of currently enumerated playback devices. */
@@ -36,17 +39,19 @@ class Mixer {
 		return result.out_default;
 	}
 
-	/** Starts the process-wide audio playback device. */
-	public static function startDevice():Void
-		AudioResult.check(NativeKitAudio.nk_audio_device_start(), "audio.device.start");
+	/** Starts the process-wide audio playback device, or answers why it cannot start (`Unsupported` with no device). */
+	public static function startDevice():Result<Void, NativeKitError>
+		return NativeKitStatus.result(NativeKitAudio.nk_audio_device_start(), "audio.device.start",
+			NativeKit.nk_last_error());
 
 	/** Stops the process-wide audio playback device without destroying the graph. */
 	public static function stopDevice():Void
 		AudioResult.check(NativeKitAudio.nk_audio_device_stop(), "audio.device.stop");
 
-	/** Restarts the process-wide audio playback device. */
-	public static function restartDevice():Void
-		AudioResult.check(NativeKitAudio.nk_audio_device_restart(), "audio.device.restart");
+	/** Restarts the process-wide audio playback device, or answers why it cannot. */
+	public static function restartDevice():Result<Void, NativeKitError>
+		return NativeKitStatus.result(NativeKitAudio.nk_audio_device_restart(), "audio.device.restart",
+			NativeKit.nk_last_error());
 
 	/** Returns the current process-wide playback device state. */
 	public static function deviceState():DeviceState {

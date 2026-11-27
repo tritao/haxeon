@@ -1,6 +1,5 @@
 import haxeon.platform.BindingError;
 import haxeon.platform.BindingErrorKind;
-import haxeon.platform.NativeKitError;
 import haxeon.platform.PlatformError;
 import haxeon.platform.event.EventBytes;
 import haxeon.platform.interop.TransportInterop;
@@ -22,10 +21,11 @@ class BindingErrorTests {
 		// Managed failures and backend failures are both catchable through PlatformError.
 		var base = false;
 		try TransportInterop.options(0) catch (error:PlatformError) base = error.domain == "haxeon-bindings";
+		// A NativeKit code that is the program's mistake (here a handle that is not one) is a BindingError too.
 		var backend = false;
-		try TransportInterop.receive(TransportHandle.invalid(), 8) catch (error:NativeKitError) {
-			backend = error.domain == "nativekit" && error.result == Result.ErrorInvalidHandle
-				&& error.operation == "TransportInterop.receive";
+		try TransportInterop.receive(TransportHandle.invalid(), 8) catch (error:BindingError) {
+			backend = error.kind == BindingErrorKind.Disposed && error.operation == "TransportInterop.receive"
+				&& error.diagnostic != null && error.diagnostic.indexOf("NativeKit result -3") >= 0;
 		}
 		return argument && malformed && base && backend;
 	}

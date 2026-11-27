@@ -34,7 +34,7 @@ class FileWatch implements Disposable {
 	/** Whether every registration is being watched. */
 	public var ready(get, never):Bool;
 
-	/** Throws NativeKitError when the platform cannot watch files. */
+	/** Throws a `NativeKitException` when the platform cannot watch files. */
 	public static function create(events:EventPump, listener:FileWatchEvent->Void):FileWatch {
 		if (listener == null)
 			throw BindingError.invalidArgument("FileWatch.create", "File watch listeners cannot be null");
@@ -53,14 +53,14 @@ class FileWatch implements Disposable {
 	function get_ready():Bool
 		return !disposed && !pending.keys().hasNext();
 
-	/** Watches `path`, and everything under it when `recursive`; returns false when it already was. Throws
-		NativeKitError when it cannot be watched. */
+	/** Watches `path`, and everything under it when `recursive`; returns false when it already was. Throws a
+		`NativeKitException` when it cannot be watched (`NotFound` when there is no directory at `path`). */
 	public function add(path:String, recursive:Bool):Bool {
 		ensureLive();
 		var key = pathKey(path), registration = registrations.get(key);
 		if (registration != null && (registration.recursive || !recursive))
 			return false;
-		register(path, recursive);
+		NativeKitStatus.check(register(path, recursive), "FileWatch.add", NativeKit.nk_last_error(), MissingPath);
 		registrations.set(key, new FileWatchRegistration(path, recursive));
 		return true;
 	}
@@ -132,9 +132,11 @@ class FileWatch implements Disposable {
 		return parentKey == childKey
 			|| StringTools.startsWith(childKey, StringTools.endsWith(parentKey, "/") ? parentKey : parentKey + "/");
 
-	function register(path:String, recursive:Bool):Void {
-		NativeKit.nk_file_watch_add_directory_checked(owned.borrow(), path, recursive);
-		pending.set(pathKey(path), true);
+	function register(path:String, recursive:Bool):Result {
+		var status = NativeKit.nk_file_watch_add_directory(owned.borrow(), path, recursive);
+		if (status == Result.Ok)
+			pending.set(pathKey(path), true);
+		return status;
 	}
 
 	function onEvent(event:PlatformEvent):Void {
@@ -175,21 +177,22 @@ class FileWatch implements Disposable {
 			var registration = registrations.get(key);
 			if (registration == null)
 				continue;
-			try {
-				register(registration.path, registration.recursive);
-			} catch (error:NativeKitError) {
-				if (error.result != Result.ErrorInvalidArgument) {
-					dispose();
-					listener(Failed(error));
-					return false;
-				}
-				var wasReady = ready;
-				registrations.remove(key);
-				pending.remove(key);
-				listener(Lost(registration.path));
-				if (!wasReady && ready)
-					listener(Ready);
+			var status = register(registration.path, registration.recursive);
+			if (status == Result.Ok)
+				continue;
+			// NativeKit answers InvalidArgument for a directory that is no longer there.
+			if (status != Result.ErrorInvalidArgument) {
+				var error = NativeKitStatus.error(status, "FileWatch.add", NativeKit.nk_last_error());
+				dispose();
+				listener(Failed(error));
+				return false;
 			}
+			var wasReady = ready;
+			registrations.remove(key);
+			pending.remove(key);
+			listener(Lost(registration.path));
+			if (!wasReady && ready)
+				listener(Ready);
 		}
 		return !disposed;
 	}

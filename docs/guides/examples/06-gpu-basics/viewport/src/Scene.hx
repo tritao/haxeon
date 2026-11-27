@@ -1,3 +1,4 @@
+import haxeon.gpu.GpuError;
 import haxeon.gpu.Renderer;
 import haxeon.platform.FrameTick;
 import haxeon.platform.GraphicsImageRef;
@@ -16,11 +17,17 @@ class Scene {
 	final content:GraphicsSurfaceViewportContent;
 	final view:FountainView;
 
-	public function new(surface:Surface) {
-		renderer = Renderer.create(surface);
+	/** The fountain and its controls drawn to `surface`, or why the GPU cannot draw them. */
+	public static function create(surface:Surface):Result<Scene, GpuError> {
+		var renderer = try Renderer.create(surface);
 		if (!renderer.features().compute)
-			throw "Viewport needs compute shaders: OpenGL 4.3, Direct3D 11 or Metal";
-		fountain = new Fountain(renderer);
+			return Err(Unsupported("Viewport needs compute shaders: OpenGL 4.3, Direct3D 11 or Metal"));
+		return Ok(new Scene(renderer, try Fountain.create(renderer)));
+	}
+
+	function new(renderer:Renderer, fountain:Fountain) {
+		this.renderer = renderer;
+		this.fountain = fountain;
 		picture = fountain.image.graphicsImage();
 		content = new GraphicsSurfaceViewportContent(GraphicsSurface.fromImage(picture), Fountain.size, Fountain.size);
 		var viewport = new GpuViewport("fountain", content).fitToView(0.0);

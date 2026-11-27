@@ -6,7 +6,8 @@ import haxe.Json;
 typedef HxiResultErrorProjection = {
 	final successValue:String;
 	final diagnosticFunction:Null<String>;
-	final errorType:String;
+	/** The function a checked helper throws the result of, called as `failure(result, operation, diagnostic)`. */
+	final failure:String;
 	final checkedSuffix:String;
 }
 
@@ -167,12 +168,12 @@ class HxiProjectionProfile {
 			var policyPath = '$field.$resultType',
 				successValue = requiredPolicyString(item, "successValue", policyPath, path),
 				diagnosticFunction = optionalPolicyString(item, "diagnosticFunction", policyPath, path),
-				errorType = requiredPolicyString(item, "errorType", policyPath, path),
+				failure = requiredPolicyString(item, "failure", policyPath, path),
 				checkedSuffix = optionalPolicyString(item, "checkedSuffix", policyPath, path);
 			result.set(resultType, {
 				successValue: successValue,
 				diagnosticFunction: diagnosticFunction,
-				errorType: errorType,
+				failure: failure,
 				checkedSuffix: checkedSuffix == null ? "_checked" : checkedSuffix
 			});
 		}

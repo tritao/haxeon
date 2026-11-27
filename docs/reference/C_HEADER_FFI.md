@@ -216,7 +216,7 @@ changing the raw result-returning ABI function:
     "nk_result": {
       "successValue": "NK_OK",
       "diagnosticFunction": "nk_last_error",
-      "errorType": "NativeKitError",
+      "failure": "haxeon.platform.NativeKitStatus.failure",
       "checkedSuffix": "_checked"
     }
   }
@@ -225,12 +225,14 @@ changing the raw result-returning ABI function:
 
 For an HXI function returning `nk_result`, the generated module keeps
 `nk_window_show(...) : Result` and adds `nk_window_show_checked(...) : Void`.
-The checked helper throws the configured Haxe error type on failure. Its
-constructor accepts `(result, operation, diagnostic)`. For functions with
+The checked helper throws what the policy's `failure` function returns for the
+failed result, called as `failure(result, operation, diagnostic)`, so the
+function decides what a code means: NativeKit's throws a `BindingError` for the
+program's mistakes and a `NativeKitException` for the rest. For functions with
 annotated output values, the checked helper returns those values after success;
 the raw status remains available through the original projected function.
 `resultPolicies` belongs to `.hxmap` because success conventions, diagnostics,
-and exception classes are language-facing policy, not ABI facts.
+and what a failure throws are language-facing policy, not ABI facts.
 
 ## Calls and types
 

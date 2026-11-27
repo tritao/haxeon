@@ -1,7 +1,7 @@
 package haxeon.platform.event;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import haxeon.platform.http.HttpHeader;
 import haxeon.platform.http.HttpResponse;
 import nativekit.ffi.NativeKit;
@@ -57,5 +57,5 @@ internal class HttpEventDecoder {
 
 	static function check(result:Result, operation:String):Void
 		if (result != Result.Ok)
-			throw new NativeKitError(result, operation, NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(result, operation, NativeKit.nk_last_error());
 }

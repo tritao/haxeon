@@ -238,17 +238,17 @@ class HxiParserMain {
 		var resultPolicyModel = parseValidated("result-policy.hxi",
 			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_status : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_status; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_status; }'),
 			resultPolicyProfile = HxiProjectionProfile.parse("result-policy.hxmap",
-				'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_status":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}'),
+				'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_status":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","failure":"ProjectionError.of"}}}'),
 			resultPolicySource = HxiProjection.source(resultPolicyModel, null, null, null, resultPolicyProfile);
 		HxiProjection.validateProfile("result-policy.hxmap", resultPolicyModel, null, null, resultPolicyProfile);
 		expect(resultPolicySource.indexOf("extern function __hxi_raw_nk_run(arg0:Int):Status") >= 0
 			&& resultPolicySource.indexOf("function nk_run_checked(seed:Int):Void") >= 0
-			&& resultPolicySource.indexOf("throw new ProjectionError(__result, \"nk_run\", __diagnostic)") >= 0
+			&& resultPolicySource.indexOf("throw ProjectionError.of(__result, \"nk_run\", __diagnostic)") >= 0
 			&& resultPolicySource.indexOf("function nk_create_checked(seed:Int):Int") >= 0
 			&& resultPolicySource.indexOf("return __result.output;") >= 0,
 			"result projection policies should preserve raw status calls and generate checked calls with typed output values");
 		var invalidSuccessPolicy = HxiProjectionProfile.parse("bad-result-policy.hxmap",
-			'{"interface":"result_policy","resultPolicies":{"nk_status":{"successValue":"NK_MISSING","errorType":"ProjectionError"}}}');
+			'{"interface":"result_policy","resultPolicies":{"nk_status":{"successValue":"NK_MISSING","failure":"ProjectionError.of"}}}');
 		expectProfileError(function() HxiProjection.validateProfile("bad-result-policy.hxmap", resultPolicyModel, null,
 			null, invalidSuccessPolicy),
 			"resultPolicies.nk_status.successValue");
@@ -258,11 +258,11 @@ class HxiParserMain {
 			"cannot use omitted diagnostic function");
 		var resultPolicyCompiler = newCompiler();
 		resultPolicyCompiler.addFfiProjection("result-policy.hxmap",
-			'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_status":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}');
+			'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_status":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","failure":"ProjectionError.of"}}}');
 		resultPolicyCompiler.addFfiInterface("result-policy.hxi",
 			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_status : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_status; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_status; }');
 		resultPolicyCompiler.update("ProjectionError.hx",
-			'class ProjectionError { public final result:result_policy.Status; public final operation:String; public final diagnostic:Null<String>; public function new(result:result_policy.Status, operation:String, diagnostic:Null<String>) { this.result = result; this.operation = operation; this.diagnostic = diagnostic; } }');
+			'class ProjectionError { public final result:result_policy.Status; public final operation:String; public final diagnostic:Null<String>; public function new(result:result_policy.Status, operation:String, diagnostic:Null<String>) { this.result = result; this.operation = operation; this.diagnostic = diagnostic; } public static function of(result:result_policy.Status, operation:String, diagnostic:Null<String>):ProjectionError return new ProjectionError(result, operation, diagnostic); }');
 		var resultPolicyMain =
 			'import result_policy; function main():Int { result_policy.nk_run_checked(1); return result_policy.nk_create_checked(1); }';
 		resultPolicyCompiler.update("ResultPolicyMain.hx", resultPolicyMain);

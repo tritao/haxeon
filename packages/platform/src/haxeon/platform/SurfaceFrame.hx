@@ -5,7 +5,6 @@ import haxeon.platform.BindingError;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
-import haxeon.platform.NativeKitError;
 
 /**
  * Immutable surface target acquired for a deferred render submission.
@@ -34,7 +33,7 @@ class SurfaceFrame {
 		var status = NativeKit.nk_surface_present_frame(value);
 		if (status != Result.ErrorWrongThread) finished = true;
 		if (status != Result.Ok)
-			throw new NativeKitError(status, "surfaceFrame.present", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(status, "surfaceFrame.present", NativeKit.nk_last_error());
 		presented = true;
 	}
 
@@ -43,7 +42,7 @@ class SurfaceFrame {
 		ensureOpen();
 		var status = NativeKit.nk_surface_cancel_frame(value);
 		if (status != Result.Ok)
-			throw new NativeKitError(status, "surfaceFrame.cancel", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(status, "surfaceFrame.cancel", NativeKit.nk_last_error());
 		finished = true;
 	}
 

@@ -2,7 +2,7 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
-import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitStatus;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
@@ -94,7 +94,7 @@ class MixSnapshot implements Disposable {
 		var status = owned.close();
 		disposed = true;
 		if (status != null && status != Result.Ok)
-			throw new NativeKitError(status, "audio.mixSnapshot.dispose", NativeKit.nk_last_error());
+			throw NativeKitStatus.failure(status, "audio.mixSnapshot.dispose", NativeKit.nk_last_error());
 	}
 
 	/** Whether it has been disposed. */

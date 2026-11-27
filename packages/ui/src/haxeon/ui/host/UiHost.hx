@@ -6,7 +6,8 @@ import haxeon.platform.App;
 import haxeon.platform.AppLaunch;
 import haxeon.platform.BindingError;
 import haxeon.platform.FrameTick;
-import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitException;
+import haxeon.platform.NativeKitStatus;
 import haxeon.platform.Runtime;
 import haxeon.platform.RuntimeOptions;
 import haxeon.platform.Surface;
@@ -113,9 +114,10 @@ class HostedUiApp implements App {
 					var index = pending.resolve(Std.string(id));
 					if (index != null) {
 						if (result != Result.Ok || data.length == 0) {
-							ui.fail("font-load",
-								new NativeKitError(result == Result.Ok ? Result.ErrorInvalidArgument : result,
-								"UiHost.loadFont", assets[index].uri));
+							ui.fail("font-load", result == Result.Ok
+								? new NativeKitException(InvalidData('${assets[index].uri} is empty'),
+								"UiHost.loadFont", 0)
+								: NativeKitStatus.failure(result, "UiHost.loadFont", assets[index].uri));
 						} else {
 							loaded[index] = data;
 							remaining--;

@@ -30,12 +30,14 @@ class Shader implements Disposable {
 		registration = renderer.registerResource(rendererClosed);
 	}
 
-	/** A shader from `program`, the sources and bindings the shader build generated for every backend. */
-	public static function create(renderer:Renderer, program:ShaderProgram):Shader {
+	/**
+	 * A shader from `program`, the sources and bindings the shader build generated for every backend, or why the device
+	 * cannot make it (`Unsupported` where `program` has no source for the renderer's backend).
+	 */
+	public static function create(renderer:Renderer, program:ShaderProgram):Result<Shader, GpuError> {
 		renderer.ensureResourceOperation();
 		var made = NativeKitGpu.nkgpu_shader_create_from_table(renderer.nativeHandle(), program.table());
-		GpuResult.check(made.status, "shader.create");
-		return new Shader(renderer, made.out_shader);
+		return GpuResult.made(made.status, "shader.create", () -> new Shader(renderer, made.out_shader));
 	}
 
 	/**
@@ -185,14 +187,13 @@ class ShaderBuilder {
 		return this;
 	}
 
-	/** Creates the shader. */
-	public function build():Shader {
+	/** Creates the shader, or answers why the device cannot. The builder is used up either way. */
+	public function build():Result<Shader, GpuError> {
 		ensureLive();
 		var made = NativeKitGpu.nkgpu_shader_end(value);
 		consumed = true;
 		registration.detach();
-		GpuResult.check(made.status, "shader.end");
-		return new Shader(renderer, made.out_shader);
+		return GpuResult.made(made.status, "shader.end", () -> new Shader(renderer, made.out_shader));
 	}
 
 	@:allow(haxeon.gpu.Renderer)
