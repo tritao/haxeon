@@ -3,6 +3,7 @@ package sys.thread;
 #if wasm
 /** Thread-local storage on a single-threaded target: one value for each stand-in thread (see ThreadState), unset until that thread sets it. */
 class Tls<T> {
+	/** The value the current thread set, or null before it sets one. */
 	public var value(get, set):T;
 
 	final threads:Array<Int> = [];
@@ -45,10 +46,12 @@ class Tls<T> {
  * thread sets it. The value is a GC root while the thread holds it.
  */
 class Tls<T> {
+	/** The value the current thread set, or null before it sets one. */
 	public var value(get, set):T;
 
 	final handle:hl.Abstract<"hl_tls">;
 
+	/** Storage no thread has set yet. */
 	public function new()
 		handle = nativeTlsAlloc(true);
 

@@ -19,7 +19,7 @@ class FileOutput extends haxe.io.Output {
 	var position:Int;
 
 	/** The file at `path` holding `content`, written from `position`. */
-	public function new(path:String, content:Bytes, position:Int, appending:Bool) {
+	internal function new(path:String, content:Bytes, position:Int, appending:Bool) {
 		this.path = path;
 		this.content = content;
 		this.length = content.length;
@@ -55,6 +55,7 @@ class FileOutput extends haxe.io.Output {
 	override public function close():Void
 		flush();
 
+	/** The write position, in bytes from the start of the file. */
 	public function tell():Int
 		return position;
 
@@ -90,7 +91,7 @@ private class HostOutput extends FileOutput {
 	final error:Bool;
 	var pending = new haxe.io.BytesBuffer();
 
-	public function new(error:Bool) {
+	internal function new(error:Bool) {
 		super("", Bytes.alloc(0), 0, true);
 		this.error = error;
 	}
@@ -154,7 +155,7 @@ internal extern function fileOutputClose(output:OutputHandle):Void;
 class FileOutput extends haxe.io.Output {
 	final handle:OutputHandle;
 
-	public function new(handle:OutputHandle)
+	internal function new(handle:OutputHandle)
 		this.handle = handle;
 
 	override public function writeByte(c:Int):Void
@@ -180,9 +181,11 @@ class FileOutput extends haxe.io.Output {
 	override public function close():Void
 		fileOutputClose(handle);
 
+	/** The write position, in bytes from the start of the file. */
 	public function tell():Int
 		return fileOutputTell(handle);
 
+	/** Moves the write position to `p` bytes from where `pos` says. Throws when it cannot. */
 	public function seek(p:Int, pos:FileSeek):Void
 		if (!fileOutputSeek(handle, p, pos.getIndex()))
 			throw "Could not seek in the file";

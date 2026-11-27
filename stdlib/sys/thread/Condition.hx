@@ -16,17 +16,34 @@ class Condition {
 	public function timedWait(timeout:Float):Bool return false;
 }
 #else
-/** Recursive mutex and condition variable backed by HashLink. */
+/** A condition variable with its own recursive lock: threads wait on it, with the lock held, until another signals. */
 class Condition {
 	final handle:hl.Abstract<"hl_condition">;
 
+	/** A condition with its own lock, not held. */
 	public function new() handle = nativeConditionAlloc();
 
+	/**
+	 * Takes the lock, waiting while another thread holds it. A thread may take it again; each take needs its `release`.
+	 */
 	public function acquire():Void nativeConditionAcquire(handle);
+
+	/** Gives back the lock once. */
 	public function release():Void nativeConditionRelease(handle);
+
+	/** Wakes one thread waiting in `wait` or `timedWait`, if any. */
 	public function signal():Void nativeConditionSignal(handle);
+
+	/** Wakes every thread waiting in `wait` or `timedWait`. */
 	public function broadcast():Void nativeConditionBroadcast(handle);
+
+	/**
+	 * With the lock held, releases it, waits for a `signal` or `broadcast`, and takes it again before returning. A wait
+	 * can also end spuriously: check the state it waits for in a loop.
+	 */
 	public function wait():Void nativeConditionWait(handle);
+
+	/** As `wait`, giving up after `timeout` seconds: whether it was woken before then. */
 	public function timedWait(timeout:Float):Bool return nativeConditionTimedWait(handle, timeout);
 }
 

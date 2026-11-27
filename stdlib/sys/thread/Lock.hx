@@ -9,6 +9,7 @@ package sys.thread;
 class Lock {
 	var releases = 0;
 
+	/** A lock with no release to consume. */
 	public function new() {}
 
 	public function wait(?timeout:Float):Bool {
@@ -33,6 +34,7 @@ class Lock {
 	final condition = new Condition();
 	var releases = 0;
 
+	/** A lock with no release to consume. */
 	public function new() {}
 
 	/**

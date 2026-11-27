@@ -134,7 +134,13 @@ class Socket {
 	final handle:SocketHandle;
 	#end
 
+	/**
+	 * What the peer sends, to read. Reading blocks unless the socket is not blocking, when it throws
+	 * `haxe.io.Error.Blocked`.
+	 */
 	public var input(default, null):haxe.io.Input;
+
+	/** What to send the peer, to write. */
 	public var output(default, null):haxe.io.Output;
 
 	/** Free for the program's own use. */
@@ -157,6 +163,7 @@ class Socket {
 		#end
 	}
 
+	/** Closes the socket, and its connection. */
 	public function close():Void {
 		#if !wasm
 		socketClose(handle);
@@ -167,9 +174,11 @@ class Socket {
 	public function read():String
 		return input.readAll().toString();
 
+	/** Sends `content`, in UTF-8. */
 	public function write(content:String):Void
 		output.writeString(content);
 
+	/** Connects to `port` of `host`. Throws when it cannot. */
 	public function connect(host:Host, port:Int):Void {
 		#if !wasm
 		if (!socketConnect(handle, host.ip, port))
@@ -177,6 +186,9 @@ class Socket {
 		#end
 	}
 
+	/**
+	 * Makes a bound socket accept connections, with up to `connections` waiting to be accepted. Throws when it cannot.
+	 */
 	public function listen(connections:Int):Void {
 		#if !wasm
 		if (!socketListen(handle, connections))
@@ -184,6 +196,10 @@ class Socket {
 		#end
 	}
 
+	/**
+	 * Ends the reading side, the writing side, or both, of the connection, which stays open until `close`. Throws when
+	 * it cannot.
+	 */
 	public function shutdown(read:Bool, write:Bool):Void {
 		#if !wasm
 		if (!socketShutdown(handle, read, write))
@@ -191,6 +207,7 @@ class Socket {
 		#end
 	}
 
+	/** Binds the socket to `port` of the local address `host`, to `listen` on. Throws when it cannot. */
 	public function bind(host:Host, port:Int):Void {
 		#if !wasm
 		if (!socketBind(handle, host.ip, port))
@@ -198,6 +215,7 @@ class Socket {
 		#end
 	}
 
+	/** Waits for a connection to the listening socket and returns a socket for it. Throws when it cannot. */
 	public function accept():Socket {
 		#if wasm
 		throw "Sockets are not available on Wasm";
@@ -209,6 +227,7 @@ class Socket {
 		#end
 	}
 
+	/** The address and port of the other end of the connection. */
 	public function peer():{host:Host, port:Int} {
 		#if wasm
 		throw "Sockets are not available on Wasm";
@@ -217,6 +236,7 @@ class Socket {
 		#end
 	}
 
+	/** The local address and port the socket is bound to. */
 	public function host():{host:Host, port:Int} {
 		#if wasm
 		throw "Sockets are not available on Wasm";
@@ -225,6 +245,7 @@ class Socket {
 		#end
 	}
 
+	/** Makes reads and writes fail after waiting `timeout` seconds. Throws when it cannot. */
 	public function setTimeout(timeout:Float):Void {
 		#if !wasm
 		if (!socketSetTimeout(handle, timeout))
@@ -232,6 +253,10 @@ class Socket {
 		#end
 	}
 
+	/**
+	 * Whether reads, writes, `connect` and `accept` wait; without, one that would wait throws `haxe.io.Error.Blocked`.
+	 * Throws when it cannot.
+	 */
 	public function setBlocking(blocking:Bool):Void {
 		#if !wasm
 		if (!socketSetBlocking(handle, blocking))
@@ -286,6 +311,7 @@ class Socket {
 	}
 	#end
 
+	/** Whether small writes are sent at once, without waiting to join them (TCP_NODELAY). Throws when it cannot. */
 	public function setFastSend(fast:Bool):Void {
 		#if !wasm
 		if (!socketSetFastSend(handle, fast))

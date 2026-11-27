@@ -94,8 +94,12 @@ function fileSystemRename(path:String, newPath:String):Bool
 	return runtime.MemoryFileSystem.rename(path, newPath);
 #end
 
-/** Supported filesystem queries backed by the stable runtime ABI. */
+/**
+ * Files and directories by path: whether they exist, what a directory holds, their status, and creating, deleting and
+ * moving them. On Wasm they are the session's in-memory filesystem.
+ */
 class FileSystem {
+	/** Whether a file or directory exists at `path`. */
 	public static function exists(path:String):Bool {
 		var result = fileSystemExists(path);
 		if (haxeon.build.InputFiles.isRecording())
@@ -103,6 +107,7 @@ class FileSystem {
 		return result;
 	}
 
+	/** Whether `path` is a directory. */
 	public static function isDirectory(path:String):Bool {
 		var result = fileSystemIsDirectory(path);
 		if (haxeon.build.InputFiles.isRecording())
@@ -110,6 +115,7 @@ class FileSystem {
 		return result;
 	}
 
+	/** `path` as an absolute path with its symbolic links resolved: the path of what exists there. */
 	public static inline function fullPath(path:String):String
 		return fileSystemFullPath(path);
 
@@ -120,6 +126,10 @@ class FileSystem {
 		return haxe.io.Path.join([Sys.getCwd(), relPath]);
 	}
 
+	/**
+	 * The names of the entries of the directory `path`, without `.` and `..`, in no particular order. Throws when it
+	 * cannot be read.
+	 */
 	public static function readDirectory(path:String):Array<String> {
 		if (!haxeon.build.InputFiles.isRecording())
 			return fileSystemReadDirectory(path);
@@ -148,7 +158,6 @@ class FileSystem {
 		return entries;
 	}
 
-	/** Lightweight metadata for change detection, or null when the path is unavailable. */
 	/** The file's status, as in Haxe; throws when there is no file at `path`. */
 	public static function stat(path:String):FileStat {
 		var values = fileSystemMetadata(path);
@@ -169,6 +178,7 @@ class FileSystem {
 		};
 	}
 
+	/** Lightweight metadata for change detection, or null when the path is unavailable. */
 	public static function metadata(path:String):Null<FileMetadata> {
 		var values = fileSystemMetadata(path);
 		return values == null ? null : new FileMetadata(values[5], values[3], values[4]);
@@ -191,23 +201,32 @@ class FileSystem {
 				throw 'Failed to create directory $part';
 	}
 
+	/** Deletes the file `path`. Unlike Haxe's, it does not report a failure: check with `exists` when it matters. */
 	public static inline function deleteFile(path:String):Void
 		fileSystemDeleteFile(path);
 
+	/**
+	 * Removes the empty directory `path`. Unlike Haxe's, it does not report a failure: check with `exists` when it
+	 * matters.
+	 */
 	public static inline function deleteDirectory(path:String):Void
 		fileSystemDeleteDirectory(path);
 
+	/** Moves the file or directory `path` to `newPath`, replacing a file there. Throws when it cannot. */
 	public static inline function rename(path:String, newPath:String):Void
 		if (!fileSystemRename(path, newPath)) throw 'Could not rename "$path" to "$newPath"';
 }
 
+/** What `FileSystem.metadata` reads: enough to tell whether a file changed. */
 class FileMetadata {
+	/** The size, in bytes. */
 	public final size:Int;
 	/** Last modification time in Unix seconds. */
 	public final modified:Int;
 	/** Last metadata change time in Unix seconds. */
 	public final changed:Int;
 
+	/** Metadata of a file of `size` bytes, modified and changed at those Unix seconds. */
 	public function new(size:Int, modified:Int, changed:Int) {
 		this.size = size;
 		this.modified = modified;
@@ -215,10 +234,15 @@ class FileMetadata {
 	}
 }
 
+/** One entry of a directory, as `FileSystem.readDirectoryEntries` lists it. */
 class FileSystemEntry {
+	/** The entry's name, without the directory's path. */
 	public final name:String;
+
+	/** Whether the entry is a directory. */
 	public final isDirectory:Bool;
 
+	/** An entry named `name`. */
 	public function new(name:String, isDirectory:Bool) {
 		this.name = name;
 		this.isDirectory = isDirectory;

@@ -16,6 +16,7 @@ internal extern function hostLocal():Null<String>;
 
 /** An IPv4 host, as in Haxe: its name and the address it resolves to. */
 class Host {
+	/** The name the host was made with. */
 	public var host(default, null):String;
 
 	/** The IPv4 address, in network byte order. */

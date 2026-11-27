@@ -10,7 +10,7 @@ class FileInput extends haxe.io.Input {
 	var position = 0;
 
 	/** `content` is the whole file; without it this is standard input, which cannot be read. */
-	public function new(?content:Bytes)
+	internal function new(?content:Bytes)
 		this.content = content;
 
 	function bytes():Bytes {
@@ -44,9 +44,11 @@ class FileInput extends haxe.io.Input {
 	public function eof():Bool
 		return position >= bytes().length;
 
+	/** The read position, in bytes from the start of the file. */
 	public function tell():Int
 		return position;
 
+	/** Moves the read position to `p` bytes from where `pos` says, within the file. */
 	public function seek(p:Int, pos:FileSeek):Void {
 		var target = switch pos {
 			case SeekBegin: p;
@@ -86,7 +88,7 @@ internal extern function fileInputClose(input:InputHandle):Void;
 class FileInput extends haxe.io.Input {
 	final handle:InputHandle;
 
-	public function new(handle:InputHandle)
+	internal function new(handle:InputHandle)
 		this.handle = handle;
 
 	override public function readByte():Int {
@@ -123,9 +125,11 @@ class FileInput extends haxe.io.Input {
 	public function eof():Bool
 		return fileInputEof(handle);
 
+	/** The read position, in bytes from the start of the file. */
 	public function tell():Int
 		return fileInputTell(handle);
 
+	/** Moves the read position to `p` bytes from where `pos` says. Throws when it cannot. */
 	public function seek(p:Int, pos:FileSeek):Void
 		if (!fileInputSeek(handle, p, pos.getIndex()))
 			throw "Could not seek in the file";

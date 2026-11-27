@@ -7,13 +7,19 @@ import haxe.io.Eof;
 #if wasm
 /** Haxe's Process: a Wasm module cannot start processes. */
 class Process {
+	/** The child's standard output, to read. */
 	public var stdout(default, null):haxe.io.Input;
+
+	/** The child's standard error, to read. */
 	public var stderr(default, null):haxe.io.Input;
+
+	/** The child's standard input, to write; close it to let the child read its end. */
 	public var stdin(default, null):haxe.io.Output;
 
 	public function new(cmd:String, ?args:Array<String>, ?detached:Bool)
 		throw "Processes are not available on Wasm";
 
+	/** The child's process id. */
 	public function getPid():Int
 		throw "Processes are not available on Wasm";
 
@@ -140,8 +146,13 @@ class Process {
 	/** The exit code, once read: waiting for a child reaps it, so it can be asked for only once. */
 	var exited:Null<Int> = null;
 
+	/** The child's standard output, to read. */
 	public var stdout(default, null):haxe.io.Input;
+
+	/** The child's standard error, to read. */
 	public var stderr(default, null):haxe.io.Input;
+
+	/** The child's standard input, to write; close it to let the child read its end. */
 	public var stdin(default, null):haxe.io.Output;
 
 	/**
@@ -160,6 +171,7 @@ class Process {
 		stdin = new ProcessInput(handle);
 	}
 
+	/** The child's process id. */
 	public function getPid():Int
 		return processPid(handle);
 
@@ -179,6 +191,7 @@ class Process {
 	public function close():Void
 		processClose(handle);
 
+	/** Ends the child at once (SIGKILL, or TerminateProcess on Windows), without letting it clean up. */
 	public function kill():Void
 		processKill(handle);
 }

@@ -63,9 +63,12 @@ function fileSaveBytes(path:String, bytes:Bytes):Void
 	runtime.MemoryFileSystem.saveBytes(path, bytes);
 #end
 
-/** Supported whole-file operations backed by the stable runtime ABI. */
+/** Files read and written whole, or opened as streams (`read`, `write`, `append`, `update`). */
 class File {
-	/** While `haxeon.build.InputFiles` is recording, every read is noted for the cache that depends on it. */
+	/**
+	 * The text of the file `path`, read as UTF-8. Throws when it cannot be read. While `haxeon.build.InputFiles` is
+	 * recording, every read is noted for the cache that depends on it.
+	 */
 	public static function getContent(path:String):String {
 		if (!haxeon.build.InputFiles.isRecording())
 			return fileGetContent(path);
@@ -80,6 +83,7 @@ class File {
 		return text;
 	}
 
+	/** The bytes of the file `path`. Throws when it cannot be read. */
 	public static function getBytes(path:String):Bytes {
 		if (!haxeon.build.InputFiles.isRecording())
 			return fileGetBytes(path);
@@ -94,16 +98,19 @@ class File {
 		return bytes;
 	}
 
+	/** Writes `content`, in UTF-8, as the file `path`, replacing what it held. */
 	public static function saveContent(path:String, content:String):Void {
 		haxeon.build.InputFiles.wrote(path);
 		fileSaveContent(path, content);
 	}
 
+	/** Adds `content`, in UTF-8, at the end of the file `path`, creating it when missing. */
 	public static function appendContent(path:String, content:String):Void {
 		haxeon.build.InputFiles.wrote(path);
 		fileAppendContent(path, content);
 	}
 
+	/** Writes `bytes` as the file `path`, replacing what it held. */
 	public static function saveBytes(path:String, bytes:Bytes):Void {
 		haxeon.build.InputFiles.wrote(path);
 		fileSaveBytes(path, bytes);
