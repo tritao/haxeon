@@ -554,8 +554,8 @@ class FrontendCompilation {
 				semanticAssembly.entryPoint, context.state.genericSpecializations,
 				context.nativeLayoutTarget(), canReuseSemantic ? context.state.lastTypedProgram : null,
 				semanticAssembly.facts, build.lowerToIr || context.requireEntry,
-				retainedFromPrevious(context, names, selected, semanticAssembly.invalidated, build.lowerToIr,
-				[for (classDecl in canonicalProgram.classes) classDecl.name => true],
+				retainedFromPrevious(context, names, selected, semanticAssembly.invalidated, semanticAssembly.owners,
+				build.lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true],
 				previousSemantic), context.options.reverseTypingOrder,
 				keptDeclarations(context, names, semanticAssembly.owners),
 				context.options.elaborateGenerics, semanticAssembly.entrySpan, context.options.nullSafety);
@@ -1241,6 +1241,9 @@ class FrontendCompilation {
 		function reachedOnly(record:compiler.semantic.DeclarationFacts.UnitReads, unit:String):Bool {
 			if (typedByName.exists(unit))
 				return false;
+			// A specialized owner's record (`TypingSession.typeOwnerSpecialization`) asks for what its members do while it is one.
+			if (compiler.semantic.GeneratedNames.isOwnerSpecialization(unit))
+				return !currentSpecializedOwners.exists(unit);
 			var state = modules.get(record.module), fn = state == null ? null : state.typedFunctions.get(unit);
 			return fn != null && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
 				&& (fn.physicalOwner == null || !currentSpecializedOwners.exists(fn.physicalOwner));
@@ -2019,11 +2022,30 @@ class FrontendCompilation {
 	}
 
 	/**
+	 * The generic function's specialization of `state` that function `name` is, or was made inside (a lambda, a helper, which its
+	 * module holds with it), or null for none.
+	 */
+	static function functionSpecializationOf(state:ModuleState, name:String):Null<String> {
+		var current = name;
+		while (true) {
+			var fn = state.typedFunctions.get(current);
+			if (fn == null || fn.physicalOwner != null)
+				return null;
+			if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization)
+				return current;
+			var origin = fn.origin;
+			if (origin == null)
+				return null;
+			current = origin;
+		}
+	}
+
+	/**
 	 * What unchanged cached functions, and the generated functions they call, still take from the previous typed program:
 	 * generic owners and the other generated classes (no source declares them) they refer to, and the static fields they read.
 	 */
 	static function retainedFromPrevious(context:CompilationContext, modules:Array<String>, selected:Map<String, Bool>,
-			invalidated:Map<String, Bool>, lowerToIr:Bool,
+			invalidated:Map<String, Bool>, owners:Map<String, String>, lowerToIr:Bool,
 			declared:Map<String, Bool>, previousSemantic:Null<SemanticProgram>):Null<RetainedFromPrevious> {
 		var result:Map<String, Bool> = [],
 			retainedEnums:Map<String, Bool> = [],
@@ -2099,18 +2121,23 @@ class FrontendCompilation {
 			};
 		var functions:Map<String, IrFunction> = [],
 			physicalMethods:Map<String, String> = [],
-			lambdas:Map<String, String> = [];
+			lambdas:Map<String, String> = [],
+			inSpecializations:Map<String, String> = [];
 		for (module in modules) {
 			var state = context.state.modules.get(module);
 			if (state == null)
 				continue;
 			for (name => fn in state.irFunctions)
 				functions.set(name, fn);
-			for (name => fn in state.typedFunctions)
+			for (name => fn in state.typedFunctions) {
 				if (fn.physicalOwner != null)
 					physicalMethods.set(name, fn.physicalOwner);
 				else if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Lambda && fn.origin != null)
 					lambdas.set(name, fn.origin);
+				var specialization = functionSpecializationOf(state, name);
+				if (specialization != null)
+					inSpecializations.set(name, specialization);
+			}
 		}
 		// A lambda belongs to the method it is written in: one in a generated class's method names that class as the method
 		// does, and retaining the class for it would keep the class alive through its own code.
@@ -2126,9 +2153,12 @@ class FrontendCompilation {
 		// the cached bodies (a call to a key path helper is inlined into its callers), so the helpers and generated bodies
 		// left behind are the ones that still name the classes and static fields they need. The methods of a generated class
 		// and the helpers of an enum specialization are the exception: they name their own type, so they count only once
-		// something else retains it.
+		// something else retains it. So is a generic function's specialization, with what was made inside it: it stays only
+		// while a caller that stays asks for it (`reachedSpecializations`), so it counts once the record of a unit that is kept
+		// names it.
 		var membersByOwner:Map<String, Array<String>> = [],
 			membersByEnum:Map<String, Array<String>> = [],
+			membersBySpecialization:Map<String, Array<String>> = [],
 			enumsByHash:Map<String, String> = [];
 		function addMember(table:Map<String, Array<String>>, owner:String, member:String):Void {
 			var members = table.get(owner);
@@ -2143,19 +2173,66 @@ class FrontendCompilation {
 			if (hash != null)
 				enumsByHash.set(hash, name);
 		}
+		// A function made with the body it belongs to (a lambda, a dispatch entry) is made again, or not at all, when that body is
+		// typed again: what it names then is asked for while it is typed.
+		function typedAgain(name:String):Bool {
+			if (selected.exists(name))
+				return true;
+			var target = compiler.types.typing.DefaultArguments.dispatchTarget(name) ?? lambdas.get(name);
+			return target != null && typedAgain(target);
+		}
 		var pending:Array<String> = [];
 		for (name in functions.keys()) {
-			if (selected.exists(name))
+			if (typedAgain(name))
 				continue;
 			var owner = physicalMethods.get(name),
 				helperHash = EnumRuntimeType.helperHash(name),
-				helperOf = helperHash == null ? null : enumsByHash.get(helperHash);
+				helperOf = helperHash == null ? null : enumsByHash.get(helperHash),
+				specialization = owner != null || helperOf != null ? null : inSpecializations.get(name);
 			if (owner != null)
 				addMember(membersByOwner, owner, name);
 			else if (helperOf != null)
 				addMember(membersByEnum, helperOf, name);
+			else if (specialization != null)
+				addMember(membersBySpecialization, specialization, name);
 			else
 				pending.push(name);
+		}
+		var reachedUnits:Map<String, Bool> = [];
+		function reach(record:Null<compiler.semantic.DeclarationFacts.UnitReads>):Void {
+			var asked = record == null ? null : record.specializations;
+			if (asked != null)
+				for (fact in asked) {
+					var unit = facts.name(fact);
+					if (reachedUnits.exists(unit))
+						continue;
+					reachedUnits.set(unit, true);
+					var members = membersBySpecialization.get(unit);
+					if (members != null)
+						for (member in members)
+							pending.push(member);
+					reach(facts.unitRecord(fact));
+				}
+		}
+		function reachFrom(unit:String):Void
+			reach(facts.unitRecord(facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit, unit)));
+		// The kept units ask for the specializations their records name: a unit typed again asks while it is typed, a
+		// specialization or a specialized owner's member only once it is reached, and a function its module no longer declares
+		// not at all.
+		var inBuild:Map<String, Bool> = [for (module in modules) module => true];
+		for (id in 0...facts.resultLimit) {
+			var record = facts.unitRecord(id);
+			if (record == null || record.specializations == null || !inBuild.exists(record.module))
+				continue;
+			var unit = facts.name(id),
+				holder = context.state.modules.get(record.module),
+				fn = holder == null ? null : holder.typedFunctions.get(unit);
+			if (selected.exists(unit) || invalidated.exists(unit)
+				|| compiler.semantic.GeneratedNames.isOwnerSpecialization(unit)
+				|| fn != null && (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
+				|| fn.originKind == null && !owners.exists(unit)))
+				continue;
+			reach(record);
 		}
 		function retain(className:String):Void {
 			if (result.exists(className))
@@ -2165,6 +2242,7 @@ class FrontendCompilation {
 			if (members != null)
 				for (member in members)
 					pending.push(member);
+			reachFrom(className);
 		}
 		function retainEnum(enumName:String):Void {
 			if (retainedEnums.exists(enumName))
@@ -2180,6 +2258,9 @@ class FrontendCompilation {
 			var name = pending.pop(), fn = functions.get(name);
 			if (fn == null)
 				throw new InternalError('Missing function $name during inline enum reflection reachability');
+			// A specialized owner's member asks for what its body calls once the owner is retained.
+			if (physicalMethods.exists(name))
+				reachFrom(name);
 			var named = state.irTypeMentions.get(state.queries, generated(state, fn));
 			for (target in named.classes)
 				if (known.exists(target))

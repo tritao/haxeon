@@ -1312,7 +1312,7 @@ class TypeRepresentation {
 			case TInstance(Class, _, _) if (isOwnInstance(type)): fieldType(type, name, span);
 			case TInstance(Class, className, _) if (session.classDecls.exists(className)):
 				var declaration = session.classDecls.required(className),
-					specialization = genericOwner(type),
+					specialization = isErasedGenericReceiver(type, declaration) ? null : genericOwner(type),
 					substitutions = specialization == null
 						? erasedNominalSubstitutions(className) : specialization.substitutions,
 					result:Null<CompilerType> = null;
@@ -1326,6 +1326,27 @@ class TypeRepresentation {
 			default:
 				fieldType(type, name, span);
 		};
+
+	/**
+	 * Whether `type` is the receiver of the body being typed and an instance of `@:generic` class `declaration` in nothing but
+	 * `Dynamic`: the class's own body, typed with its parameters erased, which is lowered as the class itself. Its fields store as
+	 * the class declares them, erased, as they do in the specialization for `Dynamic`, which only code that names that type asks
+	 * for: a field read in the class's own body does not make it.
+	 */
+	function isErasedGenericReceiver(type:CompilerType, declaration:AstClass):Bool {
+		if (!GenericSpecializationPolicy.isGeneric(declaration))
+			return false;
+		switch type {
+			case TInstance(_, _, arguments):
+				for (argument in arguments)
+					if (!argument.match(TDynamic))
+						return false;
+			default:
+				return false;
+		}
+		var receiver = session.currentContext.receiver;
+		return receiver != null && TypeRelations.equals(receiver, type);
+	}
 
 	function projectNominal(type:CompilerType, target:String):CompilerType {
 		var projected = session.declarations.inheritance.project(type, target);

@@ -171,7 +171,10 @@ so a changed one is invalidated rather than losing its record. Keeping it (`Typi
 output again: it asks again for its helpers, owners and enums, brings back its lambdas and structures and its owners' aliases,
 and the same class and method objects go back into the program, so IR generation skips them. A specialization whose typing made
 a key path definition is typed again, as those live outside the outputs. `TypingOutput.mergeInto` no longer marks a shared unit
-merged when the build has no output for it, and `pruneModule` drops a specialization's record with its methods.
+merged when the build has no output for it, and `pruneModule` drops a specialization's record with its methods. A specialization's
+record asks for what its methods call only while the program still has it (`reachedSpecializations`), so a generic function's
+specialization only a dropped one called goes with it; the specializations a build asks for again before typing
+(`retainedFromPrevious`) follow the same rule, through the records of the units it keeps.
 
 The compiler's own sources have 33 specializations with 733 methods, typed again on every warm build before this (about 100 ms
 of a 138 ms `generated` phase, and 40 ms of IR, in a 362 ms no-op). The frozen perf-guard input has 7, so its gain there is

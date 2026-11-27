@@ -77,11 +77,6 @@ class WarmEditCatalogueMain {
 		var util =
 			"class Util { public static function one():Int return 1; } class Extra { public function new() {} public function n():Int return 5; }";
 		var level = "enum abstract Level(Int) to Int { var Low = 1; var High = 2; }";
-		// Typing an @:generic class's own erased bodies asks for its `Dynamic` specialization (`TypeRepresentation.physicalFieldType`
-		// on `this`), which a warm build that keeps those bodies does not ask for again: the fresh program has that specialization,
-		// unused, and the warm one does not.
-		var erasedOriginOwner =
-			"the @:generic class's own bodies ask for its Dynamic specialization only when they are typed";
 		// A bare name a module neither declares nor finds a module for is taken to come from its imports (`ModuleAnalyzer.parse`), and
 		// the module is not scanned again when a module of that name appears: the warm graph never reaches it.
 		var staleImportedName =
@@ -414,8 +409,7 @@ class WarmEditCatalogueMain {
 				kind: "add a specialization of an @:generic class",
 				files: ["Stack.hx" => stack, "StackUser.hx" => stackUser, "Main.hx" => stackMain],
 				edit: ["Main.hx"
-					=> "class Main { static function main():Int return StackUser.count() + new Stack<String>().push(\"a\"); }"],
-				known: [Plain => erasedOriginOwner, Live => erasedOriginOwner]
+					=> "class Main { static function main():Int return StackUser.count() + new Stack<String>().push(\"a\"); }"]
 			},
 			{
 				kind: "change the fields of an @:generic class an unchanged module specializes",
@@ -457,8 +451,7 @@ class WarmEditCatalogueMain {
 			{
 				kind: "edit a body in a program with an @:generic class",
 				files: ["Stack.hx" => stack, "StackUser.hx" => stackUser, "Main.hx" => stackMain],
-				edit: ["Main.hx" => "class Main { static function main():Int return StackUser.count() + 1; }"],
-				known: [Plain => erasedOriginOwner, Live => erasedOriginOwner]
+				edit: ["Main.hx" => "class Main { static function main():Int return StackUser.count() + 1; }"]
 			},
 			{
 				kind: "use a generic enum method at a second type",
