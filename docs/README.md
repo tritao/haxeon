@@ -76,6 +76,7 @@ Language:
 - [UI_LANGUAGE_FEATURES.md](design/UI_LANGUAGE_FEATURES.md): features the reactive UI model needs.
 - [INLINING_AND_VALUE_TYPES.md](design/INLINING_AND_VALUE_TYPES.md): the inliner and scalar replacement.
 - [INTERFACE_VALUES.md](design/INTERFACE_VALUES.md): one interface-value model on every backend.
+- [TEXT_FORMATTING.md](design/TEXT_FORMATTING.md): `Display` for users, generated `Debug` for developers, written into a formatter (proposal).
 - [STRUCTURE_VALUES.md](design/STRUCTURE_VALUES.md): open anonymous types, width subtyping, structures as
   the object itself (plan step 2.6).
 - [TYPE_VALUES.md](design/TYPE_VALUES.md): classes and enums as runtime values (`Class<T>`, `Enum<T>`), the `Type` API's

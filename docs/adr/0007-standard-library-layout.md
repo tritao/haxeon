@@ -59,6 +59,7 @@ A program uses the prelude without an import. It holds exactly the declarations 
 | `Disposable` | a scoped binding requires it, and disposes of it at the end of its scope |
 | `Exception` | the base of what code throws ([ERROR_MODEL.md](../design/ERROR_MODEL.md)) |
 | `PosInfos` | the compiler fills a `?pos:PosInfos` argument |
+| `Display`, `Debug`, `Formatter` | interpolation, concatenation and `trace` resolve to them ([TEXT_FORMATTING.md](../design/TEXT_FORMATTING.md)) |
 | `trace` | the compiler fills its position |
 
 A declaration the compiler does not name is imported from its package, however often it is used: the rule decides, not
