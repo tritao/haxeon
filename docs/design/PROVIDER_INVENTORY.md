@@ -68,7 +68,7 @@ Columns: generator (file), name form, serves (type, operation), consumer (who ca
 A row is `(type key, operation) -> function name`, registered by the generator at the moment it creates the function, where the type key is the
 same `SemanticSignature.type(T)` string the name hashes today. Operations needed to cover the inventory:
 
-`equals`, `reflect-equals`, `custom-method(name)` (enum conformance), `hash`, `box-dynamic`, `view-dynamic`, `dynamic-test`, `dynamic-unbox`,
+`equals`, `reflect-equals`, `custom-method(name)` (enum conformance; a generic method adds its type arguments, `custom-method(map<Int>)`), `hash`, `box-dynamic`, `view-dynamic`, `dynamic-test`, `dynamic-unbox`,
 `wire-encode`, `wire-decode`, `json-encode`, `json-decode`, `map-key-compare`, `keypath`, `typed-interface-entry(I, method)`, `inline-enum-helper`,
 `interface-box`, `interface-unbox`, `optional-copy`, `optional-box`, `optional-unbox`, `optional-field-copy`, `scalar-clone(f)`, `checked-cast`,
 `value-array-element`, `value-array-slot`, `generic-type-test`, `iteration-adapter`.

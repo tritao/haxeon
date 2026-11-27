@@ -32,14 +32,23 @@ class EnumConformanceMethods {
 	public static inline final PREFIX = "$enum-custom:";
 
 	/** The helper for `method` of the enum `type`, with the method's own `typeArguments` when it is generic. */
-	public static function name(type:CompilerType, method:String, ?typeArguments:Array<CompilerType>):String {
-		var signature = compiler.semantic.SemanticSignature.type(type);
-		if (typeArguments != null && typeArguments.length > 0)
-			signature += "<"
-				+ [for (argument in typeArguments) compiler.semantic.SemanticSignature.type(argument)].join(",")
-				+ ">";
-		return PREFIX + method + ":" + TextDigest.sha256(signature).substr(0, 32);
-	}
+	public static function name(type:CompilerType, method:String, ?typeArguments:Array<CompilerType>):String
+		return PREFIX + method + ":"
+			+ TextDigest.sha256(compiler.semantic.SemanticSignature.type(type) + typeArgumentsSignature(typeArguments))
+			.substr(0, 32);
+
+	/**
+	 * What the helper serves for its enum type: the method, and for a generic method its type arguments, since each of
+	 * those is a helper of its own and the provider table holds one helper per type and operation.
+	 */
+	static function operation(method:String, typeArguments:Array<CompilerType>):ProviderOperation
+		return ProviderOperations.detailed(ProviderOperation.CustomMethod,
+			method + typeArgumentsSignature(typeArguments));
+
+	static function typeArgumentsSignature(typeArguments:Null<Array<CompilerType>>):String
+		return typeArguments == null || typeArguments.length == 0 ? "" : "<"
+			+ [for (argument in typeArguments) compiler.semantic.SemanticSignature.type(argument)].join(",")
+			+ ">";
 
 	/**
 	 * Requests `method` of the enum `type`, with the method's own closed `typeArguments`, and returns the type it is keyed
@@ -106,8 +115,7 @@ class EnumConformanceMethods {
 				var typed = typer.typeFunction(method, owner, true, substitutions, name(type, method.name, given),
 					method.isStatic ? null : type);
 				{
-					name:typed.name, role:ProviderFunction(type,
-						ProviderOperations.detailed(ProviderOperation.CustomMethod, method.name)), origin:origin,
+					name:typed.name, role:ProviderFunction(type, operation(method.name, given)), origin:origin,
 						originKind:Helper, typeArguments:null, owner:null,
 						isStatic:true, isConstructor:false, isInline:typed.isInline, isKept:false, isExposed:false,
 						arguments:typed.arguments, result:typed.result, statements:typed.statements,
