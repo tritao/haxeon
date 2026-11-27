@@ -12,7 +12,7 @@
 			"why": "The first rebuild after the cold build, with nothing changed: deterministic. It should cost what the next no-op costs; while it does more, a fix shows here as an improvement."
 		},
 		"noop_allocated_bytes": {
-			"value": 60693480,
+			"value": 58933336,
 			"tolerance": 0.02,
 			"why": "A no-op rebuild of a warm session: deterministic; it reads and compares the sources and reuses the module."
 		},
@@ -47,7 +47,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"signature_edit_allocated_bytes": {
-			"value": 935378664,
+			"value": 859226384,
 			"tolerance": 0.03,
 			"why": "An optional argument added to InternalError's constructor, which most modules call: deterministic; the slack absorbs code growth."
 		},
@@ -102,7 +102,7 @@
 			"why": "Milliseconds of those collections (the runtime's mark time, gc_mark_micros), the mean of the three: the collector's work, which main-thread instructions leave out as the collector marks on threads of its own. Wall time on a shared machine varies by a third between runs, so the slack catches a collection that costs half again more, not drift."
 		},
 		"signature_edit_instructions": {
-			"value": 17357430075,
+			"value": 16736276712,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of the signature edit, measured as body_edit_instructions is."
 		}
