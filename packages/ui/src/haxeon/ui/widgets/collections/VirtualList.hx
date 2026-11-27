@@ -126,9 +126,9 @@ class VirtualList implements View {
 			contentStyle.width = LayoutAxis.grow();
 			contentStyle.height = LayoutAxis.fixed(itemCount * itemHeight);
 			var content = new Column("virtual-content", rowViews, contentStyle);
-			var scroll = new ScrollView("viewport", content, viewportStyle, ScrollAxis.Vertical, controller);
 			// The rows built depend on the offset.
-			scroll.contentFollowsOffset = true;
+			var scroll = new ScrollView("viewport", content, viewportStyle, ScrollAxis.Vertical, controller,
+				contentFollowsOffset: true);
 			var root = context.createNode(context.rootId("list"), LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;

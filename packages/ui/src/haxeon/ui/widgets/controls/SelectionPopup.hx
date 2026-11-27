@@ -205,9 +205,9 @@ internal class SelectionPopup implements ScopeView {
 				new SelectionPopupContent(optionParent),
 				viewportStyle,
 				ScrollAxis.Vertical,
-				controller);
-			scroll.showScrollbar = false;
-			scroll.onScroll = ownWheel;
+				controller,
+				onScroll: ownWheel,
+				showScrollbar: false);
 			dropdown.add(scroll.build(context));
 			var reveal = function(index:Int) {
 				scrollState.activeIndex = index;

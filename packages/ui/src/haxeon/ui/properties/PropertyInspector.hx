@@ -187,10 +187,8 @@ class PropertyInspector implements View {
 				group.semantics = new Semantics(AccessibilityRole.Group, label);
 				return context.build(content, group);
 			}
-			var scroll = new ScrollView("viewport", content, style, ScrollAxis.Vertical, controller);
-			scroll.showScrollbar = showScrollbar;
-			scroll.label = label;
-			return scroll.build(context);
+			return new ScrollView("viewport", content, style, ScrollAxis.Vertical, controller,
+				showScrollbar: showScrollbar, label: label).build(context);
 		});
 		if (observed) context.reportBuild("inspector:" + key, 0.0, Sys.time() - started, result);
 		return result;

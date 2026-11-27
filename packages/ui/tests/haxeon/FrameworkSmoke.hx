@@ -2285,12 +2285,14 @@ class FrameworkSmoke {
 		var longContentStyle = new LayoutStyle();
 		longContentStyle.width = LayoutAxis.fixed(256.0);
 		longContentStyle.height = LayoutAxis.fixed(400.0);
-		var scrollView = new ScrollView("demo-scroll",
+		var scrollView = new ScrollView(
+			"demo-scroll",
 			new Column("long-content", [new KeyedView("message", new Button("Scrollable content"))], longContentStyle),
 			viewportStyle,
-			ScrollAxis.Vertical);
-		// Interaction checks require a visible thumb without advancing the fade animation.
-		scrollView.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Always;
+			ScrollAxis.Vertical,
+			// Interaction checks require a visible thumb without advancing the fade animation.
+			scrollbarVisibility: haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Always
+		);
 		var scrollFrame = new LayoutFrame(256.0, 80.0);
 		var scrollRoot = context.submit(scrollView, scrollFrame);
 		var contentGeometry:ResolvedLayoutItem = cast scrollRoot.children[0].resolved;
@@ -7056,8 +7058,8 @@ private class ExternalScrollbarSmoke implements View {
 				new Column("content", [], contentStyle),
 				viewportStyle,
 				ScrollAxis.Vertical,
-				controller);
-			viewport.scrollbarOverlayHost = host;
+				controller,
+				scrollbarOverlayHost: host);
 			host.add(viewport.build(context));
 			var sideStyle = new LayoutStyle();
 			sideStyle.width = LayoutAxis.fixed(80);

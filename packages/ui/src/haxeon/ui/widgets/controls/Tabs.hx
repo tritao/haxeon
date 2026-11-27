@@ -319,14 +319,14 @@ class Tabs implements ScopeView {
 			new TabsStripView(strip),
 			style,
 			ScrollAxis.Horizontal,
-			state.controller);
-		scroll.showScrollbar = false;
-		scroll.onScroll = function(event) {
-			if (event.deltaX == 0 && state.controller.scrollBy(event.deltaY, 0)) {
-				event.preventDefault();
-				event.stopPropagation();
-			}
-		};
+			state.controller,
+			onScroll: function(event) {
+				if (event.deltaX == 0 && state.controller.scrollBy(event.deltaY, 0)) {
+					event.preventDefault();
+					event.stopPropagation();
+				}
+			},
+				showScrollbar: false);
 		var viewport = scroll.build(context);
 		for (index in 0...items.length) if (items[index].key == active) {
 			var header = strip.children[index];

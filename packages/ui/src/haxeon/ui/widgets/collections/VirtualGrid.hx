@@ -189,9 +189,9 @@ class VirtualGrid implements View {
 			contentStyle.width = LayoutAxis.fixed(contentWidth);
 			contentStyle.height = LayoutAxis.fixed(rowCount * rowHeight);
 			var content = new Column("virtual-grid-content", rowViews, contentStyle);
-			var scroll = new ScrollView("viewport", content, viewportStyle, ScrollAxis.Both, controller);
 			// The rows built depend on the offset.
-			scroll.contentFollowsOffset = true;
+			var scroll = new ScrollView("viewport", content, viewportStyle, ScrollAxis.Both, controller,
+				contentFollowsOffset: true);
 			var root = context.createNode(context.rootId("grid"), LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;

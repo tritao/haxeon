@@ -38,32 +38,40 @@ class ScrollView implements View {
 	public var controller(default, null):ScrollController;
 
 	/** Called with each scroll event the view handles. */
-	public var onScroll:UiEvent->Void;
+	public final onScroll:UiEvent->Void;
 	/** Shows an interactive overlay scrollbar when vertical content overflows. */
-	public var showScrollbar:Bool;
+	public final showScrollbar:Bool;
 
 	/** The scroll area's accessible name. */
-	public var label:Null<String> = null;
+	public final label:Null<String>;
 	/**
 	 * Set when the content builds from the scroll offset, as virtualized rows do: scrolling then rebuilds the view. Otherwise
 	 * the content is moved in place and nothing is rebuilt.
 	 */
-	public var contentFollowsOffset:Bool = false;
+	public final contentFollowsOffset:Bool;
 	/** Expand content to fill a short viewport while retaining intrinsic scroll overflow. */
-	public var fillViewport:Bool = false;
+	public final fillViewport:Bool;
 	/** Optional intrinsic content dimensions for clipped or virtualized document widgets. */
-	public var contentExtentProvider:Null<(Float, Float) -> {width:Float, height:Float}>;
+	public final contentExtentProvider:Null<(Float, Float) -> {width:Float, height:Float}>;
 	/** Null inherits the application environment policy. */
-	public var scrollbarVisibility:Null<ScrollbarVisibility> = null;
+	public final scrollbarVisibility:Null<ScrollbarVisibility>;
 	/** Optional non-scrolling ancestor with the same vertical extent. */
-	public var scrollbarOverlayHost:Null<RenderNode> = null;
+	public final scrollbarOverlayHost:Null<RenderNode>;
 
 	/** A viewport scrolling `child` along `axis`. Throws without a child or with an unknown axis. */
 	public function new(key:String,
 			child:View,
 			?style:LayoutStyle,
 			axis:ScrollAxis = ScrollAxis.Vertical,
-			?controller:ScrollController) {
+			?controller:ScrollController,
+			?onScroll:UiEvent->Void,
+			showScrollbar:Bool = true,
+			?label:String,
+			contentFollowsOffset:Bool = false,
+			fillViewport:Bool = false,
+			?contentExtentProvider:(Float, Float) -> {width:Float, height:Float},
+			?scrollbarVisibility:ScrollbarVisibility,
+			?scrollbarOverlayHost:RenderNode) {
 		if (child == null || (axis != ScrollAxis.Vertical && axis != ScrollAxis.Horizontal
 			&& axis != ScrollAxis.Both)) throw "ScrollView requires a child and a supported axis";
 		this.key = new Key(key);
@@ -72,8 +80,14 @@ class ScrollView implements View {
 		this.style = style == null ? new LayoutStyle() : style.copy();
 		suppliedController = controller != null;
 		this.controller = controller == null ? new ScrollController() : controller;
-		onScroll = null;
-		showScrollbar = true;
+		this.onScroll = onScroll;
+		this.showScrollbar = showScrollbar;
+		this.label = label;
+		this.contentFollowsOffset = contentFollowsOffset;
+		this.fillViewport = fillViewport;
+		this.contentExtentProvider = contentExtentProvider;
+		this.scrollbarVisibility = scrollbarVisibility;
+		this.scrollbarOverlayHost = scrollbarOverlayHost;
 	}
 
 	public function build(context:BuildContext):ViewRoot {
