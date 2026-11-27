@@ -11,12 +11,14 @@ import haxe.io.BytesOutput;
 	without reflection or intermediate object graphs.
  */
 class MessagePackWriter {
+	/** The largest output a writer makes by default, in bytes. */
 	public static inline final DEFAULT_MAX_BYTES:Int = 16 * 1024 * 1024;
 
 	final output:BytesOutput;
 	final maxBytes:Int;
 	var size:Int;
 
+	/** A writer refusing output over `maxBytes` bytes: a write past it throws a `MessagePackError`. */
 	public function new(?maxBytes:Int = DEFAULT_MAX_BYTES) {
 		if (maxBytes < 0)
 			throw new haxe.Exception("MessagePack writer limit cannot be negative");
@@ -26,9 +28,11 @@ class MessagePackWriter {
 		this.size = 0;
 	}
 
+	/** Writes nil. */
 	public function writeNil():Void
 		writeByte(0xc0);
 
+	/** Writes `value`. */
 	public function writeBool(value:Bool):Void
 		writeByte(value ? 0xc3 : 0xc2);
 
@@ -88,6 +92,7 @@ class MessagePackWriter {
 		output.writeDouble(value);
 	}
 
+	/** Writes `value`, as UTF-8. Throws for null: write `writeNil` instead. */
 	public function writeString(value:String):Void {
 		if (value == null)
 			throw new haxe.Exception("MessagePack string cannot be null; writeNil instead");
@@ -112,6 +117,7 @@ class MessagePackWriter {
 		return leftBytes.length < rightBytes.length ? -1 : (leftBytes.length > rightBytes.length ? 1 : 0);
 	}
 
+	/** Writes `value` as a binary value. Throws for null. */
 	public function writeBinary(value:Bytes):Void {
 		if (value == null)
 			throw new haxe.Exception("MessagePack binary value cannot be null; writeNil instead");
@@ -119,12 +125,14 @@ class MessagePackWriter {
 		writeBytes(value);
 	}
 
+	/** Starts an array of `count` items, which the next `count` writes are. */
 	public function writeArrayHeader(count:Int):Void {
 		if (count < 0)
 			throw new haxe.Exception("MessagePack array count cannot be negative");
 		writeLength(count, 15, 0x90, -1, 0xdc, 0xdd);
 	}
 
+	/** Starts a map of `count` entries, each written as its key, then its value. */
 	public function writeMapHeader(count:Int):Void {
 		if (count < 0)
 			throw new haxe.Exception("MessagePack map count cannot be negative");
@@ -165,9 +173,11 @@ class MessagePackWriter {
 		writeBytes(value);
 	}
 
+	/** What was written. */
 	public function getBytes():Bytes
 		return output.getBytes();
 
+	/** How many bytes were written. */
 	public function byteLength():Int
 		return size;
 

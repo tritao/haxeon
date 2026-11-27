@@ -3,6 +3,7 @@ package haxeon.wire;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 
+/** A MessagePack extension value: its application-defined type and its bytes. */
 typedef MessagePackExtension = {
 	final type:Int;
 	final value:Bytes;
@@ -15,8 +16,13 @@ typedef MessagePackExtension = {
 	provides skip() for forward-compatible unknown fields.
  */
 class MessagePackReader {
+	/** The largest input a reader takes by default, in bytes. */
 	public static inline final DEFAULT_MAX_BYTES:Int = 16 * 1024 * 1024;
+
+	/** The most items a container may have by default. */
 	public static inline final DEFAULT_MAX_CONTAINER:Int = 1000000;
+
+	/** The deepest nesting a reader takes by default. */
 	public static inline final DEFAULT_MAX_DEPTH:Int = 64;
 
 	final input:BytesInput;
@@ -26,6 +32,10 @@ class MessagePackReader {
 	final maxBytes:Int;
 	var bufferedMarker:Null<Int>;
 
+	/**
+	 * A reader of `bytes`, refusing more than `maxContainer` items in a container, `maxDepth` levels of nesting, or
+	 * input over `maxBytes` bytes. Each read throws a `MessagePackError` when the input is malformed or past a limit.
+	 */
 	public function new(bytes:Bytes, ?maxContainer:Int = DEFAULT_MAX_CONTAINER, ?maxDepth:Int = DEFAULT_MAX_DEPTH,
 			?maxBytes:Int = DEFAULT_MAX_BYTES) {
 		if (bytes == null)
@@ -43,9 +53,11 @@ class MessagePackReader {
 			throw new WireFailure(LimitExceeded("MessagePack input exceeds configured limit"));
 	}
 
+	/** How many bytes have been read. */
 	public function position():Int
 		return input.position - (bufferedMarker == null ? 0 : 1);
 
+	/** Whether every byte has been read. */
 	public function atEnd():Bool
 		return bufferedMarker == null && input.position == totalBytes;
 
@@ -71,9 +83,11 @@ class MessagePackReader {
 		return bufferedMarker ?? -1;
 	}
 
+	/** Reads nil. Throws when what comes next is not. */
 	public function readNil():Void
 		expect(0xc0, "nil");
 
+	/** Reads a boolean. Throws when what comes next is not one. */
 	public function readBool():Bool {
 		var marker = readByte();
 		if (marker == 0xc2)
@@ -84,6 +98,7 @@ class MessagePackReader {
 		return #end unexpected(marker, "boolean");
 	}
 
+	/** Reads an integer that fits in an `Int`. Throws when what comes next is not one, or does not fit. */
 	public function readInt():Int {
 		var marker = readByte();
 		if (marker <= 0x7f)
@@ -147,6 +162,7 @@ class MessagePackReader {
 		}
 	}
 
+	/** Reads a float, 32- or 64-bit. Throws when what comes next is not one. */
 	public function readFloat():Float {
 		var marker = readByte();
 		if (marker == 0xca)
@@ -168,22 +184,32 @@ class MessagePackReader {
 		return sign * (1.0 + fraction / 8388608.0) * Math.pow(2.0, exponent - 127.0);
 	}
 
+	/** Reads a string, from its UTF-8. Throws when what comes next is not one. */
 	public function readString():String {
 		var length = readLength(readByte(), 31, 0xa0, 0xd9, 0xda, 0xdb, "string");
 		return readStringBytes(length);
 	}
 
+	/** Reads a binary value. Throws when what comes next is not one. */
 	public function readBinary():Bytes {
 		var length = readLength(readByte(), -1, -1, 0xc4, 0xc5, 0xc6, "binary");
 		return readBytes(length);
 	}
 
+	/**
+	 * Enters the array that comes next and returns how many items follow. Throws when what comes next is not an array.
+	 */
 	public function readArrayHeader():Int
 		return readLength(readByte(), 15, 0x90, -1, 0xdc, 0xdd, "array");
 
+	/**
+	 * Enters the map that comes next and returns how many entries follow, each a key then a value. Throws when what
+	 * comes next is not a map.
+	 */
 	public function readMapHeader():Int
 		return readLength(readByte(), 15, 0x80, -1, 0xde, 0xdf, "map");
 
+	/** Reads an extension value. Throws when what comes next is not one. */
 	public function readExtension():MessagePackExtension {
 		var marker = readByte(), length:Int;
 		switch marker {

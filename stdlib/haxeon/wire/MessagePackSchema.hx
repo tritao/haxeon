@@ -11,8 +11,13 @@ typedef MessagePackSchemaDefaultValue = {
 
 /** What a described type is declared as: its code is the descriptor's `sourceKind`. */
 enum MessagePackSchemaSourceKind:String {
+	/** A `struct`. */
 	Struct = "struct";
+
+	/** A class. */
 	Class = "class";
+
+	/** A native value type, laid out as native code declares it. */
 	NativeValue = "native-value";
 }
 
@@ -29,6 +34,7 @@ typedef MessagePackSchemaSourceFacts = {
 	use their field names, semantic type identities, or source defaults.
  */
 class MessagePackSchema {
+	/** The version of the descriptor artifact this reads and the compiler writes; it also reads the version before. */
 	public static inline final FORMAT_VERSION:Int = 4;
 	static inline final LEGACY_FORMAT_VERSION:Int = 3;
 	static inline final DESCRIPTOR_VERSION:Int = 5;

@@ -21,13 +21,17 @@ private class JsonWireWriteFrame {
 	}
 }
 
-/** Event writer used by generated JSON value codecs. */
+/**
+ * Writes one value as the JSON wire envelope, `{"version": 1, "value": ...}`, event by event: what the JSON codecs the
+ * compiler generates call, and what a `JsonWireCodec` writes with. A container's header gives how many items follow.
+ */
 class JsonWireWriter {
 	final maxBytes:Int;
 	final output = new StringBuf();
 	final frames:Array<JsonWireWriteFrame> = [];
 	var hasRoot:Bool = false;
 
+	/** A writer refusing output over `maxBytes` bytes. */
 	public function new(?maxBytes:Int = 16 * 1024 * 1024) {
 		if (maxBytes < 0)
 			throw new haxe.Exception("JSON writer limit cannot be negative");
@@ -79,18 +83,26 @@ class JsonWireWriter {
 		endValue();
 	}
 
+	/** Writes null. */
 	public function writeNil():Void
 		writeLiteral("null");
 
+	/** Writes `value`. */
 	public function writeBool(value:Bool):Void
 		writeLiteral(value ? "true" : "false");
 
+	/** Writes `value` as a JSON integer. */
 	public function writeInt(value:Int):Void
 		writeLiteral(Std.string(value));
 
+	/** Writes `value` as a string `"i64:..."`, which a JSON number could not hold exactly. */
 	public function writeInt64(value:haxe.Int64):Void
 		writeString("i64:" + haxe.Int64.toStr(value));
 
+	/**
+	 * Writes `value` as a JSON number, or as `"float:NaN"`, `"float:+Infinity"` or `"float:-Infinity"`, which JSON has
+	 * no number for.
+	 */
 	public function writeFloat(value:Float):Void {
 		if (Math.isNaN(value))
 			writeString("float:NaN");
@@ -102,6 +114,7 @@ class JsonWireWriter {
 			writeLiteral(Std.string(value));
 	}
 
+	/** Writes `value` as a JSON string. Throws for null: write `writeNil` instead. */
 	public function writeString(value:String):Void {
 		if (value == null)
 			throw new haxe.Exception("JSON wire string cannot be null; writeNil instead");
@@ -131,21 +144,26 @@ class JsonWireWriter {
 		endValue();
 	}
 
+	/** Writes `value` as a string `"base64:..."`. Throws for null. */
 	public function writeBinary(value:Bytes):Void {
 		if (value == null)
 			throw new haxe.Exception("JSON wire binary value cannot be null; writeNil instead");
 		writeString("base64:" + Base64.encode(value));
 	}
 
+	/** Writes an object field's name: `"id:name"`, its wire id and its source name. */
 	public function writeFieldKey(id:Int, name:String):Void
 		writeString(Std.string(id) + ":" + name);
 
+	/** Starts an array of `count` items, which the next `count` writes are. */
 	public function writeArrayHeader(count:Int):Void
 		open(count, ArrayValues);
 
+	/** Starts a map of `count` entries, each written as its key, then its value. */
 	public function writeMapHeader(count:Int):Void
 		open(count, MapPairs);
 
+	/** Starts an object of `count` fields, each written as `writeFieldKey`, then its value. */
 	public function writeObjectHeader(count:Int):Void
 		open(count, ObjectMembers);
 
@@ -161,6 +179,7 @@ class JsonWireWriter {
 			frames.push(new JsonWireWriteFrame(kind, kind == ArrayValues ? count : count * 2));
 	}
 
+	/** The envelope's text. Throws when the value is incomplete, or the text is over the writer's limit. */
 	public function getString():String {
 		if (!hasRoot || frames.length != 0)
 			throw new haxe.Exception("JSON value is incomplete");

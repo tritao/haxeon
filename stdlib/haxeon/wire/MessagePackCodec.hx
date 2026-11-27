@@ -7,6 +7,9 @@ package haxeon.wire;
 	Dynamic intermediate values, or a runtime type registry.
  */
 interface MessagePackCodec<T> {
+	/** Writes `value` to `writer`. */
 	function encode(writer:MessagePackWriter, value:T):Void;
+
+	/** Reads a value from `reader`; throws a `MessagePackError` when what it holds is not one. */
 	function decode(reader:MessagePackReader):T;
 }
