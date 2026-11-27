@@ -54,16 +54,13 @@ class App implements UiApplication implements UiDiagnosticsProvider {
 	}
 
 	function tabs():Tabs {
-		var options = new TabsOptions();
-		options.selectionMode = TabsSelectionMode.Controlled;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.grow();
-		options.style = style;
-		return Tabs.withOptions("tabs", [
+		return new Tabs("tabs", [
 			new TabItem("tasks", "Tasks", tasksPage()),
 			new TabItem("settings", "Settings", settingsPage())
-		], tab, key -> tab = key, options);
+		], tab, key -> tab = key, style, selectionMode: TabsSelectionMode.Controlled);
 	}
 
 	function tasksPage():View {
@@ -108,14 +105,15 @@ class App implements UiApplication implements UiDiagnosticsProvider {
 	}
 
 	function addForm():View {
-		var field = new TextField("new-task", draft, text -> draft = text, placeholder:"New task", onSubmit:_->add());
+		var field = new TextField("new-task", draft, text -> draft = text, placeholder: "New task",
+			onSubmit: _ -> add());
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.childGap = 8;
 		return new Row("add-form", [
 			new KeyedView("field", field),
 			new KeyedView("add",
-				new Button("Add", onClick:add, key:"add", enabled:draft.length > 0, variant:ButtonVariant.Primary))
+				new Button("Add", onClick: add, key: "add", enabled: draft.length > 0, variant: ButtonVariant.Primary))
 		], style);
 	}
 

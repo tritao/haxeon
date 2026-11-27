@@ -43,28 +43,29 @@ class Tabs implements ScopeView {
 	public final style:LayoutStyle;
 
 	/** Called with the key of the tab the user selects. */
-	public var onChange(default, null):Null<String->Void>;
+	public final onChange:Null<String->Void>;
 	/** Called with a tab's key when the user starts dragging it, for dock hosts. */
-	public var onTabDragStart(default, null):Null<String->UiEvent->Void>;
+	public final onTabDragStart:Null<String->UiEvent->Void>;
 	/** Called with the dragged tab's key as the pointer moves during a tab drag. */
-	public var onTabDragMove(default, null):Null<String->UiEvent->Void>;
+	public final onTabDragMove:Null<String->UiEvent->Void>;
 	/** Called with the dragged tab's key when the pointer is released. */
-	public var onTabDragEnd(default, null):Null<String->UiEvent->Void>;
+	public final onTabDragEnd:Null<String->UiEvent->Void>;
 	/** Called with the dragged tab's key when a tab drag is abandoned, as by Escape or a lost pointer capture. */
-	public var onTabDragCancel(default, null):Null<String->UiEvent->Void>;
+	public final onTabDragCancel:Null<String->UiEvent->Void>;
 	/** Requests a menu for an enabled tab without changing the selected page. */
-	public var onTabContextMenu(default, null):Null<String->UiEvent->Void>;
+	public final onTabContextMenu:Null<String->UiEvent->Void>;
 	/**
 	 * Called while the strip builds with each tab's header, the strip's own node around its button, so dock hosts can
 	 * register geometry or add to it. It shapes what the strip builds, so a new function always builds the strip again.
 	 */
-	public var onTabHeaderBuilt(default, null):Null<String->RenderNode->Void>;
+	public final onTabHeaderBuilt:Null<String->RenderNode->Void>;
 	/** Fixed actions beside the scrolling tab strip. */
-	public var headerTrailing(default, null):Null<View>;
+	public final headerTrailing:Null<View>;
 
 	/**
 	 * A tab strip over `items` with `selectedKey` selected. The drag callbacks and `selectionMode` are for dock hosts;
-	 * `withOptions` sets these and the rest by name. Throws when `key` is empty or two tabs share a key.
+	 * callers give these and the later inputs by name (`new Tabs("tabs", items, tab, select, selectionMode: Controlled)`).
+	 * Throws when `key` is empty or two tabs share a key.
 	 */
 	public function new(key:String,
 			items:Array<TabItem>,
@@ -76,7 +77,9 @@ class Tabs implements ScopeView {
 			?onTabDragEnd:String->UiEvent->Void,
 			?onTabDragCancel:String->UiEvent->Void,
 			?selectionMode:TabsSelectionMode,
-			?onTabHeaderBuilt:String->RenderNode->Void) {
+			?onTabHeaderBuilt:String->RenderNode->Void,
+			?onTabContextMenu:String->UiEvent->Void,
+			?headerTrailing:View) {
 		if (key == null || key.length == 0) throw "Tabs require a stable key";
 		this.key = key;
 		this.items = items == null ? [] : items.copy();
@@ -89,36 +92,13 @@ class Tabs implements ScopeView {
 		this.onTabDragEnd = onTabDragEnd;
 		this.onTabDragCancel = onTabDragCancel;
 		this.onTabHeaderBuilt = onTabHeaderBuilt;
-		onTabContextMenu = null;
-		headerTrailing = null;
+		this.onTabContextMenu = onTabContextMenu;
+		this.headerTrailing = headerTrailing;
 		var keys:Map<String, Bool> = new Map();
 		for (item in this.items) {
 			if (item == null || keys.exists(item.key)) throw "Tab keys must be unique";
 			keys.set(item.key, true);
 		}
-	}
-
-	/** Builds a tab strip with named options for optional drag behavior. */
-	public static function withOptions(key:String,
-			items:Array<TabItem>,
-			selectedKey:String,
-			onChange:Null<String->Void>,
-			options:TabsOptions):Tabs {
-		var configured = options == null ? new TabsOptions() : options;
-		var tabs = new Tabs(key,
-			items,
-			selectedKey,
-			onChange,
-			configured.style,
-			configured.onTabDragStart,
-			configured.onTabDragMove,
-			configured.onTabDragEnd,
-			configured.onTabDragCancel,
-			configured.selectionMode,
-			configured.onTabHeaderBuilt);
-		tabs.onTabContextMenu = configured.onTabContextMenu;
-		tabs.headerTrailing = configured.headerTrailing;
-		return tabs;
 	}
 
 	public function scopeKey():String return key;
@@ -569,12 +549,12 @@ class TabItem {
 	public final icon:Null<IconName>;
 
 	/** A count shown in a badge on the header, such as unread items, when positive; it is announced with the name. */
-	public var badgeCount:Int = 0;
+	public final badgeCount:Int;
 
 	/** Optional decorative view used in place of the standard icon. */
-	public var iconView:Null<View>;
+	public final iconView:Null<View>;
 	/** Optional close action; the header reserves a hover-revealed close target. */
-	public var onClose:Null<Void->Void>;
+	public final onClose:Null<Void->Void>;
 
 	/** Whether `other` describes this tab with the same inputs: the same views, and a close action or none like this one. */
 	public function sameAs(other:TabItem):Bool {
@@ -586,7 +566,7 @@ class TabItem {
 
 	/** A tab named `label` showing `content`. Throws when `key` is empty or there is no content. */
 	public function new(key:String, label:String, content:View, enabled:Bool = true,
-			?icon:IconName, ?displayLabel:String) {
+			?icon:IconName, ?displayLabel:String, badgeCount:Int = 0, ?iconView:View, ?onClose:Void->Void) {
 		if (key == null || key.length == 0 || content == null)
 			throw "Tabs require stable keys and content views";
 		this.key = key;
@@ -595,49 +575,9 @@ class TabItem {
 		this.content = content;
 		this.enabled = enabled;
 		this.icon = icon;
-	}
-}
-
-/** Optional behavior and presentation settings for an advanced tab strip. */
-class TabsOptions {
-	/** `Tabs.headerTrailing`: fixed actions beside the scrolling tab strip. */
-	public var headerTrailing:Null<haxeon.ui.core.View>;
-
-	/** `Tabs.style`; the default when null. */
-	public var style:Null<LayoutStyle>;
-
-	/** `Tabs.selectionMode`: `Local` unless set. */
-	public var selectionMode:TabsSelectionMode;
-
-	/** `Tabs.onTabDragStart`. */
-	public var onTabDragStart:Null<String->UiEvent->Void>;
-
-	/** `Tabs.onTabDragMove`. */
-	public var onTabDragMove:Null<String->UiEvent->Void>;
-
-	/** `Tabs.onTabDragEnd`. */
-	public var onTabDragEnd:Null<String->UiEvent->Void>;
-
-	/** `Tabs.onTabDragCancel`. */
-	public var onTabDragCancel:Null<String->UiEvent->Void>;
-
-	/** `Tabs.onTabContextMenu`. */
-	public var onTabContextMenu:Null<String->UiEvent->Void>;
-
-	/** `Tabs.onTabHeaderBuilt`. */
-	public var onTabHeaderBuilt:Null<String->RenderNode->Void>;
-
-	/** Options that change nothing until set. */
-	public function new() {
-		headerTrailing = null;
-		style = null;
-		selectionMode = TabsSelectionMode.Local;
-		onTabDragStart = null;
-		onTabDragMove = null;
-		onTabDragEnd = null;
-		onTabDragCancel = null;
-		onTabHeaderBuilt = null;
-		onTabContextMenu = null;
+		this.badgeCount = badgeCount;
+		this.iconView = iconView;
+		this.onClose = onClose;
 	}
 }
 

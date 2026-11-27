@@ -216,30 +216,16 @@ class DockWorkspace implements View {
 		var showAllLabels = visiblePanels.length <= 1 || allWidth <= availableWidth;
 		var showSelectedLabel = showAllLabels || selectedWidth <= availableWidth;
 		for (descriptor in visiblePanels) {
-			var item = new TabItem(descriptor.id,
+			items.push(new TabItem(descriptor.id,
 				descriptor.title,
 				panelView(descriptor.id, availableWidth, panelCache),
 				descriptor.enabled,
 				descriptor.icon,
 				!showAllLabels && descriptor.icon != null
-				&& (descriptor.id != selectedId || !showSelectedLabel) ? "" : null);
-			item.badgeCount = descriptor.badgeCount;
-			items.push(item);
+				&& (descriptor.id != selectedId || !showSelectedLabel) ? "" : null,
+				descriptor.badgeCount));
 		}
-		var options = new TabsOptions();
-		if (headerActions != null) options.headerTrailing = headerActions([for (panel in visiblePanels) panel.id],
-			selectedId);
-		options.selectionMode = TabsSelectionMode.Controlled;
-		options.onTabDragStart = function(panelId, event) interaction.beginTabDrag(panelId,
-			event.pointerId,
-			event.x,
-			event.y);
-		options.onTabDragMove = function(panelId,
-				event) interaction.moveTabDrag(panelId, event.pointerId, event.x, event.y);
-		options.onTabDragEnd = function(panelId, event) interaction.endTabDrag(panelId, event.pointerId, event.x,
-			event.y);
-		options.onTabDragCancel = function(panelId, event) interaction.cancelTabDrag(panelId, event.pointerId);
-		options.onTabHeaderBuilt = function(panelId, node) {
+		var onTabHeaderBuilt = function(panelId:String, node:RenderNode) {
 			interaction.registerTabTarget(new DockTabDropTarget(panelId, node));
 			// Preview changes invalidate the pane through the tracked interaction fields. A node that has nothing to paint
 			// until then does not need its own layout, style and paint callback in every idle tab header.
@@ -268,13 +254,21 @@ class DockWorkspace implements View {
 			}, "tab-drop-indicator:" + panelId + ":" + tabPreviewKey);
 			node.add(indicator);
 		};
-		var tabs = haxeon.ui.widgets.controls.Tabs.withOptions(nodeKey, items, activePanelId, function(next) {
-			model.activate(next);
-		}, options);
 		// The panel follows its split pane even when the active content has a larger intrinsic width.
-		tabs.style.width = LayoutAxis.stretch();
-		tabs.style.height = LayoutAxis.grow();
-		return tabs;
+		var tabsStyle = new LayoutStyle();
+		tabsStyle.width = LayoutAxis.stretch();
+		tabsStyle.height = LayoutAxis.grow();
+		tabsStyle.direction = LayoutDirection.TopToBottom;
+		tabsStyle.childGap = 0.0;
+		return new haxeon.ui.widgets.controls.Tabs(nodeKey, items, activePanelId, next -> model.activate(next),
+			tabsStyle,
+			onTabDragStart: (panelId, event) -> interaction.beginTabDrag(panelId, event.pointerId, event.x, event.y),
+			onTabDragMove: (panelId, event) -> interaction.moveTabDrag(panelId, event.pointerId, event.x, event.y),
+			onTabDragEnd: (panelId, event) -> interaction.endTabDrag(panelId, event.pointerId, event.x, event.y),
+			onTabDragCancel: (panelId, event) -> interaction.cancelTabDrag(panelId, event.pointerId),
+			selectionMode: TabsSelectionMode.Controlled, onTabHeaderBuilt: onTabHeaderBuilt,
+			headerTrailing: headerActions == null ? null : headerActions([for (panel in visiblePanels) panel.id],
+			selectedId));
 	}
 
 	function matchesExpandedGroup(node:DockNode):Bool {

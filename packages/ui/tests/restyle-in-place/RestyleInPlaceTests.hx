@@ -392,14 +392,12 @@ private class TabsRig {
 		ui.buildContext.environment.reducedMotion = true;
 		var first = new haxeon.ui.widgets.controls.Tabs.TabItem("first",
 			"First",
-			new TrackedScope("first-page", () -> new Text("First page")));
+			new TrackedScope("first-page", () -> new Text("First page")), onClose: () -> closes++);
 		var second = new haxeon.ui.widgets.controls.Tabs.TabItem("second",
 			"Second",
-			new TrackedScope("second-page", () -> new Text("Second page")));
+			new TrackedScope("second-page", () -> new Text("Second page")), onClose: () -> closes++);
 		var disabled = new haxeon.ui.widgets.controls.Tabs.TabItem("disabled", "Disabled", new Text("Disabled page"),
 			false);
-		first.onClose = () -> closes++;
-		second.onClose = () -> closes++;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(280);
 		style.height = LayoutAxis.fixed(200);

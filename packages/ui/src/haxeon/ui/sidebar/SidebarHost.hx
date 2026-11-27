@@ -42,18 +42,16 @@ class SidebarHost implements View {
 		for (mode in model.modes) if (mode.visible && (!activeOnly || mode.id == selected.id))
 			items.push(new TabItem(mode.id, mode.label, new SidebarPage(mode), true,
 			iconProvider == null ? null : iconProvider(mode.id)));
-		var options = new TabsOptions();
-		options.selectionMode = TabsSelectionMode.Controlled;
-		options.style = new LayoutStyle();
-		options.style.width = LayoutAxis.stretch();
-		options.style.height = LayoutAxis.grow();
-		options.style.clipHorizontal = true;
+		var style = new LayoutStyle();
+		style.width = LayoutAxis.stretch();
+		style.height = LayoutAxis.grow();
+		style.clipHorizontal = true;
 		// The tab stack must shrink its page to the available height. Vertical
 		// clipping here makes Clay treat the whole stack as scroll content and
 		// leaves the page at its intrinsic height instead of sizing its viewport.
 		// Each destination owns its vertical clipping and scrolling.
-		if (headerActions != null) options.headerTrailing = headerActions(selected.id);
-		var tabs = Tabs.withOptions(key, items, selected.id, onSelect, options);
+		var tabs = new Tabs(key, items, selected.id, onSelect, style, selectionMode: TabsSelectionMode.Controlled,
+			headerTrailing: headerActions == null ? null : headerActions(selected.id));
 		var modifier = new RootModifier();
 		modifier.onResolved(function(bounds) model.rememberWidth(bounds.width));
 		return context.build(tabs, modifier);
