@@ -22,7 +22,7 @@ class MessagePackFrameReader {
 			|| maxQueuedBytes < maxPayload
 			|| maxQueuedBytes > 0x7fffffff - MessagePackFrame.HEADER_BYTES
 			|| maxMessages < 1)
-			throw new MessagePackError("Invalid frame reader limits");
+			throw new haxe.Exception("Invalid frame reader limits");
 		this.maxPayload = maxPayload;
 		this.maxQueuedBytes = maxQueuedBytes;
 		this.maxMessages = maxMessages;
@@ -34,12 +34,16 @@ class MessagePackFrameReader {
 	public function bufferedMessages():Int
 		return queued.length;
 
-	public function feed(bytes:Bytes, offset:Int, length:Int, budget:Int = 65536):Int {
+	/**
+	 * Takes up to `budget` of the `length` bytes at `offset`, and gives how many it took. A malformed frame is its error, after
+	 * which the reader takes nothing more: the stream must be started again.
+	 */
+	public function feed(bytes:Bytes, offset:Int, length:Int, budget:Int = 65536):Result<Int, WireError> {
 		if (failed)
-			throw new MessagePackError("Frame reader failed; start a fresh connection");
+			throw new haxe.Exception("Frame reader failed; start a fresh connection");
 		if (bytes == null || offset < 0 || length < 0 || offset > bytes.length || length > bytes.length - offset
 			|| budget < 0)
-			throw new MessagePackError("Invalid frame input range");
+			throw new haxe.Exception("Invalid frame input range");
 		var limit = Std.int(Math.min(length, budget));
 		var consumed = 0;
 		while (consumed < limit) {
@@ -54,13 +58,12 @@ class MessagePackFrameReader {
 					break;
 			}
 			if (payload == null) {
-				var size:Int;
-				try
-					size = MessagePackFrame.payloadLength(header, maxPayload);
-				catch (error:Dynamic) {
-					failed = true;
-					throw error;
-				}
+				var size = switch MessagePackFrame.payloadLength(header, maxPayload) {
+					case Ok(size): size;
+					case Err(error):
+						failed = true;
+						return Err(error);
+				};
 				if (size > maxQueuedBytes - reservedBytes)
 					break;
 				payload = Bytes.alloc(size);
@@ -77,7 +80,7 @@ class MessagePackFrameReader {
 				headerUsed = 0;
 			}
 		}
-		return consumed;
+		return Ok(consumed);
 	}
 
 	/** Transfers an assembled payload without a second framing copy. */

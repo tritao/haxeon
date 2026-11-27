@@ -141,12 +141,10 @@ class MessagePackInterop {
 
 	static function verifyFrames(frames:Array<MessagePackVector>, canonical:Bool):Void {
 		for (frame in frames) {
-			var payload:Bytes;
-			try {
-				payload = MessagePackFrame.unpack(frame.bytes);
-			} catch (error:Dynamic) {
-				fail(frame.name, Std.string(error));
-			}
+			var payload = switch MessagePackFrame.unpack(frame.bytes) {
+				case Ok(payload): payload;
+				case Err(error): throw 'MessagePack interop failure for ${frame.name}: $error';
+			};
 			var payloadName = "";
 			switch (frame.name) {
 				case "nil-frame":

@@ -34,11 +34,13 @@ Values outside the compiler-owned profile can use the explicit escape hatch:
 
 ```haxe
 var bytes = MessagePack.encodeWith(value, codec);
-var decoded:CustomType = MessagePack.decodeWith(bytes, codec);
+var decoded:Result<CustomType, WireError> = MessagePack.decodeWith(bytes, codec);
 ```
 
 `encodeWith` and `decodeWith` construct bounded writer/reader instances and
-apply the same one-value rule as generated codecs.
+apply the same one-value rule as generated codecs. A codec fails a decode by
+throwing a `WireFailure`, as the reader does, and `decodeWith` returns its
+`WireError`.
 
 The compiler also recognizes `MessagePack.encode(value)` and
 `MessagePack.decode(bytes)` (or their fully-qualified names). The compiler
@@ -61,8 +63,27 @@ class User {
 }
 
 var bytes = MessagePack.encode(new User(7, "Ada"));
-var decoded:User = MessagePack.decode(bytes);
+var decoded:Result<User, WireError> = MessagePack.decode(bytes);
 ```
+
+Decoding returns a `Result`, since bytes from elsewhere may not hold a value of
+the expected type. The codec is generated for the `Result`'s value type, so the
+expected type names it: a typed local, as above, or `try` in a function that
+returns a `Result` with the same error type (`var user:User = try
+MessagePack.decode(bytes);`). A decode the `Result` is not expected of, such as
+the subject of a `switch` or the receiver of `.mapErr(f)`, needs the typed local.
+The `Err` is a `WireError`:
+
+- `Truncated`: the input ends inside a value.
+- `TrailingData`: another value follows the one decoded.
+- `Malformed(reason)`: the input is not MessagePack, or not the shape the type
+  expects there, such as a string where a record goes.
+- `LimitExceeded(reason)`: the input, a container or its nesting is over a
+  reader limit.
+- `IncompatibleSchema(reason)`: a writer descriptor is missing or damaged.
+
+Encoding does not fail for expected reasons: a writer that is misused, or whose
+output is over its limit, throws.
 
 The compiler supports non-generic, non-inheriting classes and structs,
 structural records, and enums. Fields must have direct storage and can use
@@ -136,7 +157,7 @@ Decoding is permissive about field order and unknown record fields. Missing
 fields receive the documented defaults, or fail when a required record/enum
 field has no explicit default. If a map or record contains a duplicate
 key, the last occurrence wins. A top-level generated decode and
-`decodeWith` must consume exactly one value; trailing bytes are rejected. The
+`decodeWith` must consume exactly one value; trailing bytes are `TrailingData`. The
 low-level reader remains stream-oriented, so callers using it directly may
 decode multiple consecutive values.
 
@@ -198,9 +219,13 @@ validation:
 import haxeon.wire.MessagePackFrame;
 
 var frame = MessagePackFrame.pack(MessagePack.encode(user));
-var bytes = MessagePackFrame.unpack(frame);
-var decoded:User = MessagePack.decode(bytes);
+var bytes = try MessagePackFrame.unpack(frame);
+var decoded:User = try MessagePack.decode(bytes);
 ```
+
+`unpack`, `payloadLength` and `MessagePackFrameReader.feed` return a `Result`
+with the same `WireError`; after a malformed frame the frame reader takes no
+more input.
 
 Existing runtime/plugin state envelopes remain responsible for their own
 versioning and lifecycle semantics when they need a different contract.
@@ -215,12 +240,15 @@ anything is read from it. Each query takes the hash and the semantic type of
 the same `typeInfo<T>()` identity:
 
 ```haxe
-var schema = MessagePackSchema.fromJson(File.getContent(descriptorPath));
+var schema = try MessagePackSchema.fromJson(File.getContent(descriptorPath));
 var info = typeInfo<MyResource>();
-schema.requireDescriptor(info.hash, info.type);
-var facts = schema.requireSourceFacts(info.hash, info.type);
-var initial = schema.fieldDefaultValue(info.hash, info.type, ["limits", "max"]);
+try schema.requireDescriptor(info.hash, info.type);
+var facts = try schema.requireSourceFacts(info.hash, info.type);
+var initial = try schema.fieldDefaultValue(info.hash, info.type, ["limits", "max"]);
 ```
+
+`fromJson` and each query return a `Result` whose `Err` is a `WireError`,
+`IncompatibleSchema` for a descriptor that is damaged or absent.
 
 - `fieldDefaultValue(hash, type, path)` returns the declared default of a root
   or nested field. `null` means the field has no initializer; an explicit
@@ -233,8 +261,8 @@ var initial = schema.fieldDefaultValue(info.hash, info.type, ["limits", "max"]);
   `SemanticSignature.type` identities of the declared and inherited
   interfaces after generic substitution, for example
   `interface:domain.Base<Int>`. `typeInfo<T>()` exposes the same two fields.
-- `sourceFacts` returns `null` for an older descriptor that has no facts, and
-  `requireSourceFacts` throws, so missing metadata is not read as
+- `sourceFacts` gives `null` for an older descriptor that has no facts, and
+  `requireSourceFacts` an `Err`, so missing metadata is not read as
   nonconformance.
 
 Current artifacts use JSON envelope format 4 with descriptor version 5.

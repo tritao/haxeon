@@ -8,8 +8,8 @@ import sys.io.File;
 
 class WireFinalWarmMain {
 	static final mainSource = 'import haxeon.wire.JsonWire; import haxeon.wire.MessagePack; function main():Int { '
-		+ 'var json:WireRecord = JsonWire.decode(JsonWire.encode(new WireRecord())); '
-		+ 'var binary:WireRecord = MessagePack.decode(MessagePack.encode(new WireRecord())); '
+		+ 'var json:WireRecord = (JsonWire.decode(JsonWire.encode(new WireRecord())) : Result<WireRecord, haxeon.wire.WireError>).unwrap(); '
+		+ 'var binary:WireRecord = (MessagePack.decode(MessagePack.encode(new WireRecord())) : Result<WireRecord, haxeon.wire.WireError>).unwrap(); '
 		+ 'return Std.string(json.value) == "7" && Std.string(binary.value) == "7" ? 42 : 1; }';
 	static final initial = '@:wire class WireRecord { @:id(1) public final value:Int = 7; public function new() {} }';
 	static final edited =

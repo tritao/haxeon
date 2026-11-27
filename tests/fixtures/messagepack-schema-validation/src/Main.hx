@@ -1,5 +1,6 @@
 import haxe.Json;
 import haxeon.wire.MessagePackSchema;
+import haxeon.wire.WireError;
 import haxeon.wire.MessagePackSchema.MessagePackSchemaSourceKind;
 import sys.io.File;
 
@@ -40,14 +41,8 @@ struct SchemaUnicodeDefault {
 	@:maxLength(1) public var title:String = "é";
 }
 
-function rejects(action:Void->Void):Bool {
-	try {
-		action();
-	} catch (_:Dynamic) {
-		return true;
-	}
-	return false;
-}
+function rejects<T>(result:Result<T, WireError>):Bool
+	return result.isErr();
 
 function field(fields:Array<Dynamic>, name:String):Dynamic {
 	for (value in fields) if (Reflect.field(value, "name") == name) return value;
@@ -59,65 +54,65 @@ function main():Int {
 	if (artifactPath == null) throw "HAXEON_SCHEMA_VALIDATION_ARTIFACT must name the generated descriptor artifact";
 	var json = File.getContent(artifactPath),
 		info:Dynamic = typeInfo<SchemaRoot>(),
-		schema = MessagePackSchema.fromJson(json);
-	schema.requireDescriptor(info.hash, info.type);
-	var sourceFacts = schema.requireSourceFacts(info.hash, info.type);
+		schema = MessagePackSchema.fromJson(json).unwrap();
+	schema.requireDescriptor(info.hash, info.type).unwrap();
+	var sourceFacts = schema.requireSourceFacts(info.hash, info.type).unwrap();
 	if (sourceFacts.sourceKind != MessagePackSchemaSourceKind.Struct || sourceFacts.interfaces.join(",")
 		!= "interface:GenericMarker<Int>,interface:SchemaBase<>,interface:SchemaResource<>,interface:SchemaRole<>")
 		return 8;
 	sourceFacts.interfaces.pop();
-	if (schema.requireSourceFacts(info.hash, info.type).interfaces.length != 4) return 9;
+	if (schema.requireSourceFacts(info.hash, info.type).unwrap().interfaces.length != 4) return 9;
 	var nativeInfo:Dynamic = typeInfo<SchemaNative>();
-	schema.requireDescriptor(nativeInfo.hash, nativeInfo.type);
-	var nativeFacts = schema.requireSourceFacts(nativeInfo.hash, nativeInfo.type);
+	schema.requireDescriptor(nativeInfo.hash, nativeInfo.type).unwrap();
+	var nativeFacts = schema.requireSourceFacts(nativeInfo.hash, nativeInfo.type).unwrap();
 	if (nativeInfo.type != "native-value:SchemaNative<>" || nativeFacts.sourceKind
 		!= MessagePackSchemaSourceKind.NativeValue || nativeFacts.interfaces.length != 0) return 15;
 	var unicodeInfo:Dynamic = typeInfo<SchemaUnicodeDefault>();
-	schema.requireDescriptor(unicodeInfo.hash, unicodeInfo.type);
-	var unicodeDefault = schema.fieldDefaultValue(unicodeInfo.hash, unicodeInfo.type, ["title"]);
+	schema.requireDescriptor(unicodeInfo.hash, unicodeInfo.type).unwrap();
+	var unicodeDefault = schema.fieldDefaultValue(unicodeInfo.hash, unicodeInfo.type, ["title"]).unwrap();
 	if (unicodeDefault == null || unicodeDefault.type != "String" || unicodeDefault.value != "é") return 17;
-	var zero = schema.fieldDefaultValue(info.hash, info.type, ["leaf", "zero"]),
+	var zero = schema.fieldDefaultValue(info.hash, info.type, ["leaf", "zero"]).unwrap(),
 		optional = schema.fieldDefaultValue(info.hash,
 			info.type,
 			[
 				"leaf",
 				"optional"
-			]),
+			]).unwrap(),
 		narrow = schema.fieldDefaultValue(info.hash,
 			info.type,
 			[
 				"leaf",
 				"narrow"
-			]),
+			]).unwrap(),
 		ratio = schema.fieldDefaultValue(info.hash,
 			info.type,
 			[
 				"leaf",
 				"ratio"
-			]),
+			]).unwrap(),
 		absent = schema.fieldDefaultValue(info.hash,
 			info.type,
 			[
 				"leaf",
 				"absent"
-			]),
+			]).unwrap(),
 		title = schema.fieldDefaultValue(info.hash,
 			info.type,
-			["title"]);
+			["title"]).unwrap();
 	var unsigned32 = schema.fieldDefaultValue(info.hash,
-		info.type, ["leaf", "unsigned32"]),
+		info.type, ["leaf", "unsigned32"]).unwrap(),
 		signed32 = schema.fieldDefaultValue(info.hash,
 			info.type,
 			[
 				"leaf",
 				"signed32"
-			]),
+			]).unwrap(),
 		highBit = schema.fieldDefaultValue(info.hash,
 			info.type,
 			[
 				"leaf",
 				"highBit"
-			]);
+			]).unwrap();
 	if (zero == null || zero.type != "Int" || zero.value != 0
 		|| optional == null || optional.type != "Null" || optional.value != null || narrow == null
 		|| narrow.type != "Int"
@@ -126,9 +121,9 @@ function main():Int {
 	if (unsigned32 == null
 		|| unsigned32.type != "Int" || unsigned32.value != 0 || signed32 == null || signed32.type != "Int"
 		|| signed32.value != 123456789 || highBit == null || highBit.type != "Int" || highBit.value != -1) return 16;
-	if (!rejects(function() MessagePackSchema.fromJson('{"formatVersion":2,"descriptors":[]}'))) return 2;
-	if (!rejects(function() schema.fieldDefaultValue(info.hash, info.type, ["leaf", "missing"]))) return 3;
-	if (!rejects(function() MessagePackSchema.fromJson(StringTools.replace(json,
+	if (!rejects(MessagePackSchema.fromJson('{"formatVersion":2,"descriptors":[]}'))) return 2;
+	if (!rejects(schema.fieldDefaultValue(info.hash, info.type, ["leaf", "missing"]))) return 3;
+	if (!rejects(MessagePackSchema.fromJson(StringTools.replace(json,
 		info.hash, StringTools.lpad("", "0", 64))))) return 4;
 	var sourceKindTamper:Dynamic = Json.parse(json),
 		sourceKindDescriptors:Array<Dynamic> = cast Reflect.field(sourceKindTamper,
@@ -137,7 +132,7 @@ function main():Int {
 		Reflect.setField(descriptor,
 		"sourceKind",
 		"class");
-	if (!rejects(function() MessagePackSchema.fromJson(Json.stringify(sourceKindTamper)))) return 10;
+	if (!rejects(MessagePackSchema.fromJson(Json.stringify(sourceKindTamper)))) return 10;
 	var interfaceOrderTamper:Dynamic = Json.parse(json),
 		interfaceDescriptors:Array<Dynamic> = cast Reflect.field(interfaceOrderTamper,
 			"descriptors");
@@ -148,16 +143,16 @@ function main():Int {
 			"interface:SchemaRole<>",
 			"interface:SchemaResource<>"
 		]);
-	if (!rejects(function() MessagePackSchema.fromJson(Json.stringify(interfaceOrderTamper)))) return 11;
+	if (!rejects(MessagePackSchema.fromJson(Json.stringify(interfaceOrderTamper)))) return 11;
 	var legacyPath = Sys.getEnv("HAXEON_SCHEMA_LEGACY_ARTIFACT");
 	if (legacyPath == null) throw "HAXEON_SCHEMA_LEGACY_ARTIFACT must name the pre-conformance fixture";
-	var legacy = MessagePackSchema.fromJson(File.getContent(legacyPath)),
+	var legacy = MessagePackSchema.fromJson(File.getContent(legacyPath)).unwrap(),
 		legacyHash = "c53ad0bec33902b10b2cb636be67e3b3c5e32eb198e08ea7fe8e76f88272e9ee",
 		legacyType = "class:LegacySchemaProbe<>";
-	legacy.requireDescriptor(legacyHash, legacyType);
-	if (legacy.sourceFacts(legacyHash, legacyType) != null) return 12;
-	if (!rejects(function() legacy.requireSourceFacts(legacyHash, legacyType))) return 13;
-	var legacyDefault = legacy.fieldDefaultValue(legacyHash, legacyType, ["value"]);
+	legacy.requireDescriptor(legacyHash, legacyType).unwrap();
+	if (legacy.sourceFacts(legacyHash, legacyType).unwrap() != null) return 12;
+	if (!rejects(legacy.requireSourceFacts(legacyHash, legacyType))) return 13;
+	var legacyDefault = legacy.fieldDefaultValue(legacyHash, legacyType, ["value"]).unwrap();
 	if (legacyDefault == null || legacyDefault.type != "Int" || legacyDefault.value != 7) return 14;
 	var wrongType:Dynamic = Json.parse(json),
 		descriptors:Array<Dynamic> = cast Reflect.field(wrongType, "descriptors"),
@@ -167,7 +162,7 @@ function main():Int {
 		leafFields:Array<Dynamic> = cast Reflect.field(leaf,
 			"fields");
 	Reflect.setField(field(leafFields, "zero"), "defaultValue", {type: "String", value: "wrong"});
-	if (!rejects(function() MessagePackSchema.fromJson(Json.stringify(wrongType)))) return 5;
+	if (!rejects(MessagePackSchema.fromJson(Json.stringify(wrongType)))) return 5;
 	var outOfRange:Dynamic = Json.parse(json),
 		outDescriptors:Array<Dynamic> = cast Reflect.field(outOfRange,
 			"descriptors");
@@ -178,7 +173,7 @@ function main():Int {
 				"fields");
 		Reflect.setField(field(outLeafFields, "narrow"), "defaultValue", {type: "Int", value: 256});
 	}
-	if (!rejects(function() MessagePackSchema.fromJson(Json.stringify(outOfRange)))) return 6;
+	if (!rejects(MessagePackSchema.fromJson(Json.stringify(outOfRange)))) return 6;
 	var outOfFloat32Range:Dynamic = Json.parse(json),
 		float32Descriptors:Array<Dynamic> = cast Reflect.field(outOfFloat32Range,
 			"descriptors");
@@ -190,6 +185,6 @@ function main():Int {
 		Reflect.setField(field(floatLeafFields, "ratio"), "defaultValue",
 			{type: "Float", value: 3.5 * Math.pow(10, 38)});
 	}
-	if (!rejects(function() MessagePackSchema.fromJson(Json.stringify(outOfFloat32Range)))) return 7;
+	if (!rejects(MessagePackSchema.fromJson(Json.stringify(outOfFloat32Range)))) return 7;
 	return 42;
 }

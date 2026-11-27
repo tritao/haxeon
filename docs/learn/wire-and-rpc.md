@@ -4,9 +4,10 @@ On main, you can omit `@:wire` and `@:id`. Wire calls infer codecs from types an
 default. To give a field a stable identity across renames, pin a positive numeric `@:id`, as this example does.
 Keep that ID when you rename the field and reserve it if you delete the field.
 
-`MessagePack` encodes to bytes. `JsonWire` encodes to text and uses the same numbered schema. Give each decoder an
-expected type so the compiler knows which schema to use. In the JSON below, `1` identifies the field and `text`
-is its readable name.
+`MessagePack` encodes to bytes. `JsonWire` encodes to text and uses the same numbered schema. Decoding returns a
+`Result`, since input from elsewhere may not be a value of the expected type: give it the type to decode
+(`Result<Greeting, WireError>`), or take its value with `try` in a function that returns a `Result`. In the JSON
+below, `1` identifies the field and `text` is its readable name.
 
 `RpcMethod.wire(100)` builds a method descriptor using the request and response types in its annotation. The
 method ID identifies the operation and is separate from field IDs. Here the caller and handler share a pair of
@@ -18,6 +19,7 @@ import haxeon.rpc.RpcConnection;
 import haxeon.rpc.RpcMethod;
 import haxeon.wire.JsonWire;
 import haxeon.wire.MessagePack;
+import haxeon.wire.WireError;
 
 @:wire typedef Greeting = {
 	@:id(1) var text:String;
@@ -26,12 +28,15 @@ import haxeon.wire.MessagePack;
 function main():Void {
 	final greeting:Greeting = {text: "hello"};
 	final packed = MessagePack.encode(greeting);
-	final unpacked:Greeting = MessagePack.decode(packed);
-	Sys.println(unpacked.text);
+	final unpacked:Result<Greeting, WireError> = MessagePack.decode(packed);
+	switch unpacked {
+		case Ok(value): Sys.println(value.text);
+		case Err(error): Sys.println('Not a greeting: $error');
+	}
 
 	final json = JsonWire.encode(greeting);
 	Sys.println(json);
-	final restored:Greeting = JsonWire.decode(json);
+	final restored:Result<Greeting, WireError> = JsonWire.decode(json);
 
 	final pair = MemoryTransport.pair();
 	final clock = () -> 0.0;
@@ -41,7 +46,7 @@ function main():Void {
 	server.register(echo, (request, context) -> {
 		context.respond({text: request.text.toUpperCase()});
 	});
-	client.call(echo, restored, 1000).onComplete(outcome -> switch outcome {
+	client.call(echo, restored.unwrap(), 1000).onComplete(outcome -> switch outcome {
 		case Success(answer): Sys.println(answer.text);
 		case Failure(error): throw error;
 		case Cancelled | Stopped:

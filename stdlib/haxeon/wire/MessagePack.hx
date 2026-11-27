@@ -19,19 +19,23 @@ class MessagePack {
 		return writer.getBytes();
 	}
 
-	public static function decodeWith<T>(bytes:Bytes, codec:MessagePackCodec<T>):T {
-		var reader = new MessagePackReader(bytes);
-		var value = codec.decode(reader);
-		if (!reader.atEnd())
-			throw new MessagePackError("MessagePack value has trailing bytes");
-		return value;
-	}
+	/** Decodes one MessagePack value with `codec`, which fails the decode by throwing a `WireFailure`. */
+	public static function decodeWith<T>(bytes:Bytes, codec:MessagePackCodec<T>):Result<T, WireError>
+		return WireFailure.settle(input -> {
+			var reader = new MessagePackReader(input);
+			var value = codec.decode(reader);
+			reader.requireEnd();
+			value;
+		}, bytes);
 
 	/** Encodes a value as MessagePack. Haxeon generates the codec for the value's concrete type. */
 	public static function encode<T>(value:T):Bytes
 		throw new haxe.Exception("MessagePack.encode must be lowered by the compiler");
 
-	/** Decodes one MessagePack value. Haxeon generates the codec from the expected result type. */
-	public static function decode<T>(bytes:Bytes):T
+	/**
+	 * Decodes one MessagePack value, or gives why the bytes are not one. Haxeon generates the codec from the expected result
+	 * type: `var user:Result<User, WireError> = MessagePack.decode(bytes)`, or `var user:User = try MessagePack.decode(bytes)`.
+	 */
+	public static function decode<T>(bytes:Bytes):Result<T, WireError>
 		throw new haxe.Exception("MessagePack.decode must be lowered by the compiler");
 }

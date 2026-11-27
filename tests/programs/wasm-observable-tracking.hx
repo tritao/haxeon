@@ -260,7 +260,7 @@ function main():Int {
 		var value = wire.label;
 	});
 	var encoded = haxeon.wire.JsonWire.encode(wire);
-	var decoded:WireModel = haxeon.wire.JsonWire.decode(encoded);
+	var decoded:WireModel = (haxeon.wire.JsonWire.decode(encoded):Result<WireModel, haxeon.wire.WireError>).unwrap();
 	if (decoded.label != "start" || decoded.note != null || haxeon.wire.JsonWire.encode(decoded) != encoded
 		|| encoded.indexOf("haxeonObservableState") >= 0 || Reflect.fields(wire).indexOf("$haxeonObservableState") >= 0
 		|| Reflect.hasField(wire, "$haxeonObservableState")) return fail(34);

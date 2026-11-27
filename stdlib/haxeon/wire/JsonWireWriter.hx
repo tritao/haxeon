@@ -30,7 +30,7 @@ class JsonWireWriter {
 
 	public function new(?maxBytes:Int = 16 * 1024 * 1024) {
 		if (maxBytes < 0)
-			throw "JSON writer limit cannot be negative";
+			throw new haxe.Exception("JSON writer limit cannot be negative");
 		this.maxBytes = maxBytes;
 		output.add('{"version":1,"value":');
 	}
@@ -38,7 +38,7 @@ class JsonWireWriter {
 	function beginValue(stringValue:Bool):Void {
 		if (frames.length == 0) {
 			if (hasRoot)
-				throw "JSON writer has more than one root value";
+				throw new haxe.Exception("JSON writer has more than one root value");
 			hasRoot = true;
 			return;
 		}
@@ -50,7 +50,7 @@ class JsonWireWriter {
 			case MapPairs, ObjectMembers:
 				if (frame.remaining % 2 == 0) {
 					if (frame.kind == ObjectMembers && !stringValue)
-						throw "JSON object key must be a string";
+						throw new haxe.Exception("JSON object key must be a string");
 					if (frame.remaining != frame.size)
 						output.add(",");
 					if (frame.kind == MapPairs)
@@ -104,7 +104,7 @@ class JsonWireWriter {
 
 	public function writeString(value:String):Void {
 		if (value == null)
-			throw "JSON wire string cannot be null; writeNil instead";
+			throw new haxe.Exception("JSON wire string cannot be null; writeNil instead");
 		beginValue(true);
 		output.add('"');
 		var start = 0;
@@ -133,7 +133,7 @@ class JsonWireWriter {
 
 	public function writeBinary(value:Bytes):Void {
 		if (value == null)
-			throw "JSON wire binary value cannot be null; writeNil instead";
+			throw new haxe.Exception("JSON wire binary value cannot be null; writeNil instead");
 		writeString("base64:" + Base64.encode(value));
 	}
 
@@ -151,7 +151,7 @@ class JsonWireWriter {
 
 	function open(count:Int, kind:JsonWireContainer):Void {
 		if (count < 0 || count > 1000000)
-			throw "JSON container count exceeds limit";
+			throw new haxe.Exception("JSON container count exceeds limit");
 		beginValue(false);
 		output.add(kind == ObjectMembers ? "{" : "[");
 		if (count == 0) {
@@ -163,10 +163,10 @@ class JsonWireWriter {
 
 	public function getString():String {
 		if (!hasRoot || frames.length != 0)
-			throw "JSON value is incomplete";
+			throw new haxe.Exception("JSON value is incomplete");
 		var result = output.toString() + "}";
 		if (Bytes.ofString(result).length > maxBytes)
-			throw "JSON output exceeds configured limit";
+			throw new haxe.Exception("JSON output exceeds configured limit");
 		return result;
 	}
 }

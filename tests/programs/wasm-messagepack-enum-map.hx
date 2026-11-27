@@ -21,7 +21,8 @@ function main():Int {
 	if (firstBytes.compare(secondBytes) != 0)
 		return 0;
 
-	var restored:Map<WasmWireKind, Int> = MessagePack.decode(firstBytes);
+	var restored:Map<WasmWireKind, Int> =
+		(MessagePack.decode(firstBytes):Result<Map<WasmWireKind, Int>, haxeon.wire.WireError>).unwrap();
 	if (restored.get(Left) != 7 || restored.get(Right) != 3 || restored.size() != 2)
 		return 0;
 	var total = 0, count = 0;
@@ -40,7 +41,8 @@ function main():Int {
 	unknown.writeInt(1);
 	var unknownRejected = false;
 	try {
-		var ignoredUnknown:Map<WasmWireKind, Int> = MessagePack.decode(unknown.getBytes());
+		var ignoredUnknown:Map<WasmWireKind, Int> =
+			(MessagePack.decode(unknown.getBytes()):Result<Map<WasmWireKind, Int>, haxeon.wire.WireError>).unwrap();
 	} catch (_:Dynamic) {
 		unknownRejected = true;
 	}
@@ -53,7 +55,8 @@ function main():Int {
 	nonInteger.writeInt(1);
 	var nonIntegerRejected = false;
 	try {
-		var ignoredNonInteger:Map<WasmWireKind, Int> = MessagePack.decode(nonInteger.getBytes());
+		var ignoredNonInteger:Map<WasmWireKind, Int> =
+			(MessagePack.decode(nonInteger.getBytes()):Result<Map<WasmWireKind, Int>, haxeon.wire.WireError>).unwrap();
 	} catch (_:Dynamic) {
 		nonIntegerRejected = true;
 	}
@@ -66,6 +69,7 @@ function main():Int {
 	duplicate.writeInt(1);
 	duplicate.writeInt(7);
 	duplicate.writeInt(9);
-	var duplicateDecoded:Map<WasmWireKind, Int> = MessagePack.decode(duplicate.getBytes());
+	var duplicateDecoded:Map<WasmWireKind, Int> =
+		(MessagePack.decode(duplicate.getBytes()):Result<Map<WasmWireKind, Int>, haxeon.wire.WireError>).unwrap();
 	return duplicateDecoded.size() == 1 && duplicateDecoded.get(Left) == 9 ? 42 : 0;
 }

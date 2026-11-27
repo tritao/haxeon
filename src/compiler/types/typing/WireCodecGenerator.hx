@@ -1085,9 +1085,8 @@ class WireCodecGenerator {
 					request.span),
 				TVar(resultName, new TypedExpression(TCall(valueDecodeName(type), [reader]), type, request.span),
 					request.span),
-				TIf(new TypedExpression(TNot(method(reader, "atEnd", [], TBool, request.span)), TBool, request.span), [
-					TThrow(stringLiteral("MessagePack value has trailing bytes", request.span), request.span)
-				], [], request.span),
+				// A trailing value fails the decode (`WireFailure`).
+				TExpression(method(reader, "requireEnd", [], TVoid, request.span), request.span),
 				TReturn(local(resultName, type, request.span), request.span)
 			];
 		return generatedFunction(rootDecodeName(type), [{name: "bytes", type: jsonMode ? TString : TBytes}], type,

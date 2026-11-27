@@ -1,11 +1,12 @@
 # Generated JSON wire codec
 
 `haxeon.wire.JsonWire.encode(value)` and `JsonWire.decode(text)` are compiler
-builtins. The decoder needs an expected result type:
+builtins. Decoding returns a `Result<T, WireError>`, as
+[MessagePack](MESSAGEPACK.md) decoding does, and the expected type names `T`:
 
 ```haxe
 var text = JsonWire.encode(value);
-var restored:MyRecord = JsonWire.decode(text);
+var restored:Result<MyRecord, WireError> = JsonWire.decode(text);
 ```
 
 Codecs are inferred from those calls, including the supported types nested in

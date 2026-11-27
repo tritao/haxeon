@@ -44,19 +44,25 @@ class MessagePackSchema {
 	}
 
 	/** Parse and validate a complete compiler-emitted descriptor JSON sidecar. */
-	public static function fromJson(json:String):MessagePackSchema {
-		if (json == null || Bytes.ofString(json).length > MAX_BYTES)
-			throw new MessagePackError("Writer descriptor artifact is null or exceeds configured limit");
+	public static function fromJson(json:String):Result<MessagePackSchema, WireError> {
+		if (json == null)
+			throw new haxe.Exception("Writer descriptor artifact cannot be null");
+		if (Bytes.ofString(json).length > MAX_BYTES)
+			return Err(LimitExceeded("Writer descriptor artifact exceeds configured limit"));
+		return WireFailure.settle(parse, json);
+	}
+
+	static function parse(json:String):MessagePackSchema {
 		try {
 			var artifact:Dynamic = haxe.Json.parse(json),
 				formatVersion:Dynamic = Reflect.field(artifact, "formatVersion"),
 				descriptorsValue:Dynamic = Reflect.field(artifact, "descriptors");
 			if ((formatVersion != FORMAT_VERSION && formatVersion != LEGACY_FORMAT_VERSION)
 				|| !Std.isOfType(descriptorsValue, Array))
-				throw new MessagePackError("Unsupported writer descriptor artifact format or missing descriptors");
+				throw new WireFailure(IncompatibleSchema("Unsupported writer descriptor artifact format or missing descriptors"));
 			var descriptors:Array<Dynamic> = cast descriptorsValue;
 			if (descriptors.length > MAX_ITEMS)
-				throw new MessagePackError("Writer descriptor artifact contains too many descriptors");
+				throw new WireFailure(IncompatibleSchema("Writer descriptor artifact contains too many descriptors"));
 			var identities:Map<String, Bool> = [],
 				byHashType:Map<String, Dynamic> = [];
 			for (descriptor in descriptors) {
@@ -64,36 +70,37 @@ class MessagePackSchema {
 				var name = fieldString(descriptor, "name"),
 					identity = name.length + ":" + name + fieldString(descriptor, "type");
 				if (identities.exists(identity))
-					throw new MessagePackError("Writer descriptor artifact contains a duplicate descriptor identity");
+					throw new WireFailure(IncompatibleSchema("Writer descriptor artifact contains a duplicate descriptor identity"));
 				identities.set(identity, true);
 				var key = descriptorKey(fieldString(descriptor, "hash"), fieldString(descriptor, "type"));
 				if (byHashType.exists(key))
-					throw new MessagePackError("Writer descriptor artifact contains a duplicate hash and type");
+					throw new WireFailure(IncompatibleSchema("Writer descriptor artifact contains a duplicate hash and type"));
 				byHashType.set(key, descriptor);
 			}
 			return new MessagePackSchema(byHashType);
+		} catch (failure:WireFailure) {
+			throw failure;
 		} catch (error:Dynamic) {
-			if (Std.isOfType(error, MessagePackError))
-				throw error;
-			throw new MessagePackError('Invalid writer descriptor artifact: ${Std.string(error)}');
+			throw new WireFailure(IncompatibleSchema('Invalid writer descriptor artifact: ${Std.string(error)}'));
 		}
 	}
 
 	/** Verify the envelope's hash identifies the expected record in this artifact. */
-	public function requireDescriptor(hash:String, type:String):Void {
-		if (!descriptors.exists(descriptorKey(hash, type)))
-			throw new MessagePackError('Writer descriptor "$type" with hash "$hash" is unavailable');
-	}
+	public function requireDescriptor(hash:String, type:String):Result<Void, WireError>
+		return descriptors.exists(descriptorKey(hash, type)) ? Ok() : Err(unavailable(hash, type));
 
-	/** Returns null for a validated legacy descriptor that predates source conformance facts. */
-	public function sourceFacts(hash:String, type:String):Null<MessagePackSchemaSourceFacts> {
+	/** The source declaration facts, or null for a validated legacy descriptor that predates them. */
+	public function sourceFacts(hash:String, type:String):Result<Null<MessagePackSchemaSourceFacts>, WireError>
+		return WireFailure.settle(described -> findSourceFacts(hash, described), type);
+
+	function findSourceFacts(hash:String, type:String):Null<MessagePackSchemaSourceFacts> {
 		var descriptor = requireDescriptorValue(hash, type);
 		if (fieldInt(descriptor, "version") != DESCRIPTOR_VERSION)
 			return null;
 		// Validation admitted only known kinds, so the code names one.
 		var sourceKind = MessagePackSchemaSourceKind.fromRaw(fieldString(descriptor, "sourceKind"));
 		if (sourceKind == null)
-			throw new MessagePackError("Writer descriptor has invalid source conformance facts");
+			throw new WireFailure(IncompatibleSchema("Writer descriptor has invalid source conformance facts"));
 		return {
 			sourceKind: sourceKind,
 			interfaces: [for (value in fieldArray(descriptor, "interfaces")) cast value]
@@ -101,11 +108,10 @@ class MessagePackSchema {
 	}
 
 	/** Requests the source declaration facts; fails closed when a legacy writer descriptor lacks them. */
-	public function requireSourceFacts(hash:String, type:String):MessagePackSchemaSourceFacts {
-		var facts = sourceFacts(hash, type);
-		if (facts == null)
-			throw new MessagePackError('Writer descriptor "$type" has no source conformance facts');
-		return facts;
+	public function requireSourceFacts(hash:String, type:String):Result<MessagePackSchemaSourceFacts, WireError> {
+		var facts = try sourceFacts(hash, type);
+		return facts == null
+			? Err(IncompatibleSchema('Writer descriptor "$type" has no source conformance facts')) : Ok(facts);
 	}
 
 	/**
@@ -114,13 +120,16 @@ class MessagePackSchema {
 		is `{type: "Null", value: null}`.
 	 */
 	public function fieldDefaultValue(hash:String, type:String,
-			fieldPath:Array<String>):Null<MessagePackSchemaDefaultValue> {
-		var descriptor = descriptors.get(descriptorKey(hash, type));
-		if (descriptor == null)
-			throw new MessagePackError('Writer descriptor "$type" with hash "$hash" is unavailable');
+			fieldPath:Array<String>):Result<Null<MessagePackSchemaDefaultValue>, WireError> {
 		if (fieldPath == null || fieldPath.length == 0)
-			throw new MessagePackError("Writer field default lookup requires a nonempty field path");
-		var fields = fieldArray(descriptor, "fields"), node:Dynamic = null;
+			throw new haxe.Exception("Writer field default lookup requires a nonempty field path");
+		return WireFailure.settle(path -> findFieldDefault(hash, type, path), fieldPath);
+	}
+
+	function findFieldDefault(hash:String, type:String, fieldPath:Array<String>):Null<MessagePackSchemaDefaultValue> {
+		var descriptor = requireDescriptorValue(hash, type),
+			fields = fieldArray(descriptor, "fields"),
+			node:Dynamic = null;
 		for (index in 0...fieldPath.length) {
 			var segment = fieldPath[index];
 			node = null;
@@ -130,7 +139,7 @@ class MessagePackSchema {
 					break;
 				}
 			if (node == null)
-				throw new MessagePackError('Field "${fieldPath.slice(0, index + 1).join(".")}" is absent from writer descriptor "$type"');
+				throw new WireFailure(IncompatibleSchema('Field "${fieldPath.slice(0, index + 1).join(".")}" is absent from writer descriptor "$type"'));
 			if (index + 1 < fieldPath.length)
 				fields = fieldArray(node, "fields");
 		}
@@ -148,12 +157,12 @@ class MessagePackSchema {
 			|| (formatVersion == FORMAT_VERSION && descriptorVersion != DESCRIPTOR_VERSION)
 			|| fieldString(value, "name").length == 0
 			|| fieldString(value, "type").length == 0)
-			throw new MessagePackError("Unsupported or incomplete writer descriptor");
+			throw new WireFailure(IncompatibleSchema("Unsupported or incomplete writer descriptor"));
 		if (descriptorVersion == DESCRIPTOR_VERSION) {
 			var sourceKind = fieldString(value, "sourceKind"),
 				interfaces = fieldArray(value, "interfaces");
 			if (MessagePackSchemaSourceKind.fromRaw(sourceKind) == null || !canonicalInterfaces(interfaces))
-				throw new MessagePackError("Writer descriptor has invalid source conformance facts");
+				throw new WireFailure(IncompatibleSchema("Writer descriptor has invalid source conformance facts"));
 		}
 		var flat = fieldBool(value, "flat");
 		fieldBool(value, "portable");
@@ -162,21 +171,24 @@ class MessagePackSchema {
 		checkItems(annotations.length);
 		for (annotation in annotations)
 			if (!Std.isOfType(annotation, String))
-				throw new MessagePackError("Writer descriptor annotation must be a string");
+				throw new WireFailure(IncompatibleSchema("Writer descriptor annotation must be a string"));
 		validateAnnotationValues(fieldArray(value, "annotationValues"));
 		validateNodes(fieldArray(value, "fields"), 0, true);
 		validateNodes(fieldArray(value, "arguments"), 0, true);
 		var hash = fieldString(value, "hash");
 		if (!~/^[0-9a-f]{64}$/.match(hash) || hash != descriptorHash(value))
-			throw new MessagePackError('Writer descriptor content hash mismatch for "${fieldString(value, "name")}"');
+			throw new WireFailure(IncompatibleSchema('Writer descriptor content hash mismatch for "${fieldString(value, "name")}"'));
 	}
 
 	function requireDescriptorValue(hash:String, type:String):Dynamic {
 		var descriptor = descriptors.get(descriptorKey(hash, type));
 		if (descriptor == null)
-			throw new MessagePackError('Writer descriptor "$type" with hash "$hash" is unavailable');
+			throw new WireFailure(unavailable(hash, type));
 		return descriptor;
 	}
+
+	static function unavailable(hash:String, type:String):WireError
+		return IncompatibleSchema('Writer descriptor "$type" with hash "$hash" is unavailable');
 
 	static function canonicalInterfaces(values:Array<Dynamic>):Bool {
 		checkItems(values.length);
@@ -230,9 +242,9 @@ class MessagePackSchema {
 			requireObject(node, "descriptor node");
 			var name = fieldString(node, "name");
 			if (name.length == 0 || fieldString(node, "type").length == 0)
-				throw new MessagePackError("Writer descriptor node name and type must be nonempty");
+				throw new WireFailure(IncompatibleSchema("Writer descriptor node name and type must be nonempty"));
 			if (uniqueNames && names.exists(name))
-				throw new MessagePackError('Writer descriptor contains duplicate field "$name"');
+				throw new WireFailure(IncompatibleSchema('Writer descriptor contains duplicate field "$name"'));
 			names.set(name, true);
 			var flat = fieldBool(node, "flat");
 			fieldBool(node, "portable");
@@ -242,7 +254,7 @@ class MessagePackSchema {
 			checkItems(annotations.length);
 			for (annotation in annotations)
 				if (!Std.isOfType(annotation, String))
-					throw new MessagePackError("Writer descriptor annotation must be a string");
+					throw new WireFailure(IncompatibleSchema("Writer descriptor annotation must be a string"));
 			validateAnnotationValues(fieldArray(node, "annotationValues"));
 			validateDefaultValue(node);
 			validateNodes(fieldArray(node, "fields"), depth + 1, true);
@@ -254,20 +266,20 @@ class MessagePackSchema {
 
 	static function validateDefaultValue(node:Dynamic):Void {
 		if (!Reflect.hasField(node, "defaultValue"))
-			throw new MessagePackError("Writer descriptor node is missing its default value contract");
+			throw new WireFailure(IncompatibleSchema("Writer descriptor node is missing its default value contract"));
 		var value:Dynamic = Reflect.field(node, "defaultValue");
 		if (value == null)
 			return;
 		requireObject(value, "field default");
 		if (!Reflect.hasField(value, "value"))
-			throw new MessagePackError("Writer descriptor default must include a value");
+			throw new WireFailure(IncompatibleSchema("Writer descriptor default must include a value"));
 		var type = fieldString(value, "type"),
 			constant:Dynamic = Reflect.field(value, "value");
 		if (type == "Float"
 			&& containsFloat32(node)
 			&& (Std.isOfType(constant, Float) || Std.isOfType(constant, Int))
 			&& float32DefaultBits(cast constant) == null)
-			throw new MessagePackError('Writer descriptor Float32 default is not finite at "${fieldString(node, "name")}"');
+			throw new WireFailure(IncompatibleSchema('Writer descriptor Float32 default is not finite at "${fieldString(node, "name")}"'));
 		var valid = switch type {
 			case "Int": Std.isOfType(constant, Int) && integerDefaultTypeAccepted(node, cast constant);
 			case "Float": (Std.isOfType(constant, Int) || Std.isOfType(constant, Float)) && Math.isFinite(cast constant)
@@ -279,7 +291,7 @@ class MessagePackSchema {
 				false;
 		};
 		if (!valid)
-			throw new MessagePackError('Writer descriptor default does not match field type "${fieldString(node, "type")}"');
+			throw new WireFailure(IncompatibleSchema('Writer descriptor default does not match field type "${fieldString(node, "type")}"'));
 	}
 
 	static function integerDefaultTypeAccepted(node:Dynamic, value:Int):Bool {
@@ -386,9 +398,9 @@ class MessagePackSchema {
 
 	static function validateLayout(flat:Bool, size:Dynamic, alignment:Dynamic, offset:Dynamic):Void {
 		if ((size != null && size < 0) || (alignment != null && alignment <= 0) || (offset != null && offset < 0))
-			throw new MessagePackError("Writer descriptor contains invalid layout values");
+			throw new WireFailure(IncompatibleSchema("Writer descriptor contains invalid layout values"));
 		if (flat && size != null && alignment == null || flat && size == null && alignment != null)
-			throw new MessagePackError("Flat writer descriptor must report both size and alignment or neither");
+			throw new WireFailure(IncompatibleSchema("Flat writer descriptor must report both size and alignment or neither"));
 	}
 
 	static function validateRenameAliases(nodes:Array<Dynamic>):Void {
@@ -403,13 +415,13 @@ class MessagePackSchema {
 				if (fieldString(annotation, "name") == "renamedFrom") {
 					var arguments = fieldArray(annotation, "arguments");
 					if (arguments.length != 1 || fieldString(arguments[0], "type") != "String")
-						throw new MessagePackError('Invalid @:renamedFrom metadata on writer field "$name"');
+						throw new WireFailure(IncompatibleSchema('Invalid @:renamedFrom metadata on writer field "$name"'));
 					var aliasValue:Dynamic = Reflect.field(arguments[0], "value");
 					if (!Std.isOfType(aliasValue, String))
-						throw new MessagePackError('Invalid @:renamedFrom name on writer field "$name"');
+						throw new WireFailure(IncompatibleSchema('Invalid @:renamedFrom name on writer field "$name"'));
 					var alias:String = cast aliasValue;
 					if (alias.length == 0 || alias == name || names.exists(alias))
-						throw new MessagePackError('Rename collision for writer field alias "$alias" on "$name"');
+						throw new WireFailure(IncompatibleSchema('Rename collision for writer field alias "$alias" on "$name"'));
 					names.set(alias, name);
 				}
 		}
@@ -420,7 +432,7 @@ class MessagePackSchema {
 		for (annotation in values) {
 			requireObject(annotation, "annotation value");
 			if (fieldString(annotation, "name").length == 0)
-				throw new MessagePackError("Writer annotation name must be nonempty");
+				throw new WireFailure(IncompatibleSchema("Writer annotation name must be nonempty"));
 			var arguments = fieldArray(annotation, "arguments"),
 				names:Map<String, Bool> = [];
 			checkItems(arguments.length);
@@ -430,15 +442,15 @@ class MessagePackSchema {
 					type = fieldString(argument, "type"),
 					value:Dynamic = Reflect.field(argument, "value");
 				if (name.length == 0 || type.length == 0 || names.exists(name))
-					throw new MessagePackError("Writer annotation argument is incomplete or duplicated");
+					throw new WireFailure(IncompatibleSchema("Writer annotation argument is incomplete or duplicated"));
 				names.set(name, true);
 				if (value != null && !Std.isOfType(value, String) && !Std.isOfType(value, Bool)
 					&& !Std.isOfType(value, Int) && !Std.isOfType(value, Float))
-					throw new MessagePackError("Writer annotation value is not a supported scalar constant");
+					throw new WireFailure(IncompatibleSchema("Writer annotation value is not a supported scalar constant"));
 				if (Std.isOfType(value, Float) && !Math.isFinite(cast value))
-					throw new MessagePackError("Writer annotation value is non-finite");
+					throw new WireFailure(IncompatibleSchema("Writer annotation value is non-finite"));
 				if (!annotationValueMatches(type, value))
-					throw new MessagePackError('Writer annotation value does not match declared type "$type"');
+					throw new WireFailure(IncompatibleSchema('Writer annotation value does not match declared type "$type"'));
 			}
 		}
 	}
@@ -524,7 +536,7 @@ class MessagePackSchema {
 		else if (type == "Bool" && Std.isOfType(constant, Bool))
 			append(buffer, Std.string(constant) == "true" ? "b1" : "b0");
 		else
-			throw new MessagePackError("Writer descriptor default does not match its value type");
+			throw new WireFailure(IncompatibleSchema("Writer descriptor default does not match its value type"));
 	}
 
 	static function appendStrings(buffer:StringBuf, values:Array<Dynamic>):Void {
@@ -555,7 +567,7 @@ class MessagePackSchema {
 				else if (Std.isOfType(value, Bool))
 					append(buffer, Std.string(value) == "true" ? "b1" : "b0");
 				else
-					throw new MessagePackError("Writer annotation value does not match its declared type");
+					throw new WireFailure(IncompatibleSchema("Writer annotation value does not match its declared type"));
 			}
 		}
 	}
@@ -571,48 +583,48 @@ class MessagePackSchema {
 
 	static function requireObject(value:Dynamic, label:String):Void
 		if (value == null || Std.isOfType(value, Array) || !Reflect.isObject(value))
-			throw new MessagePackError('Invalid writer $label object');
+			throw new WireFailure(IncompatibleSchema('Invalid writer $label object'));
 
 	static function fieldString(value:Dynamic, name:String):String {
 		var result:Dynamic = Reflect.field(value, name);
 		if (!Std.isOfType(result, String))
-			throw new MessagePackError('Writer descriptor field "$name" must be a string');
+			throw new WireFailure(IncompatibleSchema('Writer descriptor field "$name" must be a string'));
 		return cast result;
 	}
 
 	static function fieldBool(value:Dynamic, name:String):Bool {
 		var result:Dynamic = Reflect.field(value, name);
 		if (!Std.isOfType(result, Bool))
-			throw new MessagePackError('Writer descriptor field "$name" must be a boolean');
+			throw new WireFailure(IncompatibleSchema('Writer descriptor field "$name" must be a boolean'));
 		return cast result;
 	}
 
 	static function fieldInt(value:Dynamic, name:String):Int {
 		var result:Dynamic = Reflect.field(value, name);
 		if (!Std.isOfType(result, Int))
-			throw new MessagePackError('Writer descriptor field "$name" must be an integer');
+			throw new WireFailure(IncompatibleSchema('Writer descriptor field "$name" must be an integer'));
 		return cast result;
 	}
 
 	static function fieldNullableInt(value:Dynamic, name:String):Dynamic {
 		var result:Dynamic = Reflect.field(value, name);
 		if (result != null && !Std.isOfType(result, Int))
-			throw new MessagePackError('Writer descriptor field "$name" must be an integer or null');
+			throw new WireFailure(IncompatibleSchema('Writer descriptor field "$name" must be an integer or null'));
 		return result;
 	}
 
 	static function fieldArray(value:Dynamic, name:String):Array<Dynamic> {
 		var result:Dynamic = Reflect.field(value, name);
 		if (!Std.isOfType(result, Array))
-			throw new MessagePackError('Writer descriptor field "$name" must be an array');
+			throw new WireFailure(IncompatibleSchema('Writer descriptor field "$name" must be an array'));
 		return cast result;
 	}
 
 	static function checkItems(count:Int):Void
 		if (count > MAX_ITEMS)
-			throw new MessagePackError("Writer descriptor item count exceeds configured limit");
+			throw new WireFailure(IncompatibleSchema("Writer descriptor item count exceeds configured limit"));
 
 	static function checkDepth(depth:Int):Void
 		if (depth > MAX_DEPTH)
-			throw new MessagePackError("Writer descriptor nesting exceeds configured limit");
+			throw new WireFailure(IncompatibleSchema("Writer descriptor nesting exceeds configured limit"));
 }

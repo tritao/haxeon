@@ -35,21 +35,27 @@ function main():Int {
 		optional: new WireFrame(3.5, 4.5),
 		frames: [new WireFrame(8, 9)]
 	};
-	var json:WireDocument = JsonWire.decode(JsonWire.encode(original));
+	var json:WireDocument =
+		(JsonWire.decode(JsonWire.encode(original)):Result<WireDocument, haxeon.wire.WireError>).unwrap();
 	var jsonOptional = json.optional;
 	if (jsonOptional == null || json.items[0].frame.x != 1.25
 		|| json.items[0].frame.y != 2.5 || jsonOptional.x != 3.5 || json.frames[0].x != 8) return 1;
-	var binary:WireDocument = MessagePack.decode(MessagePack.encode(original));
+	var binary:WireDocument =
+		(MessagePack.decode(MessagePack.encode(original)):Result<WireDocument, haxeon.wire.WireError>).unwrap();
 	var binaryOptional = binary.optional;
 	if (binaryOptional == null
 		|| binary.items[0].frame.x != 1.25 || binaryOptional.y != 4.5 || binary.frames[0].y != 9) return 2;
 	var holder = new WireHolder(new WireFrame(6.0, 7.0));
-	var jsonHolder:WireHolder = JsonWire.decode(JsonWire.encode(holder));
-	var binaryHolder:WireHolder = MessagePack.decode(MessagePack.encode(holder));
+	var jsonHolder:WireHolder =
+		(JsonWire.decode(JsonWire.encode(holder)):Result<WireHolder, haxeon.wire.WireError>).unwrap();
+	var binaryHolder:WireHolder =
+		(MessagePack.decode(MessagePack.encode(holder)):Result<WireHolder, haxeon.wire.WireError>).unwrap();
 	if (jsonHolder.frame.x != 6.0 || binaryHolder.frame.y != 7.0) return 3;
 	var aliasHolder = new WireAliasHolder(new WireFrame(11.0, 12.0));
-	var jsonAlias:WireAliasHolder = JsonWire.decode(JsonWire.encode(aliasHolder));
-	var binaryAlias:WireAliasHolder = MessagePack.decode(MessagePack.encode(aliasHolder));
+	var jsonAlias:WireAliasHolder =
+		(JsonWire.decode(JsonWire.encode(aliasHolder)):Result<WireAliasHolder, haxeon.wire.WireError>).unwrap();
+	var binaryAlias:WireAliasHolder =
+		(MessagePack.decode(MessagePack.encode(aliasHolder)):Result<WireAliasHolder, haxeon.wire.WireError>).unwrap();
 	var jsonAliasFrame:WireFrame = jsonAlias.frame;
 	var binaryAliasFrame:WireFrame = binaryAlias.frame;
 	if (jsonAliasFrame.x != 11.0 || binaryAliasFrame.y != 12.0) return 10;
@@ -63,16 +69,20 @@ function main():Int {
 		duplicate.writeFieldKey(2, "y");
 		duplicate.writeFloat(n);
 	}
-	var replaced:WireHolder = JsonWire.decode(duplicate.getString());
+	var replaced:WireHolder =
+		(JsonWire.decode(duplicate.getString()):Result<WireHolder, haxeon.wire.WireError>).unwrap();
 	if (replaced.frame.x != 2.0) return 9;
 	var none:WireDocument = {items: [], optional: null, frames: []};
-	var jsonNone:WireDocument = JsonWire.decode(JsonWire.encode(none));
-	var binaryNone:WireDocument = MessagePack.decode(MessagePack.encode(none));
+	var jsonNone:WireDocument =
+		(JsonWire.decode(JsonWire.encode(none)):Result<WireDocument, haxeon.wire.WireError>).unwrap();
+	var binaryNone:WireDocument =
+		(MessagePack.decode(MessagePack.encode(none)):Result<WireDocument, haxeon.wire.WireError>).unwrap();
 	if (jsonNone.optional != null || binaryNone.optional != null) return 4;
 	var jsonMissing = new JsonWireWriter();
 	jsonMissing.writeMapHeader(0);
 	try {
-		var absent:WireHolder = JsonWire.decode(jsonMissing.getString());
+		var absent:WireHolder =
+			(JsonWire.decode(jsonMissing.getString()):Result<WireHolder, haxeon.wire.WireError>).unwrap();
 		return 5;
 	} catch (error:Dynamic) {
 		if (Std.string(error).indexOf('Missing required MessagePack field "WireHolder.frame"') < 0) return 6;
@@ -80,7 +90,8 @@ function main():Int {
 	var missing = new MessagePackWriter();
 	missing.writeMapHeader(0);
 	try {
-		var absent:WireHolder = MessagePack.decode(missing.getBytes());
+		var absent:WireHolder =
+			(MessagePack.decode(missing.getBytes()):Result<WireHolder, haxeon.wire.WireError>).unwrap();
 		return 7;
 	} catch (error:Dynamic) {
 		if (Std.string(error).indexOf('Missing required MessagePack field "WireHolder.frame"') < 0) return 8;

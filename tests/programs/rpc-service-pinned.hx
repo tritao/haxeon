@@ -62,7 +62,9 @@ function main():Int {
 	client.of(OtherService).next(6).onComplete(observe);
 
 	var legacyName = new RpcMethod<String, Int>(0, value -> MessagePack.encode(value),
-		bytes -> MessagePack.decode(bytes), value -> MessagePack.encode(value), bytes -> MessagePack.decode(bytes),
+		bytes -> (MessagePack.decode(bytes):Result<String, haxeon.wire.WireError>).unwrap(),
+		value -> MessagePack.encode(value),
+		bytes -> (MessagePack.decode(bytes):Result<Int, haxeon.wire.WireError>).unwrap(),
 		"Pinned.length");
 	client.call(legacyName, "Grace", 25).onComplete(observe);
 

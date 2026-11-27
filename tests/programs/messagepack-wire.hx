@@ -129,7 +129,7 @@ function main():Int {
 		0x00, 0x00, 0x00
 	]))
 		return 7;
-	var restored:WireNumbers = MessagePack.decode(encoded);
+	var restored:WireNumbers = (MessagePack.decode(encoded):Result<WireNumbers, haxeon.wire.WireError>).unwrap();
 	var restoredMax = restored.byName.get("max"),
 		restoredMin = restored.byName.get("min");
 	if (Int64.compare(restored.small, numbers.small) != 0
@@ -145,7 +145,8 @@ function main():Int {
 	var byId:Map<Int, Int64> = [];
 	byId.set(-1, minimum);
 	byId.set(7, maximum);
-	var restoredById:Map<Int, Int64> = MessagePack.decode(MessagePack.encode(byId)),
+	var restoredById:Map<Int, Int64> =
+		(MessagePack.decode(MessagePack.encode(byId)):Result<Map<Int, Int64>, haxeon.wire.WireError>).unwrap(),
 		restoredByIdMinimum = restoredById.get(-1),
 		restoredByIdMaximum = restoredById.get(7);
 	if (restoredByIdMinimum == null
@@ -160,13 +161,14 @@ function main():Int {
 	duplicate.writeInt(3);
 	duplicate.writeInt(1);
 	duplicate.writeInt(9);
-	var duplicateDecoded:WireNumbers = MessagePack.decode(duplicate.getBytes());
+	var duplicateDecoded:WireNumbers =
+		(MessagePack.decode(duplicate.getBytes()):Result<WireNumbers, haxeon.wire.WireError>).unwrap();
 	if (Int64.compare(duplicateDecoded.small, Int64.ofInt(9)) != 0)
 		return 10;
 
 	var trailing = appendByte(encoded, 0xc0), trailingRejected = false;
 	try {
-		var ignored:WireNumbers = MessagePack.decode(trailing);
+		var ignored:WireNumbers = (MessagePack.decode(trailing):Result<WireNumbers, haxeon.wire.WireError>).unwrap();
 	} catch (_:Dynamic) {
 		trailingRejected = true;
 	}
@@ -174,41 +176,23 @@ function main():Int {
 		return 11;
 
 	var framed = MessagePackFrame.pack(encoded);
-	var unframed = MessagePackFrame.unpack(framed);
+	var unframed = MessagePackFrame.unpack(framed).unwrap();
 	if (unframed.compare(encoded) != 0)
 		return 12;
 	var badVersion = copyBytes(framed);
 	badVersion.set(4, 2);
-	var versionRejected = false;
-	try {
-		MessagePackFrame.unpack(badVersion);
-	} catch (_:Dynamic) {
-		versionRejected = true;
-	}
-	if (!versionRejected)
+	if (!MessagePackFrame.unpack(badVersion).match(Err(Malformed(_))))
 		return 13;
-	var framedTrailingRejected = false;
-	try {
-		MessagePackFrame.unpack(appendByte(framed, 0));
-	} catch (_:Dynamic) {
-		framedTrailingRejected = true;
-	}
-	if (!framedTrailingRejected)
+	if (!MessagePackFrame.unpack(appendByte(framed, 0)).match(Err(Malformed(_))))
 		return 14;
 
 	var codec:MessagePackCodec<OpaqueValue> = new OpaqueValueCodec(),
 		opaque = new OpaqueValue("custom");
 	var customBytes = MessagePack.encodeWith(opaque, codec);
-	var custom:OpaqueValue = MessagePack.decodeWith(customBytes, codec);
+	var custom:OpaqueValue = MessagePack.decodeWith(customBytes, codec).unwrap();
 	if (custom.text != "custom")
 		return 15;
-	var customTrailingRejected = false;
-	try {
-		var ignoredCustom:OpaqueValue = MessagePack.decodeWith(appendByte(customBytes, 0xc0), codec);
-	} catch (_:Dynamic) {
-		customTrailingRejected = true;
-	}
-	return customTrailingRejected ? 42 : 16;
+	return MessagePack.decodeWith(appendByte(customBytes, 0xc0), codec).match(Err(TrailingData)) ? 42 : 16;
 }
 
 function appendByte(bytes:Bytes, value:Int):Bytes {

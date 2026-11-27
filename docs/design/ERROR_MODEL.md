@@ -110,6 +110,14 @@ compatibility forms: wire and MessagePack decoding, RPC (its connector's `RpcCon
 filesystem, platform requests (`NativeKitError`), and audio and GPU device and shader setup. Misuse checks, such as
 ui's argument checks, stay exceptions. Other APIs change when they are next worked on.
 
+- **Wire (done).** `MessagePack.decode`, `JsonWire.decode`, their `decodeWith`, the frame readers and
+  `MessagePackSchema` return `Result<T, WireError>` (`Truncated`, `TrailingData`, `Malformed`, `LimitExceeded`,
+  `IncompatibleSchema`). Inside a decode the readers and codecs throw a `WireFailure`, which the entry point returns as
+  the `Err`; writers throw only for misuse. The codec is generated for the expected `Result`'s value type, so a decode
+  needs an expected `Result`: a typed local, or `try` (whose value is then expected to be a `Result` of the expected
+  type). The subject of a `switch` or the receiver of `.mapErr(f)` has none, and needs the typed local; inferring the
+  decoded type through such a use is open.
+
 The compiler's own source uses none of this until the gates of [ADR 0006](../adr/0006-haxeon-only-compiler-source.md)
 hold: stock Haxe parses neither enum methods nor `try` without `catch`. Its failures are diagnostics or bugs anyway.
 

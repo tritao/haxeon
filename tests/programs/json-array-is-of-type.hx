@@ -16,12 +16,13 @@ function main():Int {
 	var parsed:Dynamic = Reflect.field(Json.parse('{"items":[{"value":42}]}'), "items");
 	if (!Std.isOfType(parsed, Array))
 		return 2;
-	var record:Record = JsonWire.decode(JsonWire.encode(new Record([42])));
+	var record:Record =
+		(JsonWire.decode(JsonWire.encode(new Record([42]))):Result<Record, haxeon.wire.WireError>).unwrap();
 	var items = record.items;
 	var decoded:Dynamic = items;
 	if (!Std.isOfType(decoded, Array))
 		return 3;
-	var roundtrip:Record = JsonWire.decode(JsonWire.encode(record));
+	var roundtrip:Record = (JsonWire.decode(JsonWire.encode(record)):Result<Record, haxeon.wire.WireError>).unwrap();
 	var boxed:Dynamic = roundtrip.items;
 	if (!Std.isOfType(boxed, Array))
 		return 4;

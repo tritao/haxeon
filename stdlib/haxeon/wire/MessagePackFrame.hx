@@ -20,13 +20,13 @@ class MessagePackFrame {
 
 	public static function pack(payload:Bytes, ?version:Int = CURRENT_VERSION, ?flags:Int = 0):Bytes {
 		if (payload == null)
-			throw new MessagePackError("MessagePack frame payload cannot be null");
+			throw new haxe.Exception("MessagePack frame payload cannot be null");
 		checkByte(version, "version");
 		checkByte(flags, "flags");
 		if (flags != 0)
-			throw new MessagePackError("Unsupported MessagePack frame flags");
+			throw new haxe.Exception("Unsupported MessagePack frame flags");
 		if (payload.length > 0x7fffffff - HEADER_BYTES)
-			throw new MessagePackError("MessagePack frame length exceeds addressable size");
+			throw new haxe.Exception("MessagePack frame length exceeds addressable size");
 		var frame = Bytes.alloc(HEADER_BYTES + payload.length);
 		frame.set(0, MAGIC_0);
 		frame.set(1, MAGIC_1);
@@ -43,48 +43,51 @@ class MessagePackFrame {
 		return frame;
 	}
 
+	/** The payload of `frame`, which must be one whole frame of `expectedVersion` within `maxPayload`. */
 	public static function unpack(frame:Bytes, ?expectedVersion:Int = CURRENT_VERSION,
-			?maxPayload:Int = MessagePackReader.DEFAULT_MAX_BYTES):Bytes {
+			?maxPayload:Int = MessagePackReader.DEFAULT_MAX_BYTES):Result<Bytes, WireError> {
 		if (frame == null)
-			throw new MessagePackError("MessagePack frame cannot be null");
+			throw new haxe.Exception("MessagePack frame cannot be null");
 		checkByte(expectedVersion, "expected version");
 		if (maxPayload < 0)
-			throw new MessagePackError("MessagePack frame limit cannot be negative");
-		var length = payloadLength(frame, maxPayload, expectedVersion);
+			throw new haxe.Exception("MessagePack frame limit cannot be negative");
+		var length = try payloadLength(frame, maxPayload, expectedVersion);
 		if (frame.length - HEADER_BYTES != length)
-			throw new MessagePackError("MessagePack frame length mismatch");
+			return Err(Malformed("MessagePack frame length mismatch"));
 		var payload = Bytes.alloc(length);
 		for (index in 0...length)
 			payload.set(index, frame.get(HEADER_BYTES + index));
-		return payload;
+		return Ok(payload);
 	}
 
 	/** Validates the header and bounds length before any payload allocation. */
 	public static function payloadLength(frame:Bytes, maxPayload:Int = MessagePackReader.DEFAULT_MAX_BYTES,
-			expectedVersion:Int = CURRENT_VERSION):Int {
-		if (frame == null || frame.length < HEADER_BYTES)
-			throw new MessagePackError("MessagePack frame is truncated");
+			expectedVersion:Int = CURRENT_VERSION):Result<Int, WireError> {
+		if (frame == null)
+			throw new haxe.Exception("MessagePack frame cannot be null");
 		if (maxPayload < 0)
-			throw new MessagePackError("MessagePack frame limit cannot be negative");
+			throw new haxe.Exception("MessagePack frame limit cannot be negative");
 		checkByte(expectedVersion, "expected version");
+		if (frame.length < HEADER_BYTES)
+			return Err(Truncated);
 		if (frame.get(0) != MAGIC_0 || frame.get(1) != MAGIC_1 || frame.get(2) != MAGIC_2 || frame.get(3) != MAGIC_3)
-			throw new MessagePackError("Invalid MessagePack frame magic");
+			return Err(Malformed("Invalid MessagePack frame magic"));
 		if (frame.get(4) != expectedVersion)
-			throw new MessagePackError("Unsupported MessagePack frame version");
+			return Err(Malformed("Unsupported MessagePack frame version"));
 		if (frame.get(5) != 0)
-			throw new MessagePackError("Unsupported MessagePack frame flags");
+			return Err(Malformed("Unsupported MessagePack frame flags"));
 		var length = 0;
 		for (index in 6...10) {
 			var byte = frame.get(index);
 			if (byte > maxPayload || length > Std.int((maxPayload - byte) / 256))
-				throw new MessagePackError("MessagePack frame payload exceeds configured limit");
+				return Err(LimitExceeded("MessagePack frame payload exceeds configured limit"));
 			length = length * 256 + byte;
 		}
-		return length;
+		return Ok(length);
 	}
 
 	static function checkByte(value:Int, name:String):Void {
 		if (value < 0 || value > 0xff)
-			throw new MessagePackError('MessagePack frame $name must fit in one byte');
+			throw new haxe.Exception('MessagePack frame $name must fit in one byte');
 	}
 }

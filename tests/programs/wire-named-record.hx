@@ -50,13 +50,14 @@ function main():Int {
 		|| MessagePack.encode(reordered).compare(bytes) != 0)
 		return 2;
 
-	var fromJson:Document = JsonWire.decode(json);
-	var fromBytes:Document = MessagePack.decode(bytes);
+	var fromJson:Document = (JsonWire.decode(json):Result<Document, haxeon.wire.WireError>).unwrap();
+	var fromBytes:Document = (MessagePack.decode(bytes):Result<Document, haxeon.wire.WireError>).unwrap();
 	if (check(fromJson) != 42 || check(fromBytes) != 42)
 		return 3;
 
 	var withUnknown:Document =
-		JsonWire.decode('{"version":1,"value":{"title":"a","new":[{"t":true}],"box":{"state":{"Ready":[42]}}}}');
+		(JsonWire.decode('{"version":1,"value":{"title":"a","new":[{"t":true}],"box":{"state":{"Ready":[42]}}}}'):Result<Document, haxeon.wire.WireError>)
+		.unwrap();
 	if (check(withUnknown) != 42)
 		return 4;
 
@@ -74,7 +75,7 @@ function main():Int {
 	writer.writeString("Ready");
 	writer.writeArrayHeader(1);
 	writer.writeInt(42);
-	var missing:Document = MessagePack.decode(writer.getBytes());
+	var missing:Document = (MessagePack.decode(writer.getBytes()):Result<Document, haxeon.wire.WireError>).unwrap();
 	if (check(missing) != 42)
 		return 5;
 
@@ -83,8 +84,10 @@ function main():Int {
 	var statusJson = JsonWire.encode(statuses);
 	if (statusBytes.toHex() != "82a3416e7428a55a6562726102")
 		return 6;
-	var mpStatuses:Map<Status, Int> = MessagePack.decode(statusBytes);
-	var jsonStatuses:Map<Status, Int> = JsonWire.decode(statusJson);
+	var mpStatuses:Map<Status, Int> =
+		(MessagePack.decode(statusBytes):Result<Map<Status, Int>, haxeon.wire.WireError>).unwrap();
+	var jsonStatuses:Map<Status, Int> =
+		(JsonWire.decode(statusJson):Result<Map<Status, Int>, haxeon.wire.WireError>).unwrap();
 	return (mpStatuses[Zebra] ?? 0) + (jsonStatuses[Ant] ?? 0);
 }
 

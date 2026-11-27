@@ -21,7 +21,7 @@ private class JsonWireReadFrame {
 			return values[index];
 		var pair:Array<Dynamic> = cast values[index >> 1];
 		if (pair == null || pair.length != 2)
-			throw "Invalid JSON wire map pair";
+			throw new WireFailure(Malformed("Invalid JSON wire map pair"));
 		return pair[index & 1];
 	}
 }
@@ -37,12 +37,16 @@ class JsonWireReader {
 	public function new(source:String, ?maxContainer:Int = 1000000, ?maxDepth:Int = 64,
 			?maxBytes:Int = 16 * 1024 * 1024) {
 		if (source == null || maxContainer < 0 || maxDepth < 0 || maxBytes < 0)
-			throw "Invalid JSON wire input or limits";
+			throw new haxe.Exception("Invalid JSON wire input or limits");
 		if (Bytes.ofString(source).length > maxBytes)
-			throw "JSON input exceeds configured limit";
-		var envelope:Dynamic = haxe.Json.parse(source);
+			throw new WireFailure(LimitExceeded("JSON input exceeds configured limit"));
+		var envelope:Dynamic;
+		try
+			envelope = haxe.Json.parse(source)
+		catch (error:Dynamic)
+			throw new WireFailure(Malformed('Invalid JSON: ${Std.string(error)}'));
 		if (envelope == null || Reflect.field(envelope, "version") != 1 || !Reflect.hasField(envelope, "value"))
-			throw "Unsupported JSON wire version or missing value";
+			throw new WireFailure(Malformed("Unsupported JSON wire version or missing value"));
 		root = Reflect.field(envelope, "value");
 		this.maxContainer = maxContainer;
 		this.maxDepth = maxDepth;
@@ -52,12 +56,12 @@ class JsonWireReader {
 		trimCompleted();
 		if (frames.length == 0) {
 			if (consumed)
-				throw "JSON wire value has ended";
+				throw new WireFailure(Malformed("JSON wire value has ended"));
 			return root;
 		}
 		var frame = frames[frames.length - 1];
 		if (frame.index >= frame.length())
-			throw "JSON wire container has ended";
+			throw new WireFailure(Malformed("JSON wire container has ended"));
 		return frame.at(frame.index);
 	}
 
@@ -78,7 +82,7 @@ class JsonWireReader {
 	function open(map:Bool):Int {
 		var value:Dynamic = take();
 		if (!Std.isOfType(value, Array))
-			throw "Expected JSON wire container";
+			throw new WireFailure(Malformed("Expected JSON wire container"));
 		var values:Array<Dynamic> = cast value;
 		return pushFrame(values, map);
 	}
@@ -86,10 +90,10 @@ class JsonWireReader {
 	public function readObjectHeader():Int {
 		var value = take();
 		if (!isObjectValue(value))
-			throw "Expected JSON wire object";
+			throw new WireFailure(Malformed("Expected JSON wire object"));
 		var names = Reflect.fields(value);
 		if (names.length > maxContainer)
-			throw "JSON wire container exceeds configured limit";
+			throw new WireFailure(LimitExceeded("JSON wire container exceeds configured limit"));
 		var pairs:Array<Dynamic> = [];
 		for (name in names)
 			pairs.push([name, Reflect.field(value, name)]);
@@ -98,9 +102,9 @@ class JsonWireReader {
 
 	function pushFrame(values:Array<Dynamic>, map:Bool):Int {
 		if (values.length > maxContainer)
-			throw "JSON wire container exceeds configured limit";
+			throw new WireFailure(LimitExceeded("JSON wire container exceeds configured limit"));
 		if (frames.length >= maxDepth)
-			throw "JSON wire nesting exceeds configured limit";
+			throw new WireFailure(LimitExceeded("JSON wire nesting exceeds configured limit"));
 		if (values.length > 0)
 			frames.push(new JsonWireReadFrame(values, map));
 		return values.length;
@@ -109,6 +113,12 @@ class JsonWireReader {
 	public function atEnd():Bool {
 		trimCompleted();
 		return consumed && frames.length == 0;
+	}
+
+	/** Fails the decode with `TrailingData` unless the value is consumed: a decoded value must be the whole input. */
+	public function requireEnd():Void {
+		if (!atEnd())
+			throw new WireFailure(TrailingData);
 	}
 
 	public function isNil():Bool
@@ -125,12 +135,12 @@ class JsonWireReader {
 
 	public function readNil():Void
 		if (take() != null)
-			throw "Expected JSON null";
+			throw new WireFailure(Malformed("Expected JSON null"));
 
 	public function readBool():Bool {
 		var value = take();
 		if (!Std.isOfType(value, Bool))
-			throw "Expected JSON boolean";
+			throw new WireFailure(Malformed("Expected JSON boolean"));
 		return cast value;
 	}
 
@@ -143,11 +153,11 @@ class JsonWireReader {
 				key = key.substr(0, colon);
 			var parsed = Std.parseInt(key);
 			if (parsed == null)
-				throw "Expected JSON wire integer key";
+				throw new WireFailure(Malformed("Expected JSON wire integer key"));
 			return parsed;
 		}
 		if (!Std.isOfType(value, Int))
-			throw "Expected JSON integer";
+			throw new WireFailure(Malformed("Expected JSON integer"));
 		return cast value;
 	}
 
@@ -156,10 +166,10 @@ class JsonWireReader {
 		if (Std.isOfType(value, Int))
 			return haxe.Int64.ofInt(cast value);
 		if (!Std.isOfType(value, String))
-			throw "Expected JSON Int64";
+			throw new WireFailure(Malformed("Expected JSON Int64"));
 		var encoded:String = cast value;
 		if (!StringTools.startsWith(encoded, "i64:"))
-			throw "Expected JSON Int64";
+			throw new WireFailure(Malformed("Expected JSON Int64"));
 		return haxe.Int64.parseString(encoded.substr(4));
 	}
 
@@ -170,25 +180,25 @@ class JsonWireReader {
 				case "float:NaN": Math.NaN;
 				case "float:+Infinity": Math.POSITIVE_INFINITY;
 				case "float:-Infinity": Math.NEGATIVE_INFINITY;
-				default: throw "Expected JSON float";
+				default: throw new WireFailure(Malformed("Expected JSON float"));
 			};
 		}
 		if (!Std.isOfType(value, Float) && !Std.isOfType(value, Int))
-			throw "Expected JSON float";
+			throw new WireFailure(Malformed("Expected JSON float"));
 		return cast value;
 	}
 
 	public function readString():String {
 		var value = take();
 		if (!Std.isOfType(value, String))
-			throw "Expected JSON string";
+			throw new WireFailure(Malformed("Expected JSON string"));
 		return cast value;
 	}
 
 	public function readBinary():Bytes {
 		var encoded = readString();
 		if (!StringTools.startsWith(encoded, "base64:"))
-			throw "Expected JSON binary";
+			throw new WireFailure(Malformed("Expected JSON binary"));
 		return Base64.decode(encoded.substr(7));
 	}
 

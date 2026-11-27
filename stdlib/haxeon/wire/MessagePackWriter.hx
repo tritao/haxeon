@@ -2,7 +2,6 @@ package haxeon.wire;
 
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
-import haxeon.wire.MessagePackError;
 
 /**
 	Small, deterministic MessagePack writer for typed codecs.
@@ -20,7 +19,7 @@ class MessagePackWriter {
 
 	public function new(?maxBytes:Int = DEFAULT_MAX_BYTES) {
 		if (maxBytes < 0)
-			throw new MessagePackError("MessagePack writer limit cannot be negative");
+			throw new haxe.Exception("MessagePack writer limit cannot be negative");
 		this.output = new BytesOutput();
 		this.output.bigEndian = true;
 		this.maxBytes = maxBytes;
@@ -91,7 +90,7 @@ class MessagePackWriter {
 
 	public function writeString(value:String):Void {
 		if (value == null)
-			throw new MessagePackError("MessagePack string cannot be null; writeNil instead");
+			throw new haxe.Exception("MessagePack string cannot be null; writeNil instead");
 		var bytes = Bytes.ofString(value);
 		writeLength(bytes.length, 31, 0xa0, 0xd9, 0xda, 0xdb);
 		writeBytes(bytes);
@@ -115,29 +114,29 @@ class MessagePackWriter {
 
 	public function writeBinary(value:Bytes):Void {
 		if (value == null)
-			throw new MessagePackError("MessagePack binary value cannot be null; writeNil instead");
+			throw new haxe.Exception("MessagePack binary value cannot be null; writeNil instead");
 		writeLength(value.length, -1, -1, 0xc4, 0xc5, 0xc6);
 		writeBytes(value);
 	}
 
 	public function writeArrayHeader(count:Int):Void {
 		if (count < 0)
-			throw new MessagePackError("MessagePack array count cannot be negative");
+			throw new haxe.Exception("MessagePack array count cannot be negative");
 		writeLength(count, 15, 0x90, -1, 0xdc, 0xdd);
 	}
 
 	public function writeMapHeader(count:Int):Void {
 		if (count < 0)
-			throw new MessagePackError("MessagePack map count cannot be negative");
+			throw new haxe.Exception("MessagePack map count cannot be negative");
 		writeLength(count, 15, 0x80, -1, 0xde, 0xdf);
 	}
 
 	/** Writes an application-defined extension value. */
 	public function writeExtension(type:Int, value:Bytes):Void {
 		if (type < -128 || type > 127)
-			throw new MessagePackError("MessagePack extension type must fit in Int8");
+			throw new haxe.Exception("MessagePack extension type must fit in Int8");
 		if (value == null)
-			throw new MessagePackError("MessagePack extension payload cannot be null");
+			throw new haxe.Exception("MessagePack extension payload cannot be null");
 		var length = value.length;
 		switch length {
 			case 1:
@@ -174,7 +173,7 @@ class MessagePackWriter {
 
 	function writeLength(length:Int, fixedLimit:Int, fixedBase:Int, smallTag:Int, mediumTag:Int, largeTag:Int):Void {
 		if (length < 0)
-			throw new MessagePackError("MessagePack length cannot be negative");
+			throw new haxe.Exception("MessagePack length cannot be negative");
 		if (fixedBase >= 0 && length <= fixedLimit) {
 			writeByte(fixedBase | length);
 		} else if (smallTag >= 0 && length <= 0xff) {
@@ -214,7 +213,7 @@ class MessagePackWriter {
 
 	function reserve(amount:Int):Void {
 		if (amount < 0 || size > maxBytes - amount)
-			throw new MessagePackError("MessagePack output exceeds configured limit");
+			throw new haxe.Exception("MessagePack output exceeds configured limit");
 		size += amount;
 	}
 }

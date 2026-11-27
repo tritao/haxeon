@@ -3,6 +3,7 @@ import haxeon.rpc.RpcConnection;
 import haxeon.rpc.RpcMethod;
 import haxeon.wire.JsonWire;
 import haxeon.wire.MessagePack;
+import haxeon.wire.WireError;
 
 @:wire typedef Greeting = {
 	@:id(1) var text:String;
@@ -11,12 +12,15 @@ import haxeon.wire.MessagePack;
 function main():Void {
 	final greeting:Greeting = {text: "hello"};
 	final packed = MessagePack.encode(greeting);
-	final unpacked:Greeting = MessagePack.decode(packed);
-	Sys.println(unpacked.text);
+	final unpacked:Result<Greeting, WireError> = MessagePack.decode(packed);
+	switch unpacked {
+		case Ok(value): Sys.println(value.text);
+		case Err(error): Sys.println('Not a greeting: $error');
+	}
 
 	final json = JsonWire.encode(greeting);
 	Sys.println(json);
-	final restored:Greeting = JsonWire.decode(json);
+	final restored:Result<Greeting, WireError> = JsonWire.decode(json);
 
 	final pair = MemoryTransport.pair();
 	final clock = () -> 0.0;
@@ -26,7 +30,7 @@ function main():Void {
 	server.register(echo, (request, context) -> {
 		context.respond({text: request.text.toUpperCase()});
 	});
-	client.call(echo, restored, 1000).onComplete(outcome -> switch outcome {
+	client.call(echo, restored.unwrap(), 1000).onComplete(outcome -> switch outcome {
 		case Success(answer): Sys.println(answer.text);
 		case Failure(error): throw error;
 		case Cancelled | Stopped:

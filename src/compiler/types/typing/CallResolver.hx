@@ -2489,17 +2489,37 @@ class CallResolver {
 				encoder = json ? WireCodecGenerator.jsonEncodeName(keyed) : WireCodecGenerator.encodeName(keyed);
 			return new TypedExpression(TCall(encoder, [value]), json ? TString : TBytes, span, false, null, null, name);
 		}
-		var resultType = switch expectedType {
-			case null, TNull: throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION,
-				'$format.decode requires an expected result type', span));
-			case type: type;
+		// The decoded type is the expected `Result`'s value type: `var user:Result<User, WireError> = MessagePack.decode(bytes)`,
+		// or `try`'s (`ExpressionTyper.propagatedExpectation`).
+		var valueType = switch expectedType == null ? null : compiler.types.Monomorphs.follow(expectedType) {
+			case null, TNull: null;
+			case TInstance(NominalKind.Enum, result, [value, _]) if (result == "Result"): value;
+			default: throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION,
+				'$format.decode gives a Result<T, WireError>; expect one, or take its value with try', span));
 		};
-		var source = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), json ? TString : TBytes,
-			'$format.decode input', DiagnosticCode.ASSIGNMENT_OR_BINDING),
-			keyed = json ? WireCodecGenerator.requestJson(session, resultType, session.currentContext.name, span)
-				: WireCodecGenerator.request(session, resultType, session.currentContext.name, span),
+		if (valueType == null || compiler.types.Monomorphs.isUnbound(valueType))
+			fail(DiagnosticCode.VALUE_CONVERSION, '$format.decode requires an expected result type', span);
+		var inputType = json ? TString : TBytes,
+			source = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), inputType, '$format.decode input',
+				DiagnosticCode.ASSIGNMENT_OR_BINDING),
+			keyed = json ? WireCodecGenerator.requestJson(session, valueType, session.currentContext.name, span)
+				: WireCodecGenerator.request(session, valueType, session.currentContext.name, span),
 			decoder = json ? WireCodecGenerator.jsonDecodeName(keyed) : WireCodecGenerator.decodeName(keyed);
-		return new TypedExpression(TCall(decoder, [source]), resultType, span, false, null, null, name);
+		// The generated decoder throws a `WireFailure`, which `WireFailure.settle` returns as the `Err`.
+		var inner = new Scope(scope), statements:Array<TypedStatement> = [];
+		function hold(name:String, value:TypedExpression):AstExpression {
+			var temporary = new TemporaryLocal(name + span.start),
+				binding = inner.define(temporary.name, value.type, span, true, null, false, null, null, temporary);
+			bodyTyper.bindCell(binding, value.type);
+			statements.push(TVar(binding.id, value, span));
+			return TemporaryVariable(temporary, span);
+		}
+		var decode = hold("__haxeon_wire_decode",
+			new TypedExpression(TFunctionRef(decoder), TFunction([inputType], valueType, []), span)),
+			input = hold("__haxeon_wire_input", source),
+			settled = bodyTyper.typeExpression(AnnotatedExpression(PrivateAccess,
+				Call("haxeon.wire.WireFailure.settle", [decode, input], span), span), inner, expectedType);
+		return new TypedExpression(TBlockExpression(statements, settled), settled.type, span, false, null, null, name);
 	}
 
 	function typeRpcDescriptor(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,

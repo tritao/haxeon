@@ -9,19 +9,20 @@ class JsonWire {
 		return writer.getString();
 	}
 
-	public static function decodeWith<T>(source:String, codec:JsonWireCodec<T>):T {
-		var reader = new JsonWireReader(source);
-		var value = codec.decode(reader);
-		if (!reader.atEnd())
-			throw "JSON value has trailing content";
-		return value;
-	}
+	/** Decodes one JSON value with `codec`, which fails the decode by throwing a `WireFailure`. */
+	public static function decodeWith<T>(source:String, codec:JsonWireCodec<T>):Result<T, WireError>
+		return WireFailure.settle(input -> {
+			var reader = new JsonWireReader(input);
+			var value = codec.decode(reader);
+			reader.requireEnd();
+			value;
+		}, source);
 
 	/** Encodes a value as JSON. Haxeon generates the codec for the value's concrete type. */
 	public static function encode<T>(value:T):String
 		throw new haxe.Exception("JsonWire.encode must be lowered by the compiler");
 
-	/** Decodes one JSON value. Haxeon generates the codec from the expected result type. */
-	public static function decode<T>(source:String):T
+	/** Decodes one JSON value, or gives why the source is not one. Haxeon generates the codec from the expected result type. */
+	public static function decode<T>(source:String):Result<T, WireError>
 		throw new haxe.Exception("JsonWire.decode must be lowered by the compiler");
 }

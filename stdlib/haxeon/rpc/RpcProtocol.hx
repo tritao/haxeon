@@ -20,7 +20,11 @@ class RpcProtocol {
 	public static function decode(bytes:Bytes, maxBytes:Int):RpcEnvelope {
 		if (bytes == null || bytes.length > maxBytes)
 			throw "RPC message exceeds configured limit";
-		var message:RpcEnvelope = MessagePack.decode(bytes);
+		var decoded:Result<RpcEnvelope, haxeon.wire.WireError> = MessagePack.decode(bytes);
+		var message = switch decoded {
+			case Ok(message): message;
+			case Err(error): throw 'Malformed RPC envelope: ${Std.string(error)}';
+		};
 		validate(message);
 		return message;
 	}

@@ -899,9 +899,9 @@ interface Echo {
 
 function exercise(connection:RpcConnection, implementation:Echo):Void {
 	var bytes = MessagePack.encode(42);
-	var packed:Int = MessagePack.decode(bytes);
+	var packed:Int = (MessagePack.decode(bytes) : Result<Int, haxeon.wire.WireError>).unwrap();
 	var json = JsonWire.encode(packed);
-	var decoded:Int = JsonWire.decode(json);
+	var decoded:Int = (JsonWire.decode(json) : Result<Int, haxeon.wire.WireError>).unwrap();
 	var method:RpcMethod<Int, Int> = RpcMethod.wire(1);
 	connection.serve(Echo, implementation);
 	var stub = connection.of(Echo, 200);

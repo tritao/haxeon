@@ -1396,6 +1396,9 @@ class TestMain {
 			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)', true);
 		expectCompileError('function main():Int { haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return 0; }',
 			'MessagePack.decode requires an expected result type', true);
+		// Decoding returns a Result, so the expected type is one: a bare value type is not taken as the decoded type.
+		expectCompileError('function main():Int { var n:Int = haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return n; }',
+			'MessagePack.decode gives a Result<T, WireError>; expect one, or take its value with try', true);
 		expectCompileError('interface Equatable {} struct Thing { public var value:Int; public function new(value:Int) this.value = value; } function main():Int { var a = new Thing(1); var b = new Thing(1); return a == b ? 1 : 0; }',
 			'Struct "Thing" does not conform to Equatable');
 		var temporaryStruct =

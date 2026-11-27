@@ -2,7 +2,6 @@ package haxeon.wire;
 
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
-import haxeon.wire.MessagePackError;
 
 typedef MessagePackExtension = {
 	final type:Int;
@@ -30,9 +29,9 @@ class MessagePackReader {
 	public function new(bytes:Bytes, ?maxContainer:Int = DEFAULT_MAX_CONTAINER, ?maxDepth:Int = DEFAULT_MAX_DEPTH,
 			?maxBytes:Int = DEFAULT_MAX_BYTES) {
 		if (bytes == null)
-			throw new MessagePackError("MessagePack input cannot be null");
+			throw new haxe.Exception("MessagePack input cannot be null");
 		if (maxContainer < 0 || maxDepth < 0 || maxBytes < 0)
-			throw new MessagePackError("MessagePack reader limits cannot be negative");
+			throw new haxe.Exception("MessagePack reader limits cannot be negative");
 		this.input = new BytesInput(bytes);
 		this.input.bigEndian = true;
 		this.totalBytes = bytes.length;
@@ -41,7 +40,7 @@ class MessagePackReader {
 		this.maxBytes = maxBytes;
 		this.bufferedMarker = null;
 		if (totalBytes > maxBytes)
-			throw new MessagePackError("MessagePack input exceeds configured limit");
+			throw new WireFailure(LimitExceeded("MessagePack input exceeds configured limit"));
 	}
 
 	public function position():Int
@@ -49,6 +48,12 @@ class MessagePackReader {
 
 	public function atEnd():Bool
 		return bufferedMarker == null && input.position == totalBytes;
+
+	/** Fails the decode with `TrailingData` unless the input is consumed: a decoded value must be the whole input. */
+	public function requireEnd():Void {
+		if (!atEnd())
+			throw new WireFailure(TrailingData);
+	}
 
 	/** Returns whether the next value is nil without consuming it. */
 	public function isNil():Bool
@@ -93,7 +98,7 @@ class MessagePackReader {
 			case 0xce:
 				var value = input.readInt32();
 				if (value < 0)
-					throw new MessagePackError("MessagePack uint32 does not fit in Haxe Int");
+					throw new WireFailure(Malformed("MessagePack uint32 does not fit in Haxe Int"));
 				return value;
 			case 0xd0:
 				return signedByte(readByte());
@@ -102,7 +107,7 @@ class MessagePackReader {
 			case 0xd2:
 				return input.readInt32();
 			case 0xcf, 0xd3:
-				throw new MessagePackError("MessagePack Int64 requires readInt64");
+				throw new WireFailure(Malformed("MessagePack Int64 requires readInt64"));
 			default:
 				#if haxe_ver
 				return #end unexpected(marker, "integer");
@@ -126,7 +131,7 @@ class MessagePackReader {
 			case 0xcf:
 				var high = input.readInt32(), low = input.readInt32();
 				if (high < 0)
-					throw new MessagePackError("MessagePack uint64 does not fit in signed Haxe Int64");
+					throw new WireFailure(Malformed("MessagePack uint64 does not fit in signed Haxe Int64"));
 				return haxe.Int64.make(high, low);
 			case 0xd0:
 				return haxe.Int64.ofInt(signedByte(readByte()));
@@ -148,7 +153,7 @@ class MessagePackReader {
 			return decodeFloat32(input.readInt32());
 		if (marker == 0xcb)
 			return input.readDouble();
-		throw new MessagePackError('Expected MessagePack float, got marker 0x${StringTools.hex(marker, 2)}');
+		throw new WireFailure(Malformed('Expected MessagePack float, got marker 0x${StringTools.hex(marker, 2)}'));
 	}
 
 	/** Decode IEEE-754 binary32 without adding a target-specific byte ABI. */
@@ -212,7 +217,7 @@ class MessagePackReader {
 
 	function skipValue(depth:Int):Void {
 		if (depth > maxDepth)
-			throw new MessagePackError("MessagePack nesting exceeds configured limit");
+			throw new WireFailure(LimitExceeded("MessagePack nesting exceeds configured limit"));
 		var marker = readByte();
 		if (marker <= 0x7f || marker >= 0xe0 || marker == 0xc0 || marker == 0xc2 || marker == 0xc3)
 			return;
@@ -280,14 +285,14 @@ class MessagePackReader {
 			case 0xc9:
 				skipBytes(readLength32("extension") + 1);
 			default:
-				throw new MessagePackError('Unsupported MessagePack marker 0x${StringTools.hex(marker, 2)}');
+				throw new WireFailure(Malformed('Unsupported MessagePack marker 0x${StringTools.hex(marker, 2)}'));
 		}
 	}
 
 	function skipItems(count:Int, depth:Int, map:Bool):Void {
 		checkContainer(count);
 		if (map && count > 0x3fffffff)
-			throw new MessagePackError("MessagePack map is too large");
+			throw new WireFailure(LimitExceeded("MessagePack map is too large"));
 		var total = map ? count * 2 : count;
 		for (_ in 0...total)
 			skipValue(depth);
@@ -310,15 +315,15 @@ class MessagePackReader {
 	function readLength32(kind:String):Int {
 		var value = input.readInt32();
 		if (value < 0)
-			throw new MessagePackError('MessagePack $kind length does not fit in Haxe Int');
+			throw new WireFailure(Malformed('MessagePack $kind length does not fit in Haxe Int'));
 		return checkedLength(value, kind);
 	}
 
 	function checkedLength(value:Int, kind:String):Int {
 		if (value < 0 || value > maxBytes || value > totalBytes - input.position)
-			throw new MessagePackError('Invalid MessagePack $kind length');
+			throw new WireFailure(Malformed('Invalid MessagePack $kind length'));
 		if ((kind == "array" || kind == "map") && value > maxContainer)
-			throw new MessagePackError('MessagePack $kind exceeds configured limit');
+			throw new WireFailure(LimitExceeded('MessagePack $kind exceeds configured limit'));
 		return value;
 	}
 
@@ -333,7 +338,7 @@ class MessagePackReader {
 
 	function skipBytes(length:Int):Void {
 		if (length < 0 || length > totalBytes - input.position)
-			throw new MessagePackError("Truncated MessagePack value");
+			throw new WireFailure(Truncated);
 		input.read(length);
 	}
 
@@ -351,7 +356,7 @@ class MessagePackReader {
 
 	function checkContainer(count:Int):Void
 		if (count < 0 || count > maxContainer)
-			throw new MessagePackError("MessagePack container exceeds configured limit");
+			throw new WireFailure(LimitExceeded("MessagePack container exceeds configured limit"));
 
 	function readByte():Int {
 		if (bufferedMarker != null) {
@@ -360,7 +365,7 @@ class MessagePackReader {
 			return cast marker;
 		}
 		if (input.position >= totalBytes)
-			throw new MessagePackError("Truncated MessagePack value");
+			throw new WireFailure(Truncated);
 		return input.readByte();
 	}
 
@@ -373,5 +378,5 @@ class MessagePackReader {
 	// Stock Haxe needs explicit returns at value sites because it does not use @:noReturn for flow analysis.
 	@:noReturn
 	static function unexpected(marker:Int, expected:String):#if haxe_ver Dynamic #else
-		Void #end throw new MessagePackError('Expected MessagePack $expected, got marker 0x${StringTools.hex(marker, 2)}');
+		Void #end throw new WireFailure(Malformed('Expected MessagePack $expected, got marker 0x${StringTools.hex(marker, 2)}'));
 }

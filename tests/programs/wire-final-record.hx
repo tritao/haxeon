@@ -66,12 +66,13 @@ function main():Int {
 	var original = new WireFinalRecord(WireFinalCalls.label(), null, new WireFinalChild(42));
 	original.count = 9;
 	var json = JsonWire.encode(original);
-	var jsonResult:WireFinalRecord = JsonWire.decode(json);
+	var jsonResult:WireFinalRecord = (JsonWire.decode(json):Result<WireFinalRecord, haxeon.wire.WireError>).unwrap();
 	if (jsonResult.label != "camera" || jsonResult.note != null || jsonResult.count != 9
 		|| jsonResult.child.value != 42)
 		return 1;
 	var binary = MessagePack.encode(original);
-	var binaryResult:WireFinalRecord = MessagePack.decode(binary);
+	var binaryResult:WireFinalRecord =
+		(MessagePack.decode(binary):Result<WireFinalRecord, haxeon.wire.WireError>).unwrap();
 	if (binaryResult.label != "camera" || binaryResult.note != null || binaryResult.count != 9
 		|| binaryResult.child.value != 42)
 		return 2;
@@ -81,7 +82,7 @@ function main():Int {
 	var effect = new Effect(function() {});
 	var observed:WireFinalObservable = null;
 	ReactiveRuntime.withTracking(effect, function() {
-		observed = JsonWire.decode(observableBytes);
+		observed = (JsonWire.decode(observableBytes):Result<WireFinalObservable, haxeon.wire.WireError>).unwrap();
 	});
 	effect.dispose();
 	if (observed.label != "observed")
@@ -90,7 +91,8 @@ function main():Int {
 	partial.writeMapHeader(1);
 	partial.writeInt(2);
 	partial.writeInt(10);
-	var defaults:WireFinalDefaults = MessagePack.decode(partial.getBytes());
+	var defaults:WireFinalDefaults =
+		(MessagePack.decode(partial.getBytes()):Result<WireFinalDefaults, haxeon.wire.WireError>).unwrap();
 	if (defaults.label != "default"
 		|| defaults.count != 10
 		|| defaults.note != null
@@ -103,7 +105,8 @@ function main():Int {
 	jsonPartial.writeInt(9);
 	jsonPartial.writeFieldKey(2, "count");
 	jsonPartial.writeInt(10);
-	var jsonDefaults:WireFinalDefaults = JsonWire.decode(jsonPartial.getString());
+	var jsonDefaults:WireFinalDefaults =
+		(JsonWire.decode(jsonPartial.getString()):Result<WireFinalDefaults, haxeon.wire.WireError>).unwrap();
 	if (jsonDefaults.label != "default" || jsonDefaults.count != 10 || jsonDefaults.note != null
 		|| jsonDefaults.tags.length != 2 || jsonDefaults.tags[0] != 2)
 		return 6;
@@ -113,13 +116,15 @@ function main():Int {
 	var jsonMissing = new JsonWireWriter();
 	jsonMissing.writeMapHeader(0);
 	try {
-		var absentJson:WireFinalRecord = JsonWire.decode(jsonMissing.getString());
+		var absentJson:WireFinalRecord =
+			(JsonWire.decode(jsonMissing.getString()):Result<WireFinalRecord, haxeon.wire.WireError>).unwrap();
 		return 7;
 	} catch (_:Dynamic) {}
 	var missing = new MessagePackWriter();
 	missing.writeMapHeader(0);
 	try {
-		var absent:WireFinalRecord = MessagePack.decode(missing.getBytes());
+		var absent:WireFinalRecord =
+			(MessagePack.decode(missing.getBytes()):Result<WireFinalRecord, haxeon.wire.WireError>).unwrap();
 		return 5;
 	} catch (_:Dynamic) {}
 	return 42;
