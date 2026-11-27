@@ -115,30 +115,21 @@ expected result is bindings for leaf widgets and live values, small re-running s
 
 Decided 2026-11-27, after every widget became a component and the self-updating model was deleted.
 
-**A component is a thin class around an inputs struct.** The class has identity, which `latestOf`, a kept body's newest
-description and the same-instance fast path use; it is dispatched through the component interface and holds the
-callbacks. Its inputs are an `Equatable` struct copied into it, so a caller cannot change them after building (value
-semantics), and `inputsEqual` is `props == other.props` plus its callbacks: event callbacks by presence, called through
-the newest description; callbacks the body calls while building by identity. Arrays in the struct compare element by
-element. C#'s `record struct` is the analogue; Haxeon's `struct` with `Equatable` already has its meaning, and
-[named arguments](../../../docs/design/NAMED_ARGUMENTS.md) add its construction and `with`.
+**A component is an immutable description, built in one call.** Every input is a `final` field set by its constructor,
+which callers call with [named arguments](../../../docs/design/NAMED_ARGUMENTS.md); no configuration is set afterwards.
+The class has identity, which `latestOf`, a kept body's newest description and the same-instance fast path use.
+`inputsEqual` compares the inputs: values by `==` (arrays element by element), the style by `Diff.mask`, event
+callbacks by presence (called through the newest description) and callbacks the body calls while building by identity.
 
 ```haxe
-struct TextFieldProps implements Equatable {
-	final key:String;
-	final value:String = "";
-	final enabled:Bool = true;
-	final placeholder:Null<String> = null;
-}
-
-class TextField implements Component {
-	final props:TextFieldProps;
-	final onChange:Null<String->Void>;                        // event: by presence, via latestOf
-	final selectionProvider:Null<Void->Null<TextSelection>>;  // read while building: by identity
-}
-
-new TextField(new TextFieldProps(key: "name", placeholder: "Name"), onChange: next -> name = next);
+new TextField(key: "name", placeholder: "Name", onChange: next -> name = next);
 ```
+
+This is the call shape of the [end state below](#beyond-the-end-state-descriptions-as-values), where the class becomes
+an `Equatable` struct and its constructor the memberwise initializer, with the same names in the same order: callers
+change once. A separate inputs struct (`new TextField(new TextFieldProps(...))`) was considered and left out: callers
+would change to it and back, and the struct would be deleted when the component becomes one; its only gain meanwhile is
+a synthesized `inputsEqual`.
 
 The rules the whole UI follows:
 
@@ -171,7 +162,7 @@ defers in favour of the runtime checks.
 
 ## Beyond the end state: descriptions as values
 
-Decided 2026-11-27 as the direction after the inputs structs. A component description becomes an `Equatable` struct
+Decided 2026-11-27 as the direction after immutable components. A component description becomes an `Equatable` struct
 implementing the component interface, and the framework keeps a body when `description == previous`: no component
 writes a comparison, and none can fall out of step with its fields. A struct boxes when converted to the interface,
 which is the allocation a class description costs today. Child views then compare by value; a button with a label view
@@ -188,18 +179,18 @@ It needs, in this order:
    while building keeps identity equality.
 4. **Child views by value**, a framework-wide change to what keeps; measured before it lands.
 
-The inputs structs are on this path: each becomes its description's value part, and the conversion moves the style,
-callbacks and views into it and deletes `inputsEqual`. Until then `inputsEqual` is `props == other.props`, the style by
-`Diff.mask`, and the callbacks by the rules above; a shared base class for those few terms was considered and left out.
+Until then each component writes `inputsEqual` by the rules above; a shared base class for its few common terms was
+considered and left out. The conversion changes no caller, since the constructor becomes the memberwise initializer.
 
 ## Next steps
 
 1. Without compiler work: the read-only root type (done: `ViewRoot`); the `StyleIdentity` struct with the styled-node factory
    (done: `BuildContext.styled`, `resolveStyled`, `applyStyled`), where
-   routing owns `RenderNode.states`; inputs structs for `TextField` and `Tabs` with handwritten constructors.
+   routing owns `RenderNode.states`.
 2. Haxeon: named arguments, then the memberwise initializer and `with` (done:
-   [NAMED_ARGUMENTS.md](../../../docs/design/NAMED_ARGUMENTS.md)). Then move every component's configuration into an
-   inputs struct: Button and TextField first, then the rest in one pass.
+   [NAMED_ARGUMENTS.md](../../../docs/design/NAMED_ARGUMENTS.md)). Then make every component an
+   immutable description with a named-argument constructor: TextField first (the one built and then configured), then
+   the rest in one pass.
 3. The `willEditRetained` survey, then ADR 0002 stages 6 and 7.
 4. The `View`/`ScopeView` merge and the frame pipeline.
 5. Descriptions as values ([above](#beyond-the-end-state-descriptions-as-values)), which replaces generating parts of
