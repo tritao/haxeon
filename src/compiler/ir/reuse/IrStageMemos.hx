@@ -6,7 +6,8 @@ import compiler.ir.pipeline.IrFunctionPass.IrStageRequest;
 /**
  * The reuse state of the IR stages in a session (docs/design/QUERY_ENGINE.md, the stage driver): what each per-function stage
  * made of each function, as kinds of the session's query database (`IrStageQueries`), and the facts their rewrites read
- * (`IrStageFacts`); the inliner's memo (`IrInlineQueries`); the whole-program walks and steps (`IrWalkMemo`) and summaries
+ * (`IrStageFacts`), with the answers verification's facts were worked out from (`IrVerifyAnswers`); the inliner's memo
+ * (`IrInlineQueries`); the whole-program walks and steps (`IrWalkMemo`) and summaries
  * (`IrContributionSummary`); and, until they move onto the database too, the contribution memos. The copies of the session state
  * share it: a memo holds only while what it was made from is the same object and what it read has not changed, so what a
  * rolled-back build left is never wrongly reused.
@@ -37,6 +38,9 @@ class IrStageMemos {
 
 	/** The inliner's memo, registered the first time the stage runs (`inliner`). */
 	var inlineQueries:Null<compiler.ir.passes.inlining.IrInliner.IrInlineQueries> = null;
+
+	/** The answers verification's facts were worked out from (`IrVerifyStage`). */
+	public final verifyAnswers = new compiler.ir.verify.IrVerifyStage.IrVerifyAnswers();
 
 	/**
 	 * Generated helpers whose name says all they are made of (the enum dispatch's boxes, views and unboxes), by the symbol of the
@@ -248,6 +252,7 @@ class IrStageMemos {
 		var inliner = inlineQueries;
 		if (inliner != null)
 			inliner.clear();
+		verifyAnswers.clear();
 		summaries.clear();
 		for (walk in walks)
 			walk.clear();

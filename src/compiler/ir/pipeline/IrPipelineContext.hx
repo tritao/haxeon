@@ -4,7 +4,6 @@ import compiler.ir.tools.IrInstrumentation.IrInstrumentationScope;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrObjectTable;
 import compiler.ir.model.IrPassScratch;
-import compiler.ir.verify.IrVerifyMemo;
 import compiler.ir.model.Ir.IrObject;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.ir.reuse.IrStageMemos;
@@ -43,7 +42,6 @@ class IrPipelineContext {
 	public var reflectable:Null<Array<String>> = null;
 	public var inlineCache:Null<IrInlineCache> = null;
 	public var instrumentScope:Null<IrInstrumentationScope> = null;
-	public var verifyMemo:Null<IrVerifyMemo> = null;
 
 	/** The tables the passes over bodies before the inliner reuse. */
 	public final passScratch = new IrPassScratch();

@@ -18,13 +18,15 @@ makes from the same sources, and its work is proportional to the edit.
 - **IR stages on bodies:** each per-function stage keeps what it made of each function in the session's query database, with
   the facts it read (`IrStageQueries`, `IrStageFacts`), and reuses it while the function and the facts are unchanged. The session caching model is in
   [IR_CORE_COLUMNS.md](IR_CORE_COLUMNS.md#session-caching-model).
-- **Whole-program walks:** every kept walk keeps its result with what it read in one record (`IrWalkRecord`): copies of
-  the program's tables, what its caller gave it (roots, settings, root types), the functions whose declarations it read,
-  and the summary of each function it reached. A build reuses the result while the tables and the given inputs are the
-  same and each changed function declares the same and, when it was reached, has a summary with the same edges; any
-  other change walks again. The type-aware walks summarize a function as `IrWalkSummary`, the HashLink plain build's
-  walk and table trim as `IrBodyEdges`; the enum escape reaches follow no function's edges and give the closures and
-  map stores they read as inputs, and keep each answer about a supported callable with their results.
+- **Whole-program walks:** every kept walk is a kind of the session's database (`IrWalkMemo`), whose memo of its result
+  reads keys of the kind: the program's tables, what its caller gave it (roots, settings, root types) and the role of each
+  function as one key, and per function its signature and its summary. A build reuses the result while none of the keys the
+  walk read changed: a function it did not reach adds nothing through its body. The type-aware walks summarize a function as
+  `IrWalkSummary`, the HashLink plain build's walk and table trim as `IrBodyEdges` (`HlFunctionQueries.plainReach`); the enum
+  escape reaches follow no function's edges and give the closures and map stores they read as inputs.
+- **Steps over the final IR:** what the HashLink backend's whole-program steps read of each function alone (its ABI signature,
+  the natives its rows call, its field stores, its form with shared runtime calls, the enums it may box) is a kind of the
+  database kept while the function is the same object (`HlFunctionQueries`).
 - **Inlining:** `IrInlineCache` keeps each inlined function with everything its result depended on.
 - **Lowering (HashLink):** a function is lowered with its requests to the symbol tables recorded (`HlLoweredFunction`).
   `HlLoweredCache` keeps the last plain build's lowered functions by name. A function whose IR is the same and whose facts
@@ -35,7 +37,7 @@ makes from the same sources, and its work is proportional to the edit.
   reads about other entities goes through `HlLoweringView`, which records each answer, and a changed answer lowers the
   function again. A live build keeps its append-only tables and trusts every lowered function it is not told to regenerate.
 - **Verification:** a function stays verified while it and what the verifier read about the rest of the program
-  (`IrVerifyMemo`) are unchanged.
+  (`IrVerifyStage`, facts of the session's database) are unchanged.
 - **Positions:** an IR location counts from its anchor (`SourceAnchor`, `SourceLocation`), the member declaration it lies in
   (a method, a field, an enum constructor) or else the whole file: its offsets and lines are distances from the anchor's start,
   its columns the file's, and it names no file hash. So lines moved above a declaration change no function, and code the

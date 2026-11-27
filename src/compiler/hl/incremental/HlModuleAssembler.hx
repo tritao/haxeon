@@ -205,6 +205,9 @@ class HlModuleAssembler {
 	/** The build patches a running module: functions are kept by name (`published`). Otherwise they are kept from `loweredCache`. */
 	public var livePatching = false;
 
+	/** What the steps around lowering work out from each function, kept in the session's database; null for a compile without one. */
+	public var queries:Null<HlFunctionQueries> = null;
+
 	/**
 	 * A next build may link this one's lowered functions, so lowering records what each read (`HlLoweringView`). Off for a
 	 * compile that keeps no session (`CompileOptions.keepSession`), which neither links nor records.
@@ -255,6 +258,7 @@ class HlModuleAssembler {
 		result.fieldReserve = fieldReserve;
 		result.developmentMetadata = developmentMetadata;
 		result.loweredCache = loweredCache;
+		result.queries = queries;
 		result.irVerified = irVerified;
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
 		result.renamed = renamed.copy();
@@ -951,8 +955,7 @@ class HlModuleAssembler {
 		// Runtime calls the lowering writes a fast path for go through one helper each (`IrSharedRuntimeCalls`); a helper this module
 		// has not published yet is new code, which a patch must carry. A function that is the same object keeps the form the last
 		// build gave it, so the states a live session keeps to take back share it instead of each holding its own.
-		var kept = livePatching ? published : loweredCache;
-		var shared = compiler.hl.IrSharedRuntimeCalls.apply(program, kept == null ? null : kept.sharedCalls),
+		var shared = compiler.hl.IrSharedRuntimeCalls.apply(program, queries, checkReuse),
 			slotted:Map<String, Bool> = [for (name in cache.slots) name => true];
 		program = shared.program;
 		var reload = switch decision {
@@ -1049,7 +1052,8 @@ class HlModuleAssembler {
 			startFresh();
 		var cachePreparedAt = Sys.time() * 1000.0;
 		var previousNatives = runtimeNatives;
-		var nativeUses = loweredCache == null ? null : loweredCache.summaries.natives;
+		// A live build adds to the published natives those of the functions it lowers again, so it keeps no function's.
+		var nativeUses = queries == null || livePatching ? null : queries.natives;
 		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && previousNatives.length > 0
 			? previousNatives : null, reuseLowered && previousNatives.length > 0 ? regenerated : null, nativeUses);
 		// New runtime imports shift every function slot. Publish a fresh module,
@@ -1137,7 +1141,7 @@ class HlModuleAssembler {
 			developmentMetadata,
 			livePatching || keepsLowered ? liveCache : null, irVerified,
 			livePatching,
-			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources, liveChain),
+			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources, liveChain, queries),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;

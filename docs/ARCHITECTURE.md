@@ -204,8 +204,9 @@ verification, then HashLink lowering (`HlLower`), then the writer. Each stage ke
 - **Pipeline shortcut.** When the typed-function IR, the canonical tables and the environment text (target, defines,
   `ProgramFacts.inputState`) equal the last plain build's, the final IR and the module bytes are reused (`reused: ir+module`).
   A miss says why (`--timings`).
-- **Per-function verification.** `IrVerifier` reads the rest of the program only through `IrVerifyTable`s. `IrVerifyMemo` records what
-  each accepted function read, so a build verifies the functions that changed and the ones whose reads changed.
+- **Per-function verification.** `IrVerifier` reads the rest of the program only through `IrVerifyTable`s. The verifier is a stage on
+  the session's database (`IrVerifyStage`) whose memo of a function holds what its check read, so a build verifies the functions that
+  changed and the ones whose reads changed.
 - **Relocatable lowering.** `HlLower` records, for every function, the requests it made to the symbol tables and the facts it read about
   object types (through `HlLoweringView`, the only way lowering sees another entity). `HlLink.relocate` asks them of the next build's
   tables, so a function whose IR and facts are unchanged is kept as it was lowered, not lowered again; the section writer finds what

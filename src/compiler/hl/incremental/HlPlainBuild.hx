@@ -4,7 +4,7 @@ import compiler.ir.analysis.IrReachability;
 import compiler.ir.analysis.IrReachability.IrBodyEdges;
 import compiler.ir.model.Ir.IrObjectTools;
 import compiler.ir.model.Ir.IrProgram;
-import compiler.ir.reuse.IrWalkRecord;
+import compiler.ir.reuse.IrWalkMemo;
 
 /**
  * A plain HashLink build, which no running module addresses by slot or stable id: it writes only what the entry reaches, from a
@@ -15,78 +15,55 @@ class HlPlainBuild {
 	/**
 	 * What a plain module is made of: a copy of `program` without the functions the entry does not reach, and without the methods of
 	 * a class no reachable function mentions, with the reachable names. `program` keeps everything (other backends and tools read it).
-	 * `summaries` keeps what the walk and the trim read of each function (`IrBodyEdges`), and the last walk with what it read
-	 * (`IrWalkRecord`), which a build reuses while the program gives it the same. The reachable names are the record's: the caller
-	 * reads them, never changes them.
+	 * With `queries`, the walk and its trim are the session's step (`HlFunctionQueries.plainReach`), whose names a build takes while
+	 * what the walk read of the program is the same; with `checkReuse`, kept names are walked again and compared. The reachable names
+	 * are the step's: the caller reads them, never changes them.
 	 */
-	public static function reachable(program:IrProgram, checkReuse:Bool = false, ?summaries:HlFunctionSummaries):{
+	public static function reachable(program:IrProgram, checkReuse:Bool = false, ?queries:HlFunctionQueries):{
 		program:IrProgram,
 		reachable:Map<String, Bool>
 	} {
-		var given = [program.entryPoint], last = summaries == null ? null : summaries.reach;
-		var kept = last == null || summaries == null ? null : last.holds(program, given, [], program.functions,
-			(fn, edges) -> {
-				// A function in blocks has no edges to compare: the walk reads its blocks.
-				if (fn.body == null)
-					return null;
-				var now = summaries.walk.get(fn);
-				if (now == null) {
-					now = IrBodyEdges.of(fn);
-					summaries.walk.set(fn, now);
-				}
-				return IrBodyEdges.same(edges, now) ? now : null;
-			});
-		if (kept != null && summaries != null) {
-			var plain = apply(program, kept.result);
+		if (queries == null)
+			return walk(program, null);
+		var step = queries.plainReach,
+			database = queries.database,
+			kept = step.kept(database, program, program.functions, [program.entryPoint], [], IrBodyEdges.of);
+		if (kept != null) {
+			var plain = apply(program, kept);
 			if (checkReuse) {
-				var fresh = walk(program, null);
-				var difference = difference(plain.program, fresh.program);
+				var difference = difference(plain.program, walk(program, null).program);
 				if (difference != null)
 					throw new compiler.core
 						.InternalError('--check-reuse: the plain build reused a reachability walk that differs from walking the program now ($difference)');
 				IrReachability.checkTables(plain.program);
 			}
-			summaries.reach = kept;
 			return plain;
 		}
-		if (last != null && summaries != null)
-			last.eachSummary((fn, edges) -> if (summaries.walk.get(fn) == null) summaries.walk.set(fn, edges));
-		var plain = walk(program, summaries);
+		step.begin(database);
+		var plain = walk(program, step);
 		if (checkReuse)
 			IrReachability.checkTables(plain.program);
-		if (summaries != null)
-			summaries.reach = record(program, given, plain.program, plain.reachable, summaries);
+		step.end(database, {
+			reachable: plain.reachable,
+			natives: [for (native in plain.program.natives) native.name => true],
+			globals: [for (field in plain.program.staticFields) field.name => true],
+			classes: [for (object in plain.program.objects) object.name => true]
+		});
 		return plain;
 	}
 
-	static function walk(program:IrProgram, summaries:Null<HlFunctionSummaries>):{
+	/** The walk of `program` from its entry and the trim of its tables, reading each reached function's edges from `step`. */
+	static function walk(program:IrProgram, step:Null<IrWalkMemo<IrBodyEdges, HlPlainNames>>):{
 		program:IrProgram,
 		reachable:Map<String, Bool>
 	} {
 		var pruned = program.copy(),
-			memo = summaries == null ? null : summaries.walk,
-			walk = IrReachability.walkWithGeneratedRuntimeRoots(program, program.entryPoint, null, true, memo);
+			edges = step == null ? null : step.summary,
+			walk = IrReachability.walkWithGeneratedRuntimeRoots(program, program.entryPoint, null, true, edges,
+				step == null ? null : step.signature);
 		IrReachability.prune(pruned, walk.reachable);
-		IrReachability.trimTables(pruned, walk, memo);
+		IrReachability.trimTables(pruned, walk, edges);
 		return {program: pruned, reachable: walk.reachable};
-	}
-
-	/** The record of the walk of `program` that made `pruned`; null when a reached function's summary was not kept. */
-	static function record(program:IrProgram, given:Array<String>, pruned:IrProgram, reachable:Map<String, Bool>,
-			summaries:HlFunctionSummaries):Null<IrWalkRecord<IrBodyEdges, HlPlainNames>> {
-		var edges:Array<Null<IrBodyEdges>> = [];
-		for (fn in program.functions) {
-			var walked = reachable.exists(fn.name) ? summaries.walk.get(fn) : null;
-			if (walked == null && reachable.exists(fn.name))
-				return null;
-			edges.push(walked);
-		}
-		return new IrWalkRecord(program, given, [], program.functions.copy(), edges, {
-			reachable: reachable,
-			natives: [for (native in pruned.natives) native.name => true],
-			globals: [for (field in pruned.staticFields) field.name => true],
-			classes: [for (object in pruned.objects) object.name => true]
-		});
 	}
 
 	/** The plain program a walk that kept `names` makes of `program`, which gives it what it read. */

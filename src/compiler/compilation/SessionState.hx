@@ -10,7 +10,6 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrSymbol;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.ir.pipeline.StaticInitializationOrder.IrStaticReferences;
-import compiler.ir.verify.IrVerifyMemo;
 import compiler.modules.ModuleState;
 import compiler.query.ComputedQueryKind;
 import compiler.query.QueryDatabase;
@@ -145,6 +144,12 @@ class SessionState {
 	public var stageMemos(default, null):compiler.ir.reuse.IrStageMemos;
 
 	/**
+	 * What the HashLink backend's steps over the final IR work out from each function (`HlFunctionQueries`), in the session's
+	 * database; every copy shares it, as `stageMemos`.
+	 */
+	public var hlFunctions(default, null):compiler.hl.incremental.HlFunctionQueries;
+
+	/**
 	 * What each function of `irGeneration` names of classes and enums (`FrontendCompilation.typeMentions`), by the same key: it
 	 * holds while the function does. Every copy shares it, as `irGeneration`.
 	 */
@@ -190,13 +195,6 @@ class SessionState {
 	 */
 	public var backend:BackendSession;
 
-	/**
-	 * What the last verification of the final IR accepted (see `IrVerifyMemo`). It belongs to the IR, not to a backend, so it is not
-	 * part of the lowered-function cache. Copies share it: an acceptance holds only while the IR and everything it read are equal, so a
-	 * build that fails leaves nothing wrong behind.
-	 */
-	public var verifyMemo(default, null):IrVerifyMemo = new IrVerifyMemo();
-
 	public var reachabilityCache(default, null):Map<String, ReachabilityCache> = [];
 	public var declarationOwners(default, null):DeclarationOwners = new DeclarationOwners();
 
@@ -218,7 +216,6 @@ class SessionState {
 		inlineCache = new IrInlineCache();
 		stageMemos.clear();
 		pipelineSnapshot = null;
-		verifyMemo = new IrVerifyMemo();
 		reachabilityCache = [];
 	}
 
@@ -358,6 +355,7 @@ class SessionState {
 		assemblyOrder = sharing == null ? new FrontendCompilation.AssemblyOrder() : sharing.assemblyOrder;
 		stageMemos = sharing == null ? new compiler.ir.reuse.IrStageMemos(queries,
 			irGeneration) : sharing.stageMemos;
+		hlFunctions = sharing == null ? new compiler.hl.incremental.HlFunctionQueries(queries) : sharing.hlFunctions;
 		this.types = types;
 		this.genericSpecializations = genericSpecializations;
 		this.backend = backend;
@@ -389,7 +387,6 @@ class SessionState {
 		result.rehydrationBaseline = rehydrationBaseline;
 		result.inlineCache = inlineCache.copy();
 		result.pipelineSnapshot = pipelineSnapshot;
-		result.verifyMemo = verifyMemo;
 		result.reachabilityCache = reachabilityCache.copy();
 		result.declarationOwners = declarationOwners.copy();
 		return result;

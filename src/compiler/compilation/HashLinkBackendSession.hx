@@ -137,10 +137,11 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAtStart = AllocationMeter.sample();
 		PeakProbe.mark("backend-start");
 		compiler.ir.analysis.IrReachability.IrReachabilityReport.report("final program", ir);
-		var summaries = this.loweredCache.summaries;
+		// A compile that keeps no session builds once: nothing it would keep of each function is read again.
+		var queries = context.options.keepSession ? context.state.hlFunctions : null;
 		var previousAbi = context.state.publishedAbi,
-			nextAbi = context.describesRuntimeAbi() ? RuntimeAbi.describe(ir, summaries.abiSignatures,
-				previousAbi) : null,
+			nextAbi = context.describesRuntimeAbi() ? RuntimeAbi.describe(ir,
+				queries == null ? null : queries.abi, previousAbi) : null,
 			baseAssembler = assembler;
 		var assemblyIr = ir;
 		if (!context.livePatching) {
@@ -148,7 +149,7 @@ class HashLinkBackendSession implements BackendSession {
 			// encoded, and a class no reachable function mentions loses its methods. The program in the result keeps everything
 			// (other backends and tools read it). A live module was pruned with the same walk and keeps every class, global and
 			// declared method, so a reachability change moves nothing in its layout (docs/design/LIVE_PRUNING.md).
-			var plain = HlPlainBuild.reachable(ir, context.options.checkReuse, summaries),
+			var plain = HlPlainBuild.reachable(ir, context.options.checkReuse, queries),
 				reachable = plain.reachable;
 			assemblyIr = plain.program;
 			regenerated = [for (name in regenerated) if (reachable.exists(name)) name];
@@ -193,6 +194,7 @@ class HashLinkBackendSession implements BackendSession {
 		candidateAssembler.irVerified = !context.livePatching;
 		candidateAssembler.livePatching = context.livePatching;
 		candidateAssembler.keepsLowered = context.options.keepSession;
+		candidateAssembler.queries = queries;
 		if (loweredCache != null) {
 			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
 			candidateAssembler.loweredCache = loweredCache;
@@ -203,7 +205,6 @@ class HashLinkBackendSession implements BackendSession {
 		var assembly = candidateAssembler.assemble(assemblyIr, regenerated, decision,
 			nextAbi == null || !context.livePatching ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi),
 			context.state.rehydrationBaseline);
-		summaries.endBuild();
 		for (detail in assembly.layoutReasons)
 			reloadReasons.push(AssemblyLayoutChanged(detail));
 		for (reason in assembly.objectReasons)

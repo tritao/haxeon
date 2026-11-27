@@ -56,6 +56,13 @@ class IrFactSource {
 	public function fact(kind:Int, key:String):Int
 		throw unimplemented();
 
+	/**
+	 * The value of fact `id` (`fact`'s, of `kind` and `key`), whose value was `last` when it is `known`: for a stage whose facts are
+	 * answers it compares with the ones they were worked out from, rather than values of their own (`IrVerifyStage`).
+	 */
+	public function factOf(id:Int, kind:Int, key:String, known:Bool, last:Int):Int
+		return fact(kind, key);
+
 	function unimplemented():compiler.core.InternalError
 		return new compiler.core.InternalError("A stage defines every method its run calls");
 }

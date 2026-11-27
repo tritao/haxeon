@@ -1749,7 +1749,6 @@ class FrontendCompilation {
 			passes.options = context.options;
 			passes.meter = meter;
 			passes.instrumentScope = build.instrumentScope;
-			passes.verifyMemo = context.state.verifyMemo;
 			// The stages over bodies keep their memos in the session too.
 			passes.stageMemos = context.options.keepSession ? context.state.stageMemos : null;
 			// The generator's functions are the pipeline's input and only a next build reads them again: a build that keeps no

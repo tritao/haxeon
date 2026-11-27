@@ -31,56 +31,105 @@ typedef RuntimeAbiDescriptor = {
 /** Canonical description of the runtime-visible ABI emitted to HashLink. */
 class RuntimeAbi {
 	/**
-	 * `signatures` keeps each function's signature text while the function is the same object. `previous`, the description of
-	 * the build before, lends the tables that read the same, so the descriptions a live session keeps of its publications share
+	 * `kept` keeps the text of each function, object, interface and enum while it is the same object. `previous`, the description
+	 * of the build before, lends the tables that read the same, so the descriptions a live session keeps of its publications share
 	 * what an edit did not change instead of each holding its own.
 	 */
-	public static function describe(program:IrProgram, ?signatures:compiler.ir.reuse.IrFunctionMemo<String>,
+	public static function describe(program:IrProgram, ?kept:RuntimeAbiTexts,
 			?previous:RuntimeAbiDescriptor):RuntimeAbiDescriptor {
-		var functions:Map<String, String> = [],
-			objects:Map<String, String> = [],
-			interfaces:Map<String, String> = [],
-			enums:Map<String, String> = [],
-			globals:Map<String, String> = [];
+		var names:Array<String> = [], texts:Array<String> = [];
 		for (fn in program.functions) {
-			var signature = signatures == null ? null : signatures.get(fn);
+			var signatures = kept == null ? null : kept.functions,
+				signature = signatures == null ? null : signatures.of(fn);
 			if (signature == null) {
 				signature = functionSignature(fn);
 				if (signatures != null)
-					signatures.set(fn, signature);
+					signature = signatures.keep(fn, signature);
 			}
-			functions.set(fn.name, signature);
+			names.push(fn.name);
+			texts.push(signature);
 		}
-		for (object in program.objects)
-			objects.set(object.name,
-				'kind=${object.isValue ? "value" : "object"};base=${object.base};interfaces=${object.interfaces.join(",")};fields=${[for (field in object.fields) fieldSignature(field)].join(",")};methods=${[for (method in object.methods) method.name + ":" + method.functionName].join(",")}');
-		for (declaration in program.interfaces)
-			interfaces.set(declaration.name,
-				'bases=${declaration.bases.join(",")};methods=${[for (method in declaration.methods) method.name + signature(method.arguments, method.result)].join(",")}');
+		var functions = table(names, texts, previous == null ? null : previous.functions);
+		names = [];
+		texts = [];
+		for (object in program.objects) {
+			names.push(object.name);
+			texts.push(kept == null ? objectText(object) : kept.text(object.name, object, objectText));
+		}
+		var objects = table(names, texts, previous == null ? null : previous.objects);
+		names = [];
+		texts = [];
+		for (declaration in program.interfaces) {
+			names.push(declaration.name);
+			texts.push(kept == null ? interfaceText(declaration) : kept.text(declaration.name, declaration,
+				interfaceText));
+		}
+		var interfaces = table(names, texts, previous == null ? null : previous.interfaces);
+		names = [];
+		texts = [];
 		for (declaration in program.enums) {
-			var schema = [
-				for (constructor in declaration.cases)
-					constructor.name + "(" + [for (parameter in constructor.params) typeKey(parameter)].join(",") + ")"
-			].join(";");
-			var storage = declaration.inlineStorage;
-			if (storage != null) schema = "inline=" + storage + ";" + schema;
-			enums.set(declaration.name, schema);
+			names.push(declaration.name);
+			texts.push(kept == null ? enumText(declaration) : kept.text(declaration.name, declaration, enumText));
 		}
+		var enums = table(names, texts, previous == null ? null : previous.enums);
+		var globals:Map<String, String> = [];
 		for (field in program.staticFields)
 			globals.set(field.name, typeKey(field.type));
 		var positional:Map<String, String> =
 			[for (name => fingerprint in program.positionalFingerprints) name => fingerprint],
 			places:Map<String, String> = [for (name => place in program.positionalPlaces) name => place];
 		return {
-			functions: sameOr(functions, previous == null ? null : previous.functions),
-			objects: sameOr(objects, previous == null ? null : previous.objects),
-			interfaces: sameOr(interfaces, previous == null ? null : previous.interfaces),
-			enums: sameOr(enums, previous == null ? null : previous.enums),
+			functions: functions,
+			objects: objects,
+			interfaces: interfaces,
+			enums: enums,
 			globals: sameOr(globals, previous == null ? null : previous.globals),
 			positional: sameOr(positional, previous == null ? null : previous.positional),
 			places: sameOr(places, previous == null ? null : previous.places),
 			sources: sameOr(program.positionalSources, previous == null ? null : previous.sources)
 		};
+	}
+
+	static function objectText(object:IrObject):String
+		return 'kind=${object.isValue ? "value" : "object"};base=${object.base};interfaces=${object.interfaces.join(",")};fields=${[for (field in object.fields) fieldSignature(field)].join(",")};methods=${[for (method in object.methods) method.name + ":" + method.functionName].join(",")}';
+
+	static function interfaceText(declaration:IrInterface):String
+		return 'bases=${declaration.bases.join(",")};methods=${[for (method in declaration.methods) method.name + signature(method.arguments, method.result)].join(",")}';
+
+	static function enumText(declaration:IrEnum):String {
+		var schema = [
+			for (constructor in declaration.cases)
+				constructor.name + "(" + [for (parameter in constructor.params) typeKey(parameter)].join(",") + ")"
+		].join(";");
+		var storage = declaration.inlineStorage;
+		return storage != null ? "inline=" + storage + ";" + schema : schema;
+	}
+
+	/**
+	 * The table of `names` and their `texts`: `previous` when it has exactly these entries, else a new one, a later entry of a name
+	 * taking its place.
+	 */
+	static function table(names:Array<String>, texts:Array<String>,
+			previous:Null<Map<String, String>>):Map<String, String> {
+		if (previous != null) {
+			var same = true;
+			for (index in 0...names.length)
+				if (previous.get(names[index]) != texts[index]) {
+					same = false;
+					break;
+				}
+			if (same) {
+				var count = 0;
+				for (_ in previous.keys())
+					count++;
+				if (count == names.length)
+					return previous;
+			}
+		}
+		var made:Map<String, String> = [];
+		for (index in 0...names.length)
+			made.set(names[index], texts[index]);
+		return made;
 	}
 
 	/** `previous` when it has exactly the entries of `next`, else `next`. */
@@ -154,4 +203,50 @@ class RuntimeAbi {
 			default:
 				IrTypeIdentity.write(out, type);
 		}
+}
+
+/**
+ * The texts the runtime ABI describes each function and declaration by (`RuntimeAbi.describe`), as kinds of the session's database:
+ * a function's while it is the same object (`IrFunctionValues`), a declaration's (an object, an interface, an enum) by the number
+ * of its name while it is the same object as the one the text was made of: one kind for the three, as names of different
+ * declarations differ, and one that did not would only have its text made again.
+ */
+class RuntimeAbiTexts {
+	final database:compiler.query.QueryDatabase;
+
+	public final functions:compiler.ir.reuse.IrFunctionValues<String>;
+
+	final declarations:compiler.query.ComputedQueryKind<RuntimeAbiText>;
+
+	public function new(database:compiler.query.QueryDatabase) {
+		this.database = database;
+		functions = new compiler.ir.reuse.IrFunctionValues<String>(database, "abi-functions",
+			(left, right) -> left == right);
+		declarations = database.register(new compiler.query.ComputedQueryKind<RuntimeAbiText>("abi-declarations",
+			RuntimeAbiText.same));
+	}
+
+	/** The text of `declaration`, named `name`: the one kept when it was made of that object, else `make`'s, kept. */
+	public function text<T>(name:String, declaration:T, make:T->String):String {
+		var key = compiler.ir.model.IrSymbol.of(name).id, known = declarations.kept(key);
+		if (known != null && known.declaration == declaration) {
+			declarations.hold(database, declarations.slotOf(key));
+			return known.text;
+		}
+		return declarations.put(database, key, new RuntimeAbiText(declaration, make(declaration))).text;
+	}
+}
+
+/** A declaration's text in the runtime ABI, with the declaration it was made of. */
+class RuntimeAbiText {
+	public final declaration:Dynamic;
+	public final text:String;
+
+	public function new(declaration:Dynamic, text:String) {
+		this.declaration = declaration;
+		this.text = text;
+	}
+
+	public static function same(left:RuntimeAbiText, right:RuntimeAbiText):Bool
+		return left.declaration == right.declaration && left.text == right.text;
 }

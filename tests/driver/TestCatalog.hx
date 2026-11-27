@@ -85,7 +85,7 @@ class TestCatalog {
 		"MemberBoundarySourceMain",
 		"WasmBackendSessionMain",
 		"PackedValuePatchMain",
-		"IrVerifyMemoMain",
+		"IrVerifyStageMain",
 		"InlinerMain",
 		"InlinerSourceIdentityMain",
 		"IrStateEqualityMain",

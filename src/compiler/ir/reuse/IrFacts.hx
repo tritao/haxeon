@@ -18,8 +18,7 @@ class IrAnswerSource {
 
 /**
  * A table of facts with prints, the one a memo outside the query engine checks what it read against: HashLink lowering's
- * (`HlLoweringView`) and verification's (`IrVerifyMemo`); the per-function stages and the inliner read theirs through the engine
- * (`IrStageFacts`). A fact is what one reader knows about the program besides the function it works on, named by a space (a stage
+ * (`HlLoweringView`); the per-function stages, the inliner and verification read theirs through the engine (`IrStageFacts`). A fact is what one reader knows about the program besides the function it works on, named by a space (a stage
  * and a kind it defines) and a key. Its value is an answer compared per kind (`IrAnswerSource`); its print is a number that changes
  * exactly when the answer does, never given twice, so a memo entry that recorded a fact at a print still holds while the fact has
  * that print.

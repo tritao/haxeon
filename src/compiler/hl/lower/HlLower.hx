@@ -111,6 +111,9 @@ class HlLower {
 	/** The functions of the last build, to keep instead of lowering again; filled with this build's at the end. */
 	final loweredCache:Null<compiler.hl.incremental.HlLoweredCache>;
 
+	/** What the steps around lowering work out from each function, kept in the session's database (`HlFunctionQueries`). */
+	final queries:Null<compiler.hl.incremental.HlFunctionQueries>;
+
 	/** How many functions this build took from the cache. */
 	public var reusedFunctions = 0;
 
@@ -165,7 +168,8 @@ class HlLower {
 			developmentMetadata:Bool = true,
 			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
 			trustCache:Bool = false, ?frozen:String->Bool, checkReuse:Bool = false,
-			?sources:compiler.core.SourceAnchor.SourceAnchors, liveChain:Int = 0):MeasuredHlCode {
+			?sources:compiler.core.SourceAnchor.SourceAnchors, liveChain:Int = 0,
+			?queries:compiler.hl.incremental.HlFunctionQueries):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -195,7 +199,7 @@ class HlLower {
 			allocationAfterVerification = AllocationMeter.sample(),
 			lowerer = new HlLower(program, symbols, indices, affected, runtimeNatives, fieldReserve,
 				developmentMetadata, loweredCache, trustCache, frozen, checkReuse, sources, !trustCache,
-				liveChain),
+				liveChain, queries),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
@@ -243,8 +247,9 @@ class HlLower {
 			developmentMetadata:Bool = true, ?loweredCache:compiler.hl.incremental.HlLoweredCache,
 			trustCache:Bool = false,
 			?frozen:String->Bool, checkReuse:Bool = false, ?sources:compiler.core.SourceAnchor.SourceAnchors,
-			relocatable:Bool = false, liveChain:Int = 0) {
+			relocatable:Bool = false, liveChain:Int = 0, ?queries:compiler.hl.incremental.HlFunctionQueries) {
 		this.liveChain = liveChain;
+		this.queries = queries;
 		this.frozen = frozen;
 		this.relocatable = relocatable;
 		this.symbols = symbols;
@@ -276,7 +281,8 @@ class HlLower {
 		// it reads none about fields, which an edit elsewhere can change.
 		if (!trustCache)
 			view.useNonNullFields(compiler.ir.analysis.IrNonNullFields.of(program,
-				loweredCache == null ? null : loweredCache.nonNullStores, checkingLinks));
+				queries == null ? null : queries.fieldStores, queries == null ? null : queries.fieldKeys,
+				checkingLinks));
 		// A method of this lowering, so taken once every field has its value.
 		allocateRegister = allocateTemporary;
 	}
@@ -358,7 +364,7 @@ class HlLower {
 	 * rows need. `memo` keeps each function's own list (`functionNatives`) while the function is the same object.
 	 */
 	public static function discoverRuntimeNatives(program:IrProgram, ?baseline:Array<IrNative>,
-			?selected:Array<String>, ?memo:compiler.ir.reuse.IrFunctionMemo<Array<IrNative>>):Array<IrNative> {
+			?selected:Array<String>, ?memo:compiler.ir.reuse.IrFunctionValues<Array<IrNative>>):Array<IrNative> {
 		var runtimeNatives = baseline == null ? program.natives.copy() : baseline.copy(),
 			selectedNames:Map<String, Bool> = [];
 		if (baseline != null)
@@ -381,11 +387,11 @@ class HlLower {
 				selectedNames.set(name, true);
 		for (fn in program.functions)
 			if (selected == null || selectedNames.exists(fn.name)) {
-				var own = memo == null ? null : memo.get(fn);
+				var own = memo == null ? null : memo.of(fn);
 				if (own == null) {
 					own = functionNatives(fn);
 					if (memo != null)
-						memo.set(fn, own);
+						own = memo.keep(fn, own);
 				}
 				for (native in own)
 					ensureNative(runtimeNatives, native.name, native.arguments, native.result, native.library,
@@ -406,8 +412,11 @@ class HlLower {
 				row = body.nextRow(row);
 			}
 		}
-		return own;
+		return own.length == 0 ? NO_NATIVES : own;
 	}
+
+	@:processWide("the natives of a function whose rows call none, never changed")
+	static final NO_NATIVES:Array<IrNative> = [];
 
 	/** The runtime natives lowering row `row` of `body` calls, added to `runtimeNatives`. */
 	static function discoverRowNatives(runtimeNatives:Array<IrNative>, body:IrBody, row:Int, valueArrayRead:Int):Void
@@ -470,7 +479,8 @@ class HlLower {
 		internType(IrType.Bytes);
 		var runtimeEnums = developmentMetadata
 			? program.enums : compiler.ir.passes.enums.IrEnumRuntimeTypes.declarations(program,
-			loweredCache == null ? null : loweredCache.summaries.enumUses);
+			queries == null ? null : queries.enumUses, queries == null ? null : queries.database,
+			checkingLinks || checkingTrust);
 		var boxedEnums = [for (declaration in runtimeEnums) declaration.name => true];
 		for (declaration in program.enums)
 			if (!boxedEnums.exists(declaration.name))

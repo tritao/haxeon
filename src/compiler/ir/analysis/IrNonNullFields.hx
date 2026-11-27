@@ -6,12 +6,12 @@ import compiler.ir.model.IrBody;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrValueId;
-import compiler.ir.reuse.IrFunctionMemo;
+import compiler.ir.reuse.IrFunctionValues;
 
 /**
  * The fields the contributions name, `Class.field` as the class the receiver's type names and the field, numbered the first time
- * one is named: a contribution keeps numbers, and the whole-program step reads them without making a key. A session's memo keeps
- * one (`IrFieldStoreMemo`), which only grows, as the field names of a program do.
+ * one is named: a contribution keeps numbers, and the whole-program step reads them without making a key. A session keeps one
+ * with the contributions (`HlFunctionQueries`), which only grows, as the field names of a program do.
  */
 @:nullSafety(Strict)
 class IrFieldKeys {
@@ -46,19 +46,6 @@ class IrFieldKeys {
 	/** Key `key` as text, `Class.field`: for diagnostics. */
 	public inline function text(key:Int):String
 		return owners[key] + "." + fields[key];
-}
-
-/**
- * What the whole-program step of `IrNonNullFields` reads of each final function, from that function alone (`IrFieldStores`), kept
- * while the function is the same object, with the field keys the contributions name. A session keeps one with its lowered
- * functions (`HlLoweredCache`).
- */
-@:nullSafety(Strict)
-class IrFieldStoreMemo {
-	public final keys = new IrFieldKeys();
-	public final functions = new IrFunctionMemo<IrFieldStores>();
-
-	public function new() {}
 }
 
 /**
@@ -201,7 +188,7 @@ class IrObjectInit {
  *   reflective write names a field it cannot see (which rules out every field).
  *
  * What it reads of each function it reads from that function alone (`IrFieldStores`), kept by the session while the function is
- * the same object (`IrFieldStoreMemo`), so a build reads only the functions it made. The step over the program combines them on
+ * the same object (`IrFunctionValues`), so a build reads only the functions it made. The step over the program combines them on
  * numbers: each declared field of the program is a slot, and a contribution's keys resolve to slots once per build.
  */
 @:nullSafety(Strict)
@@ -235,13 +222,15 @@ class IrNonNullFields {
 	final known:Map<String, Map<String, Bool>> = [];
 
 	/**
-	 * The table for `program`'s final functions and objects, kept on it while they are the same arrays. `memo` keeps the
-	 * contributions for later builds; with `checks` (`--check-reuse`), each one it reuses is read again and compared.
+	 * The table for `program`'s final functions and objects, kept on it while they are the same arrays. `stores` keeps the
+	 * contributions for later builds, with the field `keys` they name; with `checks` (`--check-reuse`), each one it reuses is read
+	 * again and compared.
 	 */
-	public static function of(program:IrProgram, ?memo:IrFieldStoreMemo, checks = false):IrNonNullFields {
+	public static function of(program:IrProgram, ?stores:IrFunctionValues<IrFieldStores>, ?keys:IrFieldKeys,
+			checks = false):IrNonNullFields {
 		var table = program.nonNullFields;
 		if (table == null || table.functions != program.functions || table.objects != program.objects) {
-			table = new IrNonNullFields(program, memo != null ? memo : new IrFieldStoreMemo(), checks);
+			table = new IrNonNullFields(program, stores, keys != null ? keys : new IrFieldKeys(), checks);
 			program.nonNullFields = table;
 		}
 		return table;
@@ -276,10 +265,10 @@ class IrNonNullFields {
 		return names.join(",");
 	}
 
-	function new(program:IrProgram, memo:IrFieldStoreMemo, checks:Bool) {
+	function new(program:IrProgram, kept:Null<IrFunctionValues<IrFieldStores>>, keys:IrFieldKeys, checks:Bool) {
 		functions = program.functions;
 		objects = program.objects;
-		keys = memo.keys;
+		this.keys = keys;
 		// The subclasses of each class by its name, which need not be an object of the program.
 		var children:Map<String, Array<Int>> = [], slotCount = 0;
 		for (index in 0...objects.length) {
@@ -299,8 +288,7 @@ class IrNonNullFields {
 			bases.push(parent == null ? -1 : parent);
 		}
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object];
-		var stores = [for (fn in functions) storesOf(fn, byName, memo, checks)];
-		memo.functions.endBuild();
+		var stores = [for (fn in functions) storesOf(fn, byName, kept, keys, checks)];
 		for (_ in 0...slotCount)
 			candidates.push(false);
 		for (_ in 0...keys.count())
@@ -525,20 +513,20 @@ class IrNonNullFields {
 	}
 
 	/**
-	 * The contribution of `fn`: the one `memo` keeps for it, or one read now and kept. With `checks`, one kept is read again
+	 * The contribution of `fn`: the one `stores` keeps for it, or one read now and kept. With `checks`, one kept is read again
 	 * and must be the same.
 	 */
-	static function storesOf(fn:IrFunction, objects:Map<String, IrObject>, memo:IrFieldStoreMemo,
-			checks:Bool):IrFieldStores {
-		var known = memo.functions.get(fn);
+	static function storesOf(fn:IrFunction, objects:Map<String, IrObject>, stores:Null<IrFunctionValues<IrFieldStores>>,
+			keys:IrFieldKeys, checks:Bool):IrFieldStores {
+		if (stores == null)
+			return read(fn, objects, keys);
+		var known = stores.of(fn);
 		if (known != null) {
-			if (checks && !read(fn, objects, memo.keys).same(known))
+			if (checks && !read(fn, objects, keys).same(known))
 				throw new InternalError('--check-reuse: the field stores kept for ${fn.name} differ from its body');
 			return known;
 		}
-		var made = read(fn, objects, memo.keys);
-		memo.functions.set(fn, made);
-		return made;
+		return stores.keep(fn, read(fn, objects, keys));
 	}
 
 	static function read(fn:IrFunction, objects:Map<String, IrObject>, keys:IrFieldKeys):IrFieldStores {

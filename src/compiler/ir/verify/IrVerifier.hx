@@ -23,7 +23,6 @@ import compiler.ir.passes.scalars.IrScalarArguments;
 import compiler.ir.passes.scalars.IrScalarWordBits;
 import compiler.ir.passes.values.IrInlineValueLayout;
 import compiler.ir.passes.values.IrValueLaneReference;
-import compiler.ir.verify.IrVerifyMemo.IrVerifyTable;
 
 import compiler.core.InternalError;
 import compiler.ir.model.Ir;
@@ -54,13 +53,24 @@ class IrVerifier {
 	}
 
 	/** Physical values must not retain an inline enum's nominal boxed carrier. */
-	public static function verifyInlineEnumsLowered(program:IrProgram, ?memo:IrVerifyMemo):Void {
+	public static function verifyInlineEnumsLowered(program:IrProgram):Void {
+		var checks = inlineEnumChecks(program);
+		if (checks != null)
+			for (fn in program.functions)
+				checks.check(fn);
+	}
+
+	/**
+	 * The program's part of `verifyInlineEnumsLowered`, checked now, and the check of each function, which reads what `context`
+	 * spells besides the function; null when the program has no inline enum.
+	 */
+	static function inlineEnumChecks(program:IrProgram):Null<IrInlineEnumChecks> {
 		var selected:Map<String, IrEnum> = [
 			for (declaration in program.enums)
 				if (declaration.inlineStorage != null) declaration.name => declaration
 		];
 		if (!selected.keys().hasNext())
-			return;
+			return null;
 		function forbidden(type:IrType):Null<String>
 			return switch type {
 				case Enum(name): selected.exists(name) ? name : null;
@@ -135,28 +145,19 @@ class IrVerifier {
 			check(native.result, 'C native result ${native.name}');
 		}
 		// A function's check reads the selected enums, the escape helpers and the native symbols besides the function itself.
-		if (memo != null) {
-			var selectedNames = [for (name in selected.keys()) name],
-				escapeNames = [for (name in escapes.keys()) name];
-			selectedNames.sort(Reflect.compare);
-			escapeNames.sort(Reflect.compare);
-			var context = selectedNames.join(",")
-				+ "|"
-				+ escapeNames.join(",")
-				+ "|"
-				+ [for (native in program.natives) native.name + "=" + native.symbol].join(",");
-			if (context != memo.enumContext) {
-				for (name in [for (name in memo.enumChecked.keys()) name])
-					memo.enumChecked.remove(name);
-				memo.enumContext = context;
-			}
-		}
-		for (fn in program.functions) {
-			if (memo != null && memo.enumChecked.get(fn.name) == fn)
-				continue;
+		var selectedNames = [for (name in selected.keys()) name],
+			escapeNames = [for (name in escapes.keys()) name];
+		selectedNames.sort(Reflect.compare);
+		escapeNames.sort(Reflect.compare);
+		var context = selectedNames.join(",")
+			+ "|"
+			+ escapeNames.join(",")
+			+ "|"
+			+ [for (native in program.natives) native.name + "=" + native.symbol].join(",");
+		return new IrInlineEnumChecks(context, function(fn:IrFunction):Void {
 			var original = IrTypedInterfaceDispatch.originalEntryName(fn.name);
 			if (escapes.exists(original))
-				continue;
+				return;
 			for (argument in fn.arguments)
 				if (fails(argument.type))
 					check(argument.type, 'argument ${fn.name}');
@@ -256,9 +257,7 @@ class IrVerifier {
 						default:
 					}
 			}
-			if (memo != null)
-				memo.enumChecked.set(fn.name, fn);
-		}
+		});
 	}
 
 	static function logicalEnumDescriptorFunction(name:String):Bool
@@ -267,26 +266,30 @@ class IrVerifier {
 			|| StringTools.startsWith(name, "$enum-dynamic-test:");
 
 	public static function verify(program:IrProgram):Void {
-		verifySelected(program, null, null);
-	}
-
-	/**
-	 * `verify`, skipping the functions the last verification accepted whose IR and whose reads of the rest of the program are unchanged
-	 * (see `IrVerifyMemo`). The program-level checks still run in full. With `checkBodies` (`CompileOptions.checkIrBody`), each function
-	 * it verifies must also round-trip through an `IrBody` (docs/design/IR_CORE_COLUMNS.md).
-	 */
-	public static function verifyReusing(program:IrProgram, memo:IrVerifyMemo, checkBodies:Bool = false):Void {
-		verifySelected(program, null, memo, checkBodies);
+		verifySelected(program, null);
 	}
 
 	/** Verify shared program metadata and only the named function bodies. */
 	public static function verifyFunctions(program:IrProgram, names:Map<String, Bool>):Void {
-		verifySelected(program, names, null);
+		verifySelected(program, names);
 	}
 
-	/** With `checkBodies`, each verified function's body round trip is checked too. */
-	static function verifySelected(program:IrProgram, selected:Null<Map<String, Bool>>, memo:Null<IrVerifyMemo>,
-			checkBodies = false):Void {
+	static function verifySelected(program:IrProgram, selected:Null<Map<String, Bool>>):Void {
+		var checked = prepare(program, false), inlineEnums = checked.inlineEnums;
+		if (inlineEnums != null)
+			for (fn in program.functions)
+				inlineEnums.check(fn);
+		for (fn in program.functions)
+			if (selected == null || selected.exists(fn.name))
+				checked.verify(fn);
+	}
+
+	/**
+	 * Checks what the program declares and how its functions fit together, and gives what the check of each function reads of the
+	 * program (`IrVerifyProgram.verify`). With `checkBodies` (`CompileOptions.checkIrBody`), each function verified must also
+	 * round-trip through an `IrBody` (docs/design/IR_CORE_COLUMNS.md).
+	 */
+	public static function prepare(program:IrProgram, checkBodies:Bool):IrVerifyProgram {
 		var signatures:Map<String, {arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}> = [];
 		var closureCasts:Map<String, String> = [];
 		for (fn in program.functions)
@@ -353,7 +356,8 @@ class IrVerifier {
 		for (object in program.objects)
 			if (object.isValue && StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX))
 				physicalValues.set(object.name, true);
-		var physicalTable = new IrVerifyTable<Bool>("physicalValues", (key:String) -> physicalValues.get(key),
+		var physicalTable = new IrVerifyTable<Bool>(IrVerifyProgram.PHYSICAL_VALUES,
+			(key:String) -> physicalValues.get(key),
 			(key:String) -> physicalValues.exists(key));
 		var changed = true;
 		while (changed) {
@@ -379,7 +383,7 @@ class IrVerifier {
 			IrInlineEnumStorage.validate(enumDecl, objectTable);
 			enums.set(enumDecl.name, enumDecl);
 		}
-		verifyInlineEnumsLowered(program, memo);
+		var inlineEnums = inlineEnumChecks(program);
 		IrEnumTagStorage.verify(program);
 		var globals:Map<String, IrType> = [];
 		for (field in program.staticFields) {
@@ -442,70 +446,28 @@ class IrVerifier {
 		}
 		if (!signatures.exists(program.entryPoint))
 			throw new InternalError('Unknown IR entry point "${program.entryPoint}"');
-		if (memo != null) {
-			memo.attach([
-				"signatures" => k -> signatures.get(k),
-				"objects" => k -> objects.get(k),
-				"interfaces" => k -> interfaces.get(k),
-				"enums" => k -> enums.get(k),
-				"globals" => k -> globals.get(k),
-				"scalarFunctions" => k -> scalarFunctions.get(k),
-				"carrierSlots" => k -> carrierSlots.get(k),
-				"physicalValues" => k -> physicalValues.get(k),
-				"closureCasts" => k -> closureCasts.get(k)
-			]);
-			memo.forget([for (fn in program.functions) fn.name => true]);
-		}
-		var tables = {
-			closureCasts: new IrVerifyTable<String>("closureCasts", (key: String) -> closureCasts.get(key),
-				(key: String) -> closureCasts.exists(key), memo),
-			signatures: new IrVerifyTable<{
+		return new IrVerifyProgram(checkBodies, inlineEnums,
+			new IrVerifyTable<{
 				arguments:Array<IrType>,
 				result:IrType,
 				kind:IrFunctionKind
-			}>("signatures", (key: String) -> signatures.get(key), (key: String) -> signatures.exists(key), memo),
-			objects: new IrVerifyTable<IrObject>("objects", (key: String) -> objects.get(key),
-				(key: String) -> objects.exists(key), memo),
-			interfaces: new IrVerifyTable<IrInterface>("interfaces", (key: String) -> interfaces.get(key),
-				(key: String) -> interfaces.exists(key), memo),
-			enums: new IrVerifyTable<IrEnum>("enums", (key: String) -> enums.get(key),
-				(key: String) -> enums.exists(key), memo),
-			globals: new IrVerifyTable<IrType>("globals", (key: String) -> globals.get(key),
-				(key: String) -> globals.exists(key), memo),
-			scalarFunctions: new IrVerifyTable<Bool>("scalarFunctions", (key: String) -> scalarFunctions.get(key),
-				(key: String) -> scalarFunctions.exists(key),
-				memo),
-			carrierSlots: new IrVerifyTable<Bool>("carrierSlots", (key: String) -> carrierSlots.get(key),
-				(key: String) -> carrierSlots.exists(key), memo),
-			physicalValues: new IrVerifyTable<Bool>("physicalValues", (key: String) -> physicalValues.get(key),
-				(key: String) -> physicalValues.exists(key), memo)
-		};
-		for (fn in program.functions)
-			if (selected == null || selected.exists(fn.name)) {
-				if (memo != null && memo.holds(fn))
-					continue;
-				try {
-					if (memo != null)
-						memo.begin();
-					verifyFunction(fn, tables.signatures, tables.objects, tables.interfaces, tables.enums,
-						tables.globals, tables.scalarFunctions,
-						tables.carrierSlots, tables.physicalValues, tables.closureCasts);
-					if (checkBodies) {
-						var difference = IrBody.roundTripDifference(fn);
-						if (difference != null)
-							throw new InternalError('IR body round trip: $difference');
-					}
-					// The verification read the decoding of a function that is a body: only the body stays.
-					if (fn.body != null)
-						fn.releaseDecoded();
-					if (memo != null)
-						memo.accept(fn);
-				} catch (error:InternalError) {
-					if (memo != null)
-						memo.abandon();
-					throw new InternalError('IR verification failed for ${fn.name}: ${error.message}', error.span);
-				}
-			}
+			}>(IrVerifyProgram.SIGNATURES, (key:String) -> signatures.get(key), (key:String) -> signatures.exists(key)),
+			new IrVerifyTable<IrObject>(IrVerifyProgram.OBJECTS, (key:String) -> objects.get(key),
+			(key:String) -> objects.exists(key)),
+			new IrVerifyTable<IrInterface>(IrVerifyProgram.INTERFACES, (key:String) -> interfaces.get(key),
+			(key:String) -> interfaces.exists(key)),
+			new IrVerifyTable<IrEnum>(IrVerifyProgram.ENUMS, (key:String) -> enums.get(key),
+			(key:String) -> enums.exists(key)),
+			new IrVerifyTable<IrType>(IrVerifyProgram.GLOBALS, (key:String) -> globals.get(key),
+			(key:String) -> globals.exists(key)),
+			new IrVerifyTable<Bool>(IrVerifyProgram.SCALAR_FUNCTIONS, (key:String) -> scalarFunctions.get(key),
+			(key:String) -> scalarFunctions.exists(key)),
+			new IrVerifyTable<Bool>(IrVerifyProgram.CARRIER_SLOTS, (key:String) -> carrierSlots.get(key),
+			(key:String) -> carrierSlots.exists(key)),
+			new IrVerifyTable<Bool>(IrVerifyProgram.PHYSICAL_VALUES, (key:String) -> physicalValues.get(key),
+			(key:String) -> physicalValues.exists(key)),
+			new IrVerifyTable<String>(IrVerifyProgram.CLOSURE_CASTS, (key:String) -> closureCasts.get(key),
+			(key:String) -> closureCasts.exists(key)));
 	}
 
 	static function validScalarStorage(type:IrType, storage:IrScalarStorage):Bool {
@@ -602,6 +564,7 @@ class IrVerifier {
 		return size > 0 && size <= 0x10000000 && alignment > 0 && alignment <= 0x10000
 			&& (alignment & (alignment - 1)) == 0;
 
+	@:allow(compiler.ir.verify.IrVerifyProgram)
 	static function verifyFunction(fn:IrFunction, signatures:IrVerifyTable<{
 		arguments:Array<IrType>,
 		result:IrType,
@@ -1822,9 +1785,10 @@ class IrVerifier {
 
 	public static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>,
 			interfaces:Map<String, IrInterface>):Bool
-		return compatible(actual, expected, new IrVerifyTable<IrObject>("objects", (key:String) -> objects.get(key),
+		return compatible(actual, expected,
+			new IrVerifyTable<IrObject>(IrVerifyProgram.OBJECTS, (key:String) -> objects.get(key),
 			(key:String) -> objects.exists(key)),
-			new IrVerifyTable<IrInterface>("interfaces", (key:String) -> interfaces.get(key),
+			new IrVerifyTable<IrInterface>(IrVerifyProgram.INTERFACES, (key:String) -> interfaces.get(key),
 			(key:String) -> interfaces.exists(key)));
 
 	static function compatible(actual:IrType, expected:IrType, objects:IrVerifyTable<IrObject>,
@@ -2015,4 +1979,150 @@ class IrValueArrayLanes {
 		names.sort(Reflect.compare);
 		return names.join(",");
 	}
+}
+
+/** The check of each function `IrVerifier.inlineEnumChecks` gives, which reads what `context` spells besides the function. */
+class IrInlineEnumChecks {
+	public final context:String;
+	public final check:IrFunction->Void;
+
+	public function new(context:String, check:IrFunction->Void) {
+		this.context = context;
+		this.check = check;
+	}
+}
+
+/**
+ * What the check of each function reads of the program (`IrVerifier.prepare`): its tables, each a kind of fact (`SIGNATURES` to
+ * `CLOSURE_CASTS`), and the inline enum check, whose context is one fact (`INLINE_ENUMS`). A check reads a table only through
+ * `get` and `exists`, recorded as reads of the session's facts when a reader is given (`IrVerifyStage`).
+ */
+class IrVerifyProgram {
+	public static inline final SIGNATURES = 0;
+	public static inline final OBJECTS = 1;
+	public static inline final INTERFACES = 2;
+	public static inline final ENUMS = 3;
+	public static inline final GLOBALS = 4;
+	public static inline final SCALAR_FUNCTIONS = 5;
+	public static inline final CARRIER_SLOTS = 6;
+	public static inline final PHYSICAL_VALUES = 7;
+	public static inline final CLOSURE_CASTS = 8;
+	public static inline final INLINE_ENUMS = 9;
+
+	final checkBodies:Bool;
+
+	public final inlineEnums:Null<IrInlineEnumChecks>;
+
+	final signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>;
+	final objects:IrVerifyTable<IrObject>;
+	final interfaces:IrVerifyTable<IrInterface>;
+	final enums:IrVerifyTable<IrEnum>;
+	final globals:IrVerifyTable<IrType>;
+	final scalarFunctions:IrVerifyTable<Bool>;
+	final carrierSlots:IrVerifyTable<Bool>;
+	final physicalValues:IrVerifyTable<Bool>;
+	final closureCasts:IrVerifyTable<String>;
+
+	public function new(checkBodies:Bool, inlineEnums:Null<IrInlineEnumChecks>,
+			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>,
+			objects:IrVerifyTable<IrObject>, interfaces:IrVerifyTable<IrInterface>, enums:IrVerifyTable<IrEnum>,
+			globals:IrVerifyTable<IrType>, scalarFunctions:IrVerifyTable<Bool>, carrierSlots:IrVerifyTable<Bool>,
+			physicalValues:IrVerifyTable<Bool>, closureCasts:IrVerifyTable<String>) {
+		this.checkBodies = checkBodies;
+		this.inlineEnums = inlineEnums;
+		this.signatures = signatures;
+		this.objects = objects;
+		this.interfaces = interfaces;
+		this.enums = enums;
+		this.globals = globals;
+		this.scalarFunctions = scalarFunctions;
+		this.carrierSlots = carrierSlots;
+		this.physicalValues = physicalValues;
+		this.closureCasts = closureCasts;
+	}
+
+	/** Records the tables' reads in `reader` from here on (`IrVerifyTable.get`). */
+	public function readThrough(reader:compiler.ir.reuse.IrFactReader):Void {
+		signatures.reader = reader;
+		objects.reader = reader;
+		interfaces.reader = reader;
+		enums.reader = reader;
+		globals.reader = reader;
+		scalarFunctions.reader = reader;
+		carrierSlots.reader = reader;
+		physicalValues.reader = reader;
+		closureCasts.reader = reader;
+	}
+
+	/** What a read of `key` in the table of `kind` gets, or the inline enum check's context. */
+	public function answer(kind:Int, key:String):Dynamic {
+		var enumChecks = inlineEnums;
+		return switch kind {
+			case SIGNATURES: signatures.answer(key);
+			case OBJECTS: objects.answer(key);
+			case INTERFACES: interfaces.answer(key);
+			case ENUMS: enums.answer(key);
+			case GLOBALS: globals.answer(key);
+			case SCALAR_FUNCTIONS: scalarFunctions.answer(key);
+			case CARRIER_SLOTS: carrierSlots.answer(key);
+			case PHYSICAL_VALUES: physicalValues.answer(key);
+			case CLOSURE_CASTS: closureCasts.answer(key);
+			case _: enumChecks == null ? null : enumChecks.context;
+		};
+	}
+
+	/** Checks `fn` against the program. */
+	public function verify(fn:IrFunction):Void {
+		try {
+			IrVerifier.verifyFunction(fn, signatures, objects, interfaces, enums, globals, scalarFunctions,
+				carrierSlots,
+				physicalValues, closureCasts);
+			if (checkBodies) {
+				var difference = IrBody.roundTripDifference(fn);
+				if (difference != null)
+					throw new InternalError('IR body round trip: $difference');
+			}
+			// The verification read the decoding of a function that is a body: only the body stays.
+			if (fn.body != null)
+				fn.releaseDecoded();
+		} catch (error:InternalError)
+			throw new InternalError('IR verification failed for ${fn.name}: ${error.message}', error.span);
+	}
+}
+
+/**
+ * A program table as the function-level verifier sees it: `get` and `exists` only, each a read of the fact of the table's kind and
+ * the key when a reader records them (`IrVerifyProgram.readThrough`). A table has no way to iterate, so a function's check cannot
+ * read what it did not record.
+ */
+class IrVerifyTable<V> {
+	final read:String->Null<V>;
+	final has:String->Bool;
+	final kind:Int;
+
+	public var reader:Null<compiler.ir.reuse.IrFactReader> = null;
+
+	public function new(kind:Int, read:String->Null<V>, has:String->Bool) {
+		this.kind = kind;
+		this.read = read;
+		this.has = has;
+	}
+
+	public function get(key:String):Null<V> {
+		var recording = reader;
+		if (recording != null)
+			recording.read(kind, key);
+		return read(key);
+	}
+
+	public function exists(key:String):Bool {
+		var recording = reader;
+		if (recording != null)
+			recording.read(kind, key);
+		return read(key) != null || has(key);
+	}
+
+	/** What a read of `key` gets, as the fact's answer. */
+	public function answer(key:String):Dynamic
+		return read(key);
 }

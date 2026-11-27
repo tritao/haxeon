@@ -213,7 +213,6 @@ class Compiler {
 	public var inlineCache(get, never):compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 	public var pipelineSnapshot(get, never):Null<compiler.compilation.PipelineSnapshot>;
 	public var backend(get, never):BackendSession;
-	public var verifyMemo(get, never):compiler.ir.verify.IrVerifyMemo;
 	public var configurationIdentity(default, null):String = "default";
 
 	var configurationScopeIdentity:String = "default";
@@ -868,9 +867,6 @@ class Compiler {
 
 	function get_backend():BackendSession
 		return state.backend;
-
-	function get_verifyMemo():compiler.ir.verify.IrVerifyMemo
-		return state.verifyMemo;
 
 	function identitySalt():String {
 		var version = defines.get("compiler-version");

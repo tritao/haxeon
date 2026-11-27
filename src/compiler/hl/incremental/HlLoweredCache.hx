@@ -20,15 +20,6 @@ class HlLoweredCache {
 	/** The facts the entries read, with their prints (`HlLoweredFunction.facts`), shared by the copies like `keys`. */
 	public final facts:compiler.hl.lower.HlLoweringView.HlLoweringFacts;
 
-	/** The field stores each final function makes (`IrNonNullFields`), while it is the same object; shared by the copies like `keys`. */
-	public final nonNullStores:compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo;
-
-	/** What the steps around lowering work out from each function alone, shared by the copies like `keys`. */
-	public final summaries:HlFunctionSummaries;
-
-	/** Each function's form with its runtime calls through helpers, while its IR is the same object (`IrSharedRuntimeCalls`). */
-	public var sharedCalls = new compiler.hl.IrSharedRuntimeCalls.IrSharedCallsMemo();
-
 	/** The tables the last build's functions were relocated into, for the next to extend (`HlLoweredTables`). */
 	public var tables:Null<HlLoweredTables> = null;
 
@@ -38,22 +29,16 @@ class HlLoweredCache {
 	/** What the entries were lowered for besides their IR (see `HashLinkBackendSession.loweringEnvironment`). */
 	public var environment = "";
 
-	public function new(?keys:HlRequestKeys,
-			?facts:compiler.hl.lower.HlLoweringView.HlLoweringFacts, ?summaries:HlFunctionSummaries,
-			?nonNullStores:compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo) {
-		this.nonNullStores = nonNullStores == null
-			? new compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo() : nonNullStores;
-		this.summaries = summaries == null ? new HlFunctionSummaries() : summaries;
+	public function new(?keys:HlRequestKeys, ?facts:compiler.hl.lower.HlLoweringView.HlLoweringFacts) {
 		this.keys = keys == null ? new HlRequestKeys() : keys;
 		this.facts = facts == null ? new compiler.hl.lower.HlLoweringView.HlLoweringFacts() : facts;
 	}
 
 	public function copy():HlLoweredCache {
-		var result = new HlLoweredCache(keys, facts, summaries, nonNullStores);
+		var result = new HlLoweredCache(keys, facts);
 		result.entries = entries;
 		entriesShared = true;
 		result.entriesShared = true;
-		result.sharedCalls = sharedCalls.copy();
 		result.environment = environment;
 		result.tables = tables;
 		result.sections = sections;

@@ -6,7 +6,6 @@ import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrOperands;
 import compiler.ir.model.IrProgramIndex;
 import compiler.ir.model.IrTypeIds;
-import compiler.ir.reuse.IrFunctionMemo;
 
 import compiler.core.InternalError;
 import compiler.ir.model.Ir.IrIntrinsic;
@@ -50,11 +49,15 @@ class IrReachability {
 			keepLiveClasses = false):Map<String, Bool>
 		return walkWithGeneratedRuntimeRoots(program, entry, additionalRoots, keepLiveClasses).reachable;
 
-	/** `withGeneratedRuntimeRoots`, with the finished walk: what it reached, the natives it calls and the classes it mentions. */
+	/**
+	 * `withGeneratedRuntimeRoots`, with the finished walk: what it reached, the natives it calls and the classes it mentions. `edges`
+	 * gives a reached function's edges in place of its body, and `signature` is told of each reached function whose argument and
+	 * result types the walk reads (`IrWalkMemo.summary`, `IrWalkMemo.signature`).
+	 */
 	public static function walkWithGeneratedRuntimeRoots(program:IrProgram, entry:String,
 			?additionalRoots:Array<String>,
-			keepLiveClasses = false, ?memo:IrFunctionMemo<IrBodyEdges>):IrReachabilityWalk {
-		var walk = new IrReachabilityWalk(program, keepLiveClasses, memo);
+			keepLiveClasses = false, ?edges:IrFunction->IrBodyEdges, ?signature:IrFunction->Void):IrReachabilityWalk {
+		var walk = new IrReachabilityWalk(program, keepLiveClasses, edges, signature);
 		walk.visit(entry);
 		if (additionalRoots != null)
 			for (root in additionalRoots)
@@ -110,7 +113,7 @@ class IrReachability {
 	 * stay, and so does every class their types mention.
 	 */
 	public static function trimTables(program:IrProgram, walk:IrReachabilityWalk,
-			?memo:IrFunctionMemo<IrBodyEdges>):Void {
+			?edges:IrFunction->IrBodyEdges):Void {
 		var fatal = false, globals:Map<String, Bool> = [];
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var kept:Map<String, Bool> = [], classes:Array<String> = [];
@@ -122,13 +125,7 @@ class IrReachability {
 		function mention(type:IrType):Void
 			namedClasses(type, keep);
 		for (fn in program.functions) {
-			var summary = memo == null ? IrBodyEdges.trimmed(fn) : memo.get(fn);
-			if (summary == null && memo != null) {
-				summary = IrBodyEdges.of(fn);
-				memo.set(fn, summary);
-			}
-			if (summary == null)
-				continue;
+			var summary = edges == null ? IrBodyEdges.trimmed(fn) : edges(fn);
 			if (summary.fatal)
 				fatal = true;
 			for (name in summary.globals)
@@ -300,8 +297,8 @@ class IrReachability {
 /**
  * What a plain build's reachability walk (`IrReachabilityWalk`) and its trim (`IrReachability.trimTables`) read of one function. The
  * walk's part is the body in row order, which the walk replays instead of reading the rows, so a session that keeps it while the
- * function is the same object (`IrFunctionMemo`) reads only the bodies an edit made; a function in blocks has none (the walk reads
- * its blocks). A type mentioned again, a class constructed again and a dispatch made again change nothing in a walk, so each is
+ * function is the same object (`IrWalkMemo`) reads only the bodies an edit made; a function in blocks has none, and names itself
+ * (`blocks`): the walk reads its blocks, and the edges of another function are never the same. A type mentioned again, a class constructed again and a dispatch made again change nothing in a walk, so each is
  * listed once. The trim's part is whether a block ends unreachable and the globals and classes the function names.
  */
 @:nullSafety(Strict)
@@ -332,6 +329,9 @@ class IrBodyEdges {
 
 	public final classes:Array<String> = [];
 
+	/** The function, when it is in blocks: the walk reads them. */
+	public var blocks(default, null):Null<IrFunction> = null;
+
 	function new() {}
 
 	/** What `fn` gives the walk and the trim. */
@@ -339,6 +339,8 @@ class IrBodyEdges {
 		var summary = new IrBodyEdges(), body = fn.body;
 		if (body != null)
 			summary.readEdges(body);
+		else
+			summary.blocks = fn;
 		summary.readTrim(fn);
 		return summary;
 	}
@@ -456,7 +458,7 @@ class IrBodyEdges {
 		if (left == right)
 			return true;
 		var count = left.kinds.length;
-		if (count != right.kinds.length || left.fatal != right.fatal
+		if (left.blocks != right.blocks || count != right.kinds.length || left.fatal != right.fatal
 			|| !IrObjectTools.sameNames(left.globals, right.globals)
 			|| !IrObjectTools.sameNames(left.classes, right.classes))
 			return false;
@@ -508,13 +510,18 @@ class IrReachabilityWalk {
 	 * (`Reflect.field`). A class nothing mentions has no instance, so its methods go. Every value a function uses is defined by an
 	 * argument or an instruction output, so the types of those are all the types it mentions.
 	 */
-	/** The walk summaries of the bodies, kept by a session while each function is the same object; null to read every body. */
-	final memo:Null<IrFunctionMemo<IrBodyEdges>>;
+	/** The edges of a reached function, kept by a session while it is the same object (`IrWalkMemo`); null to read every body. */
+	final edges:Null<IrFunction->IrBodyEdges>;
 
-	public function new(program:IrProgram, keepLiveClasses = false, ?memo:IrFunctionMemo<IrBodyEdges>) {
+	/** Told of each reached function whose argument and result types the walk reads, when the walk is a session's. */
+	final signature:Null<IrFunction->Void>;
+
+	public function new(program:IrProgram, keepLiveClasses = false, ?edges:IrFunction->IrBodyEdges,
+			?signature:IrFunction->Void) {
 		index = IrProgramIndex.of(program);
 		this.keepLiveClasses = keepLiveClasses;
-		this.memo = memo;
+		this.edges = edges;
+		this.signature = signature;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
 		nativeResults = IrConstructed.nativeResults(program);
@@ -534,23 +541,22 @@ class IrReachabilityWalk {
 			reachable.set(name, true);
 			count++;
 			if (keepLiveClasses) {
+				var reads = signature;
+				if (reads != null)
+					reads(fn);
 				mention(fn.result, pending);
 				for (argument in fn.arguments)
 					mention(argument.type, pending);
 			}
-			var body = fn.body;
-			if (body != null) {
-				var known = memo;
-				if (known == null) {
-					visitBody(body, pending);
+			var body = fn.body, read = edges;
+			if (read != null) {
+				var summary = read(fn);
+				if (summary.blocks == null) {
+					replay(summary, pending);
 					continue;
 				}
-				var summary = known.get(fn);
-				if (summary == null) {
-					summary = IrBodyEdges.of(fn);
-					known.set(fn, summary);
-				}
-				replay(summary, pending);
+			} else if (body != null) {
+				visitBody(body, pending);
 				continue;
 			}
 			for (block in fn.blocks)

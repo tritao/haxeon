@@ -38,6 +38,7 @@ import compiler.ir.passes.values.IrValueDynamicDispatch;
 import compiler.ir.passes.values.IrValueInterfaceBoxes;
 import compiler.ir.passes.values.IrValuePhiScalarization;
 import compiler.ir.verify.IrVerifier;
+import compiler.ir.verify.IrVerifyStage;
 import compiler.ir.passes.objects.IrObjectReflection;
 import compiler.core.InternalError;
 import compiler.ir.model.Ir.IrObject;
@@ -126,7 +127,7 @@ class IrPipeline {
 		IrFunctionStages.programStage("nullable-scalar-flow", nullableScalarFlow),
 		IrFunctionStages.programStage("late-enum-tag-escapes", lateEnumTagEscapes),
 		new IrStage("inliner", inliner),
-		new IrStage("verifier", verifier).when(verifiesHere),
+		IrFunctionStages.programStage("verifier", verifier).when(verifiesHere),
 		new IrStage("verifier-check", verifierCheck).when(checksVerification)
 	]);
 
@@ -641,8 +642,6 @@ class IrPipeline {
 			context.instrumentScope, context.stageMemos);
 		compiler.ir.tools.IrAllocationReport.report(program, context.sources);
 		var memos = context.stageMemos;
-		// No stage after the inliner keeps memos in the session.
-		context.stageMemos = null;
 		// `--check-reuse`: what the session keeps for the next compile is frozen, so no stage of this one changed it in place.
 		if (context.options.checkReuse && context.options.keepSession) {
 			var unfrozen = cache.unfrozen();
@@ -654,13 +653,13 @@ class IrPipeline {
 		return program;
 	}
 
-	/** HashLink has its scalar closure ABI here. Wasm verifies after its target-specific closure escape adapters exist. */
-	static function verifier(program:IrProgram, context:IrPipelineContext):IrProgram {
-		var memo = context.verifyMemo;
-		if (memo == null)
-			throw new InternalError("The verifier stage needs the session's verify memo");
-		IrVerifier.verifyReusing(program, memo, context.options.checkIrBody);
-		return program;
+	/**
+	 * HashLink has its scalar closure ABI here. Wasm verifies after its target-specific closure escape adapters exist. In a session a
+	 * function is verified again only when it or what it read of the program changed (`IrVerifyStage`).
+	 */
+	static function verifier(program:IrProgram, context:IrPipelineContext):IrFunctionPass {
+		var memos = context.stageMemos;
+		return new IrVerifyStage(program, memos == null ? null : memos.verifyAnswers, context.options.checkIrBody);
 	}
 
 	/** `--check-reuse`: the memoized verification accepted only what a full one accepts, and every provider call is declared. */

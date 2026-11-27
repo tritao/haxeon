@@ -953,7 +953,7 @@ class IrBody {
 
 	/**
 	 * Where `fn` and the function its body decodes to first differ, or null when they are equal: every function the compiler makes
-	 * must have a body (`IrVerifier.verifyReusing` with `CompileOptions.checkIrBody`).
+	 * must have a body (`IrVerifier.prepare` with `CompileOptions.checkIrBody`).
 	 */
 	public static function roundTripDifference(fn:IrFunction):Null<String> {
 		var body = IrBodyBuilder.encode(fn), layout = body.layoutDifference();

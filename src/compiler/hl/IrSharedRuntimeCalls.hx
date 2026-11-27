@@ -35,19 +35,27 @@ class IrSharedRuntimeCalls {
 
 	public static inline final SUFFIX = "$shared:";
 
-	public static function isHelper(name:String):Bool
-		return name.indexOf(SUFFIX) > 0 && shared.exists(name.substr(0, name.indexOf(SUFFIX)));
+	/** Whether `name` is a helper's: every runtime function it shares is named under `__`, as its helpers are. */
+	public static function isHelper(name:String):Bool {
+		if (name.length < 2 || StringTools.fastCodeAt(name, 0) != "_".code
+			|| StringTools.fastCodeAt(name, 1) != "_".code)
+			return false;
+		var at = name.indexOf(SUFFIX);
+		return at > 0 && shared.exists(name.substr(0, at));
+	}
 
 	/**
-	 * `program` with its runtime calls going through helpers, added after its own functions, and the helpers' names. With `memo`,
-	 * a function whose IR is the object it was last time keeps the form it got then.
+	 * `program` with its runtime calls going through helpers, added after its own functions, and the helpers' names. With `queries`,
+	 * a function whose IR is the object it was last time keeps the form it got then, and a helper made before is that object again;
+	 * with `checks`, a kept form is made again and compared.
 	 */
-	public static function apply(program:IrProgram, ?memo:IrSharedCallsMemo):{program:IrProgram,
-		helpers:Array<String>} {
+	public static function apply(program:IrProgram, ?queries:compiler.hl.incremental.HlFunctionQueries,
+			checks = false):{
+				program:IrProgram,
+				helpers:Array<String>
+			} {
 		var helpers:Map<String, IrFunction> = [for (fn in program.functions) if (isHelper(fn.name)) fn.name => fn],
-			added:Array<IrFunction> = [],
-			madeBefore:Map<String, IrFunction> = memo == null ? [] : memo.helpers,
-			made:Map<String, IrFunction> = [];
+			added:Array<IrFunction> = [];
 		// The helper of each runtime function by signature id, so a call site whose helper is known spells no name.
 		var named:Map<String, Map<Int, String>> = [];
 		function helper(name:String, signature:Int):String {
@@ -72,7 +80,8 @@ class IrSharedRuntimeCalls {
 			bySignature.set(signature, key);
 			if (!helpers.exists(key)) {
 				// A helper is its key's alone, so the one made for it before is the same object: what is kept for it stays.
-				var fn = madeBefore.get(key);
+				var symbol = IrSymbol.of(key).functionKey(),
+					fn = queries == null ? null : queries.sharedHelpers.kept(symbol);
 				if (fn == null) {
 					var builder = new IrBuilder(),
 						parameters = [for (index in 0...arguments.length) builder.argument("value" + index,
@@ -80,7 +89,8 @@ class IrSharedRuntimeCalls {
 					builder.returnValue(builder.call(name, parameters, result));
 					fn = new IrFunction(key, builder.arguments, result, builder.blocks, GeneratedHelper);
 				}
-				made.set(key, fn);
+				if (queries != null)
+					fn = queries.sharedHelpers.put(queries.database, symbol, fn);
 				helpers.set(key, fn);
 				added.push(fn);
 			}
@@ -92,19 +102,16 @@ class IrSharedRuntimeCalls {
 			rows:Array<Int> = [],
 			targets:Array<Int> = [];
 		result.functions = [];
-		var known:Map<String, SharedCallsEntry> = memo == null ? [] : memo.entries,
-			kept:Map<String, SharedCallsEntry> = [];
 		for (fn in program.functions) {
 			if (isHelper(fn.name)) {
 				result.functions.push(fn);
 				continue;
 			}
-			var entry = known.get(fn.name);
-			if (entry != null && entry.source == fn) {
-				for (call in entry.calls)
+			var kept = queries == null ? null : queries.sharedCalls.of(fn);
+			if (kept != null && !checks) {
+				for (call in kept.calls)
 					helper(call.name, call.signature);
-				kept.set(fn.name, entry);
-				result.functions.push(entry.result);
+				result.functions.push(kept.result ?? fn);
 				continue;
 			}
 			// Frozen: a rewritten function shares its columns (`IrBody.withAuxes`).
@@ -129,13 +136,17 @@ class IrSharedRuntimeCalls {
 					row = body.nextRow(row);
 				}
 			}
-			var rewritten = rows.length == 0 ? fn : IrFunction.ofBody(body.withAuxes(rows, targets));
-			kept.set(fn.name, {source: fn, result: rewritten, calls: calls});
-			result.functions.push(rewritten);
-		}
-		if (memo != null) {
-			memo.entries = kept;
-			memo.helpers = made;
+			var made = rows.length == 0
+				? SharedCalls.NONE : new SharedCalls(IrFunction.ofBody(body.withAuxes(rows, targets)),
+				calls);
+			if (kept != null) {
+				if (!SharedCalls.same(kept, made))
+					throw new compiler.core
+						.InternalError('--check-reuse: the shared runtime calls kept for ${fn.name} differ from its body');
+				made = kept;
+			} else if (queries != null)
+				made = queries.sharedCalls.keep(fn, made);
+			result.functions.push(made.result ?? fn);
 		}
 		added.sort((left, right) -> left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
 		for (fn in added)
@@ -150,27 +161,32 @@ typedef SharedCall = {
 	final signature:Int;
 }
 
-/** A function, its form with its runtime calls through helpers, and those calls. */
-typedef SharedCallsEntry = {
-	final source:IrFunction;
-	final result:IrFunction;
-	final calls:Array<SharedCall>;
-}
+/** A function's form with its runtime calls through helpers, and those calls; `NONE` for a function that makes none. */
+class SharedCalls {
+	@:processWide("the form of a function that makes no shared runtime call: the function itself, never changed")
+	public static final NONE = new SharedCalls(null, []);
 
-/** Each function's form with its runtime calls through helpers, by name, kept while the function is the same object. */
-class IrSharedCallsMemo {
-	/** Replaced as a whole by each run (`IrSharedRuntimeCalls.apply`), never changed in place, so a copy shares it. */
-	public var entries:Map<String, SharedCallsEntry> = [];
+	/** The rewritten function; null for the function itself. */
+	public final result:Null<IrFunction>;
 
-	/** The helpers the last run made, by name; replaced as a whole like `entries`. */
-	public var helpers:Map<String, IrFunction> = [];
+	public final calls:Array<SharedCall>;
 
-	public function new() {}
+	public function new(result:Null<IrFunction>, calls:Array<SharedCall>) {
+		this.result = result;
+		this.calls = calls;
+	}
 
-	public function copy():IrSharedCallsMemo {
-		var result = new IrSharedCallsMemo();
-		result.entries = entries;
-		result.helpers = helpers;
-		return result;
+	/** Whether two forms of one function make the same calls and have the same IR (`--check-reuse`). */
+	public static function same(left:SharedCalls, right:SharedCalls):Bool {
+		if (left == right)
+			return true;
+		if (left.calls.length != right.calls.length)
+			return false;
+		for (index in 0...left.calls.length)
+			if (left.calls[index].name != right.calls[index].name
+				|| left.calls[index].signature != right.calls[index].signature)
+				return false;
+		var a = left.result, b = right.result;
+		return a == b || a != null && b != null && compiler.ir.codec.IrFunctionStateEquality.same(a, b);
 	}
 }

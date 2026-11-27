@@ -8,7 +8,7 @@ import compiler.ir.model.IrTypeIdentity;
  * What a whole-program walk reads of the program besides its functions: copies of its tables (classes, interfaces, natives, C
  * natives, static fields, enums), whose entries are never changed once made, since a later stage may add to a list; and what it
  * reads of a function it does not follow, its declaration (`sameDeclaration`). A walk kept across builds holds while the program's
- * tables are the same (`holds`) (`IrWalkMemo`, `IrWalkRecord`).
+ * tables are the same (`holds`) (`IrWalkMemo`).
  */
 @:nullSafety(Strict)
 class IrWalkTables {

@@ -180,7 +180,8 @@ class IrStageFacts extends QueryKindBase {
 		var space = spaceOf[id], source = sources[space];
 		if (source == null)
 			throw new compiler.core.InternalError("fact " + describe(id) + " is read before its stage ran");
-		var value = source.fact(kinds[id], keys[id]), known = verifiedAt[id] != 0 || changes[id] != 0;
+		var known = verifiedAt[id] != 0 || changes[id] != 0,
+			value = source.factOf(id, kinds[id], keys[id], known, values[id]);
 		computedIn[id] = runs[space];
 		if (!known || value != values[id] || value == UNKNOWN) {
 			values[id] = value;

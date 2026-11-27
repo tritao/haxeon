@@ -3,7 +3,7 @@ package compiler.ir.passes.enums;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrOperands;
-import compiler.ir.reuse.IrFunctionMemo;
+import compiler.ir.reuse.IrStageMemos.IrContributionSummary;
 
 import compiler.ir.model.Ir;
 
@@ -11,10 +11,11 @@ import compiler.ir.model.Ir;
 @:nullSafety(Strict)
 class IrEnumRuntimeTypes {
 	/**
-	 * The enums whose boxed descriptors the program needs. `memo` keeps each function's part (`functionNames`) while the function is
-	 * the same object.
+	 * The enums whose boxed descriptors the program needs. `uses`, a summary of `database`, keeps each function's part
+	 * (`functionNames`) while the function is the same object; with `checks`, a kept part is read again and compared.
 	 */
-	public static function declarations(program:IrProgram, ?memo:IrFunctionMemo<Array<String>>):Array<IrEnum> {
+	public static function declarations(program:IrProgram, ?uses:IrContributionSummary<String>,
+			?database:compiler.query.QueryDatabase, checks = false):Array<IrEnum> {
 		var candidates:Map<String, Bool> = [
 			for (entry in program.enums)
 				if (IrEnumTagStorage.eligible(entry)) entry.name => true
@@ -50,16 +51,13 @@ class IrEnumRuntimeTypes {
 				visit(argument, note);
 			visit(entry.result, note);
 		}
-		for (fn in program.functions) {
-			var names = memo == null ? null : memo.get(fn);
-			if (names == null) {
-				names = functionNames(fn);
-				if (memo != null)
-					memo.set(fn, names);
-			}
-			for (name in names)
+		if (uses != null && database != null)
+			for (name in uses.collect(database, program.functions, functionNames, name -> name, checks, "enum uses"))
 				note(name);
-		}
+			else
+				for (fn in program.functions)
+					for (name in functionNames(fn))
+						note(name);
 		return [
 			for (entry in program.enums)
 				if (!candidates.exists(entry.name) || required.exists(entry.name)) entry
