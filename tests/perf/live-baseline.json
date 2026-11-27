@@ -1,6 +1,6 @@
 {
 	"about": "scripts/perf-guard.py, live part: haxeon run --watch, patching, on tests/perf/live-project (small) and on the app template over haxeon-ui (ui), made and built from the template and packages at ui_input_revision (the same for every checkout; move it only with a re-baseline of the ui metrics), from the save of an edit to the running app's patch-applied event, with the CLI and server built ahead of time (haxeon-aot, aot_). Measured on Linux x86-64. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
-	"ui_input_revision": "a293dbb13596baca8441b9fbfc9e3bf56a032596",
+	"ui_input_revision": "4df7d322977f130abf704f12906d1a6487251a03",
 	"metrics": {
 		"aot_small_body_edit_ms": {
 			"value": 113,
@@ -53,10 +53,10 @@
 			"why": "Live data growth over the growth session's edits after those that fill the session, from the same census. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack is two and a half of the census's 0.1 MB steps."
 		},
 		"aot_ui_server_live_bytes": {
-			"value": 300836454,
+			"value": 302514176,
 			"tolerance": 0.001,
 			"why": "The server's live data after the growth session's last edit: what a live session keeps from one edit to the next. From the heap census after each build's request (`request-done`, once the build's result and response are gone, after a full collection): the bytes of the live blocks, which do not move with the collector's fragmentation or the machine (three runs agree to the census's 0.1 MB step; a run on four cores from a longer path too). The mapped pages beside them are printed, not compared. The publications kept to take back share the string and global tables with the current state, each seeing its own prefix. The slack is about five of the census's steps.",
-			"raise_reason": "Measured on the ui input moved to a293dbb13, as 1c974dd30 dropped Outcome.Failure, which the packages at the earlier input still called: a different program, 0.5 MB more, not a change in the compiler."
+			"raise_reason": "the frozen ui input moved from a293dbb13 to 4df7d3229, where Diff.all takes its type as a type argument (the old input's Diff.all(Type) no longer compiles): the newer ui packages, measured on them"
 		},
 		"aot_ui_server_live_growth_bytes": {
 			"value": 0,

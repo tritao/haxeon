@@ -1,11 +1,12 @@
 {
 	"about": "scripts/perf-guard.py: the compiler, built in release mode from the checkout, compiling the frozen input (its sources at input_revision, the same for every checkout). Measured on Linux x86-64; scripts/perf-guard.py --update writes the metrics that improved beyond their tolerance, --raise=METRIC=REASON one that is higher on purpose with its reason (raise_reason), in the commit that moves it, and move input_revision only with a re-baseline. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
-	"input_revision": "b3a22d6bf8ec9487a7061b12f93259aaff161552",
+	"input_revision": "4df7d322977f130abf704f12906d1a6487251a03",
 	"metrics": {
 		"allocated_bytes": {
-			"value": 2244516248,
+			"value": 2910453040,
 			"tolerance": 0.02,
-			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates."
+			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates.",
+			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
 		},
 		"collections": {
 			"value": 2,
@@ -13,29 +14,34 @@
 			"why": "Phase-end collections (CompileOptions.phaseCollections) plus the byte trigger as a safety net; one extra collection can come from crossing a trigger boundary."
 		},
 		"live_bytes_tables": {
-			"value": 238131610,
+			"value": 290350694,
 			"tolerance": 0.03,
-			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
+			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth.",
+			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
 		},
 		"live_bytes_ir": {
-			"value": 225443840,
+			"value": 277872640,
 			"tolerance": 0.03,
-			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
+			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth.",
+			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
 		},
 		"live_bytes_backend": {
-			"value": 248827085,
+			"value": 312475648,
 			"tolerance": 0.03,
-			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
+			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth.",
+			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
 		},
 		"peak_rss_bytes": {
-			"value": 1347186688,
+			"value": 1505669120,
 			"tolerance": 0.08,
-			"why": "An outcome of the collection schedule, not a measure of the work: reported and gated loosely, while allocation and the live data at the phase boundaries gate tightly."
+			"why": "An outcome of the collection schedule, not a measure of the work: reported and gated loosely, while allocation and the live data at the phase boundaries gate tightly.",
+			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
 		},
 		"main_thread_instructions": {
-			"value": 51312408941,
+			"value": 62746250954,
 			"tolerance": 0.03,
-			"why": "Stable to well under a percent with perf; compared only where perf is installed and allowed."
+			"why": "Stable to well under a percent with perf; compared only where perf is installed and allowed.",
+			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
 		}
 	}
 }
