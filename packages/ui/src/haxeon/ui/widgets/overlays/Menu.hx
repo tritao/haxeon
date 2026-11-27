@@ -172,9 +172,8 @@ class Menu implements View {
 				});
 				anchor = itemModifier.modify(button);
 			}
-			var tooltip = new Tooltip("menu-label-tooltip", anchor, new Text(item.label), 0.0, 28.0);
-			tooltip.fillAnchor = true;
-			tooltip.showWhen = function() return label.truncated;
+			var tooltip = new Tooltip("menu-label-tooltip", anchor, new Text(item.label), 0.0, 28.0, fillAnchor: true,
+				showWhen: function() return label.truncated);
 			children.push(new KeyedView(item.key, tooltip));
 		}
 		var menuStyle = new LayoutStyle();

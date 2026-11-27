@@ -24,21 +24,21 @@ class Tooltip implements View {
 	/** Hosts without a hovering pointer (touch) turn this off; a tooltip then draws only its anchor. */
 	public static var hoverEnabled:Bool = true;
 	/** Preferred side. Null preserves explicit x/y positioning. */
-	public var placement:Null<TooltipPlacement> = null;
+	public final placement:Null<TooltipPlacement>;
 	/** Initial hover delay for side-positioned tooltips. */
-	public var delaySeconds:Float = 0.8;
+	public final delaySeconds:Float;
 
 	/** A group shared by neighbouring tooltips, so moving between them shows each at once without the delay again. */
-	public var hoverGroup:Null<TooltipHoverGroup> = null;
+	public final hoverGroup:Null<TooltipHoverGroup>;
 
 	/** Whether its group shows it now; the group sets it. */
-	public var groupVisible:Bool = false;
+	public final groupVisible:Bool;
 
 	/** The area the tooltip must stay within; the viewport when null. */
-	public var boundsProvider:Null<Void->Rect> = null;
+	public final boundsProvider:Null<Void->Rect>;
 
 	/** Whether a tooltip placed by `placement` starts at the anchor's horizontal middle rather than its left edge. */
-	public var startAtAnchorMiddle:Bool = false;
+	public final startAtAnchorMiddle:Bool;
 	static inline final PADDING = 10.0;
 	static inline final EDGE = 6.0;
 	/** Private resolver inputs; resolved nodes own their own mutable styles. */
@@ -76,22 +76,39 @@ class Tooltip implements View {
 	/** Its top edge, from the anchor's, when `placement` is null. */
 	public final y:Float;
 	/** Fill the available row width when the anchor needs to clip long text. */
-	public var fillAnchor:Bool = false;
+	public final fillAnchor:Bool;
 	/** Optional condition checked when the pointer enters the anchor. */
-	public var showWhen:Null<Void->Bool> = null;
+	public final showWhen:Null<Void->Bool>;
 	/** Require pointer motion over the anchor, rather than layout-induced hover. */
-	public var requirePointerMovement:Bool = false;
+	public final requirePointerMovement:Bool;
 	/** Change this value to dismiss a tooltip when its surrounding content moves. */
-	public var dismissRevision:Int = 0;
+	public final dismissRevision:Int;
 
-	/** A tooltip showing `content` over `anchor`, at (`x`, `y`) from it unless `placement` places it. */
-	public function new(key:String, anchor:View, content:View, x:Float = 0.0, y:Float = -28.0) {
+	/**
+	 * A tooltip showing `content` over `anchor`, at (`x`, `y`) from it unless `placement` places it; the rest is given
+	 * by name (`placement: Below, delaySeconds: 0.4`).
+	 */
+	public function new(key:String, anchor:View, content:View, x:Float = 0.0, y:Float = -28.0,
+			?placement:TooltipPlacement, delaySeconds:Float = 0.8, ?hoverGroup:TooltipHoverGroup,
+			groupVisible:Bool = false, ?boundsProvider:Void->Rect, startAtAnchorMiddle:Bool = false,
+			fillAnchor:Bool = false, ?showWhen:Void->Bool, requirePointerMovement:Bool = false,
+			dismissRevision:Int = 0) {
 		if (anchor == null || content == null) throw "Tooltip requires an anchor and content view";
 		this.key = new Key(key);
 		this.anchor = anchor;
 		this.content = content;
 		this.x = x;
 		this.y = y;
+		this.placement = placement;
+		this.delaySeconds = delaySeconds;
+		this.hoverGroup = hoverGroup;
+		this.groupVisible = groupVisible;
+		this.boundsProvider = boundsProvider;
+		this.startAtAnchorMiddle = startAtAnchorMiddle;
+		this.fillAnchor = fillAnchor;
+		this.showWhen = showWhen;
+		this.requirePointerMovement = requirePointerMovement;
+		this.dismissRevision = dismissRevision;
 	}
 
 	public function build(context:BuildContext):ViewRoot {

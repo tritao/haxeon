@@ -91,9 +91,7 @@ class TooltipContentTests {
 			bump.value;
 			bodyRuns++;
 			var tip = new Tooltip("scoped-tip", new Button("Anchor", null, function() {}, "scoped-anchor"),
-				new Text("Hint"));
-			tip.fillAnchor = true;
-			tip.placement = TooltipPlacement.Above;
+				new Text("Hint"), placement: TooltipPlacement.Above, fillAnchor: true);
 			return mode == "feedback" ? new Column("scoped", [
 				new KeyedView("box", new WidthBox()),
 				new KeyedView("tip", tip)
@@ -187,9 +185,8 @@ class TooltipContentTests {
 
 		// Side-placed tooltip: shown after its hover delay, placed inside the viewport.
 		for (placement in [TooltipPlacement.Below, TooltipPlacement.Above, TooltipPlacement.Right]) {
-			var side = new Tooltip("side-" + Std.string(placement), new Button("Anchor"), new Text("Hint"));
-			side.placement = placement;
-			side.delaySeconds = 0.5;
+			var side = new Tooltip("side-" + Std.string(placement), new Button("Anchor"), new Text("Hint"),
+				placement: placement, delaySeconds: 0.5);
 			root = ui.submit(side, frame);
 			check(hints(root) == 0, "a hidden " + Std.string(placement) + " tooltip built its content");
 			anchor = cast root.children[0].resolved;
@@ -223,9 +220,8 @@ class TooltipContentTests {
 			root = ui.submit(side, frame);
 			check(hints(root) == 0, "the tooltip stayed visible after keyboard focus left");
 		}
-		var suppressed = new Tooltip("suppressed", new Button("Anchor"), new Text("Hint"));
-		suppressed.placement = TooltipPlacement.Right;
-		suppressed.showWhen = () -> false;
+		var suppressed = new Tooltip("suppressed", new Button("Anchor"), new Text("Hint"),
+			placement: TooltipPlacement.Right, showWhen: () -> false);
 		root = ui.submit(suppressed, frame);
 		anchor = cast root.children[0].resolved;
 		ui.pointerMove(anchor.x + 4, anchor.y + 4);
