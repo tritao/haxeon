@@ -1827,7 +1827,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			var declaration = byName.get(classes[index].name);
 			if (declaration != null) {
 				methods[index] = typeClassMethods(declaration, classes[index].fields, selected, false,
-					session.representation.erasedNominalSubstitutions(declaration.name), null, outputs[index]);
+					session.representation.erasedNominalSubstitutions(declaration.name), null, outputs[index],
+					classes[index].methods);
 				if (declaration.isExtern != true
 					&& externTyper.nativeLibrary(declaration.name, declaration.metadata) == null)
 					for (method in declaration.methods) {
@@ -1863,14 +1864,20 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		}];
 	}
 
+	/**
+	 * The methods of `classDecl`, their bodies typed unless `deferBodies` or `selected` leaves them out. With `declared`, the
+	 * methods as the declaration pass typed them (`typeDeclaredClasses`), a method whose body is left out is that signature
+	 * as it is, rather than one typed again in a unit of its own.
+	 */
 	function typeClassMethods(classDecl:AstClass, fields:Array<TypedField>, selected:Null<Map<String, Bool>>,
 			deferBodies:Bool,
 			substitutions:Map<String, CompilerType>,
 			?specialization:compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation,
-			?units:Array<TypingOutput>):Array<TypedFunction> {
+			?units:Array<TypingOutput>, ?declared:Array<TypedFunction>):Array<TypedFunction> {
 		var typedMethods:Array<TypedFunction> = [],
 			instanceInitializers:Array<TypedField> = [],
-			hasConstructor = false;
+			hasConstructor = false,
+			signatures:Null<Map<String, TypedFunction>> = null;
 		for (field in fields)
 			if (!field.isStatic && field.initializer != null)
 				instanceInitializers.push(field);
@@ -1895,6 +1902,15 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				hasConstructor = true;
 			var qualified = classDecl.name + "." + method.name,
 				typeBody = !deferBodies && (specialization != null || selected == null || selected.exists(qualified));
+			if (!typeBody && declared != null) {
+				if (signatures == null)
+					signatures = [for (fn in declared) fn.name => fn];
+				var signature = signatures.get(qualified);
+				if (signature == null)
+					throw new InternalError('The declaration pass typed no signature for method "$qualified"');
+				methodsTyped[methodIndex] = signature;
+				continue;
+			}
 			// An unannotated method of a declared class is typed in its own unit when its signature is first needed, and kept for
 			// here. Its unit is merged in declaration order with the others, or at once without them.
 			if (typeBody && specialization == null && hasOwnSlot(classDecl, method)
