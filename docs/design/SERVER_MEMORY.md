@@ -138,7 +138,8 @@ intermediate keeps alone is to be measured the same way before it is built.
 ## Open questions
 
 - Step 4's policy: drop after every build (simplest, a body edit then recomputes the few functions the inliner reads from
-  callers), or an LRU bound (keeps recent ones, a knob to tune). Measure the first; add the bound only if edits slow down.
+  callers), or an LRU bound (keeps recent ones, a knob to tune). Measure the first; add the bound only if edits slow down. Built
+  the first; no edit slowed down ("As built", step 4).
 - Whether step 1 changes the gate's baseline enough to re-record it: yes, by 9 MB, re-recorded with the reason.
 - Order of the package tier and the narrow columns: the tier first, since it removes most of what narrowing would shrink;
   narrow what is left, measured after the tier.
@@ -225,3 +226,21 @@ everything, as before. The tier decides what is kept, never what is built.
   frontend and the live build run afresh must give the same IR (`checkFrontendReuse`, `checkLiveAfresh`), which a build that
   read a released body would not. The UI session 344.25 → 322.96 MB, the small project 8.60 → 8.07 MB; an edit of a package's
   file (perf-guard's live package edit) patches in about the time it did, as its module's functions are typed again either way.
+- **Policy.** Both are dropped after the build that made them, with no bound: no edit got slower, so no LRU bound was added.
+- **What is left**, released one part at a time as above (the syntax trees of package code, after the token change; the rest
+  over the whole program):
+  - *Syntax trees* 10.2 MB, of which the function bodies 5.6. Every build reads each module's declarations from its tree
+    (`SemanticAssembly`: aliases, enums, static inline fields, discovery metadata; `StaticExtensionTable`; the initialization
+    order), so the tree itself stays until those read a per-module summary instead (the typer-state pieces, TYPER_STATE.md).
+    The bodies are read only to make the canonical declarations again, which a change of the names every module resolves
+    against (a type added anywhere) does for every module: dropping them means parsing every package file again on such an
+    edit, a latency cost on an edit of the app's own code, for 1.6% of the session. Not built; it pairs with making the
+    canonical declarations independent of that universe.
+  - *The IR stages' intermediate forms* 9.3 MB: what each per-function stage but the last made of each function. The stage
+    driver runs each stage over the whole program and verifies a memo by the version of the function it is given, so a stage
+    whose memo misses needs the object the stage before it made; dropping those means recomputing a function's earlier stages
+    on demand inside a later stage's run, which the driver cannot do yet (the passes prepare whole-program state per run).
+  - *The walks and contribution summaries* 16.2 MB: what decides whether a walk is reused, kept by the rule; narrower forms are
+    step 5's.
+  - *The final IR the inline cache holds* 0.1, *the generated IR and its memo* 0.9, *the canonical declarations* 0.9 and *the
+    inliner's memo* 0.9: not worth a mechanism each.
