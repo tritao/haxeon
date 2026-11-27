@@ -11,7 +11,7 @@ frame, and the framework skips what it can prove unchanged.
 
 - A component (`ScopeView`) keeps its body while its parent describes it with equal inputs and nothing the body read
   changed; `TrackedScope` makes one from a plain body. The dock's pane and panel caches reuse built subtrees while
-  their recorded dependencies match: widget-state values, tracked reads, and the interaction state they were built from.
+  their recorded dependencies match: widget-state values and tracked reads, interaction states included.
 - Components run alone when something their body read changes, and keep their body while their parent describes them
   with equal inputs; controller edits are announced with `willEditRetained`. A frame with only these builds no view.
   (Self-updating widgets and `RenderNode.reconcile`, the earlier mechanism, are deleted.)
@@ -111,9 +111,66 @@ Compose-style re-running scopes are the middle option: plain control flow with a
 per re-run. The ADR's stage 3 converts one live panel each way on the same signals and decides by measurement. The
 expected result is bindings for leaf widgets and live values, small re-running scopes where structure is dynamic.
 
+## Component model: end state
+
+Decided 2026-11-27, after every widget became a component and the self-updating model was deleted.
+
+**A component is a thin class around an inputs struct.** The class has identity, which `latestOf`, a kept body's newest
+description and the same-instance fast path use; it is dispatched through the component interface and holds the
+callbacks. Its inputs are an `Equatable` struct copied into it, so a caller cannot change them after building (value
+semantics), and `inputsEqual` is `props == other.props` plus its callbacks: event callbacks by presence, called through
+the newest description; callbacks the body calls while building by identity. Arrays in the struct compare element by
+element. C#'s `record struct` is the analogue; Haxeon's `struct` with `Equatable` already has its meaning, and
+[named arguments](../../../docs/design/NAMED_ARGUMENTS.md) add its construction and `with`.
+
+```haxe
+struct TextFieldProps implements Equatable {
+	final key:String;
+	final value:String = "";
+	final enabled:Bool = true;
+	final placeholder:Null<String> = null;
+}
+
+class TextField implements Component {
+	final props:TextFieldProps;
+	final onChange:Null<String->Void>;                        // event: by presence, via latestOf
+	final selectionProvider:Null<Void->Null<TextSelection>>;  // read while building: by identity
+}
+
+new TextField(new TextFieldProps(key: "name", placeholder: "Name"), onChange: next -> name = next);
+```
+
+The rules the whole UI follows:
+
+- **Descriptions are immutable.** No `var` configuration set after construction; adjust a copy of the props instead.
+- **State:** local state in signals the component holds, shared models `Observable`, caller-owned values controlled
+  (the caller passes the value and is told of changes).
+- **Every read is a dependency, interaction states included.** A component runs again exactly when something it read
+  changed.
+- **Styling.** A widget gives its style identity once, as a `StyleIdentity` struct, to one styled-node factory, which
+  reads only the states some rule selects for it and resolves the style. Routing owns `RenderNode.states`; the widget
+  supplies only its authored states (disabled, selected, checked). Small values (`TextSelection`, `Insets`, `Color`,
+  `Rect`) are structs; `LayoutStyle` becomes one only if measurements allow.
+- **Roots.** A body returns a read-only root type; callers add to it only through `RootModifier`, enforced by the type
+  rather than the debug check.
+- **The render tree is output-only.** Scroll offsets, fades and animated transforms are layer properties (ADR 0002
+  stage 7); independent nodes are placed after layout without another solve (stage 6); `willEditRetained` goes.
+- **One kind of view.** `View` and `ScopeView` merge into one component interface, with a cheap form for small bodies
+  that hold no state and read nothing.
+- **The frame is a pipeline of typed stages:** input, settle state, run components, settle structure, compare, layout
+  and its feedback, paint and composite, semantics. Reference and verify modes are options of the pipeline.
+- **Events are typed enums**, not strings.
+
+Not adopted: reference records (classes keep identity equality), struct construction from anonymous literals,
+positional component keys (subtle under conditionals), and compile-time body purity, which [PURITY.md](../../../docs/design/PURITY.md)
+defers in favour of the runtime checks.
+
 ## Next steps
 
-1. Let the current Codex session (remaining panels, Tabs/SelectionPopup, render-side cost and incremental render compile)
-   finish.
-2. Finish the queued cleanup and measurement work from ADR 0002 stages 1 and 1b.
-4. Language and compiler features the design needs, in order: `haxeon/docs/UI_LANGUAGE_FEATURES.md`.
+1. Without compiler work: the read-only root type; the `StyleIdentity` struct with the styled-node factory, where
+   routing owns `RenderNode.states`; inputs structs for `TextField` and `Tabs` with handwritten constructors.
+2. Haxeon: named arguments, then the memberwise initializer and `with` ([NAMED_ARGUMENTS.md](../../../docs/design/NAMED_ARGUMENTS.md)).
+   Then move every component's configuration into an inputs struct.
+3. The `willEditRetained` survey, then ADR 0002 stages 6 and 7.
+4. The `View`/`ScopeView` merge and the frame pipeline.
+5. If the pattern holds, a conformance that generates the callback part of `inputsEqual`.

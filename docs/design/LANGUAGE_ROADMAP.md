@@ -32,6 +32,7 @@ The rules for every entry:
 | `internal` | An access level for what a package's modules share but its users may not use, enforced per manifest package, with named friends (`package.friends`) for its own test projects and no public declaration exposing an internal type. Implemented. | [LANGUAGE_SUPPORT.md](../reference/LANGUAGE_SUPPORT.md) |
 | Enum members and per-case constants | `enum` is the one construct for closed value sets: any methods and static members, and immutable per-case constants (`final` fields each case sets, checked complete at the declaration). Raw codes are raw-value enums. Implemented. | [ENUM_MEMBERS.md](ENUM_MEMBERS.md) |
 | Errors as values | `Result<T, E>` in the root package for expected failures, must-use values (`MustUse`, `_ = expr;`), prefix `try` propagation with the same error type, and `Void` as the unit type. Exceptions stay for bugs. | [ERROR_MODEL.md](ERROR_MODEL.md) |
+| Named arguments and memberwise initializers | Calls may name arguments, defaults are expressions evaluated at the call site, and structs get a synthesized memberwise initializer and `with`. An extension: every Haxe call keeps its meaning. Not implemented; the call syntax needs a parser check. | [NAMED_ARGUMENTS.md](NAMED_ARGUMENTS.md) |
 
 ### Raw-value enums (implemented)
 

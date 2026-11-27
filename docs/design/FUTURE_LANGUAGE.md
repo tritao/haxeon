@@ -368,6 +368,8 @@ Haxe has neither named arguments nor defaults beyond constants, but it lets a ca
 their types. Calls may name arguments (`f(width: 10, height: 20)`), parameters take defaults (`x:Int = 0`), and
 skipping by type goes away. This also settles optional parameters against `T?` (see the clashes below) and gives
 structs a memberwise initializer: `Rect(x: 0, y: 0, width: 10, height: 10)`.
+The part that keeps every Haxe call valid (named arguments, expression defaults, memberwise initializers and `with`)
+lands as a Haxeon extension: [NAMED_ARGUMENTS.md](NAMED_ARGUMENTS.md). Removing skip-by-type stays here.
 
 ### 11. Declared extensions in place of `using`
 
