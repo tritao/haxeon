@@ -111,7 +111,7 @@ class DependencyScanner {
 				NotEqual(a, b, _):
 				scanExpression(a, dependencies, typeParameters);
 				scanExpression(b, dependencies, typeParameters);
-			case Not(value, _):
+			case Not(value, _), Propagate(value, _):
 				scanExpression(value, dependencies, typeParameters);
 			case Negate(value, _):
 				scanExpression(value, dependencies, typeParameters);

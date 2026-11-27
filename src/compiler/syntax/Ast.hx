@@ -392,6 +392,12 @@ enum AstExpression {
 
 	ThrowExpression(expression:AstExpression, span:SourceSpan);
 
+	/**
+	 * `try value` with no `catch`: the `Ok` value of the `Result` `value`; its `Err` is returned from the enclosing function,
+	 * whose result is a `Result` with the same error type.
+	 */
+	Propagate(value:AstExpression, span:SourceSpan);
+
 	/** `break` or `continue` where a value is expected, as in `if (skip) continue else value`: it gives no value. */
 	BreakExpression(span:SourceSpan);
 	ContinueExpression(span:SourceSpan);

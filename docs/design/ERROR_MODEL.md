@@ -65,9 +65,13 @@ enum Result<T, E> implements MustUse {
 - **The error type must match.** A different one is converted explicitly with `mapErr`, where a case constructor serves
   as the function: `try read(path).mapErr(ConfigError.Io)`. A conversion conformance is added only if this boilerplate
   proves common.
+- **`try` is a prefix operator**, as `!` is: `try a() + 1` adds to the value, and `try read(path).mapErr(f)` converts the
+  error before it propagates. An unannotated function, or a lambda whose result is inferred, returns a `Result` with the
+  error type of its first `try`.
 - **`try` followed by `catch` keeps its exception meaning.** Haxe requires a `catch`, so a `try` without one means
-  nothing in Haxe code, and no Haxe code changes meaning. A postfix `?` was rejected: next to the ternary `a ? b : c`
-  a reader cannot tell them apart, and `?` stays the null operators' (`?.`, `??`).
+  nothing in Haxe code, and no Haxe code changes meaning. A `try` is a `try`/`catch` when a `catch` follows its body at
+  the body's own nesting. A postfix `?` was rejected: next to the ternary `a ? b : c` a reader cannot tell them apart,
+  and `?` stays the null operators' (`?.`, `??`).
 - Returning through `try` runs scoped cleanup (`defer`, scoped `Disposable` bindings) as any `return` does.
 
 ### `Void` is the unit type
@@ -104,6 +108,6 @@ hold: stock Haxe parses neither enum methods nor `try` without `catch`. Its fail
 | 2 | `Result<T, E>` in the root package, with its methods; nested patterns count for switch coverage, and a case with a payload is a function value (`mapErr(ConfigError.Io)`) | Implemented |
 | 3 | `MustUse`, `E1033` and `_ = expr;` | Implemented |
 | 4 | `Void` as the unit type | |
-| 5 | `try` propagation | |
+| 5 | `try` propagation | Implemented |
 | 6 | The migration above, with `Future<Result<T, E>>` for RPC and platform requests | |
 | 7 | Inline generic enums (STRUCTS.md E8), so returning a `Result` allocates nothing | |

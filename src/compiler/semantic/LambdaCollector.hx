@@ -104,7 +104,7 @@ class LambdaCollector {
 				NotEqual(left, right, _):
 				collectLambdaExpression(left, functionName, module, generatedByModule);
 				collectLambdaExpression(right, functionName, module, generatedByModule);
-			case Not(value, _):
+			case Not(value, _), Propagate(value, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case Negate(value, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);

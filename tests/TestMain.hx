@@ -625,6 +625,18 @@ class TestMain {
 		expectCompileError(mustUse + ' function main():Int { each(n -> { save(); }); return 0; }', dropped, true);
 		expectCompileError(mustUse + ' function main():Int { var x = (_ = save()); return 0; }',
 			'"_ = value" drops a value, so it is a statement, not a value', true);
+		// `try value` takes a Result and returns its Err from a function that returns the same error type.
+		var propagating = mustUse + ' enum LoadError { Missing; }';
+		expectCompileError(propagating + ' function main():Int { var x = try 5; return 0; }',
+			'"try" without "catch" takes a Result, got Int', true);
+		expectCompileError(propagating
+			+ ' function load():Result<Int, LoadError> return Ok(try save()); function main():Int return 0;',
+			'"try" passes on an error of type SaveError, but the function returns errors of type LoadError; convert it with mapErr',
+			true);
+		expectCompileError(propagating + ' function main():Int return try save();',
+			'"try" without "catch" returns its error from the function, which must return a Result, not Int', true);
+		expectCompileError(propagating + ' function main():Int { each(n -> try save()); return 0; }',
+			'"try" without "catch" returns its error from the function, which must return a Result, not Void', true);
 		// A generic enum's case used as a function takes its type arguments from the expected function type.
 		expectCompileError('enum R<T> { G(v:T); } function main():Int { var f = R.G; return 0; }',
 			'Cannot infer the type arguments of "R.G" used as a function; give it an expected function type or call it');

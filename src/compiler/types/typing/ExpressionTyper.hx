@@ -53,6 +53,9 @@ import compiler.types.analysis.Scope.LocalBinding;
 
 /** Dispatches source expressions and owns their expression-specific typing rules. */
 class ExpressionTyper {
+	/** The root package's `Result`, whose `Err` a `try` without `catch` returns. */
+	static inline final RESULT = "Result";
+
 	final session:TypingSession;
 	final conversionResolver:ConversionResolver;
 	final callResolver:CallResolver;
@@ -145,6 +148,7 @@ class ExpressionTyper {
 				scope,
 				expectedType);
 			case ThrowExpression(value, span): throwExpression(value, span, scope);
+			case Propagate(value, span): propagate(value, span, scope);
 			case BreakExpression(span): loopJump(true, span);
 			case ContinueExpression(span): loopJump(false, span);
 			case Capture(_, _, span):
@@ -2250,6 +2254,92 @@ class ExpressionTyper {
 			bodyTyper.typeExpression(value, scope), span)),
 			TNever,
 			span);
+
+	/**
+	 * `try value` with no `catch` (`Propagate`): the `Ok` value of the `Result` `value`, or, for an `Err`, a return of that
+	 * error from the enclosing function, whose result is a `Result` with the same error type (`propagatedResult`). The value
+	 * is held once and its case tested, so no name is looked up: a module's own `Ok` or `Result` cannot be picked instead.
+	 */
+	function propagate(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
+		var held = bodyTyper.typeExpression(value, scope), heldType = compiler.types.Monomorphs.follow(held.type);
+		var error = switch heldType {
+			case TInstance(NominalKind.Enum, name, [_, error]) if (name == RESULT): error;
+			default:
+				throw new CompileError(new Diagnostic(DiagnosticCode.TYPE_CONSTRAINT,
+					'"try" without "catch" takes a Result, got ${MissingMember.haxeType(held.type)}', span));
+		};
+		var resultType = propagatedResult(error, span), declaration = session.enumDecls.get(RESULT);
+		if (declaration == null)
+			fail(DiagnosticCode.TYPE_CONSTRAINT, 'Cannot resolve enum "$RESULT"', span);
+		var temporary = new TemporaryLocal("__haxeon_try" + span.start),
+			binding = new Scope(scope).define(temporary.name, heldType, span, true, null, false, null, null,
+				temporary);
+		bodyTyper.bindCell(binding, heldType);
+		var local = new TypedExpression(TLocal(binding.id), heldType, span),
+			representation = session.representation;
+		function payload(name:String):{index:Int, value:TypedExpression} {
+			var index = 0;
+			while (declaration.cases[index].name != name)
+				index++;
+			var parameter = declaration.cases[index].params[0],
+				storage = representation.enumStorageType(declaration.typeParameters, parameter, heldType);
+			return {
+				index: index,
+				value: representation.boundaryCast(new TypedExpression(TEnumField(local, index, 0), storage, span),
+					representation.enumParameterType(declaration.typeParameters, parameter, heldType))
+			};
+		}
+		var ok = payload("Ok"), err = payload("Err");
+		var returned = new TypedExpression(TEnumConstruct(RESULT, err.index, [
+			representation.boundaryCast(err.value,
+				representation.enumStorageType(declaration.typeParameters, declaration.cases[err.index].params[0],
+				resultType))
+		]), resultType, span),
+			failed = new TypedExpression(TEqual(new TypedExpression(TEnumIndex(local), TInt, span),
+				new TypedExpression(TIntLiteral(err.index), TInt, span)), TBool, span);
+		return new TypedExpression(TBlockExpression([
+			TVar(binding.id, held, span),
+			TIf(failed, [TReturn(returned, span)], [], span)
+		], ok.value), ok.value.type, span);
+	}
+
+	/**
+	 * The result of the function a `try` is in, which returns its `Err`: a `Result` whose error type is `error`. An unannotated
+	 * function's result, or an inferred lambda's, becomes one; a different error type is converted explicitly with `mapErr`.
+	 */
+	function propagatedResult(error:CompilerType, span:SourceSpan):CompilerType {
+		if (!session.hasBody())
+			fail(DiagnosticCode.TYPE_CONSTRAINT, '"try" without "catch" is only valid in a function', span);
+		var context = session.currentContext,
+			declared = context.expectedReturnType ?? context.inferredResult;
+		if (declared == null || compiler.types.Monomorphs.isUnbound(declared)) {
+			var value = session.monomorphs.create('the value of the Result that "try" returns', span);
+			if (value == null)
+				fail(DiagnosticCode.TYPE_CONSTRAINT,
+					'Cannot infer the result of a function that uses "try"; declare it as a Result', span);
+			var result = TInstance(NominalKind.Enum, RESULT, [value, error]);
+			if (declared == null)
+				context.inferredResult = result;
+			else
+				compiler.types.Monomorphs.close(declared, result);
+			return result;
+		}
+		return switch compiler.types.Monomorphs.follow(declared) {
+			case TInstance(NominalKind.Enum, name, [_, returned]) if (name == RESULT):
+				if (compiler.types.Monomorphs.isUnbound(returned))
+					compiler.types.Monomorphs.unify(returned, error);
+				else if (!TypeRelations.equals(compiler.types.Monomorphs.follow(returned),
+					compiler.types.Monomorphs.follow(error)))
+					fail(DiagnosticCode.TYPE_CONSTRAINT,
+						'"try" passes on an error of type ${MissingMember.haxeType(error)}, but the function returns errors of type ${MissingMember.haxeType(returned)}; convert it with mapErr',
+						span);
+				declared;
+			default:
+				throw new CompileError(new Diagnostic(DiagnosticCode.TYPE_CONSTRAINT,
+					'"try" without "catch" returns its error from the function, which must return a Result, not ${MissingMember.haxeType(declared)}',
+					span));
+		};
+	}
 
 	/** `break` (`leaves`) or `continue` as an expression, which gives no value: as in Haxe, only inside a loop. */
 	function loopJump(leaves:Bool, span:SourceSpan):TypedExpression {

@@ -61,6 +61,10 @@ The current subset includes:
   that computes one, or the expression body of a lambda that returns `Void` and computes one, is `E1033`. `_ = value;`
   evaluates a value and drops it on purpose, as a statement or as a lambda's body (`item -> _ = save(item)`); `_` names
   no variable there, and `_ = value` is not a value itself.
+- `try value` with no `catch` takes a `Result`: it gives the `Ok` value, and for an `Err` returns that error from the
+  enclosing function or lambda, whose result must be a `Result` with the same error type (`try read(path).mapErr(f)`
+  converts one first). It is a prefix operator, as `!` is: `try a() + 1` adds to the value. An unannotated function's
+  result becomes a `Result` with that error type. A `try` that a `catch` follows is Haxe's `try`/`catch`.
 - A switch over an enum abstract without a default covers every declared value, as one over an enum covers every
   constructor: a missing value is `E1021`, naming it, and a switch that covers them all returns on every path when its
   arms do. A value outside the declared set (a native code newer than its binding, or a cast) throws at the switch.

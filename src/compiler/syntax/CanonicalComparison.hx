@@ -409,6 +409,11 @@ class CanonicalComparison {
 						&& span(l1, r1);
 					default: false;
 				};
+			case Propagate(l0, l1): switch right {
+					case Propagate(r0, r1): astExpression(l0, r0)
+						&& span(l1, r1);
+					default: false;
+				};
 			case And(l0, l1, l2): switch right {
 					case And(r0, r1, r2): astExpression(l0, r0)
 						&& astExpression(l1, r1)

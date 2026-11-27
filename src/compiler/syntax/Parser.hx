@@ -1827,8 +1827,8 @@ class Parser {
 				end = expressionEnd(expression);
 			return Throw(expression, start.merge(end));
 		}
-		if (match(TokenKind.Try)) {
-			var start = spanOf(previous()),
+		if (check(TokenKind.Try) && startsTryCatch()) {
+			var start = spanOf(advance()),
 				tryBranch = parseTryBody(),
 				catches:Array<compiler.syntax.Ast.AstCatch> = [],
 				end = spanOf(previous());
@@ -2531,8 +2531,14 @@ class Parser {
 		}
 		if (match(TokenKind.Switch))
 			return parseSwitchExpression(spanOf(previous()));
-		if (match(TokenKind.Try))
-			return parseTryExpression(spanOf(previous()));
+		if (check(TokenKind.Try)) {
+			var catches = startsTryCatch(), start = spanOf(advance());
+			if (catches)
+				return parseTryExpression(start);
+			// A prefix operator, as `!` is: `try a() + 1` adds to the value, `try read(path).mapErr(f)` converts the error first.
+			var value = parsePrimary();
+			return Propagate(value, start.merge(expressionSpan(value)));
+		}
 		if (match(TokenKind.Throw)) {
 			var start = spanOf(previous()), value = parseExpression();
 			return ThrowExpression(value, start.merge(expressionSpan(value)));
@@ -3115,7 +3121,7 @@ class Parser {
 		advance();
 		var start = spanOf(previous()), statements = [];
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
-			if (isStatementOnlyStart(kindOf(current()))) {
+			if (atStatementOnlyStart()) {
 				parseStatements(statements);
 				continue;
 			}
@@ -3364,7 +3370,7 @@ class Parser {
 				return BlockExpression(statements, statementTerminates(last) ? Unreachable(end) : EmptyExpression(end),
 					start.merge(end));
 			}
-			if (isStatementOnlyStart(kindOf(current()))) {
+			if (atStatementOnlyStart()) {
 				parseStatements(statements);
 				continue;
 			}
@@ -3410,12 +3416,63 @@ class Parser {
 			default: false;
 		};
 
-	static function isStatementOnlyStart(kind:TokenKind):Bool
-		return switch kind {
-			case TokenKind.Var, TokenKind.Return, TokenKind.Try, TokenKind.While, TokenKind.Do, TokenKind.For,
-				TokenKind.Break, TokenKind.Continue: true;
+	/** Whether the cursor starts what only a statement can be: a `try` that propagates (`try value`) is an expression. */
+	function atStatementOnlyStart():Bool
+		return switch kindOf(current()) {
+			case TokenKind.Var, TokenKind.Return, TokenKind.While, TokenKind.Do, TokenKind.For, TokenKind.Break,
+				TokenKind.Continue: true;
+			case TokenKind.Try: startsTryCatch();
 			default: false;
 		};
+
+	/**
+	 * Whether the `try` at the cursor begins a `try`/`catch`: a `catch` follows its body at the body's own nesting. Without
+	 * one it propagates (`try value`), whose operand ends where a `;`, `,`, a closing bracket, or an `else` or `:` it did
+	 * not open ends it. A body that only a statement can begin (`try var x = f() catch ...`) is a `try`/`catch`.
+	 */
+	function startsTryCatch():Bool {
+		switch peekKind(1) {
+			case TokenKind.Var, TokenKind.Final, TokenKind.Return, TokenKind.While, TokenKind.Do, TokenKind.For,
+				TokenKind.Break, TokenKind.Continue, TokenKind.Defer, TokenKind.Try:
+				return true;
+			default:
+		}
+		var depth = 0, conditionals = 0, branches = 0, row = position + 1;
+		while (row < tokenCount) {
+			var kind = kindAt(row++);
+			if (depth > 0) {
+				switch kind {
+					case TokenKind.LeftParen, TokenKind.LeftBracket, TokenKind.LeftBrace: depth++;
+					case TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace: depth--;
+					default:
+				}
+				continue;
+			}
+			switch kind {
+				case TokenKind.Catch:
+					return true;
+				case TokenKind.LeftParen, TokenKind.LeftBracket, TokenKind.LeftBrace:
+					depth++;
+				case TokenKind.Semicolon:
+					// As in Haxe, a braceless body may end with a semicolon before its `catch`.
+					return row < tokenCount && kindAt(row) == TokenKind.Catch;
+				case TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace, TokenKind.Comma, TokenKind.Eof:
+					return false;
+				case TokenKind.Question:
+					conditionals++;
+				case TokenKind.Colon:
+					if (conditionals-- == 0)
+						return false;
+				case TokenKind.If:
+					branches++;
+				case TokenKind.Else:
+					if (branches-- == 0)
+						return false;
+				default:
+			}
+		}
+		return false;
+	}
 
 	function tryParseExpression():Null<AstExpression> {
 		var saved = position, savedLambdas = lambdaMark(), savedIfStart = statementIfStart;
@@ -3967,7 +4024,7 @@ class Parser {
 				NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
 				PostfixIncrement(_, _, span), AssignmentValue(_, span), Lambda(_, _, _, span), And(_, _, span),
 				Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
-				ThrowExpression(_, span), BreakExpression(span), ContinueExpression(span),
+				ThrowExpression(_, span), Propagate(_, span), BreakExpression(span), ContinueExpression(span),
 				SwitchExpression(_, _, _, span), Cast(_, _, span), CheckType(_, _, span),
 				Capture(_, _, span), Extractor(_, _, span), Spread(_, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span),

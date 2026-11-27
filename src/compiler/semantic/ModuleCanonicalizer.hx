@@ -660,6 +660,7 @@ class ModuleCanonicalizer {
 			case NotEqual(a, b, s): NotEqual(canonicalExpression(a, module, entry, locals, aliases),
 				canonicalExpression(b, module, entry, locals, aliases), s);
 			case Not(value, s): Not(canonicalExpression(value, module, entry, locals, aliases), s);
+			case Propagate(value, s): Propagate(canonicalExpression(value, module, entry, locals, aliases), s);
 			case And(a, b, s): And(canonicalExpression(a, module, entry, locals, aliases),
 				canonicalExpression(b, module, entry, locals, aliases), s);
 			case Or(a, b, s): Or(canonicalExpression(a, module, entry, locals, aliases),
