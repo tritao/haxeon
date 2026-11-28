@@ -1,6 +1,6 @@
 # The typer's per-build state as results
 
-Status: accepted (pieces 1, 2 and 5 first; piece 4 with engine slices 6 and 7); pieces 1, 3 and 5 are built ("As built", below), piece 2 is not yet. Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
+Status: accepted (pieces 1, 2 and 5 first; piece 4 with engine slices 6 and 7); pieces 1, 3 and 5 are built, and of piece 4 the prune's and retention's edges ("As built", below); piece 2 is not yet, nor piece 4's object tables. Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
 
 ## Why
 
@@ -179,6 +179,64 @@ specialization only a dropped one called goes with it; the specializations a bui
 The compiler's own sources have 33 specializations with 733 methods, typed again on every warm build before this (about 100 ms
 of a 138 ms `generated` phase, and 40 ms of IR, in a 362 ms no-op). The frozen perf-guard input has 7, so its gain there is
 small; `tests/compiler/TyperStateMain.hx` covers an `@:generic` class kept, and taken back when a publication is refused.
+
+### Piece 4: the prune and retention follow edges kept by module
+
+What the publication's whole-program questions read of a module's functions is that module's contribution, kept with it
+(`ModuleFunctionEdges`, `ModuleState.functionEdges`) and copied with it, so a build that is not taken leaves the edges of the
+state it copied. Two parts, each made the first time it is asked for:
+
+- **The prune's**: which of the module's typed functions are shared provider helpers, and the shared helpers each of its IR
+  functions calls. `stillCalled` answers what `generatedHelpersStillCalled` answered by reading every body of the program: which
+  shared helpers a function that stays, or a helper that stays on its own, still calls.
+- **Retention's**: for each IR function that has one, the generated class it is a method of (or a lambda of one), the enum
+  specialization it is a helper of, the function specialization it is made in, and the generated types it names. Only these
+  functions are read by `retainedFromPrevious`; a function that belongs to none and names no generated type has nothing to
+  retain. Its walk no longer builds maps of every function of the program, nor reads every function's type mentions.
+
+Where publication or the prune changes a function (`publishFunctions`, `generatePendingIr`, `removeCachedFunctions`), it marks it
+(`ModuleFunctionEdges.changed`); each part reads the marked functions again the next time it is asked for, so a kept function is
+not read at all, and a changed one is read in the build that asks, as before (the prune after publication, retention in the next
+build). The kinds that held each function's calls and type mentions (`SessionState.irCalls`, `irTypeMentions`) are gone: the
+edges read a function once per change.
+
+A call is recorded by its callee's name (the callee may be in a module not read yet), so the shared helpers' names are one prefix
+per generator; retention's generated types are known by name too (`$generic:`, an enum specialization, an enum's interface
+adapter, a key path cache). `--check-reuse` holds every shared helper and every type retention may keep to those names, and makes
+every module's edges afresh and compares them with the kept ones (`ModuleFunctionEdges.check`); the programs suite with
+`--check-reuse` is what found the interface adapters missing from a first list.
+
+Warm-equals-cold bug 3 is fixed on the same edges: `Slot.map` at `String` in `Main.main` made a shared helper whose origin is
+`Main.main`; undoing the edit typed `Main.main` again without the call, and the prune dropped the helper, but retention had counted
+its IR before typing, so `Slot<String>` stayed in the warm program. Retention now counts a helper made for a function typed again
+(directly or through another such helper) only when a caller that stays calls it, which is the prune's question asked with
+"typed again" before typing (`helpersMadeAgain`, `stillCalled`). One rule serves both. A helper is held by the module of its
+origin, so only the modules of the functions typed again are read; a no-op reads none. The warm-edit catalogue has no known
+failure left.
+
+Not built, with the reasons:
+
+- **`objectsFrom` per class as a contribution.** A class's object is a function of its typed class, but also of how its field
+  types lower and of its bases and observable facts, which a kept typed class does not record; a contribution keyed by the class
+  would need those as recorded reads. It stays with slice 7, which holds the same object tables (above, "Decided"). Measured
+  share on the no-op: `objectsFrom` about 10 ms of a 250 ms build.
+- **The rest of the prune.** `pruneModule` still runs for every module (about 15 ms on a no-op): it also gives every kept generated
+  function its owner, which a build needs each time, and its decisions read build-wide sets (what was typed, invalidated, still
+  called), so skipping a module needs those as recorded reads first. `reachedSpecializations` and retention's scan of the unit
+  records (about 3 ms each) and retention's `units` (about 7 ms, every kept function by name, which `keepAnonymousUnits` reads)
+  are also whole-program; the last goes with piece 2.
+
+Lines in `src/`: 194 deleted and 499 added (`ModuleFunctionEdges` 347 of them, with its check).
+
+Measured (perf-guard, all four parts, origin/main and this change back to back on one machine): no-op 0.767G → 0.723G
+main-thread instructions (−5.7%), body edit 2.011G → 1.967G (−2.2%), signature edit 19.646G → 19.611G (−0.2%); allocation of the
+no-op 84.1 → 81.5 MB, of the first no-op 133.3 → 126.3 MB, of the body edit 236.5 → 233.9 MB; the session's live data 893.3 →
+889.4 MB (the two memo kinds gone, the edges kept), the UI app's live session 302.0 → 301.3 MB, the small project's 7.76 → 7.65 MB.
+The small project builds and checks within 0.7% (all lower), and the cold self-compile within 0.1% (instructions +0.05%, live data at
+the phase boundaries +0.2 to +0.3 MB), its output byte-identical. A first version without per-function marks made a module's
+edges again whenever one of its functions changed, which made the signature edit 0.4% slower and read every function's type
+mentions in the build that changed it; one that kept every function naming any `$` name held 5,600 entries instead of 1,600 and
+grew live data by 0.9 MB.
 
 ### Piece 2: not built yet
 

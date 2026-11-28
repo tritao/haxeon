@@ -150,15 +150,9 @@ class SessionState {
 	public var hlFunctions(default, null):compiler.hl.incremental.HlFunctionQueries;
 
 	/**
-	 * What each function of `irGeneration` names of classes and enums (`FrontendCompilation.typeMentions`), by the same key: it
-	 * holds while the function does. Every copy shares it, as `irGeneration`.
+	 * What each function of `irGeneration` references for the static initialization order, by the same key: it holds while the
+	 * function does. Every copy shares it, as `irGeneration`.
 	 */
-	public var irTypeMentions(default, null):ComputedQueryKind<FrontendCompilation.TypeMentions>;
-
-	/** The functions each function of `irGeneration` calls (`FrontendCompilation.callsIn`), as `irTypeMentions`. */
-	public var irCalls(default, null):ComputedQueryKind<Array<String>>;
-
-	/** What each function of `irGeneration` references for the static initialization order, as `irTypeMentions`. */
 	public var staticReferences(default, null):ComputedQueryKind<IrStaticReferences>;
 
 	/**
@@ -213,8 +207,10 @@ class SessionState {
 	public function releaseRetained():Void {
 		releaseSyntax();
 		releaseGeneratedIr();
-		for (state in modules)
+		for (state in modules) {
 			state.typedFunctions = [];
+			state.functionEdges = null;
+		}
 		objects = [];
 		lastTypedProgram = null;
 		semanticProgram = null;
@@ -232,13 +228,13 @@ class SessionState {
 	 * memos in place, as `releaseRetained` does.
 	 */
 	public function releaseGeneratedIr():Void {
-		for (state in modules)
+		for (state in modules) {
 			state.irFunctions = [];
+			state.functionEdges = null;
+		}
 		irGeneration.clear();
 		irObjects.clear();
 		initializerInputs.clear();
-		irTypeMentions.clear();
-		irCalls.clear();
 		staticReferences.clear();
 	}
 
@@ -323,13 +319,6 @@ class SessionState {
 			initializerInputs = queries.register(new ComputedQueryKind<Array<TypedField>>("initializer-inputs",
 				sameFields, null,
 				symbolName));
-			irTypeMentions =
-				queries.register(new ComputedQueryKind<FrontendCompilation.TypeMentions>("ir-type-mentions",
-				FrontendCompilation.sameTypeMentions,
-				(database, key) -> FrontendCompilation.typeMentions(generation.get(database, key)), symbolName));
-			irCalls = queries.register(new ComputedQueryKind<Array<String>>("ir-calls",
-				compiler.ir.model.Ir.IrObjectTools.sameNames,
-				(database, key) -> FrontendCompilation.callsIn(generation.get(database, key)), symbolName));
 			staticReferences = queries.register(new ComputedQueryKind<IrStaticReferences>("static-references",
 				IrStaticReferences.same, (database, key) -> IrStaticReferences.of(generation.get(database, key)),
 				symbolName));
@@ -351,8 +340,6 @@ class SessionState {
 			irGeneration = sharing.irGeneration;
 			irObjects = sharing.irObjects;
 			initializerInputs = sharing.initializerInputs;
-			irTypeMentions = sharing.irTypeMentions;
-			irCalls = sharing.irCalls;
 			staticReferences = sharing.staticReferences;
 			declarationKeys = sharing.declarationKeys;
 			moduleNames = sharing.moduleNames;

@@ -16,6 +16,9 @@ import compiler.types.typing.KeyPathTyping.KeyPathDefinition;
 
 /** Shared descriptors own typed access functions; calling them never builds a writer. */
 class KeyPathRuntime {
+	/** What separates a key path cache's root from the digest that ends its name. */
+	public static inline final CACHE_SEPARATOR = ".$keypaths$";
+
 	final session:TypingSession;
 	final emitted:Map<String, Bool> = [];
 	final caches:Map<String, TypedClass> = [];
@@ -24,7 +27,7 @@ class KeyPathRuntime {
 	public function new(session:TypingSession, classes:Array<TypedClass>) {
 		this.session = session;
 		for (declaration in classes)
-			if (declaration.name.indexOf(".$keypaths$") >= 0) caches.set(declaration.name, declaration);
+			if (declaration.name.indexOf(CACHE_SEPARATOR) >= 0) caches.set(declaration.name, declaration);
 	}
 
 	public function drain():Array<TypedFunction> {
@@ -163,7 +166,7 @@ class KeyPathRuntime {
 			case TInstance(_, name, _): name;
 			default: throw new InternalError("Invalid key path root");
 		};
-		return rootName + ".$keypaths$" + TextDigest.sha256(SemanticSignature.type(definition.root)).substr(0, 16);
+		return rootName + CACHE_SEPARATOR + TextDigest.sha256(SemanticSignature.type(definition.root)).substr(0, 16);
 	}
 
 	static function string(value:String, span:SourceSpan):TypedExpression

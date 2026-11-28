@@ -53,6 +53,11 @@ private typedef WirePayloadField = {
 
 /** Emits the first compiler-owned MessagePack codec profile. */
 class WireCodecGenerator {
+	/** What every name of a binary codec's helpers starts with, and of a JSON codec's. */
+	public static inline final WIRE_PREFIX:String = "$wire:";
+
+	public static inline final JSON_PREFIX:String = "$json:";
+
 	static inline final ENCODE_PREFIX:String = "$wire:encode:";
 	static inline final DECODE_PREFIX:String = "$wire:decode:";
 	static inline final VALUE_ENCODE_PREFIX:String = "$wire:value-encode:";

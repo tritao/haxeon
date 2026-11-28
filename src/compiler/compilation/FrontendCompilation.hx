@@ -3,6 +3,7 @@ import compiler.ir.model.IrTypeIds;
 import compiler.syntax.CanonicalComparison.PositionsCount;
 
 import compiler.abi.PositionalName;
+import compiler.compilation.ModuleFunctionEdges.RetentionEntry;
 import compiler.compilation.PipelineSnapshot.PipelineInputs;
 import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.AllocationSnapshot;
@@ -358,8 +359,10 @@ class FrontendCompilation {
 		pruneCachedFunctions(build);
 		generatePendingIr(build);
 		reportStages(build);
-		if (context.options.checkReuse)
+		if (context.options.checkReuse) {
 			checkHelperCalls(build.context.state.modules, build.names);
+			ModuleFunctionEdges.check(build.context.state, build.names);
+		}
 		finishTyping(build);
 		if (!lowerToIr)
 			return {
@@ -388,8 +391,10 @@ class FrontendCompilation {
 				semantic.declarations.bindReads(null);
 			// Nothing reads the typed bodies past the tables; live patching still reads the semantic program's parameter defaults.
 			build.typedByName = [];
-			for (state in context.state.modules)
+			for (state in context.state.modules) {
 				state.typedFunctions = [];
+				state.functionEdges = null;
+			}
 			if (!context.livePatching)
 				context.state.semanticProgram = null;
 		}
@@ -974,6 +979,8 @@ class FrontendCompilation {
 			var state = context.state.writableState(module, rollbackModules),
 				held = state.typedFunctions.get(fn.name);
 			state.typedFunctions.set(fn.name, fn);
+			if (held != fn)
+				ModuleFunctionEdges.changed(state, fn.name);
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			var keyPathRecord = keyPathUses.get(fn.name);
 			if (keyPathRecord != null)
@@ -1014,6 +1021,8 @@ class FrontendCompilation {
 				// Typed again to the IR it already had (a helper every build types from the program's requests, an edit that changes
 				// nothing the function compiles to): the function keeps that IR, so nothing after it sees a change.
 				var made = generation.put(context.state.queries, key, ir);
+				if (state.irFunctions.get(fn.name) != made)
+					ModuleFunctionEdges.changed(state, fn.name);
 				state.irFunctions.set(fn.name, made);
 				if (made != previous)
 					regenerated.push(fn.name);
@@ -1249,8 +1258,10 @@ class FrontendCompilation {
 				modules.get(module).typeVersion++;
 		build.allocationBeforeModulePrune = AllocationMeter.sample();
 		// Shared generated helpers have one origin, but every retained caller needs their dependencies.
-		var calledGeneratedHelpers = generatedHelpersStillCalled(modules, names, build.typedByName, owners,
-			build.semanticAssembly.invalidated, context.state);
+		var typedByName = build.typedByName;
+		var calledGeneratedHelpers = ModuleFunctionEdges.stillCalled(modules, names,
+			(_, name) -> typedByName.exists(name),
+			owners, build.semanticAssembly.invalidated);
 		var readSpecializations = reachedSpecializations(build);
 		for (name in names) {
 			checkCancelled(build.token);
@@ -1514,8 +1525,9 @@ class FrontendCompilation {
 					if (fn == null)
 						throw new InternalError('Pending IR function "$functionName" has no typed function');
 					var ir = generator.generateFunction(fn);
-					state.irFunctions.set(functionName,
-						context.state.irGeneration.put(context.state.queries, ir.symbol.id, ir));
+					ir = context.state.irGeneration.put(context.state.queries, ir.symbol.id, ir);
+					state.irFunctions.set(functionName, ir);
+					ModuleFunctionEdges.changed(state, functionName);
 					if (!state.typedSourceRevisions.exists(functionName))
 						throw new InternalError('Pending IR function "$functionName" has no typed source revision');
 					state.irSourceRevisions.set(functionName, state.typedSourceRevisions.get(functionName));
@@ -2012,6 +2024,7 @@ class FrontendCompilation {
 			state.pendingIrFunctions.remove(cached);
 			state.irFunctions.remove(cached);
 			state.irSourceRevisions.remove(cached);
+			ModuleFunctionEdges.changed(state, cached);
 		}
 
 	/**
@@ -2065,7 +2078,7 @@ class FrontendCompilation {
 	 * The generic function's specialization of `state` that function `name` is, or was made inside (a lambda, a helper, which its
 	 * module holds with it), or null for none.
 	 */
-	static function functionSpecializationOf(state:ModuleState, name:String):Null<String> {
+	public static function functionSpecializationOf(state:ModuleState, name:String):Null<String> {
 		var current = name;
 		while (true) {
 			var fn = state.typedFunctions.get(current);
@@ -2159,48 +2172,24 @@ class FrontendCompilation {
 				helpers: helpers,
 				specializations: specializations
 			};
-		var functions:Map<String, IrFunction> = [],
-			physicalMethods:Map<String, String> = [],
-			lambdas:Map<String, String> = [],
-			inSpecializations:Map<String, String> = [];
-		for (module in modules) {
-			var state = context.state.modules.get(module);
-			if (state == null)
-				continue;
-			for (name => fn in state.irFunctions)
-				functions.set(name, fn);
-			for (name => fn in state.typedFunctions) {
-				if (fn.physicalOwner != null)
-					physicalMethods.set(name, fn.physicalOwner);
-				else if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Lambda && fn.origin != null)
-					lambdas.set(name, fn.origin);
-				var specialization = functionSpecializationOf(state, name);
-				if (specialization != null)
-					inSpecializations.set(name, specialization);
-			}
-		}
-		// A lambda belongs to the method it is written in: one in a generated class's method names that class as the method
-		// does, and retaining the class for it would keep the class alive through its own code.
-		for (name => origin in lambdas) {
-			var root = origin;
-			while (lambdas.exists(root))
-				root = lambdas.get(root);
-			var owner = physicalMethods.get(root);
-			if (owner != null)
-				physicalMethods.set(name, owner);
-		}
+		if (context.options.checkReuse)
+			for (names in [known, knownEnums])
+				for (name in names.keys())
+					if (!ModuleFunctionEdges.generatedTypeName(name))
+						throw new InternalError('generated type "$name" is not named as one');
 		// Every function that stays in the program counts, not only those a source function reaches: later IR passes rewrite
 		// the cached bodies (a call to a key path helper is inlined into its callers), so the helpers and generated bodies
 		// left behind are the ones that still name the classes and static fields they need. The methods of a generated class
 		// and the helpers of an enum specialization are the exception: they name their own type, so they count only once
 		// something else retains it. So is a generic function's specialization, with what was made inside it: it stays only
 		// while a caller that stays asks for it (`reachedSpecializations`), so it counts once the record of a unit that is kept
-		// names it.
-		var membersByOwner:Map<String, Array<String>> = [],
-			membersByEnum:Map<String, Array<String>> = [],
-			membersBySpecialization:Map<String, Array<String>> = [],
+		// names it. A function that belongs to none of these and names no generated type has nothing to retain, so only the
+		// functions a module's edges list are read (`ModuleFunctionEdges`).
+		var membersByOwner:Map<String, Array<RetentionEntry>> = [],
+			membersByEnum:Map<String, Array<RetentionEntry>> = [],
+			membersBySpecialization:Map<String, Array<RetentionEntry>> = [],
 			enumsByHash:Map<String, String> = [];
-		function addMember(table:Map<String, Array<String>>, owner:String, member:String):Void {
+		function addMember(table:Map<String, Array<RetentionEntry>>, owner:String, member:RetentionEntry):Void {
 			var members = table.get(owner);
 			if (members == null) {
 				members = [];
@@ -2213,30 +2202,25 @@ class FrontendCompilation {
 			if (hash != null)
 				enumsByHash.set(hash, name);
 		}
-		// A function made with the body it belongs to (a lambda, a dispatch entry) is made again, or not at all, when that body is
-		// typed again: what it names then is asked for while it is typed.
-		function typedAgain(name:String):Bool {
-			if (selected.exists(name))
-				return true;
-			var target = compiler.types.typing.DefaultArguments.dispatchTarget(name) ?? lambdas.get(name);
-			return target != null && typedAgain(target);
-		}
-		var pending:Array<String> = [];
-		for (name in functions.keys()) {
-			if (typedAgain(name))
-				continue;
-			var owner = physicalMethods.get(name),
-				helperHash = EnumRuntimeType.helperHash(name),
-				helperOf = helperHash == null ? null : enumsByHash.get(helperHash),
-				specialization = owner != null || helperOf != null ? null : inSpecializations.get(name);
-			if (owner != null)
-				addMember(membersByOwner, owner, name);
-			else if (helperOf != null)
-				addMember(membersByEnum, helperOf, name);
-			else if (specialization != null)
-				addMember(membersBySpecialization, specialization, name);
-			else
-				pending.push(name);
+		var anySelected = selected.keys().hasNext(),
+			calledAgain = helpersMadeAgain(context.state, modules, selected, invalidated, owners);
+		var pending:Array<RetentionEntry> = [];
+		for (module in modules) {
+			var state = context.state.modules.get(module);
+			if (state != null)
+				for (name => entry in ModuleFunctionEdges.retention(state)) {
+					if (anySelected && typedAgainIn(state, selected, name))
+						continue;
+					var helperOf = entry.enumHash == null ? null : enumsByHash.get(entry.enumHash);
+					if (entry.owner != null)
+						addMember(membersByOwner, entry.owner, entry);
+					else if (helperOf != null)
+						addMember(membersByEnum, helperOf, entry);
+					else if (entry.specialization != null)
+						addMember(membersBySpecialization, entry.specialization, entry);
+					else if (entry.mentions != null && (!calledAgain.exists(name) || calledAgain.get(name)))
+						pending.push(entry);
+				}
 		}
 		var reachedUnits:Map<String, Bool> = [];
 		function reach(record:Null<compiler.semantic.DeclarationFacts.UnitReads>):Void {
@@ -2293,15 +2277,16 @@ class FrontendCompilation {
 				for (member in members)
 					pending.push(member);
 		}
-		var state = context.state;
-		while (pending.length > 0) {
-			var name = pending.pop(), fn = functions.get(name);
-			if (fn == null)
-				throw new InternalError('Missing function $name during inline enum reflection reachability');
+		while (true) {
+			var entry = pending.pop();
+			if (entry == null)
+				break;
 			// A specialized owner's member asks for what its body calls once the owner is retained.
-			if (physicalMethods.exists(name))
-				reachFrom(name);
-			var named = state.irTypeMentions.get(state.queries, generated(state, fn));
+			if (entry.owner != null)
+				reachFrom(entry.name);
+			var named = entry.mentions;
+			if (named == null)
+				continue;
 			for (target in named.classes)
 				if (known.exists(target))
 					retain(target);
@@ -2319,6 +2304,63 @@ class FrontendCompilation {
 		};
 	}
 
+	/**
+	 * The helpers made for a function this build types again, directly or for such a helper, each with whether it still counts
+	 * for `retainedFromPrevious`. Typing the function makes the helper again if it still asks for it, and asks then for what the
+	 * helper names; otherwise the prune keeps the helper only for a caller that stays (`ModuleFunctionEdges.stillCalled`, which the
+	 * prune asks after typing), so only then does it count before typing. A helper is held by the module of its origin, so only
+	 * the modules of the functions typed again are read.
+	 */
+	static function helpersMadeAgain(session:SessionState, modules:Array<String>, selected:Map<String, Bool>,
+			invalidated:Map<String, Bool>, owners:Map<String, String>):Map<String, Bool> {
+		var result:Map<String, Bool> = [], holders:Map<String, Bool> = [];
+		for (name in selected.keys()) {
+			var module = owners.get(name) ?? initializerModule(name, owners);
+			if (module != null)
+				holders.set(module, true);
+		}
+		for (module in holders.keys()) {
+			var state = session.modules.get(module);
+			if (state == null)
+				continue;
+			function madeAgain(fn:compiler.types.TypedAst.TypedFunction):Bool {
+				var origin = fn.origin;
+				if (fn.originKind != compiler.types.TypedAst.FunctionOriginKind.Helper || origin == null)
+					return false;
+				if (typedAgainIn(state, selected, origin))
+					return true;
+				var parent = state.typedFunctions.get(origin);
+				return parent != null && madeAgain(parent);
+			}
+			for (name => fn in state.typedFunctions)
+				if (madeAgain(fn))
+					result.set(name, false);
+		}
+		if (result.keys().hasNext()) {
+			var called = ModuleFunctionEdges.stillCalled(session.modules, modules.copy(),
+				(holder, name) -> typedAgainIn(holder, selected, name), owners, invalidated);
+			for (name in called.keys())
+				if (result.exists(name))
+					result.set(name, true);
+		}
+		return result;
+	}
+
+	/**
+	 * Whether `name`, a function `state` holds, is typed again before retention's question is answered: it is selected, or it is
+	 * made with a body that is (a dispatch entry, a lambda), so that what it names is asked for while that body is typed.
+	 */
+	static function typedAgainIn(state:ModuleState, selected:Map<String, Bool>, name:String):Bool {
+		if (selected.exists(name))
+			return true;
+		var target = compiler.types.typing.DefaultArguments.dispatchTarget(name);
+		if (target != null)
+			return typedAgainIn(state, selected, target);
+		var fn = state.typedFunctions.get(name);
+		return fn != null && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Lambda && fn.origin != null
+			&& typedAgainIn(state, selected, fn.origin);
+	}
+
 	/** Whether two functions name the same classes and enums, in the same order. */
 	public static function sameTypeMentions(left:TypeMentions, right:TypeMentions):Bool
 		return compiler.ir.model.Ir.IrObjectTools.sameNames(left.classes, right.classes)
@@ -2326,8 +2368,8 @@ class FrontendCompilation {
 
 	/**
 	 * The classes and specialized-enum candidates `fn` names in its signature, values, type values and globals, each
-	 * once: what `retainedFromPrevious` reads of a function, kept by the session while the function is the same
-	 * (`SessionState.irTypeMentions`), so an unchanged one is not read again.
+	 * once: what `retainedFromPrevious` reads of a function, through the edges of its module (`ModuleFunctionEdges`), which
+	 * read it once per change of the function.
 	 */
 	public static function typeMentions(fn:IrFunction):TypeMentions {
 		var names:TypeMentions = {classes: [], enums: []};
@@ -2418,7 +2460,7 @@ class FrontendCompilation {
 						}
 		var kept:Array<compiler.types.TypedAst.TypedClass> = [];
 		for (entry in typed.classes) {
-			if (entry.name.indexOf(".$keypaths$") < 0) {
+			if (entry.name.indexOf(compiler.types.typing.KeyPathRuntime.CACHE_SEPARATOR) < 0) {
 				kept.push(entry);
 				continue;
 			}
@@ -2448,15 +2490,6 @@ class FrontendCompilation {
 			typed.classes.push(entry);
 	}
 
-	/** Body-only semantic reuse keeps every previous declaration, so it is valid only for an identical declaration set. */
-	/**
-	 * Cached equality and wire helpers still called by retained helpers, directly or transitively.
-	 * A shared helper has only one recorded origin. When that origin is edited or stops requesting the helper,
-	 * pruning by origin or source-module reachability alone would drop a dependency of another retained helper and
-	 * the next verification fails on the unknown call. A helper is kept on its own when it was typed again in this
-	 * build or its origin is unchanged. Required helper owners join the artifact assembly/pruning set even when
-	 * their source module is no longer reachable; unrelated functions in that module are still pruned.
-	 */
 	/** The names of the helpers the typer generates, by what they implement (equality, hash, enum methods, flags, raw values, key paths). */
 	static final helperPrefixes = [
 		compiler.types.typing.ValueEqualityGenerator.PREFIX,
@@ -2506,89 +2539,6 @@ class FrontendCompilation {
 		}
 	}
 
-	static function generatedHelpersStillCalled(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>,
-			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>,
-			invalidated:Map<String, Bool>, session:SessionState):Map<String, Bool> {
-		var reachable = [for (name in names) name => true];
-		var holders:Map<String, compiler.modules.ModuleState> = [],
-			kept:Map<String, Bool> = [],
-			pending:Array<String> = [];
-		for (name => state in modules) {
-			for (cached => fn in state.typedFunctions) {
-				var shared = switch fn.role {
-					case ProviderFunction(_,
-						operation): compiler.core.Provides.ProviderOperations.sharedAcrossModules(operation);
-					default: false;
-				};
-				if (!shared)
-					continue;
-				if (!holders.exists(cached) || reachable.exists(name))
-					holders.set(cached, state);
-				var origin = fn.origin;
-				if (reachable.exists(name)
-					&& (typedByName.exists(cached)
-					|| (origin != null && owners.exists(origin) && !invalidated.exists(origin)))) {
-					kept.set(cached, true);
-					pending.push(cached);
-				}
-			}
-		}
-		var result:Map<String, Bool> = [];
-		// A function that stays and was not typed again calls its helpers by name, whoever the helpers were made for: the helper stays
-		// while any such caller does. Only the helpers a retyped function requested were made again.
-		for (name => state in modules) {
-			if (!reachable.exists(name))
-				continue;
-			for (cached => body in state.irFunctions) {
-				if (!owners.exists(cached) || typedByName.exists(cached))
-					continue;
-				for (callee in callsOf(body, session))
-					if (holders.exists(callee) && !invalidated.exists(callee)) {
-						result.set(callee, true);
-						var dependencyOwner = holders.get(callee).name;
-						if (!reachable.exists(dependencyOwner)) {
-							reachable.set(dependencyOwner, true);
-							names.push(dependencyOwner);
-						}
-						if (!kept.exists(callee)) {
-							kept.set(callee, true);
-							pending.push(callee);
-						}
-					}
-			}
-		}
-		while (pending.length > 0) {
-			var current = pending.pop(), holder = holders.get(current);
-			if (holder == null)
-				continue;
-			var body = holder.irFunctions.get(current);
-			if (body == null)
-				continue;
-			for (callee in callsOf(body, session))
-				if (holders.exists(callee)) {
-					result.set(callee, true);
-					var dependencyOwner = holders.get(callee).name;
-					if (!reachable.exists(dependencyOwner)) {
-						reachable.set(dependencyOwner, true);
-						names.push(dependencyOwner);
-					}
-					if (!kept.exists(callee)) {
-						kept.set(callee, true);
-						pending.push(callee);
-					}
-				}
-		}
-		names.sort(Reflect.compare);
-		return result;
-	}
-
-	/**
-	 * The functions `fn` calls (`callsIn`), kept by the session while `fn` is the same (`SessionState.irCalls`), so the helpers a
-	 * build keeps are found without reading every function that stays.
-	 */
-	static function callsOf(fn:IrFunction, session:SessionState):Array<String>
-		return session.irCalls.get(session.queries, generated(session, fn));
-
 	/** The functions `fn` calls, each once, in the order it first calls them. */
 	public static function callsIn(fn:IrFunction):Array<String> {
 		var found:Array<String> = [], body = fn.body;
@@ -2617,6 +2567,7 @@ class FrontendCompilation {
 		return found;
 	}
 
+	/** Body-only semantic reuse keeps every previous declaration, so it is valid only for an identical declaration set. */
 	static function sameDeclarations(previous:AstProgram, current:AstProgram):Bool {
 		// Structural type signatures ignore field order and metadata, which the codec reads from the declaration.
 		if (previous.aliases.length != current.aliases.length)

@@ -8,16 +8,14 @@
 			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
 		},
 		"first_noop_allocated_bytes": {
-			"value": 134495920,
+			"value": 126282472,
 			"tolerance": 0.02,
-			"why": "The first rebuild after the cold build, with nothing changed: deterministic. It should cost what the next no-op costs; while it does more, a fix shows here as an improvement.",
-			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
+			"why": "The first rebuild after the cold build, with nothing changed: deterministic. It should cost what the next no-op costs; while it does more, a fix shows here as an improvement."
 		},
 		"noop_allocated_bytes": {
-			"value": 85266216,
+			"value": 81490352,
 			"tolerance": 0.02,
-			"why": "A no-op rebuild of a warm session: deterministic; it reads and compares the sources and reuses the module.",
-			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
+			"why": "A no-op rebuild of a warm session: deterministic; it reads and compares the sources and reuses the module."
 		},
 		"noop_retyped_functions": {
 			"value": 0,
@@ -90,10 +88,9 @@
 			"why": "Growth of the live data over the last two body edits, after the session has settled: steady to a fraction of a megabyte between runs. Keeping each build's compile result, whose IR mostly shares the session's, adds about eight megabytes a build, so the slack is a few megabytes."
 		},
 		"noop_instructions": {
-			"value": 781589083,
+			"value": 722861242,
 			"tolerance": 0.03,
-			"why": "Main-thread instructions of a no-op rebuild of a warm session, measured as body_edit_instructions is (the median of three): the floor every build in the server pays, reading and comparing the sources and reusing the module.",
-			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
+			"why": "Main-thread instructions of a no-op rebuild of a warm session, measured as body_edit_instructions is (the median of three): the floor every build in the server pays, reading and comparing the sources and reusing the module."
 		},
 		"body_edit_instructions": {
 			"value": 2024256430,

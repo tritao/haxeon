@@ -15,8 +15,11 @@ import compiler.types.typing.HelperRequests.HelperRequest;
 
 /** An enum obtains an object only at an explicit interface conversion boundary. */
 class EnumInterfaceAdapter {
+	/** What every adapter class's name starts with. */
+	public static inline final PREFIX = "$enum-interface:";
+
 	public static function name(type:CompilerType, interfaceType:CompilerType):String
-		return "$enum-interface:" + TextDigest.sha256(compiler.semantic.SemanticSignature.type(type) + ":"
+		return PREFIX + TextDigest.sha256(compiler.semantic.SemanticSignature.type(type) + ":"
 			+ compiler.semantic.SemanticSignature.type(interfaceType)).substr(0, 32);
 
 	public static function request(session:TypingSession, type:CompilerType, interfaceType:CompilerType,

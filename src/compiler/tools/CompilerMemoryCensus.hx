@@ -87,6 +87,7 @@ class CompilerMemoryCensus {
 				release: () -> for (state in compiler.modules) {
 					state.typedFunctions = [];
 					state.keyPathUses = [];
+					state.functionEdges = null;
 				}
 			},
 				{name: "IR functions of modules",
@@ -94,6 +95,7 @@ class CompilerMemoryCensus {
 					for (state in compiler.modules) {
 						state.irFunctions = [];
 						state.pendingIrFunctions = [];
+						state.functionEdges = null;
 					}
 					compiler.state.irGeneration.clear();
 					compiler.state.initializerInputs.clear();

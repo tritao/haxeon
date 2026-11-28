@@ -106,6 +106,12 @@ class ModuleState {
 	public var irFunctions:Map<String, IrFunction> = [];
 	public var irSourceRevisions:Map<String, Int> = [];
 
+	/**
+	 * What the publication's whole-program questions read of `typedFunctions` and `irFunctions` (`ModuleFunctionEdges`), or null
+	 * until they are asked: whoever changes a function of either marks it (`ModuleFunctionEdges.changed`).
+	 */
+	public var functionEdges:Null<compiler.compilation.ModuleFunctionEdges> = null;
+
 	public var dirty:Bool = true;
 	public var canonicalFunctions:Array<AstFunction> = [];
 	public var canonicalAllFunctions:Array<AstFunction> = [];
@@ -218,6 +224,7 @@ class ModuleState {
 		result.pendingIrFunctions = copyMap(pendingIrFunctions);
 		result.irFunctions = copyMap(irFunctions);
 		result.irSourceRevisions = copyMap(irSourceRevisions);
+		result.functionEdges = functionEdges == null ? null : functionEdges.copy();
 		result.dirty = dirty;
 		result.canonicalFunctions = canonicalFunctions;
 		result.canonicalAllFunctions = canonicalAllFunctions;

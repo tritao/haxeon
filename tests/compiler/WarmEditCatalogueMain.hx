@@ -466,9 +466,7 @@ class WarmEditCatalogueMain {
 				edit: [
 					"Main.hx"
 						=> "class Main { static function main():Int { var s:Slot<Int> = Full(20); return s.map(n -> n * 2).or(0) + s.map(n -> \"n\" + n).or(\"\").length; } }"
-				],
-				known: [Plain
-					=> "a helper the edit stops asking for still retains, until it is pruned, the enum it names"]
+				]
 			},
 			{
 				kind: "remove one of two calls to a generic enum method at a type, whose body alone names an enum at it",

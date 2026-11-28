@@ -49,7 +49,7 @@ enum abstract ProviderOperation(String) to String {
 class ProviderOperations {
 	/**
 	 * Whether the helpers of this operation are generated on demand from a request in one module and called from others, so a module
-	 * that is no longer reachable still holds helpers that reachable code calls (`FrontendCompilation.generatedHelpersStillCalled`).
+	 * that is no longer reachable still holds helpers that reachable code calls (`ModuleFunctionEdges.stillCalled`).
 	 */
 	public static function sharedAcrossModules(operation:String):Bool {
 		var colon = operation.indexOf(":"),
