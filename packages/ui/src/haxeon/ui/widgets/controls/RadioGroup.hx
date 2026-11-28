@@ -8,7 +8,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RootModifier;
-import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
@@ -61,17 +60,17 @@ class RadioGroup implements View {
 		return context.withScope(key, function() {
 			var root = context.createNode(context.rootId("radio-group"), LayoutVisualKind.Box, style.copy());
 			root.semantics = new Semantics(AccessibilityRole.Group, "Radio group");
-			var selected:State<String> = context.state(root.id, value);
-			var active:String = selected.value;
+			// The user's last choice, until the caller gives a different value; a disabled one shows the first enabled.
+			var chosen = context.adopted("value", value);
+			var active:String = chosen.value;
 			if (!hasEnabledValue(active)) active = firstEnabledValue();
-			if (active != selected.value) selected.update(active);
 			value = active;
 
 			var nodes:Array<ViewRoot> = [];
 			var select = function(next:String) {
 				if (next == value) return;
 				value = next;
-				selected.update(next);
+				chosen.set(next);
 				if (hasChangeHandler) onChange(next);
 			};
 			for (option in options) {

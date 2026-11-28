@@ -6,6 +6,7 @@ import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.core.AdoptedValue;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
@@ -57,14 +58,14 @@ class SplitView implements View {
 	public final dividerStyle:LayoutStyle;
 
 	/**
-	 * The resizable pane's extent, in logical pixels: on every build when `onResize` is given, which is then told of each
-	 * change (controlled); otherwise the starting extent, which the view keeps as the user drags (local).
+	 * The resizable pane's extent, in logical pixels. The view shows the user's last drag until this changes, and tells
+	 * `onResize` of each drag.
 	 */
 	public final extent:Float;
 
 	/**
-	 * Whether the resizable pane is collapsed: on every build when `onCollapsedChanged` is given; otherwise at the start,
-	 * and the view expands it when the user drags it open.
+	 * Whether the resizable pane is collapsed. The view expands it when the user drags it open, until this changes, and
+	 * tells `onCollapsedChanged`.
 	 */
 	public final collapsed:Bool;
 
@@ -114,16 +115,10 @@ class SplitView implements View {
 			rootStyle.childDistribution = LayoutDistribution.Start;
 			rootStyle.wrapMode = LayoutWrapMode.NoWrap;
 			var root = context.createNode(context.rootId("split-view"), LayoutVisualKind.Box, rootStyle);
-			// A controlled input is authoritative on every build; a local one is the view's own state.
-			var localExtent:State<Float> = context.state(context.id("extent"), extent),
-				localCollapsed:State<Bool> = context.state(context.id("collapsed"), collapsed);
-			var pane = context.lazyState(context.id("pane"), () -> new SplitPane()).value;
-			pane.extent = bounded(onResize != null ? extent : localExtent.value);
-			pane.collapsed = onCollapsedChanged != null ? collapsed : localCollapsed.value;
-			pane.localExtent = localExtent;
-			pane.localCollapsed = localCollapsed;
-			var collapsed = pane.collapsed;
-			var paneExtent = collapsed ? 0.0 : pane.extent;
+			// The user's last drag, until the caller gives a different extent or collapse.
+			var pane = new SplitPane(context.adopted("extent", extent), context.adopted("collapsed", collapsed));
+			var collapsed = pane.collapsed.value;
+			var paneExtent = collapsed ? 0.0 : bounded(pane.extent.value);
 
 			var leadingPane = context.createNode(context.rootId("leading-pane"),
 				LayoutVisualKind.Box,
@@ -195,7 +190,7 @@ class SplitView implements View {
 				var sideName = resizableSide == SplitSide.Leading ? "Leading" : "Trailing";
 				var dividerSemantics = new Semantics(AccessibilityRole.Separator, '$sideName pane divider');
 				dividerSemantics.actions = AccessibilityAction.Increment | AccessibilityAction.Decrement;
-				dividerSemantics.numericValue = pane.extent;
+				dividerSemantics.numericValue = bounded(pane.extent.value);
 				dividerSemantics.numericMinimum = minimumExtent;
 				dividerSemantics.numericMaximum = maximumExtent;
 				divider.semantics = dividerSemantics;
@@ -241,7 +236,7 @@ class SplitView implements View {
 			event.capturePointer();
 			drag.dragging = true;
 			drag.startPointer = horizontal ? event.x : event.y;
-			drag.startExtent = pane.collapsed ? minimumExtent : pane.extent;
+			drag.startExtent = pane.collapsed.value ? minimumExtent : bounded(pane.extent.value);
 			dragState.update(drag);
 			event.preventDefault();
 		});
@@ -267,16 +262,16 @@ class SplitView implements View {
 			else if (event.key == UiKey.Home) updateExtent(pane, minimumExtent, true);
 			else if (event.key == UiKey.End) updateExtent(pane, maximumExtent, true);
 			else return;
-			if (delta != 0.0) updateExtent(pane, pane.extent + delta, true);
+			if (delta != 0.0) updateExtent(pane, pane.extent.value + delta, true);
 			event.preventDefault();
 		};
 		divider.on(UiEventKind.KeyDown, handleKey);
 		divider.on(UiEventKind.KeyRepeat, handleKey);
 		divider.on(UiEventKind.AccessibilityIncrement, function(event) {
-			updateExtent(pane, pane.extent + keyboardStep() * actionGranularity(event), true);
+			updateExtent(pane, pane.extent.value + keyboardStep() * actionGranularity(event), true);
 		});
 		divider.on(UiEventKind.AccessibilityDecrement, function(event) {
-			updateExtent(pane, pane.extent - keyboardStep() * actionGranularity(event), true);
+			updateExtent(pane, pane.extent.value - keyboardStep() * actionGranularity(event), true);
 		});
 		divider.on(UiEventKind.PointerUp, function(_) {
 			var drag = dragState.value;
@@ -290,21 +285,17 @@ class SplitView implements View {
 		});
 	}
 
-	/** Moves the pane to `next`, telling the caller of a controlled input and keeping a local one. */
+	/** Moves the pane to `next`, shown at once, and tells the caller. */
 	function updateExtent(pane:SplitPane, next:Float, expandCollapsed:Bool):Bool {
 		if (!finite(next)) return false;
 		var target = bounded(next);
-		var changed = target != pane.extent;
-		pane.extent = target;
-		if (pane.collapsed && expandCollapsed && target > 0.0) {
-			pane.collapsed = false;
+		var changed = target != bounded(pane.extent.value);
+		pane.extent.set(target);
+		if (pane.collapsed.value && expandCollapsed && target > 0.0) {
+			pane.collapsed.set(false);
 			if (onCollapsedChanged != null) onCollapsedChanged(false);
-			else pane.localCollapsed.update(false);
 		}
-		if (changed) {
-			if (onResize != null) onResize(target);
-			else pane.localExtent.update(target);
-		}
+		if (changed && onResize != null) onResize(target);
 		return changed;
 	}
 
@@ -393,17 +384,15 @@ private class SplitDragState {
 	}
 }
 
-/**
- * The pane's current extent and collapse, which the divider's handlers read and change between builds, and the local
- * state a build reads when the caller does not control them.
- */
+/** The pane's extent and collapse as shown: the user's last drag, until the caller gives different ones. */
 private class SplitPane {
-	public var extent:Float = 0.0;
-	public var collapsed:Bool = false;
-	public var localExtent:Null<State<Float>> = null;
-	public var localCollapsed:Null<State<Bool>> = null;
+	public final extent:AdoptedValue<Float>;
+	public final collapsed:AdoptedValue<Bool>;
 
-	public function new() {}
+	public function new(extent:AdoptedValue<Float>, collapsed:AdoptedValue<Bool>) {
+		this.extent = extent;
+		this.collapsed = collapsed;
+	}
 }
 
 /** Main axis used by a SplitView. */

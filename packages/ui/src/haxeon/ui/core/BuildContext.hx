@@ -1086,6 +1086,17 @@ class BuildContext implements Disposable {
 		return stateStore.handle(id);
 	}
 
+	/**
+	 * The value a control shows under `key` of a value its caller gives as `given` and its user changes: the user's last
+	 * choice, until the caller gives a different value (`AdoptedValue`). Reading it makes the build depend on its changes.
+	 */
+	public function adopted<T>(key:String, given:T):AdoptedValue<T> {
+		var revision:State<Int> = state(id(key + ":revision"), 0);
+		var held:AdoptedValue<T> = lazyState(id(key), () -> new AdoptedValue(given, revision)).value;
+		held.adopt(given);
+		return held;
+	}
+
 	/** Like `state`, but calls `create` only when the state is first initialized, so later builds allocate no discarded value. */
 	public function lazyState<T>(id:WidgetId, create:Void->T):State<T> {
 		if (stateStore.contains(id)) stateStore.touch(id);

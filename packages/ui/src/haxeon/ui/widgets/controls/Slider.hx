@@ -12,7 +12,6 @@ import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
-import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.semantics.AccessibilityRequest;
@@ -97,10 +96,9 @@ class Slider implements ScopeView implements Observable {
 	public function buildBody(context:BuildContext):ViewRoot return buildControl(context, context.rootId("slider"));
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
-		// With `onChange` the caller's value is authoritative on every build (controlled); without it the slider keeps the
-		// value the user sets (local). Either way the handlers below read and change `value` between builds.
-		var local:State<Float> = context.state(context.id("value"), this.value);
-		var value = onChange != null ? this.value : local.value;
+		// The user's last setting, until the caller gives a different value; the handlers below change it between builds.
+		var chosen = context.adopted("value", this.value);
+		var value = chosen.value;
 		var authored = enabled ? StyleState.empty() : StyleState.Disabled;
 		var identity = new StyleIdentity("slider", key, key, null, ["slider"]);
 		var computed = context.resolveStyled(nodeId, identity, style, authored, null);
@@ -126,9 +124,9 @@ class Slider implements ScopeView implements Observable {
 			bounded = clamp(snapped, minimum, maximum);
 			if (bounded == value) return false;
 			value = bounded;
+			chosen.set(bounded);
 			var handler = latest().onChange;
 			if (handler != null) handler(value);
-			else local.update(value);
 			return true;
 		};
 		var valueAtPointer = function(event:UiEvent) {

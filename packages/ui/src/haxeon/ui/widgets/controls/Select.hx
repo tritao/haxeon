@@ -95,11 +95,9 @@ class Select<T> implements View {
 				}
 			});
 
-			// With `onChange` the caller's value is authoritative on every build (controlled); without it the select keeps
-			// the value the user picks (local).
-			var selectedState:State<T> = context.state(context.id("value"), value);
-			if (onChange == null) value = selectedState.value;
-			else selectedState.value;
+			// The user's last choice, until the caller gives a different value.
+			var chosen = context.adopted("value", value);
+			value = chosen.value;
 			var selectedIndex = enabledValueIndex(value);
 			if (selectedIndex < 0) selectedIndex = firstEnabledIndex();
 			if (selectedIndex >= 0 && !sameValue(value, options[selectedIndex].value)) {
@@ -156,7 +154,7 @@ class Select<T> implements View {
 				var option = options[index];
 				var changed = !sameValue(value, option.value);
 				value = option.value;
-				selectedState.update(value);
+				chosen.set(value);
 				setActive(index);
 				close();
 				if (changed && hasChangeHandler) onChange(value);

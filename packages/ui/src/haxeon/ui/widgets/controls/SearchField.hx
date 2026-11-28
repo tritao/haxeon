@@ -12,7 +12,6 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.State;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.Icon;
@@ -68,10 +67,9 @@ class SearchField implements View {
 	public function build(context:BuildContext):ViewRoot {
 		var value = this.value;
 		return context.withScope(new Key(key), function() {
-			// With `onChange` the caller's query is authoritative on every build (controlled); without it the field keeps
-			// what the user types (local).
-			var local:State<String> = context.state(context.id("query"), value);
-			if (onChange == null) value = local.value;
+			// What the user typed last, until the caller gives a different query.
+			var chosen = context.adopted("query", value);
+			value = chosen.value;
 			var icon = new Icon("search-icon", IconName.Search, 15.0, context.theme.tokens.textSecondary);
 			var leadingStyle = new LayoutStyle();
 			leadingStyle.width = LayoutAxis.fixed(18.0);
@@ -84,8 +82,8 @@ class SearchField implements View {
 			// The field's box is the row around it; the theme's search-input rule makes the input's own box invisible.
 			var input = new TextField("input", value, function(next) {
 				value = next;
+				chosen.set(next);
 				if (onChange != null) onChange(next);
-				else local.update(next);
 			}, inputStyle, label, placeholder:, enabled:, classes: ["search-input"],
 				onSubmit:);
 
@@ -99,8 +97,8 @@ class SearchField implements View {
 				clearStyle.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
 				var clear = new Button("", clearStyle, function() {
 					value = "";
+					chosen.set("");
 					if (onChange != null) onChange("");
-					else local.update("");
 				}, "clear", enabled,
 					ButtonVariant.Navigation, null, null, IconName.Close, null, null, null, null, null, null,
 					"Clear search");

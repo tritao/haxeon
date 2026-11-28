@@ -136,10 +136,11 @@ The rules the whole UI follows:
 - **Descriptions are immutable.** Every input is a `final` field set by the constructor, the later ones by name; no
   view writes one afterwards, itself included (the compiler rejects a final field written by its bare name outside the
   constructor). A change takes effect when the caller describes the view again.
-- **A value a view owns is controlled or local.** Given its change callback (`onChange`, `onResize`), the caller's value
-  is authoritative on every build and the caller is told of each change; without it, the view keeps the value in its
-  own state, so a rebuilt description keeps what the user chose (Slider, Select, ComboBox, SearchField, SplitView,
-  Tabs). Handlers read and change a per-build local, so events between builds accumulate.
+- **A value both a caller and a user change is adopted.** A control shows the user's last choice until the caller gives
+  a different value than the last time, which it then takes (`BuildContext.adopted`, `AdoptedValue`; TextField's
+  `adoptExternal` for text). A caller that keeps the value in a plain field and passes it back unchanged keeps the
+  user's edit, shown at once; one that resets it is followed; one with no callback just lets the user change it. Slider,
+  Select, ComboBox, RadioGroup, SearchField and SplitView work this way; Tabs has its explicit selection mode.
 - **Retained objects say so.** A few views are objects their owner keeps, with methods it calls: TreeView (`select`,
   `scrollTo`), PropertyInspector (`setStyle`, `setLabelLayout`, section state) and BinaryControl's `checked`, which
   activation writes on the mounted instance. They are the next step's work: descriptions as values replace them with
