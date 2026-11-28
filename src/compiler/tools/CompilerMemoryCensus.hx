@@ -73,7 +73,8 @@ class CompilerMemoryCensus {
 				},
 				{name: "objects",
 				release: () -> {
-					compiler.state.objects = [];
+					for (state in compiler.modules)
+						state.madeObjects = null;
 					compiler.state.irObjects.clear();
 				}
 			},

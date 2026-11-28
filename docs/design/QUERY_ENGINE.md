@@ -438,7 +438,8 @@ Design changes from the plan, with the reasons:
 - **The object set stays state.** `objectCache` also held the objects an earlier build made for a function it typed (closure
   environments), which a function not typed again still names: a set a candidate copies and a rejected build must not change, so
   it stays, as `SessionState.objects`. What was a cache in it, an equal object being the one kept, is `irObjects`, now for every
-  object and not only structures. `canonicalObjectCache` was remade from the typed classes every build: it is the build's.
+  object and not only structures. (The set went later: each function keeps the objects it made in its module, and the program's
+  objects are its owners', [TYPER_STATE.md](TYPER_STATE.md), "Objects by owner".) `canonicalObjectCache` was remade from the typed classes every build: it is the build's.
 - **`__init` is made every build** and put, so one made the same is last build's. It is made from names alone, which
   `IrGeneratedFunctions` joined into its key; interning such a key would grow the symbol table with every change to the
   initialization order.

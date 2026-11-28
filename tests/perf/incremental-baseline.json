@@ -7,12 +7,12 @@
 			"why": "A cold build in a session that keeps its state: deterministic for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"first_noop_allocated_bytes": {
-			"value": 92418104,
+			"value": 87417848,
 			"tolerance": 0.02,
 			"why": "The first rebuild after the cold build, with nothing changed: deterministic. It should cost what the next no-op costs; while it does more, a fix shows here as an improvement."
 		},
 		"noop_allocated_bytes": {
-			"value": 47082840,
+			"value": 42060600,
 			"tolerance": 0.02,
 			"why": "A no-op rebuild of a warm session: deterministic; it reads and compares the sources and reuses the module."
 		},
@@ -27,7 +27,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"body_edit_allocated_bytes": {
-			"value": 159157424,
+			"value": 154150040,
 			"tolerance": 0.02,
 			"why": "A body-only edit of the entry module: deterministic for a given source tree."
 		},
@@ -64,7 +64,7 @@
 			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
 		},
 		"late_body_edit_allocated_bytes": {
-			"value": 168022656,
+			"value": 162975952,
 			"tolerance": 0.02,
 			"why": "The body edit again after the signature edit: the session holds the rewrites of the constructor's callers, which an edit elsewhere must reuse. Deterministic for a given source tree."
 		},
@@ -85,7 +85,7 @@
 			"why": "Growth of the live data over the last two body edits, after the session has settled: steady to a fraction of a megabyte between runs. Keeping each build's compile result, whose IR mostly shares the session's, adds about eight megabytes a build, so the slack is a few megabytes."
 		},
 		"noop_instructions": {
-			"value": 430206936,
+			"value": 405351688,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of a no-op rebuild of a warm session, measured as body_edit_instructions is (the median of three): the floor every build in the server pays, reading and comparing the sources and reusing the module."
 		},

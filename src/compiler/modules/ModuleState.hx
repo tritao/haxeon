@@ -3,6 +3,7 @@ package compiler.modules;
 import compiler.core.Diagnostic;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
+import compiler.ir.model.Ir.IrObject;
 import compiler.ir.model.IrFunction;
 import compiler.semantic.SemanticModel;
 import compiler.syntax.Ast.AstFunction;
@@ -108,6 +109,12 @@ class ModuleState {
 
 	public var irFunctions:Map<String, IrFunction> = [];
 	public var irSourceRevisions:Map<String, Int> = [];
+
+	/**
+	 * The objects each function the module holds made when it was typed (its closures' environments, its captured locals' cells),
+	 * by function, or null for none: they are the program's while the function is, and go with it (`FrontendCompilation.programObjects`).
+	 */
+	public var madeObjects:Null<Map<String, Array<IrObject>>> = null;
 
 	/**
 	 * What the publication's whole-program questions read of `typedFunctions` and `irFunctions` (`ModuleFunctionEdges`), or null
@@ -228,6 +235,7 @@ class ModuleState {
 		result.pendingIrFunctions = copyMap(pendingIrFunctions);
 		result.irFunctions = copyMap(irFunctions);
 		result.irSourceRevisions = copyMap(irSourceRevisions);
+		result.madeObjects = madeObjects == null ? null : copyMap(madeObjects);
 		result.functionEdges = functionEdges == null ? null : functionEdges.copy();
 		result.dirty = dirty;
 		result.canonicalFunctions = canonicalFunctions;

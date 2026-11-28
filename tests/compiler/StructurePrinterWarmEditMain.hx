@@ -43,10 +43,11 @@ class StructurePrinterWarmEditMain {
 
 	/** The printer the session keeps for the structure whose first field is `field`. */
 	static function printer(compiler:Compiler, field:String):IrFunction {
-		for (name => object in compiler.state.objects)
-			if (StringTools.startsWith(name, "$anon:") && object.fields.length > 0 && object.fields[0].name == field) {
-				var kept =
-					compiler.state.irGeneration.kept(IrSymbol.of(IrProgramAssembler.anonymousStringName(name)).id);
+		for (structure in compiler.state.lastTypedProgram.anonymousTypes)
+			if (structure.fields.length > 0 && structure.fields[0].name == field) {
+				var name = structure.name,
+					kept =
+						compiler.state.irGeneration.kept(IrSymbol.of(IrProgramAssembler.anonymousStringName(name)).id);
 				if (kept == null)
 					throw 'the structure "$name" has no printer kept with its object';
 				return kept;

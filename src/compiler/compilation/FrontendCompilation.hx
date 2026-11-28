@@ -178,7 +178,12 @@ private class FrontendBuild {
 	public final releasedBodies:Array<compiler.types.TypedAst.TypedFunction> = [];
 
 	public var currentSpecializedOwners:Map<String, Bool>;
-	public var currentObjects:Array<IrObject>;
+
+	/** The objects of the classes and structures of the typed program (`publishObjects`). */
+	public var declaredObjects:Array<IrObject>;
+
+	/** The objects this build's typing made for closures, by name, which `publishFunctions` keeps with the functions that made them. */
+	public var closureObjects:Map<String, IrObject>;
 
 	/** The value objects' layouts on the canonical ABI, by name, which the inline enum lowering reads (`publishObjects`). */
 	public var canonicalObjects:Map<String, IrObject>;
@@ -401,6 +406,7 @@ class FrontendCompilation {
 			build.typedByName = [];
 			for (state in context.state.modules) {
 				state.typedFunctions = [];
+				state.madeObjects = null;
 				state.functionEdges = null;
 			}
 			if (!context.livePatching)
@@ -798,51 +804,40 @@ class FrontendCompilation {
 	}
 
 	/**
-	 * The object layouts of the typed classes and structures, among the program's objects (`SessionState.objects`), with each
-	 * structure's printer, and the generator that lowers against them.
+	 * The objects the typed program makes (`IrProgramAssembler.objectsFrom`): those of its classes and structures, with each
+	 * structure's printer, and those its typing made for closures; and the generator that lowers against them.
 	 */
 	static function publishObjects(build:FrontendBuild):Void {
 		var context = build.context,
 			state = context.state,
 			typedNew = build.typed(),
-			generator = build.generator,
-			objects = state.objects;
+			generator = build.generator;
 		build.retyped = [];
 		build.regenerated = [];
-		var previousTyped = state.lastTypedProgram;
 		build.currentSpecializedOwners = [
 			for (classDecl in typedNew.classes)
 				if (classDecl.specializationOrigin != null) classDecl.name => true
 		];
-		// A class or structure the program no longer has takes its object with it, and a structure's printer with its object.
-		if (previousTyped != null) {
-			var currentClasses = [for (classDecl in typedNew.classes) classDecl.name => true];
-			for (classDecl in previousTyped.classes)
-				if (!currentClasses.exists(classDecl.name))
-					objects.remove(classDecl.name);
-			if (previousTyped.anonymousTypes != typedNew.anonymousTypes) {
-				var currentStructures = [for (anonymous in typedNew.anonymousTypes) anonymous.name => true];
-				for (anonymous in previousTyped.anonymousTypes)
-					if (!currentStructures.exists(anonymous.name))
-						objects.remove(anonymous.name);
-			}
-		}
-		// The objects a function makes for its closures and captured variables are named by source offsets. When the function
-		// is typed again they are made again under their new names, and the old ones must not stay behind.
-		var retypedNames:Map<String, Bool> = [for (fn in typedNew.functions) fn.name => true];
-		for (name in [for (name in objects.keys()) name])
-			if (isGeneratedObjectOfRetypedFunction(name, retypedNames))
-				objects.remove(name);
-		var typedObjects = IrProgramAssembler.objectsFrom(generator, typedNew, null, false, printsStructures(context));
-		// An object made again the same is the one the program had. One this build did not make is the one an earlier build put,
-		// which a structure's printer reads (`structurePrinter`).
+		var typedObjects = IrProgramAssembler.objectsFrom(generator, typedNew, null, false, printsStructures(context)),
+			plan = typedNew.closurePlan,
+			planned:Map<String, Bool> = [];
+		for (cell in plan.storage)
+			planned.set(cell.name, true);
+		for (environment in plan.environments)
+			planned.set(environment.name, true);
+		var declaredObjects:Array<IrObject> = [], closureObjects:Map<String, IrObject> = [];
+		// An object made again the same is the one the program had.
 		for (index in 0...typedObjects.length) {
 			var object = state.irObjects.put(state.queries, IrSymbol.of(typedObjects[index].name).id,
 				typedObjects[index]);
 			typedObjects[index] = object;
-			objects.set(object.name, object);
+			if (planned.exists(object.name))
+				closureObjects.set(object.name, object);
+			else
+				declaredObjects.push(object);
 		}
-		var currentObjects:Array<IrObject> = [for (object in objects) object];
+		build.declaredObjects = declaredObjects;
+		build.closureObjects = closureObjects;
 		if (printsStructures(context))
 			for (anonymous in typedNew.anonymousTypes)
 				structurePrinter(build, generator, anonymous);
@@ -878,8 +873,7 @@ class FrontendCompilation {
 				canonicalObjects.set(object.name, object);
 		}
 		build.canonicalObjects = canonicalObjects;
-		build.currentObjects = currentObjects;
-		build.generator = generator.withObjects(currentObjects);
+		build.generator = generator.withObjects(typedObjects);
 		build.allocationAfterObjects = AllocationMeter.sample();
 	}
 
@@ -973,7 +967,9 @@ class FrontendCompilation {
 			bodies = new compiler.ir.model.IrBodyBuilder();
 		var touchedModules:Map<String, Bool> = [],
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [],
-			generatedFunctions:Map<String, Bool> = [];
+			generatedFunctions:Map<String, Bool> = [],
+			closureObjects = build.closureObjects;
+		build.closureObjects = null;
 		build.touchedModules = touchedModules;
 		build.typedByName = typedByName;
 		for (fn in typedNew.functions) {
@@ -999,8 +995,11 @@ class FrontendCompilation {
 			var state = context.state.writableState(module, rollbackModules),
 				held = state.typedFunctions.get(fn.name);
 			state.typedFunctions.set(fn.name, fn);
-			if (held != fn)
+			// A function kept as the last build made it keeps the objects it made then.
+			if (held != fn) {
 				ModuleFunctionEdges.changed(state, fn.name);
+				keepMadeObjects(state, fn.name, objectsMadeBy(fn, closureObjects));
+			}
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			var keyPathRecord = keyPathUses.get(fn.name);
 			if (keyPathRecord != null)
@@ -1049,11 +1048,57 @@ class FrontendCompilation {
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
+		if (context.options.checkReuse)
+			checkClosureObjectsOwned(typedNew.functions, closureObjects);
 		publishUnitReads(build);
 		publishStructures(build);
 		publishDeclarationTypeDigests(build);
 		publishInferredSignatures(build);
 		build.allocationAfterFunctions = AllocationMeter.sample();
+	}
+
+	/** The objects among `made` (this build's closure objects) that typing `fn` made: the environment it runs in, its locals' cells. */
+	static function objectsMadeBy(fn:compiler.types.TypedAst.TypedFunction,
+			made:Map<String, IrObject>):Null<Array<IrObject>> {
+		var environment = fn.owner == null ? null : made.get(fn.owner),
+			result = environment == null ? null : [environment];
+		for (cell in fn.cells) {
+			var object = made.get(cell);
+			if (object != null) {
+				if (result == null)
+					result = [];
+				result.push(object);
+			}
+		}
+		return result;
+	}
+
+	/** Gives function `name` of `state`, which a build copied for writing, the objects it made, or none when null. */
+	static function keepMadeObjects(state:ModuleState, name:String, objects:Null<Array<IrObject>>):Void {
+		var made = state.madeObjects;
+		if (objects != null) {
+			if (made == null) {
+				made = [];
+				state.madeObjects = made;
+			}
+			made.set(name, objects);
+		} else if (made != null && made.remove(name) && !made.keys().hasNext())
+			state.madeObjects = null;
+	}
+
+	/** Check mode: every object this build's typing made for closures has a function that made it, which keeps it. */
+	static function checkClosureObjectsOwned(functions:Array<compiler.types.TypedAst.TypedFunction>,
+			made:Map<String, IrObject>):Void {
+		var owned:Map<String, Bool> = [];
+		for (fn in functions) {
+			var objects = objectsMadeBy(fn, made);
+			if (objects != null)
+				for (object in objects)
+					owned.set(object.name, true);
+		}
+		for (name in made.keys())
+			if (!owned.exists(name))
+				throw new InternalError('the closure object "$name" has no function that made it');
 	}
 
 	/**
@@ -1755,10 +1800,6 @@ class FrontendCompilation {
 		var context = build.context,
 			generator = build.generator,
 			typedNew = build.typed();
-		var resolvedObjects = resolvedObjectsFrom(context.state.objects, typedNew,
-			functionNamesOf(build.cachedNames, typedNew));
-		var objectNames = [for (name in resolvedObjects.keys()) name];
-		objectNames.sort(Reflect.compare);
 		var irNatives = context.natives.irNatives();
 		for (native in IrProgramAssembler.nativesFrom(generator, typedNew)) {
 			for (existing in irNatives)
@@ -1787,7 +1828,7 @@ class FrontendCompilation {
 				&& published.isPublished() ? IrProgramAssembler.liveInitializersFrom(generator, typedNew,
 				name -> published.publishedObject(name),
 				(name, field) -> published.publishedField(name, field)) : [];
-		build.objects = [for (name in objectNames) resolvedObjects.get(name)];
+		build.objects = programObjects(build);
 		build.interfaces = IrProgramAssembler.interfacesFrom(generator, typedNew);
 		build.enums = IrProgramAssembler.enumsFrom(generator, typedNew);
 		build.staticFields = IrProgramAssembler.staticFieldsFrom(generator, typedNew);
@@ -2008,9 +2049,8 @@ class FrontendCompilation {
 	 * `--check-reuse` of what the frontend kept from earlier builds (typed bodies, their IR, objects): the frontend run again on the
 	 * same sources from a fresh state (`SessionState.freshFromSources`) must give the IR pipeline the same inputs, positions
 	 * included. The IR and backend checks recompute from these inputs, so a body kept typed against a declaration's old position
-	 * passes them. The program's objects may also hold content-named objects an edit left unused (`isGeneratedObjectOfRetypedFunction`),
-	 * which nothing reads and a fresh state has not made: those and their printers are left out. A live build is not checked: it
-	 * keeps the layouts and identities of the module it patches, which a fresh state has not.
+	 * passes them. A live build is not checked: it keeps the layouts and identities of the module it patches, which a fresh state
+	 * has not.
 	 */
 	static function checkFrontendReuse(build:FrontendBuild, inputs:PipelineInputs):Void {
 		var fresh = build.context.over(build.context.state.freshFromSources()), freshBuild:Null<FrontendBuild> = null;
@@ -2020,14 +2060,8 @@ class FrontendCompilation {
 			throw new InternalError('--check-reuse: the frontend run afresh fails where the warm build passed (${error.message})');
 		if (freshBuild == null)
 			throw new InternalError("--check-reuse: the frontend run afresh produced no IR tables");
-		var made = [for (object in freshBuild.objects) object.name => true],
-			unusedPrinters = [
-				for (object in build.objects)
-					if (!made.exists(object.name)) IrProgramAssembler.anonymousStringName(object.name) => true
-			],
-			freshInputs = inputsOf(freshBuild),
-			keptInputs = inputsOf(build, [for (object in build.objects) if (made.exists(object.name)) object],
-				[for (fn in build.cached) if (!unusedPrinters.exists(fn.name)) fn]),
+		var freshInputs = inputsOf(freshBuild),
+			keptInputs = inputsOf(build),
 			difference = PipelineSnapshot.inputsDifference(freshInputs, keptInputs);
 		if (difference != null)
 			throw new InternalError('--check-reuse: what the frontend kept from earlier builds differs from a fresh frontend run ($difference)');
@@ -2117,7 +2151,7 @@ class FrontendCompilation {
 				context.rootModules.push(module);
 		}
 
-	/** Drops functions of module `state` with what they were typed and lowered to, and the records of what they read. */
+	/** Drops functions of module `state` with what they were typed and lowered to, the objects they made, and the records of what they read. */
 	static function removeCachedFunctions(session:SessionState, state:ModuleState, names:Array<String>):Void
 		for (cached in names) {
 			state.typedFunctions.remove(cached);
@@ -2132,6 +2166,7 @@ class FrontendCompilation {
 			state.pendingIrFunctions.remove(cached);
 			state.irFunctions.remove(cached);
 			state.irSourceRevisions.remove(cached);
+			keepMadeObjects(state, cached, null);
 			ModuleFunctionEdges.changed(state, cached);
 		}
 
@@ -2718,90 +2753,25 @@ class FrontendCompilation {
 	}
 
 	/**
-	 * Cached closure and anonymous objects outlive the typing pass that produced them and are
-	 * kept for when their module becomes reachable again; only objects whose layout resolves
-	 * against this program's declarations are lowered.
+	 * The program's objects, by name: every object has an owner, and is the program's while its owner is. A class or structure of
+	 * the typed program gives its own, made this build (`publishObjects`); a function of the program's modules gives those its typing
+	 * made, kept with it in its module while it is held (`ModuleState.madeObjects`), and gone with it.
 	 */
-	static function resolvedObjectsFrom(programObjects:Map<String, IrObject>, typed:TypedProgram,
-			functionNames:Map<String, Bool>):Map<String, IrObject> {
-		var enums = [for (decl in typed.enums) decl.name => true],
-			interfaces = [for (decl in typed.interfaces) decl.name => true],
-			objects = [
-				for (name => object in programObjects)
-					if (!isOrphanedEnvironment(name, functionNames)) name => object
-			];
-		var removed = true;
-		while (removed) {
-			removed = false;
-			for (name in [for (name in objects.keys()) name]) {
-				var object = objects.get(name),
-					resolved = object.base == null || objects.exists(Std.string(object.base));
-				for (field in object.fields)
-					if (!typeResolved(field.type, objects, enums, interfaces))
-						resolved = false;
-				if (!resolved) {
-					objects.remove(name);
-					removed = true;
-				}
-			}
+	static function programObjects(build:FrontendBuild):Array<IrObject> {
+		var byName:Map<String, IrObject> = [for (object in build.declaredObjects) object.name => object],
+			modules = build.context.state.modules;
+		build.declaredObjects = null;
+		for (name in build.names) {
+			var state = modules.get(name), made = state == null ? null : state.madeObjects;
+			if (made != null)
+				for (objects in made)
+					for (object in objects)
+						byName.set(object.name, object);
 		}
-		return objects;
+		var names = [for (name in byName.keys()) name];
+		names.sort(Reflect.compare);
+		return [for (name in names) byName.get(name)];
 	}
-
-	/**
-	 * The environment object of a lambda or function adapter exists for that function alone. When an edit renames the
-	 * function (a lambda is named by its position among the lambdas of its body) or removes it, the old environment must go
-	 * with it; anything else kept in the cache is content-named and harmless to keep.
-	 */
-	static function isGeneratedObjectOfRetypedFunction(name:String, retyped:Map<String, Bool>):Bool {
-		for (prefix in ["$cell:", "$lambda-env:", "$function-adapter-env:"])
-			if (StringTools.startsWith(name, prefix)) {
-				// The owner is followed by ":" and may itself contain ":" (a lambda's name), so try every boundary.
-				var rest = name.substr(prefix.length),
-					colon = rest.indexOf(":");
-				while (colon >= 0) {
-					if (retyped.exists(rest.substr(0, colon)))
-						return true;
-					colon = rest.indexOf(":", colon + 1);
-				}
-				return false;
-			}
-		return false;
-	}
-
-	static function functionNamesOf(cachedNames:Array<String>, typed:TypedProgram):Map<String, Bool> {
-		var names:Map<String, Bool> = [for (name in cachedNames) name => true];
-		for (fn in typed.functions)
-			names.set(fn.name, true);
-		return names;
-	}
-
-	static function isOrphanedEnvironment(name:String, functionNames:Map<String, Bool>):Bool {
-		for (pair in [["$lambda-env:", "$lambda:"], ["$function-adapter-env:", "$function-adapter:"]])
-			if (StringTools.startsWith(name, pair[0]))
-				return !functionNames.exists(pair[1] + name.substr(pair[0].length));
-		// The environment of a key path composition is named after its functions (`<name>:get` is always made) and, like a lambda's,
-		// by the place of the composition: an edit that moves it leaves the old environment with nothing to run.
-		if (StringTools.startsWith(name, "$keypath.compose:") && StringTools.endsWith(name, ":environment"))
-			return !functionNames.exists(name.substr(0, name.length - ":environment".length) + ":get");
-		return false;
-	}
-
-	static function typeResolved(type:IrType, objects:Map<String, IrObject>, enums:Map<String, Bool>,
-			interfaces:Map<String, Bool>):Bool
-		return switch type {
-			case Obj(name): objects.exists(name);
-			case Enum(name): enums.exists(compiler.types.typing.EnumRuntimeType.declaration(name));
-			case Virtual(name): interfaces.exists(name);
-			case Array(element), Iterator(element): typeResolved(element, objects, enums, interfaces);
-			case Function(arguments, result):
-				var resolved = typeResolved(result, objects, enums, interfaces);
-				for (argument in arguments)
-					if (!typeResolved(argument, objects, enums, interfaces))
-						resolved = false;
-				resolved;
-			default: true;
-		};
 
 	/** The literal defaults of the optional parameters of `ir`'s functions (`IrProgram.parameterDefaults`). */
 	static function parameterDefaults(ir:IrProgram,

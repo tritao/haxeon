@@ -46,13 +46,6 @@ class SessionState {
 
 	public var types(default, null):TypeRegistry;
 	public var genericSpecializations(default, null):GenericSpecializationRegistry;
-	/**
-	 * The program's objects by name: those of the classes and structures this build typed, and those an earlier build made for a
-	 * function it typed (its closures' environments), which a function not typed again still names. A copy has its own, as a build
-	 * removes the objects of the functions it types again.
-	 */
-	public var objects(default, null):Map<String, IrObject> = [];
-
 	/** The order of the functions the last assembly started from; every copy shares it, as it is a function of their names. */
 	public final assemblyOrder:FrontendCompilation.AssemblyOrder;
 
@@ -125,7 +118,7 @@ class SessionState {
 	public var irGeneration(default, null):ComputedQueryKind<IrFunction>;
 
 	/**
-	 * Each object of the program (`objects`) by its name's symbol, put every build: one made again the same is last build's, so
+	 * Each object the typed program makes (`FrontendCompilation.publishObjects`) by its name's symbol, put every build: one made again the same is last build's, so
 	 * what compares objects downstream finds the same object, and a structure's printer, which reads its object here, is kept.
 	 */
 	public var irObjects(default, null):ComputedQueryKind<IrObject>;
@@ -217,9 +210,9 @@ class SessionState {
 		releaseGeneratedIr();
 		for (state in modules) {
 			state.typedFunctions = [];
+			state.madeObjects = null;
 			state.functionEdges = null;
 		}
-		objects = [];
 		lastTypedProgram = null;
 		semanticProgram = null;
 		purity.clear();
@@ -378,7 +371,6 @@ class SessionState {
 			(startingBackend == null ? backend : startingBackend).forCandidate(), this);
 		for (name => state in modules)
 			result.modules.set(name, state);
-		result.objects = objects.copy();
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
 		result.unitsCheckedAt = unitsCheckedAt;

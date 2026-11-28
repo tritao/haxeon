@@ -727,6 +727,25 @@ class WarmEditCatalogueMain {
 						=> "class Main { static function main():Int return StackUser.count() + new Holder().count; }"
 				],
 				edit: ["Holder.hx" => "class Holder { public var count:Int = 1; public function new() {} }"]
+			},
+			{
+				kind: "stop asking for a specialization whose closure keeps a captured local in a cell",
+				files: [
+					"Gen.hx"
+						=> "class Gen { @:generic public static function counter<T>(x:T):Void->T { var n = 0; return () -> { n++; return x; }; } }",
+					"Main.hx"
+						=> "class Main { static function main():Int { var a = Gen.counter(3); var b = Gen.counter(\"ab\"); return a() + b().length; } }"
+				],
+				edit: ["Main.hx" => "class Main { static function main():Int return Gen.counter(3)(); }"]
+			},
+			{
+				kind: "remove the only conversion that needed an iteration adapter, which has an environment of its own",
+				files: [
+					"Sum.hx"
+						=> "class Sum { public static function total(xs:Iterable<Int>):Int { var s = 0; for (x in xs) s += x; return s; } public static function seed():Int return 4; }",
+					"Main.hx" => "class Main { static function main():Int return Sum.total([1, 2, 3]) + Sum.seed(); }"
+				],
+				edit: ["Main.hx" => "class Main { static function main():Int return Sum.seed(); }"]
 			}
 		];
 	}

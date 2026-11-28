@@ -67,7 +67,7 @@ estimate from the phase times above, to be measured per piece.
 ## Decided
 
 - Piece 4 lands with engine slices 6 and 7, which hold the same object tables. Slice 6 shares none of them: its steps read the
-  final IR's tables, which the publication's (`SessionState.objects`, `irObjects`) first meet in lowering's object facts
+  final IR's tables, which the publication's (the program's objects, `irObjects`) first meet in lowering's object facts
   (`HlLoweringView`), so piece 4 lands with slice 7 ([QUERY_ENGINE.md](QUERY_ENGINE.md), "Slice 6 as built").
 - Piece 1 keys by module parse: a module's re-parse replaces all its `AstFunction` nodes, so a finer key would gain nothing.
 
@@ -294,10 +294,8 @@ is a commit of its own, before this piece ("Drop the object and printer of a str
 has no known failure.
 
 Not done: the alias registration of the setup phase still walks every alias each build, and retention's scan of unit records
-(about 2 ms) is unchanged. The session's objects keep those a dropped function made (a specialization the program no longer asks
-for leaves its closures' storage), which a plain build's reachability drops and the plain reuse check leaves out by comparing only
-the objects a fresh build makes (`checkFrontendReuse`); removing them by the function that made them would let that check compare
-the objects whole. Package syntax trees cannot be released yet: piece 2's state is typed, and what reads the trees every
+(about 2 ms) is unchanged. The objects a dropped function made stayed in the session; that is fixed below ("Objects by owner").
+Package syntax trees cannot be released yet: piece 2's state is typed, and what reads the trees every
 build is the frontend (SERVER_MEMORY.md, step 4).
 
 Lines in `src/`: 299 deleted and 887 added (`ProgramTypeUses` 290, the walk with its registering and check, which replaces the
@@ -311,3 +309,32 @@ census's rounding, in every pair), the small project's 7.65 MB both, its builds 
 time. The cold self-compile is byte-identical, 62.82G → 62.66G instructions (−0.25%), allocation 2,901.7 → 2,887.5 MB, its live
 data at the phase boundaries the same; the build lets go of its records once published (holding them to the end had added 3 MB).
 
+### Objects by owner
+
+The session kept the program's objects as one set (`SessionState.objects`) and removed from it by three rules: a class the
+program no longer declared, a structure it no longer listed (3ee519728), and the closure objects of a function typed again, found
+by name prefix (`isGeneratedObjectOfRetypedFunction`). Nothing removed the objects of a function that went without being typed
+again: a specialization nothing asked for any more left its captured locals' cells, a conversion edited away left its iteration
+adapter's environment (a prefix the rule did not know). Assembly filtered the set again (`resolvedObjectsFrom`: environments
+whose lambda or adapter was not in the program, by two more name rules, and a fixpoint over objects whose field types did not
+resolve), and `--check-reuse` compared only the objects a fresh build made, which hid the rest: a live build kept them.
+
+Now every object has an owner, and is the program's while its owner is (`FrontendCompilation.programObjects`). A class or
+structure of the typed program gives its object, made each build (`publishObjects`, as before). A function gives the objects its
+typing made, the environment it runs in (its `owner`) and its locals' cells (`cells`), kept with it in its module
+(`ModuleState.madeObjects`): set when the function is typed, kept with a function kept as the last build made it, and dropped with
+it (`removeCachedFunctions`), so a candidate build's copy and a rejected build's rollback follow the module, as its functions do.
+The program's objects are the declared ones and those of the functions its modules hold. `SessionState.objects`, the removal
+rules, the name rules and the resolution fixpoint are gone; the generator lowers against the objects this build made, as it reads
+only value classes' layouts. `--check-reuse` compares the objects whole, and checks that every closure object this build made has
+a function that made it (`checkClosureObjectsOwned`). The warm-edit catalogue gained the two edits that showed it: a specialization
+with a cell no longer asked for, and the only conversion needing an iteration adapter removed; both failed in plain and live mode
+with the filter gone, and pass now.
+
+Lines in `src/`: 144 deleted and 114 added.
+
+Measured (perf-guard, origin/main at c98a03dcc and this change built in two worktrees and run back to back on one machine): no-op
+430.5M → 404.9M main-thread instructions (−5.9%), body edit 1.592G → 1.568G (−1.5%), signature edit 19.10G → 19.08G; allocation
+of the no-op 47.1 → 42.1 MB, of the first no-op 92.5 → 87.4 MB, of the body edit 159.2 → 154.1 MB, of the late body edit 168.1
+→ 163.0 MB; the session's live data 886.05 MB both. The UI app's live session 300.00 → 299.79 MB, the small project's 7.65 MB both,
+its builds and checks on the VM and ahead of time the same or lower. The cold self-compile is byte-identical.
