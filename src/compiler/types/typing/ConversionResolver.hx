@@ -279,7 +279,10 @@ class ConversionResolver {
 			default:
 		}
 		return switch session.relations.conversion(value.type, expected) {
-			case Identity: ValueCopy.bind(session, value, expected);
+			// Two instantiations of a generic enum are one type to the relation, two storages to the runtime.
+			case Identity:
+				var rebuilt = enumSpecializationConversion(value, expected, value.span);
+				rebuilt != null ? rebuilt : ValueCopy.bind(session, value, expected);
 			case IntToFloat:
 				new TypedExpression(TIntToFloat(value), TFloat, value.span);
 			case IntToInt64:
@@ -658,8 +661,10 @@ class ConversionResolver {
 	function functionAdapter(value:TypedExpression, expected:CompilerType, span:SourceSpan):TypedExpression {
 		var sourceSignature = expectedFunctionType(value.type),
 			targetSignature = expectedFunctionType(expected);
-		if (sourceSignature == null || targetSignature == null)
-			return new TypedExpression(TCast(value), expected, span);
+		if (sourceSignature == null || targetSignature == null) {
+			var rebuilt = enumSpecializationConversion(value, expected, span);
+			return rebuilt != null ? rebuilt : new TypedExpression(TCast(value), expected, span);
+		}
 		if (isNullable(value.type) && functionSignaturesDiffer(value.type, expected)) {
 			// Evaluate the callable once and retain null as null rather than creating
 			// a non-null wrapper which would call a missing function later.
@@ -776,7 +781,75 @@ class ConversionResolver {
 			default: false;
 		}))
 			return new TypedExpression(TFloatToInt(value), TInt, span);
+		var rebuilt = enumSpecializationConversion(value, target, span);
+		if (rebuilt != null)
+			return rebuilt;
 		return new TypedExpression(TCast(value), target, span);
+	}
+
+	/** How deep the conversions being built nest, which names each one's local apart from the ones around it. */
+	var enumConversionDepth = 0;
+
+	/**
+	 * `value`, one instantiation of a generic enum, as another of the same enum, or null when the two are not that.
+	 * Two instantiations' specializations store their payloads as different types (`Result<Dynamic, E>` where erased
+	 * generic code made the value, `Result<Result<A, R>, E>` where its caller knows the arguments), so no cast turns
+	 * one into the other: each case is rebuilt, its payload read from the source's storage, converted to the target's
+	 * field type, and stored as the target stores it.
+	 */
+	public function enumSpecializationConversion(value:TypedExpression, target:CompilerType,
+			span:SourceSpan):Null<TypedExpression> {
+		var sourceType = Monomorphs.follow(value.type), targetType = Monomorphs.follow(target);
+		var name = switch [sourceType, targetType] {
+			case [TInstance(NominalKind.Enum, from, fromArguments), TInstance(NominalKind.Enum, to, toArguments)]
+				if (from == to && fromArguments.length > 0 && toArguments.length > 0):
+				from;
+			default: null;
+		};
+		if (name == null || EnumRuntimeType.name(sourceType) == EnumRuntimeType.name(targetType))
+			return null;
+		var declaration = session.enumDecls.get(name);
+		if (declaration == null)
+			return null;
+		// A recursive enum's payload holds the enum again, which would rebuild without end at compile time.
+		if (session.enumRepresentations.isRecursive(name))
+			throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION,
+				'Converting the recursive generic enum "$name" between instantiations is not supported yet ('
+				+ SemanticSignature.display(sourceType) + ' to ' + SemanticSignature.display(targetType) + ')', span));
+		var representation = session.representation,
+			localName = '$' + 'enum-conversion:${span.start}:$enumConversionDepth',
+			local = new TypedExpression(TLocal(localName), sourceType, span);
+		enumConversionDepth++;
+		var rebuilt:Null<TypedExpression> = null;
+		try {
+			for (offset in 0...declaration.cases.length) {
+				var caseIndex = declaration.cases.length - 1 - offset,
+					parameters = declaration.cases[caseIndex].params;
+				var arguments = [for (fieldIndex in 0...parameters.length) {
+					var parameter = parameters[fieldIndex],
+						read = representation.boundaryCast(new TypedExpression(TEnumField(local, caseIndex, fieldIndex),
+							representation.enumStorageType(declaration.typeParameters, parameter, sourceType), span),
+							representation.enumParameterType(declaration.typeParameters, parameter, sourceType)),
+						converted = adaptFunctionValue(read,
+							representation.enumParameterType(declaration.typeParameters, parameter, targetType), span);
+					representation.boundaryCast(converted,
+						representation.enumStorageType(declaration.typeParameters, parameter, targetType));
+				}];
+				var constructed = new TypedExpression(TEnumConstruct(name, caseIndex, arguments), targetType, span);
+				rebuilt = rebuilt == null ? constructed
+					: new TypedExpression(TConditional(new TypedExpression(TEqual(new TypedExpression(TEnumIndex(local),
+					TInt, span), new TypedExpression(TIntLiteral(caseIndex), TInt, span)), TBool, span), constructed,
+					rebuilt),
+					targetType, span);
+			}
+		} catch (error:Dynamic) {
+			enumConversionDepth--;
+			throw error;
+		}
+		enumConversionDepth--;
+		if (rebuilt == null)
+			return null;
+		return new TypedExpression(TBlockExpression([TVar(localName, value, span)], rebuilt), targetType, span);
 	}
 
 	static function expectedFunctionType(type:Null<CompilerType>):Null<{

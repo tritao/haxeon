@@ -1017,6 +1017,9 @@ class TypeRepresentation {
 		rejectMapStorageChange(value, target, owner);
 		if (ConversionResolver.functionSignaturesDiffer(value.type, target))
 			return requiredConversions().adaptFunction(value, target, value.span);
+		var rebuilt = requiredConversions().enumSpecializationConversion(value, target, value.span);
+		if (rebuilt != null)
+			return rebuilt;
 		return new TypedExpression(TAbiCast(value), target, value.span, value.stableFlowValue);
 	}
 

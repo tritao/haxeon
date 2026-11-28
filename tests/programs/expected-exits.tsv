@@ -438,6 +438,7 @@ captured-call-reassignment	42
 async-Future	42
 rpc-lifecycle	42
 rpc-service	42
+rpc-service-result	42
 rpc-service-pinned	42
 rpc-wire-method	42
 native-static-codec	42

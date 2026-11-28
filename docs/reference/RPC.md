@@ -45,8 +45,10 @@ the response is ready. For example, a method declared as
 promise's future. The server sends the response when that future succeeds.
 A failed future is a bug in the implementation, which the caller sees as
 `HandlerFailed`. A failure the service expects to report belongs in its
-response type, such as an enum with a case for each answer; a generic enum such
-as `Result<Answer, E>` is not yet a wire type. A client cancellation requests cancellation
+response type: `Result<Answer, E>` with an error enum of the service's own, or
+an enum with a case for each answer. A call then answers
+`Result<Result<Answer, E>, RpcError>`: the outer `Err` is the call's failure,
+the inner one the service's answer. A client cancellation requests cancellation
 on the server future when the server processes the cancellation message.
 Streaming can use a separate type in the future.
 
