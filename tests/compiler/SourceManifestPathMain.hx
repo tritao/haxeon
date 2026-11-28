@@ -1,7 +1,6 @@
 import compiler.tools.CompilerRequest.PackageSourceRoot;
 import compiler.tools.SourceManifestLoader;
 import haxe.io.Path;
-import sys.FileSystem;
 
 /** A source file belongs to the same module however the file and its root are written. */
 class SourceManifestPathMain {

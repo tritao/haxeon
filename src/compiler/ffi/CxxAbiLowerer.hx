@@ -19,7 +19,6 @@ import compiler.ffi.HxiModel.HxiHandleDisposition;
 import compiler.ffi.HxiModel.HxiResultPolicy;
 import compiler.ffi.NativeCallPlan.NativeDispatch;
 import haxe.Int64;
-import sys.FileSystem;
 
 private typedef CxxCallbackType = {
 	final name:String;
