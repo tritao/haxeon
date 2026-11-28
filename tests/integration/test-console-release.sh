@@ -87,8 +87,9 @@ function main():Int {
 HAXE
 "$haxeon" build --build-mode release
 if ls "$bin" | grep -E 'nativekit' > /dev/null; then
-	echo "libraries of a dropped package stayed in $bin" >&2
-	ls -A "$bin" >&2
+	echo "libraries of a dropped package stayed in $bin; what the last publish recorded:" >&2
+	ls -lA "$bin" >&2
+	cat "$bin/.haxeon-published" >&2
 	exit 1
 fi
 [[ $(run_alone "$work/tool/$executable" /) == "plain" ]]
