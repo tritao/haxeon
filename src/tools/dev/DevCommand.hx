@@ -36,9 +36,10 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *   haxeon dev bootstrap [--self]
  *       Refresh the checked-in compiler, or check it against the sources (build.HaxeonBuild). scripts/bootstrap-compiler.sh runs it.
  *
- *   haxeon dev aot [--toolchain=NAME]
+ *   haxeon dev aot [--toolchain=NAME] [--no-publish]
  *       Build the CLI and the compiler ahead of time to C, one executable, and publish it beside the VM, where the haxeon
  *       command and the CLI run it while it is current (build.AotCompiler, AotBuild): what a release ships prebuilt.
+ *       --no-publish leaves it in out/aot.
  *
  *   haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive]
  *       Stage this checkout's release for this platform and archive it (ReleasePackage, docs/DEVELOPMENT.md, Releases).
@@ -222,8 +223,9 @@ class DevCommand {
 			summary: "Refresh bootstrap/compiler.hl from the sources; --self: check that it rebuilds itself identically"
 		},
 		{
-			usage: "aot [--toolchain=NAME]",
+			usage: "aot [--toolchain=NAME] [--no-publish]",
 			summary: "Build the CLI and the compiler to C (default toolchain: the hlc SDK's target's) and publish them beside the VM"
+				+ "; --no-publish: leave the executable in out/aot"
 		},
 		{
 			usage: "package [--output=DIR] [--version=VERSION] [--no-archive]",

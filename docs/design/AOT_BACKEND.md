@@ -417,6 +417,8 @@ publishes it beside the executable, where the release package takes it from.
 - `tests/aot/test-aot-programs.sh` compiles each listed `tests/programs` file for `hl` and for `hlc`, runs both, and
   compares exit code, stdout and stderr. The list grows with the milestones; the script prints pass, fail and
   unsupported counts (a compile that stops at an unsupported IR construct is reported as such, not as a failure).
+  `--aot-compiler` compiles with the compiler built ahead of time, left unpublished in `out/aot`
+  (`haxeon dev aot --no-publish`): CI's release and sanitized runs take it, and the development run keeps the compiler stock Haxe built.
 - Later: every program in `expected-exits.tsv`, with a skip list like `wasm-parity-skips.tsv`, in the test driver.
 - The compiler itself built with `hlc`: compiling the self-compile input must give byte-identical output to the JIT
   build, and its speed is the benchmark that decides how far to go.

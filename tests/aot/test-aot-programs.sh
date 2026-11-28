@@ -2,30 +2,30 @@
 # The C backend's parity test (docs/design/AOT_BACKEND.md): each program listed in tests/aot/programs.txt (or named on the
 # command line) is compiled for `hl` and for `hlc`, both are run, and their exit codes, stdout and stderr must match. A compile
 # the C backend stops with "C backend:" counts as unsupported, not as a failure.
-#   tests/aot/test-aot-programs.sh [-v] [--all] [--sanitize] [NAME...]
+#   tests/aot/test-aot-programs.sh [-v] [--all] [--sanitize] [--aot-compiler] [NAME...]
 # NAME is a tests/programs file without .hx, or a path to a .hx file; --all takes every program of expected-exits.tsv.
 # --sanitize builds the C with AddressSanitizer and UndefinedBehaviorSanitizer, and the check of a float converted out of its
 # target's range, which `undefined` leaves out (gcc or clang); a report stops the program, so it fails the comparison.
 # The C is built through cmake/aot with the SDK's CMake package (HAXEON_SDK, default out/sdk). TEST_JOBS programs run at once
 # (default 4); TOOLCHAIN is the C compiler CMake builds with (gcc, clang, clang-cl, cl, or a path; default CMake's choice, CC);
-# HLC_BUILD_MODE is the hlc build's mode (default development, whose frames are exact; release inlines). AOT_PROGRAMS_COMPILER, when
-# set, is a compiler executable that does both compiles instead of the compiler on the VM, which stock Haxe built: the aot-compiler
-# suite sets it to the compiler built ahead of time, so the C backend's own code also runs as Haxeon compiles it.
+# HLC_BUILD_MODE is the hlc build's mode (default development, whose frames are exact; release inlines).
+# --aot-compiler does both compiles with the compiler built ahead of time from this checkout (`haxeon dev aot --no-publish`, built
+# first and left in out/aot, so later suites keep the VM's), instead of the compiler on the VM, which stock Haxe built. Haxeon built
+# it, so the C backend's own code runs as Haxeon compiles it, and a compile skips the VM's start, most of a small program's compile.
 set -uo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 source "$root_dir/scripts/lib/env.sh"
 source "$root_dir/scripts/lib/haxeon-compiler.sh"
-if [[ -n ${AOT_PROGRAMS_COMPILER:-} ]]; then
-	haxeon_compile() { (cd "$root_dir" && "$AOT_PROGRAMS_COMPILER" "$@"); }
-fi
 verbose=0
 sanitize=0
+aot_compiler=0
 programs=()
 while (($# > 0)); do
 	case $1 in
 	-v) verbose=1 ;;
 	--sanitize) sanitize=1 ;;
+	--aot-compiler) aot_compiler=1 ;;
 	--all) while IFS= read -r program; do programs+=("$program"); done < <(grep -v '^#' "$root_dir/tests/programs/expected-exits.tsv" | cut -f1 | sed '/^$/d') ;;
 	*) programs+=("$1") ;;
 	esac
@@ -59,6 +59,16 @@ sanitize_skip() {
 	esac
 }
 mkdir -p "$out_dir"
+if ((aot_compiler)); then
+	if ! "$root_dir/scripts/haxeon" dev aot --no-publish > "$out_dir/aot-build.log" 2>&1; then
+		cat "$out_dir/aot-build.log"
+		echo "FAIL: the compiler built ahead of time does not build" >&2
+		exit 1
+	fi
+	aot_executable=$root_dir/out/aot/haxeon-aot
+	if [[ -f $aot_executable.exe ]]; then aot_executable+=.exe; fi
+	haxeon_compile() { (cd "$root_dir" && "$aot_executable" "$@"); }
+fi
 
 # Builds the executable WORK/NAME from the C in WORK/NAME.c.
 build_c() {

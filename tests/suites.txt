@@ -108,13 +108,15 @@ wasm-gc-wasmtime                 ci          lane=wasm requires=wasmtime -- bash
 
 driver-default                   quick,ci    -- scripts/test-driver.sh {jobs}
 # The C backend (docs/design/AOT_BACKEND.md): each program of tests/aot/programs.txt compiled for hl and for hlc must give the
-# same exit code, stdout and stderr.
+# same exit code, stdout and stderr. This one compiles with the compiler stock Haxe built; the two after it with the compiler built
+# ahead of time, which Haxeon built, so the C backend's own code also runs as Haxeon compiles it (an out-of-range read there once
+# threw only that way), and each compile skips the VM's start.
 aot-programs                     ci          -- TEST_JOBS={jobs} bash tests/aot/test-aot-programs.sh
 # The same in a release build, the -O2 C a release ships, which only the compiler's own build ran otherwise.
-aot-programs-release             ci          -- HLC_BUILD_MODE=release TEST_JOBS={jobs} bash tests/aot/test-aot-programs.sh
+aot-programs-release             ci          -- HLC_BUILD_MODE=release TEST_JOBS={jobs} bash tests/aot/test-aot-programs.sh --aot-compiler
 # The same with AddressSanitizer and UndefinedBehaviorSanitizer: undefined behaviour in the generated C, which an optimizer may
 # turn into a wrong result on another compiler or version, fails a program here.
-aot-programs-sanitized           ci          -- TEST_JOBS={jobs} bash tests/aot/test-aot-programs.sh --sanitize
+aot-programs-sanitized           ci          -- TEST_JOBS={jobs} bash tests/aot/test-aot-programs.sh --sanitize --aot-compiler
 # Example callers are outside the compiler and UI fixture roots; final-prop API ports must check the app too.
 ui-showcase                      quick       -- env -u HAXEON_COMPILER_HL bash packages/ui/tools/test-showcase-builds.sh
 example-builds                   quick       -- python3 tests/integration/check-example-builds.py

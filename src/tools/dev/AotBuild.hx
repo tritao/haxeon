@@ -10,22 +10,26 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * `haxeon dev aot [--toolchain=NAME]`: builds the CLI and the compiler ahead of time, one executable (`build.AotCompiler`),
- * from this checkout and publishes it beside the VM with its stamp, which is what a release ships for its platform. The checkout's compiler, built to
- * bytecode with the pinned Haxe, compiles `tools.CompilerExecutable` to C in release mode as every tool artifact
- * (`HaxeonBuild.TOOL_BUILD_MODE`), and `cmake/aot` builds the C with the SDK's CMake package (`haxeon_add_c_executable`).
+ * `haxeon dev aot [--toolchain=NAME] [--no-publish]`: builds the CLI and the compiler ahead of time, one executable
+ * (`build.AotCompiler`), from this checkout and publishes it beside the VM with its stamp, which is what a release ships for its
+ * platform. `--no-publish` leaves it in `out/aot`, so the haxeon command and the CLI keep running the compiler on the VM while a
+ * test compiles with the executable. The checkout's compiler, built to bytecode with the pinned Haxe, compiles
+ * `tools.CompilerExecutable` to C in release mode as every tool artifact (`HaxeonBuild.TOOL_BUILD_MODE`), and `cmake/aot` builds the C with the SDK's CMake package (`haxeon_add_c_executable`).
  * `--toolchain` is the C compiler CMake builds with (`CMAKE_C_COMPILER`: `gcc`, `clang`, `clang-cl`, `cl`, or a path); without
  * it CMake chooses, except that an SDK built with MSVC is built with clang-cl, as the Windows release is. The C sources and
- * CMake's build stay in `out/aot`, so a rebuild after an edit compiles only the C files that changed.
+ * CMake's build stay in `out/aot`, so a rebuild after an edit compiles only the C files that changed, and a rebuild with the
+ * sources unchanged reuses the C (its stamp is `haxeon-aot.c.sources`) and only checks CMake's build.
  */
 class AotBuild {
 	public static function run(arguments:Array<String>, home:String):Int {
-		var toolchain:Null<String> = null;
+		var toolchain:Null<String> = null, publish = true;
 		for (argument in arguments)
 			if (StringTools.startsWith(argument, "--toolchain="))
 				toolchain = argument.substr("--toolchain=".length);
+			else if (argument == "--no-publish")
+				publish = false;
 			else
-				throw new InternalError('Usage: haxeon dev aot [--toolchain=NAME] (unexpected "$argument")');
+				throw new InternalError('Usage: haxeon dev aot [--toolchain=NAME] [--no-publish] (unexpected "$argument")');
 		home = Path.normalize(home);
 		var nativeStatus = build.HaxeonBuild.buildNative(new build.BuildEnvironment(home, Path.join([home, "out"])));
 		if (nativeStatus != 0)
@@ -48,6 +52,7 @@ class AotBuild {
 		sources.sort((left, right) -> left < right ? -1 : (left > right ? 1 : 0));
 		File.saveContent(sourcesFile, sources.join("\n") + "\n");
 		var digest = AotCompiler.sourcesDigest(sdk, compilerSource),
+			generated = AotCompiler.stampOf('$output.c'),
 			arguments = [
 				compiler,
 				'--build-mode=${build.HaxeonBuild.TOOL_BUILD_MODE}',
@@ -56,10 +61,15 @@ class AotBuild {
 				"--target=hlc",
 				'--output=$output'
 			].concat([for (root in roots) '--root=$root']);
-		var status = ProcessRunner.run(HashLinkPath.executable(sdk), arguments, home,
-			CompilerClient.runtimeLibraryEnvironment(sdk));
-		if (status != 0)
-			return status;
+		var status = 0;
+		if (!FileSystem.exists(generated) || StringTools.trim(File.getContent(generated)) != digest) {
+			if (FileSystem.exists(generated))
+				FileSystem.deleteFile(generated);
+			status = ProcessRunner.run(HashLinkPath.executable(sdk), arguments, home,
+				CompilerClient.runtimeLibraryEnvironment(sdk));
+			if (status != 0)
+				return status;
+		}
 		if (toolchain == null && msvcSdk(sdk))
 			toolchain = "clang-cl";
 		var binary = Path.join([directory, "build"]);
@@ -83,6 +93,11 @@ class AotBuild {
 		if (AotCompiler.sourcesDigest(sdk, compilerSource) != digest) {
 			Sys.stderr().writeString("The compiler sources changed during the build; run it again\n");
 			return 1;
+		}
+		File.saveContent(generated, digest + "\n");
+		if (!publish) {
+			Sys.println('Built $output$suffix');
+			return 0;
 		}
 		// The stamp goes first and comes back last, so no moment pairs a new stamp with an old executable. A running worker keeps
 		// the executable it started from: it is replaced by rename (cmake/haxeon-replace.cmake).
