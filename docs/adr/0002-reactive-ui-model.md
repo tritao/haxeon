@@ -1606,6 +1606,33 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 7. **Retained rendering and layers.** Per-node display-list segments and layer properties; delete `willEditRetained` and
    `RetainedAnimation`.
 
+   **Survey of in-place edits (2026-11-28).** Every `willEditRetained` call and every `RetainedAnimation`, by what replaces it:
+
+   | Edit | Where | What it changes | Replaced by |
+   | --- | --- | --- | --- |
+   | Scroll offset | `ScrollView` (input, animation, offset clamp after layout) | content transform | stage 7: the viewport's layer offset |
+   | Scroll animation | `ScrollController` (`RetainedAnimation`) | the offset above | stage 7: a frame-clock signal bound to it |
+   | Scrollbar fade and hover | `ScrollView` via `ScrollbarVisibilityController` | track, thumb, visual: colour, width | stage 7: layer opacity; width as a paint-only change |
+   | Scrollbar geometry | `ScrollView` after layout | track and thumb position and size | stage 6: independent placement |
+   | Popup placement | `Popup` after layout | panel position | stage 6: independent placement |
+   | Tooltip placement | `Tooltip` after layout (twice) | position, label's maximum width | stage 6 for position; the width reflows text, so a solve |
+   | Middle ellipsis | `MiddleEllipsisText` after layout | the label's text | a solve: the text is measured content |
+   | Spinner step | `SpinnerClock` (`RetainedAnimation`) | custom paint | stage 7: paint-dirty only, no layout |
+   | Kept body's modifier | `BuildContext` when a body is kept | the kept root's caller additions | the frame pipeline's settle-structure stage |
+
+   What each frame does today: after a solve, geometry callbacks (`didResolve`) make these edits and ask for another pass
+   (`requestLayoutFeedback`), and each pass is a full native solve (`UiContext`, up to eight). The renderer keeps
+   per-node content, paint, geometry and composite revisions and layers through `beginLayer`, but the compositor compiles the
+   display list into a render plan every frame, so a layer has no retained properties yet.
+
+   Order: stage 6 first, as it removes the extra solves of the commonest edits (scrollbar geometry, overlay placement)
+   without new rendering machinery; then stage 7's layer properties, which remove the scroll and fade edits and with them
+   `willEditRetained` and `RetainedAnimation`. Text that a placement reflows (tooltip width, ellipsis) keeps a solve.
+
+   Open for stage 6: content bounds include every child (`clay_layout_backend.cpp`). The decision excludes "absolute
+   overlays", but the scrollbar's parts are absolute without `overlay`, and a scroll view of absolutely placed items (a
+   diagram) needs them counted. The exclusion should be a property the scrollbar sets, not every absolute node.
+
 ### Signals-only interim allocation measurement — 2026-11-01
 
 These historical 30-cycle medians cover the signals-only checkpoint. They are superseded by the combined stage 1 + 1b
