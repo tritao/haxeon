@@ -1,5 +1,6 @@
 package haxeon.platform.event;
 
+import haxeon.platform.NativeKitError;
 import haxeon.platform.http.HttpResponse;
 import haxeon.platform.input.TextEdit as PlatformTextEdit;
 import haxeon.platform.resource.Resource;
@@ -14,7 +15,7 @@ import nativekit.ffi.NativeKitTypes.MessageResult;
 import nativekit.ffi.NativeKitTypes.Modifiers;
 import nativekit.ffi.NativeKitTypes.NavigationError;
 import nativekit.ffi.NativeKitTypes.PointerButton;
-import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 import nativekit.ffi.NativeKitTypes.TouchAction;
 import nativekit.ffi.NativeKitTypes.TouchTool;
 import nativekit.ffi.NativeKitTypes.WindowStateFlags;
@@ -53,7 +54,7 @@ enum PlatformEvent {
 	NotificationFailed(request:haxe.Int64, message:String);
 
 	/** An HTTP response's status and headers arrived. */
-	HttpHeaders(source:Handle, request:haxe.Int64, result:Result, response:HttpResponse);
+	HttpHeaders(source:Handle, request:haxe.Int64, result:NativeResult, response:HttpResponse);
 
 	/** More of an HTTP response's body can be read. */
 	HttpDataAvailable(source:Handle, request:haxe.Int64);
@@ -63,10 +64,10 @@ enum PlatformEvent {
 		downloadTotal:haxe.Int64, uploaded:haxe.Int64, uploadTotal:haxe.Int64);
 
 	/** An HTTP request finished. */
-	HttpComplete(source:Handle, request:haxe.Int64, result:Result, response:HttpResponse);
+	HttpComplete(source:Handle, request:haxe.Int64, result:NativeResult, response:HttpResponse);
 
 	/** A native event with no typed case. */
-	Raw(kind:EventKind, source:Handle, request:haxe.Int64, result:Result,
+	Raw(kind:EventKind, source:Handle, request:haxe.Int64, result:NativeResult,
 		flags:Int, dataCount:Int, data:haxe.io.Bytes);
 
 	/** The user asked to close a window. */
@@ -143,7 +144,7 @@ enum PlatformEvent {
 	SurfaceLost(source:Handle);
 
 	/** A submitted surface frame finished. */
-	SurfaceFrameComplete(source:Handle, frameToken:haxe.Int64, result:Result);
+	SurfaceFrameComplete(source:Handle, frameToken:haxe.Int64, outcome:Result<Void, NativeKitError>);
 
 	/** The system opened resources with the app, as when the user opens a file with it. */
 	ResourcesOpened(items:Array<Resource>);
@@ -158,19 +159,19 @@ enum PlatformEvent {
 	ResourceAssetReady(source:Handle, request:haxe.Int64);
 
 	/** A resource cache asset failed to load. */
-	ResourceAssetLoadFailed(source:Handle, request:haxe.Int64, result:Result);
+	ResourceAssetLoadFailed(source:Handle, request:haxe.Int64, error:NativeKitError);
 
 	/** An audio clip loaded. */
 	AudioClipReady(source:Handle, request:haxe.Int64);
 
 	/** An audio clip failed to load. */
-	AudioClipLoadFailed(source:Handle, request:haxe.Int64, result:Result);
+	AudioClipLoadFailed(source:Handle, request:haxe.Int64, error:NativeKitError);
 
 	/** An audio voice finished loading. */
 	AudioVoiceReady(source:Handle);
 
 	/** An audio voice failed to load. */
-	AudioVoiceLoadFailed(source:Handle, result:Result);
+	AudioVoiceLoadFailed(source:Handle, error:NativeKitError);
 
 	/** An audio voice reached its end. */
 	AudioVoiceComplete(source:Handle);
@@ -185,7 +186,7 @@ enum PlatformEvent {
 	AudioVoiceResumed(source:Handle);
 
 	/** A streaming audio voice failed to read its source. */
-	AudioVoiceStreamFailed(source:Handle, result:Result);
+	AudioVoiceStreamFailed(source:Handle, error:NativeKitError);
 
 	/** The audio device started. */
 	AudioDeviceStarted;

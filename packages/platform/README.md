@@ -143,6 +143,14 @@ Use `window.onKey` and `window.onClose` for window events, and `surface.onReady`
 window or surface disposes its subscriptions. Dispose a subscription directly
 to stop listening sooner.
 
+`onFrameComplete` gives each submitted frame's token and a `Result<Void, NativeKitError>`:
+`Err(Cancelled)` or `Err(SurfaceLost)` for a frame to draw again. A stream of signals like
+this one stays an event, as do a resource cache entry's `ResourceAssetReady` and
+`ResourceAssetLoadFailed` (several callers may join one load) and an audio voice's failures:
+each failure in them is a `NativeKitError`, and only `Raw` still carries NativeKit's code.
+A request with one answer, such as `Requests.loadResource(resource)`, settles a future
+instead.
+
 Key handlers run in registration order. A handler that returns `true` consumes
 the key for subsequent handlers on that source. Attach UI input before registering
 application shortcuts so focused widgets can consume keys first.

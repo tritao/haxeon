@@ -26,8 +26,12 @@ internal class ResourceEventDecoder {
 		case EventKind.ResourceCommitComplete:
 			Answered(ResourceCommit(c.request, c.result == NativeResult.Ok ? Ok((c.flags & 1) != 0)
 				: Err(NativeKitStatus.reported(c.result, null))));
+		case EventKind.ResourceDataComplete:
+			Answered(ResourceData(c.request, c.result == NativeResult.Ok ? Ok(c.data)
+				: Err(NativeKitStatus.reported(c.result, null))));
 		case EventKind.ResourceCacheReady: Happened(ResourceAssetReady(c.source, c.request));
-		case EventKind.ResourceCacheLoadFailed: Happened(ResourceAssetLoadFailed(c.source, c.request, c.result));
+		case EventKind.ResourceCacheLoadFailed: Happened(ResourceAssetLoadFailed(c.source, c.request,
+			NativeKitStatus.reported(c.result, null)));
 		default: null;
 	}
 

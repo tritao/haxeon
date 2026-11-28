@@ -12,7 +12,7 @@ import haxeon.platform.event.PlatformEvent;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.OwnedSurfaceHandle;
-import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameCallbackCallback;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameMode;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameTarget;
@@ -92,12 +92,12 @@ class Surface implements Disposable {
 		});
 	}
 
-	/** Observes completion of submitted frames for this surface. */
-	public function onFrameComplete(handler:Int64->Result->Void):EventSubscription {
+	/** Observes completion of submitted frames for this surface: each frame's token, and whether it was shown. */
+	public function onFrameComplete(handler:Int64->Result<Void, NativeKitError>->Void):EventSubscription {
 		if (handler == null)
 			throw BindingError.invalidArgument("Surface.onFrameComplete", "Completion handler is required");
 		return listen(function(event) switch event {
-			case SurfaceFrameComplete(_, token, result): handler(token, result);
+			case SurfaceFrameComplete(_, token, outcome): handler(token, outcome);
 			case _:
 		});
 	}
@@ -148,7 +148,7 @@ class Surface implements Disposable {
 		var target = new SurfaceFrameTarget();
 		target.struct_size = SurfaceFrameTarget.byteSize();
 		var acquired = NativeKit.nk_surface_acquire_frame(value, target);
-		if (acquired.status != Result.Ok)
+		if (acquired.status != NativeResult.Ok)
 			throw NativeKitStatus.failure(acquired.status, "surface.acquireFrame", NativeKit.nk_last_error());
 		return new SurfaceFrame(this, acquired.out_frame, acquired.out_target);
 	}
@@ -158,9 +158,9 @@ class Surface implements Disposable {
 		ensureLive();
 		var started = callbackSeconds == null ? Sys.monotonicTime() : callbackSeconds;
 		var feedback = NativeKit.nk_surface_get_presentation_feedback(value, Int64.ofInt(-1));
-		if (feedback.status == Result.ErrorUnsupported)
+		if (feedback.status == NativeResult.ErrorUnsupported)
 			return new SurfaceFrameTiming(this, null, started);
-		if (feedback.status != Result.Ok)
+		if (feedback.status != NativeResult.Ok)
 			throw NativeKitStatus.failure(feedback.status, "surface.captureFrameTiming", NativeKit.nk_last_error());
 		return new SurfaceFrameTiming(this, feedback.out_frame_id, started);
 	}
@@ -170,9 +170,9 @@ class Surface implements Disposable {
 		if (disposed)
 			return null;
 		var feedback = NativeKit.nk_surface_get_presentation_feedback(value, frameId);
-		if (feedback.status == Result.ErrorUnsupported)
+		if (feedback.status == NativeResult.ErrorUnsupported)
 			return null;
-		if (feedback.status != Result.Ok)
+		if (feedback.status != NativeResult.Ok)
 			throw NativeKitStatus.failure(feedback.status, "surface.presentationSeconds", NativeKit.nk_last_error());
 		return feedback.out_presentation_seconds > 0.0 ? feedback.out_presentation_seconds : null;
 	}

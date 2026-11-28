@@ -137,15 +137,18 @@ class Transaction {
 		var ready = false;
 		var rendered = 0;
 		var submitted:Null<haxe.Int64> = null;
-		var failure:Null<Result> = null;
+		var failure:Null<haxeon.platform.NativeKitError> = null;
 		var attempts = 0;
 		var events = runtime.events;
 		var eventSubscription = events.listen(function(value) switch value {
 			case SurfaceReady(source) if (source.rawValue == surface.rawValue): ready = true;
-			case SurfaceFrameComplete(source, token, result)
+			case SurfaceFrameComplete(source, token, outcome)
 				if (source.rawValue == surface.rawValue && submitted != null && submitted == token):
 				submitted = null;
-				if (result == Result.Ok) rendered++ else failure = result;
+				switch outcome {
+					case Ok(_): rendered++;
+					case Err(error): failure = error;
+				}
 			case _:
 		});
 		while (rendered < 3 && attempts < 120) {

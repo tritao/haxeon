@@ -6,6 +6,8 @@ import haxeon.platform.App;
 import haxeon.platform.AppLaunch;
 import haxeon.platform.BindingError;
 import haxeon.platform.FrameTick;
+import haxeon.async.Future;
+import haxeon.platform.NativeKitError;
 import haxeon.platform.NativeKitException;
 import haxeon.platform.NativeKitStatus;
 import haxeon.platform.Runtime;
@@ -14,6 +16,7 @@ import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
 import haxeon.platform.WindowOptions;
 import haxeon.platform.event.EventSubscription;
+import haxeon.platform.resource.Resource;
 import haxeon.ui.FontCollection;
 import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostOptions;
@@ -23,7 +26,7 @@ import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.ResourceFlags;
 import nativekit.ffi.NativeKitTypes.ResourceValue;
-import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameMode;
 import nativekit.ffi.NativeKitTypes.WindowFlags;
 
@@ -62,8 +65,8 @@ class HostedUiApp implements App {
 	final context:DesktopUiHostContext;
 	final ui:UiHostRuntime;
 	var resize:EventSubscription;
-	var resources:EventSubscription;
-	var pending:UiHostPendingResources<Int>;
+	/** The font loads in flight, stopped when the host is disposed. */
+	final loads:Array<Future<Result<Bytes, NativeKitError>>> = [];
 	final loaded:Array<Null<Bytes>> = [];
 	var remaining = 0;
 	var readyToStart = false;
@@ -107,39 +110,9 @@ class HostedUiApp implements App {
 		var assets = options.fonts;
 		if (assets != null && assets.length > 0) {
 			session.transition(UiHostLifecycle.LoadingResources);
-			pending = new UiHostPendingResources();
 			remaining = assets.length;
-			resources = runtime.events.listen(function(event) switch event {
-				case Raw(kind, _, id, result, _, _, data) if (kind == EventKind.ResourceDataComplete):
-					var index = pending.resolve(Std.string(id));
-					if (index != null) {
-						if (result != Result.Ok || data.length == 0) {
-							ui.fail("font-load", result == Result.Ok
-								? new NativeKitException(InvalidData('${assets[index].uri} is empty'),
-								"UiHost.loadFont", 0)
-								: NativeKitStatus.failure(result, "UiHost.loadFont", assets[index].uri));
-						} else {
-							loaded[index] = data;
-							remaining--;
-							if (remaining == 0) {
-								for (i in 0...assets.length)
-									fonts.addData(assets[i].name, loaded[i], assets[i].family);
-								startApplication();
-							}
-						}
-					}
-				case _:
-			});
-			for (i in 0...assets.length) {
-				var asset = assets[i];
-				var request = new ResourceValue();
-				request.set_struct_size(ResourceValue.byteSize());
-				request.set_flags(ResourceFlags.Readable);
-				request.set_uri(asset.uri);
-				request.set_mime_type("font/ttf");
-				request.set_display_name(asset.name);
-				pending.add(Std.string(NativeKit.nk_resource_load_async_checked(request)), i);
-			}
+			for (i in 0...assets.length)
+				loadFont(runtime, assets, i);
 		}
 		#end
 
@@ -150,10 +123,10 @@ class HostedUiApp implements App {
 		traceSubscription = recorder.attach(runtime.events, context.window);
 		if (desktop.inputScriptPath != null)
 			script = new ScriptedInput(desktop.inputScriptPath);
-		captureSubscription = surface.onFrameComplete(function(token, result) {
+		captureSubscription = surface.onFrameComplete(function(token, outcome) {
 			if (captureToken == token) {
 				captureToken = null;
-				capturePending = result == Result.Ok;
+				capturePending = outcome.isOk();
 			}
 		});
 		#end
@@ -171,7 +144,7 @@ class HostedUiApp implements App {
 
 	public function ready():Void {
 		var size = NativeKit.nk_window_get_size(context.window);
-		if (size.status == Result.Ok && size.out_width > 0 && size.out_height > 0) {
+		if (size.status == NativeResult.Ok && size.out_width > 0 && size.out_height > 0) {
 			logicalWidth = size.out_width;
 			logicalHeight = size.out_height;
 		}
@@ -272,11 +245,36 @@ class HostedUiApp implements App {
 		return !session.isActive();
 	}
 
+	#if wasm
+	/** Loads font `index` of `assets`, starting the application once the last one has loaded. */
+	function loadFont(runtime:Runtime, assets:Array<UiFontAsset>, index:Int):Void {
+		var asset = assets[index];
+		var load = runtime.events.requests.loadResource(new Resource(asset.uri, "font/ttf", asset.name));
+		loads.push(load);
+		load.onComplete(function(outcome) switch outcome {
+			case Success(Ok(data)) if (data.length > 0):
+				loaded[index] = data;
+				remaining--;
+				if (remaining == 0) {
+					for (i in 0...assets.length)
+						fonts.addData(assets[i].name, loaded[i], assets[i].family);
+					startApplication();
+				}
+			case Success(Ok(_)):
+				ui.fail("font-load",
+					new NativeKitException(InvalidData('${asset.uri} is empty'), "UiHost.loadFont", 0));
+			case Success(Err(error)):
+				ui.fail("font-load", new NativeKitException(error, "UiHost.loadFont", 0));
+			case Cancelled | Stopped:
+		});
+	}
+	#end
+
 	public function dispose():Void {
 		defer fonts.dispose();
 		defer if (ui != null) ui.dispose();
-		defer if (pending != null) pending.cancel();
-		defer if (resources != null) resources.dispose();
+		defer for (load in loads)
+			load.cancel();
 		defer if (resize != null) resize.dispose();
 		#if !wasm
 		defer if (captureSubscription != null) captureSubscription.dispose();

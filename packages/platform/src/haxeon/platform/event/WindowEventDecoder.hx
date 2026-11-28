@@ -1,6 +1,8 @@
 package haxeon.platform.event;
 
+import haxeon.platform.NativeKitStatus;
 import nativekit.ffi.NativeKitTypes.EventKind;
+import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 import nativekit.ffi.NativeKitTypes.SurfaceResizeEvent;
 import nativekit.ffi.NativeKitTypes.WindowFramebufferResizeEvent;
 import nativekit.ffi.NativeKitTypes.WindowMoveEvent;
@@ -39,7 +41,8 @@ internal class WindowEventDecoder {
 				SurfaceResize(c.source, v.get_width(), v.get_height(), v.get_framebuffer_width(),
 					v.get_framebuffer_height());
 			case EventKind.SurfaceLost: SurfaceLost(c.source);
-			case EventKind.SurfaceFrameComplete: SurfaceFrameComplete(c.source, c.request, c.result);
+			case EventKind.SurfaceFrameComplete: SurfaceFrameComplete(c.source, c.request,
+				c.result == NativeResult.Ok ? Ok() : Err(NativeKitStatus.reported(c.result, null)));
 			default: null;
 		}
 	}

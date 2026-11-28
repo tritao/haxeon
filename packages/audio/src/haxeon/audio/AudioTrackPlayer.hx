@@ -5,6 +5,7 @@ import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
 
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
@@ -35,8 +36,8 @@ class AudioTrackPlayer implements Disposable {
 	public var onTrackStarted:AudioTrack->Void = null;
 	/** Called when a track leaves the player, naturally or through replacement. */
 	public var onTrackEnded:AudioTrack->Void = null;
-	/** Called when a track's asynchronous source fails. */
-	public var onTrackFailed:AudioTrack->Result->Void = null;
+	/** Called when a track's asynchronous source fails, with why. */
+	public var onTrackFailed:AudioTrack->NativeKitError->Void = null;
 	/** Called after the outgoing and incoming tracks have been scheduled. */
 	public var onTransitionStarted:AudioTrack->AudioTrack->Void = null;
 	/** Called when a crossfade reaches its shared-clock end. */
@@ -251,8 +252,8 @@ class AudioTrackPlayer implements Disposable {
 		switch value {
 			case AudioVoiceComplete(source): handleVoiceEnded(source);
 			case AudioVoiceStolen(source): handleVoiceEnded(source);
-			case AudioVoiceLoadFailed(source, result): handleVoiceFailed(source, result);
-			case AudioVoiceStreamFailed(source, result): handleVoiceFailed(source, result);
+			case AudioVoiceLoadFailed(source, error): handleVoiceFailed(source, error);
+			case AudioVoiceStreamFailed(source, error): handleVoiceFailed(source, error);
 			case _: return;
 		}
 	}
@@ -284,7 +285,7 @@ class AudioTrackPlayer implements Disposable {
 		startQueued();
 	}
 
-	function handleVoiceFailed(source:Handle, result:Result):Void {
+	function handleVoiceFailed(source:Handle, error:NativeKitError):Void {
 		if (matches(source, outgoingVoiceValue)) {
 			var failed = outgoingTrackValue;
 			var voice = outgoingVoiceValue;
@@ -293,7 +294,7 @@ class AudioTrackPlayer implements Disposable {
 			stopAndDispose(voice);
 			if (failed != null) {
 				if (onTrackFailed != null)
-					onTrackFailed(failed, result);
+					onTrackFailed(failed, error);
 				emitTrackEnded(failed);
 			}
 			return;
@@ -310,7 +311,7 @@ class AudioTrackPlayer implements Disposable {
 		stopAndDispose(voice);
 		if (failed != null) {
 			if (onTrackFailed != null)
-				onTrackFailed(failed, result);
+				onTrackFailed(failed, error);
 			emitTrackEnded(failed);
 		}
 		startQueued();

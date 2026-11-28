@@ -1,7 +1,6 @@
 package haxeon.platform.resource;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.NativeKitStatus;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.ResourceFlags;
 import nativekit.ffi.NativeKitTypes.ResourceValue;
@@ -41,12 +40,5 @@ class Resource {
 		value.mime_type = mimeType;
 		value.display_name = displayName;
 		return value;
-	}
-
-	/** Cancels a pending generic asynchronous resource load. */
-	public static function cancelLoad(request:haxe.Int64):Void {
-		var status = NativeKit.nk_resource_load_cancel(request);
-		if (status != Result.Ok)
-			throw NativeKitStatus.failure(status, "resource.cancelLoad", NativeKit.nk_last_error());
 	}
 }

@@ -86,6 +86,17 @@ class Requests {
 			.rawValue), options.nativeValue()));
 	}
 
+	/** Reads all of `resource`'s bytes; cancelling the future stops the load. */
+	public function loadResource(resource:Resource):Future<Result<haxe.io.Bytes, NativeKitError>> {
+		ensureLive();
+		if (resource == null) throw BindingError.invalidArgument("Requests.loadResource", "Resource cannot be null");
+		var request = NativeKit.nk_resource_load_async_checked(resource.nativeValue());
+		return registerRequest(request, function(value, _) switch value {
+			case Answered(ResourceData(_, bytes)): settled(bytes);
+			case _: wrongEvent("resource load");
+		}, function() NativeKit.nk_resource_load_cancel_checked(request));
+	}
+
 	/** Commits a raw writable stream; `Ok(true)` means a download was initiated. */
 	public function commitResourceNative(stream:ResourceStreamHandle):Future<Result<Bool, NativeKitError>> {
 		ensureLive();
@@ -248,7 +259,7 @@ class Requests {
 			case TaskProgress(task, _) | TaskComplete(task, _) | TaskFailed(task, _, _) | TaskCancelled(task):
 				"task:" + Std.string(task.rawValue);
 			case ClipboardText(id, _) | ClipboardFiles(id, _) | ClipboardResources(id, _) | DialogResources(id, _)
-				| DialogMessage(id, _) | WebViewEvaluation(id, _) | ResourceCommit(id, _):
+				| DialogMessage(id, _) | WebViewEvaluation(id, _) | ResourceCommit(id, _) | ResourceData(id, _):
 				"request:" + Std.string(id);
 		};
 
@@ -259,7 +270,7 @@ class Requests {
 			case NotificationFailed(id, _): Std.string(id);
 			case ResourceAssetReady(_, id): Std.string(id);
 			case ResourceAssetLoadFailed(_, id, _): Std.string(id);
-			// A completion with no typed case, such as nk_resource_load_async's loaded bytes.
+			// An answer with no typed case.
 			case Raw(_, _, id, _, _, _, _): Std.string(id);
 			case _: null;
 		};

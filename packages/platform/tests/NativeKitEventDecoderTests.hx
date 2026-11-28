@@ -12,6 +12,13 @@ import nativekit.ffi.NativeKitTypes;
 
 /** Synthetic payload tests for decoder validation and fallback behavior. */
 class NativeKitEventDecoderTests {
+	/** Whether `error` is what NativeKit's ErrorUnknown reports. */
+	static function isUnknown(error:haxeon.platform.NativeKitError):Bool
+		return switch error {
+			case Failed(code, _): code == Result.ErrorUnknown.rawValue;
+			case _: false;
+		};
+
 	/** What `context` decodes to when it is something that happened, else null. */
 	static function happened(context:EventSnapshot):Null<PlatformEvent>
 		return switch NativeEvent.decodeSnapshot(context) {
@@ -90,9 +97,9 @@ class NativeKitEventDecoderTests {
 			happened(new EventSnapshot(EventKind.ResourceCacheLoadFailed,
 				handle(25), haxe.Int64.ofInt(26), Result.ErrorUnknown, 0, 0, empty))
 		] {
-			case [ResourceAssetReady(source, request), ResourceAssetLoadFailed(failedSource, failedRequest, result)]:
+			case [ResourceAssetReady(source, request), ResourceAssetLoadFailed(failedSource, failedRequest, error)]:
 				source.rawValue == 24 && Std.string(request) == "25" && failedSource.rawValue == 25
-					&& Std.string(failedRequest) == "26" && result == Result.ErrorUnknown;
+					&& Std.string(failedRequest) == "26" && isUnknown(error);
 			case _: false;
 		};
 		var editPayload = haxe.io.Bytes.alloc(50);
@@ -238,8 +245,8 @@ class NativeKitEventDecoderTests {
 		var audioFailedContext = new EventSnapshot(EventKind.AudioVoiceLoadFailed,
 			handle(18), zero, Result.ErrorUnknown, 0, 0, empty);
 		var audioFailedOk = switch happened(audioFailedContext) {
-			case AudioVoiceLoadFailed(source, result):
-				source.rawValue == 18 && result == Result.ErrorUnknown;
+			case AudioVoiceLoadFailed(source, error):
+				source.rawValue == 18 && isUnknown(error);
 			case _: false;
 		};
 		var audioClipReadyContext = new EventSnapshot(EventKind.AudioClipReady,
@@ -252,15 +259,15 @@ class NativeKitEventDecoderTests {
 		var audioClipFailedContext = new EventSnapshot(EventKind.AudioClipLoadFailed,
 			handle(20), haxe.Int64.ofInt(20), Result.ErrorUnknown, 0, 0, empty);
 		var audioClipFailedOk = switch happened(audioClipFailedContext) {
-			case AudioClipLoadFailed(source, request, result):
-				source.rawValue == 20 && Std.string(request) == "20" && result == Result.ErrorUnknown;
+			case AudioClipLoadFailed(source, request, error):
+				source.rawValue == 20 && Std.string(request) == "20" && isUnknown(error);
 			case _: false;
 		};
 		var audioStreamFailedContext = new EventSnapshot(EventKind.AudioVoiceStreamFailed,
 			handle(24), zero, Result.ErrorUnknown, 0, 0, empty);
 		var audioStreamFailedOk = switch happened(audioStreamFailedContext) {
-			case AudioVoiceStreamFailed(source, result):
-				source.rawValue == 24 && result == Result.ErrorUnknown;
+			case AudioVoiceStreamFailed(source, error):
+				source.rawValue == 24 && isUnknown(error);
 			case _: false;
 		};
 		var audioDeviceEventsOk = switch [

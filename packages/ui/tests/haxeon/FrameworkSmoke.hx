@@ -776,7 +776,6 @@ class FrameworkSmoke {
 			throw "Retained paint fingerprint missed a content or interaction change";
 		if (!gpuViewportFitsToView())
 			throw "GPU viewport fitting missed a resize or lost the fitted view on navigation";
-		if (!hostPendingResourcesValid()) return 273;
 		if (!coordinateMathValid()) return 240;
 		var anchorIndex = new VirtualExtentIndex(100, 20.0, 40.0, 200.0, 0, 0, 2400.0);
 		if (anchorIndex.totalExtent != 2400.0 || anchorIndex.indexAtOffset(200.0) != 10) return 260;
@@ -4791,15 +4790,6 @@ class FrameworkSmoke {
 		if (node.retainedPaintKey() == styled) return false;
 		node.invalidatePaint();
 		return node.retainedPaintKey() != null;
-	}
-
-	static function hostPendingResourcesValid():Bool {
-		var pending = new UiHostPendingResources<String>();
-		pending.add("first", "font-a");
-		pending.add("second", "font-b");
-		if (pending.remaining != 2 || pending.resolve("first") != "font-a" || pending.remaining != 1) return false;
-		pending.cancel();
-		return pending.remaining == 0 && pending.resolve("second") == null;
 	}
 
 	static function hostRuntimeLifecycleValid(fonts:FontCollection):Bool {

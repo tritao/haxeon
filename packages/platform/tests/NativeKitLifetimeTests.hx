@@ -21,7 +21,7 @@ import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 class NativeKitLifetimeTests {
 	/** A completion with no typed case, as `trackNative` follows, carrying `text`. */
 	static function rawAnswer(id:haxe.Int64, text:String):PlatformEvent
-		return Raw(EventKind.ResourceDataComplete, new Handle(0), id, Result.Ok, 0, 0, haxe.io.Bytes.ofString(text));
+		return Raw(EventKind.PluginEvent, new Handle(0), id, Result.Ok, 0, 0, haxe.io.Bytes.ofString(text));
 
 	static var shutdownCompleted:Bool = false;
 	static var secondShutdownCompleted:Bool = false;

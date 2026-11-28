@@ -40,6 +40,7 @@ import haxeon.platform.Window;
 import haxeon.platform.event.PlatformEvent;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitGpu;
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import shaders.Fixture;
@@ -59,7 +60,7 @@ class Triangle {
 		var source = new Handle(surface.nativeHandle().rawValue);
 		var token = haxe.Int64.ofInt(17);
 		loop.pending = token;
-		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.ErrorCancelled));
+		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Err(Cancelled)));
 		if (loop.pending != null || loop.stopped || loop.failure != null || loop.firstFramePresented)
 			throw "A canceled submission stopped the loop or marked a frame as presented";
 		var deadline = Sys.monotonicTime() + 5.0;
@@ -69,7 +70,7 @@ class Triangle {
 			throw "A canceled submission did not request another on-demand frame";
 		runtime.events.dispatch(PlatformEvent.SurfaceLost(source));
 		loop.pending = token;
-		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.ErrorSurfaceLost));
+		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Err(SurfaceLost)));
 		if (!loop.surfaceLost || loop.stopped || loop.pending != null)
 			throw "Surface loss did not pause the loop and release the pending frame";
 		loop.draw(1, 1);
@@ -79,11 +80,11 @@ class Triangle {
 		if (loop.surfaceLost || loop.stopped)
 			throw "Surface readiness did not resume the loop";
 		loop.pending = token;
-		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.Ok));
+		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Ok()));
 		if (loop.pending != null || loop.stopped || !loop.firstFramePresented)
 			throw "The loop did not accept a successful frame after cancellation";
 		loop.pending = token;
-		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.ErrorUnknown));
+		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Err(Failed(-1, "unknown"))));
 		if (loop.pending != null || !loop.stopped || loop.failure == null)
 			throw "The loop did not stop on an unexpected rendering error";
 	}
@@ -388,12 +389,18 @@ class Triangle {
 		var commandBuffer:Null<CommandBuffer> = null;
 		var surfaceReady = false;
 		var queuedFrame:Null<haxe.Int64> = null;
-		var queuedResult:Null<Result> = null;
+		var queuedDone = false;
+		var queuedError:Null<NativeKitError> = null;
 		var closeSubscription = window.onClose(function() running = false);
 		var readySubscription = surface.onReady(function() surfaceReady = true);
-		var completeSubscription = surface.onFrameComplete(function(token, result) {
-			if (queuedFrame != null && token == queuedFrame)
-				queuedResult = result;
+		var completeSubscription = surface.onFrameComplete(function(token, outcome) {
+			if (queuedFrame != null && token == queuedFrame) {
+				queuedDone = true;
+				switch outcome {
+					case Err(error): queuedError = error;
+					case Ok(_):
+				}
+			}
 		});
 
 		while (running) {
@@ -508,12 +515,13 @@ class Triangle {
 				queuedWindowFrame.submit([windowStep]);
 				sealedBatch.dispose();
 				var deadline = Sys.monotonicTime() + 5.0;
-				while (queuedResult == null && Sys.monotonicTime() < deadline) {
+				while (!queuedDone && Sys.monotonicTime() < deadline) {
 					if (!runtime.events.poll())
 						runtime.events.wait(0.01);
 				}
-				if (queuedResult != Result.Ok)
-					throw "Queued GPU window frame failed: " + Std.string(queuedResult);
+				if (!queuedDone || queuedError != null)
+					throw "Queued GPU window frame failed: "
+						+ (queuedError == null ? "no completion" : queuedError.describe());
 				targetColor.dispose();
 				targetDepth.dispose();
 				ready = true;
@@ -642,8 +650,8 @@ private class TriangleLoopApp implements App {
 
 	public function new(surface:Surface) {
 		this.surface = surface;
-		surface.onFrameComplete(function(completed, result) {
-			if (completed == token && result == Result.Ok)
+		surface.onFrameComplete(function(completed, outcome) {
+			if (completed == token && outcome.isOk())
 				completions++;
 		});
 	}

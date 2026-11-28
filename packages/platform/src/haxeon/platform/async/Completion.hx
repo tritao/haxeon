@@ -18,6 +18,7 @@ internal enum Completion {
 	DialogMessage(request:haxe.Int64, button:Result<MessageResult, NativeKitError>);
 	WebViewEvaluation(request:haxe.Int64, json:Result<String, NativeKitError>);
 	ResourceCommit(request:haxe.Int64, downloadInitiated:Result<Bool, NativeKitError>);
+	ResourceData(request:haxe.Int64, bytes:Result<haxe.io.Bytes, NativeKitError>);
 
 	/** A task reported progress; its request stays open. */
 	TaskProgress(task:Handle, data:haxe.io.Bytes);

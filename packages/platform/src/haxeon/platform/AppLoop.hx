@@ -3,7 +3,7 @@ package haxeon.platform;
 import haxe.Int64;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
-import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 
 /** Drives an app from native surface callbacks and the runtime's event pump. */
 class AppLoop implements Disposable {
@@ -50,15 +50,18 @@ class AppLoop implements Disposable {
 		});
 		try {
 			lostSubscription = surface.onLost(function() surfaceLost = true);
-			completionSubscription = surface.onFrameComplete(function(token, result) {
+			completionSubscription = surface.onFrameComplete(function(token, outcome) {
 				if (pending != null && token == pending) {
 					pending = null;
-					if (result == Result.Ok)
-						firstFramePresented = true;
-					else if (result == Result.ErrorCancelled || result == Result.ErrorSurfaceLost) {
-						if (!stopped && !app.shouldQuit()) surface.requestFrame();
-					} else
-						fail(NativeKitStatus.failure(result, "AppLoop.frame", "Rendering or presentation failed"));
+					switch outcome {
+						case Ok(_):
+							firstFramePresented = true;
+						// A frame cancelled or lost with its surface is drawn again; anything else stops the loop.
+						case Err(Cancelled | SurfaceLost):
+							if (!stopped && !app.shouldQuit()) surface.requestFrame();
+						case Err(error):
+							fail(new NativeKitException(error, "AppLoop.frame", 0));
+					}
 					requestDeferredRedraw();
 				}
 			});
@@ -96,7 +99,7 @@ class AppLoop implements Disposable {
 		if (!advance(false)) return false;
 		if (!started || stopped || surfaceLost || pending != null) return true;
 		var size = nativekit.ffi.NativeKit.nk_surface_get_framebuffer_size(surface.nativeHandle());
-		if (size.status != Result.Ok)
+		if (size.status != NativeResult.Ok)
 			fail(NativeKitStatus.failure(size.status, "AppLoop.stepFrame", "Could not query the framebuffer"));
 		else draw(size.out_width, size.out_height, timeSeconds);
 		return advance(false);
