@@ -1,6 +1,6 @@
 {
 	"about": "scripts/perf-guard.py: the compiler, built in release mode from the checkout, compiling the frozen input (its sources at input_revision, the same for every checkout). Measured on Linux x86-64; scripts/perf-guard.py --update writes the metrics that improved beyond their tolerance, --raise=METRIC=REASON one that is higher on purpose with its reason (raise_reason), in the commit that moves it, and move input_revision only with a re-baseline. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
-	"input_revision": "4df7d322977f130abf704f12906d1a6487251a03",
+	"input_revision": "6652fbf72c8a0ccd9cc8a61af6867a63200963cb",
 	"metrics": {
 		"allocated_bytes": {
 			"value": 2910453040,
