@@ -88,10 +88,10 @@ The C layout bridge uses a versioned transaction with fixed node records of
 capacity grows with submitted data rather than imposing a small framework node
 limit. Resolved geometry is returned as one dynamically sized snapshot. The
 bridge validates record sizes, transaction bounds, text ranges, IDs, and
-geometry before replacing the submitted snapshot. Geometry arrives beside it as
-`NKUI_LAYOUT_GEOMETRY_RECORD_BYTES` records from `nkui_layout_session_set_geometry`,
-and text is measured for layout with `nkui_layout_session_measure_text`, on the
-session's fonts.
+geometry before replacing the submitted snapshot. Each record is a scene record:
+how the node paints and where the solver placed it; no layout input reaches
+NativeKit. Text is measured for layout with `nkui_layout_session_measure_text`,
+on the session's fonts.
 
 Custom nodes can provide intrinsic dimensions and an optional baseline through
 their `LayoutContent`, or the session's measure callback. The solver keeps each

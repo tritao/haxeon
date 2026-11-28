@@ -69,7 +69,12 @@ internal class LayoutTransaction {
 		return new LayoutTransaction().encodeInto(root);
 
 	/** Encodes into reusable storage and returns the backing byte buffer. */
-	public function encodeInto(root:LayoutNode, ?changes:LayoutChanges, captureContentVersions:Bool = true):Bytes {
+	/**
+	 * Encodes `root`'s tree: the nodes in `changes` since the last commit, or all of them when there is none, with the
+	 * geometry `layout` last solved for them (zero without one).
+	 */
+	public function encodeInto(root:LayoutNode, ?changes:LayoutChanges, captureContentVersions:Bool = true,
+			?layout:haxeon.ui.layout.LayoutSolver):Bytes {
 		if (root == null)
 			throw "Layout transaction requires a root node";
 
@@ -164,45 +169,20 @@ internal class LayoutTransaction {
 				throw "Layout sizing values are invalid: node=" + node.id + ", width=" + axisDescription(style.width)
 					+ ", height=" + axisDescription(style.height) + ", aspect=" + style.aspectRatio;
 			var determinant = style.transform.a * style.transform.d - style.transform.b * style.transform.c;
-			var childAlignX = style.childAlignX;
-			var childAlignY = style.childAlignY;
-			var childDistribution = style.childDistribution;
 			var positioning = style.positioning;
-			var wrapMode = style.wrapMode;
-			var alignSelf = style.alignSelf;
 			if (!validSpacing(style.padding.left) || !validSpacing(style.padding.right)
 				|| !validSpacing(style.padding.top) || !validSpacing(style.padding.bottom)
 				|| !validSpacing(style.childGap) || !validSpacing(style.rowGap) || !validSpacing(style.columnGap)
 				|| !finite(style.positionX) || !finite(style.positionY) || style.zIndex < -32768
 				|| style.zIndex > 32767)
 				throw "Layout alignment or positioning is invalid";
+			if (node.anchor != null && positioning != LayoutPositioning.Absolute)
+				throw "A layout anchor requires absolute positioning";
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ID_OFFSET, node.id);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PARENT_OFFSET, parents[index]);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET,
 				node.visualKind.rawValue);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET,
-				style.width.sizing.rawValue);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, style.width.value);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET,
-				style.height.sizing.rawValue);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, style.height.value);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET, style.width.min);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET, style.width.max);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_MIN_OFFSET, style.height.min);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_MAX_OFFSET, style.height.max);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ASPECT_RATIO_OFFSET, style.aspectRatio);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET,
-				style.width.growWeight);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET,
-				style.height.growWeight);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_DIRECTION_OFFSET,
-				style.direction.rawValue);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_LEFT_OFFSET, style.padding.left);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_RIGHT_OFFSET, style.padding.right);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_TOP_OFFSET, style.padding.top);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_BOTTOM_OFFSET,
-				style.padding.bottom);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_GAP_OFFSET, style.childGap);
+			var hidden = layout != null && layout.writePlacement(node.id, output, record);
 			writeColor(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_BACKGROUND_OFFSET, style.background);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET,
 				style.radiusTopLeft);
@@ -224,8 +204,7 @@ internal class LayoutTransaction {
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, nodeTextStyle.fontSize);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET,
 				nodeTextStyle.letterSpacing);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET,
-				lineHeight);
+			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET, lineHeight);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET,
 				nodeParagraphStyle.wrap.rawValue);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET,
@@ -235,7 +214,6 @@ internal class LayoutTransaction {
 			if (nodeParagraphStyle.tabWidth < 0) throw "Tab width cannot be negative";
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET,
 				nodeParagraphStyle.tabWidth);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET, 0);
 			var transform = style.transform;
 			if (!finite(transform.a) || !finite(transform.b) || !finite(transform.c) || !finite(transform.d)
 				|| !finite(transform.tx) || !finite(transform.ty)
@@ -251,30 +229,14 @@ internal class LayoutTransaction {
 				throw "Layout overlays require absolute positioning";
 			var nodeFlags = style.visible ? 1 : 0;
 			if (style.overlay) nodeFlags |= 1 << 5;
-			if (!node.hitSelf)
-				nodeFlags |= 1 << 3;
-			if (!node.hitChildren)
-				nodeFlags |= 1 << 4;
+			if (!node.hitSelf) nodeFlags |= 1 << 3;
+			if (!node.hitChildren) nodeFlags |= 1 << 4;
+			if (hidden) nodeFlags |= 1 << 6;
 			if (positioning == LayoutPositioning.Absolute) {
 				nodeFlags |= 1 << 1;
-				if (style.clipToParent)
-					nodeFlags |= 1 << 2;
+				if (style.clipToParent) nodeFlags |= 1 << 2;
 			}
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FLAGS_OFFSET, nodeFlags);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
-				childAlignX.rawValue | (childAlignY.rawValue << 8));
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET,
-				childDistribution.rawValue);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ROW_GAP_OFFSET,
-				style.rowGap);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET,
-				style.columnGap);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET,
-				wrapMode.rawValue);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET,
-				alignSelf.rawValue);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_MEASURE_VERSION_OFFSET,
-				measureVersion);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET,
 				style.transformOriginX);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_Y_OFFSET,
@@ -285,13 +247,7 @@ internal class LayoutTransaction {
 				node.geometryRevision);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET,
 				node.compositeRevision);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_POSITION_X_OFFSET,
-				style.positionX);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_POSITION_Y_OFFSET,
-				style.positionY);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_Z_INDEX_OFFSET,
-				style.zIndex);
-			writeAnchor(output, record, node.anchor, positioning);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_Z_INDEX_OFFSET, style.zIndex);
 			if (textOffset < 0 || textOffset + this.stringBytes[index].length > output.length)
 				throw 'Layout string table write is out of range: ${textOffset} + ${this.stringBytes[index].length} > ${output.length}';
 			for (byteIndex in 0...this.stringBytes[index].length)
@@ -299,65 +255,6 @@ internal class LayoutTransaction {
 			textOffset += this.stringBytes[index].length;
 		}
 		return output;
-	}
-
-	/** A node's anchor fields: every one, zero for a node placed at its position. */
-	static function writeAnchor(output:Bytes, record:Int, anchor:Null<LayoutAnchor>,
-			positioning:LayoutPositioning):Void {
-		if (anchor != null && positioning != LayoutPositioning.Absolute)
-			throw "A layout anchor requires absolute positioning";
-		var kind = 0, node = 0, rect:Null<Rect> = null, bounds = 0, boundsNode = 0, boundsRect:Null<Rect> = null;
-		if (anchor != null) {
-			switch anchor.target {
-				case Node(id):
-					kind = 1;
-					node = id;
-				case Area(area):
-					kind = 2;
-					rect = area;
-			}
-			switch anchor.within {
-				case Viewport:
-				case Node(id):
-					bounds = 1;
-					boundsNode = id;
-				case Area(area):
-					bounds = 2;
-					boundsRect = area;
-			}
-			if (!finite(anchor.gap) || !finite(anchor.margin) || anchor.margin < 0 || !(anchor.align >= 0)
-				|| anchor.align > 1 || !(anchor.boxAlign >= 0) || anchor.boxAlign > 1)
-				throw "A layout anchor needs a finite gap, a margin of zero or more, and alignments within 0..1";
-		}
-		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_KIND_OFFSET, kind);
-		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_NODE_OFFSET, node);
-		writeRect(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_X_OFFSET, rect);
-		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_SIDE_OFFSET,
-			anchor == null ? 0 : anchor.side.rawValue);
-		writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_GAP_OFFSET,
-			anchor == null ? 0 : anchor.gap);
-		writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_ALIGN_OFFSET,
-			anchor == null ? 0 : anchor.align);
-		writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_BOX_ALIGN_OFFSET,
-			anchor == null ? 0 : anchor.boxAlign);
-		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_FLAGS_OFFSET,
-			anchor == null ? 0 : (anchor.flip ? 1 : 0) | (anchor.flipCross ? 2 : 0));
-		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_OFFSET, bounds);
-		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_NODE_OFFSET, boundsNode);
-		writeRect(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_X_OFFSET, boundsRect);
-		writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_MARGIN_OFFSET,
-			anchor == null ? 0 : anchor.margin);
-	}
-
-	/** A rectangle as four floats from `offset`, zero when null. */
-	static function writeRect(output:Bytes, record:Int, offset:Int, rect:Null<Rect>):Void {
-		if (rect != null && (!finite(rect.x) || !finite(rect.y) || !finite(rect.width) || !finite(rect.height)
-			|| rect.width < 0 || rect.height < 0))
-			throw "A layout anchor rectangle must be finite, with no negative extent";
-		writeFloat(output, record, offset, rect == null ? 0 : rect.x);
-		writeFloat(output, record, offset + 4, rect == null ? 0 : rect.y);
-		writeFloat(output, record, offset + 8, rect == null ? 0 : rect.width);
-		writeFloat(output, record, offset + 12, rect == null ? 0 : rect.height);
 	}
 
 	public function byteLength():Int
@@ -445,7 +342,8 @@ internal class LayoutTransaction {
 		return finite(value) && value > 0.0;
 
 	static function axisDescription(axis:LayoutAxis):String {
-		return "[" + axis.sizing.rawValue + "," + axis.value + "," + axis.min + "," + axis.max + "," + axis.growWeight
+		return "[" + Std.string(axis.sizing) + "," + axis.value + "," + axis.min + "," + axis.max + ","
+			+ axis.growWeight
 			+ "]";
 	}
 

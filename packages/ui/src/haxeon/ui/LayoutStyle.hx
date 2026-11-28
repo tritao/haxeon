@@ -296,23 +296,51 @@ class LayoutStyle implements Diffable {
 
 }
 
-/** Child flow direction used by the native layout engine. */
-typedef LayoutDirection = NativeKitUI.UiLayoutDirection;
+/** The direction a node lays its flow children out in. */
+enum LayoutDirection implements Hashable {
+	LeftToRight;
+	TopToBottom;
+}
 
-/** Cross-axis alignment for children in a top-to-bottom layout. */
-typedef LayoutAlignmentX = NativeKitUI.UiLayoutAlignmentX;
+/** Where children sit across a top-to-bottom flow. */
+enum LayoutAlignmentX implements Hashable {
+	Start;
+	End;
+	Center;
+}
 
-/** Cross-axis alignment for children in a left-to-right layout. */
-typedef LayoutAlignmentY = NativeKitUI.UiLayoutAlignmentY;
+/** Where children sit across a left-to-right flow; `Baseline` lines up their first baselines. */
+enum LayoutAlignmentY implements Hashable {
+	Start;
+	End;
+	Center;
+	Baseline;
+}
 
-/** Main-axis free-space distribution policy. */
-typedef LayoutDistribution = NativeKitUI.UiLayoutDistribution;
+/** How a flow shares the room its children leave along it. */
+enum LayoutDistribution implements Hashable {
+	Start;
+	Center;
+	End;
+	SpaceBetween;
+	SpaceAround;
+	SpaceEvenly;
+}
 
-/** Optional per-child cross-axis alignment override. */
-typedef LayoutSelfAlignment = NativeKitUI.UiLayoutSelfAlignment;
+/** A child's own alignment across its parent's flow, or the parent's (`Inherit`). */
+enum LayoutSelfAlignment implements Hashable {
+	Inherit;
+	Start;
+	End;
+	Center;
+	Baseline;
+}
 
-/** Child flow policy for layout containers. */
-typedef LayoutWrapMode = NativeKitUI.UiLayoutWrapMode;
+/** Whether a flow breaks onto further lines when its children do not fit. */
+enum LayoutWrapMode implements Hashable {
+	NoWrap;
+	Wrap;
+}
 
 /** Whether a node participates in parent flow or floats over sibling layout. */
 enum LayoutPositioning implements Hashable {

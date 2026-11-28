@@ -53,8 +53,10 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
    grow by weight up to maximums, or shrink largest first down to minimums), widths before heights so text wraps at its
    width, then positions from distribution and alignment, wrapped lines, baselines, and absolute and anchored nodes. The
    rules are ours, not Clay's, and documented on the solver; Clay is not a compatibility target.
-2. **Native builds the scene from the solver's geometry.** Each submit sets one record per node with
-   `nkui_layout_session_set_geometry` (bounds, where its text goes, its baseline); the scene builder resolves transforms,
+2. **Native builds the scene from the solver's geometry.** Each node record is a scene record: how the node paints and
+   stacks, and where the solver placed it (bounds, where its text goes, its baseline, a scroll offset, whether layout hid
+   it), sent for the nodes whose paint inputs or geometry changed; no layout input reaches native. The scene builder
+   (`SceneBuilder`) resolves transforms,
    clips, content and hit bounds, shapes text at the given widths, and emits the paint primitives in paint order. The
    solver measures text with `nkui_layout_session_measure_text` on the session's fonts and keeps the results per node,
    and measures custom content through `LayoutContent`, keeping each node's last results per version and constraints.
@@ -82,7 +84,8 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
 ## Migration
 
 1. Done: the solver, the geometry hand-off and text measurement; Clay, its backend, its native tests, the native measure
-   callback and the linear reference engine deleted; native tests place their fixtures with `tests/fixture_geometry.h`.
+   callback and the linear reference engine deleted. The node record became a scene record, with the layout-only fields
+   and the separate geometry call gone; native tests place their fixture nodes with `tests/scene_record.h`.
 2. Done: a frame's passes lay out in Haxe and publish to NativeKit once; the solver resolves the geometry callbacks read.
 3. Done: scroll offsets, reveals and scrollbars settle during layout; truncation (`LayoutNode.truncation`); the anchor's
    sizing, with `SelectionPopup` on it; `requestLayoutFeedback` and the pass loop deleted.

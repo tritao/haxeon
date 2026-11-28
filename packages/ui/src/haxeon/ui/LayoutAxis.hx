@@ -46,5 +46,10 @@ struct LayoutAxis implements Hashable implements Diffable {
 		return percent(1.0);
 }
 
-/** Sizing policy for one layout axis. */
-typedef LayoutSizing = NativeKitUI.UiLayoutSizing;
+/** How one axis of a node is sized: to its content, to the room left, to a fixed size, or to a share of its parent. */
+enum LayoutSizing implements Hashable {
+	Fit;
+	Grow;
+	Fixed;
+	Percent;
+}

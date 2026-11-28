@@ -9,230 +9,75 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	const NKUI_EFFECT_PROGRAM_MAX_OPS = 8;
 	const NKUI_GRADIENT_MAX_STOPS = 8;
 	const NKUI_LAYER_COMMAND_VERSION = 2;
-	const NKUI_LAYOUT_API_VERSION = 26;
-	const NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET = 32;
-	const NKUI_LAYOUT_GEOMETRY_FLAGS_OFFSET = 44;
-	const NKUI_LAYOUT_GEOMETRY_HEIGHT_OFFSET = 16;
-	const NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET = 0;
-	const NKUI_LAYOUT_GEOMETRY_RECORD_BYTES = 48;
-	const NKUI_LAYOUT_GEOMETRY_SCROLL_X_OFFSET = 36;
-	const NKUI_LAYOUT_GEOMETRY_SCROLL_Y_OFFSET = 40;
-	const NKUI_LAYOUT_GEOMETRY_TEXT_WIDTH_OFFSET = 28;
-	const NKUI_LAYOUT_GEOMETRY_TEXT_X_OFFSET = 20;
-	const NKUI_LAYOUT_GEOMETRY_TEXT_Y_OFFSET = 24;
-	const NKUI_LAYOUT_GEOMETRY_WIDTH_OFFSET = 12;
-	const NKUI_LAYOUT_GEOMETRY_X_OFFSET = 4;
-	const NKUI_LAYOUT_GEOMETRY_Y_OFFSET = 8;
+	const NKUI_LAYOUT_API_VERSION = 27;
 	const NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16777216;
+	const NKUI_LAYOUT_NODE_BACKGROUND_OFFSET = 60;
+	const NKUI_LAYOUT_NODE_BASELINE_OFFSET = 48;
+	const NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET = 16;
 	/**
-	 * Per-child cross-axis alignment override; zero inherits the parent.
+	 * Opacity/effects revision.
 	 */
-	const NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET = 232;
+	const NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 192;
 	/**
-	 * Cross-axis alignment: this fraction of the anchor's extent meets ...
+	 * Paint/text revision consumed by retained render caches.
 	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_ALIGN_OFFSET = 296;
+	const NKUI_LAYOUT_NODE_CONTENT_REVISION_OFFSET = 184;
+	const NKUI_LAYOUT_NODE_FLAGS_OFFSET = 12;
+	const NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET = 116;
+	const NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET = 120;
 	/**
-	 * The bounds rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_BOUNDS_RECT.
+	 * Bounds/transform/clip revision.
 	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_HEIGHT_OFFSET = 328;
-	/**
-	 * The bounds node's ID, for NKUI_LAYOUT_ANCHOR_BOUNDS_NODE; it must come before the anchored node in tree order.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_NODE_OFFSET = 312;
-	/**
-	 * The region the node is kept inside (nkui_layout_anchor_bounds): on both axes when it overlaps its anchor or may flip,
-	 * else on the cross axis only, so it stays on its side.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_OFFSET = 308;
-	/**
-	 * The bounds rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_BOUNDS_RECT.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_WIDTH_OFFSET = 324;
-	/**
-	 * The bounds rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_BOUNDS_RECT.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_X_OFFSET = 316;
-	/**
-	 * The bounds rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_BOUNDS_RECT.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_Y_OFFSET = 320;
-	/**
-	 * ... this fraction of the node's (0 and 0 align starts, 0.5 and 0.5 centres, 1 and 1 ends).
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_BOX_ALIGN_OFFSET = 300;
-	/**
-	 * nkui_layout_anchor_flags.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_FLAGS_OFFSET = 304;
-	/**
-	 * Distance from the anchor along the side's axis.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_GAP_OFFSET = 292;
-	/**
-	 * The anchor rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_RECT.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_HEIGHT_OFFSET = 284;
-	/**
-	 * What a floating node is placed against after the flow (nkui_layout_anchor_kind); NONE places it at its position.
-	 * An anchored node's position is an offset from its placement.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_KIND_OFFSET = 264;
-	/**
-	 * How far inside the bounds the node is kept.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_MARGIN_OFFSET = 332;
-	/**
-	 * The anchor node's ID, for NKUI_LAYOUT_ANCHOR_NODE; it must come before the anchored node in tree order.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_NODE_OFFSET = 268;
-	/**
-	 * The anchor's side the node goes on (nkui_layout_anchor_side).
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_SIDE_OFFSET = 288;
-	/**
-	 * The anchor rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_RECT.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_WIDTH_OFFSET = 280;
-	/**
-	 * The anchor rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_RECT.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_X_OFFSET = 272;
-	/**
-	 * The anchor rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_RECT.
-	 */
-	const NKUI_LAYOUT_NODE_ANCHOR_Y_OFFSET = 276;
-	/**
-	 * Width divided by height; zero disables aspect-ratio sizing.
-	 */
-	const NKUI_LAYOUT_NODE_ASPECT_RATIO_OFFSET = 204;
-	const NKUI_LAYOUT_NODE_BACKGROUND_OFFSET = 52;
-	/**
-	 * Packed child alignment: x in bits 0..7, y in bits 8..15.
-	 */
-	const NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET = 172;
-	/**
-	 * Main-axis free-space distribution policy.
-	 */
-	const NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET = 216;
-	const NKUI_LAYOUT_NODE_CHILD_GAP_OFFSET = 48;
-	const NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET = 84;
-	/**
-	 * Horizontal gap between wrapped columns.
-	 */
-	const NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET = 224;
-	/**
-	 * Haxe-owned compositing revision for shared scene metadata.
-	 */
-	const NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 256;
-	/**
-	 * Haxe-owned paint/content revision used by native raster caches.
-	 */
-	const NKUI_LAYOUT_NODE_CONTENT_REVISION_OFFSET = 248;
-	const NKUI_LAYOUT_NODE_DIRECTION_OFFSET = 28;
-	const NKUI_LAYOUT_NODE_FLAGS_OFFSET = 168;
-	const NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET = 112;
-	const NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET = 116;
-	/**
-	 * Haxe-owned resolved geometry revision for shared scene metadata.
-	 */
-	const NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET = 252;
-	/**
-	 * Relative share of extra height for GROW sizing; must be positive and finite.
-	 */
-	const NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET = 212;
-	/**
-	 * Maximum height for FIT/GROW sizing; zero means unbounded.
-	 */
-	const NKUI_LAYOUT_NODE_HEIGHT_MAX_OFFSET = 200;
-	/**
-	 * Minimum height for FIT/GROW sizing; zero means no minimum.
-	 */
-	const NKUI_LAYOUT_NODE_HEIGHT_MIN_OFFSET = 196;
-	const NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET = 20;
-	const NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET = 24;
+	const NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET = 188;
+	const NKUI_LAYOUT_NODE_HEIGHT_OFFSET = 32;
 	const NKUI_LAYOUT_NODE_ID_OFFSET = 0;
-	const NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET = 120;
-	const NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET = 124;
-	/**
-	 * Application-defined intrinsic-content version used by measurement caching.
-	 */
-	const NKUI_LAYOUT_NODE_MEASURE_VERSION_OFFSET = 236;
-	const NKUI_LAYOUT_NODE_PADDING_BOTTOM_OFFSET = 44;
-	const NKUI_LAYOUT_NODE_PADDING_LEFT_OFFSET = 32;
-	const NKUI_LAYOUT_NODE_PADDING_RIGHT_OFFSET = 36;
-	const NKUI_LAYOUT_NODE_PADDING_TOP_OFFSET = 40;
+	const NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET = 124;
+	const NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET = 128;
 	const NKUI_LAYOUT_NODE_PARENT_OFFSET = 4;
+	const NKUI_LAYOUT_NODE_RADIUS_BOTTOM_LEFT_OFFSET = 84;
+	const NKUI_LAYOUT_NODE_RADIUS_BOTTOM_RIGHT_OFFSET = 88;
+	const NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET = 76;
+	const NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET = 80;
+	const NKUI_LAYOUT_NODE_RECORD_BYTES = 196;
+	const NKUI_LAYOUT_NODE_SCROLL_X_OFFSET = 52;
+	const NKUI_LAYOUT_NODE_SCROLL_Y_OFFSET = 56;
+	const NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 144;
+	const NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET = 136;
+	const NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET = 100;
+	const NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET = 140;
+	const NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET = 96;
+	const NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET = 92;
+	const NKUI_LAYOUT_NODE_TEXT_WIDTH_OFFSET = 44;
+	const NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET = 132;
+	const NKUI_LAYOUT_NODE_TEXT_X_OFFSET = 36;
+	const NKUI_LAYOUT_NODE_TEXT_Y_OFFSET = 40;
+	const NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET = 148;
+	const NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET = 152;
+	const NKUI_LAYOUT_NODE_TRANSFORM_C_OFFSET = 156;
+	const NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET = 160;
 	/**
-	 * Parent-relative x offset for absolute-positioned nodes.
+	 * The transform's origin as fractions of the node's bounds; the default is its center.
 	 */
-	const NKUI_LAYOUT_NODE_POSITION_X_OFFSET = 176;
+	const NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET = 172;
 	/**
-	 * Parent-relative y offset for absolute-positioned nodes.
+	 * The transform's origin as fractions of the node's bounds; the default is its center.
 	 */
-	const NKUI_LAYOUT_NODE_POSITION_Y_OFFSET = 180;
-	const NKUI_LAYOUT_NODE_RADIUS_BOTTOM_LEFT_OFFSET = 76;
-	const NKUI_LAYOUT_NODE_RADIUS_BOTTOM_RIGHT_OFFSET = 80;
-	const NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET = 68;
-	const NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET = 72;
-	const NKUI_LAYOUT_NODE_RECORD_BYTES = 336;
-	/**
-	 * Vertical gap between wrapped rows.
-	 */
-	const NKUI_LAYOUT_NODE_ROW_GAP_OFFSET = 220;
-	/**
-	 * Tab-stop interval in space advances; zero preserves default shaping.
-	 */
-	const NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 260;
-	const NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET = 132;
-	const NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET = 96;
-	const NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET = 136;
-	const NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET = 140;
-	const NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET = 92;
-	const NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET = 88;
-	const NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET = 128;
-	const NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET = 144;
-	const NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET = 148;
-	const NKUI_LAYOUT_NODE_TRANSFORM_C_OFFSET = 152;
-	const NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET = 156;
-	/**
-	 * Normalized horizontal transform origin, in the range 0..1.
-	 */
-	const NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET = 240;
-	/**
-	 * Normalized vertical transform origin, in the range 0..1.
-	 */
-	const NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_Y_OFFSET = 244;
-	const NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET = 160;
-	const NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET = 164;
+	const NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_Y_OFFSET = 176;
+	const NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET = 164;
+	const NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET = 168;
 	const NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET = 8;
+	const NKUI_LAYOUT_NODE_WIDTH_OFFSET = 28;
+	const NKUI_LAYOUT_NODE_X_OFFSET = 20;
+	const NKUI_LAYOUT_NODE_Y_OFFSET = 24;
 	/**
-	 * Relative share of extra width for GROW sizing; must be positive and finite.
+	 * Paint order of a floating node among its siblings' layers.
 	 */
-	const NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET = 208;
-	/**
-	 * Maximum width for FIT/GROW sizing; zero means unbounded.
-	 */
-	const NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET = 192;
-	/**
-	 * Minimum width for FIT/GROW sizing; zero means no minimum.
-	 */
-	const NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET = 188;
-	const NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET = 12;
-	const NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET = 16;
-	/**
-	 * Wrap policy: zero keeps one row/column, one enables wrapping.
-	 */
-	const NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET = 228;
-	/**
-	 * Stacking order for absolute-positioned nodes, encoded as signed int32.
-	 */
-	const NKUI_LAYOUT_NODE_Z_INDEX_OFFSET = 184;
+	const NKUI_LAYOUT_NODE_Z_INDEX_OFFSET = 180;
 	const NKUI_LAYOUT_PATCH_HEADER_BYTES = 32;
-	const NKUI_LAYOUT_PATCH_VERSION = 19;
+	const NKUI_LAYOUT_PATCH_VERSION = 21;
 	const NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96;
 	const NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16;
-	const NKUI_LAYOUT_TRANSACTION_VERSION = 18;
+	const NKUI_LAYOUT_TRANSACTION_VERSION = 20;
 	/**
 	 * 16-bit opcode identifying one display-list command record.
 	 */
@@ -391,65 +236,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		NKUI_LAYER_HAS_BOUNDS = 2;
 	}
 	/**
-	 * Horizontal child alignment; the low byte of a node's packed child alignment.
-	 */
-	enum nkui_layout_alignment_x : u32 {
-		NKUI_LAYOUT_ALIGNMENT_X_START = 0;
-		NKUI_LAYOUT_ALIGNMENT_X_END = 1;
-		NKUI_LAYOUT_ALIGNMENT_X_CENTER = 2;
-	}
-	/**
-	 * Vertical child alignment; the second byte of a node's packed child alignment.
-	 */
-	enum nkui_layout_alignment_y : u32 {
-		NKUI_LAYOUT_ALIGNMENT_Y_START = 0;
-		NKUI_LAYOUT_ALIGNMENT_Y_END = 1;
-		NKUI_LAYOUT_ALIGNMENT_Y_CENTER = 2;
-		/**
-		 * Aligns child baselines in horizontal rows; baseline-less children use their bottom edge.
-		 */
-		NKUI_LAYOUT_ALIGNMENT_Y_BASELINE = 3;
-	}
-	/**
-	 * The region a placed node is kept inside.
-	 */
-	enum nkui_layout_anchor_bounds : u32 {
-		NKUI_LAYOUT_ANCHOR_BOUNDS_VIEWPORT = 0;
-		NKUI_LAYOUT_ANCHOR_BOUNDS_NODE = 1;
-		NKUI_LAYOUT_ANCHOR_BOUNDS_RECT = 2;
-	}
-	/**
-	 * Bit flags of a placed node.
-	 */
-	enum nkui_layout_anchor_flags : u32 {
-		/**
-		 * Take the opposite side when the node does not fit on its own and fits better there.
-		 */
-		NKUI_LAYOUT_ANCHOR_FLIP = 1;
-		/**
-		 * Align the opposite edges on the cross axis when the node would overflow the bounds.
-		 */
-		NKUI_LAYOUT_ANCHOR_FLIP_CROSS = 2;
-	}
-	/**
-	 * What a floating node is placed against.
-	 */
-	enum nkui_layout_anchor_kind : u32 {
-		NKUI_LAYOUT_ANCHOR_NONE = 0;
-		NKUI_LAYOUT_ANCHOR_NODE = 1;
-		NKUI_LAYOUT_ANCHOR_RECT = 2;
-	}
-	/**
-	 * The anchor's side a placed node goes on; OVERLAP places it at the anchor's origin.
-	 */
-	enum nkui_layout_anchor_side : u32 {
-		NKUI_LAYOUT_ANCHOR_OVERLAP = 0;
-		NKUI_LAYOUT_ANCHOR_BELOW = 1;
-		NKUI_LAYOUT_ANCHOR_ABOVE = 2;
-		NKUI_LAYOUT_ANCHOR_AFTER = 3;
-		NKUI_LAYOUT_ANCHOR_BEFORE = 4;
-	}
-	/**
 	 * Persistent rendering policy for a retained custom-paint plane.
 	 */
 	enum nkui_layout_cache_policy : u32 {
@@ -463,33 +249,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	flags nkui_layout_clip_flags : u32 {
 		NKUI_LAYOUT_CLIP_HORIZONTAL = 1;
 		NKUI_LAYOUT_CLIP_VERTICAL = 2;
-	}
-	/**
-	 * Child flow directions encoded in node styles.
-	 */
-	enum nkui_layout_direction : u32 {
-		NKUI_LAYOUT_DIRECTION_LEFT_TO_RIGHT = 0;
-		NKUI_LAYOUT_DIRECTION_TOP_TO_BOTTOM = 1;
-	}
-	/**
-	 * Main-axis free-space distribution policies.
-	 */
-	enum nkui_layout_distribution : u32 {
-		NKUI_LAYOUT_DISTRIBUTION_START = 0;
-		NKUI_LAYOUT_DISTRIBUTION_CENTER = 1;
-		NKUI_LAYOUT_DISTRIBUTION_END = 2;
-		NKUI_LAYOUT_DISTRIBUTION_SPACE_BETWEEN = 3;
-		NKUI_LAYOUT_DISTRIBUTION_SPACE_AROUND = 4;
-		NKUI_LAYOUT_DISTRIBUTION_SPACE_EVENLY = 5;
-	}
-	/**
-	 * Flags of a geometry record.
-	 */
-	flags nkui_layout_geometry_flags : u32 {
-		/**
-		 * Layout hid the node, as a placer hides a scrollbar with nothing to scroll: it is neither drawn nor hit.
-		 */
-		NKUI_LAYOUT_GEOMETRY_HIDDEN = 1;
 	}
 	/**
 	 * Node flags stored at NKUI_LAYOUT_NODE_FLAGS_OFFSET.
@@ -510,6 +269,10 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		 * Floating overlay above ordinary content, scoped to the nearest enclosing overlay.
 		 */
 		NKUI_LAYOUT_NODE_OVERLAY = 32;
+		/**
+		 * Layout hid the node, as a placer hides a scrollbar with nothing to scroll: neither drawn nor hit.
+		 */
+		NKUI_LAYOUT_NODE_HIDDEN = 64;
 	}
 	/**
 	 * Flags returned with each resolved item.
@@ -519,25 +282,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		NKUI_LAYOUT_RESOLVED_HAS_BASELINE = 2;
 	}
 	/**
-	 * Optional per-child cross-axis alignment override.
-	 */
-	enum nkui_layout_self_alignment : u32 {
-		NKUI_LAYOUT_SELF_ALIGNMENT_INHERIT = 0;
-		NKUI_LAYOUT_SELF_ALIGNMENT_START = 1;
-		NKUI_LAYOUT_SELF_ALIGNMENT_END = 2;
-		NKUI_LAYOUT_SELF_ALIGNMENT_CENTER = 3;
-		NKUI_LAYOUT_SELF_ALIGNMENT_BASELINE = 4;
-	}
-	/**
-	 * Sizing modes encoded for each node axis.
-	 */
-	enum nkui_layout_sizing : u32 {
-		NKUI_LAYOUT_SIZING_FIT = 0;
-		NKUI_LAYOUT_SIZING_GROW = 1;
-		NKUI_LAYOUT_SIZING_FIXED = 2;
-		NKUI_LAYOUT_SIZING_PERCENT = 3;
-	}
-	/**
 	 * Visual content kinds encoded in the transaction.
 	 */
 	enum nkui_layout_visual_kind : u32 {
@@ -545,13 +289,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		NKUI_LAYOUT_VISUAL_TEXT = 2;
 		NKUI_LAYOUT_VISUAL_IMAGE = 3;
 		NKUI_LAYOUT_VISUAL_CUSTOM = 4;
-	}
-	/**
-	 * Whether children stay on one row/column or flow onto additional lines.
-	 */
-	enum nkui_layout_wrap_mode : u32 {
-		NKUI_LAYOUT_WRAP_NO_WRAP = 0;
-		NKUI_LAYOUT_WRAP_WRAP = 1;
 	}
 	/**
 	 * Source-alpha masks are separate composition inputs, not sequential effects.
@@ -891,7 +628,7 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	 * Bounds remain in pre-transform layout coordinates; `transform` maps them to
 	 * viewport coordinates. `clip_*` is the effective inherited clip, and
 	 * `content_*` describes the union of direct children relative to the node's
-	 * padded content origin. Pass NULL to query the required byte count, then
+	 * origin. Pass NULL to query the required byte count, then
 	 * pass a buffer of that size.
 	 */
 	extern fn nkui_layout_session_get_resolved_items(
@@ -1029,16 +766,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	extern fn nkui_layout_session_set_font_collection(
 		session: nkui_layout_session,
 		fonts: nkui_resource
-	) -> nkui_result;
-	/**
-	 * Sets the geometry the framework laid the next submit's tree out with (ADR 0009): one
-	 * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES record for every node of the tree after that submit, in any order. It stays until
-	 * it is set again, so every submit that changes geometry sets it first.
-	 */
-	extern fn nkui_layout_session_set_geometry(
-		session: nkui_layout_session,
-		geometry: ptr<const<u8>> @in_array("geometry_bytes"),
-		geometry_bytes: u32
 	) -> nkui_result;
 	/**
 	 * Submits one flat, Haxe-owned render/layout tree transaction.
@@ -1834,7 +1561,7 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		clip_width: f32;
 		clip_height: f32;
 		/**
-		 * Union of direct child bounds, relative to this node's content origin.
+		 * Union of direct child bounds, relative to this node's origin.
 		 */
 		content_x: f32;
 		content_y: f32;

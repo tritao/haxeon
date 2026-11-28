@@ -71,5 +71,11 @@ enum AnchorBounds implements Equatable {
 	Area(rect:Rect);
 }
 
-/** The side of its anchor an anchored node goes on. */
-typedef AnchorSide = NativeKitUI.UiLayoutAnchorSide;
+/** The side of its anchor an anchored node goes on; `Overlap` places it at the anchor's origin. */
+enum AnchorSide implements Hashable {
+	Overlap;
+	Below;
+	Above;
+	After;
+	Before;
+}

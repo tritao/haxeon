@@ -17,7 +17,6 @@ class LayoutSession implements Disposable {
 	static final EmptyBytes:Bytes = Bytes.alloc(0);
 	/** Lays each submitted tree out; native builds the scene from its geometry (ADR 0009). */
 	final solver:haxeon.ui.layout.LayoutSolver = new haxeon.ui.layout.LayoutSolver();
-	var geometryBytes:Bytes = Bytes.alloc(4096);
 	var value:nkui_layout_session;
 	var disposed:Bool;
 	final transaction:LayoutTransaction;
@@ -98,19 +97,10 @@ class LayoutSession implements Disposable {
 	internal function publish(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges, forceFull:Bool = false):Void {
 		ensureLive();
 		var encodeStarted = measureCost ? Sys.time() : 0.0;
-		solver.takeChangedText(forceFull ? null : changes);
-		var transactionBytes:Bytes = transaction.encodeInto(root, forceFull ? null : changes);
+		solver.takeChanged(forceFull ? null : changes);
+		var transactionBytes:Bytes = transaction.encodeInto(root, forceFull ? null : changes, true, solver);
 		collectRenderableContents();
-		var geometryLength = solver.nodes * NativeKitUIConstants.NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
-		if (geometryLength > geometryBytes.length) {
-			var capacity = geometryBytes.length;
-			while (capacity < geometryLength) capacity *= 2;
-			geometryBytes = Bytes.alloc(capacity);
-		}
-		solver.encode(geometryBytes);
 		var encodeFinished = measureCost ? Sys.time() : 0.0;
-		UiResult.check(NativeKitUI.nkui_layout_session_set_geometry_slice(value, geometryBytes, 0, geometryLength),
-			"layoutSession.setGeometry");
 		UiResult.check(NativeKitUI.nkui_layout_session_submit_slice(value, transactionBytes, 0,
 			transaction.byteLength(),
 			frame.nativeValue()), "layoutSession.submit");
@@ -136,7 +126,7 @@ class LayoutSession implements Disposable {
 	/** Compare a retained native tree against its complete Haxe input, without replacing the native tree. */
 	public function verifyTree(root:LayoutNode):Void {
 		ensureLive();
-		var reference = referenceTransaction.encodeInto(root, null, false);
+		var reference = referenceTransaction.encodeInto(root, null, false, solver);
 		UiResult.check(NativeKitUI.nkui_layout_session_verify_tree_slice(value, reference, 0,
 			referenceTransaction.byteLength()), "layoutSession.verifyIncrementalTree");
 	}

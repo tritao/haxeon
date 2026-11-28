@@ -146,8 +146,8 @@ class LayoutSessionSmoke {
 		if (next[0].id != wrapper.id || next.length != 1102) throw "Changing the layout root was lost";
 		next = session.submit(root, frame, changes);
 		if (next[0].id != root.id || next.length != 1101) throw "Removing the old layout root was lost";
-		// Omitting an actual input change must fail verification, even when native can retain its old geometry.
-		root.children[20].style.width = LayoutAxis.fixed(31);
+		// Omitting a paint input change must fail verification; geometry changes the solver finds itself.
+		root.children[20].style.background = Color.rgba(0.9, 0.1, 0.1, 1);
 		var caught = false;
 		try session.submit(root, frame,
 			changes) catch (error:Dynamic) caught = Std.string(error).indexOf("layoutSession.verifyIncrementalTree")

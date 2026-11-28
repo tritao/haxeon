@@ -3,7 +3,7 @@
 #include "nativekit_gpu.h"
 #include "nativekit_ui.h"
 #include "nativekit_ui_layout.h"
-#include "fixture_geometry.h"
+#include "scene_record.h"
 #include "nativekit_window.h"
 #include "surface_frame.h"
 
@@ -86,8 +86,6 @@ std::vector<uint8_t> transaction(float width, float height) {
                                    static_cast<std::size_t>(index) * NKUI_LAYOUT_NODE_RECORD_BYTES;
         write_float(bytes, offset + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, 1.0f);
         write_float(bytes, offset + NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, 1.0f);
-        write_float(bytes, offset + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET, 1.0f);
-        write_float(bytes, offset + NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET, 1.0f);
         write_u32(bytes, offset + NKUI_LAYOUT_NODE_FLAGS_OFFSET, NKUI_LAYOUT_NODE_VISIBLE);
     }
 
@@ -100,12 +98,7 @@ std::vector<uint8_t> transaction(float width, float height) {
     write_u32(bytes, record(0) + NKUI_LAYOUT_NODE_ID_OFFSET, 1);
     write_i32(bytes, record(0) + NKUI_LAYOUT_NODE_PARENT_OFFSET, -1);
     write_u32(bytes, record(0) + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, NKUI_LAYOUT_VISUAL_BOX);
-    write_u32(bytes, record(0) + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, NKUI_LAYOUT_SIZING_FIXED);
-    write_float(bytes, record(0) + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, width);
-    write_u32(bytes, record(0) + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, NKUI_LAYOUT_SIZING_FIXED);
-    write_float(bytes, record(0) + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, height);
-    write_u32(bytes, record(0) + NKUI_LAYOUT_NODE_DIRECTION_OFFSET,
-              NKUI_LAYOUT_DIRECTION_TOP_TO_BOTTOM);
+    fixture::place(bytes.data() + record(0), 0.0f, 0.0f, width, height);
     write_color(bytes, record(0) + NKUI_LAYOUT_NODE_BACKGROUND_OFFSET, 0.1f, 0.1f, 0.1f, 1.0f);
     write_float(bytes, record(0) + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 16.0f);
     write_u32(bytes, record(0) + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET,
@@ -115,12 +108,7 @@ std::vector<uint8_t> transaction(float width, float height) {
     write_u32(bytes, record(1) + NKUI_LAYOUT_NODE_ID_OFFSET, 2);
     write_i32(bytes, record(1) + NKUI_LAYOUT_NODE_PARENT_OFFSET, 0);
     write_u32(bytes, record(1) + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, NKUI_LAYOUT_VISUAL_BOX);
-    write_u32(bytes, record(1) + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, NKUI_LAYOUT_SIZING_FIXED);
-    write_float(bytes, record(1) + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 160.0f);
-    write_u32(bytes, record(1) + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, NKUI_LAYOUT_SIZING_FIXED);
-    write_float(bytes, record(1) + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 64.0f);
-    write_u32(bytes, record(1) + NKUI_LAYOUT_NODE_DIRECTION_OFFSET,
-              NKUI_LAYOUT_DIRECTION_TOP_TO_BOTTOM);
+    fixture::place(bytes.data() + record(1), 0.0f, 0.0f, 160.0f, 64.0f);
     write_float(bytes, record(1) + NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET, 12.0f);
     write_float(bytes, record(1) + NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET, 20.0f);
     write_color(bytes, record(1) + NKUI_LAYOUT_NODE_BACKGROUND_OFFSET, 0.2f, 0.5f, 0.9f, 1.0f);
@@ -132,10 +120,7 @@ std::vector<uint8_t> transaction(float width, float height) {
     write_u32(bytes, record(2) + NKUI_LAYOUT_NODE_ID_OFFSET, 3);
     write_i32(bytes, record(2) + NKUI_LAYOUT_NODE_PARENT_OFFSET, 1);
     write_u32(bytes, record(2) + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, NKUI_LAYOUT_VISUAL_TEXT);
-    write_u32(bytes, record(2) + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, NKUI_LAYOUT_SIZING_FIT);
-    write_u32(bytes, record(2) + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, NKUI_LAYOUT_SIZING_FIT);
-    write_u32(bytes, record(2) + NKUI_LAYOUT_NODE_DIRECTION_OFFSET,
-              NKUI_LAYOUT_DIRECTION_TOP_TO_BOTTOM);
+    fixture::place(bytes.data() + record(2), 0.0f, 0.0f, 54.0f, 23.0f, 54.0f, 18.0f);
     write_u32(bytes, record(2) + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET,
               static_cast<uint32_t>(string_offset));
     write_u32(bytes, record(2) + NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET, sizeof(text) - 1);
@@ -198,7 +183,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
         transaction(framebuffer_width / pixel_scale, framebuffer_height / pixel_scale);
     nkui_layout_frame_input frame{sizeof(frame), framebuffer_width / pixel_scale,
                                   framebuffer_height / pixel_scale, 1.0f / 60.0f};
-    const nkui_result submit_result = fixture::submit(
+    const nkui_result submit_result = nkui_layout_session_submit(
         session, bytes.data(), static_cast<uint32_t>(bytes.size()), &frame);
     if (submit_result != NKUI_OK) {
         std::fprintf(stderr, "session submit returned %d\n", static_cast<int>(submit_result));
@@ -263,7 +248,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
         const std::size_t root_record = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
         write_float(moved, root_record + NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET, 32.0f);
         write_float(moved, root_record + NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET, 16.0f);
-        if (fixture::submit(session, moved.data(), static_cast<uint32_t>(moved.size()),
+        if (nkui_layout_session_submit(session, moved.data(), static_cast<uint32_t>(moved.size()),
                                        &frame) != NKUI_OK ||
             nkui_layout_session_render_frame(renderer, session, surface, &frame_info, 0) !=
                 NKUI_OK ||
@@ -276,7 +261,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
     }
 
     if (!result &&
-        fixture::submit(session, bytes.data(), static_cast<uint32_t>(bytes.size()),
+        nkui_layout_session_submit(session, bytes.data(), static_cast<uint32_t>(bytes.size()),
                                    &frame) != NKUI_OK)
         result = 19;
 
@@ -374,7 +359,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
             if (nkui_display_list_submit(custom_list, custom_commands.data(),
                                          static_cast<uint32_t>(custom_commands.size())) !=
                     NKUI_OK ||
-                fixture::submit(session, custom_tree.data(),
+                nkui_layout_session_submit(session, custom_tree.data(),
                                            static_cast<uint32_t>(custom_tree.size()),
                                            &frame) != NKUI_OK ||
                 nkui_layout_session_set_custom_paint(session, 2, custom_list) != NKUI_OK ||
@@ -559,7 +544,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
                                                text_layout, 0.0f, 0.0f, 0.0f, 0.0f});
             if (nkui_display_list_submit(text_list, text_commands.data(),
                                          static_cast<uint32_t>(text_commands.size())) != NKUI_OK ||
-                fixture::submit(session, text_tree.data(),
+                nkui_layout_session_submit(session, text_tree.data(),
                                            static_cast<uint32_t>(text_tree.size()),
                                            &frame) != NKUI_OK ||
                 nkui_layout_session_set_custom_paint(session, 2, text_list) != NKUI_OK ||
@@ -975,8 +960,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
             auto tree = transaction(framebuffer_width / zoom, framebuffer_height / zoom);
             const size_t node = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
             write_u32(tree, node + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, NKUI_LAYOUT_VISUAL_CUSTOM);
-            write_float(tree, node + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 50.4f);
-            write_float(tree, node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 32.6f);
+            fixture::place(tree.data() + node, 0.0f, 0.0f, 50.4f, 32.6f);
             write_float(tree, node + NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET, 8.2f);
             write_float(tree, node + NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET, 8.3f);
             write_u32(tree, node + NKUI_LAYOUT_NODE_RECORD_BYTES + NKUI_LAYOUT_NODE_FLAGS_OFFSET, 0);
@@ -984,7 +968,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
                                                 framebuffer_height / zoom, 0};
             const nkui_frame_info info{sizeof(info), framebuffer_width / zoom, framebuffer_height / zoom,
                                        framebuffer_width, framebuffer_height, zoom};
-            const auto submitted = fixture::submit(session, tree.data(), tree.size(), &input);
+            const auto submitted = nkui_layout_session_submit(session, tree.data(), tree.size(), &input);
             const auto painted = nkui_layout_session_set_custom_paint(session, 2, border_list);
             const auto composited = nkui_layout_session_set_custom_paint_composite(session, 2, composite_list);
             const auto rendered = nkui_layout_session_render_frame(renderer, session, surface, &info, 0);
@@ -1071,7 +1055,7 @@ static int run_composite_test(nk_window window, nk_surface surface, int width, i
             for (uint32_t node = 0; node < 2; ++node)
                 write_u32(tree, NKUI_LAYOUT_TRANSACTION_HEADER_BYTES +
                     node * NKUI_LAYOUT_NODE_RECORD_BYTES + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, tree.size());
-            if (fixture::submit(session, tree.data(), tree.size(), &layout) != NKUI_OK ||
+            if (nkui_layout_session_submit(session, tree.data(), tree.size(), &layout) != NKUI_OK ||
                 nkui_frame_step_layout(ui, session, frame, &info, 1, &steps[1]) != NKUI_OK)
                 return 113;
             if (fail_ui_step) {

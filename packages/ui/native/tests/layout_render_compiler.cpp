@@ -1,5 +1,4 @@
-#include "fixture_placements.h"
-#include "layout/layout_engine.h"
+#include "layout/scene_builder.h"
 #include "layout/layout_render_compiler.h"
 #include "render/render_plan_executor.h"
 #include "render/sealed_render_plan.h"
@@ -24,8 +23,6 @@ LayoutNode box(uint32_t id, int32_t parent) {
     LayoutNode node;
     node.id = id;
     node.parent = parent;
-    node.style.width = {LayoutSizing::Grow, 0.0f};
-    node.style.height = {LayoutSizing::Fit, 0.0f};
     return node;
 }
 
@@ -217,27 +214,20 @@ int main() {
     if (!direct_layout.layout_utf8("shared direct layout", 240.0f, 16.0f) ||
         shared_fonts->font_load_count() != 1)
         return 3;
-    LayoutEngine engine(shared_fonts);
+    SceneBuilder engine(shared_fonts);
     if (!engine.valid())
         return 3;
 
     std::vector<LayoutNode> nodes;
     LayoutNode root = box(1, -1);
-    root.style.width = {LayoutSizing::Fixed, 320.0f};
-    root.style.height = {LayoutSizing::Fixed, 200.0f};
-    root.style.padding_left = root.style.padding_right = 16;
-    root.style.padding_top = root.style.padding_bottom = 12;
-    root.style.child_gap = 8;
+    root.placement.bounds = {0.0f, 0.0f, 320.0f, 200.0f};
     root.style.background = {0.9f, 0.92f, 0.98f, 1.0f};
     root.style.radius_top_left = root.style.radius_top_right = 12.0f;
     root.style.radius_bottom_left = root.style.radius_bottom_right = 12.0f;
     nodes.push_back(root);
 
     LayoutNode button = box(2, 0);
-    button.style.width = {LayoutSizing::Fixed, 160.0f};
-    button.style.height = {LayoutSizing::Fit, 0.0f};
-    button.style.padding_left = button.style.padding_right = 12;
-    button.style.padding_top = button.style.padding_bottom = 8;
+    button.placement.bounds = {16.0f, 12.0f, 160.0f, 39.0f};
     button.style.transform.tx = 10.0f;
     button.style.transform.ty = 6.0f;
     button.style.clip_horizontal = true;
@@ -252,11 +242,13 @@ int main() {
     label.text = "Compile me";
     label.text_style.font_size = 18.0f;
     label.text_color = {0.1f, 0.15f, 0.25f, 1.0f};
+    label.placement.bounds = {28.0f, 20.0f, 136.0f, 23.0f};
+    label.placement.text_width = 136.0f;
     nodes.push_back(label);
 
     LayoutSnapshot snapshot;
     LayoutError layout_error;
-    if (!engine.layout(nodes, fixture::placements(nodes, 320.0f, 200.0f), 320.0f, 200.0f, snapshot, &layout_error))
+    if (!engine.build(nodes, 320.0f, 200.0f, snapshot, &layout_error))
         return 4;
 
     LayoutRenderCompiler compiler;
@@ -391,10 +383,7 @@ int main() {
         const char *value = rtl_values[rtl_index];
         std::vector<LayoutNode> rtl_nodes;
         LayoutNode rtl_root = box(10, -1);
-        rtl_root.style.width = {LayoutSizing::Fixed, 320.0f};
-        rtl_root.style.height = {LayoutSizing::Fixed, 80.0f};
-        rtl_root.style.padding_left = rtl_root.style.padding_right = 12;
-        rtl_root.style.padding_top = rtl_root.style.padding_bottom = 10;
+        rtl_root.placement.bounds = {0.0f, 0.0f, 320.0f, 80.0f};
         rtl_nodes.push_back(rtl_root);
 
         LayoutNode rtl_text = box(11, 0);
@@ -402,10 +391,12 @@ int main() {
         rtl_text.text = value;
         rtl_text.text_style.font_size = 18.0f;
         rtl_text.paragraph_style.wrap = TextWrapMode::None;
+        rtl_text.placement.bounds = {12.0f, 10.0f, 296.0f, 23.0f};
+        rtl_text.placement.text_width = 296.0f;
         rtl_nodes.push_back(rtl_text);
 
         LayoutSnapshot rtl_snapshot;
-        if (!engine.layout(rtl_nodes, fixture::placements(rtl_nodes, 320.0f, 80.0f), 320.0f, 80.0f, rtl_snapshot, &layout_error))
+        if (!engine.build(rtl_nodes, 320.0f, 80.0f, rtl_snapshot, &layout_error))
             return 14;
         const auto rtl_primitive = std::find_if(
             rtl_snapshot.primitives.begin(), rtl_snapshot.primitives.end(),
@@ -867,7 +858,7 @@ int main() {
     moved_nodes[0].style.transform.tx = 48.0f;
     moved_nodes[0].style.transform.ty = 24.0f;
     LayoutSnapshot moved_snapshot;
-    if (!engine.layout(moved_nodes, fixture::placements(moved_nodes, 320.0f, 200.0f), 320.0f, 200.0f, moved_snapshot,
+    if (!engine.build(moved_nodes, 320.0f, 200.0f, moved_snapshot,
                        &layout_error))
         return 27;
     LayoutRenderFrame moved_subtree_frame;
@@ -960,7 +951,7 @@ int main() {
     std::vector<LayoutNode> content_changed_nodes = nodes;
     content_changed_nodes[0].content_revision = 7;
     LayoutSnapshot content_changed_snapshot;
-    if (!engine.layout(content_changed_nodes, fixture::placements(content_changed_nodes, 320.0f, 200.0f), 320.0f, 200.0f,
+    if (!engine.build(content_changed_nodes, 320.0f, 200.0f,
                        content_changed_snapshot, &layout_error))
         return 128;
     LayoutRenderFrame content_changed_subtree_frame;
@@ -1008,7 +999,7 @@ int main() {
     std::vector<LayoutNode> composite_changed_nodes = nodes;
     composite_changed_nodes[0].composite_revision = 9;
     LayoutSnapshot composite_changed_snapshot;
-    if (!engine.layout(composite_changed_nodes, fixture::placements(composite_changed_nodes, 320.0f, 200.0f), 320.0f, 200.0f,
+    if (!engine.build(composite_changed_nodes, 320.0f, 200.0f,
                        composite_changed_snapshot, &layout_error))
         return 129;
     LayoutRenderFrame composite_changed_subtree_frame;

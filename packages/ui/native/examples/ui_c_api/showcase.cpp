@@ -804,14 +804,12 @@ struct WebShowcase {
                 write(node + NKUI_LAYOUT_NODE_PARENT_OFFSET, int32_t(index) - 1);
                 write(node + NKUI_LAYOUT_NODE_FLAGS_OFFSET, uint32_t{NKUI_LAYOUT_NODE_VISIBLE});
                 write(node + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, uint32_t{NKUI_LAYOUT_VISUAL_BOX});
-                write(node + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
-                write(node + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
-                write(node + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, extent);
-                write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, extent);
+                // A C host lays its tree out itself: each record carries the node's bounds.
+                write(node + NKUI_LAYOUT_NODE_WIDTH_OFFSET, extent);
+                write(node + NKUI_LAYOUT_NODE_HEIGHT_OFFSET, extent);
+                write(node + NKUI_LAYOUT_NODE_BASELINE_OFFSET, NAN);
                 write(node + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, size);
                 write(node + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 16.0f);
-                write(node + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET, 1.0f);
-                write(node + NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET, 1.0f);
                 write(node + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, 1.0f);
                 write(node + NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, 1.0f);
             }
@@ -826,18 +824,6 @@ struct WebShowcase {
                                                   float(target.height), 0.0f};
             const nkui_frame_info info{sizeof(info), layout.width, layout.height,
                                        target.width, target.height, 1.0f};
-            // A C host lays its tree out itself and gives the session each node's bounds.
-            std::array<uint8_t, count * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES> geometry{};
-            for (uint32_t index = 0; index < count; ++index) {
-                const uint32_t record = index * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
-                const float extent = index == 0 ? 64.0f : 128.0f;
-                const float values[] = {0.0f, 0.0f, extent, extent, 0.0f, 0.0f, 0.0f, NAN, 0.0f, 0.0f, 0.0f};
-                const uint32_t id = index + 1;
-                std::memcpy(geometry.data() + record + NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET, &id, sizeof(id));
-                std::memcpy(geometry.data() + record + NKUI_LAYOUT_GEOMETRY_X_OFFSET, values, sizeof(values));
-            }
-            if (nkui_layout_session_set_geometry(session, geometry.data(), geometry.size()) != NKUI_OK)
-                return false;
             const auto submitted = nkui_layout_session_submit(session, tree.data(), tree.size(), &layout);
             if (submitted != NKUI_OK) {
                 EM_ASM({ console.error("Shared frame layout submission", $0); }, submitted);

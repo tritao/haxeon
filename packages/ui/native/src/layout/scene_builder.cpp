@@ -1,4 +1,4 @@
-#include "layout/layout_engine.h"
+#include "layout/scene_builder.h"
 #include "layout/layout_cost.h"
 #include "layout/layout_id_index.h"
 
@@ -148,14 +148,14 @@ bool finite_rect(LayoutRect rect) {
 
 } // namespace
 
-struct LayoutEngine::Impl {
+struct SceneBuilder::Impl {
     explicit Impl(std::shared_ptr<FontCollection> fonts = {})
         : text(fonts ? std::move(fonts) : std::make_shared<FontCollection>()) {}
 
     bool valid() const { return text.valid(); }
-    bool layout(const LayoutNodeView &nodes, const std::vector<LayoutPlacement> &placements, float width,
-                float height, LayoutSnapshot &out, LayoutError *error, const LayoutInputChanges *changes);
-    bool shape_text(const LayoutNode &node, const LayoutPlacement &placement, LayoutSnapshot &out);
+    bool build(const LayoutNodeView &nodes, float width, float height, LayoutSnapshot &out, LayoutError *error,
+               const LayoutInputChanges *changes);
+    bool shape_text(const LayoutNode &node, LayoutSnapshot &out);
     void emit(const LayoutNodeView &nodes, std::size_t index, LayoutSnapshot &out);
 
     TextEngine text;
@@ -167,15 +167,12 @@ struct LayoutEngine::Impl {
     std::vector<std::vector<std::size_t>> overlay_children;
     std::vector<std::size_t> context_order;
     std::vector<int32_t> layers;
-    LayoutIdIndex placement_index;
-    std::vector<const LayoutPlacement *> node_placements;
     std::vector<std::size_t> node_text_layouts;
     std::vector<TextLayoutId> retained_text_layouts;
 };
 
-bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, const std::vector<LayoutPlacement> &placements,
-                                float width, float height, LayoutSnapshot &out, LayoutError *error,
-                                const LayoutInputChanges *changes) {
+bool SceneBuilder::Impl::build(const LayoutNodeView &nodes, float width, float height, LayoutSnapshot &out,
+                               LayoutError *error, const LayoutInputChanges *changes) {
     if (error)
         *error = {};
     out = {};
@@ -330,25 +327,9 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, const std::vector<L
     }
 
     const double placement_started = layout_cost_time();
-    placement_index.reset(placements.size());
-    for (std::size_t index = 0; index < placements.size(); ++index)
-        placement_index.insert(placements[index].node_id, index);
     std::vector<LayoutRect> node_bounds(nodes.size());
-    node_placements.assign(nodes.size(), nullptr);
-    for (std::size_t index = 0; index < nodes.size(); ++index) {
-        const std::size_t found = placement_index.find(nodes[index].id);
-        if (found == LayoutIdIndex::missing || !finite_rect(placements[found].bounds) ||
-            !std::isfinite(placements[found].text_x) || !std::isfinite(placements[found].text_y) ||
-            !std::isfinite(placements[found].text_width)) {
-            if (error) {
-                error->node_index = index;
-                error->message = "a laid-out node needs a finite placement";
-            }
-            return false;
-        }
-        node_placements[index] = &placements[found];
-        node_bounds[index] = placements[found].bounds;
-    }
+    for (std::size_t index = 0; index < nodes.size(); ++index)
+        node_bounds[index] = nodes[index].placement.bounds;
 
     // Text is shaped at the width its node gave it; the text engine keeps recent layouts, so unchanged text is not
     // shaped again.
@@ -357,9 +338,9 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, const std::vector<L
     for (std::size_t index = 0; index < nodes.size(); ++index) {
         const LayoutNode &node = nodes[index];
         if (node.visual_kind != LayoutVisualKind::Text || node.text.empty() ||
-            node_placements[index]->text_width <= 0.0f)
+            nodes[index].placement.text_width <= 0.0f)
             continue;
-        if (!shape_text(node, *node_placements[index], out)) {
+        if (!shape_text(node, out)) {
             if (error) {
                 error->node_index = index;
                 error->message = "text could not be shaped at its width";
@@ -380,9 +361,9 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, const std::vector<L
                                       LayoutRect parent_clip, LayoutRect parent_bounds) -> bool {
         const auto &node = nodes[index];
         const LayoutTransform transform =
-            compose(parent_transform, compose(translated(-node_placements[index]->scroll_x, -node_placements[index]->scroll_y),
+            compose(parent_transform, compose(translated(-nodes[index].placement.scroll_x, -nodes[index].placement.scroll_y),
                                               local_transform(node, node_bounds[index])));
-        const bool visible = parent_visible && node.style.visible && !node_placements[index]->hidden;
+        const bool visible = parent_visible && node.style.visible && !nodes[index].placement.hidden;
         const LayoutRect transformed = transform_bounds(node_bounds[index], transform);
         LayoutRect item_clip = parent_clip;
         if (node.style.positioning == LayoutPositioning::Absolute) {
@@ -446,8 +427,8 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, const std::vector<L
                 return false;
             }
         }
-        const float content_x = node_bounds[index].x + node.style.padding_left;
-        const float content_y = node_bounds[index].y + node.style.padding_top;
+        const float content_x = node_bounds[index].x;
+        const float content_y = node_bounds[index].y;
         bool has_child = false;
         float left = 0.0f;
         float top = 0.0f;
@@ -472,9 +453,9 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, const std::vector<L
         }
         if (has_child)
             item.content_bounds = {left, top, right - left, bottom - top};
-        if (node_placements[index]->has_baseline && std::isfinite(node_placements[index]->baseline)) {
+        if (nodes[index].placement.has_baseline && std::isfinite(nodes[index].placement.baseline)) {
             item.has_baseline = true;
-            item.baseline = node_placements[index]->baseline;
+            item.baseline = nodes[index].placement.baseline;
         }
         out.items[index] = item;
 
@@ -581,7 +562,8 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, const std::vector<L
     return true;
 }
 
-bool LayoutEngine::Impl::shape_text(const LayoutNode &node, const LayoutPlacement &placement, LayoutSnapshot &out) {
+bool SceneBuilder::Impl::shape_text(const LayoutNode &node, LayoutSnapshot &out) {
+    const LayoutPlacement &placement = node.placement;
     const TextLayoutOptions options = text_options_for_node(node);
     TextLayoutResult shaped;
     if (!text.layout_utf8(node.text.c_str(), placement.text_width, options, &shaped) || shaped.id == 0)
@@ -612,7 +594,7 @@ bool LayoutEngine::Impl::shape_text(const LayoutNode &node, const LayoutPlacemen
  * A node's primitives: its clip, its background, its text lines, its custom content, then its flow subtree, then the
  * end of its clip. Absolute descendants paint in their own stacking context.
  */
-void LayoutEngine::Impl::emit(const LayoutNodeView &nodes, std::size_t index, LayoutSnapshot &out) {
+void SceneBuilder::Impl::emit(const LayoutNodeView &nodes, std::size_t index, LayoutSnapshot &out) {
     const LayoutNode &node = nodes[index];
     const LayoutItem &item = out.items[index];
     const LayoutRect bounds = item.bounds;
@@ -647,7 +629,7 @@ void LayoutEngine::Impl::emit(const LayoutNodeView &nodes, std::size_t index, La
     }
     if (node_text_layouts[index] != std::numeric_limits<std::size_t>::max()) {
         const LayoutTextLayout &layout = out.text_layouts[node_text_layouts[index]];
-        const LayoutPlacement &placement = *node_placements[index];
+        const LayoutPlacement &placement = nodes[index].placement;
         for (std::size_t line = 0; line < layout.lines.size(); ++line) {
             const LayoutTextLine &shaped = layout.lines[line];
             if (shaped.text_length == 0)
@@ -677,60 +659,59 @@ void LayoutEngine::Impl::emit(const LayoutNodeView &nodes, std::size_t index, La
     }
 }
 
-LayoutEngine::LayoutEngine(std::size_t) : impl_(std::make_unique<Impl>()) {}
+SceneBuilder::SceneBuilder() : impl_(std::make_unique<Impl>()) {}
 
-LayoutEngine::LayoutEngine(std::shared_ptr<FontCollection> fonts, std::size_t)
+SceneBuilder::SceneBuilder(std::shared_ptr<FontCollection> fonts)
     : impl_(std::make_unique<Impl>(std::move(fonts))) {}
 
-LayoutEngine::~LayoutEngine() = default;
+SceneBuilder::~SceneBuilder() = default;
 
-bool LayoutEngine::valid() const {
+bool SceneBuilder::valid() const {
     return impl_ && impl_->valid();
 }
 
-TextEngine *LayoutEngine::text_engine() {
+TextEngine *SceneBuilder::text_engine() {
     return impl_ ? &impl_->text : nullptr;
 }
 
-const TextEngine *LayoutEngine::text_engine() const {
+const TextEngine *SceneBuilder::text_engine() const {
     return impl_ ? &impl_->text : nullptr;
 }
 
-bool LayoutEngine::add_font(const char *path, FontFamily family) {
+bool SceneBuilder::add_font(const char *path, FontFamily family) {
     return impl_ && impl_->text.add_font(path, family);
 }
 
-bool LayoutEngine::add_font_from_data(const char *name, const void *data, std::size_t bytes,
+bool SceneBuilder::add_font_from_data(const char *name, const void *data, std::size_t bytes,
                                       FontFamily family) {
     return impl_ && impl_->text.add_font_from_data(name, data, bytes, family);
 }
 
-bool LayoutEngine::add_system_fallbacks() {
+bool SceneBuilder::add_system_fallbacks() {
     return impl_ && impl_->text.add_system_fallbacks();
 }
 
-bool LayoutEngine::layout(const std::vector<LayoutNode> &nodes, const std::vector<LayoutPlacement> &placements,
-                          float width, float height, LayoutSnapshot &out, LayoutError *error,
-                          const LayoutInputChanges *changes) {
+bool SceneBuilder::build(const std::vector<LayoutNode> &nodes, float width, float height, LayoutSnapshot &out,
+                         LayoutError *error, const LayoutInputChanges *changes) {
     if (!impl_) {
         if (error)
-            error->message = "layout implementation is unavailable";
+            error->message = "scene builder is unavailable";
         return false;
     }
     impl_->dense_nodes.clear();
     for (const auto &node : nodes)
         impl_->dense_nodes.push_back(&node);
-    return layout(LayoutNodeView(impl_->dense_nodes), placements, width, height, out, error, changes);
+    return build(LayoutNodeView(impl_->dense_nodes), width, height, out, error, changes);
 }
 
-bool LayoutEngine::layout(const LayoutNodeView &nodes, const std::vector<LayoutPlacement> &placements, float width,
-                          float height, LayoutSnapshot &out, LayoutError *error, const LayoutInputChanges *changes) {
+bool SceneBuilder::build(const LayoutNodeView &nodes, float width, float height, LayoutSnapshot &out,
+                         LayoutError *error, const LayoutInputChanges *changes) {
     if (!impl_) {
         if (error)
-            error->message = "layout implementation is unavailable";
+            error->message = "scene builder is unavailable";
         return false;
     }
-    return impl_->layout(nodes, placements, width, height, out, error, changes);
+    return impl_->build(nodes, width, height, out, error, changes);
 }
 
 } // namespace nkui

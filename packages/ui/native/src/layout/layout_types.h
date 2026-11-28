@@ -69,69 +69,9 @@ struct ParagraphStyle {
 
 using TextLayoutId = uint64_t;
 
-enum class LayoutDirection : uint8_t {
-    LeftToRight = 0,
-    TopToBottom,
-};
-
-enum class LayoutAlignmentX : uint8_t {
-    Start = 0,
-    End,
-    Center,
-};
-
-enum class LayoutAlignmentY : uint8_t {
-    Start = 0,
-    End,
-    Center,
-    Baseline,
-};
-
-enum class LayoutWrapMode : uint8_t {
-    NoWrap = 0,
-    Wrap,
-};
-
-enum class LayoutSelfAlignment : uint8_t {
-    Inherit = 0,
-    Start,
-    End,
-    Center,
-    Baseline,
-};
-
-enum class LayoutDistribution : uint8_t {
-    Start = 0,
-    Center,
-    End,
-    SpaceBetween,
-    SpaceAround,
-    SpaceEvenly,
-};
-
 enum class LayoutPositioning : uint8_t {
     Flow = 0,
     Absolute,
-};
-
-enum class LayoutSizing : uint8_t {
-    Fit = 0,
-    Grow,
-    Fixed,
-    Percent,
-};
-
-struct LayoutAxis {
-    bool operator==(const LayoutAxis &) const = default;
-    LayoutSizing sizing = LayoutSizing::Fit;
-    // Used by FIXED and PERCENT.
-    float value = 0.0f;
-    // FIT/GROW limits; a zero max means unbounded.
-    float min = 0.0f;
-    float max = 0.0f;
-    // Relative share of extra space for GROW sizing. Other sizing modes ignore
-    // this field. The wire/API layer requires a positive finite value.
-    float grow_weight = 1.0f;
 };
 
 struct LayoutColor {
@@ -160,49 +100,10 @@ struct LayoutRect {
     float height = 0.0f;
 };
 
-/** Placement of a floating node against an anchor, after the flow solve (nkui_layout_anchor_*). */
-enum class LayoutAnchorKind : uint8_t { None = 0, Node = 1, Rect = 2 };
-enum class LayoutAnchorSide : uint8_t { Overlap = 0, Below = 1, Above = 2, After = 3, Before = 4 };
-enum class LayoutAnchorBounds : uint8_t { Viewport = 0, Node = 1, Rect = 2 };
-
-struct LayoutAnchor {
-    bool operator==(const LayoutAnchor &) const = default;
-    LayoutAnchorKind kind = LayoutAnchorKind::None;
-    uint32_t node = 0;
-    LayoutRect rect{};
-    LayoutAnchorSide side = LayoutAnchorSide::Overlap;
-    float gap = 0.0f;
-    float align = 0.0f;
-    float box_align = 0.0f;
-    bool flip = false;
-    bool flip_cross = false;
-    LayoutAnchorBounds bounds = LayoutAnchorBounds::Viewport;
-    uint32_t bounds_node = 0;
-    LayoutRect bounds_rect{};
-    float margin = 0.0f;
-};
-
+/** How a node paints and stacks; where it is comes from its placement. */
 struct LayoutStyle {
     bool operator==(const LayoutStyle &) const = default;
-    LayoutAxis width{};
-    LayoutAxis height{};
-    float aspect_ratio = 0.0f;
-    LayoutDirection direction = LayoutDirection::TopToBottom;
-    float padding_left = 0.0f;
-    float padding_right = 0.0f;
-    float padding_top = 0.0f;
-    float padding_bottom = 0.0f;
-    float child_gap = 0.0f;
-    float row_gap = 0.0f;
-    float column_gap = 0.0f;
-    LayoutWrapMode wrap_mode = LayoutWrapMode::NoWrap;
-    LayoutSelfAlignment align_self = LayoutSelfAlignment::Inherit;
-    LayoutAlignmentX child_align_x = LayoutAlignmentX::Start;
-    LayoutAlignmentY child_align_y = LayoutAlignmentY::Start;
-    LayoutDistribution child_distribution = LayoutDistribution::Start;
     LayoutPositioning positioning = LayoutPositioning::Flow;
-    float position_x = 0.0f;
-    float position_y = 0.0f;
     int32_t z_index = 0;
     bool clip_to_parent = true;
     bool overlay = false;
@@ -217,8 +118,25 @@ struct LayoutStyle {
     LayoutTransform transform{};
     float transform_origin_x = 0.5f;
     float transform_origin_y = 0.5f;
-    /** Where a floating node is placed after the flow; with an anchor, position_x and position_y offset it. */
-    LayoutAnchor anchor{};
+};
+
+/**
+ * Where the framework laid one node out (ADR 0009): its bounds in layout coordinates, where its text goes relative to
+ * them, its first baseline in layout coordinates when it has one, and the scroll offset of a scroll container's content.
+ */
+struct LayoutPlacement {
+    bool operator==(const LayoutPlacement &) const = default;
+    LayoutRect bounds{};
+    float text_x = 0.0f;
+    float text_y = 0.0f;
+    float text_width = 0.0f;
+    float baseline = 0.0f;
+    bool has_baseline = false;
+    /** How far a scroll container's content moves left and up, ahead of its own transform. */
+    float scroll_x = 0.0f;
+    float scroll_y = 0.0f;
+    /** Whether layout hid it: it is neither drawn nor hit. */
+    bool hidden = false;
 };
 
 /** A flat, frame-scoped render/layout tree. Parent indices refer to this array. */
@@ -235,7 +153,8 @@ struct LayoutNode {
     /** Geometric hit policy supplied by the framework layer. */
     bool hit_self = true;
     bool hit_children = true;
-    uint32_t measure_version = 0;
+    /** Where the framework laid it out (ADR 0009). */
+    LayoutPlacement placement{};
     /** Paint/text revision supplied by the retained scene owner. */
     uint32_t content_revision = 0;
     /** Resolved bounds/transform/clip revision supplied by the retained scene owner. */
@@ -263,25 +182,6 @@ class LayoutNodeView {
     Iterator end() const { return {this, size()}; }
   private:
     const std::vector<const LayoutNode *> &nodes_;
-};
-
-/**
- * Where the framework laid one node out (ADR 0009): its bounds in layout coordinates, where its text goes relative to
- * them, its first baseline in layout coordinates when it has one, and the scroll offset of a scroll container's content.
- */
-struct LayoutPlacement {
-    uint32_t node_id = 0;
-    LayoutRect bounds{};
-    float text_x = 0.0f;
-    float text_y = 0.0f;
-    float text_width = 0.0f;
-    float baseline = 0.0f;
-    bool has_baseline = false;
-    /** How far a scroll container's content moves left and up, ahead of its own transform. */
-    float scroll_x = 0.0f;
-    float scroll_y = 0.0f;
-    /** Whether layout hid it: it is neither drawn nor hit. */
-    bool hidden = false;
 };
 
 struct LayoutError {

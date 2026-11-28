@@ -60,7 +60,7 @@ add_library(nativekit_ui ${NK_LIBRARY_TYPE}
     src/compositor/compositor.cpp
     src/compositor/render_plan.cpp
     src/display_list/display_list.cpp
-    src/layout/layout_scene.cpp
+    src/layout/scene_builder.cpp
     src/layout/layout_render_compiler.cpp
     src/prepare/nanovg_path.cpp
     src/prepare/text_engine.cpp
@@ -271,7 +271,7 @@ if(NK_BUILD_TESTS)
     add_test(NAME nativekit_ui_frame_resources COMMAND nativekit_ui_frame_resources_test)
     add_executable(nativekit_ui_layout_render_compiler_test
         tests/layout_render_compiler.cpp
-        src/layout/layout_scene.cpp
+        src/layout/scene_builder.cpp
         src/layout/layout_render_compiler.cpp
         src/display_list/display_list.cpp
         src/prepare/nanovg_path.cpp
@@ -296,14 +296,6 @@ if(NK_BUILD_TESTS)
         NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
     target_link_libraries(nativekit_ui_layout_session_test PRIVATE NativeKit::ui)
     add_test(NAME nativekit_ui_layout_session COMMAND nativekit_ui_layout_session_test)
-    add_executable(nativekit_ui_hit_test_benchmark
-        bench/hit_test_benchmark.cpp)
-    target_compile_features(nativekit_ui_hit_test_benchmark PRIVATE cxx_std_20)
-    target_link_libraries(nativekit_ui_hit_test_benchmark PRIVATE NativeKit::ui)
-    add_test(NAME nativekit_ui_hit_test_benchmark
-        COMMAND nativekit_ui_hit_test_benchmark)
-    set_tests_properties(nativekit_ui_hit_test_benchmark PROPERTIES
-        LABELS "ui;benchmark" TIMEOUT 30)
     if(TARGET NativeKit::gpu)
         add_executable(nativekit_ui_path_cache_retention_test tests/path_cache_retention.cpp)
         target_link_libraries(nativekit_ui_path_cache_retention_test PRIVATE NativeKit::ui)

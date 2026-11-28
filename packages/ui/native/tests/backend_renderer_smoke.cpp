@@ -4,7 +4,7 @@
 #include "nativekit_time.h"
 #include "nativekit_ui.h"
 #include "nativekit_ui_layout.h"
-#include "fixture_geometry.h"
+#include "scene_record.h"
 #include "nativekit_window.h"
 #include "adapter_internal.h"
 #include "core/executor.hpp"
@@ -325,16 +325,11 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
         write(node + NKUI_LAYOUT_NODE_FLAGS_OFFSET, uint32_t{NKUI_LAYOUT_NODE_VISIBLE});
         write(node + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, 1.0f);
         write(node + NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, 1.0f);
-        write(node + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET, 1.0f);
-        write(node + NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET, 1.0f);
         write(node + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 18.0f);
         write(node + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, static_cast<uint32_t>(transaction.size()));
-        write(node + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
-        write(node + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 240.0f);
-        write(node + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
-        write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 160.0f);
+        fixture::place(transaction.data() + node, 0.0f, 0.0f, 240.0f, 160.0f);
         const nkui_layout_frame_input layout_frame{sizeof(layout_frame), 256.0f, 192.0f, 0.0f};
-        if (!check(fixture::submit(session, transaction.data(),
+        if (!check(nkui_layout_session_submit(session, transaction.data(),
                                               static_cast<uint32_t>(transaction.size()),
                                               &layout_frame) == NKUI_OK &&
                        nkui_layout_session_set_custom_paint(session, 1, list) == NKUI_OK,
@@ -524,17 +519,12 @@ bool check_plan_reuse(nk_window window, nk_surface surface) {
         write(node + NKUI_LAYOUT_NODE_FLAGS_OFFSET, uint32_t{NKUI_LAYOUT_NODE_VISIBLE});
         write(node + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, 1.0f);
         write(node + NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, 1.0f);
-        write(node + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET, 1.0f);
-        write(node + NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET, 1.0f);
         write(node + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 18.0f);
         write(node + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, static_cast<uint32_t>(transaction.size()));
-        write(node + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
-        write(node + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 240.0f);
-        write(node + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
-        write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 160.0f);
+        fixture::place(transaction.data() + node, 0.0f, 0.0f, 240.0f, 160.0f);
         const nkui_layout_frame_input layout_frame{sizeof(layout_frame), 256.0f, 192.0f, 0.0f};
         const auto submit_layout = [&]() {
-            return fixture::submit(session, transaction.data(),
+            return nkui_layout_session_submit(session, transaction.data(),
                                               static_cast<uint32_t>(transaction.size()),
                                               &layout_frame) == NKUI_OK;
         };

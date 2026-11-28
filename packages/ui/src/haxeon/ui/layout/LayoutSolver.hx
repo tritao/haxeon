@@ -33,6 +33,9 @@ class LayoutSolver {
 	/** Each node's item from the last resolution, and from this one; swapped after each, so removed nodes drop out. */
 	var previousItems:Map<Int, ResolvedLayoutItem> = new Map();
 	var nextItems:Map<Int, ResolvedLayoutItem> = new Map();
+	/** Each node's geometry as last encoded, and as this resolution has it; swapped like the items. */
+	var previousPlaced:Map<Int, PlacedGeometry> = new Map();
+	var nextPlaced:Map<Int, PlacedGeometry> = new Map();
 	final resolvedItems:Array<ResolvedLayoutItem> = [];
 	final indexOf:IntIndex = new IntIndex();
 	final measure:TextMeasure = new TextMeasure();
@@ -183,38 +186,46 @@ class LayoutSolver {
 				new Transform2D(box.wa, box.wb, box.wc, box.wd, box.wtx,
 				box.wty), baseline);
 			nextItems.set(box.node.id, item);
+			var placed = previousPlaced.get(box.node.id);
+			if (placed == null || !placed.matches(box)) {
+				if (placed == null) placed = new PlacedGeometry();
+				placed.take(box);
+				changedNodes.push(box.node.id);
+			}
+			nextPlaced.set(box.node.id, placed);
 			resolvedItems[index] = item;
 		}
 		var last = previousItems;
 		last.clear();
 		previousItems = nextItems;
 		nextItems = last;
+		var lastPlaced = previousPlaced;
+		lastPlaced.clear();
+		previousPlaced = nextPlaced;
+		nextPlaced = lastPlaced;
 		return resolvedItems;
 	}
 
-	/** Writes each node's geometry into `output` as `NKUI_LAYOUT_GEOMETRY_RECORD_BYTES` records, returning the length. */
-	public function encode(output:Bytes):Int {
-		var record = NativeKitUIConstants.NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
-		var length = count * record;
-		if (output.length < length) throw "Layout geometry exceeds its buffer";
-		var offset = 0;
-		for (index in 0...count) {
-			var box = boxes[index];
-			output.setInt32(offset, box.node.id);
-			output.setFloat(offset + 4, box.x);
-			output.setFloat(offset + 8, box.y);
-			output.setFloat(offset + 12, box.width);
-			output.setFloat(offset + 16, box.height);
-			output.setFloat(offset + 20, box.textX);
-			output.setFloat(offset + 24, box.textY);
-			output.setFloat(offset + 28, box.textWidth);
-			output.setFloat(offset + 32, box.ownBaseline ? box.y + box.baseline : Math.NaN);
-			output.setFloat(offset + 36, box.scrollX);
-			output.setFloat(offset + 40, box.scrollY);
-			output.setInt32(offset + 44, box.hidden ? 1 : 0);
-			offset += record;
-		}
-		return length;
+	/**
+	 * Writes the geometry of the node with ID `id` into its record at `record` of `output`, as the last solve placed it,
+	 * and returns whether it is hidden. A node the last solve did not see gets zero geometry.
+	 */
+	public function writePlacement(id:Int, output:Bytes, record:Int):Bool {
+		var index = indexOf.get(id);
+		var box = index < 0 ? null : boxes[index];
+		inline function float(offset:Int, value:Float):Void output.setFloat(record + offset, value);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_X_OFFSET, box == null ? 0.0 : box.x);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_Y_OFFSET, box == null ? 0.0 : box.y);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_OFFSET, box == null ? 0.0 : box.width);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_OFFSET, box == null ? 0.0 : box.height);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_X_OFFSET, box == null ? 0.0 : box.textX);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_Y_OFFSET, box == null ? 0.0 : box.textY);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WIDTH_OFFSET, box == null ? 0.0 : box.textWidth);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_BASELINE_OFFSET, box != null && box.ownBaseline ? box.y
+			+ box.baseline : Math.NaN);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_SCROLL_X_OFFSET, box == null ? 0.0 : box.scrollX);
+		float(NativeKitUIConstants.NKUI_LAYOUT_NODE_SCROLL_Y_OFFSET, box == null ? 0.0 : box.scrollY);
+		return box != null && box.hidden;
 	}
 
 	/**
@@ -343,7 +354,7 @@ class LayoutSolver {
 		}
 		if (size.shown != node.shownText) {
 			@:privateAccess node.shownText = size.shown;
-			changedText.push(node.id);
+			changedNodes.push(node.id);
 		}
 		box.textHeight = size.height;
 	}
@@ -378,13 +389,13 @@ class LayoutSolver {
 
 	static inline final Ellipsis:String = "…";
 
-	/** Text nodes whose shown text the solves since the last `takeChangedText` changed, which NativeKit must hear of. */
-	final changedText:Array<Int> = [];
+	/** Nodes whose geometry or shown text the solves since the last `takeChanged` changed, which NativeKit must hear of. */
+	final changedNodes:Array<Int> = [];
 
-	/** Moves the IDs of the text nodes whose shown text changed into `changes`. */
-	internal function takeChangedText(changes:Null<LayoutChanges>):Void {
-		if (changes != null) for (id in changedText) changes.inputs.set(id, 0);
-		changedText.resize(0);
+	/** Moves the IDs of the nodes whose geometry or shown text changed into `changes`. */
+	internal function takeChanged(changes:Null<LayoutChanges>):Void {
+		if (changes != null) for (id in changedNodes) changes.inputs.set(id, 0);
+		changedNodes.resize(0);
 	}
 
 	// Custom content
@@ -1298,6 +1309,46 @@ private class ContentMeasures {
 		}
 		this.constraints.push(constraints);
 		results.push(result);
+	}
+}
+
+/** A node's geometry as a node record carries it, to tell when it changes. */
+private class PlacedGeometry {
+	var x:Float = 0.0;
+	var y:Float = 0.0;
+	var width:Float = 0.0;
+	var height:Float = 0.0;
+	var textX:Float = 0.0;
+	var textY:Float = 0.0;
+	var textWidth:Float = 0.0;
+	var baseline:Float = 0.0;
+	var hasBaseline:Bool = false;
+	var scrollX:Float = 0.0;
+	var scrollY:Float = 0.0;
+	var hidden:Bool = false;
+
+	public function new() {}
+
+	public function matches(box:LayoutBox):Bool {
+		return x == box.x && y == box.y && width == box.width && height == box.height && textX == box.textX
+			&& textY == box.textY && textWidth == box.textWidth && hasBaseline == box.ownBaseline
+			&& (!hasBaseline || baseline == box.baseline) && scrollX == box.scrollX && scrollY == box.scrollY
+			&& hidden == box.hidden;
+	}
+
+	public function take(box:LayoutBox):Void {
+		x = box.x;
+		y = box.y;
+		width = box.width;
+		height = box.height;
+		textX = box.textX;
+		textY = box.textY;
+		textWidth = box.textWidth;
+		hasBaseline = box.ownBaseline;
+		baseline = box.baseline;
+		scrollX = box.scrollX;
+		scrollY = box.scrollY;
+		hidden = box.hidden;
 	}
 }
 

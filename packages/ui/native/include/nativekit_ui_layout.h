@@ -17,43 +17,14 @@ extern "C" {
 
 /** Layout bridge and wire-format versions and fixed sizes. */
 enum {
-    NKUI_LAYOUT_API_VERSION = 26,
-    NKUI_LAYOUT_TRANSACTION_VERSION = 18,
-    NKUI_LAYOUT_PATCH_VERSION = 19,
+    NKUI_LAYOUT_API_VERSION = 27,
+    NKUI_LAYOUT_TRANSACTION_VERSION = 20,
+    NKUI_LAYOUT_PATCH_VERSION = 21,
     NKUI_LAYOUT_PATCH_HEADER_BYTES = 32,
     NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16,
-    NKUI_LAYOUT_NODE_RECORD_BYTES = 336,
+    NKUI_LAYOUT_NODE_RECORD_BYTES = 196,
     NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16 * 1024 * 1024,
-    NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96,
-    NKUI_LAYOUT_GEOMETRY_RECORD_BYTES = 48
-};
-
-/**
- * Field offsets of one geometry record, as `nkui_layout_session_set_geometry` reads them: the node ID, then its laid-out
- * bounds in layout coordinates, then where its text goes relative to those bounds (a text node only), then its first
- * baseline in layout coordinates, NaN when it has none, then how far a scroll container's content moves left and up,
- * ahead of the node's own transform, then its flags.
- */
-enum {
-    NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET = 0,
-    NKUI_LAYOUT_GEOMETRY_X_OFFSET = 4,
-    NKUI_LAYOUT_GEOMETRY_Y_OFFSET = 8,
-    NKUI_LAYOUT_GEOMETRY_WIDTH_OFFSET = 12,
-    NKUI_LAYOUT_GEOMETRY_HEIGHT_OFFSET = 16,
-    NKUI_LAYOUT_GEOMETRY_TEXT_X_OFFSET = 20,
-    NKUI_LAYOUT_GEOMETRY_TEXT_Y_OFFSET = 24,
-    NKUI_LAYOUT_GEOMETRY_TEXT_WIDTH_OFFSET = 28,
-    NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET = 32,
-    NKUI_LAYOUT_GEOMETRY_SCROLL_X_OFFSET = 36,
-    NKUI_LAYOUT_GEOMETRY_SCROLL_Y_OFFSET = 40,
-    NKUI_LAYOUT_GEOMETRY_FLAGS_OFFSET = 44
-};
-
-/** Flags of a geometry record. */
-typedef uint32_t nkui_layout_geometry_flags;
-enum NK_FLAGS(nkui_layout_geometry_flags) {
-    /** Layout hid the node, as a placer hides a scrollbar with nothing to scroll: it is neither drawn nor hit. */
-    NKUI_LAYOUT_GEOMETRY_HIDDEN = 1u << 0
+    NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96
 };
 
 /** Bit flags stored in each node's clip-flags field. */
@@ -74,7 +45,9 @@ enum NK_FLAGS(nkui_layout_node_flags) {
     /** Excludes this node's descendants from geometric hit testing. */
     NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED = 1u << 4,
     /** Floating overlay above ordinary content, scoped to the nearest enclosing overlay. */
-    NKUI_LAYOUT_NODE_OVERLAY = 1u << 5
+    NKUI_LAYOUT_NODE_OVERLAY = 1u << 5,
+    /** Layout hid the node, as a placer hides a scrollbar with nothing to scroll: neither drawn nor hit. */
+    NKUI_LAYOUT_NODE_HIDDEN = 1u << 6
 };
 
 /** Persistent rendering policy for a retained custom-paint plane. */
@@ -101,221 +74,61 @@ enum NK_ENUM(nkui_layout_visual_kind) {
     NKUI_LAYOUT_VISUAL_CUSTOM = 4
 };
 
-/** Sizing modes encoded for each node axis. */
-typedef uint32_t nkui_layout_sizing;
-enum NK_ENUM(nkui_layout_sizing) {
-    NKUI_LAYOUT_SIZING_FIT = 0,
-    NKUI_LAYOUT_SIZING_GROW = 1,
-    NKUI_LAYOUT_SIZING_FIXED = 2,
-    NKUI_LAYOUT_SIZING_PERCENT = 3
-};
-
-/** Child flow directions encoded in node styles. */
-typedef uint32_t nkui_layout_direction;
-enum NK_ENUM(nkui_layout_direction) {
-    NKUI_LAYOUT_DIRECTION_LEFT_TO_RIGHT = 0,
-    NKUI_LAYOUT_DIRECTION_TOP_TO_BOTTOM = 1
-};
-
-/** Horizontal child alignment; the low byte of a node's packed child alignment. */
-typedef uint32_t nkui_layout_alignment_x;
-enum NK_ENUM(nkui_layout_alignment_x) {
-    NKUI_LAYOUT_ALIGNMENT_X_START = 0,
-    NKUI_LAYOUT_ALIGNMENT_X_END = 1,
-    NKUI_LAYOUT_ALIGNMENT_X_CENTER = 2
-};
-
-/** Vertical child alignment; the second byte of a node's packed child alignment. */
-typedef uint32_t nkui_layout_alignment_y;
-enum NK_ENUM(nkui_layout_alignment_y) {
-    NKUI_LAYOUT_ALIGNMENT_Y_START = 0,
-    NKUI_LAYOUT_ALIGNMENT_Y_END = 1,
-    NKUI_LAYOUT_ALIGNMENT_Y_CENTER = 2,
-    /** Aligns child baselines in horizontal rows; baseline-less children use their bottom edge. */
-    NKUI_LAYOUT_ALIGNMENT_Y_BASELINE = 3
-};
-
-/** Main-axis free-space distribution policies. */
-typedef uint32_t nkui_layout_distribution;
-enum NK_ENUM(nkui_layout_distribution) {
-    NKUI_LAYOUT_DISTRIBUTION_START = 0,
-    NKUI_LAYOUT_DISTRIBUTION_CENTER = 1,
-    NKUI_LAYOUT_DISTRIBUTION_END = 2,
-    NKUI_LAYOUT_DISTRIBUTION_SPACE_BETWEEN = 3,
-    NKUI_LAYOUT_DISTRIBUTION_SPACE_AROUND = 4,
-    NKUI_LAYOUT_DISTRIBUTION_SPACE_EVENLY = 5
-};
-
-/** Whether children stay on one row/column or flow onto additional lines. */
-typedef uint32_t nkui_layout_wrap_mode;
-enum NK_ENUM(nkui_layout_wrap_mode) { NKUI_LAYOUT_WRAP_NO_WRAP = 0, NKUI_LAYOUT_WRAP_WRAP = 1 };
-
-/** Optional per-child cross-axis alignment override. */
-typedef uint32_t nkui_layout_self_alignment;
-enum NK_ENUM(nkui_layout_self_alignment) {
-    NKUI_LAYOUT_SELF_ALIGNMENT_INHERIT = 0,
-    NKUI_LAYOUT_SELF_ALIGNMENT_START = 1,
-    NKUI_LAYOUT_SELF_ALIGNMENT_END = 2,
-    NKUI_LAYOUT_SELF_ALIGNMENT_CENTER = 3,
-    NKUI_LAYOUT_SELF_ALIGNMENT_BASELINE = 4
-};
-
-/** Byte offsets within each fixed-size node record. */
+/**
+ * Field offsets of one node record: a node as the framework laid it out and paints it (ADR 0009). Its bounds are in layout
+ * coordinates, before its transform; its text goes at the text offsets from its bounds, wrapped at the text width; its
+ * baseline is in layout coordinates, NaN when it has none; a scroll container's content moves left and up by its scroll
+ * offsets, ahead of its own transform.
+ */
 enum {
     NKUI_LAYOUT_NODE_ID_OFFSET = 0,
     NKUI_LAYOUT_NODE_PARENT_OFFSET = 4,
     NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET = 8,
-    NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET = 12,
-    NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET = 16,
-    NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET = 20,
-    NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET = 24,
-    NKUI_LAYOUT_NODE_DIRECTION_OFFSET = 28,
-    NKUI_LAYOUT_NODE_PADDING_LEFT_OFFSET = 32,
-    NKUI_LAYOUT_NODE_PADDING_RIGHT_OFFSET = 36,
-    NKUI_LAYOUT_NODE_PADDING_TOP_OFFSET = 40,
-    NKUI_LAYOUT_NODE_PADDING_BOTTOM_OFFSET = 44,
-    NKUI_LAYOUT_NODE_CHILD_GAP_OFFSET = 48,
-    NKUI_LAYOUT_NODE_BACKGROUND_OFFSET = 52,
-    NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET = 68,
-    NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET = 72,
-    NKUI_LAYOUT_NODE_RADIUS_BOTTOM_LEFT_OFFSET = 76,
-    NKUI_LAYOUT_NODE_RADIUS_BOTTOM_RIGHT_OFFSET = 80,
-    NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET = 84,
-    NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET = 88,
-    NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET = 92,
-    NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET = 96,
-    NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET = 112,
-    NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET = 116,
-    NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET = 120,
-    NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET = 124,
-    NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET = 128,
-    NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET = 132,
-    NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET = 136,
-    NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET = 140,
-    NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET = 144,
-    NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET = 148,
-    NKUI_LAYOUT_NODE_TRANSFORM_C_OFFSET = 152,
-    NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET = 156,
-    NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET = 160,
-    NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET = 164,
-    NKUI_LAYOUT_NODE_FLAGS_OFFSET = 168,
-    /** Packed child alignment: x in bits 0..7, y in bits 8..15. */
-    NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET = 172,
-    /** Parent-relative x offset for absolute-positioned nodes. */
-    NKUI_LAYOUT_NODE_POSITION_X_OFFSET = 176,
-    /** Parent-relative y offset for absolute-positioned nodes. */
-    NKUI_LAYOUT_NODE_POSITION_Y_OFFSET = 180,
-    /** Stacking order for absolute-positioned nodes, encoded as signed int32. */
-    NKUI_LAYOUT_NODE_Z_INDEX_OFFSET = 184,
-    /** Minimum width for FIT/GROW sizing; zero means no minimum. */
-    NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET = 188,
-    /** Maximum width for FIT/GROW sizing; zero means unbounded. */
-    NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET = 192,
-    /** Minimum height for FIT/GROW sizing; zero means no minimum. */
-    NKUI_LAYOUT_NODE_HEIGHT_MIN_OFFSET = 196,
-    /** Maximum height for FIT/GROW sizing; zero means unbounded. */
-    NKUI_LAYOUT_NODE_HEIGHT_MAX_OFFSET = 200,
-    /** Width divided by height; zero disables aspect-ratio sizing. */
-    NKUI_LAYOUT_NODE_ASPECT_RATIO_OFFSET = 204,
-    /** Relative share of extra width for GROW sizing; must be positive and finite. */
-    NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET = 208,
-    /** Relative share of extra height for GROW sizing; must be positive and finite. */
-    NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET = 212,
-    /** Main-axis free-space distribution policy. */
-    NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET = 216,
-    /** Vertical gap between wrapped rows. */
-    NKUI_LAYOUT_NODE_ROW_GAP_OFFSET = 220,
-    /** Horizontal gap between wrapped columns. */
-    NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET = 224,
-    /** Wrap policy: zero keeps one row/column, one enables wrapping. */
-    NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET = 228,
-    /** Per-child cross-axis alignment override; zero inherits the parent. */
-    NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET = 232,
-    /** Application-defined intrinsic-content version used by measurement caching. */
-    NKUI_LAYOUT_NODE_MEASURE_VERSION_OFFSET = 236,
-    /** Normalized horizontal transform origin, in the range 0..1. */
-    NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET = 240,
-    /** Normalized vertical transform origin, in the range 0..1. */
-    NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_Y_OFFSET = 244,
-    /** Haxe-owned paint/content revision used by native raster caches. */
-    NKUI_LAYOUT_NODE_CONTENT_REVISION_OFFSET = 248,
-    /** Haxe-owned resolved geometry revision for shared scene metadata. */
-    NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET = 252,
-    /** Haxe-owned compositing revision for shared scene metadata. */
-    NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 256,
-    /** Tab-stop interval in space advances; zero preserves default shaping. */
-    NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 260,
-    /**
-     * What a floating node is placed against after the flow (nkui_layout_anchor_kind); NONE places it at its position.
-     * An anchored node's position is an offset from its placement.
-     */
-    NKUI_LAYOUT_NODE_ANCHOR_KIND_OFFSET = 264,
-    /** The anchor node's ID, for NKUI_LAYOUT_ANCHOR_NODE; it must come before the anchored node in tree order. */
-    NKUI_LAYOUT_NODE_ANCHOR_NODE_OFFSET = 268,
-    /** The anchor rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_RECT. */
-    NKUI_LAYOUT_NODE_ANCHOR_X_OFFSET = 272,
-    NKUI_LAYOUT_NODE_ANCHOR_Y_OFFSET = 276,
-    NKUI_LAYOUT_NODE_ANCHOR_WIDTH_OFFSET = 280,
-    NKUI_LAYOUT_NODE_ANCHOR_HEIGHT_OFFSET = 284,
-    /** The anchor's side the node goes on (nkui_layout_anchor_side). */
-    NKUI_LAYOUT_NODE_ANCHOR_SIDE_OFFSET = 288,
-    /** Distance from the anchor along the side's axis. */
-    NKUI_LAYOUT_NODE_ANCHOR_GAP_OFFSET = 292,
-    /** Cross-axis alignment: this fraction of the anchor's extent meets ... */
-    NKUI_LAYOUT_NODE_ANCHOR_ALIGN_OFFSET = 296,
-    /** ... this fraction of the node's (0 and 0 align starts, 0.5 and 0.5 centres, 1 and 1 ends). */
-    NKUI_LAYOUT_NODE_ANCHOR_BOX_ALIGN_OFFSET = 300,
-    /** nkui_layout_anchor_flags. */
-    NKUI_LAYOUT_NODE_ANCHOR_FLAGS_OFFSET = 304,
-    /**
-     * The region the node is kept inside (nkui_layout_anchor_bounds): on both axes when it overlaps its anchor or may flip,
-     * else on the cross axis only, so it stays on its side.
-     */
-    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_OFFSET = 308,
-    /** The bounds node's ID, for NKUI_LAYOUT_ANCHOR_BOUNDS_NODE; it must come before the anchored node in tree order. */
-    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_NODE_OFFSET = 312,
-    /** The bounds rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_BOUNDS_RECT. */
-    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_X_OFFSET = 316,
-    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_Y_OFFSET = 320,
-    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_WIDTH_OFFSET = 324,
-    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_HEIGHT_OFFSET = 328,
-    /** How far inside the bounds the node is kept. */
-    NKUI_LAYOUT_NODE_ANCHOR_MARGIN_OFFSET = 332
-};
-
-/** What a floating node is placed against. */
-typedef uint32_t nkui_layout_anchor_kind;
-enum NK_ENUM(nkui_layout_anchor_kind) {
-    NKUI_LAYOUT_ANCHOR_NONE = 0,
-    NKUI_LAYOUT_ANCHOR_NODE = 1,
-    NKUI_LAYOUT_ANCHOR_RECT = 2
-};
-
-/** The anchor's side a placed node goes on; OVERLAP places it at the anchor's origin. */
-typedef uint32_t nkui_layout_anchor_side;
-enum NK_ENUM(nkui_layout_anchor_side) {
-    NKUI_LAYOUT_ANCHOR_OVERLAP = 0,
-    NKUI_LAYOUT_ANCHOR_BELOW = 1,
-    NKUI_LAYOUT_ANCHOR_ABOVE = 2,
-    NKUI_LAYOUT_ANCHOR_AFTER = 3,
-    NKUI_LAYOUT_ANCHOR_BEFORE = 4
-};
-
-/** Bit flags of a placed node. */
-typedef uint32_t nkui_layout_anchor_flags;
-enum NK_ENUM(nkui_layout_anchor_flags) {
-    /** Take the opposite side when the node does not fit on its own and fits better there. */
-    NKUI_LAYOUT_ANCHOR_FLIP = 1u << 0,
-    /** Align the opposite edges on the cross axis when the node would overflow the bounds. */
-    NKUI_LAYOUT_ANCHOR_FLIP_CROSS = 1u << 1
-};
-
-/** The region a placed node is kept inside. */
-typedef uint32_t nkui_layout_anchor_bounds;
-enum NK_ENUM(nkui_layout_anchor_bounds) {
-    NKUI_LAYOUT_ANCHOR_BOUNDS_VIEWPORT = 0,
-    NKUI_LAYOUT_ANCHOR_BOUNDS_NODE = 1,
-    NKUI_LAYOUT_ANCHOR_BOUNDS_RECT = 2
+    NKUI_LAYOUT_NODE_FLAGS_OFFSET = 12,
+    NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET = 16,
+    NKUI_LAYOUT_NODE_X_OFFSET = 20,
+    NKUI_LAYOUT_NODE_Y_OFFSET = 24,
+    NKUI_LAYOUT_NODE_WIDTH_OFFSET = 28,
+    NKUI_LAYOUT_NODE_HEIGHT_OFFSET = 32,
+    NKUI_LAYOUT_NODE_TEXT_X_OFFSET = 36,
+    NKUI_LAYOUT_NODE_TEXT_Y_OFFSET = 40,
+    NKUI_LAYOUT_NODE_TEXT_WIDTH_OFFSET = 44,
+    NKUI_LAYOUT_NODE_BASELINE_OFFSET = 48,
+    NKUI_LAYOUT_NODE_SCROLL_X_OFFSET = 52,
+    NKUI_LAYOUT_NODE_SCROLL_Y_OFFSET = 56,
+    NKUI_LAYOUT_NODE_BACKGROUND_OFFSET = 60,
+    NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET = 76,
+    NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET = 80,
+    NKUI_LAYOUT_NODE_RADIUS_BOTTOM_LEFT_OFFSET = 84,
+    NKUI_LAYOUT_NODE_RADIUS_BOTTOM_RIGHT_OFFSET = 88,
+    NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET = 92,
+    NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET = 96,
+    NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET = 100,
+    NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET = 116,
+    NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET = 120,
+    NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET = 124,
+    NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET = 128,
+    NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET = 132,
+    NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET = 136,
+    NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET = 140,
+    NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 144,
+    NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET = 148,
+    NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET = 152,
+    NKUI_LAYOUT_NODE_TRANSFORM_C_OFFSET = 156,
+    NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET = 160,
+    NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET = 164,
+    NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET = 168,
+    /** The transform's origin as fractions of the node's bounds; the default is its center. */
+    NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET = 172,
+    NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_Y_OFFSET = 176,
+    /** Paint order of a floating node among its siblings' layers. */
+    NKUI_LAYOUT_NODE_Z_INDEX_OFFSET = 180,
+    /** Paint/text revision consumed by retained render caches. */
+    NKUI_LAYOUT_NODE_CONTENT_REVISION_OFFSET = 184,
+    /** Bounds/transform/clip revision. */
+    NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET = 188,
+    /** Opacity/effects revision. */
+    NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 192
 };
 
 /** Opaque retained layout session used by a Haxe-owned component tree. */
@@ -337,7 +150,7 @@ typedef struct nkui_layout_item {
     float clip_y;
     float clip_width;
     float clip_height;
-    /** Union of direct child bounds, relative to this node's content origin. */
+    /** Union of direct child bounds, relative to this node's origin. */
     float content_x;
     float content_y;
     float content_width;
@@ -398,14 +211,6 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_destroy(nkui_layout_session ses
 /** Copies the font collection configuration into the layout session. */
 NKUI_API nkui_result NK_CALL nkui_layout_session_set_font_collection(nkui_layout_session session,
                                                                      nkui_resource fonts);
-
-/**
- * Sets the geometry the framework laid the next submit's tree out with (ADR 0009): one
- * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES record for every node of the tree after that submit, in any order. It stays until
- * it is set again, so every submit that changes geometry sets it first.
- */
-NKUI_API nkui_result NK_CALL nkui_layout_session_set_geometry(
-    nkui_layout_session session, const uint8_t *geometry NKUI_IN_ARRAY(geometry_bytes), uint32_t geometry_bytes);
 
 /**
  * Measures `text` with the session's fonts: unwrapped when `width` is zero, else laid out at `width`. Laying it out at
@@ -492,7 +297,7 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_submit(
  * Bounds remain in pre-transform layout coordinates; `transform` maps them to
  * viewport coordinates. `clip_*` is the effective inherited clip, and
  * `content_*` describes the union of direct children relative to the node's
- * padded content origin. Pass NULL to query the required byte count, then
+ * origin. Pass NULL to query the required byte count, then
  * pass a buffer of that size.
  */
 NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_items(

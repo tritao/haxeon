@@ -13,7 +13,7 @@
 #include "display_list/display_list.h"
 #include "compositor/compositor.h"
 #include "prepare/image_pixels.h"
-#include "layout/layout_engine.h"
+#include "layout/scene_builder.h"
 #include "layout/layout_resolved_item.h"
 #include "layout/layout_cost.h"
 #include "layout/layout_render_compiler.h"
@@ -266,7 +266,7 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
     }
 
     std::mutex mutex;
-    std::unique_ptr<nkui::LayoutEngine> engine;
+    std::unique_ptr<nkui::SceneBuilder> engine;
     nkui::LayoutRenderCompiler compiler;
     nkui::LayoutRenderFrame frame;
     nkui::LayoutSnapshot snapshot;
@@ -335,8 +335,6 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
     std::vector<uint32_t> hit_test_traversal_path;
     std::vector<uint32_t> hit_test_candidate_path;
     nkui_layout_hit_test_stats hit_test_stats{};
-    /* The framework's geometry for the tree, set before each submit (ADR 0009). */
-    std::vector<nkui::LayoutPlacement> placements;
     bool fonts_configured = false;
     bool submitted = false;
     /* Counts the layout results this session has published; a render plan built from one snapshot stays valid until it
@@ -879,208 +877,91 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
             nkui::LayoutNode node;
             uint32_t id = 0;
             uint32_t visual_kind = 0;
-            uint32_t width_sizing = 0;
-            uint32_t height_sizing = 0;
-            uint32_t direction = 0;
             uint32_t font_family = 0;
             uint32_t text_wrap = 0;
             uint32_t text_alignment = 0;
             uint32_t text_direction = 0;
             uint32_t clip = 0;
-            uint32_t text_flags = 0;
             uint32_t text_offset = 0;
             uint32_t text_length = 0;
             uint32_t node_flags = 0;
-            uint32_t child_alignment = 0;
-            uint32_t child_distribution = 0;
             int32_t z_index = 0;
             std::array<float, 6> transform{};
-            float position_x = 0.0f;
-            float position_y = 0.0f;
-            float width_min = 0.0f;
-            float width_max = 0.0f;
-            float height_min = 0.0f;
-            float height_max = 0.0f;
-            float aspect_ratio = 0.0f;
-            float width_grow_weight = 1.0f;
-            float height_grow_weight = 1.0f;
             float transform_origin_x = 0.5f;
             float transform_origin_y = 0.5f;
-            uint32_t wrap_mode = 0;
-            uint32_t align_self = 0;
-            uint32_t content_revision = 0;
-            uint32_t geometry_revision = 0;
-            uint32_t composite_revision = 0;
+            float baseline = 0.0f;
+            auto &placement = node.placement;
             if (!read_node_u32(record, NKUI_LAYOUT_NODE_ID_OFFSET, id) ||
                 !read_node_i32(record, NKUI_LAYOUT_NODE_PARENT_OFFSET, node.parent) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, visual_kind) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, width_sizing) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET,
-                                 node.style.width.value) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, height_sizing) ||
-                height_sizing > NKUI_LAYOUT_SIZING_PERCENT ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET,
-                                 node.style.height.value) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_DIRECTION_OFFSET, direction) ||
-                direction > NKUI_LAYOUT_DIRECTION_TOP_TO_BOTTOM ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_PADDING_LEFT_OFFSET,
-                                 node.style.padding_left) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_PADDING_RIGHT_OFFSET,
-                                 node.style.padding_right) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_PADDING_TOP_OFFSET,
-                                 node.style.padding_top) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_PADDING_BOTTOM_OFFSET,
-                                 node.style.padding_bottom) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_CHILD_GAP_OFFSET, node.style.child_gap) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ROW_GAP_OFFSET, node.style.row_gap) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET,
-                                 node.style.column_gap) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET, wrap_mode) ||
-                !read_node_color(record, NKUI_LAYOUT_NODE_BACKGROUND_OFFSET,
-                                 node.style.background) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET,
-                                 node.style.radius_top_left) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET,
-                                 node.style.radius_top_right) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_FLAGS_OFFSET, node_flags) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET, clip) ||
+                clip > (NKUI_LAYOUT_CLIP_HORIZONTAL | NKUI_LAYOUT_CLIP_VERTICAL) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_X_OFFSET, placement.bounds.x) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_Y_OFFSET, placement.bounds.y) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_WIDTH_OFFSET, placement.bounds.width) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_HEIGHT_OFFSET, placement.bounds.height) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_TEXT_X_OFFSET, placement.text_x) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_TEXT_Y_OFFSET, placement.text_y) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_TEXT_WIDTH_OFFSET, placement.text_width) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_BASELINE_OFFSET, baseline) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_SCROLL_X_OFFSET, placement.scroll_x) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_SCROLL_Y_OFFSET, placement.scroll_y) ||
+                !read_node_color(record, NKUI_LAYOUT_NODE_BACKGROUND_OFFSET, node.style.background) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET, node.style.radius_top_left) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET, node.style.radius_top_right) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_BOTTOM_LEFT_OFFSET,
                                  node.style.radius_bottom_left) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_BOTTOM_RIGHT_OFFSET,
                                  node.style.radius_bottom_right) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET, clip) ||
-                clip > (NKUI_LAYOUT_CLIP_HORIZONTAL | NKUI_LAYOUT_CLIP_VERTICAL) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, text_offset) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET, text_length) ||
                 !read_node_color(record, NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET, node.text_color) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET, font_family) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET,
-                                 node.text_style.font_size) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET,
-                                 node.text_style.letter_spacing) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET,
-                                 node.paragraph_style.line_height) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, node.text_style.font_size) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET, node.text_style.letter_spacing) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET, node.paragraph_style.line_height) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET, text_wrap) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET, text_alignment) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET, text_direction) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET, node.paragraph_style.tab_width) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET, text_flags) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, transform[0]) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET, transform[1]) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_C_OFFSET, transform[2]) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, transform[3]) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET, transform[4]) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET, transform[5]) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_FLAGS_OFFSET, node_flags) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET, child_alignment) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET,
-                               child_distribution) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET, align_self) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_POSITION_X_OFFSET, position_x) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_POSITION_Y_OFFSET, position_y) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET, transform_origin_x) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_Y_OFFSET, transform_origin_y) ||
                 !read_node_i32(record, NKUI_LAYOUT_NODE_Z_INDEX_OFFSET, z_index) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_MEASURE_VERSION_OFFSET,
-                               node.measure_version) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET, width_min) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET, width_max) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_HEIGHT_MIN_OFFSET, height_min) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_HEIGHT_MAX_OFFSET, height_max) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ASPECT_RATIO_OFFSET, aspect_ratio) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET,
-                                 width_grow_weight) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET,
-                                 height_grow_weight) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET,
-                                 transform_origin_x) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_Y_OFFSET,
-                                 transform_origin_y) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_CONTENT_REVISION_OFFSET,
-                               content_revision) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET,
-                               geometry_revision) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET,
-                               composite_revision))
+                !read_node_u32(record, NKUI_LAYOUT_NODE_CONTENT_REVISION_OFFSET, node.content_revision) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET, node.geometry_revision) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET, node.composite_revision))
                 return false;
-            uint32_t anchor_kind = 0, anchor_side = 0, anchor_flags = 0, anchor_bounds = 0;
-            nkui::LayoutAnchor anchor{};
-            if (!read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_KIND_OFFSET, anchor_kind) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_NODE_OFFSET, anchor.node) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_X_OFFSET, anchor.rect.x) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_Y_OFFSET, anchor.rect.y) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_WIDTH_OFFSET, anchor.rect.width) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_HEIGHT_OFFSET, anchor.rect.height) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_SIDE_OFFSET, anchor_side) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_GAP_OFFSET, anchor.gap) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_ALIGN_OFFSET, anchor.align) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOX_ALIGN_OFFSET, anchor.box_align) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_FLAGS_OFFSET, anchor_flags) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_OFFSET, anchor_bounds) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_NODE_OFFSET, anchor.bounds_node) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_X_OFFSET, anchor.bounds_rect.x) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_Y_OFFSET, anchor.bounds_rect.y) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_WIDTH_OFFSET,
-                                 anchor.bounds_rect.width) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_HEIGHT_OFFSET,
-                                 anchor.bounds_rect.height) ||
-                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_MARGIN_OFFSET, anchor.margin))
-                return false;
+            const bool floating = (node_flags & NKUI_LAYOUT_NODE_FLOATING) != 0;
+            const bool clip_to_parent = (node_flags & NKUI_LAYOUT_NODE_CLIP_TO_PARENT) != 0;
+            const bool overlay = (node_flags & NKUI_LAYOUT_NODE_OVERLAY) != 0;
             const auto finite_rect = [](const nkui::LayoutRect &rect) {
                 return std::isfinite(rect.x) && std::isfinite(rect.y) && std::isfinite(rect.width) &&
                        std::isfinite(rect.height) && rect.width >= 0.0f && rect.height >= 0.0f;
             };
-            // An anchor places a floating node; its references are other nodes' IDs, its fractions lie in 0..1.
-            if (anchor_kind > NKUI_LAYOUT_ANCHOR_RECT || anchor_side > NKUI_LAYOUT_ANCHOR_BEFORE ||
-                anchor_bounds > NKUI_LAYOUT_ANCHOR_BOUNDS_RECT ||
-                (anchor_flags & ~(NKUI_LAYOUT_ANCHOR_FLIP | NKUI_LAYOUT_ANCHOR_FLIP_CROSS)) != 0 ||
-                !finite_rect(anchor.rect) || !finite_rect(anchor.bounds_rect) || !std::isfinite(anchor.gap) ||
-                !std::isfinite(anchor.margin) || anchor.margin < 0.0f || !std::isfinite(anchor.align) ||
-                anchor.align < 0.0f || anchor.align > 1.0f || !std::isfinite(anchor.box_align) ||
-                anchor.box_align < 0.0f || anchor.box_align > 1.0f ||
-                (anchor_kind != NKUI_LAYOUT_ANCHOR_NONE && (node_flags & NKUI_LAYOUT_NODE_FLOATING) == 0) ||
-                (anchor_kind == NKUI_LAYOUT_ANCHOR_NODE && (anchor.node == 0 || anchor.node == id)) ||
-                (anchor_bounds == NKUI_LAYOUT_ANCHOR_BOUNDS_NODE &&
-                 (anchor.bounds_node == 0 || anchor.bounds_node == id)))
-                return false;
-            anchor.kind = static_cast<nkui::LayoutAnchorKind>(anchor_kind);
-            anchor.side = static_cast<nkui::LayoutAnchorSide>(anchor_side);
-            anchor.bounds = static_cast<nkui::LayoutAnchorBounds>(anchor_bounds);
-            anchor.flip = (anchor_flags & NKUI_LAYOUT_ANCHOR_FLIP) != 0;
-            anchor.flip_cross = (anchor_flags & NKUI_LAYOUT_ANCHOR_FLIP_CROSS) != 0;
-            const uint32_t child_align_x = child_alignment & 0xffu;
-            const uint32_t child_align_y = (child_alignment >> 8u) & 0xffu;
-            const bool floating = (node_flags & NKUI_LAYOUT_NODE_FLOATING) != 0;
-            const bool clip_to_parent = (node_flags & NKUI_LAYOUT_NODE_CLIP_TO_PARENT) != 0;
-            const bool overlay = (node_flags & NKUI_LAYOUT_NODE_OVERLAY) != 0;
             if (visual_kind < NKUI_LAYOUT_VISUAL_BOX || visual_kind > NKUI_LAYOUT_VISUAL_CUSTOM ||
-                (child_alignment & 0xffff0000u) != 0 ||
-                child_align_x > NKUI_LAYOUT_ALIGNMENT_X_CENTER ||
-                child_align_y > NKUI_LAYOUT_ALIGNMENT_Y_BASELINE ||
-                child_distribution > NKUI_LAYOUT_DISTRIBUTION_SPACE_EVENLY ||
-                wrap_mode > NKUI_LAYOUT_WRAP_WRAP ||
-                align_self > NKUI_LAYOUT_SELF_ALIGNMENT_BASELINE ||
                 (node_flags &
-                 ~(NKUI_LAYOUT_NODE_VISIBLE | NKUI_LAYOUT_NODE_FLOATING |
-                   NKUI_LAYOUT_NODE_CLIP_TO_PARENT | NKUI_LAYOUT_NODE_HIT_SELF_DISABLED |
-                   NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED | NKUI_LAYOUT_NODE_OVERLAY)) != 0 ||
-                (overlay && !floating) ||
-                (clip_to_parent && !floating) || z_index < std::numeric_limits<int16_t>::min() ||
-                z_index > std::numeric_limits<int16_t>::max() || !std::isfinite(position_x) ||
-                !std::isfinite(position_y) || width_sizing > NKUI_LAYOUT_SIZING_PERCENT)
+                 ~(NKUI_LAYOUT_NODE_VISIBLE | NKUI_LAYOUT_NODE_FLOATING | NKUI_LAYOUT_NODE_CLIP_TO_PARENT |
+                   NKUI_LAYOUT_NODE_HIT_SELF_DISABLED | NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED |
+                   NKUI_LAYOUT_NODE_OVERLAY | NKUI_LAYOUT_NODE_HIDDEN)) != 0 ||
+                (overlay && !floating) || (clip_to_parent && !floating) ||
+                z_index < std::numeric_limits<int16_t>::min() || z_index > std::numeric_limits<int16_t>::max() ||
+                !finite_rect(placement.bounds) || !std::isfinite(placement.text_x) ||
+                !std::isfinite(placement.text_y) || !std::isfinite(placement.text_width) ||
+                placement.text_width < 0.0f || !std::isfinite(placement.scroll_x) ||
+                !std::isfinite(placement.scroll_y) || std::isinf(baseline))
                 return false;
-            const auto valid_spacing = [](float value) {
-                return std::isfinite(value) && value >= 0.0f;
-            };
-            if (!valid_spacing(node.style.padding_left) ||
-                !valid_spacing(node.style.padding_right) ||
-                !valid_spacing(node.style.padding_top) ||
-                !valid_spacing(node.style.padding_bottom) || !valid_spacing(node.style.child_gap) ||
-                !valid_spacing(node.style.row_gap) || !valid_spacing(node.style.column_gap))
-                return false;
-            if (!std::isfinite(transform_origin_x) || transform_origin_x < 0.0f ||
-                transform_origin_x > 1.0f || !std::isfinite(transform_origin_y) ||
-                transform_origin_y < 0.0f || transform_origin_y > 1.0f)
+            if (!std::isfinite(transform_origin_x) || transform_origin_x < 0.0f || transform_origin_x > 1.0f ||
+                !std::isfinite(transform_origin_y) || transform_origin_y < 0.0f || transform_origin_y > 1.0f)
                 return false;
             const float determinant = transform[0] * transform[3] - transform[1] * transform[2];
-            if (std::any_of(transform.begin(), transform.end(),
-                            [](float value) { return !std::isfinite(value); }) ||
+            if (std::any_of(transform.begin(), transform.end(), [](float value) { return !std::isfinite(value); }) ||
                 !std::isfinite(determinant) || std::abs(determinant) < 0.000001f)
                 return false;
             node.id = id;
@@ -1088,83 +969,40 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
             node.style.visible = (node_flags & NKUI_LAYOUT_NODE_VISIBLE) != 0;
             node.hit_self = (node_flags & NKUI_LAYOUT_NODE_HIT_SELF_DISABLED) == 0;
             node.hit_children = (node_flags & NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED) == 0;
-            node.style.transform = {transform[0], transform[1], transform[2],
-                                    transform[3], transform[4], transform[5]};
+            placement.hidden = (node_flags & NKUI_LAYOUT_NODE_HIDDEN) != 0;
+            placement.has_baseline = std::isfinite(baseline);
+            placement.baseline = placement.has_baseline ? baseline : 0.0f;
+            node.style.transform = {transform[0], transform[1], transform[2], transform[3], transform[4], transform[5]};
             node.style.transform_origin_x = transform_origin_x;
             node.style.transform_origin_y = transform_origin_y;
-            node.content_revision = content_revision;
-            node.geometry_revision = geometry_revision;
-            node.composite_revision = composite_revision;
-            node.style.width.sizing = static_cast<nkui::LayoutSizing>(width_sizing);
-            node.style.height.sizing = static_cast<nkui::LayoutSizing>(height_sizing);
-            node.style.width.min = width_min;
-            node.style.width.max = width_max;
-            node.style.height.min = height_min;
-            node.style.height.max = height_max;
-            node.style.width.grow_weight = width_grow_weight;
-            node.style.height.grow_weight = height_grow_weight;
-            node.style.aspect_ratio = aspect_ratio;
-            node.style.direction = static_cast<nkui::LayoutDirection>(direction);
-            node.style.child_align_x = static_cast<nkui::LayoutAlignmentX>(child_align_x);
-            node.style.child_align_y = static_cast<nkui::LayoutAlignmentY>(child_align_y);
-            node.style.child_distribution =
-                static_cast<nkui::LayoutDistribution>(child_distribution);
-            node.style.wrap_mode = static_cast<nkui::LayoutWrapMode>(wrap_mode);
-            node.style.align_self = static_cast<nkui::LayoutSelfAlignment>(align_self);
-            node.style.positioning =
-                floating ? nkui::LayoutPositioning::Absolute : nkui::LayoutPositioning::Flow;
-            node.style.position_x = position_x;
-            node.style.position_y = position_y;
+            node.style.positioning = floating ? nkui::LayoutPositioning::Absolute : nkui::LayoutPositioning::Flow;
             node.style.z_index = z_index;
             node.style.clip_to_parent = clip_to_parent;
             node.style.overlay = overlay;
-            node.style.anchor = anchor;
             node.text_style.family = static_cast<nkui::FontFamily>(font_family);
             node.paragraph_style.wrap = static_cast<nkui::TextWrapMode>(text_wrap);
             node.paragraph_style.alignment = static_cast<nkui::TextAlignment>(text_alignment);
             node.paragraph_style.direction = static_cast<nkui::TextDirection>(text_direction);
             node.style.clip_horizontal = (clip & NKUI_LAYOUT_CLIP_HORIZONTAL) != 0;
             node.style.clip_vertical = (clip & NKUI_LAYOUT_CLIP_VERTICAL) != 0;
-            const auto valid_axis = [](const nkui::LayoutAxis &axis) {
-                if (!std::isfinite(axis.value) || axis.value < 0.0f || !std::isfinite(axis.min) ||
-                    axis.min < 0.0f || !std::isfinite(axis.max) || axis.max < 0.0f ||
-                    !std::isfinite(axis.grow_weight) || axis.grow_weight <= 0.0f)
-                    return false;
-                if (axis.sizing == nkui::LayoutSizing::Percent)
-                    return axis.value <= 1.0f && axis.min == 0.0f && axis.max == 0.0f &&
-                           axis.grow_weight == 1.0f;
-                if (axis.sizing == nkui::LayoutSizing::Fixed)
-                    return axis.min == 0.0f && axis.max == 0.0f && axis.grow_weight == 1.0f;
-                if (axis.sizing != nkui::LayoutSizing::Grow && axis.grow_weight != 1.0f)
-                    return false;
-                return axis.max == 0.0f || axis.max >= axis.min;
-            };
             const auto valid_color = [](const nkui::LayoutColor &color) {
-                const auto valid = [](float value) {
-                    return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
-                };
-                return valid(color.red) && valid(color.green) && valid(color.blue) &&
-                       valid(color.alpha);
+                const auto valid = [](float value) { return std::isfinite(value) && value >= 0.0f && value <= 1.0f; };
+                return valid(color.red) && valid(color.green) && valid(color.blue) && valid(color.alpha);
             };
-            if (!valid_axis(node.style.width) || !valid_axis(node.style.height) ||
-                !valid_color(node.style.background) || !valid_color(node.text_color) ||
-                !std::isfinite(node.style.radius_top_left) ||
-                !std::isfinite(node.style.radius_top_right) ||
-                !std::isfinite(node.style.radius_bottom_left) ||
-                !std::isfinite(node.style.radius_bottom_right) ||
+            if (!valid_color(node.style.background) || !valid_color(node.text_color) ||
+                !std::isfinite(node.style.radius_top_left) || !std::isfinite(node.style.radius_top_right) ||
+                !std::isfinite(node.style.radius_bottom_left) || !std::isfinite(node.style.radius_bottom_right) ||
                 node.style.radius_top_left < 0.0f || node.style.radius_top_right < 0.0f ||
                 node.style.radius_bottom_left < 0.0f || node.style.radius_bottom_right < 0.0f)
                 return false;
-            if (!std::isfinite(node.style.aspect_ratio) || node.style.aspect_ratio < 0.0f)
-                return false;
-            if ((font_family != NKUI_FONT_FAMILY_DEFAULT && font_family != NKUI_FONT_FAMILY_EMOJI && font_family != NKUI_FONT_FAMILY_MONOSPACE) ||
+            if ((font_family != NKUI_FONT_FAMILY_DEFAULT && font_family != NKUI_FONT_FAMILY_EMOJI &&
+                 font_family != NKUI_FONT_FAMILY_MONOSPACE) ||
                 !std::isfinite(node.text_style.font_size) || node.text_style.font_size <= 0.0f ||
-                !std::isfinite(node.text_style.letter_spacing) ||
-                !std::isfinite(node.paragraph_style.line_height) ||
+                !std::isfinite(node.text_style.letter_spacing) || !std::isfinite(node.paragraph_style.line_height) ||
                 node.paragraph_style.line_height < 0.0f ||
                 text_wrap > static_cast<uint32_t>(nkui::TextWrapMode::WordCharacter) ||
                 text_alignment > static_cast<uint32_t>(nkui::TextAlignment::End) ||
-                text_direction > static_cast<uint32_t>(nkui::TextDirection::Rtl) || text_flags != 0)
+                text_direction > static_cast<uint32_t>(nkui::TextDirection::Rtl))
                 return false;
             if (text_length > size - string_offset || text_offset < string_offset ||
                 text_offset - string_offset > size - string_offset - text_length)
@@ -2065,7 +1903,7 @@ extern "C" nkui_result nkui_layout_session_create(nkui_layout_session *out_sessi
             if (slot.session)
                 continue;
             slot.session = std::make_shared<LayoutSessionState>();
-            slot.session->engine = std::make_unique<nkui::LayoutEngine>();
+            slot.session->engine = std::make_unique<nkui::SceneBuilder>();
             if (!slot.session->engine->valid()) {
                 slot.session.reset();
                 return NKUI_ERROR_RENDERING;
@@ -2077,7 +1915,7 @@ extern "C" nkui_result nkui_layout_session_create(nkui_layout_session *out_sessi
             return NKUI_ERROR_OUT_OF_MEMORY;
         LayoutSessionSlot slot;
         slot.session = std::make_shared<LayoutSessionState>();
-        slot.session->engine = std::make_unique<nkui::LayoutEngine>();
+        slot.session->engine = std::make_unique<nkui::SceneBuilder>();
         if (!slot.session->engine->valid())
             return NKUI_ERROR_RENDERING;
         layout_sessions.push_back(std::move(slot));
@@ -2112,54 +1950,13 @@ extern "C" nkui_result nkui_layout_session_set_font_collection(nkui_layout_sessi
         if (!font_slot->font_collection || !font_slot->font_collection->valid())
             return NKUI_ERROR_INVALID_HANDLE;
         const auto shared_fonts = font_slot->font_collection;
-        state->engine = std::make_unique<nkui::LayoutEngine>(shared_fonts);
+        state->engine = std::make_unique<nkui::SceneBuilder>(shared_fonts);
         if (!state->engine->valid())
             return NKUI_ERROR_OUT_OF_MEMORY;
         state->compiler.set_font_collection(shared_fonts);
         ++state->render_epoch;
         state->reusable_plan = {};
         state->fonts_configured = true;
-    }
-    return NKUI_OK;
-}
-
-extern "C" nkui_result nkui_layout_session_set_geometry(nkui_layout_session session, const uint8_t *geometry,
-                                                       uint32_t geometry_bytes) {
-    if ((!geometry && geometry_bytes) || geometry_bytes % NKUI_LAYOUT_GEOMETRY_RECORD_BYTES)
-        return NKUI_ERROR_INVALID_ARGUMENT;
-    std::lock_guard<std::mutex> lock(layout_sessions_mutex);
-    auto *state = resolve(session);
-    if (!state)
-        return NKUI_ERROR_INVALID_HANDLE;
-    std::lock_guard<std::mutex> session_lock(state->mutex);
-    const std::size_t count = geometry_bytes / NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
-    auto &placements = state->placements;
-    placements.resize(count);
-    for (std::size_t index = 0; index < count; ++index) {
-        const std::size_t record = index * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
-        auto &placement = placements[index];
-        float baseline = 0.0f;
-        uint32_t flags = 0;
-        if (!read_u32(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET, placement.node_id) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_X_OFFSET, placement.bounds.x) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_Y_OFFSET, placement.bounds.y) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_WIDTH_OFFSET, placement.bounds.width) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_HEIGHT_OFFSET, placement.bounds.height) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_TEXT_X_OFFSET, placement.text_x) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_TEXT_Y_OFFSET, placement.text_y) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_TEXT_WIDTH_OFFSET, placement.text_width) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET, baseline) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_SCROLL_X_OFFSET, placement.scroll_x) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_SCROLL_Y_OFFSET, placement.scroll_y) ||
-            !read_u32(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_FLAGS_OFFSET, flags) ||
-            (flags & ~uint32_t{NKUI_LAYOUT_GEOMETRY_HIDDEN}) != 0 ||
-            !std::isfinite(placement.scroll_x) || !std::isfinite(placement.scroll_y)) {
-            placements.clear();
-            return NKUI_ERROR_INVALID_ARGUMENT;
-        }
-        placement.hidden = (flags & NKUI_LAYOUT_GEOMETRY_HIDDEN) != 0;
-        placement.has_baseline = std::isfinite(baseline);
-        placement.baseline = placement.has_baseline ? baseline : 0.0f;
     }
     return NKUI_OK;
 }
@@ -2774,7 +2571,7 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     }
     nkui::LayoutSnapshot snapshot;
     nkui::LayoutError error{};
-    if (!state->engine->layout(nodes, state->placements, frame->width, frame->height, snapshot,
+    if (!state->engine->build(nodes, frame->width, frame->height, snapshot,
                                &error, &mutation.changes)) {
         std::fprintf(stderr, "UIKit layout rejected node %zu: %s\n", error.node_index,
                      error.message ? error.message : "unknown layout error");
@@ -2879,10 +2676,10 @@ extern "C" nkui_result nkui_layout_session_verify_tree(nkui_layout_session sessi
         const auto parent = reference[index].parent;
         const auto &retained = *state->ordered_nodes[index];
         if (reference[index] == retained && parent == state->ordered_parents[index]) continue;
-        std::fprintf(stderr, "UIKit incremental tree differs from full encode: node=%zu id=%u/%u parent=%d/%d style=%d text=%d measure=%u/%u revisions=%u,%u,%u/%u,%u,%u\n",
+        std::fprintf(stderr, "UIKit incremental tree differs from full encode: node=%zu id=%u/%u parent=%d/%d style=%d text=%d placement=%d revisions=%u,%u,%u/%u,%u,%u\n",
             index, reference[index].id, retained.id, parent, state->ordered_parents[index],
             reference[index].style == retained.style, reference[index].text == retained.text,
-            reference[index].measure_version, retained.measure_version,
+            reference[index].placement == retained.placement,
             reference[index].content_revision, reference[index].geometry_revision, reference[index].composite_revision,
             retained.content_revision, retained.geometry_revision, retained.composite_revision);
         return NKUI_ERROR_INVALID_TRANSACTION;
