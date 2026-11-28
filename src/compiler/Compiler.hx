@@ -373,7 +373,7 @@ class Compiler {
 		var assembler = retracted.assembler.copy();
 		// The refused revisions were published; their numbers stay used.
 		assembler.continueRevisions(latest);
-		state.backend = new HashLinkBackendSession(assembler, retracted.loweredCache);
+		state.backend = retracted.over(assembler);
 		return true;
 	}
 

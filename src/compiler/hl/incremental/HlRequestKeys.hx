@@ -9,7 +9,7 @@ import compiler.ir.model.IrTypeIds;
  * questions in the order it first asked them and the answer each got (`HlLoweredFunction.keys` and `answers`). Linking asks each
  * question at most once per build (`HlRequestAnswers`), so a function whose answers all stand costs an array read per request.
  *
- * The session keeps one, with the lowered functions (`HlLoweredCache`); it only grows, so the copies of the cache share it.
+ * The session keeps one, with the lowered functions (`HlFunctionQueries`); it only grows, so the copies of the session share it.
  */
 class HlRequestKeys {
 	/** Questions by number, as first asked: the index in them is the asker's answer, which another build may answer otherwise. */

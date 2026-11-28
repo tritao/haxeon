@@ -1,7 +1,7 @@
 import compiler.Frontend;
 import compiler.hl.HlFunction;
-import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlLoweredFunction;
+import compiler.hl.incremental.HlPublishedFunctions;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.hl.lower.HlLower;
 
@@ -15,7 +15,7 @@ class LiveKeptCheckMain {
 		var program = Frontend.compile("function value():Int return 7; function main():Int return value() + 1;");
 		var layout:Map<String, Int> = [];
 		HlLower.lower(program, layout);
-		var symbols = new HlSymbolTable(), cache = new HlLoweredCache();
+		var symbols = new HlSymbolTable(), cache = new HlPublishedFunctions();
 		HlLower.lowerStableMeasured(program, symbols, layout, [], null, 0, true, cache, false, true);
 		HlLower.lowerStableMeasured(program, symbols, layout, [], null, 0, true, cache, false, true, null,
 			true);
@@ -35,7 +35,7 @@ class LiveKeptCheckMain {
 			throw "no integer load to change in value()";
 		var wrong = new HlFunction(entry.fn.type, entry.fn.functionIndex, entry.fn.registers, opcodes,
 			entry.fn.debugLocations, entry.fn.debugAssignments);
-		cache.entries.set("value", new HlLoweredFunction("value", entry.source, wrong, [], [], []));
+		cache.entries.set("value", new HlLoweredFunction("value", entry.source, wrong, [], []));
 		var message:Null<String> = null;
 		try
 			HlLower.lowerStableMeasured(program, symbols, layout, [], null, 0, true, cache, false, true,

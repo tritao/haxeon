@@ -210,7 +210,8 @@ verification, then HashLink lowering (`HlLower`), then the writer. Each stage ke
 - **Relocatable lowering.** `HlLower` records, for every function, the requests it made to the symbol tables and the facts it read about
   object types (through `HlLoweringView`, the only way lowering sees another entity). `HlLink.relocate` asks them of the next build's
   tables, so a function whose IR and facts are unchanged is kept as it was lowered, not lowered again; the section writer finds what
-  its indices name there (`HlRelocations`) and names it by key. `HlLoweredCache` holds the entries.
+  its indices name there (`HlRelocations`) and names it by key. What lowering made of each function is a kind of the session's
+  database whose reads are those facts (`HlFunctionQueries.lowered`).
 - **Module sections.** The writer writes one section per module (`HlSectionWriter`, HLB 9), and keeps a section whose encoding
   would read the same as the last build's, so an edit re-encodes only the sections it changes.
 - **Live patching** uses the same cache with trust instead of replay: append-only tables and stable slots keep a kept function's operands

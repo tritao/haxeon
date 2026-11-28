@@ -257,7 +257,7 @@ Everything below keeps results across builds outside the engine. Lines are the f
 |---|---|---|---|---|
 | `IrStageMemo`, `IrStageMemos`, `IrStageEntry` | 526 (the file, with `IrLineage` and the contribution memos) | stage and function slot; input version, fact reads, output, summary, helper requests; dropped when the stage's last run did not use it | `IrFunctionStages.run`, the ~25 `IrFunctionPass` stages | a computed kind per stage, keyed by function symbol; done for every per-function stage (slice 3) and the inliner (slice 5) |
 | ~~`IrLineage`, `IrFunctionSlots`~~ | (above), 95 | slot → function object and version; a version is never given twice; slots swept when cells exceed twice the functions | every stage (`settle`, `versionOf`), `IrStage` | done (slice 3): a version is the function object's own number (`IrFunction.version`), settling is early cutoff in the stages' kinds |
-| `IrFacts`, `IrFactReader`, `IrAnswerSource` | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests); the passes' facts are done (slice 3: `IrStageFacts`, `IrFactReader` reads it), the inliner's (slice 5); verification's (slice 6); `IrFacts` stays for lowering (7) |
+| ~~`IrFacts`, `IrFactReader`, `IrAnswerSource`~~ | 275, 85 | space, kind, key text → value or answer, and a print; dropped when unread a build | passes, `IrVerifyMemo`, `HlLoweringView` | derived kinds digested by value (the prints are digests); the passes' facts are done (slice 3: `IrStageFacts`, `IrFactReader` reads it), the inliner's (slice 5); verification's (slice 6); lowering's (slice 7), with which `IrFacts` and `IrAnswerSource` went |
 | Contribution memos, `lastResult`/`keepResult`, kept helpers (in `IrStageMemos.hx`) | (above) | function version → contribution; whole-program results checked by `holds`; helpers by name for one build | ~12 passes (`IrClosedEnumTagAbi.ESCAPES`, `IrScalarArguments.CLOSURE_NAMES`, ...) | contribution queries, summary queries over them, helpers as derived queries by name; helpers done (slice 3, a kind put by name), the requests and enum mentions done (summaries, slice 3), the walk summaries done (`IrWalkMemo`), the enum dispatch's encodings a kind by type id; `lastResult` and the memos the choices and escape reaches read done (slice 4, steps); the inliner's done (slice 5: its call edges a step's summaries, its forms a kind); the array types and the value array lane check done ("The value array rewrite as built"); left: the runtime needs, closure uses, initialization calls and stores (4), the verifier's (6) |
 | `IrWalkRecord` with `IrWalkSummary`, `IrBodyEdges` comparison | 209 | copies of six program tables, given inputs, read functions and their summaries; one per walk | `IrTypeAwareWalk.runKept`, `IrEntryPrune`, `IrEnumEscapeReach`, `IrScalarArguments`, `IrNullableScalarFlow`, `HlPlainBuild.reachable` | a kind per walk (`IrWalkMemo`); done for the walks before the encode point (slice 3), past it (slice 4, steps) and the plain build's (slice 6); the record is gone |
 | Reuse code inside passes | ~750 lines naming the above in 49 files; est. 1,000–1,400 with the code around them | — | — | query declarations (est. a third of it); fact reads stay as engine reads |
@@ -267,11 +267,11 @@ Everything below keeps results across builds outside the engine. Lines are the f
 | `IrSourceRehash`, `irSources` | 130 | function → file hashes its locations name | frontend | gone with relative positions (the hash is added at encode), else a derived query |
 | ~~`IrVerifyMemo`~~ | 190 | function name → function and answer facts | `IrVerifier` | computed query per function; done (slice 6: a stage of the driver, `IrVerifyStage`) |
 | `IrInlineCache` and the inliner's memo plumbing | ~170, ~100 | name → original body, instrumented form, published form, object facts, positional prints; maps replaced per run | `IrInliner`, `Compiler` (published) | inlined form per function; done (slice 5: a kind of forms, the components a step, the original bodies gone); `published`, the instrumented forms and the positional prints stay, live state |
-| `PipelineSnapshot` | 157 | tables' encoding, functions' identity, environment text; last plain build | `CompilationPipeline`, backends | the root query (final IR, module) verifies; deleted with its check |
-| `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts | 83, 45, 162 | name and lowering environment; the build's entries; facts never swept | `HlLower` | computed query per function: relocatable code, reading object facts as engine reads |
+| `PipelineSnapshot` | 157 | tables' encoding, functions' identity, environment text; last plain build | `CompilationPipeline`, backends | the root query (final IR, module) verifies; deleted with its check; not done in slice 7: its reads would be the frontend's tables and program facts as memos, which typer piece 4 makes ("Slice 7 as built") |
+| ~~`HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts~~ | 83, 45, 162 | name and lowering environment; the build's entries; facts never swept | `HlLower` | computed query per function: relocatable code, reading object facts as engine reads; done (slice 7: `HlFunctionQueries.lowered`) |
 | Link and replay: `HlRequestKeys`, `HlRequestAnswers`, `HlSymbolRequest`, `HlLink`, `HlLinkRecord`/`HlKeptTables`, parts of `HlSymbolTable` and `HlLower` | 196, 66, 102, 120, 251, ~150, ~290 | request numbers (grow only); last build's tables with each position's first requests | `HlLower` | module sections ([MODULE_SECTIONS.md](MODULE_SECTIONS.md)) |
 | `HlDebugMetadataCache`, `HlWriterCache` | — | — | — | deleted with the dense build path (MODULE_SECTIONS.md, slice 4d); the section memo (`HlSectionCache`) keeps the validation marks (`HlValidationMarks`) |
-| Wasm module reuse (`WasmBackendSession.encoded`) | ~30 of 181 | identity of the final IR and options | Wasm backend | the root query |
+| ~~Wasm module reuse (`WasmBackendSession.encoded`)~~ | ~30 of 181 | identity of the final IR and options | Wasm backend | the root query; deleted (slice 7): the pipeline's reuse of the module already covered it |
 | **Stays:** `HlModuleAssembler`, `HlFunctionCache`, `HlSymbolTable`'s published prefix, `hl/persistence`, Wasm `patchState` | 1,041, 286, —, 933 | published slots | live patching | not caches: the running module's state, an input to the next patch; the loader mints stable ids (MODULE_SECTIONS.md, slice 4d), and these shrink further to the semantic baseline (MODULE_SECTIONS.md, 4) |
 | **Stays here:** frontend prints and canonical forms, `semanticProgram`, `programFacts`, `lastTypedProgram`, `ReachabilityCache`; interning tables | — | — | — | step 3c/3d and M4c; COMPILER_FOUNDATIONS item 4 |
 
@@ -338,7 +338,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 | 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4); two parts built (below) | −400 / +250; built −401 / +508 and −53 / +257 | their whole-program rereads | 0.2 / 1.2 / 0.2; built 0.11 / 0 / not measured and 0.02 / 0.39 / not measured | 3 |
 | 5 | Inliner; **done** (below) | −300 / +150; built −739 / +545 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A; built 0.06 / 0.06 / not measured | 4 |
 | 6 | Verification and final-IR summaries; **done** (below) | −450 / +100; built −754 / +861 | `IrVerifyMemo`, `IrFunctionMemo`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, plain-build reach record | 0.1 / 0.3 / 0.05; built 0.04 / 0.06 / not measured | 5 |
-| 7 | Lowering, debug metadata and encoding as queries; root query | −850 / +300 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts, `HlDebugMetadataCache`, `HlWriterCache` encodings, `PipelineSnapshot`, Wasm module reuse | small; no-op must stay at 0.29 s | B, 6 |
+| 7 | Lowering, debug metadata and encoding as queries; root query; **done** in part (below): lowering and Wasm module reuse, the root query waits for typer piece 4 | −850 / +300; built −519 / +373 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts, `HlDebugMetadataCache`, `HlWriterCache` encodings, `PipelineSnapshot`, Wasm module reuse | small; no-op must stay at 0.29 s; built 0 / 0 / not measured, no-op 0, body edit allocation −1.5% | B, 6 |
 
 B touches only `hl/` and can land beside 1–3. The largest part of the signature edit, typing and IR generation (6.8G), is
 step 3c's and the frontend's, not this plan's. Estimated together: the body edit from 2.44G to about 1.9G, the signature
@@ -1109,6 +1109,59 @@ non-null fields' combination and the plain program's copy among it.
 Lines in `src/`: 754 deleted and 861 added, against the estimated −450 / +100: the verifier's split into the program's part and the
 function's (`IrVerifier.prepare`, `IrVerifyProgram`, about 150 lines moved), the stage and its answers (about 120), the kinds over the
 final IR and their holder (about 160), and the runtime ABI's kept texts (about 80, beyond the plan).
+
+### Slice 7 as built
+
+What a plain build's lowering made of each function is a kind of the session's database, and the facts lowering reads are facts of
+the database like the stages'. Of the plan's list, the debug metadata cache and the writer's encodings were gone already, with the
+dense build path (MODULE_SECTIONS.md, slice 4d); the root query is not built (below).
+
+- **Lowered functions.** `HlFunctionQueries.lowered` is a `ComputedQueryKind<HlLoweredFunction>` keyed by the number of the
+  function's name: the function's code with the requests it made and the answers they got. A memo holds while the function is
+  the IR it was lowered from, or equal to it (`IrFunctionStateEquality.same`, which then replaces the source in the memo,
+  `ComputedQueryKind.replace`), and every fact it read has the value it read; a held function is then relocated into the build's
+  tables as before (`HlLink.relocate`, now of its requests alone). Nothing reads a memo through the database, so a lowering made
+  again is not compared (`endChanged`). Memos of functions a plain build no longer has go with the engine's sweep, where the cache
+  was replaced by each build's entries. The request numbers (`HlRequestKeys`) are the session's with the kind.
+- **Facts.** What lowering reads about the program (an object type, a dispatch function's typed-interface key, a class's non-null
+  fields) is a fact of lowering's space of `IrStageFacts`, read through the database into the memo being computed
+  (`HlLoweringView`), whose value keeps while its answer is the same part by part as the one it was last worked out from
+  (`HlLoweringAnswers`), as verification's are. The settings a function is lowered with (field reserve, development metadata) are
+  a fact every memo reads, where the cache dropped its entries when they changed; the tables a build extends carry them too
+  (`HlLoweredTables.fits`). With the last reader gone, `IrFacts` and `IrAnswerSource` went.
+- **What stays outside the database.** The tables the last plain build relocated into and its sections are the backend session's
+  (`HashLinkBackendSession.loweredTables`, `sections`), which follow the candidate as the cache did. A live build's published
+  functions are the running module's state and follow the assembler (`HlPublishedFunctions`, the cache's live half, with the
+  live sections).
+- **Wasm module reuse** went: a build whose pipeline inputs are the last one's takes the last module whole already
+  (`BackendSession.reuse`), so the session's memo of the module by IR identity only ever held for the build that checks its reuse,
+  where it made the check compare the module with itself. The session keeps the last bytes, which say whether a build changed the
+  module.
+
+Not done, with the reasons:
+
+- **The root query.** `PipelineSnapshot` decides from the pipeline's inputs whether a plain build reuses the last final IR and
+  module, the no-op among them. Making those inputs costs every build 28 to 35 ms of the compile server's main thread (wall, VM,
+  measured around `FrontendCompilation.inputsOf`): the canonical encoding of the program's tables, 17 to 50 ms, and a 224 KB text
+  of the generator's program facts (`ProgramFacts.inputState`), 3 to 20 ms; comparing them costs under 1 ms. As a query, the
+  snapshot's reads would be the frontend's tables (objects, interfaces, enums, static fields, natives) and program facts as memos
+  with cutoff, which they are not yet: making them results is typer piece 4 ([TYPER_STATE.md](TYPER_STATE.md)), under way
+  elsewhere. The root query comes after it, and with it the cost above off the no-op.
+- **The section memo stays as it is** (`HlSectionCache`): it is one result per section already, kept while what its encoding read
+  reads the same and checked by `--check-reuse`; as a kind its reads would be the same comparisons, not engine reads.
+- **The lowered functions are not visited by changed fact.** Every held function is verified (`current`, its facts read inline once
+  computed in the run), not skipped by the readers of the facts that changed as the stage driver does: on the body edit the held
+  path costs what the cache's did.
+
+Measured on the compiler's own sources (perf-guard `--only=incremental`, origin/main and this change built in two worktrees and run
+back to back on one machine): the no-op rebuild 0.770G → 0.767G instructions, the body edit 2.013G → 2.013G (over ten body edits in
+one session after the first, 2.0096G to 2.0104G → 2.0063G to 2.0072G), the signature edit 19.624G → 19.621G; allocation of the body edit 236.5 → 232.9 MB (−1.5%), of the late body edit 250.2 → 246.5 MB, of the signature
+edit 1,069.5 → 1,066.2 MB (no map of the entries by name per build, no list of facts per function); the server's live data 893.3 → 893.2 MB; a cold small-project build the same (11.34G → 11.33G on the VM, 1.467G → 1.463G ahead
+of time). The self-compile is
+byte-identical, warm builds equal fresh ones with and without `--check-reuse`, the edit replay and the test driver pass.
+
+Lines in `src/`: 519 deleted and 373 added, against the estimated −850 / +300: the estimate counted the debug metadata and writer
+caches, which slice 4d deleted, and `PipelineSnapshot`, which stays.
 
 ## Prior art
 

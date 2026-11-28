@@ -246,6 +246,13 @@ class ComputedQueryKind<V> extends QueryKindBase {
 	public inline function value(slot:Int):V
 		return values[slot];
 
+	/**
+	 * Keeps `value` in the memo in `slot` in place of its value, which it equals for every reader (a lowering kept for an equal
+	 * function made again, `HlFunctionQueries.lowered`): what the memo read and the revisions it was verified and changed at stay.
+	 */
+	public inline function replace(slot:Int, value:V):Void
+		values[slot] = value;
+
 	/** The value of `key`'s memo whether or not it holds, or null when it has none; brings nothing up to date. */
 	public function kept(key:Int):Null<V> {
 		var slot = slotOf(key);

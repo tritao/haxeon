@@ -45,8 +45,8 @@ typedef HlLowerMetrics = {
 }
 
 typedef MeasuredHlCode = {
-	/** Each function lowered or kept by this call with the requests and facts its code depends on; none in a live build. */
-	final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction>;
+	/** The tables a relocatable lowering relocated its functions into, for the next build to extend; null for any other. */
+	final tables:Null<compiler.hl.incremental.HlRelocations.HlLoweredTables>;
 
 	/** How many functions were kept from the cache instead of lowered. */
 	final reusedFunctions:Int;
@@ -75,7 +75,7 @@ class HlLower {
 	/** The answers of `recordedKeys`, in step. */
 	var recordedAnswers:Array<Int> = [];
 
-	/** The numbers requests are recorded under (`HlRequestKeys`): the lowered cache's, or this lowering's own. */
+	/** The numbers requests are recorded under (`HlRequestKeys`): the session's, or this lowering's own. */
 	final requestKeys:compiler.hl.incremental.HlRequestKeys;
 
 	/** The next label `freshLabel` gives, past the function's last block id. */
@@ -109,10 +109,19 @@ class HlLower {
 	/** Where this build's tables hold the indices of the function being relocated. */
 	final remap = new HlRemap();
 
-	/** The functions of the last build, to keep instead of lowering again; filled with this build's at the end. */
-	final loweredCache:Null<compiler.hl.incremental.HlLoweredCache>;
+	/** A live build's published functions, kept by name instead of lowered again (`trustCache`); filled with this build's at the end. */
+	final published:Null<compiler.hl.incremental.HlPublishedFunctions>;
 
-	/** What the steps around lowering work out from each function, kept in the session's database (`HlFunctionQueries`). */
+	/** The tables the last plain build relocated its functions into, which this one extends when they fit (`HlLoweredTables`). */
+	final previousTables:Null<compiler.hl.incremental.HlRelocations.HlLoweredTables>;
+
+	/** The tables this build relocated its functions into, once lowered; null unless it is relocatable. */
+	var loweredTables:Null<compiler.hl.incremental.HlRelocations.HlLoweredTables> = null;
+
+	/**
+	 * What the steps around lowering work out from each function, kept in the session's database (`HlFunctionQueries`), with what a
+	 * plain build's lowering made of each function.
+	 */
 	final queries:Null<compiler.hl.incremental.HlFunctionQueries>;
 
 	/** How many functions this build took from the cache. */
@@ -139,9 +148,6 @@ class HlLower {
 	@:processWide("a check-mode diagnostic, reported once per process; never part of a module")
 	static var reportedSkips = false;
 
-	/** Each lowered function with what it leans on, by name (see `HlLoweredFunction`). */
-	public final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
-
 	/** The owner `Class.field` was found on, by `Class.field`, for the field slot request. */
 	final interfaceBases:Map<String, Array<String>> = [];
 
@@ -167,14 +173,15 @@ class HlLower {
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>,
 			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, fieldReserve:Int = 0,
 			developmentMetadata:Bool = true,
-			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
+			?published:compiler.hl.incremental.HlPublishedFunctions, irVerified:Bool = false,
 			trustCache:Bool = false, ?frozen:String->Bool, checkReuse:Bool = false,
 			?sources:compiler.core.SourceAnchor.SourceAnchors, liveChain:Int = 0,
-			?queries:compiler.hl.incremental.HlFunctionQueries):MeasuredHlCode {
+			?queries:compiler.hl.incremental.HlFunctionQueries,
+			?previousTables:compiler.hl.incremental.HlRelocations.HlLoweredTables):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
-		var cacheEmpty = loweredCache == null || !loweredCache.entries.iterator().hasNext();
+		var cacheEmpty = published == null || !published.entries.iterator().hasNext();
 		if (!trustCache || regenerated == null || cacheEmpty) {
 			// The final IR of a plain build is verified where it is made (`FrontendCompilation`), once, whatever the backend.
 			// A frozen function (a retired signature, or a lambda the program dropped) is code the running module holds for
@@ -199,12 +206,12 @@ class HlLower {
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
 			lowerer = new HlLower(program, symbols, indices, affected, runtimeNatives, fieldReserve,
-				developmentMetadata, loweredCache, trustCache, frozen, checkReuse, sources, !trustCache,
-				liveChain, queries),
+				developmentMetadata, published, trustCache, frozen, checkReuse, sources, !trustCache,
+				liveChain, queries, previousTables),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
-			lowered: lowerer.lowered,
+			tables: lowerer.loweredTables,
 			reusedFunctions: lowerer.reusedFunctions,
 			movedFunctions: lowerer.movedFunctions,
 			metrics: {
@@ -226,6 +233,9 @@ class HlLower {
 	/** Reserved slots a live build gives each object that can take fields later (see `reservedSlots`). */
 	final fieldReserve:Int;
 
+	/** What a lowered function depends on besides the program and the tables: the settings it is lowered with. */
+	final settings:String;
+
 	/** HashLink field indices by `object.field`, resolved against the types this build publishes. */
 	/** The slot of an object field and the object that declares it, by type name then field name: a lookup makes no key string. */
 	final fieldSlots:Map<String, Map<String, {index:Int, owner:String}>> = [];
@@ -245,10 +255,11 @@ class HlLower {
 
 	function new(program:IrProgram, symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?regenerated:Array<String>,
 			?runtimeNatives:Array<IrNative>, fieldReserve:Int = 0,
-			developmentMetadata:Bool = true, ?loweredCache:compiler.hl.incremental.HlLoweredCache,
+			developmentMetadata:Bool = true, ?published:compiler.hl.incremental.HlPublishedFunctions,
 			trustCache:Bool = false,
 			?frozen:String->Bool, checkReuse:Bool = false, ?sources:compiler.core.SourceAnchor.SourceAnchors,
-			relocatable:Bool = false, liveChain:Int = 0, ?queries:compiler.hl.incremental.HlFunctionQueries) {
+			relocatable:Bool = false, liveChain:Int = 0, ?queries:compiler.hl.incremental.HlFunctionQueries,
+			?previousTables:compiler.hl.incremental.HlRelocations.HlLoweredTables) {
 		this.liveChain = liveChain;
 		this.queries = queries;
 		this.frozen = frozen;
@@ -256,10 +267,12 @@ class HlLower {
 		this.symbols = symbols;
 		arrayBounds = new HlArrayBounds(compiler.ir.analysis.IrLoopBounds.pureNativeCalls(program.natives));
 		this.checkingLinks = !trustCache && checkReuse;
-		this.loweredCache = loweredCache;
+		this.published = published;
+		this.previousTables = previousTables;
 		this.checkingTrust = trustCache && checkReuse;
-		this.requestKeys = loweredCache != null ? loweredCache.keys : new compiler.hl.incremental.HlRequestKeys();
+		this.requestKeys = queries != null ? queries.requestKeys : new compiler.hl.incremental.HlRequestKeys();
 		this.fieldReserve = fieldReserve;
+		settings = "fieldReserve:" + fieldReserve + ",development:" + developmentMetadata;
 		this.trustCache = trustCache;
 		this.preparedRuntimeNatives = runtimeNatives;
 		this.developmentMetadata = developmentMetadata;
@@ -276,8 +289,7 @@ class HlLower {
 			for (name => index in indices)
 				functionIndices.set(name, index);
 		typedInterfaces = new HlTypedInterfaceTables(program);
-		view = new HlLoweringView(typedInterfaces.keys, null, loweredCache == null ? null : loweredCache.facts,
-			checkingLinks);
+		view = new HlLoweringView(typedInterfaces.keys, null, relocatable ? queries : null, settings, checkingLinks);
 		// A live build keeps the code of the functions it does not regenerate without asking whether their facts still hold, so
 		// it reads none about fields, which an edit elsewhere can change.
 		if (!trustCache)
@@ -558,12 +570,12 @@ class HlLower {
 		var metadataDoneAt = Sys.time() * 1000.0;
 		PeakProbe.mark("lower-metadata-done");
 		var allocationAfterMetadata = AllocationMeter.sample();
-		// A build extends the last one's tables when its metadata and function layout are theirs (`HlLoweredTables`).
+		// A build extends the last one's tables when its settings, metadata and function layout are theirs (`HlLoweredTables`).
 		var metadata = symbols.lengths(),
 			slots = relocatable ? slotNames() : null,
-			previousTables = relocatable && loweredCache != null ? loweredCache.tables : null,
+			previousTables = relocatable ? this.previousTables : null,
 			extended = previousTables;
-		if (extended != null && slots != null && extended.fits(symbols, slots))
+		if (extended != null && slots != null && extended.fits(symbols, slots, settings))
 			symbols.shareFrom(extended.tables);
 		else
 			extended = null;
@@ -572,13 +584,16 @@ class HlLower {
 			extended == null ? null : extended.answers);
 		answers = current;
 		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [],
+			memos = relocatable ? queries : null,
 			relocated:Array<compiler.hl.incremental.HlLoweredFunction> = [],
 			relocatedTypes:Array<Int> = [],
 			relocatedMoves:Array<Bool> = [];
+		if (memos != null)
+			memos.lowered.reserve(program.functions.length, compiler.ir.model.IrSymbol.functionKeysGiven());
 		for (position in 0...program.functions.length) {
 			var fn = program.functions[position];
 			var kept = trustCache && !regenerated.exists(fn.name)
-				&& loweredCache != null ? loweredCache.entries.get(fn.name) : null;
+				&& published != null ? published.entries.get(fn.name) : null;
 			if (kept != null) {
 				// A frozen function is the code of an earlier signature, or of a lambda the program dropped, kept for closures that still call it; its stale IR lowered against this build is not what it holds.
 				if (checkingTrust && (frozen == null || !frozen(fn.name)))
@@ -589,17 +604,14 @@ class HlLower {
 			} else {
 				// A function whose IR is the one an earlier build lowered, and whose outside facts still hold, is kept as that build
 				// made it: its requests are asked of this build's tables, which then hold what it names (`HlCode.relocations`).
-				var entry = loweredCache == null || !relocatable ? null : loweredCache.entries.get(fn.name);
-				if (entry != null
-					&& (entry.source == fn || compiler.ir.codec.IrFunctionStateEquality.same(entry.source, fn))) {
-					var relocation = compiler.hl.incremental.HlLink.relocate(entry, current, view, remap);
+				var slot = memos == null ? -1 : memos.lowered.slotFor(fn.symbol.functionKey()),
+					entry = memos == null ? null : memos.loweredFor(slot, fn);
+				if (entry != null) {
+					var relocation = compiler.hl.incremental.HlLink.relocate(entry, current, remap);
 					if (relocation != compiler.hl.incremental.HlLink.STALE) {
 						var moves = relocation == compiler.hl.incremental.HlLink.MOVES;
-						var same = entry.source == fn ? entry : entry.from(fn);
 						code.functions.push(entry.fn);
-						entries.set(fn.name, same);
-						this.lowered.set(fn.name, entry);
-						relocated.push(same);
+						relocated.push(entry);
 						relocatedTypes.push(moves ? remap.get(compiler.hl.incremental.HlRequestKeys.TYPES,
 							entry.fn.type) : entry.fn.type);
 						relocatedMoves.push(moves);
@@ -614,11 +626,13 @@ class HlLower {
 						recordedKeys = [];
 						recordedAnswers = [];
 						requestKeys.startFunction();
+						if (memos != null)
+							memos.lowered.begin(memos.database, slot);
 						view.beginFunction();
 					}
 					var lowered = lowerFunction(loweringBody(fn));
 					if (trustCache) {
-						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], [], []);
+						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], []);
 						code.functions.push(lowered);
 						entries.set(fn.name, entry);
 						relocated.push(entry);
@@ -628,12 +642,13 @@ class HlLower {
 						if (keys == null)
 							throw new InternalError("HashLink lowering: a function's requests were not recorded");
 						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, keys,
-							recordedAnswers, view.endFunction());
+							recordedAnswers);
+						view.endFunction();
 						recordedKeys = null;
 						if (checkingLinks)
 							verifyAnswers(entry);
-						this.lowered.set(fn.name, entry);
-						entries.set(fn.name, entry);
+						if (memos != null)
+							memos.lowered.endChanged(memos.database, slot, entry);
 						relocated.push(entry);
 						relocatedTypes.push(lowered.type);
 						relocatedMoves.push(false);
@@ -670,13 +685,13 @@ class HlLower {
 						internInt(0)
 					]
 				});
-		var cache = loweredCache;
-		if (cache != null) {
-			cache.entries = entries;
-			if (slots != null)
-				cache.tables = new compiler.hl.incremental.HlLoweredCache.HlLoweredTables(metadata, slots, symbols,
-					current, code.constants, chain);
-		}
+		var live = published;
+		if (live != null && trustCache)
+			live.entries = entries;
+		if (slots != null)
+			loweredTables = new compiler.hl.incremental.HlRelocations.HlLoweredTables(metadata, slots, settings,
+				symbols,
+				current, code.constants, chain);
 		var functionsDoneAt = Sys.time() * 1000.0;
 		PeakProbe.mark("lower-functions-done");
 		var allocationAfterFunctions = AllocationMeter.sample();

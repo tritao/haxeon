@@ -89,7 +89,7 @@ class HlPlainBuild {
 			[for (object in right.objects) for (method in object.methods) method.functionName.name]);
 	}
 
-	/** Assembles `program` as a plain build with no session: reachable from the entry, a fresh assembler and an empty lowered cache. */
+	/** Assembles `program` as a plain build with no session: reachable from the entry, a fresh assembler that keeps nothing. */
 	public static function assemble(program:IrProgram, developmentMetadata:Bool,
 			?sources:compiler.core.SourceAnchor.SourceAnchors):HlModuleAssembler.HlAssemblyResult {
 		var plain = reachable(program).program, assembler = assembler(developmentMetadata);
@@ -97,15 +97,13 @@ class HlPlainBuild {
 		return assembler.assemble(plain, [for (fn in plain.functions) fn.name], Patch);
 	}
 
-	/** The fresh assembler of a plain build, with an empty lowered cache. */
+	/** The fresh assembler of a plain build, which keeps nothing for a next one. */
 	public static function assembler(developmentMetadata:Bool):HlModuleAssembler {
-		var cache = new HlLoweredCache(),
-			assembler = new HlModuleAssembler();
+		var assembler = new HlModuleAssembler();
 		assembler.fieldReserve = 0;
 		assembler.developmentMetadata = developmentMetadata;
 		assembler.irVerified = true;
 		assembler.livePatching = false;
-		assembler.loweredCache = cache;
 		return assembler;
 	}
 }

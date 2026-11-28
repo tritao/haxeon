@@ -4,8 +4,9 @@ import compiler.ir.model.Ir;
 
 /**
  * Whether two declarations of one name read the same, part by part: what a memo that recorded a declaration as an answer
- * (`IrAnswerSource`) compares it by. An `IrObject`, `IrInterface` or `IrEnum` is never changed once made, and the stages make new
- * ones every build, so the same object is the fast case and the parts decide the rest.
+ * (verification's and lowering's facts, `IrVerifyAnswers`, `HlLoweringView`) compares it by. An `IrObject`, `IrInterface` or
+ * `IrEnum` is never changed once made, and the stages make new ones every build, so the same object is the fast case and the
+ * parts decide the rest.
  */
 @:nullSafety(Strict)
 class IrDeclarationEquality {

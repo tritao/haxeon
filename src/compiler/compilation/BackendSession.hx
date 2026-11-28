@@ -36,7 +36,7 @@ typedef BackendAssemblyResult = {
 	final moduleFunctions:Int;
 	final moduleNatives:Int;
 
-	/** Functions taken from the last plain build's lowering, and how many of them were re-indexed (see `HlLoweredCache`). */
+	/** Functions taken from the last plain build's lowering, and how many of them were re-indexed (see `HlFunctionQueries.lowered`). */
 	final linkedFunctions:Int;
 
 	final movedFunctions:Int;

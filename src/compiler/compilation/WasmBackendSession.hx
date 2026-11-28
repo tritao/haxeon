@@ -16,32 +16,27 @@ import compiler.ir.model.Ir.IrProgram;
 import haxe.Json;
 import haxe.io.Bytes;
 
-/** The module a Wasm session built last, with the program and the options it was built from. */
-typedef WasmEncodedModule = {
-	final ir:IrProgram;
-	final options:String;
-	final bytes:Bytes;
-}
-
 /**
  * The Wasm backend of a compilation session (`wasm32`, `wasm-gc`). A build runs the Wasm backend on the final IR and nothing of
- * HashLink's. The session keeps the module it built last, so a build whose IR and options are the ones that module was built from
- * (a build that reused its IR) gets the same bytes without building them again, and the state of the live module a Wasm patch is
- * checked against (`patchBase`, `patch`). Both follow the candidate: a failed build leaves them as they were.
+ * HashLink's; one whose pipeline inputs are the last build's takes that build's module whole (`reuse`). The session keeps the
+ * bytes it built last, which tell whether a build changed the module, and the state of the live module a Wasm patch is checked
+ * against (`patchBase`, `patch`). Both follow the candidate: a failed build leaves them as they were.
  *
  * A Wasm module is not patched into a running host, so a build has no revision history: each build is revision 1 of a fresh
  * module, as a plain HashLink build is. Unifying Wasm patch identities with HashLink's stable function ids is a later step.
  */
 class WasmBackendSession implements BackendSession {
 	final target:BackendTarget;
-	var encoded:Null<WasmEncodedModule>;
+
+	/** The module this session built last. */
+	var lastBytes:Null<Bytes>;
 
 	/** The live module's identities a replacement must keep (`WasmBackend.compilePatchBase`); null until a base is built. */
 	public var patchState(default, null):Null<WasmPatchState>;
 
-	public function new(target:BackendTarget, ?encoded:WasmEncodedModule, ?patchState:WasmPatchState) {
+	public function new(target:BackendTarget, ?lastBytes:Bytes, ?patchState:WasmPatchState) {
 		this.target = target;
-		this.encoded = encoded;
+		this.lastBytes = lastBytes;
 		this.patchState = patchState;
 	}
 
@@ -55,7 +50,7 @@ class WasmBackendSession implements BackendSession {
 		return this;
 
 	public function forCandidate():BackendSession
-		return new WasmBackendSession(target, encoded, patchState);
+		return new WasmBackendSession(target, lastBytes, patchState);
 
 	/** The options a build runs the backend with: the request's (`Compiler.backendOptions`), or the defaults for the target. */
 	public function options(context:CompilationContext):BackendOptions {
@@ -77,18 +72,15 @@ class WasmBackendSession implements BackendSession {
 		compiler.ir.analysis.IrReachability.IrReachabilityReport.report("final program", ir);
 		var abi = RuntimeAbi.describe(ir), abiPlanningDoneAt = Sys.time() * 1000.0;
 		var allocationAfterAbi = AllocationMeter.sample();
-		var chosen = options(context), key = Json.stringify(chosen), last = encoded, known = last;
-		if (known == null || known.ir != ir || known.options != key) {
-			known = {ir: ir, options: key, bytes: new WasmBackend().compile(ir, chosen).bytes};
-			encoded = known;
-		}
+		var last = lastBytes, bytes = new WasmBackend().compile(ir, options(context)).bytes;
+		lastBytes = bytes;
 		// Unchanged: the module is the bytes of the one this session built last.
-		var unchanged = last != null && (last == known || last.bytes.compare(known.bytes) == 0);
+		var unchanged = last != null && last.compare(bytes) == 0;
 		var builtAt = Sys.time() * 1000.0;
 		if (token != null)
 			token.check();
 		return {
-			artifact: WasmBuild({bytes: known.bytes}),
+			artifact: WasmBuild({bytes: bytes}),
 			assembler: null,
 			abi: abi,
 			reloadReasons: [],

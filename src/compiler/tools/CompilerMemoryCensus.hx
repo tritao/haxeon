@@ -1,7 +1,6 @@
 package compiler.tools;
 
 import compiler.Compiler;
-import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.syntax.TokenTable;
@@ -54,8 +53,11 @@ class CompilerMemoryCensus {
 				{name: "lowered function cache",
 				release: () -> {
 					var hashLink = compiler.backend.hashLink();
-					if (hashLink != null)
-						hashLink.loweredCache = new HlLoweredCache();
+					if (hashLink != null) {
+						hashLink.loweredTables = null;
+						hashLink.sections = null;
+					}
+					compiler.state.hlFunctions.lowered.clear();
 				}
 			},
 				{name: "last assembler (function cache, symbols)",

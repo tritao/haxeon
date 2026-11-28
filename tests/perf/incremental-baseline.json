@@ -30,10 +30,9 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"body_edit_allocated_bytes": {
-			"value": 237698272,
+			"value": 232867464,
 			"tolerance": 0.02,
-			"why": "A body-only edit of the entry module: deterministic for a given source tree.",
-			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
+			"why": "A body-only edit of the entry module: deterministic for a given source tree."
 		},
 		"body_edit_retyped_functions": {
 			"value": 3,

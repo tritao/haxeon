@@ -29,13 +29,13 @@ makes from the same sources, and its work is proportional to the edit.
   database kept while the function is the same object (`HlFunctionQueries`).
 - **Inlining:** `IrInlineCache` keeps each inlined function with everything its result depended on.
 - **Lowering (HashLink):** a function is lowered with its requests to the symbol tables recorded (`HlLoweredFunction`).
-  `HlLoweredCache` keeps the last plain build's lowered functions by name. A function whose IR is the same and whose facts
-  hold is kept as the build that lowered it made it (`HlLink.relocate`, `HlCode.relocations`), and a build whose metadata
+  What lowering made of each function is a kind of the session's database (`HlFunctionQueries.lowered`), whose reads are the
+  facts lowering read. A function whose IR is the same and whose facts hold is kept as the build that lowered it made it (`HlLink.relocate`, `HlCode.relocations`), and a build whose metadata
   tables and function layout are the last build's extends the last build's tables (`HlLoweredTables`), so a kept function
   asks nothing. The module is written as sections that name entries by key, so cold and warm output are equal without
   making the tables what a cold build's order would ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), section 3). What lowering
-  reads about other entities goes through `HlLoweringView`, which records each answer, and a changed answer lowers the
-  function again. A live build keeps its append-only tables and trusts every lowered function it is not told to regenerate.
+  reads about other entities goes through `HlLoweringView`, which reads each as a fact of the database, and a changed answer
+  lowers the function again. A live build keeps its append-only tables and trusts every lowered function it is not told to regenerate.
 - **Verification:** a function stays verified while it and what the verifier read about the rest of the program
   (`IrVerifyStage`, facts of the session's database) are unchanged.
 - **Positions:** an IR location counts from its anchor (`SourceAnchor`, `SourceLocation`), the member declaration it lies in

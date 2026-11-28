@@ -65,7 +65,7 @@ class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 	/** A function that takes closures, whose targets the choice keeps. */
 	static inline final CLOSES = 2;
 
-	/** The fact of the candidates as a whole: their names, what kind each is and their signatures, interned (`IrFacts.intern`). */
+	/** The fact of the candidates as a whole: their names, what kind each is and their signatures, interned (`IrStageFacts.intern`). */
 	static inline final CANDIDATES = 0;
 
 	/** The fact of what a rewrite reads of the declarations, the value objects' layouts (`IrInlineValueLayout.declarationsFact`). */

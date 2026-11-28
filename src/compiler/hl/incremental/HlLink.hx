@@ -4,7 +4,6 @@ import compiler.core.InternalError;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
-import compiler.hl.lower.HlLoweringView;
 
 /**
  * Relocation of lowered functions: whether a function lowered against one build's tables and function layout holds in another's,
@@ -23,14 +22,11 @@ class HlLink {
 	public static inline final MOVES = 1;
 
 	/**
-	 * Whether `lowered`, kept as the build that lowered it made it, holds in this build: the facts it read hold, and every
-	 * request but the ones that index a table has the answer it had. Asks every request, so this build's tables hold what the
-	 * function names; `STALE`, `STAYS`, or `MOVES` with `remap` filled.
+	 * Whether `lowered`, kept as the build that lowered it made it (its facts held), holds in this build's tables: every request
+	 * but the ones that index a table has the answer it had. Asks every request, so this build's tables hold what the function
+	 * names; `STALE`, `STAYS`, or `MOVES` with `remap` filled.
 	 */
-	public static function relocate(lowered:HlLoweredFunction, answers:HlRequestAnswers, view:HlLoweringView,
-			remap:HlRemap):Int {
-		if (view.holds(lowered.facts) != null)
-			return STALE;
+	public static function relocate(lowered:HlLoweredFunction, answers:HlRequestAnswers, remap:HlRemap):Int {
 		var keys = lowered.keys, recorded = lowered.answers, requests = answers.keys, moved = false;
 		for (index in 0...keys.length) {
 			var key = keys[index], answer = answers.answer(key), before = recorded[index];

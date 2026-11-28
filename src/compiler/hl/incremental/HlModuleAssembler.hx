@@ -2,6 +2,7 @@ package compiler.hl.incremental;
 
 import compiler.core.InternalError;
 import compiler.core.SourceAnchor.SourceAnchors;
+import compiler.hl.incremental.HlRelocations.HlLoweredTables;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.pipeline.IrProgramAssembler;
 import compiler.ir.model.IrFunction;
@@ -137,9 +138,9 @@ class HlModuleAssembler {
 
 	/**
 	 * The functions of the published module, as live patching keeps them: trusted by name, with no requests (see
-	 * `HlLower.trustCache`), with the sections the last live build wrote (`HlLoweredCache.sections`).
+	 * `HlLower.trustCache`), with the sections the last live build wrote.
 	 */
-	var published = new HlLoweredCache();
+	var published = new HlPublishedFunctions();
 
 	/**
 	 * The run of live builds whose tables extend one another's with nothing in them renamed (`HlRelocations.chain`): a fresh
@@ -199,20 +200,23 @@ class HlModuleAssembler {
 	/** Lower what the lowering cache would reuse again and compare (`CompileOptions.checkReuse`). */
 	public var checkReuse:Bool = false;
 
-	/** The functions of the last plain build to keep instead of lowering again, and the ones this build lowers (see `HlLoweredCache`). */
-	public var loweredCache:Null<HlLoweredCache>;
-
-	/** The build patches a running module: functions are kept by name (`published`). Otherwise they are kept from `loweredCache`. */
-	public var livePatching = false;
-
-	/** What the steps around lowering work out from each function, kept in the session's database; null for a compile without one. */
-	public var queries:Null<HlFunctionQueries> = null;
+	/**
+	 * The tables the last plain build relocated its functions into, which this one extends when they fit (`HlLoweredTables`); after
+	 * `assemble`, this build's.
+	 */
+	public var loweredTables:Null<HlLoweredTables> = null;
 
 	/**
-	 * A next build may link this one's lowered functions, so lowering records what each read (`HlLoweringView`). Off for a
-	 * compile that keeps no session (`CompileOptions.keepSession`), which neither links nor records.
+	 * The build patches a running module: functions are kept by name (`published`). Otherwise they are kept as the session's
+	 * memos of the last plain builds' lowering (`HlFunctionQueries.lowered`).
 	 */
-	public var keepsLowered = true;
+	public var livePatching = false;
+
+	/**
+	 * What the steps around lowering work out from each function, kept in the session's database, with what lowering made of each
+	 * (`HlFunctionQueries.lowered`); null for a compile without one, which keeps nothing for a next build.
+	 */
+	public var queries:Null<HlFunctionQueries> = null;
 
 	/** The IR given to `assemble` was verified already (a plain build verifies its final IR before any backend). */
 	public var irVerified = false;
@@ -223,7 +227,7 @@ class HlModuleAssembler {
 	/** The program the last assembly lowered, after the shared runtime calls; null unless `keepsProgram`. */
 	public var lastProgram(default, null):Null<IrProgram> = null;
 
-	/** How many functions the last `assemble` took from `loweredCache`. */
+	/** How many functions the last `assemble` kept from the last plain builds' lowering. */
 	public var reusedFunctions = 0;
 
 	/** How many of those got other indices than they were lowered with. */
@@ -252,12 +256,11 @@ class HlModuleAssembler {
 		result.sectionDigests = sectionDigests.copy();
 		result.pendingRenames = pendingRenames.copy();
 		result.livePatching = livePatching;
-		result.keepsLowered = keepsLowered;
 		result.runtimeNatives = runtimeNatives.copy();
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
 		result.developmentMetadata = developmentMetadata;
-		result.loweredCache = loweredCache;
+		result.loweredTables = loweredTables;
 		result.queries = queries;
 		result.irVerified = irVerified;
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
@@ -664,7 +667,7 @@ class HlModuleAssembler {
 	 */
 	function discardPublishedSymbols():Void {
 		symbols = new HlSymbolTable();
-		published = new HlLoweredCache();
+		published = new HlPublishedFunctions();
 		liveChain++;
 		publishedInts = 0;
 		publishedFloats = 0;
@@ -1121,17 +1124,11 @@ class HlModuleAssembler {
 					changed.push(name);
 		changed.sort(Reflect.compare);
 		var addsFunctions = initialized && !reload && cache.slots.length > publishedSlots;
-		if (livePatching == (loweredCache != null))
-			throw new InternalError('a ${livePatching ? "live" : "plain"} build must use ${livePatching ? "only" : "a"} ${livePatching ? "the published functions" : "lowered cache"}');
-		var liveCache = loweredCache;
 		if (keepsProgram)
 			lastProgram = ordered;
-		if (livePatching) {
-			if (!reuseLowered) {
-				published = new HlLoweredCache();
-				liveChain++;
-			}
-			liveCache = published;
+		if (livePatching && !reuseLowered) {
+			published = new HlPublishedFunctions();
+			liveChain++;
 		}
 		var relowered = regenerated.copy(), listedForLowering = [for (name in regenerated) name => true];
 		for (name in afterRenames(present))
@@ -1139,10 +1136,13 @@ class HlModuleAssembler {
 				relowered.push(name);
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, relowered, runtimeNatives, fieldReserve,
 			developmentMetadata,
-			livePatching || keepsLowered ? liveCache : null, irVerified,
+			livePatching ? published : null, irVerified,
 			livePatching,
-			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources, liveChain, queries),
+			name -> RetiredName.is(name) || !present.exists(name), checkReuse, sources, liveChain,
+			queries, livePatching ? null : loweredTables),
 			module = lowered.code;
+		if (!livePatching)
+			loweredTables = lowered.tables;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;
 		var loweredAt = Sys.time() * 1000.0;

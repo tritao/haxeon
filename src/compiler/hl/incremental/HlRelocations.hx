@@ -74,3 +74,51 @@ class HlRelocations {
 		return HlLink.rewritten(fn, functionIndices[position], remap);
 	}
 }
+
+/**
+ * The tables a build lowered and relocated its functions into, with the answers its requests got and its String
+ * constants. A sectioned build names entries by key, so their order is no one's concern: the next build with the same settings,
+ * metadata and function layout extends these tables instead of making its own, and every request answered here keeps its answer, so a
+ * function kept from here asks nothing. Entries no function names any more stay until a build starts afresh.
+ */
+class HlLoweredTables {
+	/** How long the tables were as the metadata left them, before any function's requests. */
+	final metadata:compiler.hl.incremental.HlSymbolTable.HlTableLengths;
+
+	/** The function layout: the name in each slot. */
+	final slots:Array<String>;
+
+	/** The settings the functions were lowered with (`HlLower.settings`). */
+	final settings:String;
+
+	public final tables:HlSymbolTable;
+	public final answers:HlRequestAnswers;
+	public final constants:Array<compiler.hl.HlCode.HlConstant>;
+
+	/**
+	 * Which run of builds extending one another's tables these are: within one, an index names the same entry in every build,
+	 * as nothing an entry is changes once made (`HlRelocations.chain`).
+	 */
+	public final chain:Int;
+
+	public function new(metadata:compiler.hl.incremental.HlSymbolTable.HlTableLengths, slots:Array<String>,
+			settings:String,
+			tables:HlSymbolTable, answers:HlRequestAnswers, constants:Array<compiler.hl.HlCode.HlConstant>, chain:Int) {
+		this.chain = chain;
+		this.settings = settings;
+		this.metadata = metadata;
+		this.slots = slots;
+		this.tables = tables;
+		this.answers = answers;
+		this.constants = constants;
+	}
+
+	/**
+	 * Whether `symbols`, the tables as this build's metadata left them, the layout `slots` and `settings` are the ones these
+	 * extend.
+	 */
+	public function fits(symbols:HlSymbolTable, slots:Array<String>, settings:String):Bool
+		return symbols != tables && settings == this.settings
+			&& compiler.ir.model.Ir.IrObjectTools.sameNames(slots, this.slots)
+			&& HlSymbolTable.sameLengths(symbols.lengths(), metadata) && tables.startsWith(symbols);
+}

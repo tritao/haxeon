@@ -362,7 +362,8 @@ class SessionState {
 		assemblyOrder = sharing == null ? new FrontendCompilation.AssemblyOrder() : sharing.assemblyOrder;
 		stageMemos = sharing == null ? new compiler.ir.reuse.IrStageMemos(queries,
 			irGeneration) : sharing.stageMemos;
-		hlFunctions = sharing == null ? new compiler.hl.incremental.HlFunctionQueries(queries) : sharing.hlFunctions;
+		hlFunctions = sharing == null ? new compiler.hl.incremental.HlFunctionQueries(queries,
+			stageMemos.stageFacts) : sharing.hlFunctions;
 		this.types = types;
 		this.genericSpecializations = genericSpecializations;
 		this.backend = backend;

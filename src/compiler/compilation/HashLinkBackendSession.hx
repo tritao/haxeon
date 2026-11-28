@@ -10,7 +10,7 @@ import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlModuleAssembler;
-import compiler.hl.incremental.HlLoweredCache;
+import compiler.hl.incremental.HlRelocations.HlLoweredTables;
 import compiler.hl.incremental.HlPlainBuild;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.core.CancellationToken;
@@ -25,15 +25,20 @@ import compiler.hl.persistence.HlRuntimeIdentity;
 
 /**
  * The HashLink backend of a compilation session. It owns what the next HashLink build starts from: the assembler of the last
- * successful build (its layout and revision history, which live patches address) and the lowered functions
- * of the last plain build. A build assembles on the candidate's copy (`forCandidate`), so a failed build leaves both as they were.
+ * successful build (its layout and revision history, which live patches address), and the tables and sections of the last plain
+ * build, which the next extends and keeps those it writes alike from; what lowering made of each function is in the session's
+ * database (`HlFunctionQueries.lowered`). A build assembles on the candidate's copy (`forCandidate`), so a failed build leaves
+ * them as they were.
  */
 class HashLinkBackendSession implements BackendSession {
 	/** The assembler of the last successful build. */
 	public var assembler:HlModuleAssembler;
 
-	/** The lowered functions of the last plain build (see `HlLoweredCache`). */
-	public var loweredCache:HlLoweredCache;
+	/** The tables the last plain build relocated its functions into (`HlLoweredTables`). */
+	public var loweredTables:Null<HlLoweredTables> = null;
+
+	/** The module sections the last plain build wrote (`HlSectionWriter`). */
+	public var sections:Null<compiler.hl.HlSectionWriter.HlSectionCache> = null;
 
 	/** The files the last module's debug locations are placed in (`HlCode.sources`): the module stays right while their texts do. */
 	var placedFiles:Map<String, Bool> = [];
@@ -41,10 +46,8 @@ class HashLinkBackendSession implements BackendSession {
 	/** Where this session's builds last placed each anchor, for the code a live module keeps of what an edit removed. */
 	var placedAnchors = new compiler.core.SourceAnchor.SourceAnchorHistory();
 
-	public function new(assembler:HlModuleAssembler, ?loweredCache:HlLoweredCache) {
+	public function new(assembler:HlModuleAssembler)
 		this.assembler = assembler;
-		this.loweredCache = loweredCache == null ? new HlLoweredCache() : loweredCache;
-	}
 
 	public function backendTarget():BackendTarget
 		return HashLink;
@@ -55,17 +58,27 @@ class HashLinkBackendSession implements BackendSession {
 	public function wasm():Null<WasmBackendSession>
 		return null;
 
-	/** The same assembler, with a copy of the lowered cache the candidate build can fill. */
-	public function forCandidate():BackendSession {
-		var candidate = new HashLinkBackendSession(assembler, loweredCache.copy());
-		candidate.placedFiles = placedFiles;
-		candidate.placedAnchors = placedAnchors;
-		return candidate;
+	/** The same assembler and last plain build, which the candidate build replaces in its own copy. */
+	public function forCandidate():BackendSession
+		return over(assembler);
+
+	/** This session's last plain build and placed files over `assembler`. */
+	public function over(assembler:HlModuleAssembler):HashLinkBackendSession {
+		var result = new HashLinkBackendSession(assembler);
+		result.loweredTables = loweredTables;
+		result.sections = sections;
+		result.placedFiles = placedFiles;
+		result.placedAnchors = placedAnchors;
+		return result;
 	}
 
 	/** A session that assembles a fresh layout (`Compiler.compact`). */
-	public function compacting():HashLinkBackendSession
-		return new HashLinkBackendSession(new HlModuleAssembler(), loweredCache);
+	public function compacting():HashLinkBackendSession {
+		var result = new HashLinkBackendSession(new HlModuleAssembler());
+		result.loweredTables = loweredTables;
+		result.sections = sections;
+		return result;
+	}
 
 	/** What the assembly reads besides the IR: an assembly made in an equal environment from an equal IR is the same module. */
 	public function environmentKey(context:CompilationContext):String
@@ -124,13 +137,6 @@ class HashLinkBackendSession implements BackendSession {
 		lowerFinalizationMs: 0.0
 	};
 
-	/** What the lowering was done for besides the IR; entries made for another environment are not used (see `HlLoweredCache`). */
-	static function loweringEnvironment(assembler:HlModuleAssembler, context:CompilationContext):String
-		return "fieldReserve:"
-			+ assembler.fieldReserve
-			+ ",development:"
-			+ assembler.developmentMetadata;
-
 	/** Assembles `ir`; the session keeps the candidate assembler, which the compiler adopts with the candidate. */
 	public function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
@@ -183,9 +189,10 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAfterAbi = AllocationMeter.sample();
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
-		// A plain build keeps the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
-		var loweredCache:Null<HlLoweredCache> = context.livePatching ? null : this.loweredCache;
-		var candidateAssembler = loweredCache != null ? new HlModuleAssembler() : context.state.compiledOnce
+		// A plain build keeps the functions of the last ones whose IR is unchanged instead of lowering them again
+		// (`HlFunctionQueries.lowered`), and extends the last one's tables.
+		var plainBuild = !context.livePatching;
+		var candidateAssembler = plainBuild ? new HlModuleAssembler() : context.state.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching ? context.liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
@@ -193,12 +200,9 @@ class HashLinkBackendSession implements BackendSession {
 		candidateAssembler.checkReuse = context.options.checkReuse;
 		candidateAssembler.irVerified = !context.livePatching;
 		candidateAssembler.livePatching = context.livePatching;
-		candidateAssembler.keepsLowered = context.options.keepSession;
 		candidateAssembler.queries = queries;
-		if (loweredCache != null) {
-			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
-			candidateAssembler.loweredCache = loweredCache;
-		}
+		if (plainBuild && queries != null)
+			candidateAssembler.loweredTables = loweredTables;
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
 		// Only a live build keeps slots for the functions prototypes dispatch to; a plain one lays out a fresh module.
@@ -219,13 +223,12 @@ class HashLinkBackendSession implements BackendSession {
 		// A build with functions kept from the last one must write the sections lowering every function gives: they are compared
 		// once written, since the dense tables are numbered as each build asked for their entries.
 		var freshModule:Null<HlCode> = null;
-		if (loweredCache != null && candidateAssembler.reusedFunctions > 0 && context.options.checkReuse) {
+		if (plainBuild && candidateAssembler.reusedFunctions > 0 && context.options.checkReuse) {
 			var fresh = new HlModuleAssembler();
 			fresh.fieldReserve = candidateAssembler.fieldReserve;
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.sources = candidateAssembler.sources;
 			fresh.irVerified = candidateAssembler.irVerified;
-			fresh.loweredCache = new HlLoweredCache();
 			var freshAssembly = fresh.assemble(assemblyIr, regenerated, decision,
 				nextAbi == null ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi),
 				context.state.rehydrationBaseline);
@@ -243,14 +246,15 @@ class HashLinkBackendSession implements BackendSession {
 		// keeps no session memoizes none for a next build.
 		var modules = [for (name => state in context.state.modules) name => state.source.contentHash()],
 			declarations = context.state.declarationOwners,
-			kept = candidateAssembler.loweredCache,
-			previousSections = context.livePatching ? candidateAssembler.liveSections() : kept == null
-				? null : kept.sections,
+			previousSections = context.livePatching ? candidateAssembler.liveSections() : queries == null
+				? null : sections,
 			written = compiler.hl.HlSectionWriter.write(assembly.module, modules, declarations, compiler.hl.HlLz4.FAST,
 				context.options.checkReuse, previousSections, context.livePatching || context.options.keepSession,
 				context.livePatching);
-		if (kept != null)
-			kept.sections = written.cache;
+		if (plainBuild && queries != null) {
+			loweredTables = candidateAssembler.loweredTables;
+			sections = written.cache;
+		}
 		candidateAssembler.wroteSections(written.cache, written.written);
 		if (freshModule != null) {
 			var afresh = compiler.hl.HlSectionWriter.write(freshModule, modules, declarations, compiler.hl.HlLz4.FAST,
