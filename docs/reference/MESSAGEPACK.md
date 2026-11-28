@@ -85,7 +85,10 @@ Encoding does not fail for expected reasons: a writer that is misused, or whose
 output is over its limit, throws.
 
 The compiler supports non-generic, non-inheriting classes and structs,
-structural records, and enums. Fields must have direct storage and can use
+structural records, and enums, generic ones included for type arguments that are
+themselves wire types (`Result<Answer, Refusal>`, `Array<Result<String, E>>`); each
+instantiation has a codec of its own. A `Void` payload, as `Ok()` of
+`Result<Void, E>`, is not written: the case's payload array leaves it out. Fields must have direct storage and can use
 `Int`, `Int64`, `Float`, `Bool`, `String`, `Bytes`, supported abstracts,
 nullable values, arrays, maps, and other supported records and enums. Fields
 may be final or mutable. An unsupported member type is a compile error.

@@ -126,8 +126,10 @@ ui's argument checks, stay exceptions. Other APIs change when they are next work
   of the peer's own; `mayHaveRun()` and `code()` read every case. The connector completes with `Result<MessageTransport,
   RpcError>` (`RpcConnectResult` is gone), the server's authorization returns `Result<Void, RpcError>`, envelopes,
   method codecs and notification decoders return `Result<T, WireError>`, and `closeError` says why a connection
-  closed. A typed service's own expected failures belong in its response type; generic enums such as `Result` are not
-  yet wire types.
+  closed. A typed service's own expected failures belong in its response type. Generic enums such as `Result` are
+  wire types for wire-typed arguments, `Void` among them; a typed RPC service answering `Result<Answer, E>` waits on
+  the compiler converting between a generic enum's specializations at an erased boundary, which a warm rebuild
+  of such a service needs.
 
 - **Platform, audio and GPU (done).** NativeKit and its GPU module answer one status code for two kinds of failure,
   which `NativeKitStatus` and the GPU package tell apart. A code that is the program's mistake throws a `BindingError`:

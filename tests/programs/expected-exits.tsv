@@ -654,6 +654,7 @@ module-variable-member	42
 array-concat-nullable	42
 abstract-equality-conformance	42
 wire-final-record	42
+wire-generic-enum	42
 nullable-abstract-value	42
 nullable-abstract-cast	42
 nullable-abstract-places	42

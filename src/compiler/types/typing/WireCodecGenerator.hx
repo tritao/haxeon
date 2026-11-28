@@ -41,6 +41,16 @@ private typedef WireEnumCase = {
 	final id:Int;
 }
 
+/**
+ * One payload field of an enum case as the wire carries it: its type for the enum's type arguments, and the type its
+ * storage has. A `Void` field (the unit value, as `Ok()` of `Result<Void, E>`) is not written; `type` is null for it.
+ */
+private typedef WirePayloadField = {
+	final index:Int;
+	final type:Null<CompilerType>;
+	final storage:CompilerType;
+}
+
 /** Emits the first compiler-owned MessagePack codec profile. */
 class WireCodecGenerator {
 	static inline final ENCODE_PREFIX:String = "$wire:encode:";
@@ -263,7 +273,10 @@ class WireCodecGenerator {
 			case TAnonymous(_, _): true;
 			case TInstance(NominalKind.Class, name, arguments): arguments.length == 0
 				&& session.classDecls.exists(name);
-			case TInstance(NominalKind.Enum, name, arguments): arguments.length == 0 && session.enumDecls.exists(name);
+			// A generic enum is a wire type for wire-typed arguments, `Void` among them: `Result<Answer, E>`.
+			case TInstance(NominalKind.Enum, name, arguments): session.enumDecls.exists(name)
+				&& Lambda.foreach(arguments,
+				argument -> VoidArguments.isVoid(argument) || isRequestType(session, argument));
 			default: false;
 		};
 
@@ -304,14 +317,17 @@ class WireCodecGenerator {
 								session.readUnit(compiler.semantic.InitializerUnit.of(name, field.name));
 							visit(session.declarations.types.fieldType(name, field), field.span);
 						}
-			case TInstance(NominalKind.Enum, name, arguments) if (arguments.length == 0):
+			case TInstance(NominalKind.Enum, name, _):
 				var declaration = session.enumDecls.entry(name);
 				reads.read(WireShape, name);
 				if (declaration != null)
 					for (enumCase in declaration.cases)
-						for (parameter in enumCase.params)
-							visit(session.representation.enumParameterType(declaration.typeParameters, parameter, type),
-								parameter.span);
+						for (parameter in enumCase.params) {
+							var parameterType = session.representation.enumParameterType(declaration.typeParameters,
+								parameter, type);
+							if (!VoidArguments.isVoid(parameterType))
+								visit(parameterType, parameter.span);
+						}
 			default:
 		}
 		walkStructuralChildren(type, syntheticSpan, visit);
@@ -495,8 +511,9 @@ class WireCodecGenerator {
 						'MessagePack enum "$name" must declare at least one constructor',
 						declaration.span);
 				for (wireCase in cases)
-					for (parameter in wireCase.caseDecl.params)
-						visit(parameter, wireCase.caseDecl.span);
+					for (field in wirePayload(session, type, name, wireCase.index))
+						if (field.type != null)
+							visit(field.type, wireCase.caseDecl.span);
 			default:
 				walkStructuralChildren(type, span, visit);
 		}
@@ -812,16 +829,18 @@ class WireCodecGenerator {
 					];
 				for (caseIndex in 0...cases.length) {
 					var wireCase = cases[cases.length - caseIndex - 1],
+						payload = [for (field in wirePayload(session, type, name, wireCase.index)) if (field.type
+							!= null) field],
 						branch:Array<TypedStatement> = [
 							writeMemberKey(writer, wireCase.id, wireCase.caseDecl.name, span),
-							expressionStatement(method(writer, "writeArrayHeader",
-								[intLiteral(wireCase.caseDecl.params.length, span)], TVoid, span), span)
+							expressionStatement(method(writer, "writeArrayHeader", [intLiteral(payload.length, span)],
+								TVoid,
+								span), span)
 						];
-					for (fieldIndex in 0...wireCase.caseDecl.params.length) {
-						var parameterType = wireEnumParameterType(session, name, wireCase.index, fieldIndex,
-							wireCase.caseDecl.params[fieldIndex]),
-							fieldValue = new TypedExpression(TEnumField(value, wireCase.index, fieldIndex),
-								parameterType, span);
+					for (field in payload) {
+						var parameterType:CompilerType = cast field.type,
+							fieldValue = session.representation.boundaryCast(new TypedExpression(TEnumField(value,
+								wireCase.index, field.index), field.storage, span), parameterType);
 						branch = branch.concat(encodeNestedValueStatements(writer, fieldValue, parameterType, span));
 					}
 					var condition = new TypedExpression(TEqual(new TypedExpression(TEnumIndex(value), TInt, span),
@@ -1015,9 +1034,11 @@ class WireCodecGenerator {
 		result.push(TVar(payloadCountName, method(reader, "readArrayHeader", [], TInt, span), span));
 		for (caseIndex in 0...cases.length) {
 			var wireCase = cases[cases.length - caseIndex - 1],
+				payload = wirePayload(session, type, name, wireCase.index),
+				written = Lambda.count(payload, field -> field.type != null),
 				branch:Array<TypedStatement> = [
 					TIf(new TypedExpression(TNot(new TypedExpression(TEqual(local(payloadCountName, TInt, span),
-						intLiteral(wireCase.caseDecl.params.length, span)), TBool, span)),
+						intLiteral(written, span)), TBool, span)),
 						TBool, span),
 						[
 							TThrow(stringLiteral('Invalid MessagePack payload for enum "$name.${wireCase.caseDecl.name}"',
@@ -1025,12 +1046,15 @@ class WireCodecGenerator {
 						], [], span)
 				];
 			var arguments:Array<TypedExpression> = [];
-			for (fieldIndex in 0...wireCase.caseDecl.params.length) {
-				var parameterType = wireEnumParameterType(session, name, wireCase.index, fieldIndex,
-					wireCase.caseDecl.params[fieldIndex]),
-					parameterName = enumParameterLocal(wireCase.index, fieldIndex),
+			for (field in payload) {
+				if (field.type == null) {
+					arguments.push(new TypedExpression(TVoidLiteral, TVoid, span));
+					continue;
+				}
+				var parameterType:CompilerType = cast field.type,
+					parameterName = enumParameterLocal(wireCase.index, field.index),
 					parameter = local(parameterName, parameterType, span);
-				arguments.push(parameter);
+				arguments.push(session.representation.boundaryCast(parameter, field.storage));
 				branch.push(TDeclare(parameterName, parameterType, span));
 				branch = branch.concat(decodeValueAssignment(session, classes, enums, parameter, parameterType, reader,
 					span));
@@ -1247,21 +1271,28 @@ class WireCodecGenerator {
 	function nullValue(type:CompilerType, span:SourceSpan):TypedExpression
 		return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span);
 
-	function wireEnumParameterType(session:TypingSession, name:String, constructor:Int, field:Int,
-			storedType:CompilerType):CompilerType {
+	/**
+	 * The payload of case `constructor` of the enum `type` (named `name`), for its type arguments: each field's type, an
+	 * optional one nullable, and its storage type, which a read from or a construction of the case casts across.
+	 */
+	function wirePayload(session:TypingSession, type:CompilerType, name:String,
+			constructor:Int):Array<WirePayloadField> {
 		var declaration = session.enumDecls.get(name);
-		if (declaration == null
-			|| constructor < 0
-			|| constructor >= declaration.cases.length
-			|| field < 0
-			|| field >= declaration.cases[constructor].params.length)
-			return storedType;
-		if (!declaration.cases[constructor].params[field].optional)
-			return storedType;
-		return switch storedType {
-			case TNullable(_): storedType;
-			default: TNullable(storedType);
-		};
+		if (declaration == null || constructor < 0 || constructor >= declaration.cases.length)
+			throw new InternalError('No MessagePack enum constructor $constructor of "$name"');
+		var parameters = declaration.cases[constructor].params;
+		return [for (index in 0...parameters.length) {
+			var parameter = parameters[index],
+				semantic = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
+				storage = session.representation.enumStorageType(declaration.typeParameters, parameter, type);
+			var wire:Null<CompilerType> = VoidArguments.isVoid(semantic) ? null : parameter.optional ? switch semantic {
+				case TNullable(_): semantic;
+				default: TNullable(semantic);
+			} : semantic;
+			{
+				index:index, type:wire, storage:storage
+			};
+		}];
 	}
 
 	function primitiveMethod(type:CompilerType):Null<String>
@@ -1415,7 +1446,10 @@ class WireCodecGenerator {
 					default: throw new InternalError('No MessagePack map key for "$key"');
 				}) + typeSegment(typeKey(value));
 			case TInstance(NominalKind.Class, name, _): "class_" + nominalKey(name);
-			case TInstance(NominalKind.Enum, name, _): "enum_" + nominalKey(name);
+			case TInstance(NominalKind.Enum, name, arguments):
+				"enum_" + nominalKey(name) + (arguments.length == 0
+					? "" : "_" + [for (argument in arguments) typeSegment(VoidArguments.isVoid(argument) ? "void"
+					: typeKey(argument))].join("_"));
 			default: throw new InternalError('No MessagePack codec key for "$type"');
 		};
 
