@@ -403,9 +403,10 @@ function drawFor(project:String):Void {
 	var log = Path.join([project, "run.log"]), seconds = "8";
 	var command = [Script.haxeon(), "run"];
 	var status = hasXvfb() ? Script.run("xvfb-run", ["-a", "timeout", seconds].concat(command),
-		{cwd: project, log: log}) : Script.run("timeout", [seconds].concat(command), {
+		{cwd: project, log: log}) : Script.run(command[0], command.slice(1), {
 			cwd: project,
-			log: log
+			log: log,
+			timeout: Std.parseFloat(seconds)
 		});
 	if (status != 124)
 		Script.fail('FAIL: ${Path.withoutDirectory(project)} stopped with status $status within ${seconds}s; its log:\n'

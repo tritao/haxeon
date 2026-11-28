@@ -18,6 +18,9 @@ typedef ScriptRunOptions = {
 
 	/** A file that receives the program's standard output and error, instead of passing them through. */
 	var ?log:String;
+
+	/** Seconds after which the program is asked to stop; its status is then 124, as coreutils' `timeout` answers. */
+	var ?timeout:Float;
 }
 
 /** One program for `Script.runAll`: what `Script.run` takes. */
@@ -181,8 +184,10 @@ private class RunningProgram {
 	final out:Output;
 	final err:Output;
 	final buffer = Bytes.alloc(65536);
+	final deadline:Float;
 	var outOpen = true;
 	var errOpen = true;
+	var timedOut = false;
 
 	public function new(command:String, arguments:Null<Array<String>>, options:Null<ScriptRunOptions>, ?out:Output) {
 		var keys:Array<String> = [], values:Array<String> = [];
@@ -195,6 +200,7 @@ private class RunningProgram {
 		log = logFile;
 		this.out = out != null ? out : logFile != null ? logFile : Sys.stdout();
 		err = logFile != null ? logFile : Sys.stderr();
+		deadline = options == null || options.timeout == null ? Math.POSITIVE_INFINITY : Sys.time() + options.timeout;
 		try {
 			process = ChildProcess.spawn(command, arguments == null ? [] : arguments,
 				options == null || options.cwd == null ? "" : options.cwd, keys, values);
@@ -207,6 +213,10 @@ private class RunningProgram {
 
 	/** Copies what the pipes have ready; whether anything moved. False once both are drained. */
 	public function step():Bool {
+		if (!timedOut && Sys.time() >= deadline) {
+			timedOut = true;
+			process.cancel();
+		}
 		var moved = false;
 		if (outOpen) {
 			var read = process.readStdout(buffer, 0, buffer.length);
@@ -229,9 +239,11 @@ private class RunningProgram {
 		return moved;
 	}
 
-	/** The exit status once both pipes are drained and the program has exited, else -1. */
-	public function exitStatus():Int
-		return outOpen || errOpen ? -1 : process.pollExit();
+	/** The exit status once both pipes are drained and the program has exited, else -1; 124 when it was stopped at its deadline. */
+	public function exitStatus():Int {
+		var status = outOpen || errOpen ? -1 : process.pollExit();
+		return status >= 0 && timedOut ? 124 : status;
+	}
 
 	/** Copies the pipes until the program exits, closes it and returns its status. */
 	public function finish():Int {
