@@ -84,9 +84,6 @@ class BuildContext implements Disposable {
 	/** The height of the viewport the UI is built for, in logical pixels. */
 	public var viewportHeight(default, null):Float;
 
-	/** A resolved widget can request another native layout pass in this submit. */
-	public var layoutFeedbackRequested(default, null):Bool = false;
-
 	var styleParent:Null<ComputedStyle>;
 
 	/** Bumped when the theme or application sheet is replaced, so swaps never reuse a fingerprint. */
@@ -363,7 +360,6 @@ class BuildContext implements Disposable {
 	}
 
 	internal function beginFrame():Void {
-		layoutFeedbackRequested = false;
 		buildBeforeLayoutFeedbackRequested = false;
 		localObserved.clear();
 		claimed.clear();
@@ -400,18 +396,6 @@ class BuildContext implements Disposable {
 	internal function consumeBuildFeedback():Bool {
 		var requested = buildFeedbackRequested;
 		buildFeedbackRequested = false;
-		return requested;
-	}
-
-	/** Asks for the frame to be built again after layout, for a widget whose content depends on its laid-out size. */
-	public function requestLayoutFeedback():Void {
-		layoutFeedbackRequested = true;
-		if (RenderCost.enabled) RenderCost.requested(haxe.CallStack.callStack());
-	}
-
-	internal function consumeLayoutFeedback():Bool {
-		var requested = layoutFeedbackRequested;
-		layoutFeedbackRequested = false;
 		return requested;
 	}
 

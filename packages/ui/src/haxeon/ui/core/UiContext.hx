@@ -619,79 +619,46 @@ class UiContext implements Disposable {
 		var mountedHash = 0;
 		var resolvedGeometryChangedNodes = 0;
 		var resolvedGeometryReusedNodes = 0;
-		var resolvedBuildFeedback = false;
-		var layoutPass = 0;
-		while (true) {
-			resolvedById.clear();
-			for (index in 0...resolved.length) resolvedById.set(resolved[index].id, index);
-			visitMissing = false;
-			visitMissingNode = null;
-			visitNodeCount = 0;
-			visitMountedHash = 0;
-			visitGeometryChanged = 0;
-			visitGeometryReused = 0;
-			diagnosticStage = 7;
-			submittedNodes.resize(0);
-			submittedPaintNodes.resize(0);
-			nextTopology.clear();
-			visitResolved = resolved;
-			next.walk(visitResolvedNode);
-			visitResolved = null;
-			nodeCount = visitNodeCount;
-			mountedHash = visitMountedHash;
-			resolvedGeometryChangedNodes = visitGeometryChanged;
-			resolvedGeometryReusedNodes = visitGeometryReused;
-			if (visitMissing) {
-				var missingNode = visitMissingNode;
-				diagnosticStage = 8;
-				throw "Native layout did not return geometry for render node " + Std.string(missingNode
-					== null ? -1 : missingNode.id.value) + " ("
-					+ (missingNode == null ? "unknown" : missingNode.styleType)
-					+ ")" + " pass=" + layoutPass + " reused=" + nativeLayoutReused + " resolved=" + resolved.length
-					+ " nodes="
-					+ nodeCount + " firstResolved=" + (resolved.length == 0 ? -1 : resolved[0].id) + " visible="
-					+ (missingNode
-					== null ? "?" : Std.string(missingNode.layout.style.visible)) + " parent=" + (missingNode == null
-					|| missingNode.parent == null ? "?" : missingNode.parent.styleType) + " parentVisible="
-					+ (missingNode == null
-					|| missingNode.parent == null ? "?" : Std.string(missingNode.parent.layout.style.visible));
-			}
-			// Handlers may read parent, child, viewport and content geometry. Give all of them the same settled layout pass
-			// before any handler changes layout inputs or requests another pass.
-			for (index in 0...submittedNodes.length) submittedNodes[submittedNodes.length - 1 - index].didResolve();
-			// Signal writes and explicit callback requests rebuild before another layout pass consumes stale view geometry.
-			var rootDirty = buildContext.rootDependenciesDirty();
-			var patchesPending = buildContext.hasPendingRenderScopes();
-			var earlyFeedback = buildContext.consumeBuildFeedbackBeforeLayout();
-			if (rootDirty || patchesPending || earlyFeedback) {
-				resolvedBuildFeedback = true;
-				break;
-			}
-			if (!buildContext.consumeLayoutFeedback()) break;
-			// Dependent geometry (text reflow, scroll extent, overlay placement)
-			// must settle before publishing the frame. Never silently discard
-			// a requested pass; fail explicitly if callbacks cannot converge.
-			if (layoutPass >= 7) throw "UI layout feedback did not converge after 8 passes";
-			buildContext.takeRetainedEdits(currentNodesById);
-			TreeDiff.collectLayoutEdits(currentNodesById, buildContext.patchedPriors(),
-				layoutChanges);
-			buildContext.endPatchFrame();
-			resolved = session.solve(next.layout, frame);
-			unpublished = true;
-			frameLayoutSolves++;
-			layoutPass++;
+		resolvedById.clear();
+		for (index in 0...resolved.length) resolvedById.set(resolved[index].id, index);
+		visitMissing = false;
+		visitMissingNode = null;
+		visitNodeCount = 0;
+		visitMountedHash = 0;
+		visitGeometryChanged = 0;
+		visitGeometryReused = 0;
+		diagnosticStage = 7;
+		submittedNodes.resize(0);
+		submittedPaintNodes.resize(0);
+		nextTopology.clear();
+		visitResolved = resolved;
+		next.walk(visitResolvedNode);
+		visitResolved = null;
+		nodeCount = visitNodeCount;
+		mountedHash = visitMountedHash;
+		resolvedGeometryChangedNodes = visitGeometryChanged;
+		resolvedGeometryReusedNodes = visitGeometryReused;
+		if (visitMissing) {
+			var missingNode = visitMissingNode;
+			diagnosticStage = 8;
+			throw "Layout did not return geometry for render node " + Std.string(missingNode
+				== null ? -1 : missingNode.id.value) + " ("
+				+ (missingNode == null ? "unknown" : missingNode.styleType)
+				+ ")" + " reused=" + nativeLayoutReused + " resolved=" + resolved.length + " nodes=" + nodeCount
+				+ " firstResolved=" + (resolved.length == 0 ? -1 : resolved[0].id) + " visible="
+				+ (missingNode
+				== null ? "?" : Std.string(missingNode.layout.style.visible)) + " parent=" + (missingNode == null
+				|| missingNode.parent == null ? "?" : missingNode.parent.styleType) + " parentVisible="
+				+ (missingNode == null
+				|| missingNode.parent == null ? "?" : Std.string(missingNode.parent.layout.style.visible));
 		}
+		// Geometry callbacks read the settled layout; they never change it. Edits they make apply on the next frame.
+		for (index in 0...submittedNodes.length) submittedNodes[submittedNodes.length - 1 - index].didResolve();
+		// Signal writes and explicit callback requests rebuild before another layout pass consumes stale view geometry.
+		var resolvedBuildFeedback = buildContext.rootDependenciesDirty() || buildContext.hasPendingRenderScopes()
+			|| buildContext.consumeBuildFeedbackBeforeLayout();
 		var nativeLayoutEndedAt = Sys.time();
 		var nativeLayoutEndAllocatedAt = AllocationProbe.now();
-		if (layoutPass > 0) {
-			comparisonFrame.preserveRevisions = true;
-			styleInvalidation = TreeDiff.compare(root,
-				next,
-				previousNodesById,
-				currentNodesById,
-				null,
-				comparisonFrame);
-		}
 		var previousTopology = submittedTopology;
 		submittedTopology = nextTopology;
 		nextTopology = previousTopology;

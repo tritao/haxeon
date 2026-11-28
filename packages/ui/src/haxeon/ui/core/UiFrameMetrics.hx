@@ -247,21 +247,8 @@ internal class RenderCost {
 	public static var encode = 0.0;
 	public static var renderable = 0.0;
 	public static var nativeCall = 0.0;
-	/** The node types edited in place since the last submit line, which ask for another solve. */
+	/** The node types edited in place since the last submit line. */
 	public static final edits:Array<String> = [];
-	/** Who asked for another layout pass since the last submit line: the caller of `requestLayoutFeedback`. */
-	public static final requesters:Array<String> = [];
-
-	public static function requested(stack:Array<haxe.CallStack.StackItem>):Void {
-		for (index in 1...stack.length)
-			switch stack[index] {
-				case FilePos(_, file, line, _):
-					var name = file.substr(file.lastIndexOf("/") + 1) + ":" + line;
-					if (requesters.indexOf(name) < 0) requesters.push(name);
-					return;
-				default:
-			}
-	}
 
 	public static inline function time():Float return enabled ? Sys.time() : 0.0;
 
@@ -275,9 +262,8 @@ internal class RenderCost {
 		if (!enabled) return;
 		Sys.stderr().writeString('render-cost submit started=$started nodes=$nodes build=${nativeStarted - viewStarted}'
 			+ ' layout=${nativeEnded - nativeStarted} other=${viewStarted - started + ended - nativeEnded}'
-			+ ' solves=$solves edits=${edits.join(",")} requesters=${requesters.join(",")}\n');
+			+ ' solves=$solves edits=${edits.join(",")}\n');
 		edits.resize(0);
-		requesters.resize(0);
 	}
 
 	public static function render(started:Float, nativeStarted:Float, ended:Float, nodes:Int):Void {

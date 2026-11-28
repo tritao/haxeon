@@ -54,7 +54,6 @@ class FeedbackGeometry implements View {
 				bar.layout.style.height = LayoutAxis.fixed(40);
 				bar.layout.style.positionX = 50;
 				bar.layout.style.visible = true;
-				context.requestLayoutFeedback();
 			}
 			if (revision.value == 0) revision.value = 1;
 		});
