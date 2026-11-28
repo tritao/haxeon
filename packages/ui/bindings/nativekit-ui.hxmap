@@ -27,6 +27,10 @@
     "nkui_layout_wrap_mode": "UiLayoutWrapMode",
     "nkui_layout_self_alignment": "UiLayoutSelfAlignment",
     "nkui_layout_cache_policy": "UiLayoutCachePolicy",
+    "nkui_layout_anchor_kind": "UiLayoutAnchorKind",
+    "nkui_layout_anchor_side": "UiLayoutAnchorSide",
+    "nkui_layout_anchor_flags": "UiLayoutAnchorFlags",
+    "nkui_layout_anchor_bounds": "UiLayoutAnchorBounds",
     "nkui_mask_kind": "UiMaskKind",
     "nkui_effect_kind": "UiEffectKind"
   },

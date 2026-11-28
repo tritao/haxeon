@@ -291,6 +291,7 @@ internal class LayoutTransaction {
 				style.positionY);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_Z_INDEX_OFFSET,
 				style.zIndex);
+			writeAnchor(output, record, node.anchor, positioning);
 			if (textOffset < 0 || textOffset + this.stringBytes[index].length > output.length)
 				throw 'Layout string table write is out of range: ${textOffset} + ${this.stringBytes[index].length} > ${output.length}';
 			for (byteIndex in 0...this.stringBytes[index].length)
@@ -298,6 +299,65 @@ internal class LayoutTransaction {
 			textOffset += this.stringBytes[index].length;
 		}
 		return output;
+	}
+
+	/** A node's anchor fields: every one, zero for a node placed at its position. */
+	static function writeAnchor(output:Bytes, record:Int, anchor:Null<LayoutAnchor>,
+			positioning:LayoutPositioning):Void {
+		if (anchor != null && positioning != LayoutPositioning.Absolute)
+			throw "A layout anchor requires absolute positioning";
+		var kind = 0, node = 0, rect:Null<Rect> = null, bounds = 0, boundsNode = 0, boundsRect:Null<Rect> = null;
+		if (anchor != null) {
+			switch anchor.target {
+				case Node(id):
+					kind = 1;
+					node = id;
+				case Area(area):
+					kind = 2;
+					rect = area;
+			}
+			switch anchor.within {
+				case Viewport:
+				case Node(id):
+					bounds = 1;
+					boundsNode = id;
+				case Area(area):
+					bounds = 2;
+					boundsRect = area;
+			}
+			if (!finite(anchor.gap) || !finite(anchor.margin) || anchor.margin < 0 || !(anchor.align >= 0)
+				|| anchor.align > 1 || !(anchor.boxAlign >= 0) || anchor.boxAlign > 1)
+				throw "A layout anchor needs a finite gap, a margin of zero or more, and alignments within 0..1";
+		}
+		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_KIND_OFFSET, kind);
+		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_NODE_OFFSET, node);
+		writeRect(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_X_OFFSET, rect);
+		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_SIDE_OFFSET,
+			anchor == null ? 0 : anchor.side.rawValue);
+		writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_GAP_OFFSET,
+			anchor == null ? 0 : anchor.gap);
+		writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_ALIGN_OFFSET,
+			anchor == null ? 0 : anchor.align);
+		writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_BOX_ALIGN_OFFSET,
+			anchor == null ? 0 : anchor.boxAlign);
+		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_FLAGS_OFFSET,
+			anchor == null ? 0 : (anchor.flip ? 1 : 0) | (anchor.flipCross ? 2 : 0));
+		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_OFFSET, bounds);
+		writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_NODE_OFFSET, boundsNode);
+		writeRect(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_X_OFFSET, boundsRect);
+		writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ANCHOR_MARGIN_OFFSET,
+			anchor == null ? 0 : anchor.margin);
+	}
+
+	/** A rectangle as four floats from `offset`, zero when null. */
+	static function writeRect(output:Bytes, record:Int, offset:Int, rect:Null<Rect>):Void {
+		if (rect != null && (!finite(rect.x) || !finite(rect.y) || !finite(rect.width) || !finite(rect.height)
+			|| rect.width < 0 || rect.height < 0))
+			throw "A layout anchor rectangle must be finite, with no negative extent";
+		writeFloat(output, record, offset, rect == null ? 0 : rect.x);
+		writeFloat(output, record, offset + 4, rect == null ? 0 : rect.y);
+		writeFloat(output, record, offset + 8, rect == null ? 0 : rect.width);
+		writeFloat(output, record, offset + 12, rect == null ? 0 : rect.height);
 	}
 
 	public function byteLength():Int

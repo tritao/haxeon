@@ -346,6 +346,7 @@ class RenderNode {
 			prior.layout.textColor = layout.textColor;
 			prior.layout.measureVersion = layout.measureVersion;
 			prior.layout.intrinsicContent = layout.intrinsicContent;
+			prior.layout.anchor = layout.anchor;
 			layout.copyTextStylesTo(prior.layout);
 		}
 		prior.parent = parent;
@@ -783,6 +784,11 @@ class RenderNode {
 			invalidationFlags |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint;
 		}
 
+		// Placement is a layout input that computed style does not hold either.
+		if (layout.anchor != previous.layout.anchor) {
+			geometryChanged = true;
+			invalidationFlags |= UiDirtyFlag.NeedsLayout;
+		}
 		if (hitTestSelf != previous.hitTestSelf || hitTestBehavior != previous.hitTestBehavior) {
 			geometryChanged = true;
 			invalidationFlags |= UiDirtyFlag.NeedsHitGeometry;

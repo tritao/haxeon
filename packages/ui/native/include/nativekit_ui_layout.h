@@ -17,12 +17,12 @@ extern "C" {
 
 /** Layout bridge and wire-format versions and fixed sizes. */
 enum {
-    NKUI_LAYOUT_API_VERSION = 24,
-    NKUI_LAYOUT_TRANSACTION_VERSION = 17,
-    NKUI_LAYOUT_PATCH_VERSION = 18,
+    NKUI_LAYOUT_API_VERSION = 25,
+    NKUI_LAYOUT_TRANSACTION_VERSION = 18,
+    NKUI_LAYOUT_PATCH_VERSION = 19,
     NKUI_LAYOUT_PATCH_HEADER_BYTES = 32,
     NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16,
-    NKUI_LAYOUT_NODE_RECORD_BYTES = 264,
+    NKUI_LAYOUT_NODE_RECORD_BYTES = 336,
     NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16 * 1024 * 1024,
     NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96
 };
@@ -215,7 +215,75 @@ enum {
     /** Haxe-owned compositing revision for shared scene metadata. */
     NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 256,
     /** Tab-stop interval in space advances; zero preserves default shaping. */
-    NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 260
+    NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 260,
+    /**
+     * What a floating node is placed against after the flow (nkui_layout_anchor_kind); NONE places it at its position.
+     * An anchored node's position is an offset from its placement.
+     */
+    NKUI_LAYOUT_NODE_ANCHOR_KIND_OFFSET = 264,
+    /** The anchor node's ID, for NKUI_LAYOUT_ANCHOR_NODE; it must come before the anchored node in tree order. */
+    NKUI_LAYOUT_NODE_ANCHOR_NODE_OFFSET = 268,
+    /** The anchor rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_RECT. */
+    NKUI_LAYOUT_NODE_ANCHOR_X_OFFSET = 272,
+    NKUI_LAYOUT_NODE_ANCHOR_Y_OFFSET = 276,
+    NKUI_LAYOUT_NODE_ANCHOR_WIDTH_OFFSET = 280,
+    NKUI_LAYOUT_NODE_ANCHOR_HEIGHT_OFFSET = 284,
+    /** The anchor's side the node goes on (nkui_layout_anchor_side). */
+    NKUI_LAYOUT_NODE_ANCHOR_SIDE_OFFSET = 288,
+    /** Distance from the anchor along the side's axis. */
+    NKUI_LAYOUT_NODE_ANCHOR_GAP_OFFSET = 292,
+    /** Cross-axis alignment: this fraction of the anchor's extent meets ... */
+    NKUI_LAYOUT_NODE_ANCHOR_ALIGN_OFFSET = 296,
+    /** ... this fraction of the node's (0 and 0 align starts, 0.5 and 0.5 centres, 1 and 1 ends). */
+    NKUI_LAYOUT_NODE_ANCHOR_BOX_ALIGN_OFFSET = 300,
+    /** nkui_layout_anchor_flags. */
+    NKUI_LAYOUT_NODE_ANCHOR_FLAGS_OFFSET = 304,
+    /** The region the node is kept inside (nkui_layout_anchor_bounds). */
+    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_OFFSET = 308,
+    /** The bounds node's ID, for NKUI_LAYOUT_ANCHOR_BOUNDS_NODE; it must come before the anchored node in tree order. */
+    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_NODE_OFFSET = 312,
+    /** The bounds rectangle in viewport coordinates, for NKUI_LAYOUT_ANCHOR_BOUNDS_RECT. */
+    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_X_OFFSET = 316,
+    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_Y_OFFSET = 320,
+    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_WIDTH_OFFSET = 324,
+    NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_HEIGHT_OFFSET = 328,
+    /** How far inside the bounds the node is kept. */
+    NKUI_LAYOUT_NODE_ANCHOR_MARGIN_OFFSET = 332
+};
+
+/** What a floating node is placed against. */
+typedef uint32_t nkui_layout_anchor_kind;
+enum NK_ENUM(nkui_layout_anchor_kind) {
+    NKUI_LAYOUT_ANCHOR_NONE = 0,
+    NKUI_LAYOUT_ANCHOR_NODE = 1,
+    NKUI_LAYOUT_ANCHOR_RECT = 2
+};
+
+/** The anchor's side a placed node goes on; OVERLAP places it at the anchor's origin. */
+typedef uint32_t nkui_layout_anchor_side;
+enum NK_ENUM(nkui_layout_anchor_side) {
+    NKUI_LAYOUT_ANCHOR_OVERLAP = 0,
+    NKUI_LAYOUT_ANCHOR_BELOW = 1,
+    NKUI_LAYOUT_ANCHOR_ABOVE = 2,
+    NKUI_LAYOUT_ANCHOR_AFTER = 3,
+    NKUI_LAYOUT_ANCHOR_BEFORE = 4
+};
+
+/** Bit flags of a placed node. */
+typedef uint32_t nkui_layout_anchor_flags;
+enum NK_ENUM(nkui_layout_anchor_flags) {
+    /** Take the opposite side when the node does not fit on its own and fits better there. */
+    NKUI_LAYOUT_ANCHOR_FLIP = 1u << 0,
+    /** Align the opposite edges on the cross axis when the node would overflow the bounds. */
+    NKUI_LAYOUT_ANCHOR_FLIP_CROSS = 1u << 1
+};
+
+/** The region a placed node is kept inside. */
+typedef uint32_t nkui_layout_anchor_bounds;
+enum NK_ENUM(nkui_layout_anchor_bounds) {
+    NKUI_LAYOUT_ANCHOR_BOUNDS_VIEWPORT = 0,
+    NKUI_LAYOUT_ANCHOR_BOUNDS_NODE = 1,
+    NKUI_LAYOUT_ANCHOR_BOUNDS_RECT = 2
 };
 
 /** Opaque retained layout session used by a Haxe-owned component tree. */

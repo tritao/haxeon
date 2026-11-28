@@ -153,6 +153,36 @@ struct LayoutTransform {
     float ty = 0.0f;
 };
 
+struct LayoutRect {
+    bool operator==(const LayoutRect &) const = default;
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+};
+
+/** Placement of a floating node against an anchor, after the flow solve (nkui_layout_anchor_*). */
+enum class LayoutAnchorKind : uint8_t { None = 0, Node = 1, Rect = 2 };
+enum class LayoutAnchorSide : uint8_t { Overlap = 0, Below = 1, Above = 2, After = 3, Before = 4 };
+enum class LayoutAnchorBounds : uint8_t { Viewport = 0, Node = 1, Rect = 2 };
+
+struct LayoutAnchor {
+    bool operator==(const LayoutAnchor &) const = default;
+    LayoutAnchorKind kind = LayoutAnchorKind::None;
+    uint32_t node = 0;
+    LayoutRect rect{};
+    LayoutAnchorSide side = LayoutAnchorSide::Overlap;
+    float gap = 0.0f;
+    float align = 0.0f;
+    float box_align = 0.0f;
+    bool flip = false;
+    bool flip_cross = false;
+    LayoutAnchorBounds bounds = LayoutAnchorBounds::Viewport;
+    uint32_t bounds_node = 0;
+    LayoutRect bounds_rect{};
+    float margin = 0.0f;
+};
+
 struct LayoutStyle {
     bool operator==(const LayoutStyle &) const = default;
     LayoutAxis width{};
@@ -188,6 +218,8 @@ struct LayoutStyle {
     LayoutTransform transform{};
     float transform_origin_x = 0.5f;
     float transform_origin_y = 0.5f;
+    /** Where a floating node is placed after the flow; with an anchor, position_x and position_y offset it. */
+    LayoutAnchor anchor{};
 };
 
 /** A flat, frame-scoped render/layout tree. Parent indices refer to this array. */
@@ -267,14 +299,6 @@ using LayoutMeasureCallback =
 struct LayoutError {
     std::size_t node_index = 0;
     const char *message = nullptr;
-};
-
-struct LayoutRect {
-    bool operator==(const LayoutRect &) const = default;
-    float x = 0.0f;
-    float y = 0.0f;
-    float width = 0.0f;
-    float height = 0.0f;
 };
 
 constexpr uint32_t kInvalidLayoutIndex = UINT32_MAX;

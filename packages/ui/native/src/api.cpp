@@ -1037,6 +1037,51 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
                 !read_node_u32(record, NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET,
                                composite_revision))
                 return false;
+            uint32_t anchor_kind = 0, anchor_side = 0, anchor_flags = 0, anchor_bounds = 0;
+            nkui::LayoutAnchor anchor{};
+            if (!read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_KIND_OFFSET, anchor_kind) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_NODE_OFFSET, anchor.node) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_X_OFFSET, anchor.rect.x) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_Y_OFFSET, anchor.rect.y) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_WIDTH_OFFSET, anchor.rect.width) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_HEIGHT_OFFSET, anchor.rect.height) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_SIDE_OFFSET, anchor_side) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_GAP_OFFSET, anchor.gap) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_ALIGN_OFFSET, anchor.align) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOX_ALIGN_OFFSET, anchor.box_align) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_FLAGS_OFFSET, anchor_flags) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_OFFSET, anchor_bounds) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_NODE_OFFSET, anchor.bounds_node) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_X_OFFSET, anchor.bounds_rect.x) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_Y_OFFSET, anchor.bounds_rect.y) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_WIDTH_OFFSET,
+                                 anchor.bounds_rect.width) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_HEIGHT_OFFSET,
+                                 anchor.bounds_rect.height) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_ANCHOR_MARGIN_OFFSET, anchor.margin))
+                return false;
+            const auto finite_rect = [](const nkui::LayoutRect &rect) {
+                return std::isfinite(rect.x) && std::isfinite(rect.y) && std::isfinite(rect.width) &&
+                       std::isfinite(rect.height) && rect.width >= 0.0f && rect.height >= 0.0f;
+            };
+            // An anchor places a floating node; its references are other nodes' IDs, its fractions lie in 0..1.
+            if (anchor_kind > NKUI_LAYOUT_ANCHOR_RECT || anchor_side > NKUI_LAYOUT_ANCHOR_BEFORE ||
+                anchor_bounds > NKUI_LAYOUT_ANCHOR_BOUNDS_RECT ||
+                (anchor_flags & ~(NKUI_LAYOUT_ANCHOR_FLIP | NKUI_LAYOUT_ANCHOR_FLIP_CROSS)) != 0 ||
+                !finite_rect(anchor.rect) || !finite_rect(anchor.bounds_rect) || !std::isfinite(anchor.gap) ||
+                !std::isfinite(anchor.margin) || anchor.margin < 0.0f || !std::isfinite(anchor.align) ||
+                anchor.align < 0.0f || anchor.align > 1.0f || !std::isfinite(anchor.box_align) ||
+                anchor.box_align < 0.0f || anchor.box_align > 1.0f ||
+                (anchor_kind != NKUI_LAYOUT_ANCHOR_NONE && (node_flags & NKUI_LAYOUT_NODE_FLOATING) == 0) ||
+                (anchor_kind == NKUI_LAYOUT_ANCHOR_NODE && (anchor.node == 0 || anchor.node == id)) ||
+                (anchor_bounds == NKUI_LAYOUT_ANCHOR_BOUNDS_NODE &&
+                 (anchor.bounds_node == 0 || anchor.bounds_node == id)))
+                return false;
+            anchor.kind = static_cast<nkui::LayoutAnchorKind>(anchor_kind);
+            anchor.side = static_cast<nkui::LayoutAnchorSide>(anchor_side);
+            anchor.bounds = static_cast<nkui::LayoutAnchorBounds>(anchor_bounds);
+            anchor.flip = (anchor_flags & NKUI_LAYOUT_ANCHOR_FLIP) != 0;
+            anchor.flip_cross = (anchor_flags & NKUI_LAYOUT_ANCHOR_FLIP_CROSS) != 0;
             const uint32_t child_align_x = child_alignment & 0xffu;
             const uint32_t child_align_y = (child_alignment >> 8u) & 0xffu;
             const bool floating = (node_flags & NKUI_LAYOUT_NODE_FLOATING) != 0;
@@ -1111,6 +1156,7 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
             node.style.z_index = z_index;
             node.style.clip_to_parent = clip_to_parent;
             node.style.overlay = overlay;
+            node.style.anchor = anchor;
             node.text_style.family = static_cast<nkui::FontFamily>(font_family);
             node.paragraph_style.wrap = static_cast<nkui::TextWrapMode>(text_wrap);
             node.paragraph_style.alignment = static_cast<nkui::TextAlignment>(text_alignment);

@@ -2,6 +2,7 @@ import haxeon.ui.Color;
 import haxeon.ui.FontCollection;
 import haxeon.ui.Image;
 import haxeon.ui.Insets;
+import haxeon.ui.LayoutAnchor;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutChanges;
 import haxeon.ui.LayoutContent;
@@ -189,6 +190,85 @@ class LayoutSessionSmoke {
 	}
 
 	/** The actual component root preserves intrinsic and authored size without a structural layout node. */
+	/**
+	 * A floating node placed against an anchor after the flow solve: on a side with a gap, flipped, aligned and clamped,
+	 * with its subtree moving with it, and the references checked.
+	 */
+	static function anchored(fonts:FontCollection):Void {
+		var session = LayoutSession.create();
+		session.setFonts(fonts);
+		var frame = new LayoutFrame(400.0, 300.0);
+		function place(anchor:LayoutAnchor, ?positionX:Float, ?positionY:Float):{popup:Rect, child:Rect} {
+			var root = LayoutNode.box(300);
+			root.style.width = LayoutAxis.fixed(400.0);
+			root.style.height = LayoutAxis.fixed(300.0);
+			root.style.padding = new Insets(left: 50.0, top: 40.0, right: 0.0, bottom: 0.0);
+			var target = LayoutNode.box(301);
+			target.style.width = LayoutAxis.fixed(100.0);
+			target.style.height = LayoutAxis.fixed(30.0);
+			root.add(target);
+			var popup = LayoutNode.box(302);
+			popup.style.positioning = haxeon.ui.LayoutStyle.LayoutPositioning.Absolute;
+			popup.style.width = LayoutAxis.fixed(120.0);
+			popup.style.height = LayoutAxis.fixed(80.0);
+			popup.style.padding = new Insets(left: 4.0, top: 6.0, right: 0.0, bottom: 0.0);
+			if (positionX != null) popup.style.positionX = positionX;
+			if (positionY != null) popup.style.positionY = positionY;
+			popup.anchor = anchor;
+			var child = LayoutNode.box(303);
+			child.style.width = LayoutAxis.fixed(20.0);
+			child.style.height = LayoutAxis.fixed(20.0);
+			popup.add(child);
+			root.add(popup);
+			var resolved = session.submit(root, frame, null, true);
+			var placed:Null<Rect> = null, inner:Null<Rect> = null;
+			for (item in resolved) {
+				if (item.id == 302) placed = new Rect(item.x, item.y, item.width, item.height);
+				if (item.id == 303) inner = new Rect(item.x, item.y, item.width, item.height);
+			}
+			if (placed == null || inner == null) throw "An anchored node or its child was not laid out";
+			return {popup: placed, child: inner};
+		}
+		function expect(label:String, anchor:LayoutAnchor, x:Float, y:Float, ?positionX:Float, ?positionY:Float):Void {
+			var placed = place(anchor, positionX, positionY);
+			if (Math.abs(placed.popup.x - x) > 0.01 || Math.abs(placed.popup.y - y) > 0.01)
+				throw 'Anchored $label at ${placed.popup.x}, ${placed.popup.y} instead of $x, $y';
+			// The subtree moves with its node: the child keeps the popup's padding from it.
+			if (Math.abs(placed.child.x - (x + 4.0)) > 0.01 || Math.abs(placed.child.y - (y + 6.0)) > 0.01)
+				throw 'The child of anchored $label stayed at ${placed.child.x}, ${placed.child.y}';
+		}
+		var target = AnchorTarget.Node(301);
+		expect("below", new LayoutAnchor(target, side: AnchorSide.Below, gap: 4.0), 50.0, 74.0);
+		// Above has 36 of room for 80 and below more, so it flips; without flip it is clamped into the viewport instead.
+		expect("above, flipped", new LayoutAnchor(target, side: AnchorSide.Above, gap: 4.0, flip: true), 50.0, 74.0);
+		expect("above, clamped", new LayoutAnchor(target, side: AnchorSide.Above, gap: 4.0), 50.0, 0.0);
+		// Near the corner: flipped above, and kept 8 inside the right edge.
+		expect("at a rectangle", new LayoutAnchor(AnchorTarget.Area(new Rect(350.0, 280.0, 10.0, 10.0)),
+			side: AnchorSide.Below, flip: true, margin: 8.0), 272.0, 200.0);
+		// Overflowing the right edge, the cross axis aligns the end edges instead.
+		expect("flipped across", new LayoutAnchor(AnchorTarget.Area(new Rect(350.0, 100.0, 40.0, 10.0)),
+			side: AnchorSide.Below, flipCross: true), 270.0, 110.0);
+		// Centred beside the anchor.
+		expect("after, centred", new LayoutAnchor(target, side: AnchorSide.After, gap: 8.0, align: 0.5, boxAlign: 0.5),
+			158.0, 15.0);
+		// Overlapping the anchor, offset by its position.
+		expect("overlapping, offset", new LayoutAnchor(target), 60.0, 12.0, 10.0, -28.0);
+		// Kept inside a region with a margin.
+		expect("within a region", new LayoutAnchor(AnchorTarget.Area(new Rect(190.0, 10.0, 5.0, 5.0)),
+			side: AnchorSide.Below, within: AnchorBounds.Area(new Rect(0.0, 0.0, 200.0, 200.0)), margin: 6.0), 74.0,
+			15.0);
+		// A reference must come before the anchored node, and only a floating node is anchored.
+		var rejectedLater = try {
+			place(new LayoutAnchor(AnchorTarget.Node(303)));
+			false;
+		} catch (_:Dynamic) true;
+		if (!rejectedLater) throw "An anchor naming a later node was accepted";
+		var flowNode = LayoutNode.box(310);
+		flowNode.anchor = new LayoutAnchor(target);
+		if (!rejectsTransaction(flowNode)) throw "An anchor on a node in the flow was accepted";
+		session.dispose();
+	}
+
 	static function componentRootLayout():Void {
 		if (ScopeRootSubmissionMain.run() != 42) throw "A cached submission lost its current component body root";
 		var navigation = NavigationScopesMain.run();
@@ -270,6 +350,7 @@ class LayoutSessionSmoke {
 		fonts.add(fontPath);
 		incremental(fonts);
 		measuredVersion(fonts);
+		anchored(fonts);
 		var duplicateRoot = LayoutNode.box(80);
 		var sharedChild = LayoutNode.box(81);
 		duplicateRoot.add(sharedChild);

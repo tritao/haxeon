@@ -37,6 +37,8 @@ class LayoutNode {
 	public var hitChildren:Bool;
 	/** Optional external content measured when this node is Custom. */
 	public var intrinsicContent:Null<LayoutContent>;
+	/** Where the layout places this node, absolutely positioned, after the flow solve; null places it at its position. */
+	public var anchor:Null<LayoutAnchor>;
 	/** Intrinsic input version. Sampled from an attached provider before submit; otherwise set by its caller. */
 	public var measureVersion:Int;
 	/** Paint/text revision consumed by native raster-cache identity. */
@@ -65,6 +67,7 @@ class LayoutNode {
 		hitSelf = true;
 		hitChildren = true;
 		intrinsicContent = null;
+		anchor = null;
 		measureVersion = 0;
 		contentRevision = 0;
 		geometryRevision = 0;

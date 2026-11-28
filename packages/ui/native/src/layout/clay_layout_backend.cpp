@@ -554,6 +554,21 @@ bool inverse_transform(LayoutTransform transform, LayoutTransform &out) {
     return finite_transform(out);
 }
 
+/** A node's own transform about its transform origin, from its layout bounds. */
+LayoutTransform local_transform(const LayoutNode &node, LayoutRect bounds) {
+    const float origin_x = bounds.x + bounds.width * node.style.transform_origin_x;
+    const float origin_y = bounds.y + bounds.height * node.style.transform_origin_y;
+    return compose(compose(translated(origin_x, origin_y), node.style.transform), translated(-origin_x, -origin_y));
+}
+
+/**
+ * The start of a box of `size` placed on the cross axis of an anchor from `start` over `extent`: the anchor's `align`
+ * fraction meets the box's `box_align` fraction.
+ */
+float cross_start(float start, float extent, float size, float align, float box_align) {
+    return start + extent * align - size * box_align;
+}
+
 LayoutRect intersect_axes(LayoutRect clip, LayoutRect bounds, bool horizontal, bool vertical) {
     if (horizontal) {
         const float right = std::min(clip.x + clip.width, bounds.x + bounds.width);
@@ -900,6 +915,149 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, float width, float 
         node_bounds[index] = rect_from(data.boundingBox);
     }
 
+    // Anchored floats are placed after the flow solve (ADR 0002, decision 6). Each moves with its subtree in layout space,
+    // before geometry, clips and content bounds are resolved from the bounds; the shifts move their primitives below.
+    std::vector<LayoutRect> placement_shift;
+    std::unordered_map<uint32_t, std::size_t> index_of_id;
+    bool anchored = false;
+    for (const LayoutNode &node : nodes)
+        anchored = anchored || node.style.anchor.kind != LayoutAnchorKind::None;
+    if (anchored) {
+        placement_shift.assign(nodes.size(), LayoutRect{});
+        index_of_id.reserve(nodes.size());
+        for (std::size_t index = 0; index < nodes.size(); ++index)
+            index_of_id[nodes[index].id] = index;
+        const auto world_of = [&](std::size_t index) {
+            LayoutTransform transform{};
+            std::vector<std::size_t> chain;
+            for (int32_t at = static_cast<int32_t>(index); at >= 0; at = nodes[static_cast<std::size_t>(at)].parent)
+                chain.push_back(static_cast<std::size_t>(at));
+            for (auto at = chain.rbegin(); at != chain.rend(); ++at)
+                transform = compose(transform, local_transform(nodes[*at], node_bounds[*at]));
+            return transform;
+        };
+        // A reference must come before the anchored node, so that its bounds are already final.
+        const auto earlier = [&](uint32_t id, std::size_t anchored, std::size_t &out) {
+            const auto found = index_of_id.find(id);
+            if (found == index_of_id.end() || found->second >= anchored) {
+                if (error) {
+                    error->node_index = anchored;
+                    error->message = "a layout anchor must name a node before the anchored node";
+                }
+                return false;
+            }
+            out = found->second;
+            return true;
+        };
+        const auto shift_subtree = [&](auto &&self, std::size_t index, float dx, float dy) -> void {
+            node_bounds[index].x += dx;
+            node_bounds[index].y += dy;
+            placement_shift[index].x += dx;
+            placement_shift[index].y += dy;
+            for (const std::size_t child : state.children[index])
+                self(self, child, dx, dy);
+        };
+        for (std::size_t index = 0; index < nodes.size(); ++index) {
+            const auto &node = nodes[index];
+            const LayoutAnchor &anchor = node.style.anchor;
+            if (anchor.kind == LayoutAnchorKind::None)
+                continue;
+            LayoutRect target = anchor.rect;
+            std::size_t reference = 0;
+            if (anchor.kind == LayoutAnchorKind::Node) {
+                if (!earlier(anchor.node, index, reference))
+                    return false;
+                target = transform_bounds(node_bounds[reference], world_of(reference));
+            }
+            LayoutRect region{0.0f, 0.0f, width, height};
+            if (anchor.bounds == LayoutAnchorBounds::Rect)
+                region = anchor.bounds_rect;
+            else if (anchor.bounds == LayoutAnchorBounds::Node) {
+                if (!earlier(anchor.bounds_node, index, reference))
+                    return false;
+                region = transform_bounds(node_bounds[reference], world_of(reference));
+            }
+            const LayoutTransform world = world_of(index);
+            const LayoutRect current = transform_bounds(node_bounds[index], world);
+            const float w = current.width, h = current.height, margin = anchor.margin;
+            const float left = region.x + margin, top = region.y + margin;
+            const float right = region.x + region.width - margin, bottom = region.y + region.height - margin;
+            const bool vertical = anchor.side == LayoutAnchorSide::Below || anchor.side == LayoutAnchorSide::Above;
+            // The main axis: the side, or its opposite when the node overflows there and the opposite has more room.
+            const auto main_start = [&](LayoutAnchorSide side) {
+                switch (side) {
+                case LayoutAnchorSide::Below: return target.y + target.height + anchor.gap;
+                case LayoutAnchorSide::Above: return target.y - anchor.gap - h;
+                case LayoutAnchorSide::After: return target.x + target.width + anchor.gap;
+                case LayoutAnchorSide::Before: return target.x - anchor.gap - w;
+                default: return 0.0f;
+                }
+            };
+            const auto opposite = [](LayoutAnchorSide side) {
+                switch (side) {
+                case LayoutAnchorSide::Below: return LayoutAnchorSide::Above;
+                case LayoutAnchorSide::Above: return LayoutAnchorSide::Below;
+                case LayoutAnchorSide::After: return LayoutAnchorSide::Before;
+                case LayoutAnchorSide::Before: return LayoutAnchorSide::After;
+                default: return side;
+                }
+            };
+            // Room for the node on `side`: how far it may extend before it leaves the region.
+            const auto room = [&](LayoutAnchorSide side) {
+                switch (side) {
+                case LayoutAnchorSide::Below: return bottom - (target.y + target.height + anchor.gap);
+                case LayoutAnchorSide::Above: return (target.y - anchor.gap) - top;
+                case LayoutAnchorSide::After: return right - (target.x + target.width + anchor.gap);
+                case LayoutAnchorSide::Before: return (target.x - anchor.gap) - left;
+                default: return 0.0f;
+                }
+            };
+            float x = target.x, y = target.y;
+            if (anchor.side != LayoutAnchorSide::Overlap) {
+                LayoutAnchorSide side = anchor.side;
+                const float extent = vertical ? h : w;
+                if (anchor.flip && room(side) < extent && room(opposite(side)) > room(side))
+                    side = opposite(side);
+                const float along = main_start(side);
+                float across = vertical ? cross_start(target.x, target.width, w, anchor.align, anchor.box_align)
+                                        : cross_start(target.y, target.height, h, anchor.align, anchor.box_align);
+                const float size = vertical ? w : h, limit = vertical ? right : bottom, floor = vertical ? left : top;
+                if (anchor.flip_cross && across + size > limit) {
+                    const float swapped = vertical
+                        ? cross_start(target.x, target.width, w, 1.0f - anchor.align, 1.0f - anchor.box_align)
+                        : cross_start(target.y, target.height, h, 1.0f - anchor.align, 1.0f - anchor.box_align);
+                    if (swapped >= floor)
+                        across = swapped;
+                }
+                x = vertical ? across : along;
+                y = vertical ? along : across;
+            }
+            x += node.style.position_x;
+            y += node.style.position_y;
+            // Kept inside the region; a node larger than it keeps its start edge inside.
+            x = std::max(left, std::min(x, right - w));
+            y = std::max(top, std::min(y, bottom - h));
+            float dx = x - current.x, dy = y - current.y;
+            if (node.parent >= 0) {
+                LayoutTransform inverse{};
+                if (!inverse_transform(world_of(static_cast<std::size_t>(node.parent)), inverse)) {
+                    if (error) {
+                        error->node_index = index;
+                        error->message = "an anchored node's parent transform is not invertible";
+                    }
+                    return false;
+                }
+                const float layout_dx = inverse.a * dx + inverse.c * dy;
+                const float layout_dy = inverse.b * dx + inverse.d * dy;
+                dx = layout_dx;
+                dy = layout_dy;
+            }
+            // Clay placed the node at its position from the parent's origin; the placement replaces that.
+            if (dx != 0.0f || dy != 0.0f)
+                shift_subtree(shift_subtree, index, dx, dy);
+        }
+    }
+
     out.text_layouts.reserve(state.text_layouts.size());
     std::vector<TextLayoutId> retained_text_layouts;
     retained_text_layouts.reserve(state.text_layouts.size());
@@ -925,16 +1083,8 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, float width, float 
                                       LayoutTransform parent_transform, bool parent_visible,
                                       LayoutRect parent_clip, LayoutRect parent_bounds) -> bool {
         const auto &node = nodes[index];
-        const LayoutRect node_bounds_rect = node_bounds[index];
-        const float origin_x =
-            node_bounds_rect.x + node_bounds_rect.width * node.style.transform_origin_x;
-        const float origin_y =
-            node_bounds_rect.y + node_bounds_rect.height * node.style.transform_origin_y;
-        const LayoutTransform to_origin = translated(origin_x, origin_y);
-        const LayoutTransform from_origin = translated(-origin_x, -origin_y);
-        const LayoutTransform local_transform =
-            compose(compose(to_origin, node.style.transform), from_origin);
-        const LayoutTransform transform = compose(parent_transform, local_transform);
+        const LayoutTransform transform =
+            compose(parent_transform, local_transform(node, node_bounds[index]));
         const bool visible = parent_visible && node.style.visible;
         const LayoutRect transformed = transform_bounds(node_bounds[index], transform);
         LayoutRect item_clip = parent_clip;
@@ -1055,7 +1205,7 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, float width, float 
                                         node.style.clip_vertical);
         }
         for (const std::size_t child : state.children[index]) {
-            if (!self(self, child, transform, visible, child_clip, node_bounds_rect))
+            if (!self(self, child, transform, visible, child_clip, node_bounds[index]))
                 return false;
         }
         LayoutRect subtree = item.hit_self && item.visible
@@ -1090,6 +1240,13 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, float width, float 
             const auto item_index = state.snapshot_items.find(primitive.node_id);
             const auto *item = item_index == LayoutIdIndex::missing ? nullptr : &out.items[item_index];
 #endif
+            if (!placement_shift.empty()) {
+                const auto moved = index_of_id.find(primitive.node_id);
+                if (moved != index_of_id.end()) {
+                    primitive.bounds.x += placement_shift[moved->second].x;
+                    primitive.bounds.y += placement_shift[moved->second].y;
+                }
+            }
             if (item) {
                 primitive.transform = item->transform;
                 primitive.visible = item->visible;
