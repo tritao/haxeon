@@ -769,7 +769,12 @@ class TextField implements ScopeView {
 				}
 			} else if (command && event.key == UiKey.V) {
 				if (readOnly) handled = false;
-				else context.clipboard.readText(function(pasted) {
+				else context.clipboard.readText(function(answer) {
+					// Nothing pastes when the platform has no text for it, or refused.
+					var pasted = switch answer {
+						case Ok(text): text;
+						case Err(_): return;
+					};
 					if (editor.isDisposed() || !editor.focused) return;
 					if (delegateEdit(Paste(pasted))) return;
 					var beforePaste = editor.documentRevision();

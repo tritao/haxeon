@@ -7,7 +7,7 @@ import nativekit.ffi.NativeKit;
 
 /**
  * The clipboard text fields copy to and paste from. Reads go through the platform's requests, which a host attaches
- * with its surface (`UiSurfaceBinding`); without them, as in a headless test, a read gives nothing.
+ * with its surface (`UiSurfaceBinding`); without them, as in a headless test, a read answers `Unsupported`.
  */
 class ClipboardService implements Disposable {
 	final reads:Array<Future<Result<String, NativeKitError>>> = [];
@@ -23,7 +23,7 @@ class ClipboardService implements Disposable {
 		this.requests = requests;
 	}
 
-	/** Stops reading through the attached requests; a read still in flight gives nothing. */
+	/** Stops reading through the attached requests; a read still in flight answers nothing, its reader having gone. */
 	public function detach():Void {
 		requests = null;
 		stopReads();
@@ -35,21 +35,27 @@ class ClipboardService implements Disposable {
 		NativeKit.nk_clipboard_set_text_checked(text == null ? "" : text);
 	}
 
-	/** Reads the clipboard's text and gives it to `handler`; a read that fails, or is cancelled, gives nothing. */
-	public function readText(handler:String->Void):Void {
+	/**
+	 * Reads the clipboard's text and answers `handler` with it, or with why not: `Unsupported` without a host,
+	 * `Cancelled` when the read was, or what the platform reported.
+	 */
+	public function readText(handler:Result<String, NativeKitError>->Void):Void {
 		ensureLive();
 		if (handler == null)
 			throw "Clipboard reads require a completion handler";
 		var source = requests;
-		if (source == null)
+		if (source == null) {
+			handler(Err(Unsupported("no platform clipboard is attached")));
 			return;
+		}
 		var read = source.readClipboardText();
 		reads.push(read);
 		read.onComplete(function(outcome) {
 			reads.remove(read);
 			switch outcome {
-				case Success(Ok(text)): handler(text);
-				case _:
+				case Success(answer): handler(answer);
+				case Cancelled: handler(Err(Cancelled));
+				case Stopped:
 			}
 		});
 	}

@@ -2027,10 +2027,10 @@ class FrameworkSmoke {
 		if (pumpEvents != 2 || !pumpSubscription.isDisposed()) return 103;
 		eventRuntime.dispose();
 		if (!eventPump.isDisposed()) return 104;
-		// A clipboard read's answer settles its request's future in the platform, never reaching the input adapter.
-		var pasted = false;
-		context.clipboard.readText(function(_) pasted = true);
-		if (pasted) return 39;
+		// Without a host's requests attached, a clipboard read answers Unsupported at once.
+		var unsupported = false;
+		context.clipboard.readText(function(answer) unsupported = answer.match(Err(Unsupported(_))));
+		if (!unsupported) return 39;
 		if (input.consume(PointerMove(new Handle(18), 4.0, 4.0))) return 12;
 		if (!input.consume(PointerMove(source, 4.0, 4.0)) || hoverEnters != 0 || !input.consume(PointerScroll(source,
 			1.5,
