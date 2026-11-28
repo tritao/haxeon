@@ -199,8 +199,8 @@ class DocumentationTools {
 
 	static function isDeclarationWord(value:String):Bool
 		return switch value {
-			case "public" | "private" | "static" | "final" | "extern" | "override" | "inline" | "dynamic" | "function"
-				| "var": true;
+			case "public" | "private" | "static" | "final" | "extern" | "override" | "inline" | "dynamic" | "abstract"
+				| "function" | "var": true;
 			case _: false;
 		};
 
