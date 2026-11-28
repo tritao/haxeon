@@ -160,6 +160,14 @@ for threads in 1 4; do
  HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=$threads LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/dirty-slices" software
  HL_GC_TEST_CANCEL_DIRTY=1 HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=$threads LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/dirty-slices" software
 done
+# A cycle whose slices cannot reach a fixed point must still end, on either tracker.
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_convergence.c" -L"$library" -lhl -lm -ldl -lpthread -o "$work/convergence"
+for backend in 0 1; do
+ [[ $backend != 0 || $kernel_available == 1 ]] || continue
+ for threads in 1 4; do
+  HL_GC_INCREMENTAL_TEST_SOFTWARE=$backend HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=$threads LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/convergence"
+ done
+done
 # Pacing controls must start earlier without moving full-collection pressure limits.
 "${CC:-cc}" -O2 -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_pacing.c" -L"$library" -lhl -lm -ldl -lpthread -o "$work/pacing"
 for backend in 0 1; do
