@@ -52,45 +52,37 @@ class LayoutSessionSmoke {
 			|| precise.contentBounds.height != 0.8
 			|| precise.transform.a != 0.1
 			|| precise.baseline != 0.7) throw "Directly constructed geometry lost precision";
-		var size = NativeKitUIConstants.NKUI_LAYOUT_RESOLVED_ITEM_BYTES;
-		var bytes = Bytes.alloc(size);
-		bytes.setInt32(0, size);
-		bytes.setInt32(4, 1);
-		bytes.setInt32(60, 0x3f800000);
-		bytes.setInt32(72, 0x3f800000);
-		var first = ResolvedLayoutItem.decode(bytes, 0);
-		if (ResolvedLayoutItem.decode(bytes, 0, first) != first) throw "Unchanged geometry was not reused";
-		bytes.setInt32(12, 0x3f800000);
-		var changed = ResolvedLayoutItem.decode(bytes, 0, first);
-		if (changed == first || first.x != 0 || changed.x != 1) throw "Changed geometry mutated a prior snapshot";
-		bytes.setInt32(12, -2147483648);
-		var negativeZero = ResolvedLayoutItem.decode(bytes, 0, first);
-		if (negativeZero == first || 1.0 / negativeZero.x >= 0) throw "Reused geometry lost negative zero";
-		// Identity decoding canonicalizes signed zero. A caller-provided previous item must not
-		// bypass that canonicalization, even when it matches the raw record bit for bit.
-		bytes.setInt32(12, 0);
-		bytes.setInt32(64, -2147483648);
-		var priorNegativeTransform = new ResolvedLayoutItem(1,
-			0,
-			0,
-			0,
-			0,
-			0,
-			new Rect(0, 0, 0, 0),
-			new Rect(0, 0, 0, 0),
-			new Transform2D(1, negativeZero.x, 0, 1, 0, 0),
-			0);
-		var canonical = ResolvedLayoutItem.decode(bytes, 0, priorNegativeTransform);
-		if (canonical == priorNegativeTransform
-			|| 1.0 / canonical.transform.b <= 0) throw "Reusing geometry skipped identity transform canonicalization";
-		bytes.setInt32(60, 0x40000000);
-		var nonIdentity = ResolvedLayoutItem.decode(bytes, 0);
-		if (1.0 / nonIdentity.transform.b >= 0 || ResolvedLayoutItem.decode(bytes,
-			0, nonIdentity) != nonIdentity) throw "Non-identity geometry lost or failed to reuse negative zero";
-		bytes.setInt32(8, 4);
-		var rejected = false;
-		try ResolvedLayoutItem.decode(bytes, 0, first) catch (_:Dynamic) rejected = true;
-		if (!rejected) throw "Reusing geometry skipped record validation";
+	}
+
+	/** A solve hands back the same item for a node whose geometry did not change, and a new one for one whose did. */
+	static function resolvedItemReuse(fonts:FontCollection):Void {
+		var session = LayoutSession.create();
+		session.setFonts(fonts);
+		var root = LayoutNode.box(20000);
+		root.style.direction = LayoutDirection.LeftToRight;
+		root.style.width = LayoutAxis.fixed(200);
+		root.style.height = LayoutAxis.fixed(100);
+		var first = LayoutNode.box(20001), second = LayoutNode.box(20002);
+		first.style.width = second.style.width = LayoutAxis.fixed(40);
+		first.style.height = second.style.height = LayoutAxis.fixed(20);
+		root.add(first);
+		root.add(second);
+		var frame = new LayoutFrame(200, 100);
+		inline function item(items:Array<ResolvedLayoutItem>, id:Int):ResolvedLayoutItem {
+			var found:Null<ResolvedLayoutItem> = null;
+			for (each in items) if (each.id == id) found = each;
+			if (found == null) throw "A solve lost a node";
+			return found;
+		}
+		var before = session.submit(root, frame).copy();
+		var again = session.submit(root, frame);
+		for (index in 0...before.length) if (again[index] != before[index]) throw "Unchanged geometry was not reused";
+		first.style.width = LayoutAxis.fixed(60);
+		var after = session.submit(root, frame);
+		if (item(after, 20001) == item(before, 20001) || item(after, 20001).width != 60
+			|| item(before, 20001).width != 40) throw "Changed geometry mutated a prior item";
+		if (item(after, 20002) == item(before, 20002)) throw "A moved sibling kept its old item";
+		session.dispose();
 	}
 
 	static function incremental(fonts:FontCollection):Void {
@@ -351,6 +343,7 @@ class LayoutSessionSmoke {
 		incremental(fonts);
 		measuredVersion(fonts);
 		anchored(fonts);
+		resolvedItemReuse(fonts);
 		var duplicateRoot = LayoutNode.box(80);
 		var sharedChild = LayoutNode.box(81);
 		duplicateRoot.add(sharedChild);

@@ -41,6 +41,8 @@ class UiContext implements Disposable {
 	final session:LayoutSession;
 	/** Native layout solves of the frame being submitted, over its build passes (`UiFrameMetrics.layoutSolves`). */
 	var frameLayoutSolves:Int = 0;
+	/** Whether the tree laid out last differs from the one NativeKit has: passes lay out in Haxe, and a frame publishes once. */
+	var unpublished:Bool = false;
 	final layoutChanges:LayoutChanges = new LayoutChanges();
 	final comparisonFrame:TreeDiffFrame;
 
@@ -568,7 +570,8 @@ class UiContext implements Disposable {
 		if (verifyRetentionEvery > 0 && !verifying) checkUnannouncedEdits(next);
 
 		buildContext.takeRetainedEdits(currentNodesById);
-		layoutChanges.clear();
+		// Changes accumulate over a frame's passes until it publishes.
+		if (!unpublished) layoutChanges.clear();
 		comparisonFrame.topology = submittedTopology;
 		comparisonFrame.preserveRevisions = false;
 		var styleInvalidation = TreeDiff.compare(root,
@@ -605,11 +608,10 @@ class UiContext implements Disposable {
 				if (previousResolved != null) resolved.push(previousResolved);
 			});
 		} else {
-			session.verifyTransactions = verifyRetentionEvery > 0;
-			resolved = session.submit(next.layout, frame, layoutChanges, verifying);
+			resolved = session.solve(next.layout, frame);
+			unpublished = true;
 			frameLayoutSolves++;
 		}
-		layoutChanges.clear();
 		diagnosticStage = 6;
 		var nodeCount = 0;
 		var mountedHash = 0;
@@ -672,9 +674,9 @@ class UiContext implements Disposable {
 			TreeDiff.collectLayoutEdits(currentNodesById, buildContext.patchedPriors(),
 				layoutChanges);
 			buildContext.endPatchFrame();
-			resolved = session.submit(next.layout, frame, layoutChanges, verifying);
+			resolved = session.solve(next.layout, frame);
+			unpublished = true;
 			frameLayoutSolves++;
-			layoutChanges.clear();
 			layoutPass++;
 		}
 		var nativeLayoutEndedAt = Sys.time();
@@ -707,6 +709,12 @@ class UiContext implements Disposable {
 				Sys.time(),
 				nodeCount, frameLayoutSolves);
 			return submitInternal(frame, cacheKey, build, reconcileNewFocus, buildFeedbackPass + 1);
+		}
+		if (unpublished) {
+			session.verifyTransactions = verifyRetentionEvery > 0;
+			session.publish(next.layout, frame, layoutChanges, verifying);
+			layoutChanges.clear();
+			unpublished = false;
 		}
 		syncWindowDecorations(next);
 		diagnosticStage = 9;

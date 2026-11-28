@@ -7,7 +7,10 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutContent;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.Rect;
+import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.TextStyle;
+import haxeon.ui.Transform2D;
 
 /**
  * Lays a `LayoutNode` tree out (ADR 0009). Each axis is solved in two passes: fit sizes go up, a box fitting its flow
@@ -25,6 +28,10 @@ class LayoutSolver {
 	final boxes:Array<LayoutBox> = [];
 	final texts:Map<Int, TextSize> = new Map();
 	final contents:Map<Int, ContentMeasures> = new Map();
+	/** Each node's item from the last resolution, and from this one; swapped after each, so removed nodes drop out. */
+	var previousItems:Map<Int, ResolvedLayoutItem> = new Map();
+	var nextItems:Map<Int, ResolvedLayoutItem> = new Map();
+	final resolvedItems:Array<ResolvedLayoutItem> = [];
 	final indexOf:IntIndex = new IntIndex();
 	final measure:TextMeasure = new TextMeasure();
 	final spread:Spread = new Spread();
@@ -93,6 +100,83 @@ class LayoutSolver {
 		rootBox.y = 0.0;
 		for (index in 0...count) place(index);
 		solveSeconds = Sys.time() - started - textSeconds;
+	}
+
+	/**
+	 * The resolved geometry of the last solve, in tree order: each node's layout bounds, world transform, the clip it
+	 * inherits in viewport coordinates, the bounds of its children relative to its padded origin, whether it is drawn,
+	 * and its baseline. An item equal to the node's previous one is that same item.
+	 */
+	public function resolve():Array<ResolvedLayoutItem> {
+		resolvedItems.resize(count);
+		for (index in 0...count) {
+			var box = boxes[index];
+			var style = box.node.style;
+			var parent = box.parent < 0 ? null : boxes[box.parent];
+			box.visible = (parent == null || parent.visible) && style.visible;
+			// The inherited clip: the viewport at the root, the parent's clip for its children, and for a floating node
+			// the parent's own clip and bounds when it is clipped to its parent, else nothing but the viewport.
+			if (parent == null) box.setClip(0.0, 0.0, viewportWidth, viewportHeight);
+			else if (style.positioning == LayoutPositioning.Absolute) {
+				if (style.clipToParent) {
+					worldBounds(box.parent, current);
+					box.setClip(parent.clipX, parent.clipY, parent.clipWidth, parent.clipHeight);
+					box.intersectClip(current, true, true);
+				} else box.setClip(0.0, 0.0, viewportWidth, viewportHeight);
+			} else box.setClip(parent.childClipX, parent.childClipY, parent.childClipWidth, parent.childClipHeight);
+			box.childClipX = box.clipX;
+			box.childClipY = box.clipY;
+			box.childClipWidth = box.clipWidth;
+			box.childClipHeight = box.clipHeight;
+			if (style.clipHorizontal || style.clipVertical) {
+				worldBounds(index, current);
+				box.intersectChildClip(current, style.clipHorizontal, style.clipVertical);
+			}
+			var left = 0.0, top = 0.0, right = 0.0, bottom = 0.0, any = false;
+			var originX = box.x + style.padding.left, originY = box.y + style.padding.top;
+			var child = index + 1;
+			for (_ in 0...box.node.children.length) {
+				var childBox = boxes[child];
+				var childLeft = childBox.x - originX, childTop = childBox.y - originY;
+				if (!any) {
+					left = childLeft;
+					top = childTop;
+					right = childLeft + childBox.width;
+					bottom = childTop + childBox.height;
+					any = true;
+				} else {
+					left = Math.min(left, childLeft);
+					top = Math.min(top, childTop);
+					right = Math.max(right, childLeft + childBox.width);
+					bottom = Math.max(bottom, childTop + childBox.height);
+				}
+				child += childBox.size;
+			}
+			var flags = (box.visible ? 1 : 0) | (box.ownBaseline ? 2 : 0);
+			var baseline = box.ownBaseline ? box.y + box.baseline : 0.0;
+			var previous = previousItems.get(box.node.id);
+			var item = previous != null && previous.flags == flags && previous.x == box.x && previous.y == box.y
+				&& previous.width == box.width && previous.height == box.height && previous.baseline == baseline
+				&& previous.clipBounds.x == box.clipX && previous.clipBounds.y == box.clipY
+				&& previous.clipBounds.width == box.clipWidth && previous.clipBounds.height == box.clipHeight
+				&& previous.contentBounds.x == left && previous.contentBounds.y == top
+				&& previous.contentBounds.width == right - left && previous.contentBounds.height == bottom - top
+				&& previous.transform.a == box.wa && previous.transform.b == box.wb && previous.transform.c == box.wc
+				&& previous.transform.d == box.wd && previous.transform.tx == box.wtx
+				&& previous.transform.ty == box.wty ? previous : new ResolvedLayoutItem(box.node.id, flags, box.x,
+				box.y,
+				box.width, box.height, new Rect(box.clipX, box.clipY, box.clipWidth, box.clipHeight),
+				new Rect(left, top, right - left, bottom - top),
+				new Transform2D(box.wa, box.wb, box.wc, box.wd, box.wtx,
+				box.wty), baseline);
+			nextItems.set(box.node.id, item);
+			resolvedItems[index] = item;
+		}
+		var last = previousItems;
+		last.clear();
+		previousItems = nextItems;
+		nextItems = last;
+		return resolvedItems;
 	}
 
 	/** Writes each node's geometry into `output` as `NKUI_LAYOUT_GEOMETRY_RECORD_BYTES` records, returning the length. */
@@ -952,8 +1036,53 @@ private class LayoutBox {
 	public var wd:Float = 1.0;
 	public var wtx:Float = 0.0;
 	public var wty:Float = 0.0;
+	/** Resolution: whether it is drawn, the clip it inherits in viewport coordinates, and the one its children inherit. */
+	public var visible:Bool = true;
+	public var clipX:Float = 0.0;
+	public var clipY:Float = 0.0;
+	public var clipWidth:Float = 0.0;
+	public var clipHeight:Float = 0.0;
+	public var childClipX:Float = 0.0;
+	public var childClipY:Float = 0.0;
+	public var childClipWidth:Float = 0.0;
+	public var childClipHeight:Float = 0.0;
 
 	public function new() {}
+
+	public inline function setClip(x:Float, y:Float, width:Float, height:Float):Void {
+		clipX = x;
+		clipY = y;
+		clipWidth = width;
+		clipHeight = height;
+	}
+
+	/** Narrows its own clip to `bounds` on both axes. */
+	public function intersectClip(bounds:AnchorRect, horizontal:Bool, vertical:Bool):Void {
+		if (horizontal) {
+			var right = Math.min(clipX + clipWidth, bounds.x + bounds.width);
+			clipX = Math.max(clipX, bounds.x);
+			clipWidth = Math.max(0.0, right - clipX);
+		}
+		if (vertical) {
+			var bottom = Math.min(clipY + clipHeight, bounds.y + bounds.height);
+			clipY = Math.max(clipY, bounds.y);
+			clipHeight = Math.max(0.0, bottom - clipY);
+		}
+	}
+
+	/** Narrows the clip its children inherit to `bounds` on the axes it clips. */
+	public function intersectChildClip(bounds:AnchorRect, horizontal:Bool, vertical:Bool):Void {
+		if (horizontal) {
+			var right = Math.min(childClipX + childClipWidth, bounds.x + bounds.width);
+			childClipX = Math.max(childClipX, bounds.x);
+			childClipWidth = Math.max(0.0, right - childClipX);
+		}
+		if (vertical) {
+			var bottom = Math.min(childClipY + childClipHeight, bounds.y + bounds.height);
+			childClipY = Math.max(childClipY, bounds.y);
+			childClipHeight = Math.max(0.0, bottom - childClipY);
+		}
+	}
 
 	/** The parent's world transform, then this node's own transform about its origin in its bounds. */
 	public function composeWorld(parent:Null<LayoutBox>):Void {

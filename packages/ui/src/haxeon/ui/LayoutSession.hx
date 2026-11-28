@@ -22,15 +22,10 @@ class LayoutSession implements Disposable {
 	var disposed:Bool;
 	final transaction:LayoutTransaction;
 	var resolved:Array<ResolvedLayoutItem>;
-	var nextResolved:Array<ResolvedLayoutItem> = [];
-	final updatesIndex:IntIndex = new IntIndex();
-	final updatedItems:Array<ResolvedLayoutItem> = [];
 	final referenceTransaction:LayoutTransaction = new LayoutTransaction();
 	/** Compare the retained native tree with a full encode after every submit while retention verification is enabled. */
 	public var verifyTransactions:Bool = false;
 	var hitPathBytes:Bytes;
-	/** Reused native geometry output; only the returned prefix is valid after each submit. */
-	var resolvedUpdateBytes:Bytes;
 	var measureFunction:Null<LayoutMeasureCallback>;
 	final renderableContents:Map<Int, LayoutRenderableContent>;
 
@@ -40,7 +35,6 @@ class LayoutSession implements Disposable {
 		transaction = new LayoutTransaction();
 		resolved = [];
 		hitPathBytes = Bytes.alloc(64 * 4);
-		resolvedUpdateBytes = Bytes.alloc(1024);
 		measureFunction = null;
 		renderableContents = new Map();
 	}
@@ -79,19 +73,33 @@ class LayoutSession implements Disposable {
 		out.hasBaseline = measured.get_has_baseline() != 0;
 	}
 
-	/** Submits one render tree and returns geometry for the complete resolved frame. */
-	internal function submit(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges,
-			forceFull:Bool = false):Array<ResolvedLayoutItem> {
+	/**
+	 * Lays `root` out and returns its resolved geometry, in tree order, without telling NativeKit: a frame may lay its tree
+	 * out several times while geometry callbacks settle, and `publish` sends the one it settles on.
+	 */
+	internal function solve(root:LayoutNode, frame:LayoutFrame):Array<ResolvedLayoutItem> {
 		ensureLive();
-		if (frame == null)
-			throw "Layout session frame cannot be null";
-		var encodeStarted = measureCost ? Sys.time() : 0.0;
-		var transactionBytes:Bytes = transaction.encodeInto(root, forceFull ? null : changes);
-		var encodeFinished = measureCost ? Sys.time() : 0.0;
-		collectRenderableContents();
-		var solveStarted = measureCost ? Sys.time() : 0.0;
+		if (frame == null) throw "Layout session frame cannot be null";
+		var started = measureCost ? Sys.time() : 0.0;
 		solver.attach(this, measureFunction);
 		solver.solve(root, frame.width, frame.height);
+		resolved = solver.resolve();
+		if (measureCost)
+			Sys.stderr().writeString("layout-cost solve nodes=" + solver.nodes + " solve=" + solver.solveSeconds
+				+ " text="
+				+ solver.textSeconds + " total=" + (Sys.time() - started) + "\n");
+		return resolved;
+	}
+
+	/**
+	 * Sends NativeKit the tree last laid out by `solve` and its geometry: the nodes in `changes` since the last publish,
+	 * or every node when `forceFull`.
+	 */
+	internal function publish(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges, forceFull:Bool = false):Void {
+		ensureLive();
+		var encodeStarted = measureCost ? Sys.time() : 0.0;
+		var transactionBytes:Bytes = transaction.encodeInto(root, forceFull ? null : changes);
+		collectRenderableContents();
 		var geometryLength = solver.nodes * NativeKitUIConstants.NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
 		if (geometryLength > geometryBytes.length) {
 			var capacity = geometryBytes.length;
@@ -99,71 +107,29 @@ class LayoutSession implements Disposable {
 			geometryBytes = Bytes.alloc(capacity);
 		}
 		solver.encode(geometryBytes);
+		var encodeFinished = measureCost ? Sys.time() : 0.0;
 		UiResult.check(NativeKitUI.nkui_layout_session_set_geometry_slice(value, geometryBytes, 0, geometryLength),
 			"layoutSession.setGeometry");
-		var solveFinished = measureCost ? Sys.time() : 0.0;
-		var nativeFrame = frame.nativeValue();
 		UiResult.check(NativeKitUI.nkui_layout_session_submit_slice(value, transactionBytes, 0,
-			transaction.byteLength(), nativeFrame),
-			"layoutSession.submit");
+			transaction.byteLength(),
+			frame.nativeValue()), "layoutSession.submit");
 		if (verifyTransactions) verifyTree(root);
-		var decodeStarted = measureCost ? Sys.time() : 0.0;
-		var result = NativeKitUI.nkui_layout_session_get_resolved_updates_into(value, resolvedUpdateBytes);
-		while (result.status == NativeKitUI.UiStatus.ErrorBufferTooSmall
-			&& result.out_bytes > resolvedUpdateBytes.length) {
-			if (result.out_bytes > 268435456) throw "Native layout geometry exceeds the output buffer limit";
-			var capacity = resolvedUpdateBytes.length;
-			while (capacity < result.out_bytes) capacity *= 2;
-			resolvedUpdateBytes = Bytes.alloc(capacity);
-			result = NativeKitUI.nkui_layout_session_get_resolved_updates_into(value, resolvedUpdateBytes);
-		}
-		UiResult.check(result.status, "layoutSession.resolvedItems");
-		var bytes = resolvedUpdateBytes, length = result.out_bytes;
-		var recordBytes = NativeKitUIConstants.NKUI_LAYOUT_RESOLVED_ITEM_BYTES;
-		if (length < 0 || length > bytes.length || length % recordBytes != 0)
-			throw "Native layout returned a truncated geometry snapshot";
-		updatesIndex.clear();
-		var count = Std.int(length / recordBytes);
-		updatedItems.resize(count);
-		for (index in 0...count) {
-			var offset = index * recordBytes;
-			var position = transaction.previousPosition(bytes.getInt32(offset + 4));
-			var prior = position < 0 || position >= resolved.length ? null : resolved[position];
-			var item = ResolvedLayoutItem.decode(bytes, offset, prior);
-			updatedItems[index] = item;
-			updatesIndex.set(item.id, index);
-		}
-		var ordered = transaction.orderedNodes();
-		nextResolved.resize(ordered.length);
-		for (index in 0...ordered.length) {
-			var id = ordered[index].id;
-			var changed = updatesIndex.get(id);
-			if (changed >= 0) nextResolved[index] = updatedItems[changed];
-			else {
-				var previous = transaction.previousPosition(id);
-				if (previous < 0 || previous >= resolved.length) throw "Native layout omitted a new resolved item";
-				nextResolved[index] = resolved[previous];
-			}
-		}
-		var previous = resolved;
-		resolved = nextResolved;
-		nextResolved = previous;
-		var decodeFinished = measureCost ? Sys.time() : 0.0;
-		var commitStarted = measureCost ? Sys.time() : 0.0;
 		transaction.commit();
-		var commitSeconds = measureCost ? Sys.time() - commitStarted : 0.0;
 		if (measureCost) {
-			Sys.stderr().writeString("layout-cost solve nodes=" + solver.nodes + " solve=" + solver.solveSeconds
-				+ " text="
-				+ solver.textSeconds + " total=" + (solveFinished - solveStarted) + "\n");
 			Sys.stderr().writeString("layout-cost haxe nodes=" + resolved.length + " started=" + encodeStarted
-				+ " encode=" + (encodeFinished - encodeStarted + commitSeconds)
-				+ " decode=" + (decodeFinished - decodeStarted) + "\n");
+				+ " encode="
+				+ (encodeFinished - encodeStarted) + " decode=0\n");
 			Sys.stderr().writeString("layout-delta updated=" + transaction.updatedCount() + " removed="
-				+ transaction.removedCount()
-				+ " parents=" + transaction.parentCount() + " resolved=" + count + "\n");
+				+ transaction.removedCount() + " parents=" + transaction.parentCount() + "\n");
 		}
-		return resolved;
+	}
+
+	/** Lays `root` out, sends it to NativeKit and returns its resolved geometry, in tree order. */
+	internal function submit(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges,
+			forceFull:Bool = false):Array<ResolvedLayoutItem> {
+		var items = solve(root, frame);
+		publish(root, frame, changes, forceFull);
+		return items;
 	}
 
 	/** Compare a retained native tree against its complete Haxe input, without replacing the native tree. */
@@ -333,7 +299,6 @@ class LayoutSession implements Disposable {
 			return;
 		var status = NativeKitUI.nkui_layout_session_destroy(value);
 		disposed = true;
-		resolvedUpdateBytes = EmptyBytes;
 		UiResult.check(status, "layoutSession.dispose");
 	}
 
