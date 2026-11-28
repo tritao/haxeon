@@ -221,8 +221,6 @@ class ScrollView implements View {
 					&& controller.viewportHeight > 0);
 				horizontalVisibility.value.setAvailable(horizontal != null
 					&& controller.maxScrollX > 0 && controller.viewportWidth > 0);
-				if (scrollbar != null) syncScrollbar(scrollbar, true);
-				if (horizontal != null) syncScrollbar(horizontal, false);
 			});
 			viewport.on(UiEventKind.Scroll, event -> {
 				if (onScroll != null) onScroll(event);
@@ -366,6 +364,8 @@ class ScrollView implements View {
 			vertical ? "Vertical scroll position" : "Horizontal scroll position");
 		semantics.actions = AccessibilityAction.Increment | AccessibilityAction.Decrement;
 		semantics.numericMinimum = 0.0;
+		// The position and its range follow the offset and metrics layout settles.
+		semantics.setRangeSource(new ScrollbarRange(controller, vertical));
 		semantics.orientation = vertical ? AccessibilityOrientation.Vertical : AccessibilityOrientation.Horizontal;
 		thumb.semantics = semantics;
 		var visualStyle = new LayoutStyle();
@@ -495,15 +495,6 @@ class ScrollView implements View {
 			event.preventDefault();
 		});
 		return track;
-	}
-
-	/** The thumb's accessible range and focusability follow the controller's settled metrics. */
-	function syncScrollbar(track:RenderNode, vertical:Bool):Void {
-		var thumb = track.children[0];
-		var maximum = vertical ? controller.maxScrollY : controller.maxScrollX;
-		var semantics:Semantics = cast thumb.semantics;
-		semantics.numericMaximum = maximum;
-		semantics.numericValue = vertical ? controller.offsetY : controller.offsetX;
 	}
 
 }
@@ -648,4 +639,19 @@ private class ScrollbarPlacer implements LayoutPlacer {
 		out.width = vertical ? hitWidth : thumbLength;
 		out.height = vertical ? thumbLength : hitWidth;
 	}
+}
+
+/** A scrollbar's accessible position: its controller's offset along one axis, out of how far it can scroll. */
+private class ScrollbarRange implements haxeon.ui.semantics.Semantics.SemanticsRangeSource {
+	final controller:ScrollController;
+	final vertical:Bool;
+
+	public function new(controller:ScrollController, vertical:Bool) {
+		this.controller = controller;
+		this.vertical = vertical;
+	}
+
+	public function semanticsRangeValue():Float return vertical ? controller.offsetY : controller.offsetX;
+
+	public function semanticsRangeMaximum():Float return vertical ? controller.maxScrollY : controller.maxScrollX;
 }

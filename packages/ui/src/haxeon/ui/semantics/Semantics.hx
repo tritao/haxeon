@@ -24,13 +24,18 @@ class Semantics {
 	public var actions:AccessibilityAction;
 
 	/** Its value, for a slider, progress bar or other range. */
-	public var numericValue:Float;
+	public var numericValue(get, set):Float;
 
 	/** The range's minimum. */
 	public var numericMinimum:Float;
 
 	/** The range's maximum. */
-	public var numericMaximum:Float;
+	public var numericMaximum(get, set):Float;
+
+	var storedNumericValue:Float;
+	var storedNumericMaximum:Float;
+	/** Where the range's value and maximum are read from, when they follow state rather than being set. */
+	var rangeSource:Null<SemanticsRangeSource>;
 
 	/** Where `value` starts within the whole document, in code points, when it holds only part of it. */
 	public var textStart:Int;
@@ -81,9 +86,10 @@ class Semantics {
 		valueRevision = 0;
 		states = AccessibilityState.empty();
 		actions = AccessibilityAction.empty();
-		numericValue = 0.0;
+		storedNumericValue = 0.0;
 		numericMinimum = 0.0;
-		numericMaximum = 0.0;
+		storedNumericMaximum = 0.0;
+		rangeSource = null;
 		textStart = 0;
 		documentLength = knownDocumentLength == null ? Utf8Text.length(value) : knownDocumentLength;
 		selectionStart = -1;
@@ -114,6 +120,47 @@ class Semantics {
 		storedValue = next;
 		valueSource = null;
 		documentLength = length;
+	}
+
+	/**
+	 * Reads the range's value and maximum from `source` whenever a consumer asks, as a scrollbar's follow its scroll
+	 * offset, which layout settles after the node is built. Setting either one drops the source.
+	 */
+	public function setRangeSource(source:SemanticsRangeSource):Void rangeSource = source;
+
+	function get_numericValue():Float {
+		var source = rangeSource;
+		return source == null ? storedNumericValue : source.semanticsRangeValue();
+	}
+
+	function set_numericValue(value:Float):Float {
+		takeRange();
+		return storedNumericValue = value;
+	}
+
+	function get_numericMaximum():Float {
+		var source = rangeSource;
+		return source == null ? storedNumericMaximum : source.semanticsRangeMaximum();
+	}
+
+	function set_numericMaximum(value:Float):Float {
+		takeRange();
+		return storedNumericMaximum = value;
+	}
+
+	/** Keeps the source's current range as set values, before one of them is set. */
+	function takeRange():Void {
+		var source = rangeSource;
+		if (source == null) return;
+		storedNumericValue = source.semanticsRangeValue();
+		storedNumericMaximum = source.semanticsRangeMaximum();
+		rangeSource = null;
+	}
+
+	/** Whether this range equals `other`'s. Two ranges from the same source are the same: both read it as it is now. */
+	function sameRange(other:Semantics):Bool {
+		if (rangeSource != null && rangeSource == other.rangeSource) return true;
+		return numericValue == other.numericValue && numericMaximum == other.numericMaximum;
 	}
 
 	/** Defers assembling an editable document until a consumer reads its value. */
@@ -147,8 +194,8 @@ class Semantics {
 		if (left == null || right == null)
 			return false;
 		return left.role == right.role && left.label == right.label && left.sameValue(right)
-			&& left.states == right.states && left.actions == right.actions && left.numericValue == right.numericValue
-			&& left.numericMinimum == right.numericMinimum && left.numericMaximum == right.numericMaximum
+			&& left.states == right.states && left.actions == right.actions && left.sameRange(right)
+			&& left.numericMinimum == right.numericMinimum
 			&& left.textStart == right.textStart && left.documentLength == right.documentLength && left.selectionStart
 			== right.selectionStart && left.selectionEnd == right.selectionEnd && left.setSize == right.setSize
 			&& left.positionInSet == right.positionInSet && left.rowCount == right.rowCount && left.columnCount
@@ -175,6 +222,15 @@ interface SemanticsValueSource {
 
 	/** A number that changes whenever `semanticsValue` would return something different. */
 	function semanticsValueRevision():Int;
+}
+
+/** A range `Semantics` reads when asked, for a range that follows state, such as a scroll offset. */
+interface SemanticsRangeSource {
+	/** The range's current value. */
+	function semanticsRangeValue():Float;
+
+	/** The range's current maximum. */
+	function semanticsRangeMaximum():Float;
 }
 
 /** Roles already understood by NativeKit's virtual accessibility tree. */

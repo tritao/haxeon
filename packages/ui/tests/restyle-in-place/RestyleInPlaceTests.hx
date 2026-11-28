@@ -92,6 +92,16 @@ private class DecoratedControl implements View {
 	}
 }
 
+private class TestRange implements haxeon.ui.semantics.Semantics.SemanticsRangeSource {
+	public var value:Float = 0.0;
+
+	public function new() {}
+
+	public function semanticsRangeValue():Float return value;
+
+	public function semanticsRangeMaximum():Float return 100.0;
+}
+
 private class NodeView implements View {
 	final make:BuildContext->RenderNode;
 
@@ -1343,8 +1353,9 @@ private class PopupHost implements View {
 	/** Semantics.same is written by hand (its value compares through sameValue); changing any other field in turn must show. */
 	static function semanticsFields():Void {
 		var base = new Semantics(AccessibilityRole.Button, "label", "value");
-		// A deferred value's source and revision are compared through sameValue, not as fields of their own.
-		var notCompared = ["valueSource", "valueRevision"], compared = 0;
+		// A deferred value's source and revision, and a range's source, are compared through sameValue and sameRange,
+		// not as fields of their own.
+		var notCompared = ["valueSource", "valueRevision", "rangeSource"], compared = 0;
 		check(Semantics.same(base, new Semantics(AccessibilityRole.Button, "label", "value")),
 			"Equal semantics differ");
 		for (name in Reflect.fields(base)) {
@@ -1365,6 +1376,18 @@ private class PopupHost implements View {
 			compared++;
 		}
 		check(compared >= 20, "Semantics fields were not found by reflection (" + compared + ")");
+		// A range read from a source follows it; two descriptions on one source are the same; setting drops the source.
+		var range = new TestRange();
+		var left = new Semantics(AccessibilityRole.Slider), right = new Semantics(AccessibilityRole.Slider);
+		left.setRangeSource(range);
+		right.setRangeSource(range);
+		range.value = 30.0;
+		check(left.numericValue == 30.0 && left.numericMaximum == 100.0 && Semantics.same(left, right),
+			"A range source is not read, or two descriptions on it differ");
+		right.numericValue = 10.0;
+		range.value = 40.0;
+		check(right.numericValue == 10.0 && right.numericMaximum == 100.0 && !Semantics.same(left, right),
+			"Setting a range value did not drop its source");
 	}
 
 	/** A build reparents a cached subtree; its old membership and topology must still compare as the submitted frame. */
