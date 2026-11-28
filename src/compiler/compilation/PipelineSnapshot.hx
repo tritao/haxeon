@@ -123,8 +123,14 @@ class PipelineSnapshot {
 	/** What differs between two final programs, or null when they are equal: the first function that differs, or the tables. */
 	public static function irDifference(previous:IrProgram, next:IrProgram):Null<String> {
 		var byName:Map<String, IrFunction> = [for (fn in previous.functions) fn.name => fn];
-		if (previous.functions.length != next.functions.length)
-			return "function count " + previous.functions.length + " -> " + next.functions.length;
+		if (previous.functions.length != next.functions.length) {
+			var nextNames = [for (fn in next.functions) fn.name => true],
+				gone = [for (fn in previous.functions) if (!nextNames.exists(fn.name)) fn.name],
+				added = [for (fn in next.functions) if (!byName.exists(fn.name)) fn.name];
+			return "function count " + previous.functions.length + " -> " + next.functions.length
+				+ (added.length > 0 ? ", added " + added.join(", ") : "")
+				+ (gone.length > 0 ? ", gone " + gone.join(", ") : "");
+		}
 		for (fn in next.functions) {
 			var old = byName.get(fn.name);
 			if (old == null)

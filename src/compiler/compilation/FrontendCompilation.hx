@@ -802,11 +802,18 @@ class FrontendCompilation {
 			for (classDecl in typedNew.classes)
 				if (classDecl.specializationOrigin != null) classDecl.name => true
 		];
+		// A class or structure the program no longer has takes its object with it, and a structure's printer with its object.
 		if (previousTyped != null) {
 			var currentClasses = [for (classDecl in typedNew.classes) classDecl.name => true];
 			for (classDecl in previousTyped.classes)
 				if (!currentClasses.exists(classDecl.name))
 					objects.remove(classDecl.name);
+			if (previousTyped.anonymousTypes != typedNew.anonymousTypes) {
+				var currentStructures = [for (anonymous in typedNew.anonymousTypes) anonymous.name => true];
+				for (anonymous in previousTyped.anonymousTypes)
+					if (!currentStructures.exists(anonymous.name))
+						objects.remove(anonymous.name);
+			}
 		}
 		// The objects a function makes for its closures and captured variables are named by source offsets. When the function
 		// is typed again they are made again under their new names, and the old ones must not stay behind.

@@ -686,6 +686,24 @@ class WarmEditCatalogueMain {
 				],
 				edit: ["Log.hx"
 					=> "class Log { public static var total = 0; public static function add(x:Int) { total += x; return total; } }"]
+			},
+			{
+				kind: "remove a body's only structure, while an unchanged function's signature names another",
+				files: [
+					"Shape.hx" => "class Shape { public static function corner():{x:Int, y:Int} return {x: 1, y: 2}; }",
+					"Main.hx"
+						=> "class Main { static function main():Int { var size = {w: 3, h: 4}; return Shape.corner().x + size.w; } }"
+				],
+				edit: ["Main.hx" => "class Main { static function main():Int return Shape.corner().x + 3; }"]
+			},
+			{
+				kind: "remove a static initializer whose value is the program's only structure of its shape",
+				files: [
+					"Config.hx"
+						=> "class Config { public static var limit = 3; public static var origin = {x: 0, y: 0}; }",
+					"Main.hx" => "class Main { static function main():Int return Config.limit; }"
+				],
+				edit: ["Config.hx" => "class Config { public static var limit = 3; }"]
 			}
 		];
 	}
