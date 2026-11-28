@@ -31,13 +31,9 @@ class Lock {
 		releases++;
 }
 #else
-/**
-	A counting lock, as in standard Haxe: each `release` lets one `wait` through,
-	whether the release comes before or after the wait starts.
-**/
+/** A counting lock, as in standard Haxe: each `release` lets one `wait` through, before or after it waits (`std.thread.Semaphore`). */
 class Lock {
-	final condition = new Condition();
-	var releases = 0;
+	final semaphore = new std.thread.Semaphore();
 
 	/** A lock with no release to consume. */
 	public function new() {}
@@ -47,32 +43,14 @@ class Lock {
 		after it and returns false; without one, waits as long as it takes.
 	**/
 	public function wait(?timeout:Float):Bool {
-		condition.acquire();
-		defer condition.release();
-		if (timeout == null) {
-			while (releases == 0)
-				condition.wait();
-		} else {
-			var deadline = Sys.time() + timeout;
-			while (releases == 0) {
-				var remaining = deadline - Sys.time();
-				if (remaining <= 0.0)
-					break;
-				condition.timedWait(remaining);
-			}
-		}
-		var acquired = releases > 0;
-		if (acquired)
-			releases--;
-		return acquired;
+		if (timeout != null)
+			return semaphore.tryAcquire(timeout);
+		semaphore.acquire();
+		return true;
 	}
 
 	/** Lets one waiter, present or future, through. */
-	public function release():Void {
-		condition.acquire();
-		defer condition.release();
-		releases++;
-		condition.signal();
-	}
+	public function release():Void
+		semaphore.release();
 }
 #end

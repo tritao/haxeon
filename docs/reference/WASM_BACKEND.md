@@ -49,7 +49,8 @@ under `#if wasm`, shared by both targets:
 - `hl.Gc` controls are ignored and its counters read zero. `Sys.getEnv` returns
   null, `Sys.systemName` is `"Web"`, and `Sys.executablePath` is empty.
 
-- Threads are single-threaded stand-ins in `sys.thread`. `Thread.create` runs its
+- `std.thread` is not available: importing it is a compile error. Haxe's
+  `sys.thread` keeps single-threaded stand-ins instead. `Thread.create` runs its
   closure to completion before it returns, so the program sees the effects the
   thread would eventually have; `Tls` keeps a separate value for each such
   thread; `Mutex` has nothing to exclude. `Lock` counts releases, and a wait

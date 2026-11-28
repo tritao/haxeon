@@ -4,7 +4,7 @@ package runtime;
 class ThreadName {
 	public static function setCurrent(name:String):Void {
 		#if haxeon
-		haxeon.Threads.nameCurrent(name);
+		std.thread.Thread.nameCurrent(name);
 		#elseif (hl && target.threaded)
 		sys.thread.Thread.current().setName(name);
 		#end

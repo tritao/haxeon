@@ -188,6 +188,12 @@ regular recursive generic enums are in the next section.
      and `std.process.Command` calls it, so every program that starts a
      process (`std-process`, `stdlib-process`) is listed. A five-line
      program with `Lambda.exists` over an `Array<String>` reproduces it.
+     A third group came with `std.thread`: a function over the body's own
+     type parameter, passed where an erased generic class takes one, is not
+     converted. `static function of<T>(run:Void->T) return new Box<T>(run);`
+     fails IR verification at any `T` ("got Function([],I32), expected
+     Function([],Dyn)"); `Thread.spawn` does this, so every program starting
+     a thread is listed.
   2. Finish step 2.4: type the parser's repaired syntax with the real typer,
      then delete the language service's approximate typer (the item below).
   3. The Android reload crash (below).
@@ -195,6 +201,19 @@ regular recursive generic enums are in the next section.
   Items 4 and 5 (nested generic calls and structured lambda names, then the
   pass replacing paths 6 to 8) have the naming function (`GeneratedNames`,
   `63914ff7d`) and wait for the boundary contract with haxeon-e4.
+- **A rethrown exception is reported where it was rethrown.** Catching a value
+  as `haxe.Exception` and throwing it again keeps the original frames in
+  `error.stack`, but an uncaught one is printed with the stack of the rethrow,
+  where stock Haxe prints where it was first thrown. `std.thread.Thread`
+  rethrows a failed thread's exception so the runtime prints it, and the trace
+  points at `Thread.body`.
+- **Packages still on `sys.thread`.** `std.thread` landed with `sys.thread` as
+  adapters (ADR 0007, step 3); moving the users is step 4. The audio and
+  platform packages (`AudioPreparation`, `SoundFontCache`, `EventPump`,
+  `FileWatch`) also build for Wasm, where `std.thread` is not there, so each
+  move needs its Wasm path without threads. `haxeon.reactive.ReactiveRuntime`'s
+  Wasm owner check exists for `sys.thread`'s stand-in threads; it moves with
+  `std.reactive`.
 - **`haxeon lint` reports usage errors as `InternalError`.** `UsageError`
   (exit 2) exists since `43ece64c9`, but `LintCommand` still throws
   `InternalError` for a missing `--only` or `--manifest` value and an unknown

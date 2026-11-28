@@ -22,6 +22,7 @@ stdlib-io-sockets	skip	sys.net sockets are HashLink-only; Wasm has no socket hos
 stdlib-stat	skip	FileSystem.stat and Timer.stamp need the Sys and file natives, which are not implemented on Wasm
 stdlib-process	native-only	sys.io.Process starts host processes, which a Wasm module cannot
 std-process	native-only	std.process starts host processes, which a Wasm module cannot
+std-thread	native-only	std.thread starts threads, and a Wasm module runs on one
 gc-stats	skip	Wasm has no collector: hl.Gc.stats reports zeros
 nested-call-stack	skip	haxe.CallStack natives are not implemented on Wasm
 package-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm

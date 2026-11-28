@@ -42,33 +42,22 @@ class Tls<T> {
 	}
 }
 #else
-/**
- * Thread-local storage backed by HashLink's: each thread sees its own `value`, null until that
- * thread sets it. The value is a GC root while the thread holds it.
- */
+/** Thread-local storage (`std.thread.ThreadLocal`): each thread sees its own `value`, null until that thread sets it. */
 class Tls<T> {
 	/** The value the current thread set, or null before it sets one. */
 	public var value(get, set):T;
 
-	final handle:hl.Abstract<"hl_tls">;
+	final local = new std.thread.ThreadLocal<T>();
 
 	/** Storage no thread has set yet. */
-	public function new()
-		handle = nativeTlsAlloc(true);
+	public function new() {}
 
 	function get_value():T
-		return nativeTlsGet(handle);
+		return local.value;
 
 	function set_value(value:T):T {
-		nativeTlsSet(handle, value);
+		local.value = value;
 		return value;
 	}
 }
-
-@:hlNative("std", "tls_alloc")
-internal extern function nativeTlsAlloc(gcValue:Bool):hl.Abstract<"hl_tls">;
-@:hlNative("std", "tls_get")
-internal extern function nativeTlsGet(tls:hl.Abstract<"hl_tls">):Dynamic;
-@:hlNative("std", "tls_set")
-internal extern function nativeTlsSet(tls:hl.Abstract<"hl_tls">, value:Dynamic):Void;
 #end

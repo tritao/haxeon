@@ -19,12 +19,7 @@ class Main {
 
   static function main():Void {
     haxeon.ProfileCounter.set("capture.test.counter", 7);
-    var done = new sys.thread.Lock();
-    haxeon.Threads.create("capture.worker", function() {
-      measured(1000);
-      done.release();
-    });
-    done.wait();
+    std.thread.Thread.spawn("capture.worker", () -> measured(1000)).join();
     Sys.println("profile capture test " + measured(1000));
   }
 }

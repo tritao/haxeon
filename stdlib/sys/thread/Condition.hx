@@ -33,49 +33,40 @@ class Condition {
 	public function timedWait(timeout:Float):Bool return false;
 }
 #else
-/** A condition variable with its own recursive lock: threads wait on it, with the lock held, until another signals. */
+/** A condition variable with its own recursive lock (`std.thread.Condition`). */
 class Condition {
-	final handle:hl.Abstract<"hl_condition">;
+	final condition = new std.thread.Condition();
 
 	/** A condition with its own lock, not held. */
-	public function new() handle = nativeConditionAlloc();
+	public function new() {}
 
 	/**
 	 * Takes the lock, waiting while another thread holds it. A thread may take it again; each take needs its `release`.
 	 */
-	public function acquire():Void nativeConditionAcquire(handle);
+	public function acquire():Void
+		condition.acquire();
 
 	/** Gives back the lock once. */
-	public function release():Void nativeConditionRelease(handle);
+	public function release():Void
+		condition.release();
 
 	/** Wakes one thread waiting in `wait` or `timedWait`, if any. */
-	public function signal():Void nativeConditionSignal(handle);
+	public function signal():Void
+		condition.signal();
 
 	/** Wakes every thread waiting in `wait` or `timedWait`. */
-	public function broadcast():Void nativeConditionBroadcast(handle);
+	public function broadcast():Void
+		condition.broadcast();
 
 	/**
 	 * With the lock held, releases it, waits for a `signal` or `broadcast`, and takes it again before returning. A wait
 	 * can also end spuriously: check the state it waits for in a loop.
 	 */
-	public function wait():Void nativeConditionWait(handle);
+	public function wait():Void
+		_ = condition.wait();
 
 	/** As `wait`, giving up after `timeout` seconds: whether it was woken before then. */
-	public function timedWait(timeout:Float):Bool return nativeConditionTimedWait(handle, timeout);
+	public function timedWait(timeout:Float):Bool
+		return condition.wait(Math.max(0, timeout));
 }
-
-@:hlNative("std", "condition_alloc")
-internal extern function nativeConditionAlloc():hl.Abstract<"hl_condition">;
-@:hlNative("std", "condition_acquire")
-internal extern function nativeConditionAcquire(condition:hl.Abstract<"hl_condition">):Void;
-@:hlNative("std", "condition_release")
-internal extern function nativeConditionRelease(condition:hl.Abstract<"hl_condition">):Void;
-@:hlNative("std", "condition_signal")
-internal extern function nativeConditionSignal(condition:hl.Abstract<"hl_condition">):Void;
-@:hlNative("std", "condition_broadcast")
-internal extern function nativeConditionBroadcast(condition:hl.Abstract<"hl_condition">):Void;
-@:hlNative("std", "condition_wait")
-internal extern function nativeConditionWait(condition:hl.Abstract<"hl_condition">):Void;
-@:hlNative("std", "condition_timed_wait")
-internal extern function nativeConditionTimedWait(condition:hl.Abstract<"hl_condition">, timeout:Float):Bool;
 #end

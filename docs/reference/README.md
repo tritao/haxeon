@@ -22,6 +22,7 @@ Look up Haxeon language features, commands, libraries and target behavior.
 
 - [Files and directories](FILES.md) explains how to read, write and remove files with `std.fs`.
 - [Processes](PROCESSES.md) explains how to run programs and read what they write with `std.process`.
+- [Threads](THREADS.md) explains how to run work on threads and share state between them with `std.thread`.
 - [Futures and promises](ASYNC.md) explains how to publish, observe and cancel an eventual result.
 - [JSON wire format](JSON_WIRE.md) explains how to encode and decode typed values as JSON.
 - [MessagePack](MESSAGEPACK.md) describes the codec, framing and schema descriptors.

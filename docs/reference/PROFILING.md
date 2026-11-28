@@ -162,9 +162,9 @@ so they can stay in shipped code.
 ### Thread names
 
 A trace shows each thread by name, so every thread a program starts should
-have one that says what it does. Start Haxe threads with
-`haxeon.Threads.create(name, call)` (or call `haxeon.Threads.nameCurrent(name)`
-first thing in the thread), and name native threads with the system call
+have one that says what it does. Haxe threads have one from
+`std.thread.Thread.spawn(name, run)`; a thread a native library started calls
+`std.thread.Thread.nameCurrent(name)` first thing. Name native threads with the system call
 (`SetThreadDescription`, `pthread_setname_np`); NativeKit names its own
 (`nk.render`, `nk.task.N`, `nk.worker.N`, `nk.local <pipe>`, `nk.pty.N.read`,
 `nk.net.request`, ...). Debuggers and crash dumps show the same names. Linux

@@ -18,10 +18,15 @@ class Thread {
 	}
 }
 #else
-/** A garbage-collected HashLink thread running a zero-argument closure. */
-extern abstract Thread(hl.Abstract<"hl_thread">) {
+/** Haxe's thread: a `std.thread.Thread` named "sys.thread", as Haxe's threads have no names. */
+class Thread {
+	final thread:std.thread.Thread<Void>;
+
+	function new(thread:std.thread.Thread<Void>)
+		this.thread = thread;
+
 	/** Starts a thread running `call`. The thread ends when `call` returns. */
-	@:hlNative("std", "thread_create")
-	public static function create(call:Void->Void):Thread;
+	public static function create(call:Void->Void):Thread
+		return new Thread(std.thread.Thread.spawn("sys.thread", call));
 }
 #end
