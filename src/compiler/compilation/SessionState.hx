@@ -29,7 +29,7 @@ import haxe.io.Bytes;
 /** The modules an entry reached in its last build, with what each depended on then. */
 typedef ReachabilityCache = {
 	final names:Array<String>;
-	final dependencyKeys:Map<String, String>;
+	final dependencies:Map<String, Array<String>>;
 	final initializationClasses:Array<String>;
 }
 
@@ -475,16 +475,29 @@ class SessionState {
 	public function cachedReachability(key:String):Null<ReachabilityCache>
 		return reachabilityCache.get(key);
 
+	/** Whether a module depends on what `cached` recorded of it: compared name by name, so a build that reuses the graph makes nothing. */
+	public static function sameDependencies(cached:Null<Array<String>>, dependencies:Array<String>):Bool {
+		if (cached == dependencies)
+			return true;
+		if (cached == null || cached.length != dependencies.length)
+			return false;
+		for (index in 0...dependencies.length)
+			if (cached[index] != dependencies[index])
+				return false;
+		return true;
+	}
+
 	public function cacheReachability(key:String, names:Array<String>, initializationClasses:Array<String>):Void {
-		var dependencyKeys:Map<String, String> = [];
+		var dependencies:Map<String, Array<String>> = [];
 		for (name in names) {
 			var state = modules.get(name);
+			// A module's dependencies are replaced whole when it is analyzed again, never changed in place.
 			if (state != null)
-				dependencyKeys.set(name, CompilationContext.dependencyKey(state.dependencies));
+				dependencies.set(name, state.dependencies);
 		}
 		reachabilityCache.set(key, {
 			names: names.copy(),
-			dependencyKeys: dependencyKeys,
+			dependencies: dependencies,
 			initializationClasses: initializationClasses.copy()
 		});
 	}

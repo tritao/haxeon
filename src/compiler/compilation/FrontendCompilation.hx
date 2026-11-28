@@ -461,7 +461,7 @@ class FrontendCompilation {
 				}
 				if (state.ast == null)
 					state = parseReached(build, name);
-				if (cachedReachability.dependencyKeys.get(name) != CompilationContext.dependencyKey(state.dependencies))
+				if (!SessionState.sameDependencies(cachedReachability.dependencies.get(name), state.dependencies))
 					reuseGraph = false;
 			}
 		if (!CompilationContext.mapIsEmpty(structuralChanged))

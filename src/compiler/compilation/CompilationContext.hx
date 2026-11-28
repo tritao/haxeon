@@ -191,14 +191,6 @@ class CompilationContext {
 		return [for (name in names) name + "=" + defines.get(name)].join("\n");
 	}
 
-	/** Length-prefixed components preserve boundaries without binary separators in text keys. */
-	public static function dependencyKey(dependencies:Array<String>):String {
-		var key = "";
-		for (dependency in dependencies)
-			key += dependency.length + ":" + dependency;
-		return key;
-	}
-
 	public static function mapIsEmpty(values:Map<String, Bool>):Bool {
 		for (_ in values.keys())
 			return false;

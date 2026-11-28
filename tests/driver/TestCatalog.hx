@@ -265,7 +265,6 @@ class TestCatalog {
 		"NamedArgumentsMain",
 		"PlatformMethodArityMain",
 		"GenericCallableAbiMain",
-		"DependencyKeyMain",
 		"PackageRootModuleMain",
 		"QualifiedStaticReceiverMain",
 		"MathRandomMain",
