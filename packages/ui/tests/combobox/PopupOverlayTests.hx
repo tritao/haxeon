@@ -6,7 +6,6 @@ import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.HitTest;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
@@ -81,9 +80,7 @@ class PopupOverlayTests {
 		if (y <= 60)
 			throw "Dropdown fixture does not cross the clipped dock";
 		if (session.hitTest(x, y).indexOf(option.id.value) < 0)
-			throw "Native hit testing lost the overlay behind the console or ancestor clip";
-		if (HitTest.path(tree, x, y).indexOf(option) < 0)
-			throw "Haxe hit testing disagrees with native overlay hit testing";
+			throw "Hit testing lost the overlay behind the console or ancestor clip";
 		var hidden:RenderNode = null;
 		tree.walk(function(node) {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.ListItem
@@ -94,17 +91,12 @@ class PopupOverlayTests {
 			throw "Missing offscreen option";
 		var hiddenBounds = hidden.globalBounds();
 		if (session.hitTest(x, hiddenBounds.y + 16).indexOf(hidden.id.value) >= 0)
-			throw "Offscreen native option escaped its own scroll viewport";
-		if (HitTest.path(tree, x, hiddenBounds.y + 16).indexOf(hidden) >= 0)
-			throw "Offscreen Haxe option escaped its own scroll viewport";
+			throw "Offscreen option escaped its own scroll viewport";
 		var optionId = option.id.value;
 		view.modal = true;
 		tree = ui.submit(view, frame);
 		if (session.hitTest(x, y).indexOf(optionId) >= 0)
 			throw "Background dropdown escaped a later modal dialog";
-		for (node in HitTest.path(tree, x, y))
-			if (node.id.value == optionId)
-				throw "Haxe hit testing put a background dropdown above the modal";
 		view.modal = false;
 		tree = ui.submit(view, frame);
 		ui.pointerDown(x, y, 0);

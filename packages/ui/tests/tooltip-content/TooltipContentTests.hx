@@ -106,10 +106,10 @@ class TooltipContentTests {
 			]));
 		};
 		var key = "scoped-tooltip-" + mode;
-		// The box's first width is written after the first frame resolves, so that frame's successors run the scope alone.
+		// The box's first width is written once the first frame resolves, which runs the scope again alone.
 		var root = ui.submitCached(view, frame, key);
 		if (mode != "feedback") for (_ in 0...2) root = ui.submitCached(view, frame, key);
-		var builds = viewBuilds, runs = bodyRuns;
+		var builds = viewBuilds, runs = mode == "feedback" ? 1 : bodyRuns;
 		if (mode != "feedback") bump.value = 1;
 		for (_ in 0...3) root = ui.submitCached(view, frame, key);
 		check(bodyRuns > runs, mode + ": the scope did not run again");
@@ -170,7 +170,7 @@ class TooltipContentTests {
 		check(px < Math.min(targetBounds.x + targetBounds.width, overlayBounds.x + overlayBounds.width)
 			&& py < Math.min(targetBounds.y + targetBounds.height, overlayBounds.y + overlayBounds.height),
 			"the regression fixture must overlap the neighbouring button");
-		var path = haxeon.ui.core.HitTest.path(root, px, py);
+		var path = ui.events.hitTestPath(px, py);
 		check(path.indexOf(root.children[0]) >= 0 && path.indexOf(overlay) < 0,
 			"the tooltip intercepted its neighbour's hit target");
 		ui.pointerMove(px, py);

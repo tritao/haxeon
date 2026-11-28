@@ -1904,13 +1904,6 @@ class FrameworkSmoke {
 		}, UiEventPhase.Capture);
 		var buttonNode = root.children[0];
 		var initialId = buttonNode.id;
-		root.hitTestBehavior = HitTestBehavior.ChildrenOnly;
-		if (HitTest.path(root, 4.0, 4.0).length < 2) return 241;
-		root.hitTestBehavior = HitTestBehavior.SelfOnly;
-		if (HitTest.path(root, 4.0, 4.0).length != 1) return 242;
-		root.hitTestBehavior = HitTestBehavior.None;
-		if (HitTest.path(root, 4.0, 4.0).length != 0) return 243;
-		root.hitTestBehavior = HitTestBehavior.Auto;
 		var state:State<Int> = context.buildContext.state(buttonNode.id, 0);
 		if (root.children.length != 3
 			|| buttonNode.resolved == null || !buttonNode.focusable || !buttonNode.resolved.hitTest(4.0,
@@ -6711,82 +6704,12 @@ class FrameworkSmoke {
 		});
 		var dispatcher = new EventDispatcher(new FocusManager(), new InteractionStateStore());
 		dispatcher.setRoot(root);
+		// Layout picks the target (LayoutSessionSmoke covers that); this checks the coordinates each phase sees.
+		dispatcher.setHitTestProvider((_, _) -> HitTest.pathTo(target));
 		dispatcher.pointerDown(globalPoint.x, globalPoint.y, 0);
 		if (order.join(",") != "root-capture,panel-capture,target,panel-bubble,root-bubble" || !near(rootLocalX,
-			expectedRoot.x) || !near(panelLocalX,
-			expectedPanel.x) || !near(targetLocalX,
-			localPoint.x) || HitTest.path(root,
-			globalPoint.x,
-			globalPoint.y).length != 3) return false;
-
-		// An inverse-transformed child remains clipped in viewport space, even
-		// when its own local bounds are reached by the pointer.
-		var clippedGlobal = target.localToGlobal(new Point(8.0, 32.0));
-		target.resolved = new ResolvedLayoutItem(912,
-			1,
-			10.0,
-			15.0,
-			60.0,
-			40.0,
-			new Rect(globalPoint.x - 1.0, globalPoint.y - 1.0, 2.0, 2.0),
-			new Rect(0.0, 0.0, 0.0, 0.0),
-			targetTransform,
-			0.0);
-		if (HitTest.path(root, clippedGlobal.x, clippedGlobal.y).length != 0) return false;
-
-		var stack = new RenderNode(new WidgetId(920));
-		stack.hitTestSelf = false;
-		stack.resolved = new ResolvedLayoutItem(920,
-			1,
-			0.0,
-			0.0,
-			100.0,
-			100.0,
-			broadClip,
-			new Rect(0.0, 0.0, 0.0, 0.0),
-			Transform2D.identity(),
-			0.0);
-		var lower = new RenderNode(new WidgetId(921));
-		var upper = new RenderNode(new WidgetId(922));
-		var equalFirst = new RenderNode(new WidgetId(923));
-		var equalSecond = new RenderNode(new WidgetId(924));
-		var flowFirst = new RenderNode(new WidgetId(925));
-		var flowSecond = new RenderNode(new WidgetId(926));
-		for (child in [lower, upper, equalFirst, equalSecond, flowFirst, flowSecond]) {
-			child.resolved = new ResolvedLayoutItem(child.id.value,
-				1,
-				0.0,
-				0.0,
-				100.0,
-				100.0,
-				broadClip,
-				new Rect(0.0, 0.0, 0.0, 0.0),
-				Transform2D.identity(),
-				0.0);
-			child.layout.style.positioning = LayoutPositioning.Absolute;
-		}
-		lower.layout.style.zIndex = 1;
-		upper.layout.style.zIndex = 5;
-		equalFirst.layout.style.zIndex = 7;
-		equalSecond.layout.style.zIndex = 7;
-		// Flow zIndex is intentionally ignored by the native renderer.
-		flowFirst.layout.style.positioning = LayoutPositioning.Flow;
-		flowFirst.layout.style.zIndex = 100;
-		flowSecond.layout.style.positioning = LayoutPositioning.Flow;
-		flowSecond.layout.style.zIndex = -100;
-		stack.add(lower);
-		stack.add(upper);
-		stack.add(equalFirst);
-		stack.add(equalSecond);
-		var hitPath = HitTest.path(stack, 10.0, 10.0);
-		if (hitPath.length != 2 || !hitPath[1].id.equals(equalSecond.id)) return false;
-		var flowStack = new RenderNode(new WidgetId(927));
-		flowStack.hitTestSelf = false;
-		flowStack.resolved = stack.resolved;
-		flowStack.add(flowFirst);
-		flowStack.add(flowSecond);
-		hitPath = HitTest.path(flowStack, 10.0, 10.0);
-		return hitPath.length == 2 && hitPath[1].id.equals(flowSecond.id);
+			expectedRoot.x) || !near(panelLocalX, expectedPanel.x) || !near(targetLocalX, localPoint.x)) return false;
+		return true;
 	}
 
 	static inline function near(left:Float, right:Float):Bool return Math.abs(left - right) < 0.00001;

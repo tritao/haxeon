@@ -23,8 +23,8 @@ display list, and dependent UI resources before disposing the collection.
 | Layer | Owns |
 | --- | --- |
 | Browser shell | WebGL canvas, event loop, module loading, input forwarding, benchmark collection |
-| Haxeon guest | Showcase state, Wasm heap and GC, frame orchestration, display-list encoding |
-| NativeKit UI | Layout, text shaping, hit testing, display-list interpretation, rendering resources |
+| Haxeon guest | Showcase state, Wasm heap and GC, frame orchestration, layout and hit testing, display-list encoding |
+| NativeKit UI | Text shaping and measurement, scene building, display-list interpretation, rendering resources |
 | NativeKit platform | Window/surface lifecycle and the bounded native host allocator |
 
 ## Benchmark modes

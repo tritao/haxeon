@@ -54,6 +54,77 @@ class LayoutSessionSmoke {
 			|| precise.baseline != 0.7) throw "Directly constructed geometry lost precision";
 	}
 
+	/**
+	 * Layout picks the topmost node under a point: floating nodes by z-index, equal ones by tree order; flow children in
+	 * tree order whatever their z-index; nothing outside a clip; a node's own and its children's hit flags; transforms.
+	 */
+	static function hitTesting(fonts:FontCollection):Void {
+		var session = LayoutSession.create();
+		session.setFonts(fonts);
+		var root = LayoutNode.box(30000);
+		root.style.width = LayoutAxis.fixed(200);
+		root.style.height = LayoutAxis.fixed(100);
+		root.style.direction = LayoutDirection.LeftToRight;
+		function absolute(id:Int, z:Int):LayoutNode {
+			var node = LayoutNode.box(id);
+			node.style.positioning = LayoutPositioning.Absolute;
+			node.style.width = LayoutAxis.fixed(50);
+			node.style.height = LayoutAxis.fixed(50);
+			node.style.zIndex = z;
+			return node;
+		}
+		// Floating siblings over (0, 0): z 5 above z 1; of two at z 7 the later.
+		for (node in [absolute(30001, 1), absolute(30002, 5), absolute(30003, 7), absolute(30004, 7)]) root.add(node);
+		// Flow children over (100, 0): z-index does not reorder them.
+		var flowFirst = LayoutNode.box(30005), flowSecond = LayoutNode.box(30006);
+		flowFirst.style.width = flowSecond.style.width = LayoutAxis.fixed(50);
+		flowFirst.style.height = flowSecond.style.height = LayoutAxis.fixed(50);
+		flowFirst.style.zIndex = 100;
+		flowSecond.style.zIndex = -100;
+		var flowStack = LayoutNode.box(30007);
+		flowStack.style.positioning = LayoutPositioning.Absolute;
+		flowStack.style.positionX = 100;
+		flowStack.style.width = LayoutAxis.fixed(50);
+		flowStack.style.height = LayoutAxis.fixed(50);
+		flowStack.add(flowFirst);
+		flowStack.add(flowSecond);
+		// Moved up over the first, which it follows in the flow.
+		flowSecond.style.transform = Transform2D.identity().translated(0, -50);
+		root.add(flowStack);
+		var frame = new LayoutFrame(200, 100);
+		session.submit(root, frame);
+		function top(x:Float, y:Float):Int {
+			var path = session.hitTest(x, y);
+			return path.length == 0 ? 0 : path[path.length - 1];
+		}
+		if (top(10, 10) != 30004) throw "Equal z-index floating nodes did not keep tree order";
+		if (top(110, 10) != 30006) throw "A later sibling did not win the hit";
+		if (top(190, 90) != 30000) throw "The root did not take a point nothing else covers";
+		// A clip keeps descendants from taking points outside it.
+		flowStack.style.clipHorizontal = flowStack.style.clipVertical = true;
+		flowSecond.style.transform = Transform2D.identity().translated(40, -50);
+		session.submit(root, frame);
+		if (top(145, 10) != 30006 || top(155, 10) != 30000) throw "A clipped child took a point outside its clip";
+		// Hit flags: a node that takes no hits itself passes them to its children; one whose children take none keeps them.
+		root.hitSelf = false;
+		session.submit(root, frame);
+		if (session.hitTest(190, 90).length != 0) throw "A node took a hit with its own hits off";
+		root.hitSelf = true;
+		root.hitChildren = false;
+		session.submit(root, frame);
+		var path = session.hitTest(10, 10);
+		if (path.length != 1 || path[0] != 30000) throw "Children took a hit with their parent's child hits off";
+		root.hitChildren = true;
+		// A transform moves where a node takes hits.
+		flowStack.style.clipHorizontal = flowStack.style.clipVertical = false;
+		var moved = absolute(30008, 9);
+		moved.style.transform = Transform2D.identity().translated(0, 50);
+		root.add(moved);
+		session.submit(root, frame);
+		if (top(10, 60) != 30008 || top(10, 10) != 30004) throw "A transformed node took hits where it was not";
+		session.dispose();
+	}
+
 	/** A solve hands back the same item for a node whose geometry did not change, and a new one for one whose did. */
 	static function resolvedItemReuse(fonts:FontCollection):Void {
 		var session = LayoutSession.create();
@@ -344,6 +415,7 @@ class LayoutSessionSmoke {
 		measuredVersion(fonts);
 		anchored(fonts);
 		resolvedItemReuse(fonts);
+		hitTesting(fonts);
 		var duplicateRoot = LayoutNode.box(80);
 		var sharedChild = LayoutNode.box(81);
 		duplicateRoot.add(sharedChild);

@@ -73,21 +73,6 @@ LayoutRect transform_bounds(LayoutRect rect, LayoutTransform transform) {
     return {left, top, std::max({x0, x1, x2, x3}) - left, std::max({y0, y1, y2, y3}) - top};
 }
 
-bool inverse_transform(LayoutTransform transform, LayoutTransform &out) {
-    const float determinant = transform.a * transform.d - transform.b * transform.c;
-    if (!finite_transform(transform) || !std::isfinite(determinant) ||
-        std::abs(determinant) < 0.000001f)
-        return false;
-    const float reciprocal = 1.0f / determinant;
-    out = {transform.d * reciprocal,
-           -transform.b * reciprocal,
-           -transform.c * reciprocal,
-           transform.a * reciprocal,
-           (transform.c * transform.ty - transform.d * transform.tx) * reciprocal,
-           (transform.b * transform.tx - transform.a * transform.ty) * reciprocal};
-    return finite_transform(out);
-}
-
 /** A node's own transform about its transform origin, from its layout bounds. */
 LayoutTransform local_transform(const LayoutNode &node, LayoutRect bounds) {
     const float origin_x = bounds.x + bounds.width * node.style.transform_origin_x;
@@ -117,28 +102,8 @@ LayoutRect intersect_axes(LayoutRect clip, LayoutRect bounds, bool horizontal, b
     return clip;
 }
 
-LayoutRect intersect_rect(LayoutRect left, LayoutRect right) {
-    return {std::max(left.x, right.x), std::max(left.y, right.y),
-            std::max(0.0f, std::min(left.x + left.width, right.x + right.width) -
-                               std::max(left.x, right.x)),
-            std::max(0.0f, std::min(left.y + left.height, right.y + right.height) -
-                               std::max(left.y, right.y))};
-}
-
 bool has_area(LayoutRect rect) {
     return rect.width > 0.0f && rect.height > 0.0f;
-}
-
-LayoutRect union_rect(LayoutRect left, LayoutRect right) {
-    if (!has_area(left))
-        return right;
-    if (!has_area(right))
-        return left;
-    const float x = std::min(left.x, right.x);
-    const float y = std::min(left.y, right.y);
-    const float right_edge = std::max(left.x + left.width, right.x + right.width);
-    const float bottom_edge = std::max(left.y + left.height, right.y + right.height);
-    return {x, y, right_edge - x, bottom_edge - y};
 }
 
 bool finite_rect(LayoutRect rect) {
@@ -390,13 +355,10 @@ bool SceneBuilder::Impl::build(const LayoutNodeView &nodes, float width, float h
         item.bounds = node_bounds[index];
         item.clip_bounds = item_clip;
         item.transform = transform;
-        item.local_bounds = {0.0f, 0.0f, node_bounds[index].width, node_bounds[index].height};
         item.world_bounds = transformed;
         item.z_index = node.style.z_index;
         item.positioned_absolute = node.style.positioning == LayoutPositioning::Absolute;
         item.visible = visible;
-        item.hit_self = node.hit_self;
-        item.hit_children = node.hit_children;
         item.content_revision = node.content_revision;
         item.geometry_revision = node.geometry_revision;
         item.composite_revision = node.composite_revision;
@@ -408,13 +370,6 @@ bool SceneBuilder::Impl::build(const LayoutNodeView &nodes, float width, float h
             if (error) {
                 error->node_index = index;
                 error->message = "layout transform is not finite and invertible";
-            }
-            return false;
-        }
-        if (!inverse_transform(transform, item.inverse_transform)) {
-            if (error) {
-                error->node_index = index;
-                error->message = "layout transform inverse could not be resolved";
             }
             return false;
         }
@@ -468,15 +423,6 @@ bool SceneBuilder::Impl::build(const LayoutNodeView &nodes, float width, float h
             if (!self(self, child, transform, visible, child_clip, node_bounds[index]))
                 return false;
         }
-        LayoutRect subtree = item.hit_self && item.visible
-                                 ? intersect_rect(item.world_bounds, item.clip_bounds)
-                                 : LayoutRect{};
-        if (item.hit_children && item.visible) {
-            for (const std::size_t child : state.children[index])
-                subtree = union_rect(subtree, out.items[child].subtree_hit_bounds);
-        }
-        item.subtree_hit_bounds = subtree;
-        out.items[index] = item;
         return true;
     };
     if (!resolve_geometry(resolve_geometry, root, LayoutTransform{}, true, viewport, viewport))
@@ -506,52 +452,6 @@ bool SceneBuilder::Impl::build(const LayoutNodeView &nodes, float width, float h
             out.primitives.push_back(std::move(end));
         }
     }
-
-    // Publish one native paint-order key for every resolved node. A node's
-    // absolute-positioned ancestor is its stacking owner: the entire owned
-    // subtree compares as one layer against ordinary flow content, while
-    // declaration/DFS order remains stable within an equal layer. This is
-    // the same ordering used by geometric picking and by the primitives above.
-    struct PaintOrderKey {
-        int32_t layer_z = 0;
-        bool floating = false;
-        uint64_t owner_order = 0;
-        uint64_t traversal_order = 0;
-    };
-    std::vector<PaintOrderKey> paint_keys(out.items.size());
-    uint64_t traversal_order = 0;
-    const auto collect_paint_order = [&](auto &&self, std::size_t index, int32_t layer_z,
-                                         bool floating, uint64_t owner_order) -> void {
-        const auto &node = nodes[index];
-        const uint64_t node_order = traversal_order++;
-        if (node.style.positioning == LayoutPositioning::Absolute) {
-            layer_z = layers[index];
-            floating = true;
-            owner_order = node_order;
-        }
-        paint_keys[index] = {layer_z, floating, owner_order, node_order};
-        for (const std::size_t child : state.children[index])
-            self(self, child, layer_z, floating, owner_order);
-    };
-    collect_paint_order(collect_paint_order, root, 0, false, 0);
-
-    std::vector<std::size_t> paint_indices(out.items.size());
-    for (std::size_t index = 0; index < paint_indices.size(); ++index)
-        paint_indices[index] = index;
-    std::stable_sort(paint_indices.begin(), paint_indices.end(),
-                     [&](std::size_t left, std::size_t right) {
-                         const auto &left_key = paint_keys[left];
-                         const auto &right_key = paint_keys[right];
-                         if (left_key.layer_z != right_key.layer_z)
-                             return left_key.layer_z < right_key.layer_z;
-                         if (left_key.floating != right_key.floating)
-                             return !left_key.floating;
-                         if (left_key.owner_order != right_key.owner_order)
-                             return left_key.owner_order < right_key.owner_order;
-                         return left_key.traversal_order < right_key.traversal_order;
-                     });
-    for (std::size_t order = 0; order < paint_indices.size(); ++order)
-        out.items[paint_indices[order]].paint_order = order + 1;
 
     const double snapshot_finished = layout_cost_time();
     state.prepared = true;

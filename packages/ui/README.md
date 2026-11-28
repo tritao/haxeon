@@ -76,8 +76,9 @@ regression coverage on one definition.
 
 Layout is solved in Haxe by `haxeon.ui.layout.LayoutSolver` (ADR 0009), and each submit hands
 NativeKit the bounds of every node and where its text goes. NativeKit builds the scene from them:
-transforms, clips, content and hit bounds, text shaped at the width it was given, and the paint
-primitives in paint order. Skribidi and NanoVG remain private implementation dependencies. Haxe
+transforms, clips, content bounds, text shaped at the width it was given, and the paint
+primitives in paint order. The solver also answers hit tests (`LayoutSession.hitTest`) from the
+geometry it resolved. Skribidi and NanoVG remain private implementation dependencies. Haxe
 paint callbacks record one retained display list per custom node; the layout compiler inserts those
 commands at the node's marker so custom drawing shares the same transforms, clipping, and sibling
 order as boxes, text, and images. `ScrollController` owns scroll offsets and input; layout only
@@ -259,8 +260,7 @@ now covered:
    bulk operation.
 4. Accessibility projection and window-decoration regions now share the
    `ResolvedLayoutItem.clippedViewportBounds()` geometry helper. Native
-   rendering, picking, and raster caching already consume the same native
-   `LayoutSnapshot` facts.
+   rendering and raster caching consume the same native `LayoutSnapshot` facts.
 
 The branch has been replayed on current `main`; rerun the native UI suite,
 Haxe framework smoke, virtualization/hit-test benchmarks, and visual

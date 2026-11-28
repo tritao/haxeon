@@ -150,9 +150,6 @@ struct LayoutNode {
     LayoutColor text_color{1.0f, 1.0f, 1.0f, 1.0f};
     TextStyle text_style{};
     ParagraphStyle paragraph_style{};
-    /** Geometric hit policy supplied by the framework layer. */
-    bool hit_self = true;
-    bool hit_children = true;
     /** Where the framework laid it out (ADR 0009). */
     LayoutPlacement placement{};
     /** Paint/text revision supplied by the retained scene owner. */
@@ -210,20 +207,10 @@ struct LayoutItem {
     /** Range into LayoutSnapshot::child_indices for direct children. */
     uint32_t child_offset = 0;
     uint32_t child_count = 0;
-    /** Node-local bounds, always rooted at (0, 0). */
-    LayoutRect local_bounds{};
     /** Axis-aligned viewport bounds after the cumulative transform. */
     LayoutRect world_bounds{};
-    /** Viewport bounds covering all hittable content below this item. */
-    LayoutRect subtree_hit_bounds{};
-    /** Inverse of transform, mapping viewport coordinates to layout coordinates. */
-    LayoutTransform inverse_transform{};
-    /** Native paint-order key; larger values are painted later. */
-    uint64_t paint_order = 0;
     int32_t z_index = 0;
     bool positioned_absolute = false;
-    bool hit_self = true;
-    bool hit_children = true;
     uint32_t content_revision = 0;
     uint32_t geometry_revision = 0;
     uint32_t composite_revision = 0;

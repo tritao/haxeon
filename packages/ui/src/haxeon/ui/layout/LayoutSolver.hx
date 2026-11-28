@@ -199,11 +199,179 @@ class LayoutSolver {
 		last.clear();
 		previousItems = nextItems;
 		nextItems = last;
+		resolveHitTesting();
 		var lastPlaced = previousPlaced;
 		lastPlaced.clear();
 		previousPlaced = nextPlaced;
 		nextPlaced = lastPlaced;
 		return resolvedItems;
+	}
+
+	/**
+	 * The IDs of the nodes from the root down to the topmost one under (`x`, `y`) in viewport coordinates that takes the
+	 * pointer, into `path`; empty when none does. Topmost is last in paint order: by stacking context (floating nodes by
+	 * z-index, overlays above them, each inside its owner's), then in tree order.
+	 */
+	public function hitTest(x:Float, y:Float, path:Array<Int>):Void {
+		path.resize(0);
+		hitBest = -1;
+		if (count > 0) visitHit(0, x, y);
+		var index = hitBest;
+		while (index >= 0) {
+			path.push(boxes[index].id);
+			index = boxes[index].parent;
+		}
+		path.reverse();
+	}
+
+	var hitBest:Int = -1;
+
+	function visitHit(index:Int, x:Float, y:Float):Void {
+		var box = boxes[index];
+		if (!box.visible || !inside(box.hitX, box.hitY, box.hitWidth, box.hitHeight, x, y)) return;
+		if (box.hitChildren) {
+			var child = index + 1;
+			for (_ in 0...box.childCount) {
+				visitHit(child, x, y);
+				child += boxes[child].size;
+			}
+		}
+		if (box.hitSelf && hitsSelf(box, x, y) && (hitBest < 0 || paintsAbove(index, hitBest))) hitBest = index;
+	}
+
+	/** Whether box `a` paints above box `b`. */
+	function paintsAbove(a:Int, b:Int):Bool {
+		var first = boxes[a], second = boxes[b];
+		if (first.layerRank != second.layerRank) return first.layerRank > second.layerRank;
+		if (first.floating != second.floating) return first.floating;
+		if (first.ownerOrder != second.ownerOrder) return first.ownerOrder > second.ownerOrder;
+		return a > b;
+	}
+
+	function hitsSelf(box:LayoutBox, x:Float, y:Float):Bool {
+		if (!inside(box.worldX, box.worldY, box.worldWidth, box.worldHeight, x, y)
+			|| !inside(box.clipX, box.clipY, box.clipWidth, box.clipHeight, x, y)) return false;
+		var determinant = box.wa * box.wd - box.wb * box.wc;
+		if (Math.abs(determinant) < 0.000001) return false;
+		var dx = x - box.wtx, dy = y - box.wty;
+		var localX = (box.wd * dx - box.wc * dy) / determinant - box.x;
+		var localY = (box.wa * dy - box.wb * dx) / determinant - box.y;
+		return inside(0.0, 0.0, box.width, box.height, localX, localY);
+	}
+
+	static inline function inside(rx:Float, ry:Float, rw:Float, rh:Float, x:Float, y:Float):Bool {
+		return rw > 0.0 && rh > 0.0 && x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
+	}
+
+	/**
+	 * Each node's hit-test pruning bounds and paint-order key: the union of the areas it and its descendants take the
+	 * pointer in, and the rank of its stacking context.
+	 */
+	function resolveHitTesting():Void {
+		for (index in 0...count) {
+			var box = boxes[index];
+			box.floatingChildren.resize(0);
+			box.overlayChildren.resize(0);
+			var node = box.node;
+			box.id = node.id;
+			box.childCount = node.children.length;
+			box.hitSelf = node.hitSelf;
+			box.hitChildren = node.hitChildren;
+			box.zIndex = node.style.zIndex;
+			var style = node.style;
+			var parent = box.parent < 0 ? null : boxes[box.parent];
+			if (parent == null) {
+				box.owner = box.overlayOwner = index;
+				box.floating = false;
+			} else if (style.positioning == LayoutPositioning.Absolute) {
+				box.floating = true;
+				if (style.overlay) boxes[parent.overlayOwner].overlayChildren.push(index);
+				else boxes[parent.owner].floatingChildren.push(index);
+				box.owner = index;
+				box.overlayOwner = style.overlay ? index : parent.overlayOwner;
+			} else {
+				box.floating = parent.floating;
+				box.owner = parent.owner;
+				box.overlayOwner = parent.overlayOwner;
+			}
+			worldBounds(index, current);
+			box.worldX = current.x;
+			box.worldY = current.y;
+			box.worldWidth = current.width;
+			box.worldHeight = current.height;
+		}
+		if (count == 0) return;
+		nextRank = 0;
+		rankContext(0);
+		var index = count - 1;
+		while (index >= 0) {
+			var box = boxes[index];
+			box.layerRank = boxes[box.owner].ownRank;
+			box.ownerOrder = box.owner == 0 ? 0 : box.owner;
+			// What it takes the pointer in itself, clipped, then what its descendants do.
+			var x0 = 0.0, y0 = 0.0, x1 = 0.0, y1 = 0.0, any = false;
+			if (box.hitSelf && box.visible) {
+				x0 = Math.max(box.worldX, box.clipX);
+				y0 = Math.max(box.worldY, box.clipY);
+				x1 = Math.min(box.worldX + box.worldWidth, box.clipX + box.clipWidth);
+				y1 = Math.min(box.worldY + box.worldHeight, box.clipY + box.clipHeight);
+				any = x1 > x0 && y1 > y0;
+			}
+			if (box.hitChildren && box.visible) {
+				var child = index + 1;
+				for (_ in 0...box.childCount) {
+					var childBox = boxes[child];
+					if (childBox.hitWidth > 0.0 && childBox.hitHeight > 0.0) {
+						if (!any) {
+							x0 = childBox.hitX;
+							y0 = childBox.hitY;
+							x1 = childBox.hitX + childBox.hitWidth;
+							y1 = childBox.hitY + childBox.hitHeight;
+							any = true;
+						} else {
+							x0 = Math.min(x0, childBox.hitX);
+							y0 = Math.min(y0, childBox.hitY);
+							x1 = Math.max(x1, childBox.hitX + childBox.hitWidth);
+							y1 = Math.max(y1, childBox.hitY + childBox.hitHeight);
+						}
+					}
+					child += childBox.size;
+				}
+			}
+			box.hitX = any ? x0 : 0.0;
+			box.hitY = any ? y0 : 0.0;
+			box.hitWidth = any ? x1 - x0 : 0.0;
+			box.hitHeight = any ? y1 - y0 : 0.0;
+			index--;
+		}
+	}
+
+	var nextRank:Int = 0;
+
+	/**
+	 * Ranks the stacking context `owner` and those nested in it in paint order: floating children below zero z-index,
+	 * the context itself, floating children at or above zero, then overlays; equal z-indexes keep tree order.
+	 */
+	function rankContext(owner:Int):Void {
+		var box = boxes[owner];
+		sortByZ(box.floatingChildren);
+		for (child in box.floatingChildren) if (boxes[child].zIndex < 0) rankContext(child);
+		box.ownRank = nextRank++;
+		for (child in box.floatingChildren) if (boxes[child].zIndex >= 0) rankContext(child);
+		sortByZ(box.overlayChildren);
+		for (child in box.overlayChildren) rankContext(child);
+	}
+
+	/** A stable sort by z-index; the lists are short. */
+	function sortByZ(list:Array<Int>):Void {
+		for (i in 1...list.length) {
+			var value = list[i], z = boxes[value].zIndex, j = i - 1;
+			while (j >= 0 && boxes[list[j]].zIndex > z) {
+				list[j + 1] = list[j];
+				j--;
+			}
+			list[j + 1] = value;
+		}
 	}
 
 	/**
@@ -519,7 +687,10 @@ class LayoutSolver {
 			case LayoutSizing.Fixed:
 				fit = least = axis.value;
 			case LayoutSizing.Percent:
-				fit = least = 0.0;
+				// It brings its content to a parent that fits it, then takes its share of the size that gives, as a
+				// percentage of an auto-sized box does in CSS; it can be made smaller, so it adds no minimum.
+				fit = clamp(content, axis.min, axis.max);
+				least = 0.0;
 			default:
 				fit = clamp(content, axis.min, axis.max);
 				least = clamp(minimum, axis.min, axis.max);
@@ -1212,6 +1383,32 @@ private class LayoutBox {
 	public var childClipY:Float = 0.0;
 	public var childClipWidth:Float = 0.0;
 	public var childClipHeight:Float = 0.0;
+	/** Hit testing: its bounds in viewport coordinates, the area it and its descendants take the pointer in, and its paint-order key. */
+	public var worldX:Float = 0.0;
+	public var worldY:Float = 0.0;
+	public var worldWidth:Float = 0.0;
+	public var worldHeight:Float = 0.0;
+	public var hitX:Float = 0.0;
+	public var hitY:Float = 0.0;
+	public var hitWidth:Float = 0.0;
+	public var hitHeight:Float = 0.0;
+	public var floating:Bool = false;
+	public var owner:Int = 0;
+	public var overlayOwner:Int = 0;
+	public var ownRank:Int = 0;
+	public var layerRank:Int = 0;
+	public var ownerOrder:Int = 0;
+	/**
+	 * What hit testing reads of the node, as it was when laid out: a reused frame keeps answering queries while the next
+	 * build already edits the nodes.
+	 */
+	public var id:Int = 0;
+	public var childCount:Int = 0;
+	public var hitSelf:Bool = false;
+	public var hitChildren:Bool = false;
+	public var zIndex:Int = 0;
+	public final floatingChildren:Array<Int> = [];
+	public final overlayChildren:Array<Int> = [];
 
 	public function new() {}
 

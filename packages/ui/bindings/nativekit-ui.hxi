@@ -9,7 +9,7 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	const NKUI_EFFECT_PROGRAM_MAX_OPS = 8;
 	const NKUI_GRADIENT_MAX_STOPS = 8;
 	const NKUI_LAYER_COMMAND_VERSION = 2;
-	const NKUI_LAYOUT_API_VERSION = 27;
+	const NKUI_LAYOUT_API_VERSION = 28;
 	const NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16777216;
 	const NKUI_LAYOUT_NODE_BACKGROUND_OFFSET = 60;
 	const NKUI_LAYOUT_NODE_BASELINE_OFFSET = 48;
@@ -74,10 +74,10 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	 */
 	const NKUI_LAYOUT_NODE_Z_INDEX_OFFSET = 180;
 	const NKUI_LAYOUT_PATCH_HEADER_BYTES = 32;
-	const NKUI_LAYOUT_PATCH_VERSION = 21;
+	const NKUI_LAYOUT_PATCH_VERSION = 23;
 	const NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96;
 	const NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16;
-	const NKUI_LAYOUT_TRANSACTION_VERSION = 20;
+	const NKUI_LAYOUT_TRANSACTION_VERSION = 22;
 	/**
 	 * 16-bit opcode identifying one display-list command record.
 	 */
@@ -258,21 +258,13 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		NKUI_LAYOUT_NODE_FLOATING = 2;
 		NKUI_LAYOUT_NODE_CLIP_TO_PARENT = 4;
 		/**
-		 * Excludes this node's own bounds from geometric hit testing.
-		 */
-		NKUI_LAYOUT_NODE_HIT_SELF_DISABLED = 8;
-		/**
-		 * Excludes this node's descendants from geometric hit testing.
-		 */
-		NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED = 16;
-		/**
 		 * Floating overlay above ordinary content, scoped to the nearest enclosing overlay.
 		 */
-		NKUI_LAYOUT_NODE_OVERLAY = 32;
+		NKUI_LAYOUT_NODE_OVERLAY = 8;
 		/**
-		 * Layout hid the node, as a placer hides a scrollbar with nothing to scroll: neither drawn nor hit.
+		 * Layout hid the node, as a placer hides a scrollbar with nothing to scroll: not drawn.
 		 */
-		NKUI_LAYOUT_NODE_HIDDEN = 64;
+		NKUI_LAYOUT_NODE_HIDDEN = 16;
 	}
 	/**
 	 * Flags returned with each resolved item.
@@ -615,13 +607,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	 */
 	extern fn nkui_layout_session_destroy(session: nkui_layout_session) -> nkui_result;
 	/**
-	 * Returns cumulative geometric hit-test counters for the session.
-	 */
-	extern fn nkui_layout_session_get_hit_test_stats(
-		session: nkui_layout_session,
-		out_stats: ptr<nkui_layout_hit_test_stats> @out
-	) -> nkui_result;
-	/**
 	 * Copies resolved geometry in retained tree order. Full submits preserve submission order; patches use child-list preorder.
 	 *
 	 * The buffer contains `nkui_layout_item` records with `struct_size` set.
@@ -655,42 +640,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		buffer: ptr<u8> @in_array("capacity_bytes"),
 		capacity_bytes: u32,
 		out_bytes: ptr<u32> @out
-	) -> nkui_result;
-	/**
-	 * Returns the root-to-target geometric hit path for a viewport point.
-	 *
-	 * The returned path contains stable node IDs in root-to-target order. Pass
-	 * NULL to query the required byte count, then provide a buffer containing at
-	 * least that many bytes. The path buffer is an array of uint32_t values even
-	 * though its capacity is reported in bytes. A point with no eligible target
-	 * returns an empty path. Geometric questions only are considered: visibility,
-	 * clipping, transforms, hit policies, and native paint order.
-	 */
-	extern fn nkui_layout_session_hit_test(
-		session: nkui_layout_session,
-		x: f32,
-		y: f32,
-		out_path: nullable<ptr<u8>> @out_buffer("inout_bytes"),
-		inout_bytes: ptr<u32> @inout
-	) -> nkui_result;
-	/**
-	 * Executes a geometric hit test into caller-owned reusable storage.
-	 *
-	 * `path` is a mutable byte buffer containing uint32_t node IDs in
-	 * root-to-target order. `path_capacity_bytes` is its capacity in bytes and
-	 * must be a multiple of sizeof(uint32_t). `out_count` receives the number of
-	 * node IDs written. If the buffer is too small, no IDs are written,
-	 * `out_count` receives the required number of IDs, and NKUI_ERROR_BUFFER_TOO_SMALL
-	 * is returned so the caller can grow and retry without a size-query allocation.
-	 * A zero-capacity buffer is valid when `path` is NULL.
-	 */
-	extern fn nkui_layout_session_hit_test_into(
-		session: nkui_layout_session,
-		x: f32,
-		y: f32,
-		path: ptr<u8> @in_array("path_capacity_bytes"),
-		path_capacity_bytes: u32,
-		out_count: ptr<u32> @out
 	) -> nkui_result;
 	/**
 	 * Measures `text` with the session's fonts: unwrapped when `width` is zero, else laid out at `width`. Laying it out at
@@ -1502,39 +1451,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		width: f32;
 		height: f32;
 		delta_seconds: f32;
-	}
-	/**
-	 * Cumulative geometric hit-test activity for one layout session.
-	 */
-	struct nkui_layout_hit_test_stats {
-		/**
-		 * Set to sizeof(nkui_layout_hit_test_stats) when returned by the API.
-		 */
-		struct_size: u32 @struct_size;
-		/**
-		 * Valid native hit-test queries performed by the session.
-		 */
-		hit_test_count: u64;
-		/**
-		 * Resolved scene nodes inspected across all queries.
-		 */
-		nodes_visited: u64;
-		/**
-		 * Scene branches rejected by visibility, bounds, or clipping.
-		 */
-		subtrees_rejected: u64;
-		/**
-		 * Precise inverse-transform self tests performed.
-		 */
-		precise_hit_tests: u64;
-		/**
-		 * Maximum resolved scene nodes inspected by one query.
-		 */
-		max_nodes_visited: u64;
-		/**
-		 * Monotonic elapsed time spent in native hit testing, in nanoseconds.
-		 */
-		hit_test_time_nanoseconds: u64;
 	}
 	/**
 	 * Resolved geometry for one node in the most recently submitted layout.

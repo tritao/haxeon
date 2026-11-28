@@ -5,7 +5,6 @@ import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.ResolvedLayoutItem;
-import haxeon.ui.core.HitTest;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
@@ -414,16 +413,9 @@ class AccessibilityContract {
 		var option:ResolvedLayoutItem = cast popupOptions(selectRoot.children[1])[0].resolved;
 		var x = option.x + 3.0;
 		var y = option.y + option.height * 0.5;
-		if (!samePath(context.events.hitTestPath(x, y), HitTest.path(root, x, y))) return false;
 		context.pointerDown(x, y, 0);
 		context.pointerUp(x, y, 0);
 		return selected == "comfortable" && underlyingClicks == 0;
-	}
-
-	static function samePath(left:Array<RenderNode>, right:Array<RenderNode>):Bool {
-		if (left.length != right.length) return false;
-		for (index in 0...left.length) if (!left[index].id.equals(right[index].id)) return false;
-		return true;
 	}
 
 	static function checkMovingHover(context:UiContext):Bool {

@@ -1392,11 +1392,6 @@ class UiContext implements Disposable {
 		return lastFrameMetrics;
 	}
 
-	/** Returns cumulative native geometric hit-test diagnostics. */
-	public var hitTestMetrics(get, never):LayoutHitTestStats;
-
-	function get_hitTestMetrics():LayoutHitTestStats return session.hitTestStats();
-
 	/** Formats the current render and semantic tree for logs or developer tools. */
 	public function dumpTree():String {
 		ensureLive();

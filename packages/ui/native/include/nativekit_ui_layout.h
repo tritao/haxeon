@@ -17,9 +17,9 @@ extern "C" {
 
 /** Layout bridge and wire-format versions and fixed sizes. */
 enum {
-    NKUI_LAYOUT_API_VERSION = 27,
-    NKUI_LAYOUT_TRANSACTION_VERSION = 20,
-    NKUI_LAYOUT_PATCH_VERSION = 21,
+    NKUI_LAYOUT_API_VERSION = 28,
+    NKUI_LAYOUT_TRANSACTION_VERSION = 22,
+    NKUI_LAYOUT_PATCH_VERSION = 23,
     NKUI_LAYOUT_PATCH_HEADER_BYTES = 32,
     NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16,
     NKUI_LAYOUT_NODE_RECORD_BYTES = 196,
@@ -40,14 +40,10 @@ enum NK_FLAGS(nkui_layout_node_flags) {
     NKUI_LAYOUT_NODE_VISIBLE = 1u << 0,
     NKUI_LAYOUT_NODE_FLOATING = 1u << 1,
     NKUI_LAYOUT_NODE_CLIP_TO_PARENT = 1u << 2,
-    /** Excludes this node's own bounds from geometric hit testing. */
-    NKUI_LAYOUT_NODE_HIT_SELF_DISABLED = 1u << 3,
-    /** Excludes this node's descendants from geometric hit testing. */
-    NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED = 1u << 4,
     /** Floating overlay above ordinary content, scoped to the nearest enclosing overlay. */
-    NKUI_LAYOUT_NODE_OVERLAY = 1u << 5,
-    /** Layout hid the node, as a placer hides a scrollbar with nothing to scroll: neither drawn nor hit. */
-    NKUI_LAYOUT_NODE_HIDDEN = 1u << 6
+    NKUI_LAYOUT_NODE_OVERLAY = 1u << 3,
+    /** Layout hid the node, as a placer hides a scrollbar with nothing to scroll: not drawn. */
+    NKUI_LAYOUT_NODE_HIDDEN = 1u << 4
 };
 
 /** Persistent rendering policy for a retained custom-paint plane. */
@@ -184,24 +180,6 @@ typedef struct nkui_layout_frame_input {
     float delta_seconds;
 } nkui_layout_frame_input;
 
-/** Cumulative geometric hit-test activity for one layout session. */
-typedef struct nkui_layout_hit_test_stats {
-    /** Set to sizeof(nkui_layout_hit_test_stats) when returned by the API. */
-    uint32_t struct_size NK_STRUCT_SIZE;
-    /** Valid native hit-test queries performed by the session. */
-    uint64_t hit_test_count;
-    /** Resolved scene nodes inspected across all queries. */
-    uint64_t nodes_visited;
-    /** Scene branches rejected by visibility, bounds, or clipping. */
-    uint64_t subtrees_rejected;
-    /** Precise inverse-transform self tests performed. */
-    uint64_t precise_hit_tests;
-    /** Maximum resolved scene nodes inspected by one query. */
-    uint64_t max_nodes_visited;
-    /** Monotonic elapsed time spent in native hit testing, in nanoseconds. */
-    uint64_t hit_test_time_nanoseconds;
-} nkui_layout_hit_test_stats;
-
 /** Creates a private layout session. */
 NKUI_API nkui_result NK_CALL nkui_layout_session_create(nkui_layout_session *out_session NKUI_OUT);
 
@@ -220,10 +198,6 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_measure_text(
     nkui_layout_session session, const char *text NKUI_NULLABLE_UTF8, float width,
     const nkui_text_style *text_style, const nkui_paragraph_style *paragraph_style,
     nkui_layout_text_measure *out_measure NKUI_OUT);
-
-/** Returns cumulative geometric hit-test counters for the session. */
-NKUI_API nkui_result NK_CALL nkui_layout_session_get_hit_test_stats(
-    nkui_layout_session session, nkui_layout_hit_test_stats *out_stats NKUI_OUT);
 
 /** Clears all custom-paint display lists attached to the session. */
 NKUI_API nkui_result NK_CALL nkui_layout_session_clear_custom_paints(nkui_layout_session session);
@@ -323,34 +297,6 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_updates_into(
 NKUI_API nkui_result NK_CALL nkui_layout_session_verify_tree(
     nkui_layout_session session, const uint8_t *transaction NKUI_IN_ARRAY(transaction_bytes),
     uint32_t transaction_bytes);
-
-/** Returns the root-to-target geometric hit path for a viewport point.
- *
- * The returned path contains stable node IDs in root-to-target order. Pass
- * NULL to query the required byte count, then provide a buffer containing at
- * least that many bytes. The path buffer is an array of uint32_t values even
- * though its capacity is reported in bytes. A point with no eligible target
- * returns an empty path. Geometric questions only are considered: visibility,
- * clipping, transforms, hit policies, and native paint order.
- */
-NKUI_API nkui_result NK_CALL nkui_layout_session_hit_test(
-    nkui_layout_session session, float x, float y, uint8_t *out_path NK_OUT_BUFFER(inout_bytes),
-    uint32_t *inout_bytes NK_INOUT);
-
-/** Executes a geometric hit test into caller-owned reusable storage.
- *
- * `path` is a mutable byte buffer containing uint32_t node IDs in
- * root-to-target order. `path_capacity_bytes` is its capacity in bytes and
- * must be a multiple of sizeof(uint32_t). `out_count` receives the number of
- * node IDs written. If the buffer is too small, no IDs are written,
- * `out_count` receives the required number of IDs, and NKUI_ERROR_BUFFER_TOO_SMALL
- * is returned so the caller can grow and retry without a size-query allocation.
- * A zero-capacity buffer is valid when `path` is NULL.
- */
-NKUI_API nkui_result NK_CALL nkui_layout_session_hit_test_into(
-    nkui_layout_session session, float x, float y,
-    uint8_t *path NKUI_IN_ARRAY(path_capacity_bytes), uint32_t path_capacity_bytes,
-    uint32_t *out_count NKUI_OUT);
 
 /** Executes the submitted layout through the existing NativeKit renderer.
  *

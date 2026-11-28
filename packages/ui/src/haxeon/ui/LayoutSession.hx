@@ -24,7 +24,6 @@ class LayoutSession implements Disposable {
 	final referenceTransaction:LayoutTransaction = new LayoutTransaction();
 	/** Compare the retained native tree with a full encode after every submit while retention verification is enabled. */
 	public var verifyTransactions:Bool = false;
-	var hitPathBytes:Bytes;
 	var measureFunction:Null<LayoutMeasureCallback>;
 	final renderableContents:Map<Int, LayoutRenderableContent>;
 
@@ -33,7 +32,6 @@ class LayoutSession implements Disposable {
 		disposed = false;
 		transaction = new LayoutTransaction();
 		resolved = [];
-		hitPathBytes = Bytes.alloc(64 * 4);
 		measureFunction = null;
 		renderableContents = new Map();
 	}
@@ -131,45 +129,18 @@ class LayoutSession implements Disposable {
 			referenceTransaction.byteLength()), "layoutSession.verifyIncrementalTree");
 	}
 
-	/** Returns the native root-to-target geometric hit path for viewport coordinates. */
+	/** The IDs of the nodes from the root down to the topmost one under (`x`, `y`) that takes the pointer, as last laid out. */
 	public function hitTest(x:Float, y:Float):Array<Int> {
 		var path:Array<Int> = [];
 		hitTestInto(x, y, path);
 		return path;
 	}
 
-	/** Fills caller-owned storage with the native root-to-target geometric hit path. */
+	/** `hitTest` into caller-owned storage. */
 	public function hitTestInto(x:Float, y:Float, path:Array<Int>):Void {
 		ensureLive();
-		if (path == null)
-			throw "Native hit-test output storage cannot be null";
-		while (true) {
-			var result = NativeKitUI.nkui_layout_session_hit_test_into(value, x, y, hitPathBytes);
-			var requiredBytes = result.out_count * 4;
-			if (result.status == NativeKitUI.UiStatus.ErrorBufferTooSmall && requiredBytes > hitPathBytes.length) {
-				var capacity = hitPathBytes.length;
-				while (capacity < requiredBytes)
-					capacity *= 2;
-				hitPathBytes = Bytes.alloc(capacity);
-				continue;
-			}
-			UiResult.check(result.status, "layoutSession.hitTestInto");
-			path.resize(0);
-			for (index in 0...result.out_count)
-				path.push(hitPathBytes.getInt32(index * 4));
-			return;
-		}
-	}
-
-	/** Returns cumulative native geometric hit-test traversal counters. */
-	public function hitTestStats():LayoutHitTestStats {
-		ensureLive();
-		var result = NativeKitUI.nkui_layout_session_get_hit_test_stats(value);
-		UiResult.check(result.status, "layoutSession.hitTestStats");
-		var stats = result.out_stats;
-		return new LayoutHitTestStats(stats.get_hit_test_count(), stats.get_nodes_visited(),
-			stats.get_subtrees_rejected(), stats.get_precise_hit_tests(),
-			stats.get_max_nodes_visited(), stats.get_hit_test_time_nanoseconds());
+		if (path == null) throw "Hit-test output storage cannot be null";
+		solver.hitTest(x, y, path);
 	}
 
 	/** Returns pre-transform layout bounds of a node after the latest submission. */
@@ -338,32 +309,4 @@ class LayoutSession implements Disposable {
 		}
 	}
 
-}
-
-/** Snapshot of native geometric hit-test traversal activity. */
-class LayoutHitTestStats {
-	/** How many hit tests ran. */
-	public final hitTestCount:haxe.Int64;
-	/** How many nodes they visited. */
-	public final nodesVisited:haxe.Int64;
-	/** How many subtrees their bounds ruled out. */
-	public final subtreesRejected:haxe.Int64;
-	/** How many tested a node's exact shape. */
-	public final preciseHitTests:haxe.Int64;
-	/** The most nodes one hit test visited. */
-	public final maxNodesVisited:haxe.Int64;
-	/** The time they took. */
-	public final hitTestTimeNanoseconds:haxe.Int64;
-
-	/** A snapshot of the counts. */
-	public function new(hitTestCount:haxe.Int64, nodesVisited:haxe.Int64,
-			subtreesRejected:haxe.Int64, preciseHitTests:haxe.Int64,
-			maxNodesVisited:haxe.Int64, hitTestTimeNanoseconds:haxe.Int64) {
-		this.hitTestCount = hitTestCount;
-		this.nodesVisited = nodesVisited;
-		this.subtreesRejected = subtreesRejected;
-		this.preciseHitTests = preciseHitTests;
-		this.maxNodesVisited = maxNodesVisited;
-		this.hitTestTimeNanoseconds = hitTestTimeNanoseconds;
-	}
 }

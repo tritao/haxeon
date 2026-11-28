@@ -228,10 +228,8 @@ internal class LayoutTransaction {
 			if (style.overlay && positioning != LayoutPositioning.Absolute)
 				throw "Layout overlays require absolute positioning";
 			var nodeFlags = style.visible ? 1 : 0;
-			if (style.overlay) nodeFlags |= 1 << 5;
-			if (!node.hitSelf) nodeFlags |= 1 << 3;
-			if (!node.hitChildren) nodeFlags |= 1 << 4;
-			if (hidden) nodeFlags |= 1 << 6;
+			if (style.overlay) nodeFlags |= 1 << 3;
+			if (hidden) nodeFlags |= 1 << 4;
 			if (positioning == LayoutPositioning.Absolute) {
 				nodeFlags |= 1 << 1;
 				if (style.clipToParent) nodeFlags |= 1 << 2;

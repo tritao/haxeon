@@ -260,11 +260,6 @@ struct RendererSlot {
 };
 
 struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
-    LayoutSessionState() {
-        hit_test_traversal_path.reserve(64);
-        hit_test_candidate_path.reserve(64);
-    }
-
     std::mutex mutex;
     std::unique_ptr<nkui::SceneBuilder> engine;
     nkui::LayoutRenderCompiler compiler;
@@ -332,9 +327,6 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
         nkui::RenderPlan plan;
     };
     std::unordered_map<uint32_t, CustomPlanCacheEntry> custom_plan_cache;
-    std::vector<uint32_t> hit_test_traversal_path;
-    std::vector<uint32_t> hit_test_candidate_path;
-    nkui_layout_hit_test_stats hit_test_stats{};
     bool fonts_configured = false;
     bool submitted = false;
     /* Counts the layout results this session has published; a render plan built from one snapshot stays valid until it
@@ -948,7 +940,6 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
             if (visual_kind < NKUI_LAYOUT_VISUAL_BOX || visual_kind > NKUI_LAYOUT_VISUAL_CUSTOM ||
                 (node_flags &
                  ~(NKUI_LAYOUT_NODE_VISIBLE | NKUI_LAYOUT_NODE_FLOATING | NKUI_LAYOUT_NODE_CLIP_TO_PARENT |
-                   NKUI_LAYOUT_NODE_HIT_SELF_DISABLED | NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED |
                    NKUI_LAYOUT_NODE_OVERLAY | NKUI_LAYOUT_NODE_HIDDEN)) != 0 ||
                 (overlay && !floating) || (clip_to_parent && !floating) ||
                 z_index < std::numeric_limits<int16_t>::min() || z_index > std::numeric_limits<int16_t>::max() ||
@@ -967,8 +958,6 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
             node.id = id;
             node.visual_kind = static_cast<nkui::LayoutVisualKind>(visual_kind);
             node.style.visible = (node_flags & NKUI_LAYOUT_NODE_VISIBLE) != 0;
-            node.hit_self = (node_flags & NKUI_LAYOUT_NODE_HIT_SELF_DISABLED) == 0;
-            node.hit_children = (node_flags & NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED) == 0;
             placement.hidden = (node_flags & NKUI_LAYOUT_NODE_HIDDEN) != 0;
             placement.has_baseline = std::isfinite(baseline);
             placement.baseline = placement.has_baseline ? baseline : 0.0f;
@@ -2008,21 +1997,6 @@ extern "C" nkui_result nkui_layout_session_measure_text(nkui_layout_session sess
     return NKUI_OK;
 }
 
-extern "C" nkui_result
-nkui_layout_session_get_hit_test_stats(nkui_layout_session session,
-                                       nkui_layout_hit_test_stats *out_stats) {
-    if (!out_stats)
-        return NKUI_ERROR_INVALID_ARGUMENT;
-    std::lock_guard<std::mutex> lock(layout_sessions_mutex);
-    auto *state = resolve(session);
-    if (!state)
-        return NKUI_ERROR_INVALID_HANDLE;
-    std::lock_guard<std::mutex> session_lock(state->mutex);
-    *out_stats = state->hit_test_stats;
-    out_stats->struct_size = sizeof(*out_stats);
-    return NKUI_OK;
-}
-
 extern "C" nkui_result nkui_layout_session_clear_custom_paints(nkui_layout_session session) {
     std::scoped_lock lock(layout_sessions_mutex, lists_mutex);
     auto *state = resolve(session);
@@ -2137,100 +2111,6 @@ nkui_result set_cache_policy(LayoutSessionState *state, uint32_t node_id,
     return NKUI_OK;
 }
 
-bool point_in_rect(const nkui::LayoutRect &rect, float x, float y) {
-    return rect.width > 0.0f && rect.height > 0.0f && x >= rect.x && x <= rect.x + rect.width &&
-           y >= rect.y && y <= rect.y + rect.height;
-}
-
-struct HitTestTraversalStats {
-    uint64_t nodes_visited = 0;
-    uint64_t subtrees_rejected = 0;
-    uint64_t precise_hit_tests = 0;
-};
-
-bool precisely_hits_self(const nkui::LayoutItem &item, float x, float y,
-                         HitTestTraversalStats &stats) {
-    ++stats.precise_hit_tests;
-    if (!point_in_rect(item.world_bounds, x, y) || !point_in_rect(item.clip_bounds, x, y))
-        return false;
-    const float layout_x =
-        item.inverse_transform.a * x + item.inverse_transform.c * y + item.inverse_transform.tx;
-    const float layout_y =
-        item.inverse_transform.b * x + item.inverse_transform.d * y + item.inverse_transform.ty;
-    return point_in_rect(item.local_bounds, layout_x - item.bounds.x, layout_y - item.bounds.y);
-}
-
-struct HitTestCandidate {
-    bool found = false;
-    uint64_t paint_order = 0;
-    uint32_t index = nkui::kInvalidLayoutIndex;
-};
-
-void visit_hit_test(const nkui::LayoutSnapshot &snapshot, uint32_t index, float x, float y,
-                    std::vector<uint32_t> &path, HitTestCandidate &candidate,
-                    HitTestTraversalStats &stats) {
-    if (index >= snapshot.items.size()) {
-        ++stats.subtrees_rejected;
-        return;
-    }
-    ++stats.nodes_visited;
-    const auto &item = snapshot.items[index];
-    // Descendant floating roots can escape this item's clip. The subtree
-    // bounds already union each descendant's independently clipped hit area.
-    if (!item.visible || !point_in_rect(item.subtree_hit_bounds, x, y)) {
-        ++stats.subtrees_rejected;
-        return;
-    }
-
-    path.push_back(item.id);
-    if (item.hit_children) {
-        for (uint32_t child_offset = 0; child_offset < item.child_count; ++child_offset) {
-            const uint32_t child_index = item.child_offset + child_offset;
-            if (child_index >= snapshot.child_indices.size())
-                break;
-            visit_hit_test(snapshot, snapshot.child_indices[child_index], x, y, path, candidate,
-                           stats);
-        }
-    }
-
-    if (item.hit_self && precisely_hits_self(item, x, y, stats) &&
-        (!candidate.found || item.paint_order > candidate.paint_order ||
-         (item.paint_order == candidate.paint_order && item.index > candidate.index))) {
-        candidate.found = true;
-        candidate.paint_order = item.paint_order;
-        candidate.index = item.index;
-    }
-    path.pop_back();
-}
-
-void build_hit_path(const nkui::LayoutSnapshot &snapshot, const HitTestCandidate &candidate,
-                    std::vector<uint32_t> &path) {
-    path.clear();
-    uint32_t index = candidate.index;
-    while (index != nkui::kInvalidLayoutIndex && index < snapshot.items.size()) {
-        path.push_back(snapshot.items[index].id);
-        index = snapshot.items[index].parent_index;
-    }
-    std::reverse(path.begin(), path.end());
-}
-
-void hit_test(const nkui::LayoutSnapshot &snapshot, float x, float y,
-              std::vector<uint32_t> &path, std::vector<uint32_t> &traversal_path,
-              HitTestTraversalStats &stats) {
-    path.clear();
-    traversal_path.clear();
-    const auto root = std::find_if(snapshot.items.begin(), snapshot.items.end(),
-                                   [](const nkui::LayoutItem &item) {
-                                       return item.parent_index == nkui::kInvalidLayoutIndex;
-                                   });
-    if (root == snapshot.items.end())
-        return;
-    HitTestCandidate candidate;
-    visit_hit_test(snapshot, root->index, x, y, traversal_path, candidate, stats);
-    if (candidate.found)
-        build_hit_path(snapshot, candidate, path);
-}
-
 extern "C" nkui_result
 nkui_layout_session_set_custom_paint_cache_policy(nkui_layout_session session, uint32_t node_id,
                                                   nkui_layout_cache_policy policy) {
@@ -2292,9 +2172,8 @@ uint64_t hash_layout_snapshot(const nkui::LayoutSnapshot &snapshot) {
         hash_snapshot_rect(hash, item.world_bounds);
         hash_snapshot_transform(hash, item.transform);
         hash_snapshot_float(hash, item.baseline);
-        hash_snapshot_value(hash, (item.visible ? 1u : 0u) | (item.hit_self ? 2u : 0u) | (item.hit_children ? 4u : 0u));
+        hash_snapshot_value(hash, item.visible ? 1u : 0u);
         hash_snapshot_value(hash, item.parent_id);
-        hash_snapshot_value(hash, item.paint_order);
         hash_snapshot_value(hash, static_cast<uint64_t>(static_cast<int64_t>(item.z_index)));
         hash_snapshot_value(hash, item.content_revision);
         hash_snapshot_value(hash, item.geometry_revision);
@@ -2733,96 +2612,6 @@ extern "C" nkui_result nkui_layout_session_get_resolved_updates_into(
     // The existing null-buffer form is a successful size query; this form reports insufficient capacity.
     if (result == NKUI_OK && size > capacity_bytes) return NKUI_ERROR_BUFFER_TOO_SMALL;
     return result;
-}
-
-extern "C" nkui_result nkui_layout_session_hit_test(nkui_layout_session session, float x, float y,
-                                                    uint8_t *out_path, uint32_t *inout_bytes) {
-    if (!inout_bytes || !std::isfinite(x) || !std::isfinite(y))
-        return NKUI_ERROR_INVALID_ARGUMENT;
-    std::lock_guard<std::mutex> lock(layout_sessions_mutex);
-    auto *state = resolve(session);
-    if (!state)
-        return NKUI_ERROR_INVALID_HANDLE;
-    std::lock_guard<std::mutex> session_lock(state->mutex);
-    if (!state->submitted)
-        return NKUI_ERROR_INVALID_ARGUMENT;
-
-    const auto started = std::chrono::steady_clock::now();
-    HitTestTraversalStats traversal_stats;
-    std::vector<uint32_t> path;
-    std::vector<uint32_t> traversal_path;
-    hit_test(state->snapshot, x, y, path, traversal_path, traversal_stats);
-    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                             std::chrono::steady_clock::now() - started)
-                             .count();
-    ++state->hit_test_stats.hit_test_count;
-    state->hit_test_stats.nodes_visited += traversal_stats.nodes_visited;
-    state->hit_test_stats.subtrees_rejected += traversal_stats.subtrees_rejected;
-    state->hit_test_stats.precise_hit_tests += traversal_stats.precise_hit_tests;
-    state->hit_test_stats.max_nodes_visited =
-        std::max(state->hit_test_stats.max_nodes_visited, traversal_stats.nodes_visited);
-    state->hit_test_stats.hit_test_time_nanoseconds += static_cast<uint64_t>(elapsed);
-    const size_t required_size = path.size() * sizeof(uint32_t);
-    if (required_size > UINT32_MAX)
-        return NKUI_ERROR_OUT_OF_MEMORY;
-    const uint32_t required = static_cast<uint32_t>(required_size);
-    if (!out_path) {
-        *inout_bytes = required;
-        return NKUI_OK;
-    }
-    if (*inout_bytes < required) {
-        *inout_bytes = required;
-        return NKUI_ERROR_BUFFER_TOO_SMALL;
-    }
-    if (required)
-        std::memcpy(out_path, path.data(), required);
-    *inout_bytes = required;
-    return NKUI_OK;
-}
-
-extern "C" nkui_result nkui_layout_session_hit_test_into(
-    nkui_layout_session session, float x, float y, uint8_t *path, uint32_t path_capacity_bytes,
-    uint32_t *out_count) {
-    if (!out_count || !std::isfinite(x) || !std::isfinite(y) ||
-        path_capacity_bytes % sizeof(uint32_t) != 0)
-        return NKUI_ERROR_INVALID_ARGUMENT;
-    if (path_capacity_bytes != 0 && !path)
-        return NKUI_ERROR_INVALID_ARGUMENT;
-    std::lock_guard<std::mutex> lock(layout_sessions_mutex);
-    auto *state = resolve(session);
-    if (!state)
-        return NKUI_ERROR_INVALID_HANDLE;
-    std::lock_guard<std::mutex> session_lock(state->mutex);
-    if (!state->submitted)
-        return NKUI_ERROR_INVALID_ARGUMENT;
-
-    const auto started = std::chrono::steady_clock::now();
-    HitTestTraversalStats traversal_stats;
-    hit_test(state->snapshot, x, y, state->hit_test_candidate_path,
-             state->hit_test_traversal_path, traversal_stats);
-    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                             std::chrono::steady_clock::now() - started)
-                             .count();
-    ++state->hit_test_stats.hit_test_count;
-    state->hit_test_stats.nodes_visited += traversal_stats.nodes_visited;
-    state->hit_test_stats.subtrees_rejected += traversal_stats.subtrees_rejected;
-    state->hit_test_stats.precise_hit_tests += traversal_stats.precise_hit_tests;
-    state->hit_test_stats.max_nodes_visited =
-        std::max(state->hit_test_stats.max_nodes_visited, traversal_stats.nodes_visited);
-    state->hit_test_stats.hit_test_time_nanoseconds += static_cast<uint64_t>(elapsed);
-
-    const auto &result = state->hit_test_candidate_path;
-    if (result.size() > UINT32_MAX) {
-        *out_count = 0;
-        return NKUI_ERROR_OUT_OF_MEMORY;
-    }
-    *out_count = static_cast<uint32_t>(result.size());
-    const size_t required_bytes = result.size() * sizeof(uint32_t);
-    if (required_bytes > path_capacity_bytes)
-        return NKUI_ERROR_BUFFER_TOO_SMALL;
-    if (required_bytes)
-        std::memcpy(path, result.data(), required_bytes);
-    return NKUI_OK;
 }
 
 extern "C" nkui_result nkui_text_layout_create(nkui_resource fonts, const char *text, float width,

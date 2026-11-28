@@ -142,9 +142,9 @@ content within their nearest enclosing overlay, ordered by their local
 `zIndex` and stable declaration order. This lets a dropdown cross dock panels
 without escaping a later modal dialog. The flag changes stacking only;
 parent-relative positioning, clipping (`clipToParent`), visibility, focus and
-event ancestry remain independent. Native and Haxe hit testing use the same
-ordering and test each descendant's resolved clip rather than rejecting an
-escaped floating subtree at an ancestor clip.
+event ancestry remain independent. Layout's hit testing (`LayoutSession.hitTest`)
+uses the paint order and tests each descendant's resolved clip rather than
+rejecting an escaped floating subtree at an ancestor clip.
 
 
 The Haxe framework lives in `src/haxeon/ui/`, its subpackages above the binding layer in the package

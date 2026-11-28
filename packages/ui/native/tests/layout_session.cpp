@@ -279,64 +279,6 @@ int main() {
         return 4;
     }
 
-    uint32_t hit_bytes = 0;
-    if (nkui_layout_session_hit_test(session, 250.0f, 180.0f, nullptr, &hit_bytes) != NKUI_OK ||
-        hit_bytes != sizeof(uint32_t))
-        return 52;
-    uint32_t hit_path[2] = {};
-    uint32_t undersized_hit_bytes = 0;
-    if (nkui_layout_session_hit_test(session, 250.0f, 180.0f,
-                                      reinterpret_cast<uint8_t *>(hit_path),
-                                      &undersized_hit_bytes) != NKUI_ERROR_BUFFER_TOO_SMALL ||
-        undersized_hit_bytes != sizeof(uint32_t))
-        return 53;
-    hit_bytes = sizeof(hit_path);
-    if (nkui_layout_session_hit_test(session, 250.0f, 180.0f,
-                                      reinterpret_cast<uint8_t *>(hit_path), &hit_bytes) != NKUI_OK ||
-        hit_bytes != sizeof(uint32_t) || hit_path[0] != 1)
-        return 54;
-
-    hit_bytes = 0;
-    if (nkui_layout_session_hit_test(session, 150.0f, 75.0f, nullptr, &hit_bytes) != NKUI_OK ||
-        hit_bytes != 2 * sizeof(uint32_t))
-        return 55;
-    hit_bytes = 2 * sizeof(uint32_t);
-    if (nkui_layout_session_hit_test(session, 150.0f, 75.0f,
-                                      reinterpret_cast<uint8_t *>(hit_path), &hit_bytes) != NKUI_OK ||
-        hit_bytes != 2 * sizeof(uint32_t) || hit_path[0] != 1 || hit_path[1] != 2)
-        return 56;
-
-    uint32_t hit_path_storage[2] = {};
-    uint32_t hit_count = 0;
-    if (nkui_layout_session_hit_test_into(session, 150.0f, 75.0f,
-                                           reinterpret_cast<uint8_t *>(hit_path_storage),
-                                           sizeof(hit_path_storage), &hit_count) != NKUI_OK ||
-        hit_count != 2 || hit_path_storage[0] != 1 || hit_path_storage[1] != 2)
-        return 59;
-    uint8_t undersized_hit_path[sizeof(uint32_t)] = {};
-    hit_count = 0;
-    if (nkui_layout_session_hit_test_into(session, 150.0f, 75.0f, undersized_hit_path,
-                                           sizeof(undersized_hit_path), &hit_count) !=
-            NKUI_ERROR_BUFFER_TOO_SMALL ||
-        hit_count != 2)
-        return 60;
-
-    auto hidden_hit = bytes;
-    const std::size_t hidden_panel_record =
-        NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
-    write_u32(hidden_hit, hidden_panel_record + NKUI_LAYOUT_NODE_FLAGS_OFFSET, 0);
-    if (nkui_layout_session_submit(session, hidden_hit.data(), hidden_hit.size(), &frame) !=
-            NKUI_OK ||
-        nkui_layout_session_hit_test(session, 150.0f, 75.0f, nullptr, &hit_bytes) != NKUI_OK ||
-        hit_bytes != sizeof(uint32_t))
-        return 57;
-    nkui_layout_hit_test_stats hit_stats{};
-    if (nkui_layout_session_get_hit_test_stats(session, &hit_stats) != NKUI_OK ||
-        hit_stats.struct_size != sizeof(hit_stats) || hit_stats.hit_test_count < 6 ||
-        hit_stats.nodes_visited < hit_stats.hit_test_count || hit_stats.precise_hit_tests == 0 ||
-        hit_stats.max_nodes_visited == 0 || hit_stats.hit_test_time_nanoseconds == 0)
-        return 58;
-
     // Geometry must be finite, with no negative extent.
     auto invalid_geometry = transaction_with_nodes(2);
     const std::size_t geometry_record = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
@@ -483,7 +425,7 @@ int main() {
         NKUI_ERROR_INVALID_TRANSACTION)
         return 8;
     invalid = bytes;
-    write_u32(invalid, panel_record + NKUI_LAYOUT_NODE_FLAGS_OFFSET, NKUI_LAYOUT_NODE_VISIBLE | (1u << 7));
+    write_u32(invalid, panel_record + NKUI_LAYOUT_NODE_FLAGS_OFFSET, NKUI_LAYOUT_NODE_VISIBLE | (1u << 5));
     if (nkui_layout_session_submit(session, invalid.data(), invalid.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 13;

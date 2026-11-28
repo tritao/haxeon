@@ -609,7 +609,8 @@ class EventDispatcher {
 
 	function hitPath(x:Float, y:Float):Array<RenderNode> {
 		if (root == null) return NoPath;
-		return hitTestProvider == null ? HitTest.path(root, x, y) : hitTestProvider(x, y);
+		var provider = hitTestProvider;
+		return provider == null ? [] : provider(x, y);
 	}
 
 	function pressedPath(pointerId:Int):Array<RenderNode> {

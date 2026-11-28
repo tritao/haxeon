@@ -5,7 +5,8 @@ Date: 2026-11-28
 ## Status
 
 Accepted. Decisions 1, 2 and 5 to 8 have landed: `haxeon.ui.layout.LayoutSolver` lays every submitted tree out once a
-frame, NativeKit builds the scene from its geometry, Clay is gone, and nothing asks for layout feedback. Decisions 3
+frame and answers hit tests, NativeKit builds the scene from its geometry, Clay is gone, and nothing asks for layout
+feedback. Decisions 3
 (retention) and 4 (layout-time builders) remain; the migration below says what is left. It supersedes the layout
 half of [ADR 0002](0002-reactive-ui-model.md): decision 6 (floating nodes placed after the flow, two-phase layout) and the
 clause that kept Clay "an immediate full solver" until "measurements later show layout as the main remaining cost".
@@ -60,7 +61,9 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
    clips, content and hit bounds, shapes text at the given widths, and emits the paint primitives in paint order. The
    solver measures text with `nkui_layout_session_measure_text` on the session's fonts and keeps the results per node,
    and measures custom content through `LayoutContent`, keeping each node's last results per version and constraints.
-   The C API keeps no layout: a C host supplies its own geometry, as `native/examples/ui_c_api` does.
+   The C API keeps no layout: a C host supplies its own geometry, as `native/examples/ui_c_api` does. Hit testing is
+   the solver's too (`LayoutSession.hitTest`): the topmost node under a point in paint order, from the geometry it
+   resolved, so native keeps no picker and no hit flags.
 3. **Retained and incremental.** Each node keeps its last constraints and result; a change marks it and its ancestors
    dirty up to a relayout boundary, a node whose size does not depend on its children. A frame lays out the dirty
    subtrees only. The per-node records then go: the solver hands native one scene record per changed node.
@@ -86,7 +89,8 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
 1. Done: the solver, the geometry hand-off and text measurement; Clay, its backend, its native tests, the native measure
    callback and the linear reference engine deleted. The node record became a scene record, with the layout-only fields
    and the separate geometry call gone; native tests place their fixture nodes with `tests/scene_record.h`.
-2. Done: a frame's passes lay out in Haxe and publish to NativeKit once; the solver resolves the geometry callbacks read.
+2. Done: a frame's passes lay out in Haxe and publish to NativeKit once; the solver resolves the geometry callbacks read
+   and answers hit tests, and the native picker and the render-tree one are deleted.
 3. Done: scroll offsets, reveals and scrollbars settle during layout; truncation (`LayoutNode.truncation`); the anchor's
    sizing, with `SelectionPopup` on it; `requestLayoutFeedback` and the pass loop deleted.
 4. Left: layout-time builders for the virtual collections, whose window rebuilds are the build feedback that remains
@@ -102,7 +106,7 @@ On the native explorer smoke, 40 of 46 frames lay out once; the others rebuild a
 - Text is measured by the solver and shaped by the scene builder; both use the text engine's layout cache, so text is
   shaped once per text, style and width.
 - Layout semantics are tested in Haxe (`LayoutSessionSmoke`, the framework and showcase suites, the web visual suite);
-  the native tests cover the scene builder, records, hit testing and rendering.
+  the native tests cover the scene builder, records and rendering.
 - Some layouts differ from Clay's where the rules differ, such as measured content widening a fitting parent; the web
   visual goldens were updated where they did.
 

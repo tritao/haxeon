@@ -69,7 +69,7 @@ class InspectionOverlay {
 			explorer.state.inspector.hoveredNodeId = 0;
 			return;
 		}
-		var path = HitTest.path(explorer.context.root, x, y);
+		var path = explorer.context.events.hitTestPath(x, y);
 		explorer.state.inspector.hoveredNodeId = path.length == 0 ? 0 : inspectionPathTargetId(path);
 	}
 
