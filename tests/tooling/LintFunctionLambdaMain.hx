@@ -65,6 +65,13 @@ class LintFunctionLambdaMain {
 		File.saveContent(path, fixed + "// @lint:off function-lambda\n");
 		if (LintCommand.run(["--only", "function-lambda", path]) != 0)
 			throw "@lint:off function-lambda did not turn the rule off";
+		// A file with conditional compilation, which the raw lexer rejects, is still read for its lambdas.
+		var conditional = Path.join([base, "app/src/app/Conditional.hx"]);
+		File.saveContent(conditional,
+			"package app;\n\n#if debug\nfunction debugOnly() {}\n#end\nfunction run(f:Void->Void) f();\n"
+			+ "function main() run(function() trace(1));\n");
+		if (LintCommand.run(["--only", "function-lambda", conditional]) != 1)
+			throw "--only function-lambda skipped a file with conditional compilation";
 		FileTree.remove(base);
 		Sys.println("PASS: lint writes a function lambda as an arrow where the two mean the same, and reports the rest");
 	}

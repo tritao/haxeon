@@ -257,42 +257,13 @@ class ModuleSourceLoader {
 
 	/** Whether `text` declares a package other than `expected` (a file without a declaration is taken as written). */
 	static function declaresOther(text:String, expected:String):Bool {
-		var declared = declaredPackage(text);
+		var declared = ModulePath.declaredPackage(text);
 		return declared.length > 0 && declared != expected;
 	}
 
 	static function packageOf(moduleName:String):String {
 		var dot = moduleName.lastIndexOf(".");
 		return dot < 0 ? "" : moduleName.substring(0, dot);
-	}
-
-	/** The package a source declares (its leading `package a.b;`, after comments), or "" for the root package. */
-	static function declaredPackage(text:String):String {
-		var index = 0, length = text.length;
-		while (index < length) {
-			var code = text.charCodeAt(index);
-			if (code == " ".code || code == "\t".code || code == "\n".code || code == "\r".code || code == 0xFEFF) {
-				index++;
-			} else if (code == "/".code && index + 1 < length && text.charCodeAt(index + 1) == "/".code) {
-				while (index < length && text.charCodeAt(index) != "\n".code)
-					index++;
-			} else if (code == "/".code && index + 1 < length && text.charCodeAt(index + 1) == "*".code) {
-				var end = text.indexOf("*/", index + 2);
-				index = end < 0 ? length : end + 2;
-			} else {
-				break;
-			}
-		}
-		if (text.substr(index, 7) != "package")
-			return "";
-		var after = index + 7;
-		if (after < length) {
-			var next = text.charCodeAt(after);
-			if (next != " ".code && next != "\t".code && next != "\n".code && next != "\r".code && next != ";".code)
-				return ""; // an identifier such as `packageName`, not the keyword
-		}
-		var end = text.indexOf(";", after);
-		return end < 0 ? "" : StringTools.trim(text.substring(after, end));
 	}
 
 	/** The entries of a directory, listed at most once per loader; null when it is missing, not a directory or unreadable. */

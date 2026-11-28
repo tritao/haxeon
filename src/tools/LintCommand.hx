@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import compiler.formatter.ProjectFormat;
 import compiler.formatter.Formatter;
+import compiler.modules.ModulePath;
 import compiler.service.FunctionLambdas;
 import compiler.service.ImportOrder;
 import compiler.service.RedundantArgumentNames;
@@ -148,10 +149,7 @@ class LintCommand {
 			var tokens:Null<Array<compiler.syntax.Token>> = try new Lexer(file).tokenize() catch (_:Dynamic) null;
 			var orderTokens:Null<Array<compiler.syntax.Token>> = checkOrder
 				? (try ImportOrder.tokens(path, source) catch (_:Dynamic) null) : null;
-			var rootTokens = tokens ?? orderTokens;
-			if (rootTokens == null)
-				continue;
-			var roots = command.rootsFor(path, rootTokens),
+			var roots = command.rootsFor(path, source),
 				resolve = (importPath:String) -> command.resolve(roots, importPath),
 				off = rulesOff(source);
 			var unused = checkUnused && !off.exists("unused-imports")
@@ -333,8 +331,10 @@ class LintCommand {
 	}
 
 	/** The roots `path` resolves against: its package root, its project's source roots, then the shared ones. */
-	function rootsFor(path:String, tokens:Array<compiler.syntax.Token>):Array<String> {
-		var roots:Array<String> = [], root = packageRoot(path, tokens), manifest = nearestManifest(path);
+	function rootsFor(path:String, source:String):Array<String> {
+		var roots:Array<String> = [],
+			root = ModulePath.packageRoot(Path.directory(path), ModulePath.declaredPackage(source)),
+			manifest = nearestManifest(path);
 		if (root != null)
 			roots.push(root);
 		if (manifest != null)
@@ -398,24 +398,6 @@ class LintCommand {
 	static function addTo(roots:Array<String>, root:String):Void {
 		if (roots.indexOf(root) < 0)
 			roots.push(root);
-	}
-
-	/** The directory a source file's package declaration implies as its root. */
-	static function packageRoot(path:String, tokens:Array<compiler.syntax.Token>):Null<String> {
-		var parts:Array<String> = [], index = 0;
-		if (tokens.length == 0 || tokens[0].kind != compiler.syntax.Token.TokenKind.Package)
-			return Path.directory(path);
-		index = 1;
-		while (index < tokens.length && tokens[index].kind != compiler.syntax.Token.TokenKind.Semicolon) {
-			if (tokens[index].kind == compiler.syntax.Token.TokenKind.Identifier)
-				parts.push(tokens[index].text);
-			index++;
-		}
-		var directory = Path.directory(path), expected = parts.join("/");
-		if (expected == "")
-			return directory;
-		return StringTools.endsWith(directory, "/" + expected)
-			|| directory == expected ? directory.substr(0, directory.length - expected.length) : null;
 	}
 
 	/** The module an import names: the longest prefix of the path that is a source file, and the type after it. */
