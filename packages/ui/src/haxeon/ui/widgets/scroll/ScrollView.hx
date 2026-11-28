@@ -356,6 +356,8 @@ class ScrollView implements View {
 		var thumbId = context.id(name + "-scrollbar-thumb");
 		var thumb = context.createNode(thumbId, LayoutVisualKind.Box, thumbStyle);
 		thumb.layout.placer = new ScrollbarPlacer(controller, vertical, true, ScrollbarHitWidth, ScrollbarInset);
+		// Focus skips it while its placer hides it, when there is nothing to scroll.
+		thumb.focusable = true;
 		thumb.setStyleIdentity(new StyleIdentity("scrollbar-thumb", key.rawValue, key.rawValue, null, [
 			"scrollbar",
 			name
@@ -502,7 +504,6 @@ class ScrollView implements View {
 		var semantics:Semantics = cast thumb.semantics;
 		semantics.numericMaximum = maximum;
 		semantics.numericValue = vertical ? controller.offsetY : controller.offsetX;
-		thumb.focusable = maximum > 0 && (vertical ? controller.viewportHeight : controller.viewportWidth) > 0;
 	}
 
 }

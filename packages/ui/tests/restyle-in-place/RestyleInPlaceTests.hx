@@ -1126,7 +1126,49 @@ private class PopupHost implements View {
 		check(reported != null, "The automatic check did not report a stale cache");
 		ui.dispose();
 		Sys.println("PASS verify: an honest cache passes; a key missing an input is reported, also by the automatic check");
+		geometryCallbackEdits(fonts);
 		observedReads(fonts);
+	}
+
+	/**
+	 * Verify mode reports a geometry callback that edits a node layout already placed, and a callback may not announce an
+	 * edit; reading geometry, or writing state in `afterBuild`, passes.
+	 */
+	static function geometryCallbackEdits(fonts:FontCollection):Void {
+		var ui = new UiContext(null, fonts);
+		var frame = new LayoutFrame(240.0, 120.0);
+		var reported:Null<String> = null;
+		ui.onRetentionMismatch = text -> reported = text;
+		ui.verifyRetentionEvery = 1;
+		var mode = "read", seen = 0.0;
+		var written = new Signal(0);
+		var build = () -> new NodeView(context -> {
+			var style = new LayoutStyle();
+			style.width = LayoutAxis.fixed(80.0);
+			style.height = LayoutAxis.fixed(20.0);
+			var node = new RenderNode(context.id("callback-target"), haxeon.ui.LayoutNode.LayoutVisualKind.Box, style);
+			written.value;
+			node.onResolved(geometry -> {
+				seen = geometry.width;
+				if (mode == "edit") node.layout.style.width = LayoutAxis.fixed(geometry.width + 1.0);
+				if (mode == "announce") context.willEditRetained(node);
+			});
+			context.afterBuild(() -> if (written.value == 0) written.value = 1);
+			return node;
+		});
+		ui.submit(build(), frame);
+		check(reported == null && seen == 80.0 && written.value == 1,
+			"Reading geometry and writing state in afterBuild must pass verification: " + reported);
+		mode = "edit";
+		ui.submit(build(), frame);
+		check(reported != null && reported.indexOf("Geometry callbacks edited") >= 0,
+			"Verification missed a geometry callback that edited its node: " + reported);
+		mode = "announce";
+		var threw = false;
+		try ui.submit(build(), frame) catch (error:Dynamic) threw = Std.string(error).indexOf("geometry callback") >= 0;
+		check(threw, "A geometry callback announced an edit to a placed node");
+		ui.dispose();
+		Sys.println("PASS geometry callbacks: verify mode reports edits; afterBuild may write state");
 	}
 
 	/** A tracked scope follows observable fields, including reads nested under another scope. */

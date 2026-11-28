@@ -330,21 +330,12 @@ class Tabs implements ScopeView {
 		var viewport = scroll.build(context);
 		for (index in 0...items.length) if (items[index].key == active) {
 			var header = strip.children[index];
-			// Layout scrolls the active tab into view as it settles the strip's offset: when it is newly active here, or
-			// after the strip was resized (seen after a layout, so it applies on the next one).
+			// Layout keeps the active tab in view as it settles the strip's offset: when it becomes active, and whenever
+			// the strip is resized.
 			if (state.selected != active) {
 				state.selected = active;
-				state.controller.revealNode(false, header.layout.id);
+				state.controller.keepInView(false, header.layout.id);
 			}
-			header.onResolved(_ -> {
-				var bounds = viewport.resolved;
-				if (bounds == null || state.width == bounds.width) return;
-				var resized = state.width >= 0;
-				state.width = bounds.width;
-				if (!resized) return;
-				state.controller.revealNode(false, header.layout.id);
-				context.requestLayout();
-			});
 		}
 		return viewport;
 	}
@@ -520,7 +511,6 @@ private class TabsStripView implements View {
 private class TabsScrollState {
 	public final controller = new ScrollController();
 	public var selected:String = "";
-	public var width:Float = -1;
 	public function new() {}
 }
 

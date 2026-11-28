@@ -590,10 +590,9 @@ class TreeView implements View {
 			else drag.clear();
 			root.states = context.interactionStates.peek(root.id);
 			guideVisibility.root = root;
-			// State hydration is complete, but synchronization callbacks may write State. Run after the tracked build,
-			// when layout has supplied the geometry needed by scrollIntoView.
+			// State hydration is complete, but synchronization callbacks may write State: run them after the build.
 			var ready = onStateReady;
-			if (ready != null || provider == null) root.onResolved(_ -> {
+			if (ready != null || provider == null) context.afterBuild(() -> {
 				// Reconcile invalid or hidden uncontrolled selection after the tracked build has settled.
 				if (provider == null) {
 					var stored = selectedKey == null ? "" : selectedKey;

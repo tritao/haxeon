@@ -146,12 +146,9 @@ class SearchPicker implements View {
 			state.scroll.jumpTo(0, 0);
 			state.hovered = -1;
 		}
-		if (state.previousSelection != selected || state.previousQuery != query || geometryChanged) {
-			var top = selected * rowHeight;
-			if (top < state.scroll.offsetY) state.scroll.jumpTo(0, top);
-			else if (top + rowHeight > state.scroll.offsetY + listHeight) state.scroll.jumpTo(0,
-				top + rowHeight - listHeight);
-		}
+		// Layout scrolls the selected row into view against the list's height it then has.
+		if (state.previousSelection != selected || state.previousQuery != query || geometryChanged)
+			state.scroll.revealRange(true, selected * rowHeight, (selected + 1) * rowHeight);
 		state.previousQuery = query;
 		state.previousSelection = selected;
 		state.previousRowHeight = rowHeight;
@@ -231,13 +228,6 @@ class SearchPicker implements View {
 			state.tooltipDismissRevision++;
 			onChanged();
 		}, UiEventPhase.Capture);
-		var recheckAfterLayout = geometryChanged;
-		modifier.onResolved(_ -> {
-			if (!recheckAfterLayout) return;
-			recheckAfterLayout = false;
-			state.previousSelection = -1;
-			onChanged();
-		});
 		var navigate = (event:UiEvent) -> {
 			if (event.defaultPrevented) return;
 			switch event.key {

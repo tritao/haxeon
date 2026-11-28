@@ -110,6 +110,21 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 		notifyChanged();
 	}
 
+	/**
+	 * Keeps the content's node whose layout ID is `id` in view along an axis: reveals it when layout next settles the
+	 * offset, and again whenever the viewport's size along that axis changes, as a resized tab strip keeps its active tab.
+	 */
+	public function keepInView(vertical:Bool, id:Int):Void {
+		keptId = id;
+		keptVertical = vertical;
+		keptViewport = -1.0;
+		revealNode(vertical, id);
+	}
+
+	var keptId:Int = 0;
+	var keptVertical:Bool = false;
+	var keptViewport:Float = -1.0;
+
 	/** Whether a reveal waits for layout to settle it. */
 	public var revealPending(get, never):Bool;
 
@@ -129,6 +144,15 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 	function settle(viewportWidth:Float, viewportHeight:Float, contentWidth:Float, contentHeight:Float,
 			content:haxeon.ui.LayoutScroll.LayoutLocator):Void {
 		updateMetrics(viewportWidth, viewportHeight, contentWidth, contentHeight);
+		if (keptId != 0) {
+			var extent = keptVertical ? viewportHeight : viewportWidth;
+			if (keptViewport >= 0.0 && extent != keptViewport && revealKind == 0) {
+				revealKind = 2;
+				revealVertical = keptVertical;
+				revealId = keptId;
+			}
+			keptViewport = extent;
+		}
 		settleReveal(content);
 	}
 

@@ -371,6 +371,21 @@ class BuildContext implements Disposable {
 
 	var buildFeedbackRequested = false;
 	var buildBeforeLayoutFeedbackRequested = false;
+	final afterBuildCallbacks:Array<Void->Void> = [];
+
+	/**
+	 * Runs `callback` once this build is laid out, before the frame is published, outside any tracked read: for a view
+	 * that brings its own state in line with what it just built, as a disabled control closes its stored popup. A write
+	 * there rebuilds before publishing. Geometry callbacks (`RenderNode.onResolved`) only read.
+	 */
+	public function afterBuild(callback:Void->Void):Void afterBuildCallbacks.push(callback);
+
+	internal function runAfterBuild():Void {
+		if (afterBuildCallbacks.length == 0) return;
+		var callbacks = afterBuildCallbacks.copy();
+		afterBuildCallbacks.resize(0);
+		for (callback in callbacks) haxeon.reactive.ReactiveRuntime.withoutTracking(callback);
+	}
 
 	/**
 	 * Which build of the current submit this is: 0 for the frame's first build, then one more for every feedback
@@ -617,12 +632,17 @@ class BuildContext implements Disposable {
 		layoutRequestRevision++;
 	}
 
+	/** Set while geometry callbacks run, which may not edit the tree. */
+	@:allow(haxeon.ui.core.UiContext) var inGeometryCallbacks:Bool = false;
+
 	/**
 	 * Call just before changing a node of the submitted tree in place, outside a build: its style, hit testing or paint. The next
 	 * frame compares the node against how it was now and lays out and paints the change, without rebuilding the view. Repeated
 	 * calls for the same node before that frame keep the first state.
 	 */
 	public function willEditRetained(node:RenderNode):Void {
+		if (inGeometryCallbacks)
+			throw "A geometry callback edited a render node; edit it while building, or in afterBuild";
 		if (retainedEdits.indexOf(node) >= 0) return;
 		if (RenderCost.enabled) RenderCost.edits.push(node.styleType == null ? "node" : node.styleType);
 		retainedEdits.push(node);

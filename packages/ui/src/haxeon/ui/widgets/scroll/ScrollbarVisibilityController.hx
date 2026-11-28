@@ -6,7 +6,8 @@ import haxeon.ui.animation.AnimationScheduler;
 import haxeon.ui.widgets.scroll.ScrollView;
 /**
  * Mount-owned scrollbar visibility, independent of scroll geometry and paint. Its changes edit the scrollbar's nodes in place
- * (BuildContext.willEditRetained), so its frames rebuild nothing.
+ * (BuildContext.willEditRetained), so its frames rebuild nothing; they happen at animation ticks and on input, never
+ * while geometry callbacks run.
  */
 internal class ScrollbarVisibilityController implements DelayedAnimation implements RetainedAnimation implements Disposable {
 	static inline var FadeInSeconds:Float = 0.3;
@@ -40,7 +41,8 @@ internal class ScrollbarVisibilityController implements DelayedAnimation impleme
 	public function bindSource(value:ScrollController):Void {
 		if (source == value) return;
 		source = value;
-		setAvailable(false);
+		// Set while building, not from layout: a new source starts with nothing known to scroll.
+		applyAvailable(false);
 	}
 
 	public function configure(value:ScrollbarVisibility, reduceMotion:Bool):Void {
@@ -61,7 +63,35 @@ internal class ScrollbarVisibilityController implements DelayedAnimation impleme
 		}
 	}
 
+	/**
+	 * Whether there is anything to scroll, which layout finds. A change that would show or hide the scrollbar at once is
+	 * applied at the next animation tick, before the next build: that edits the scrollbar's nodes, which layout has
+	 * placed for this frame. Any other change applies now.
+	 */
 	public function setAvailable(value:Bool):Void {
+		var current = availablePending ? pendingAvailable : available;
+		if (current == value) return;
+		var clock = scheduler;
+		if (clock == null || !changesOpacity(value)) {
+			applyAvailable(value);
+			return;
+		}
+		availablePending = true;
+		pendingAvailable = value;
+		clock.track(this);
+	}
+
+	function changesOpacity(available:Bool):Bool {
+		if (!available) return opacity != 0.0;
+		if (policy == ScrollbarVisibility.Always) return opacity != 1.0;
+		return policy == ScrollbarVisibility.Auto && reducedMotion && held() && opacity != 1.0;
+	}
+
+	var availablePending:Bool = false;
+	var pendingAvailable:Bool = false;
+
+	function applyAvailable(value:Bool):Void {
+		availablePending = false;
 		if (available == value) return;
 		available = value;
 		if (!available) {
@@ -127,13 +157,14 @@ internal class ScrollbarVisibilityController implements DelayedAnimation impleme
 	function held():Bool return viewportHovered || hovered || dragging || focused;
 
 	function animating():Bool {
+		if (availablePending) return true;
 		return available && policy == ScrollbarVisibility.Auto
 			&& (opacity != targetOpacity || (!held() && targetOpacity > 0));
 	}
 
 	/** The idle grace after a fade-in changes nothing on screen, so it needs a wake, not frames. */
 	public function delaySeconds():Float {
-		if (!animating() || held() || targetOpacity <= 0.0 || opacity != 1.0) return 0.0;
+		if (availablePending || !animating() || held() || targetOpacity <= 0.0 || opacity != 1.0) return 0.0;
 		return idleRemaining;
 	}
 
@@ -157,6 +188,7 @@ internal class ScrollbarVisibilityController implements DelayedAnimation impleme
 	}
 
 	public function advance(deltaSeconds:Float):Bool {
+		if (availablePending) applyAvailable(pendingAvailable);
 		if (!available || policy != ScrollbarVisibility.Auto) return false;
 		// Consume each phase in order so a long frame produces the same result
 		// as several short frames. The idle delay starts after the fade-in ends.

@@ -5776,10 +5776,14 @@ class FrameworkSmoke {
 		scrollbarCheck(visibility.opacity == fading && fading > 0 && fading < 1,
 			"re-entry reverses without an opacity jump");
 		clock.advance(0.3);
+		// Losing overflow hides a shown scrollbar at the next tick, outside geometry callbacks.
 		visibility.setAvailable(false);
+		scrollbarCheck(visibility.opacity > 0 && clock.activeCount == 1, "a visible change waits for the next tick");
+		clock.advance(0);
 		scrollbarCheck(visibility.opacity == 0 && visibility.viewportHovered && clock.activeCount == 0,
 			"overflow loss preserves pane hover");
 		visibility.setAvailable(true);
+		clock.advance(0);
 		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 1,
 			"new overflow fades in under a stationary pointer");
 		clock.advance(0.3);
@@ -5794,8 +5798,10 @@ class FrameworkSmoke {
 		visibility.configure(haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Always, false);
 		scrollbarCheck(visibility.opacity == 1 && clock.activeCount == 0, "always policy does not animate");
 		visibility.setAvailable(false);
+		clock.advance(0);
 		scrollbarCheck(visibility.opacity == 0, "no scrollbar without overflow");
 		visibility.setAvailable(true);
+		clock.advance(0);
 		scrollbarCheck(visibility.opacity == 1, "always policy restores on overflow");
 		visibility.configure(haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Hidden, false);
 		visibility.configure(haxeon.ui.widgets.scroll.ScrollView.ScrollbarVisibility.Auto, false);
@@ -5810,6 +5816,8 @@ class FrameworkSmoke {
 		fine.attach(fineClock, () -> {});
 		coarse.setAvailable(true);
 		fine.setAvailable(true);
+		coarseClock.advance(0);
+		fineClock.advance(0);
 		coarse.reveal();
 		fine.reveal();
 		coarseClock.advance(0.9);
@@ -5890,6 +5898,8 @@ class FrameworkSmoke {
 			style,
 			ScrollAxis.Vertical,
 			controller);
+		root = context.submit(view, frame);
+		// The visibility learns there is nothing to scroll from this layout and settles at the next tick.
 		root = context.submit(view, frame);
 		var hiddenTrack = root.children[1].resolved;
 		scrollbarCheck(hiddenTrack != null && !hiddenTrack.visible && context.animations.activeCount == 0,

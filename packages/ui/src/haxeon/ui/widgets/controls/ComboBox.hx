@@ -114,7 +114,7 @@ class ComboBox<T> implements View {
 			if (storedLabel != selectedLabel && followsSelection) query = selectedLabel;
 			if (storedLabel != selectedLabel) {
 				var nextLabel = selectedLabel;
-				root.onResolved(_ -> {
+				context.afterBuild(() -> {
 					labelState.update(nextLabel);
 					if (followsSelection) queryState.update(nextLabel);
 				});
@@ -130,7 +130,7 @@ class ComboBox<T> implements View {
 			var openState:State<Bool> = context.state(context.id("open"), false);
 			var isOpen:Bool = openState.value;
 			if (!enabled || filteredIndices.length == 0) {
-				if (isOpen) root.onResolved(_ -> openState.update(false));
+				if (isOpen) context.afterBuild(() -> openState.update(false));
 				isOpen = false;
 			}
 			root.layout.style.zIndex = isOpen ? 10 : 0;
@@ -140,7 +140,7 @@ class ComboBox<T> implements View {
 			var active:Int = activeState.value;
 			if (!contains(filteredIndices, active)) active = initialActive;
 			var storedActive:Int = activeState.value;
-			if (active != storedActive) root.onResolved(_ -> activeState.update(active));
+			if (active != storedActive) context.afterBuild(() -> activeState.update(active));
 
 			var inputNode:Null<ViewRoot> = null;
 			// The open popup's option rows, so the trigger's keys can move focus into the list.

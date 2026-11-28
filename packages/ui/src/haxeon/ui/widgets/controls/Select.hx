@@ -90,7 +90,7 @@ class Select<T> implements View {
 			var isOpen:Bool = openState.value;
 			var firstEnabled = firstEnabledIndex();
 			if (!enabled || firstEnabled < 0) {
-				if (isOpen) root.onResolved(_ -> openState.update(false));
+				if (isOpen) context.afterBuild(() -> openState.update(false));
 				isOpen = false;
 			}
 			root.layout.style.zIndex = isOpen ? 10 : 0;
@@ -100,7 +100,7 @@ class Select<T> implements View {
 			var active:Int = activeState.value;
 			if (!isEnabledIndex(active)) active = initialActive;
 			var storedActive:Int = activeState.value;
-			if (active != storedActive) root.onResolved(_ -> activeState.update(active));
+			if (active != storedActive) context.afterBuild(() -> activeState.update(active));
 
 			var triggerNode:Null<ViewRoot> = null;
 			// The open popup's option rows, so the trigger's keys can move focus into the list.

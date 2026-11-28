@@ -400,6 +400,23 @@ class UiContext implements Disposable {
 	/** Fingerprints of the submitted tree's nodes, by widget ID, while verification is on. */
 	final submittedFingerprints:Map<Int, Int> = new Map();
 
+	final callbackFingerprints:Array<Int> = [];
+
+	/** Reports the nodes a geometry callback changed, as a retention mismatch: layout already placed them as they were. */
+	function checkCallbackEdits():Void {
+		var found:Array<String> = [];
+		for (index in 0...submittedNodes.length) {
+			var node = submittedNodes[index];
+			if (node.fingerprint() != callbackFingerprints[index] && found.length < 5)
+				found.push(stateStoreDescription(node));
+		}
+		if (found.length == 0) return;
+		var difference = "Geometry callbacks edited nodes layout had already placed:\n  " + found.join("\n  ");
+		var report = onRetentionMismatch;
+		if (report == null) throw difference;
+		report(difference);
+	}
+
 	function recordFingerprints(tree:RenderNode):Void {
 		submittedFingerprints.clear();
 		tree.walk(node -> submittedFingerprints.set(node.id.value, node.fingerprint()));
@@ -652,8 +669,18 @@ class UiContext implements Disposable {
 				+ (missingNode == null
 				|| missingNode.parent == null ? "?" : Std.string(missingNode.parent.layout.style.visible));
 		}
-		// Geometry callbacks read the settled layout; they never change it. Edits they make apply on the next frame.
+		// Geometry callbacks read the settled layout and never edit the tree; verify mode checks they did not.
+		var checkCallbacks = verifyRetentionEvery > 0;
+		if (checkCallbacks) {
+			callbackFingerprints.resize(submittedNodes.length);
+			for (index in 0...submittedNodes.length) callbackFingerprints[index] = submittedNodes[index].fingerprint();
+		}
+		buildContext.inGeometryCallbacks = true;
 		for (index in 0...submittedNodes.length) submittedNodes[submittedNodes.length - 1 - index].didResolve();
+		buildContext.inGeometryCallbacks = false;
+		if (checkCallbacks) checkCallbackEdits();
+		// Views then bring their state in line with what they built; a write rebuilds before publishing.
+		buildContext.runAfterBuild();
 		// Signal writes and explicit callback requests rebuild before another layout pass consumes stale view geometry.
 		var resolvedBuildFeedback = buildContext.rootDependenciesDirty() || buildContext.hasPendingRenderScopes()
 			|| buildContext.consumeBuildFeedbackBeforeLayout();
