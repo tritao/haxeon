@@ -10,6 +10,7 @@ import haxeon.ui.widgets.text.Text;
 /** Mount either component in memory, then exercise real cached submissions without a native host. */
 @:access(haxeon.ui.LayoutSession)
 @:access(haxeon.ui.core.UiContext)
+@:access(haxeon.ui.core.ViewRoot)
 class ComponentIdleParity {
 	static var ui:UiContext;
 	static var frame:LayoutFrame;
@@ -26,7 +27,7 @@ class ComponentIdleParity {
 			: new TrackedScope("structure", () -> new BoundText("value", () -> source.value));
 		body = () -> view;
 		ui.buildContext.beginFrame();
-		ui.root = ui.buildContext.trackReads(() -> view.build(ui.buildContext));
+		ui.root = ui.buildContext.trackReads(() -> view.build(ui.buildContext).node());
 		ui.buildContext.captureRootDependencies();
 		ui.stateStore.endFrame();
 		var nodes = 0;

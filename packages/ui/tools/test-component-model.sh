@@ -2,6 +2,8 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+# The compiler finds the standard library from the repository root.
+cd "$root"
 ui="$root/packages/ui"
 hl="$("$root/scripts/hashlink-path.sh")/hl"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-ui-component-model.XXXXXXXX")
@@ -10,7 +12,9 @@ compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.t
 cat > "$tmp/memory.json" <<'JSON'
 {"name":"nativekit-haxeon-linear-memory","version":1,"address_model":"wasm32","page_size":65536,"host_base":0,"host_limit":134217728,"guest_base":134217728,"guest_limit":268435456,"memory_size":268435456}
 JSON
-export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+native=${NATIVEKIT_BUILD_DIR:-"$root/out/packages/ui/native"}
+cmake --build "$native" --target nativekit_ui
+export LD_LIBRARY_PATH="$native:$native/nativekit:$native/nativekit/modules/gpu:$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fixtures=("$@")
 if [[ ${#fixtures[@]} == 0 ]]; then
   fixtures=(UiEventPhaseMain KeyValueMain RetainedClaimMain ScopeResourceIdMain WidgetIdCacheMain RetainedWidgetIdMain InteractionStateStoreMain ScopeInstanceLifetimeMain ScopeRootStateMain ScopeIncomingInteractionMain RoutingStateMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualInputsMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)

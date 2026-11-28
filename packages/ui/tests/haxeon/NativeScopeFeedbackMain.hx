@@ -43,18 +43,16 @@ class FeedbackGeometry implements View {
 		var root = context.createNode(context.rootId("viewport"), LayoutVisualKind.Box, style);
 		root.states = context.interactionStates.get(root.id);
 		var barStyle = new LayoutStyle();
+		// The bar shows once the first frame is built: its body reruns alone for it, and the outer scope after it.
+		var shown = context.state(context.id("bar-shown"), false);
 		barStyle.width = LayoutAxis.fixed(5);
-		barStyle.height = LayoutAxis.fixed(0);
+		barStyle.height = LayoutAxis.fixed(shown.value ? 40 : 0);
 		barStyle.positioning = LayoutPositioning.Absolute;
-		barStyle.visible = false;
-		var bar = root.add(context.createNode(context.rootId("bar"), LayoutVisualKind.Box, barStyle));
-		root.onResolved(_ -> {
-			if (!bar.layout.style.visible) {
-				context.willEditRetained(bar);
-				bar.layout.style.height = LayoutAxis.fixed(40);
-				bar.layout.style.positionX = 50;
-				bar.layout.style.visible = true;
-			}
+		barStyle.positionX = shown.value ? 50 : 0;
+		barStyle.visible = shown.value;
+		root.add(context.createNode(context.rootId("bar"), LayoutVisualKind.Box, barStyle));
+		context.afterBuild(() -> {
+			if (!shown.value) shown.update(true);
 			if (revision.value == 0) revision.value = 1;
 		});
 		return root;

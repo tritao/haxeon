@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+# The compiler finds the standard library from the repository root.
+cd "$root"
 ui="$root/packages/ui"
 native=${NATIVEKIT_BUILD_DIR:-"$root/out/packages/ui/native"}
 hl="$("$root/scripts/hashlink-path.sh")/hl"

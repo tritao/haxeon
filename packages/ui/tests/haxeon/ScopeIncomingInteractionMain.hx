@@ -165,8 +165,8 @@ import haxeon.ui.style.StyleState;
 		expected = enter ? 2 : 1;
 	}
 
-	override public function submit(root:LayoutNode,
-			frame:LayoutFrame, ?changes:LayoutChanges, forceFull:Bool = false):Array<ResolvedLayoutItem> {
+	// A frame lays its tree out through solve before it publishes; stopping there sees the tree layout was given.
+	override function solve(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges):Array<ResolvedLayoutItem> {
 		matched = root.children.length == 1 && root.children[0].style.zIndex == expected;
 		if (root.children.length == 1) revision = root.children[0].contentRevision;
 		throw "incoming layout boundary";

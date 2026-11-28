@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+# The compiler finds the standard library from the repository root.
+cd "$root"
 ui="$root/packages/ui"
 hl="$("$root/scripts/hashlink-path.sh")/hl"
 work=$(mktemp -d "${TMPDIR:-$root/out}/haxeon-idle-parity.XXXXXXXX")
