@@ -678,6 +678,9 @@ typedef struct {
 	char *real; /* normalized, links resolved */
 	int recursive;
 	FSEventStreamRef stream;
+	/* The last event id before the stream started: a stream asked for changes since now still delivers some that
+	 * happened just before it, still on their way to it, and those are not this watch's. */
+	FSEventStreamEventId since;
 } realtime_watch_entry;
 
 struct realtime_watch {
@@ -756,7 +759,6 @@ static int realtime_watch_exists(const char *path) {
 static void realtime_watch_callback(ConstFSEventStreamRef stream, void *info, size_t count, void *paths,
 	const FSEventStreamEventFlags flags[], const FSEventStreamEventId ids[]) {
 	(void)stream;
-	(void)ids;
 	realtime_watch_entry *entry = (realtime_watch_entry *)info;
 	realtime_watch *watch = entry->watch;
 	char **reported = (char **)paths;
@@ -774,6 +776,8 @@ static void realtime_watch_callback(ConstFSEventStreamRef stream, void *info, si
 			watch->pending_rescan = 1;
 			continue;
 		}
+		/* After the lost-event flags: a root change carries no event id. */
+		if (ids[index] <= entry->since) continue;
 		if (flag & kFSEventStreamEventFlagHistoryDone) continue;
 		char *path = realtime_watch_rebased(entry, reported[index]);
 		if (path == NULL) continue;
@@ -840,6 +844,7 @@ realtime_watch_status realtime_watch_add(realtime_watch *watch, const char *path
 	CFStringRef root = CFStringCreateWithCString(NULL, entry->real, kCFStringEncodingUTF8);
 	CFArrayRef roots = root == NULL ? NULL : CFArrayCreate(NULL, (const void **)&root, 1, &kCFTypeArrayCallBacks);
 	FSEventStreamContext context = { 0, entry, NULL, NULL, NULL };
+	entry->since = FSEventsGetCurrentEventId();
 	entry->stream = roots == NULL ? NULL : FSEventStreamCreate(NULL, realtime_watch_callback, &context, roots,
 		kFSEventStreamEventIdSinceNow, 0.05,
 		kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagWatchRoot);
