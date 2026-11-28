@@ -613,7 +613,13 @@ static void realtime_child_validate(vstring *command, varray *arguments, varray 
 		vstring *key = hl_aptr(keys, vstring *)[i], *value = hl_aptr(values, vstring *)[i];
 		if (key == NULL || key->length == 0) hl_error("An environment variable needs a name");
 		const uchar *name = (const uchar *)realtime_string_data(key);
-		for (int at = 0; at < key->length; at++)
+#ifdef _WIN32
+		/* Windows' own =C: entries (a drive's working directory) start with '='; it ends any other name. */
+		int first = 1;
+#else
+		int first = 0;
+#endif
+		for (int at = first; at < key->length; at++)
 			if (name[at] == '=') hl_error("An environment variable name holds '='");
 		if (value == NULL) hl_error("An environment variable's value is null");
 	}

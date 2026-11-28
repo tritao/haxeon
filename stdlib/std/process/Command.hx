@@ -157,7 +157,7 @@ class Command {
 		return [for (part in [program].concat(arguments)) quoted(part)].join(" ");
 
 	function change(name:String, value:Null<String>):Command {
-		if (name == null || name.length == 0 || name.indexOf("=") >= 0)
+		if (!Environment.isName(name))
 			throw new haxe.Exception('std.process.Command: "$name" is not a variable name');
 		changedNames.push(name);
 		changedValues.push(value);

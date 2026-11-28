@@ -93,8 +93,15 @@ class Environment {
 	internal static function namesIgnoreCase():Bool
 		return nativeSystemName() == "Windows";
 
+	/**
+	 * Whether `name` can name a variable: not empty, and no `=`, which ends a name, but on Windows as its first character
+	 * (the system's own `=C:`, a drive's working directory).
+	 */
+	internal static function isName(name:Null<String>):Bool
+		return name != null && name.length > 0 && name.indexOf("=", nativeSystemName() == "Windows" ? 1 : 0) < 0;
+
 	static function checkedName(name:String):String {
-		if (name == null || name.length == 0 || name.indexOf("=") >= 0)
+		if (!isName(name))
 			throw new haxe.Exception('std.process.Environment: "$name" is not a variable name');
 		return name;
 	}
