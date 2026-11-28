@@ -1,7 +1,9 @@
 package state;
 
-/** Persistent gesture counters and animation values shown by the demos. */
-class GestureDemoState {
+import Observable;
+
+/** Persistent gesture counters and animation values shown by the demos; observed, so the tweens they drive rebuild what reads them. */
+class GestureDemoState implements Observable {
 	public var tweenValue:Float = 0.0;
 	public var springValue:Float = 0.18;
 	public var tapCount:Int = 0;

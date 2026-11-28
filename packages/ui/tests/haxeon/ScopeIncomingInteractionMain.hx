@@ -93,7 +93,6 @@ import haxeon.ui.style.StyleState;
 		ui.submittedFrameHeight = 80;
 		ui.submittedInteractionRevision = ui.interactionStates.revision;
 		ui.submittedStyleRevision = context.styleRevision;
-		ui.submittedAnimationRevision = ui.animations.revision;
 		ui.submittedGestureRevision = ui.gestures.revision;
 		ui.submittedTheme = context.theme;
 		ui.submittedStyleSheet = context.styleSheet;

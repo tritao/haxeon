@@ -6,7 +6,7 @@ import haxeon.ui.widgets.scroll.ScrollView;
  * Haxe-owned scroll offsets and resolved viewport/content metrics. Its smooth scrolling frames need no rebuild of their own: each
  * offset change goes to the bound callback, which moves content in place or asks for a rebuild itself.
  */
-class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimation {
+class ScrollController implements haxeon.ui.animation.Animation {
 	/** How long a smooth scroll takes, in seconds. */
 	public var animationDuration(default, null):Float = 0.12;
 

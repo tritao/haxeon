@@ -35,6 +35,9 @@ internal class StyleResolver {
 	var stringHashCount:Int;
 
 	/** Number of cacheable resolutions served from the computed-style cache. */
+	/** Changes each time a running transition moves a value, so the styles it reaches are resolved again. */
+	public var transitionRevision(default, null):Int = 0;
+
 	public var cacheHits(get, never):Int;
 	/** Number of cacheable resolutions that required a fresh cascade. */
 	public var cacheMisses(get, never):Int;
@@ -468,10 +471,12 @@ internal class StyleResolver {
 				var animation = new StyleTransitionAnimation(current, next, transition.duration, transition.easing,
 					value -> {
 						animatedValues.set(key, value);
+						transitionRevision++;
 					},
 						() -> {
 					animatedValues.set(key, next);
 					activeAnimations.remove(key);
+					transitionRevision++;
 				});
 				activeAnimations.set(key, animation);
 				scheduler.track(animation);

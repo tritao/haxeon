@@ -16,12 +16,6 @@ interface DelayedAnimation extends Animation {
 	function delaySeconds():Float;
 }
 
-/**
- * An animation that only changes nodes already on screen, announcing each change with BuildContext.willEditRetained. Its frames
- * lay out and paint those nodes without rebuilding the view, so it does not count as pending build work.
- */
-interface RetainedAnimation extends Animation {}
-
 /** Repeating normalized phase advanced by the Haxe UI frame clock. */
 class LoopAnimation implements Animation {
 	/** Where in the loop it is, from 0 up to 1. */

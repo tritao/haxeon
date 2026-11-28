@@ -304,7 +304,8 @@ class BuildContext implements Disposable {
 		// the replacement has taken the same number of edits (light to dark) as the sheet it replaced.
 		var result = styleEpoch * 1000003 + theme.styles.revision;
 		result = result * 1000003 + styleSheet.revision * 1009 + environment.revision;
-		return result;
+		// A running transition changes resolved values without a sheet edit.
+		return result * 31 + styleResolver.transitionRevision;
 	}
 
 	/** Installs the UiContext focus route used by composite keyboard widgets. */

@@ -9,7 +9,7 @@ import haxeon.ui.widgets.scroll.ScrollView;
  * (BuildContext.willEditRetained), so its frames rebuild nothing; they happen at animation ticks and on input, never
  * while geometry callbacks run.
  */
-internal class ScrollbarVisibilityController implements DelayedAnimation implements RetainedAnimation implements Disposable {
+internal class ScrollbarVisibilityController implements DelayedAnimation implements Disposable {
 	static inline var FadeInSeconds:Float = 0.3;
 	static inline var IdleSeconds:Float = 0.5;
 	static inline var FadeOutSeconds:Float = 0.2;

@@ -61,24 +61,18 @@ class SearchPickerTests {
 		var scheduler = new haxeon.ui.animation.AnimationScheduler(), visible = false;
 		var delay = new haxeon.ui.widgets.overlays.Tooltip.TooltipHoverDelay(scheduler,
 			value -> visible = value);
-		var revision = scheduler.revision;
 		delay.start();
-		check(scheduler.revision == revision && scheduler.rebuildingCount == 0 && !scheduler.needsFrame,
-			"Waiting tooltip invalidated the view before its deadline");
+		check(!scheduler.needsFrame, "Waiting tooltip asked for frames before its deadline");
 		check(scheduler.waitSeconds() == 0.8, "Tooltip did not expose its wake deadline");
 		scheduler.advance(0.4);
 		check(!visible, "Shared tooltip ignored its initial delay");
-		check(scheduler.revision == revision && scheduler.rebuildingCount == 0,
-			"Counting down a tooltip rebuilt its owner");
+		check(!scheduler.needsFrame, "Counting down a tooltip asked for frames");
 		scheduler.advance(0.41);
 		check(visible, "Shared tooltip delay never completed");
-		check(scheduler.revision > revision && scheduler.activeCount == 0,
-			"Tooltip deadline did not invalidate its visible state");
-		revision = scheduler.revision;
+		check(scheduler.activeCount == 0, "A tooltip delay stayed active after its deadline");
 		delay.start();
 		delay.cancel();
-		check(!visible && scheduler.revision == revision && scheduler.activeCount == 0,
-			"Cancelling a waiting tooltip scheduled an unrelated rebuild");
+		check(!visible && scheduler.activeCount == 0, "Cancelling a waiting tooltip left it active");
 		delay.dispose();
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();

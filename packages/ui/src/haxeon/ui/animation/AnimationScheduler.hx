@@ -2,16 +2,18 @@ package haxeon.ui.animation;
 
 import haxeon.ui.animation.Animation;
 
-/** Advances active Haxe animations whenever the host drives a UI frame. */
+/**
+ * Advances active Haxe animations whenever the host drives a UI frame, and asks for frames while one changes. An
+ * animation changes the view only through what it writes: a signal or state that views read rebuilds them, a scroll
+ * offset settles in layout, and custom paint that reads it paints again; the scheduler itself rebuilds nothing.
+ */
 class AnimationScheduler {
 	final active:Array<AnimationHandle>;
 	internal var onFrameRequested:Null<Void->Void>;
-	internal var revision(default, null):Int;
 
 	internal function new() {
 		active = [];
 		onFrameRequested = null;
-		revision = 0;
 	}
 
 	/** Registers an animation and returns a stable handle for its lifetime. */
@@ -23,7 +25,6 @@ class AnimationScheduler {
 				return handle;
 		var handle = new AnimationHandle(this, animation);
 		active.push(handle);
-		if (!handle.retained && handle.delaySeconds() <= 0.0) revision++;
 		requestFrame();
 		return handle;
 	}
@@ -47,53 +48,34 @@ class AnimationScheduler {
 	function removeHandle(handle:AnimationHandle):Void {
 		if (handle == null)
 			return;
-		if (active.remove(handle)) {
-			handle.deactivate();
-			if (!handle.retained && handle.delaySeconds() <= 0.0) revision++;
-		}
+		if (active.remove(handle)) handle.deactivate();
 	}
 
 	internal function advance(deltaSeconds:Float):Void {
 		if (!finite(deltaSeconds) || deltaSeconds < 0.0)
 			throw "Animation time must be finite and non-negative";
 		if (active.length == 0) return;
-		var hadActive = false;
 		var current = active.copy();
 		for (handle in current) {
 			if (active.indexOf(handle) < 0) continue;
-			// Waiting does not change the view. Crossing a deadline does, even if the animation schedules another wait.
-			if (!handle.retained && handle.delaySeconds() <= deltaSeconds) hadActive = true;
 			if (!handle.advance(deltaSeconds)) removeHandle(handle);
 		}
 		if (needsFrame)
 			requestFrame();
-		if (hadActive)
-			revision++;
 	}
 
 	internal function cancelAll():Void {
 		if (active.length == 0)
 			return;
-		var rebuilding = rebuildingCount > 0;
 		for (handle in active)
 			handle.deactivate();
 		active.resize(0);
-		if (rebuilding) revision++;
 	}
 
 	/** How many animations it is advancing. */
 	public var activeCount(get, never):Int;
 	inline function get_activeCount():Int
 		return active.length;
-
-	/** Animations that change the view now; retained updates and pending deadlines do not rebuild it. */
-	public var rebuildingCount(get, never):Int;
-	function get_rebuildingCount():Int {
-		var count = 0;
-		for (handle in active)
-			if (!handle.retained && handle.delaySeconds() <= 0.0) count++;
-		return count;
-	}
 
 	/** Whether some animation changes on every frame, as opposed to only waiting for a deadline. */
 	public var needsFrame(get, never):Bool;
@@ -136,14 +118,11 @@ class AnimationHandle {
 
 	/** Whether the animation is still being advanced. */
 	public var active(default, null):Bool;
-	/** Whether advancing it only edits nodes on screen (RetainedAnimation), so it needs no rebuild. */
-	public final retained:Bool;
 
 	@:allow(haxeon.ui.animation.AnimationScheduler)
 	private function new(scheduler:AnimationScheduler, animation:Animation) {
 		this.scheduler = scheduler;
 		this.animation = animation;
-		retained = Std.isOfType(animation, RetainedAnimation);
 		active = true;
 	}
 

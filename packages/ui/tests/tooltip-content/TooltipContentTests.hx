@@ -191,7 +191,7 @@ class TooltipContentTests {
 			check(hints(root) == 0, "a hidden " + Std.string(placement) + " tooltip built its content");
 			anchor = cast root.children[0].resolved;
 			ui.pointerMove(anchor.x + 4.0, anchor.y + 4.0);
-			check(ui.animations.rebuildingCount == 0 && !ui.animations.needsFrame && ui.animations.waitSeconds() > 0,
+			check(!ui.animations.needsFrame && ui.animations.waitSeconds() > 0,
 				"waiting for a tooltip requested continuous rebuilding frames");
 			root = settle(ui, side, frame, 0.2, 2, tree -> hints(tree) > 0);
 			check(hints(root) == 0, "a " + Std.string(placement) + " tooltip appeared before its hover delay");

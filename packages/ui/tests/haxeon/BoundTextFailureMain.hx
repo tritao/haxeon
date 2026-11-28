@@ -34,7 +34,6 @@ import haxeon.ui.theme.Theme;
 		ui.submittedFrameHeight = frame.height;
 		ui.submittedInteractionRevision = ui.interactionStates.revision;
 		ui.submittedStyleRevision = ui.buildContext.styleRevision;
-		ui.submittedAnimationRevision = ui.animations.revision;
 		ui.submittedGestureRevision = ui.gestures.revision;
 		ui.submittedTheme = ui.buildContext.theme;
 		ui.submittedStyleSheet = ui.buildContext.styleSheet;

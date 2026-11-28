@@ -116,7 +116,6 @@ class UiContext implements Disposable {
 	var submittedLayoutRequestRevision:Int = 0;
 	var submittedBindingRequestRevision:Int = 0;
 	var submittedStyleRevision:Int;
-	var submittedAnimationRevision:Int;
 	var submittedGestureRevision:Int;
 	var submittedNodeCount:Int;
 	var submittedFrameWidth:Float;
@@ -212,7 +211,6 @@ class UiContext implements Disposable {
 		var parsedEvery:Null<Int> = verifyEvery == null ? null : Std.parseInt(verifyEvery);
 		if (parsedEvery != null && parsedEvery > 0) verifyRetentionEvery = parsedEvery;
 		submittedStyleRevision = -1;
-		submittedAnimationRevision = -1;
 		submittedGestureRevision = -1;
 		submittedNodeCount = 0;
 		submittedFrameWidth = -1.0;
@@ -797,7 +795,6 @@ class UiContext implements Disposable {
 		buildContext.stateStore.prunePaths(nodesById);
 		submittedInteractionRevision = interactionStates.revision;
 		submittedStyleRevision = buildContext.styleRevision;
-		submittedAnimationRevision = animations.revision;
 		submittedRetainedEditRevision = buildContext.retainedEditRevision;
 		submittedLayoutRequestRevision = buildContext.layoutRequestRevision;
 		submittedBindingRequestRevision = bindingAppliedRevision;
@@ -1220,13 +1217,13 @@ class UiContext implements Disposable {
 	/** True when nothing but pointer state moved since the submitted frame, so retained output may be updated instead of rebuilt. */
 	function steadyForInteractionReuse(cacheKey:String, frame:LayoutFrame):Bool {
 		return sameSubmittedInputs(cacheKey, frame) && !buildContext.rootDependenciesDirty()
-			&& submittedStyleRevision == buildContext.styleRevision && animations.rebuildingCount == 0;
+			&& submittedStyleRevision == buildContext.styleRevision;
 	}
 
 	/** Whether the submitted frame was built for `cacheKey` at this size, with the same animations, gestures and styles. */
 	function sameSubmittedInputs(cacheKey:String, frame:LayoutFrame):Bool {
 		return root != null && submittedBuildKey == cacheKey && submittedFrameWidth == frame.width
-			&& submittedFrameHeight == frame.height && animations.revision == submittedAnimationRevision
+			&& submittedFrameHeight == frame.height
 			&& gestures.revision == submittedGestureRevision && buildContext.theme == submittedTheme
 			&& buildContext.styleSheet == submittedStyleSheet;
 	}
@@ -1348,7 +1345,7 @@ class UiContext implements Disposable {
 			| UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout
 			| UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics
 			| UiDirtyFlag.NeedsHitGeometry;
-		if (animations.rebuildingCount > 0) result |= UiDirtyFlag.NeedsComposite;
+		if (animations.needsFrame) result |= UiDirtyFlag.NeedsComposite;
 		if (buildContext.layoutRequestRevision != submittedLayoutRequestRevision) result |= UiDirtyFlag.NeedsLayout
 			| UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
 		if (buildContext.retainedEditRevision != submittedRetainedEditRevision) result |= UiDirtyFlag.NeedsStyle
