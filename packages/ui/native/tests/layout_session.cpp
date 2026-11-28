@@ -191,7 +191,7 @@ bool incremental(nkui_resource fonts) {
         geometry(session, true).size() != 1201 * NKUI_LAYOUT_RESOLVED_ITEM_BYTES) return false;
     const auto expected_updates = geometry(session, true);
     uint32_t required = 0;
-    if (nkui_layout_session_get_resolved_updates_into(session, nullptr, 0, &required) != NKUI_ERROR_INVALID_ARGUMENT ||
+    if (nkui_layout_session_get_resolved_updates_into(session, nullptr, 0, &required) != NKUI_ERROR_BUFFER_TOO_SMALL ||
         required != expected_updates.size()) return false;
     std::vector<uint8_t> update_storage(required, 0xa5);
     uint32_t written = 0;
@@ -199,7 +199,7 @@ bool incremental(nkui_resource fonts) {
         nkui_layout_session_get_resolved_updates_into(session, update_storage.data(), required, nullptr) !=
             NKUI_ERROR_INVALID_ARGUMENT) return false;
     if (nkui_layout_session_get_resolved_updates_into(session, update_storage.data(), required - 1, &written) !=
-            NKUI_ERROR_INVALID_ARGUMENT || written != required || update_storage.front() != 0xa5 ||
+            NKUI_ERROR_BUFFER_TOO_SMALL || written != required || update_storage.front() != 0xa5 ||
         update_storage.back() != 0xa5) return false;
     if (nkui_layout_session_get_resolved_updates_into(session, update_storage.data(), required, &written) != NKUI_OK ||
         written != required || update_storage != expected_updates) return false;
@@ -337,7 +337,7 @@ int main() {
     uint32_t undersized_hit_bytes = 0;
     if (nkui_layout_session_hit_test(session, 250.0f, 180.0f,
                                       reinterpret_cast<uint8_t *>(hit_path),
-                                      &undersized_hit_bytes) != NKUI_ERROR_INVALID_ARGUMENT ||
+                                      &undersized_hit_bytes) != NKUI_ERROR_BUFFER_TOO_SMALL ||
         undersized_hit_bytes != sizeof(uint32_t))
         return 53;
     hit_bytes = sizeof(hit_path);
@@ -367,7 +367,7 @@ int main() {
     hit_count = 0;
     if (nkui_layout_session_hit_test_into(session, 150.0f, 75.0f, undersized_hit_path,
                                            sizeof(undersized_hit_path), &hit_count) !=
-            NKUI_ERROR_INVALID_ARGUMENT ||
+            NKUI_ERROR_BUFFER_TOO_SMALL ||
         hit_count != 2)
         return 60;
 

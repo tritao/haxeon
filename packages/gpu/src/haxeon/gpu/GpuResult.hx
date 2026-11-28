@@ -34,12 +34,18 @@ internal class GpuResult {
 		return new GpuException(error(status), operation, status.rawValue);
 	}
 
+	/**
+	 * The `BindingErrorKind` a failure `status` that is the program's mistake is, else null. This switch and `error`'s
+	 * name every GPU code with no default, so a code the GPU module adds fails to build until it is classified.
+	 */
 	static function misuse(status:GpuStatus):Null<BindingErrorKind>
 		return switch status {
 			case GpuStatus.ErrorInvalidArgument, GpuStatus.ErrorBufferOverflow: InvalidArgument;
 			case GpuStatus.ErrorInvalidHandle: Disposed;
 			case GpuStatus.ErrorWrongState, GpuStatus.ErrorWrongThread: InvalidState;
-			case _: null;
+			case GpuStatus.Ok, GpuStatus.ErrorUnknown, GpuStatus.ErrorDeviceLost, GpuStatus.ErrorOutOfMemory,
+				GpuStatus.ErrorUnsupported:
+				null;
 		}
 
 	static function error(status:GpuStatus):GpuError {
@@ -48,7 +54,12 @@ internal class GpuResult {
 			case GpuStatus.ErrorUnsupported: Unsupported(reason);
 			case GpuStatus.ErrorDeviceLost: DeviceLost;
 			case GpuStatus.ErrorOutOfMemory: OutOfMemory;
-			case _: Failed(status.rawValue, reason);
+			case GpuStatus.ErrorUnknown: Failed(status.rawValue, reason);
+			// Only reached for a status `misuse` already classified, or for success.
+			case GpuStatus.Ok, GpuStatus.ErrorInvalidArgument, GpuStatus.ErrorBufferOverflow,
+				GpuStatus.ErrorInvalidHandle,
+				GpuStatus.ErrorWrongState, GpuStatus.ErrorWrongThread:
+				Failed(status.rawValue, reason);
 		}
 	}
 

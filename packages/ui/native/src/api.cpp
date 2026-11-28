@@ -2808,7 +2808,7 @@ extern "C" nkui_result nkui_layout_session_get_resolved_items(nkui_layout_sessio
     }
     if (*inout_bytes < required) {
         *inout_bytes = required;
-        return NKUI_ERROR_INVALID_ARGUMENT;
+        return NKUI_ERROR_BUFFER_TOO_SMALL;
     }
     for (size_t index = 0; index < state->snapshot.items.size(); ++index) {
         const auto &resolved = state->snapshot.items[index];
@@ -2877,7 +2877,7 @@ extern "C" nkui_result nkui_layout_session_get_resolved_updates(nkui_layout_sess
     const auto required = state->resolved_updates.size() * sizeof(nkui_layout_item);
     if (required > UINT32_MAX) return NKUI_ERROR_OUT_OF_MEMORY;
     if (!out_buffer) { *inout_bytes = static_cast<uint32_t>(required); return NKUI_OK; }
-    if (*inout_bytes < required) { *inout_bytes = static_cast<uint32_t>(required); return NKUI_ERROR_INVALID_ARGUMENT; }
+    if (*inout_bytes < required) { *inout_bytes = static_cast<uint32_t>(required); return NKUI_ERROR_BUFFER_TOO_SMALL; }
     if (required) std::memcpy(out_buffer, state->resolved_updates.data(), required);
     *inout_bytes = static_cast<uint32_t>(required);
     return NKUI_OK;
@@ -2890,7 +2890,7 @@ extern "C" nkui_result nkui_layout_session_get_resolved_updates_into(
     const auto result = nkui_layout_session_get_resolved_updates(session, buffer, &size);
     *out_bytes = size;
     // The existing null-buffer form is a successful size query; this form reports insufficient capacity.
-    if (result == NKUI_OK && size > capacity_bytes) return NKUI_ERROR_INVALID_ARGUMENT;
+    if (result == NKUI_OK && size > capacity_bytes) return NKUI_ERROR_BUFFER_TOO_SMALL;
     return result;
 }
 
@@ -2931,7 +2931,7 @@ extern "C" nkui_result nkui_layout_session_hit_test(nkui_layout_session session,
     }
     if (*inout_bytes < required) {
         *inout_bytes = required;
-        return NKUI_ERROR_INVALID_ARGUMENT;
+        return NKUI_ERROR_BUFFER_TOO_SMALL;
     }
     if (required)
         std::memcpy(out_path, path.data(), required);
@@ -2978,7 +2978,7 @@ extern "C" nkui_result nkui_layout_session_hit_test_into(
     *out_count = static_cast<uint32_t>(result.size());
     const size_t required_bytes = result.size() * sizeof(uint32_t);
     if (required_bytes > path_capacity_bytes)
-        return NKUI_ERROR_INVALID_ARGUMENT;
+        return NKUI_ERROR_BUFFER_TOO_SMALL;
     if (required_bytes)
         std::memcpy(path, result.data(), required_bytes);
     return NKUI_OK;
@@ -3240,7 +3240,7 @@ extern "C" nkui_result nkui_text_layout_get_selection_rects(nkui_resource layout
     }
     if (*inout_bytes < required) {
         *inout_bytes = required;
-        return NKUI_ERROR_INVALID_ARGUMENT;
+        return NKUI_ERROR_BUFFER_TOO_SMALL;
     }
     for (std::size_t index = 0; index < rectangles.size(); ++index) {
         const auto &rect = rectangles[index];
@@ -3276,7 +3276,7 @@ extern "C" nkui_result nkui_text_layout_get_line_rects(nkui_resource layout, int
     }
     if (*inout_bytes < required) {
         *inout_bytes = required;
-        return NKUI_ERROR_INVALID_ARGUMENT;
+        return NKUI_ERROR_BUFFER_TOO_SMALL;
     }
     for (std::size_t index = 0; index < rectangles.size(); ++index) {
         const auto &rect = rectangles[index];

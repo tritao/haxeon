@@ -1,8 +1,8 @@
+import haxeon.platform.PlatformError;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrameSubscription;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
-import haxeon.ui.UiResult.UiError;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
@@ -179,10 +179,10 @@ class WindowChromeDemo implements Disposable {
 
 	public function failureMessage():Null<String> {
 		if (failure == null) return null;
-		if (Std.isOfType(failure, UiError)) {
-			var uiError:UiError = cast failure;
+		if (Std.isOfType(failure, PlatformError)) {
+			var platformError:PlatformError = cast failure;
 			var stage = context == null ? 0 : context.getDiagnosticStage();
-			return 'UI ${uiError.operation} failed with status ${uiError.status} (stage ${stage}): '
+			return 'UI ${platformError.operation} failed: ${platformError.message} (stage ${stage}): '
 				+ NativeKitGpu.nkgpu_last_error();
 		}
 		return Std.string(failure);

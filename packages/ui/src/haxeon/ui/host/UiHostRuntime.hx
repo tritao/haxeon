@@ -7,7 +7,7 @@ import haxeon.ProfileSpan;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
 import haxeon.ui.Renderer;
-import haxeon.ui.UiResult.UiError;
+import haxeon.ui.UiResult.UiException;
 import haxeon.ui.core.UiFrameMetrics;
 import haxeon.ui.host.UiApplication;
 import haxeon.ui.style.Density;
@@ -205,9 +205,9 @@ class UiHostRuntime implements Disposable {
 		} catch (error:Dynamic) {
 			context.repaintOnly = false;
 			if (callbackDepth > 0) callbackDepth--;
-			if (Std.isOfType(error, UiError)) {
-				var uiError:UiError = cast error;
-				if (uiError.status == UiStatus.ErrorResourceLimit) {
+			if (Std.isOfType(error, UiException)) {
+				var uiError:UiException = cast error;
+				if (uiError.failure == ResourceLimit) {
 					lastRenderResourceError = uiError.message;
 					if (callbackDepth == 0 && disposeRequested) disposeNow();
 					return false;

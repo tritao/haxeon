@@ -442,7 +442,7 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_updates(
     uint32_t *inout_bytes NK_INOUT);
 
 /** Copies changed geometry into caller-owned storage. If capacity is insufficient, no records are written,
- * `out_bytes` receives the required size, and NKUI_ERROR_INVALID_ARGUMENT is returned. A zero-capacity
+ * `out_bytes` receives the required size, and NKUI_ERROR_BUFFER_TOO_SMALL is returned. A zero-capacity
  * buffer may be null. Repeated reads of the same submit return the same records.
  */
 NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_updates_into(
@@ -473,7 +473,7 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_hit_test(
  * root-to-target order. `path_capacity_bytes` is its capacity in bytes and
  * must be a multiple of sizeof(uint32_t). `out_count` receives the number of
  * node IDs written. If the buffer is too small, no IDs are written,
- * `out_count` receives the required number of IDs, and NKUI_ERROR_INVALID_ARGUMENT
+ * `out_count` receives the required number of IDs, and NKUI_ERROR_BUFFER_TOO_SMALL
  * is returned so the caller can grow and retry without a size-query allocation.
  * A zero-capacity buffer is valid when `path` is NULL.
  */

@@ -75,7 +75,8 @@ typedef int32_t nkui_result;
 enum NK_ENUM(nkui_result) {
     /** The operation completed successfully. */
     NKUI_OK = 0,
-    /** An argument was null, out of range, or otherwise invalid. */
+    /** An argument was null, out of range, or otherwise invalid: the caller's mistake. A buffer that is merely too
+     * small is NKUI_ERROR_BUFFER_TOO_SMALL instead. */
     NKUI_ERROR_INVALID_ARGUMENT = -1,
     /** A handle is invalid, stale, or has already been destroyed. */
     NKUI_ERROR_INVALID_HANDLE = -2,
@@ -86,7 +87,9 @@ enum NK_ENUM(nkui_result) {
     /** The graphics backend could not initialize or execute the render. */
     NKUI_ERROR_RENDERING = -5,
     /** A frame exceeded its stream budget or could not allocate another page. Retryable. */
-    NKUI_ERROR_RESOURCE_LIMIT = -6
+    NKUI_ERROR_RESOURCE_LIMIT = -6,
+    /** A caller's output buffer is too small; the call reports the size it needs. */
+    NKUI_ERROR_BUFFER_TOO_SMALL = -7
 };
 
 /** Opaque handle for a retained display list. */

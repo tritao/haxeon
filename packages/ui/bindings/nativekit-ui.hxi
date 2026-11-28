@@ -507,7 +507,8 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		 */
 		NKUI_OK = 0;
 		/**
-		 * An argument was null, out of range, or otherwise invalid.
+		 * An argument was null, out of range, or otherwise invalid: the caller's mistake. A buffer that is merely too
+		 * small is NKUI_ERROR_BUFFER_TOO_SMALL instead.
 		 */
 		NKUI_ERROR_INVALID_ARGUMENT = -1;
 		/**
@@ -530,6 +531,10 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		 * A frame exceeded its stream budget or could not allocate another page. Retryable.
 		 */
 		NKUI_ERROR_RESOURCE_LIMIT = -6;
+		/**
+		 * A caller's output buffer is too small; the call reports the size it needs.
+		 */
+		NKUI_ERROR_BUFFER_TOO_SMALL = -7;
 	}
 	/**
 	 * Horizontal alignment of paragraph lines.
@@ -783,7 +788,7 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	) -> nkui_result;
 	/**
 	 * Copies changed geometry into caller-owned storage. If capacity is insufficient, no records are written,
-	 * `out_bytes` receives the required size, and NKUI_ERROR_INVALID_ARGUMENT is returned. A zero-capacity
+	 * `out_bytes` receives the required size, and NKUI_ERROR_BUFFER_TOO_SMALL is returned. A zero-capacity
 	 * buffer may be null. Repeated reads of the same submit return the same records.
 	 */
 	extern fn nkui_layout_session_get_resolved_updates_into(
@@ -816,7 +821,7 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	 * root-to-target order. `path_capacity_bytes` is its capacity in bytes and
 	 * must be a multiple of sizeof(uint32_t). `out_count` receives the number of
 	 * node IDs written. If the buffer is too small, no IDs are written,
-	 * `out_count` receives the required number of IDs, and NKUI_ERROR_INVALID_ARGUMENT
+	 * `out_count` receives the required number of IDs, and NKUI_ERROR_BUFFER_TOO_SMALL
 	 * is returned so the caller can grow and retry without a size-query allocation.
 	 * A zero-capacity buffer is valid when `path` is NULL.
 	 */

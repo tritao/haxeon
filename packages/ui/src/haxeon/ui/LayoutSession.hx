@@ -94,7 +94,7 @@ class LayoutSession implements Disposable {
 		if (verifyTransactions) verifyTree(root);
 		var decodeStarted = measureCost ? Sys.time() : 0.0;
 		var result = NativeKitUI.nkui_layout_session_get_resolved_updates_into(value, resolvedUpdateBytes);
-		while (result.status == NativeKitUI.UiStatus.ErrorInvalidArgument
+		while (result.status == NativeKitUI.UiStatus.ErrorBufferTooSmall
 			&& result.out_bytes > resolvedUpdateBytes.length) {
 			if (result.out_bytes > 268435456) throw "Native layout geometry exceeds the output buffer limit";
 			var capacity = resolvedUpdateBytes.length;
@@ -171,7 +171,7 @@ class LayoutSession implements Disposable {
 		while (true) {
 			var result = NativeKitUI.nkui_layout_session_hit_test_into(value, x, y, hitPathBytes);
 			var requiredBytes = result.out_count * 4;
-			if (result.status == NativeKitUI.UiStatus.ErrorInvalidArgument && requiredBytes > hitPathBytes.length) {
+			if (result.status == NativeKitUI.UiStatus.ErrorBufferTooSmall && requiredBytes > hitPathBytes.length) {
 				var capacity = hitPathBytes.length;
 				while (capacity < requiredBytes)
 					capacity *= 2;

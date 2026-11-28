@@ -3,7 +3,6 @@ import haxeon.platform.SurfaceFrameSubscription;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
-import haxeon.ui.UiResult.UiError;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
@@ -415,9 +414,6 @@ class ShowcaseDesktop {
 			if (Std.isOfType(error, PlatformError)) {
 				var platformError:PlatformError = cast error;
 				Sys.println('nativekit_ui_showcase: ${platformError.message}');
-			} else if (Std.isOfType(error, UiError)) {
-				var uiError:UiError = cast error;
-				Sys.println('nativekit_ui_showcase: ${uiError.operation} failed with status ${uiError.status}');
 			} else
 				Sys.println("nativekit_ui_showcase: " + Std.string(error));
 			result = 20;
