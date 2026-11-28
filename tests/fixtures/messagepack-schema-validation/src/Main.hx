@@ -37,6 +37,16 @@ struct SchemaRoot implements SchemaBase implements GenericMarker<Int> implements
 	public var title:String = "root";
 }
 
+enum SchemaRefusal {
+	Busy;
+}
+
+// Two instantiations of one generic enum: a descriptor tells them apart by their arguments.
+struct SchemaAnswers {
+	public var count:Result<Int, SchemaRefusal>;
+	public var saved:Result<Void, SchemaRefusal>;
+}
+
 struct SchemaUnicodeDefault {
 	@:maxLength(1) public var title:String = "é";
 }
@@ -67,6 +77,8 @@ function main():Int {
 	var nativeFacts = schema.requireSourceFacts(nativeInfo.hash, nativeInfo.type).unwrap();
 	if (nativeInfo.type != "native-value:SchemaNative<>" || nativeFacts.sourceKind
 		!= MessagePackSchemaSourceKind.NativeValue || nativeFacts.interfaces.length != 0) return 15;
+	var answersInfo:Dynamic = typeInfo<SchemaAnswers>();
+	schema.requireDescriptor(answersInfo.hash, answersInfo.type).unwrap();
 	var unicodeInfo:Dynamic = typeInfo<SchemaUnicodeDefault>();
 	schema.requireDescriptor(unicodeInfo.hash, unicodeInfo.type).unwrap();
 	var unicodeDefault = schema.fieldDefaultValue(unicodeInfo.hash, unicodeInfo.type, ["title"]).unwrap();

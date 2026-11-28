@@ -90,6 +90,14 @@ const fs = require('node:fs');
 const dump = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const schemaRoot = dump.descriptors.find(item => item.name === 'SchemaRoot');
 assert(schemaRoot);
+// A generic enum's instantiations are described with their arguments, so a change to one changes the hash.
+const answers = dump.descriptors.find(item => item.name === 'SchemaAnswers');
+assert(answers);
+const answerTypes = Object.fromEntries(answers.fields.map(field => [field.name, field.type]));
+assert.notEqual(answerTypes.count, answerTypes.saved);
+assert.match(answerTypes.count, /Result/);
+assert.match(answerTypes.count, /Int/);
+assert.match(answerTypes.saved, /Void/);
 const schemaLeaf = schemaRoot.fields.find(field => field.name === 'leaf');
 const integerFields = Object.fromEntries(schemaLeaf.fields.map(field => [field.name, field]));
 assert.deepEqual(integerFields.unsigned32.defaultValue, { type: 'Int', value: 0 });
