@@ -484,7 +484,7 @@ class Compiler {
 		var wasm = BackendTargets.isWasm(backendTarget),
 			names = [
 				for (name in sourceLoader.standardModuleNames())
-					if (wasm || !StringTools.startsWith(name, StdlibNames.WASM_HOST_PACKAGE)) name
+					if (wasm ? !StdlibNames.isNativeOnly(name) : !StdlibNames.isWasmOnly(name)) name
 			];
 		for (name in names)
 			sourceLoader.load(name, modules);

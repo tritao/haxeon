@@ -20,6 +20,7 @@ gc-dump-paths	skip	Wasm has no collector: hl.Gc census and heap dump write no fi
 stdlib-io-sockets	skip	sys.net sockets are HashLink-only; Wasm has no socket host
 stdlib-stat	skip	FileSystem.stat and Timer.stamp need the Sys and file natives, which are not implemented on Wasm
 stdlib-process	skip	sys.io.Process starts host processes, which Wasm cannot
+std-process	skip	std.process starts host processes, which Wasm cannot; importing it for Wasm is an error
 gc-stats	skip	Wasm has no collector: hl.Gc.stats reports zeros
 nested-call-stack	skip	haxe.CallStack natives are not implemented on Wasm
 package-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm

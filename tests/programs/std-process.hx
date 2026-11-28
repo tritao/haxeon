@@ -31,7 +31,7 @@ function child(mode:String, rest:Array<String>):Int {
 			Sys.stderr().writeString("to stderr");
 			return 0;
 		case "exit":
-			return Std.parseInt(rest[0]);
+			return Std.parseInt(rest[0]) ?? 99;
 		case "echo-input":
 			var input = Sys.stdin().readAll();
 			Sys.print("[" + input.toString() + "]");
@@ -81,10 +81,11 @@ function input():Int {
 	var stdin = child.stdin, stdout = child.stdout;
 	if (stdin == null || stdout == null || child.stderr != null)
 		return 10;
-	stdin.writeText("line one\n").unwrap();
+	// No newline: the child prints through the C runtime, whose text-mode stdout writes one as "\r\n" on Windows.
+	stdin.writeText("line one;").unwrap();
 	stdin.write(Bytes.ofString("xx-two-xx"), 3, 3).unwrap();
 	stdin.close();
-	if (stdout.readText().unwrap() != "[line one\ntwo]" || !child.wait().unwrap().succeeded())
+	if (stdout.readText().unwrap() != "[line one;two]" || !child.wait().unwrap().succeeded())
 		return 11;
 	child.close();
 	// Output()'s input is empty unless set otherwise.

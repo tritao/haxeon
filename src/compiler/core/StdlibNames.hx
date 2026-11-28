@@ -200,6 +200,14 @@ class StdlibNames {
 
 	public static inline final WASM_HOST_ERROR = "haxeon.wasm.HostError";
 
+	/** Whether the standard library's module `name` is a Wasm host's, which only a Wasm module has. */
+	public static function isWasmOnly(name:String):Bool
+		return StringTools.startsWith(name, WASM_HOST_PACKAGE);
+
+	/** Whether the standard library's module `name` starts processes, which a Wasm module cannot: importing it for Wasm is an error. */
+	public static function isNativeOnly(name:String):Bool
+		return StringTools.startsWith(name, "std.process.") || name == "haxeon.Script";
+
 	/**
 	 * The functions the compiler expands at each call. The standard library declares each as an `extern` without a body or
 	 * a native binding, so it has a signature and documentation but no function value; the typer checks both directions.
