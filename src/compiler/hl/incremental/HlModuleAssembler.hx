@@ -1166,7 +1166,8 @@ class HlModuleAssembler {
 		// what lowering ignores) is the published revision again: a new revision would carry no patch, and the runtime
 		// can only reach a revision without a patch by reloading.
 		var baseRevision = revision;
-		programNames = [for (name in present.keys()) name => true];
+		// Nothing changes `present` from here on, and a later build makes a map of its own.
+		programNames = present;
 		var renames = reload ? [] : pendingRenames;
 		pendingRenames = [];
 		var unchanged = initialized && !reload && changed.length == 0 && !addsFunctions

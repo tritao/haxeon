@@ -29,6 +29,9 @@ class IrFunctionIndex {
 		var waiting = pending;
 		if (waiting != null) {
 			pending = null;
+			// Every function's key is below the count of keys given: one allocation, not one per growth.
+			if (byKey.length == 0)
+				byKey.resize(IrSymbol.functionKeysGiven());
 			for (fn in waiting)
 				put(fn.symbol.functionKey(), fn);
 		}

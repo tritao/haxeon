@@ -7,6 +7,7 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOperands;
 import compiler.ir.model.IrProgramIndex;
 import compiler.ir.model.IrProviders;
+import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.TypeKey;
 import compiler.ir.passes.enums.IrEnumDynamicDispatch;
@@ -798,8 +799,9 @@ class IrWalkSummary {
 
 	/** Whether two summaries name the same edges, for `--check-reuse`. */
 	public static function same(left:IrWalkSummary, right:IrWalkSummary):Bool {
+		// Name by name: a session compares the summary of every function an edit made again.
 		inline function names(a:Array<String>, b:Array<String>):Bool
-			return a.join("\u0001") == b.join("\u0001");
+			return IrObjectTools.sameNames(a, b);
 		if (!names(left.outputObjects, right.outputObjects) || !names(left.newObjects, right.newObjects)
 			|| !names(left.calls, right.calls) || !names(left.staticClosures, right.staticClosures)
 			|| !names(left.instanceClosures, right.instanceClosures) || !names(left.globals, right.globals)
@@ -811,8 +813,18 @@ class IrWalkSummary {
 			if (left.siteInterfaces[index] != right.siteInterfaces[index])
 				return false;
 		for (index in 0...left.intrinsics.length)
-			if (Std.string(left.intrinsics[index]) != Std.string(right.intrinsics[index]))
+			if (!sameIntrinsic(left.intrinsics[index], right.intrinsics[index]))
 				return false;
 		return true;
 	}
+
+	static function sameIntrinsic(left:IrIntrinsic, right:IrIntrinsic):Bool
+		return Type.enumIndex(left) == Type.enumIndex(right)
+			&& IrTypeIdentity.same(intrinsicType(left), intrinsicType(right));
+
+	static function intrinsicType(intrinsic:IrIntrinsic):IrType
+		return switch intrinsic {
+			case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type), InlineEnumBox(type),
+				InlineEnumUnbox(type): type;
+		};
 }

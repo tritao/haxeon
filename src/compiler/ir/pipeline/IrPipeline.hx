@@ -222,18 +222,27 @@ class IrPipeline {
 	 */
 	static function pruneDependencies(assembly:IrAssembly,
 			functions:Array<IrFunction>):compiler.ir.analysis.IrTypeAwareWalk.IrClassDependencies {
-		var objectTable:Map<String, IrObject> = [for (object in assembly.objects) object.name => object],
-			present:Map<String, Bool> = [for (fn in functions) fn.name => true],
-			facts = assembly.generator.facts,
-			observable = [for (name in facts.observableFieldBits.keys()) name];
+		var facts = assembly.generator.facts,
+			observable = [for (name in facts.observableFieldBits.keys()) name],
+			objectTable:Null<Map<String, IrObject>> = null,
+			present:Map<String, Bool> = [];
 		observable.sort(Reflect.compare);
+		// The tables are made on the walk's first question: a walk a session keeps asks none.
+		function dependencies(className:String, symbol:String):Array<String> {
+			var objects = objectTable;
+			if (objects == null) {
+				objects = [for (object in assembly.objects) object.name => object];
+				objectTable = objects;
+				for (fn in functions)
+					present.set(fn.name, true);
+			}
+			return IrObjectReflection.dependencies(objects, facts.observableFieldBits, className, symbol,
+				name -> present.exists(name));
+		}
 		return {
 			inputs: "observable-bits " + observable.join(" "),
 			symbols: IrObjectReflection.helperSymbols(),
-			of: (className, symbol) -> IrObjectReflection.dependencies(objectTable, facts.observableFieldBits,
-				className,
-				symbol,
-				name -> present.exists(name))
+			of: dependencies
 		};
 	}
 

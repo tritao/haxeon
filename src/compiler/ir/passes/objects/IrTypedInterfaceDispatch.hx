@@ -206,7 +206,11 @@ class IrTypedInterfaceDispatch {
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			byInterface:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
 			byFunction = new IrFunctionIndex("typed-interface-dispatch", functions),
-			functionIndices:Map<String, Int> = [for (index in 0...functions.length) functions[index].name => index];
+			// By the number of each function's name (`IrSymbol.functionKey`), its position plus one: no table of names.
+			positions:Array<Int> = [];
+		positions.resize(IrSymbol.functionKeysGiven());
+		for (index in 0...functions.length)
+			place(positions, functions[index].symbol.functionKey(), index);
 		function extendsInterface(actual:String, expected:String, visited:Map<String, Bool>):Bool {
 			if (actual == expected) return true;
 			if (visited.exists(actual)) return false;
@@ -317,9 +321,10 @@ class IrTypedInterfaceDispatch {
 				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks,
 					Provider(TypeKey.of(Obj(candidate.name)),
 					ProviderOperations.detailed(ProviderOperation.TypedInterfaceEntry, entryName))),
-					entryIndex = functionIndices.get(entryName);
-				if (entryIndex == null) {
-					functionIndices.set(entryName, functions.length);
+					entryKey = IrSymbol.of(entryName).functionKey(),
+					entryIndex = positionOf(positions, entryKey);
+				if (entryIndex < 0) {
+					place(positions, entryKey, functions.length);
 					functions.push(entryFunction);
 				} else functions[entryIndex] = entryFunction;
 				var matched = builder.createBlock(), next = builder.createBlock();
@@ -337,12 +342,23 @@ class IrTypedInterfaceDispatch {
 				ProviderOperations.detailed(ProviderOperation.DynamicDispatch, name)));
 			if (existing == null) functions.push(generated);
 			else {
-				var index = functionIndices.get(name);
-				if (index == null) throw new InternalError('Missing typed interface dispatcher index "$name"');
+				var index = positionOf(positions, IrSymbol.of(name).functionKey());
+				if (index < 0) throw new InternalError('Missing typed interface dispatcher index "$name"');
 				functions[index] = generated;
 			}
 		}
 	}
+
+	/** Records that the function whose name's number is `key` is at `position` (`generate`'s positions). */
+	static function place(positions:Array<Int>, key:Int, position:Int):Void {
+		if (key >= positions.length)
+			positions.resize(key + 1 + (key >> 1));
+		positions[key] = position + 1;
+	}
+
+	/** Where the function whose name's number is `key` is, or -1. */
+	static function positionOf(positions:Array<Int>, key:Int):Int
+		return key < positions.length ? positions[key] - 1 : -1;
 }
 
 /**

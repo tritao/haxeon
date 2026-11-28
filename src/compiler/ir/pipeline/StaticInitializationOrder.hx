@@ -70,7 +70,7 @@ class StaticInitializationOrder {
 	final instanceMethods:Map<String, Bool> = [];
 
 	final initializers:Map<String, IrFunction>;
-	final functions:Map<String, IrFunction>;
+	final functions:IrFunctionIndex;
 	final placing:Map<String, Bool> = [];
 	final placed:Map<String, Bool> = [];
 	final walked:Map<String, Bool> = [];
@@ -85,10 +85,10 @@ class StaticInitializationOrder {
 	/**
 	 * `classes` in the order static initialization runs in. `classes` is in module order (`compareModules`, declaration order
 	 * within a module); `initializers` holds a function per initialized static field (`Class.field`) that evaluates its
-	 * initializer, and `program` the program's functions.
+	 * initializer, and `program` the program's functions by name.
 	 */
 	public static function of(classes:Array<TypedClass>, initializers:Map<String, IrFunction>,
-			program:Array<IrFunction>, ?references:IrFunction->IrStaticReferences):{
+			program:IrFunctionIndex, ?references:IrFunction->IrStaticReferences):{
 				order:Array<TypedClass>,
 				loops:Array<TypedClass>
 			} {
@@ -101,11 +101,11 @@ class StaticInitializationOrder {
 	/** What each function references (`IrStaticReferences`): a session keeps it while the function is the same. */
 	final referencesOf:IrFunction->IrStaticReferences;
 
-	function new(classList:Array<TypedClass>, initializers:Map<String, IrFunction>, program:Array<IrFunction>,
+	function new(classList:Array<TypedClass>, initializers:Map<String, IrFunction>, program:IrFunctionIndex,
 			referencesOf:IrFunction->IrStaticReferences) {
 		this.initializers = initializers;
 		this.referencesOf = referencesOf;
-		functions = [for (fn in program) fn.name => fn];
+		functions = program;
 		for (classDecl in classList) {
 			classes.set(classDecl.name, classDecl);
 			for (field in classDecl.fields)

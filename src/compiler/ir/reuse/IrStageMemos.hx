@@ -60,6 +60,14 @@ class IrStageMemos {
 	/** The contribution memos the stages registered (`contribution`), by name, each begun with every build. */
 	final contributions:Map<String, IrContributionMemo<Dynamic>> = [];
 
+	/**
+	 * The slot and summary of each function of the stage run under way (`IrFunctionStages.run`), their storage kept from one run to
+	 * the next; `columnsTaken` while a run holds them, so one inside it, or after a build that failed in one, makes its own.
+	 */
+	public final runSlots:Array<Int> = [];
+
+	public final runSummaries:Array<Int> = [];
+	public var columnsTaken = false;
 
 	public function new(database:compiler.query.QueryDatabase, inputs:compiler.query.ComputedQueryKind<IrFunction>) {
 		this.database = database;
@@ -75,6 +83,7 @@ class IrStageMemos {
 	public function startBuild(functions:Array<IrFunction>, checks:Bool):Void {
 		build++;
 		bodies = false;
+		columnsTaken = false;
 		this.checks = checks;
 		for (memo in contributions)
 			memo.begin(build);

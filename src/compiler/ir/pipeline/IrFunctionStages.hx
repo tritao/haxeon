@@ -57,9 +57,10 @@ class IrFunctionStages {
 	 */
 	public static function run(name:String, pass:IrFunctionPass, functions:Array<IrFunction>,
 			memos:Null<IrStageMemos>, ?builder:compiler.ir.model.IrBodyBuilder, ?part:String):Array<IrFunction> {
-		var count = functions.length, summaries:Array<Int> = [];
-		summaries.resize(count);
+		var count = functions.length;
 		if (memos == null) {
+			var summaries:Array<Int> = [];
+			summaries.resize(count);
 			var facts = new IrStageFacts();
 			facts.run(null, partName(name, part), pass);
 			for (index in 0...count)
@@ -77,9 +78,13 @@ class IrFunctionStages {
 			kind = stage.functions,
 			checks = memos.checks,
 			partKeys = part == null ? null : stage.part(part),
-			slots:Array<Int> = [];
+			shared = !memos.columnsTaken,
+			slots:Array<Int> = shared ? memos.runSlots : [],
+			summaries:Array<Int> = shared ? memos.runSummaries : [];
+		memos.columnsTaken = true;
 		var facts = memos.stageFacts, space = facts.run(database, partName(name, part), pass);
 		slots.resize(count);
+		summaries.resize(count);
 		kind.reserve(count, partKeys == null ? IrSymbol.functionKeysGiven() : 0);
 		for (index in 0...count) {
 			var fn = functions[index],
@@ -124,6 +129,8 @@ class IrFunctionStages {
 			stage.made(slot, fn.version, summaries[index], reader.requests());
 			stage.readersOf(slot, facts);
 		}
+		if (shared)
+			memos.columnsTaken = false;
 		var result = pass.finish(output);
 		// What `finish` added before the encode point (the helpers the rewrites asked for) is last build's when made the same. What
 		// the rewrites made is told apart by identity, not by place: `finish` may drop functions, which moves the rest.

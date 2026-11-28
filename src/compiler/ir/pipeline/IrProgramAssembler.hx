@@ -140,10 +140,10 @@ class IrProgramAssembler {
 					probes.set(global, made(probe, [field],
 						() -> initializerFunction(generator, probe, [assign(classDecl, field)], field.span)));
 				}
-		var initialization = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, program,
-			references),
+		var defined = new IrFunctionIndex("static-initialization", program),
+			initialization = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, defined,
+				references),
 			classes = initialization.order,
-			defined:Map<String, IrFunction> = [for (fn in program) fn.name => fn],
 			inits:Array<IrFunction> = [];
 		for (classDecl in classes) {
 			var init = defined.get(StaticInitializationOrder.initFunction(classDecl.name));

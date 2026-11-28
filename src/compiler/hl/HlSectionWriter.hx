@@ -690,21 +690,26 @@ class HlSectionWriter {
 		}
 		for (global in ownedGlobals)
 			useType(code.globals[global]);
-		var sources = code.sources, found = tables.uses;
+		// The section's uses sized at once: a section of many functions names many thousands.
+		var sources = code.sources, found = tables.uses, count = 0;
+		for (position in owned)
+			count += usesAt(position).length >> 1;
+		found.resize(count);
+		count = 0;
 		for (position in owned) {
 			// A function whose requests have the answers its code names needs no remap.
 			var moves = relocations.moves[position];
 			if (moves)
 				relocations.fill(position, remap);
 			var uses = usesAt(position), at = 0;
-			tables.useStarts.push(found.length);
+			tables.useStarts.push(count);
 			while (at < uses.length) {
 				var kind = uses[at],
 					index = moves ? remap.get(kind == USE_DEBUG_NAME ? USE_STRING : kind, uses[at + 1]) : uses[at + 1];
 				at += 2;
 				if (index < 0)
 					throw new InternalError('HashLink sections: ${code.functionNames[position]} names an entry its requests did not ask for');
-				found.push(index);
+				found[count++] = index;
 				switch kind {
 					case USE_INT: useInt(index);
 					case USE_FLOAT: useFloat(index);

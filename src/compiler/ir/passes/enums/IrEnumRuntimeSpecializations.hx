@@ -36,31 +36,31 @@ class IrEnumRuntimeSpecializations {
 	 */
 	static function mentionsOf(functions:Array<IrFunction>, site:String,
 			stageMemos:Null<compiler.ir.reuse.IrStageMemos>):Array<String> {
-		if (stageMemos == null) {
-			var shared:Array<Bool> = [];
-			return [for (fn in functions) for (name in readMentions(fn, shared)) name];
-		}
+		var marks:Array<Int> = [];
+		if (stageMemos == null)
+			return [for (fn in functions) for (name in readMentions(fn, marks, 1)) name];
 		var summary:compiler.ir.reuse.IrStageMemos.IrContributionSummary<String> =
 			stageMemos.summary("enum-mentions:" + site);
-		return summary.collect(stageMemos.database, functions, fn -> readMentions(fn, null), name -> name,
+		var reads = 0;
+		return summary.collect(stageMemos.database, functions, fn -> readMentions(fn, marks, ++reads), name -> name,
 			stageMemos.checks,
 			"enum specializations");
 	}
 
 	/**
-	 * What `fn` names (`mentionsOf`), in the order it names them. A function past the encode point is read as its body, each type once; one before it, as its objects. With
-	 * `shared`, by type id, a type an earlier body visited is not visited again: what is read is then only what that union
-	 * lacks, for a caller that keeps no contribution.
+	 * What `fn` names (`mentionsOf`), in the order it names them. A function past the encode point is read as its body, each type once; one before it, as its objects.
+	 * `marks` holds, by type id, the number of the read that last visited the type, and `read` is this read's: a type visited
+	 * under the same number is not visited again. A caller that keeps no contribution gives every read one number, and reads only
+	 * what the union so far lacks; one that keeps each function's gives each its own, sharing the marks instead of making them.
 	 */
-	static function readMentions(fn:IrFunction, shared:Null<Array<Bool>>):Array<String> {
+	static function readMentions(fn:IrFunction, marks:Array<Int>, read:Int):Array<String> {
 		var names:Array<String> = [], body = fn.body;
 		if (body != null) {
-			var visited:Array<Bool> = shared ?? [];
 			inline function visitId(id:Int):Void {
-				while (visited.length <= id)
-					visited.push(false);
-				if (!visited[id]) {
-					visited[id] = true;
+				if (id >= marks.length)
+					marks.resize(id + 1 + (id >> 1));
+				if (marks[id] != read) {
+					marks[id] = read;
 					mentions(IrTypeIds.type(id), names);
 				}
 			}
