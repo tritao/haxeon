@@ -1,12 +1,12 @@
 #!/usr/bin/env haxeon
 /**
- * Checks that the compiler in this tree can build itself, to a fixed point, in about a minute and a half:
+ * Checks that the compiler in this tree can build itself, to a fixed point:
  * `haxeon scripts/check-self-hosting.hx`.
  *
- * The seed is built by running the compiler sources under the pinned Haxe interpreter; stage 1 is built by the seed, stage 2
- * by stage 1 and stage 3 by stage 2. Stages 2 and 3 must be identical: stage 1 is not, because the interpreter has none of
- * HashLink's natives and the seed writes its debug sections uncompressed. Unlike `haxeon dev bootstrap --self` this does not use the checked-in
- * compiler, so it also catches a change that the sources can no longer be built with.
+ * The seed is the compiler stock Haxe built from these sources (`haxeon dev tool-path`); stage 1 is built by the seed, stage 2
+ * by stage 1 and stage 3 by stage 2. Stages 2 and 3 must be identical; stage 1 need not be, since stock Haxe compiled the
+ * compiler that built it. Unlike `haxeon dev bootstrap --self` this does not use the checked-in compiler, so it also catches a
+ * change that the sources can no longer be built with.
  */
 import haxe.io.Path;
 import haxeon.Script;
@@ -22,11 +22,9 @@ function main() {
 	];
 	var entryGaps:Map<String, String> = [];
 	var root = Path.directory(Script.directory()),
-		haxe = Path.join([root, ".tools", "haxe", Sys.systemName() == "Windows" ? "haxe.exe" : "haxe"]),
 		hl = Script.vm(),
-		work = Path.join([root, "out", "self-hosting"]);
-	if (!FileSystem.exists(haxe))
-		Script.fail("missing local toolchain; run scripts/bootstrap-tools.sh first");
+		work = Path.join([root, "out", "self-hosting"]),
+		haxeBuiltCompiler = Script.output(Script.haxeon(), ["dev", "tool-path", "compiler.tools.HaxeonCompiler"]);
 	FileSystem.createDirectory(work);
 
 	var sources = Path.join([work, "compiler-sources.txt"]);
@@ -39,11 +37,7 @@ function main() {
 		toolMode, "--entry=compiler.tools.HaxeonCompiler", "--root=src", "--root=stdlib", '--sources-file=$sources'
 	];
 
-	Sys.println("seed: building the compiler with the Haxe interpreter");
-	step(haxe, ["--cwd", root, "common.hxml", "--run", "compiler.tools.HaxeonCompiler",
-		'--output=$work/seed.hl'].concat(arguments),
-		root, '$work/seed.log', "the compiler sources do not build under the Haxe interpreter");
-	var previous = '$work/seed.hl';
+	var previous = haxeBuiltCompiler;
 	for (stage in 1...4) {
 		Sys.println('stage $stage: building the compiler with ${Path.withoutDirectory(previous)}');
 		step(hl, [previous, '--output=$work/stage-$stage.hl'].concat(arguments), root, '$work/stage-$stage.log',
@@ -57,22 +51,27 @@ function main() {
 
 	var entrySources = Path.join([work, "entry-sources.txt"]);
 	sys.io.File.saveContent(entrySources, sourceList(root, ["src", "stdlib", "lib/haxeon-io"]));
-	function buildEntry(entry:String):Int
-		return Script.run(hl, [
-			'$work/stage-1.hl', toolMode, '--entry=$entry', "--root=src", "--root=stdlib", "--root=lib/haxeon-io",
-			'--sources-file=$entrySources', '--output=$work/entry-$entry.hl'
-		], {
-			cwd: root,
-			log: '$work/entry-$entry.log'
-		});
-	for (entry in buildingEntries)
-		if (buildEntry(entry) != 0) {
+	var gapEntries = [for (entry in entryGaps.keys()) entry], entries = buildingEntries.concat(gapEntries);
+	var statuses = Script.runAll([
+		for (entry in entries)
+			{
+				command: hl,
+				arguments: [
+					'$work/stage-1.hl', toolMode, '--entry=$entry', "--root=src", "--root=stdlib",
+					"--root=lib/haxeon-io",
+					'--sources-file=$entrySources', '--output=$work/entry-$entry.hl'
+				],
+				options: {cwd: root, log: '$work/entry-$entry.log'}
+			}
+	], Script.jobs(processorCount()));
+	for (index => entry in buildingEntries)
+		if (statuses[index] != 0) {
 			Sys.stderr().writeString(Script.tail('$work/entry-$entry.log', 5) + "\n");
 			Script.fail('FAIL: the self-hosted compiler does not build $entry');
 		}
-	for (entry => why in entryGaps)
-		if (buildEntry(entry) == 0)
-			Script.fail('FAIL: $entry now builds with the self-hosted compiler ($why); move it to buildingEntries');
+	for (index => entry in gapEntries)
+		if (statuses[buildingEntries.length + index] == 0)
+			Script.fail('FAIL: $entry now builds with the self-hosted compiler (${entryGaps[entry]}); move it to buildingEntries');
 	Sys.println('PASS: the self-hosted compiler builds ${buildingEntries.length} entry points; ${Lambda.count(entryGaps)} have known gaps');
 
 	// A fixed point says the stages agree, not that they are right: a miscompilation the self-hosted compiler repeats when it
@@ -103,9 +102,7 @@ function main() {
 	Sys.println('PASS: the self-hosted compile server passes the program cases (${StringTools.replace(summary, "Test driver: ", "")})');
 
 	// The same equality semantics through a stock-Haxe-built compiler and the self-hosted compiler.
-	Sys.println("equality guard: building the compiler with stock Haxe");
-	var haxeBuiltCompiler = Script.output(Script.haxeon(), ["dev", "tool-path", "compiler.tools.HaxeonCompiler"]),
-		fixture = Path.join([root, "tests", "programs", "equality-self-hosting-guard.hx"]);
+	var fixture = Path.join([root, "tests", "programs", "equality-self-hosting-guard.hx"]);
 	for (compiler in [haxeBuiltCompiler, '$work/stage-1.hl'])
 		for (inlining in ["0", "1"])
 			for (target in ["hl", "wasm32", "wasm-gc"]) {

@@ -299,10 +299,9 @@ example or page compiles cannot break unseen.
 
 The compiler builds itself. Three scripts cover that:
 
-- `haxeon scripts/check-self-hosting.hx` is the check to run after a compiler change, and CI runs it. It builds a seed by running the
-  sources under the pinned Haxe interpreter, then stages 1, 2 and 3, each with the one before, and requires stages 2 and 3 to be
-  identical (the seed writes its debug sections uncompressed: the interpreter has no HashLink natives). It does not use the
-  checked-in compiler.
+- `haxeon scripts/check-self-hosting.hx` is the check to run after a compiler change, and CI runs it. Its seed is the compiler stock Haxe
+  built from the sources (`haxeon dev tool-path`); it builds stages 1, 2 and 3, each with the one before, and requires stages 2 and
+  3 to be identical (stage 1 need not be: stock Haxe compiled the compiler that built it). It does not use the checked-in compiler.
 - `scripts/bootstrap-compiler.sh` refreshes the checked-in compiler, `bootstrap/compiler.hl`. It builds the native runtime,
   builds a seed with the pinned Haxe, then has each stage build the next until two consecutive stages are byte-identical (at most
   eight), and copies the result over `bootstrap/compiler.hl` and `bootstrap/compiler.hl.functions`.
