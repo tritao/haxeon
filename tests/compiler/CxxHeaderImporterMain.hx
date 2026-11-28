@@ -532,9 +532,9 @@ class CxxHeaderImporterMain {
 			&& spanText.indexOf("value: ptr<u8>,\n\t\tvalue__length: usize") >= 0
 			&& spanSource.indexOf("std::span<const std::byte>(arg0, arg0__length)") >= 0
 			&& spanSource.indexOf("std::span<const std::uint8_t>(arg0, arg0__length)") >= 0
-			&& spanProjection.indexOf("public function byteCount(value:haxe.io.Bytes):Int") >= 0
+			&& spanProjection.indexOf("public function byteCount(value:std.bytes.Bytes):Int") >= 0
 			&& spanProjection.indexOf("haxe.Int64.ofInt(value.length)") >= 0
-			&& spanFunctions.indexOf("public static function byteCount(value:haxe.io.Bytes):Int") >= 0,
+			&& spanFunctions.indexOf("public static function byteCount(value:std.bytes.Bytes):Int") >= 0,
 			"read-only byte std::span should lower to a thunked pointer/length ABI and a Bytes projection");
 		if (spanMethodPlan != null)
 			switch spanMethodPlan.arguments {

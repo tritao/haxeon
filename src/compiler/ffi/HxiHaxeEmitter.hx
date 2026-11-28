@@ -692,14 +692,14 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function new(callback:$projectedName) this = haxeon.wasm.Callbacks.create("$callbackEntryModule.__hxi_callback_entry_$name", "${wasmEntry.signature}", callback);\n');
 						output.add('\tpublic inline function close():Bool return haxeon.wasm.Callbacks.close(cast this);\n');
 						output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_from_native(haxeon.wasm.Callbacks.errorKind(cast this));\n');
-						output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return haxeon.wasm.Callbacks.takeError(cast this);\n');
+						output.add('\tpublic inline function takeError():Null<std.bytes.Bytes> return haxeon.wasm.Callbacks.takeError(cast this);\n');
 						output.add('#else\n');
-						output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), $registeredCallback);\n');
+						output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(std.bytes.Bytes.ofString("$signature"), std.bytes.Bytes.ofString("${pointerSizes.join(",")}"), std.bytes.Bytes.ofString("${pointerNullable.join(",")}"), $registeredCallback);\n');
 						output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
 						output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_from_native(${model.name}.__hxi_callback_error_kind_$name(this));\n');
-						output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
+						output.add('\tpublic inline function takeError():Null<std.bytes.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
 						output.add('#end\n');
-						output.add('\tpublic static inline function fromNative(pointer:hl.Abstract<"native_pointer">):${projectedName}Callback return cast ${model.name}.__hxi_callback_from_pointer_$name(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), pointer);\n');
+						output.add('\tpublic static inline function fromNative(pointer:hl.Abstract<"native_pointer">):${projectedName}Callback return cast ${model.name}.__hxi_callback_from_pointer_$name(std.bytes.Bytes.ofString("$signature"), std.bytes.Bytes.ofString("${pointerSizes.join(",")}"), std.bytes.Bytes.ofString("${pointerNullable.join(",")}"), pointer);\n');
 						var callbackNames = [for (parameter in parameters) parameter.name],
 							invokeArguments = callbackNames.length == 0 ? "" : ", " + callbackNames.join(", ");
 						if (returnValue.haxeType == "Void")
@@ -713,8 +713,8 @@ class HxiHaxeEmitter {
 				}
 		if (emitFunctions && callbackDeclarations.length != 0) {
 			output.add('#if wasm\n');
-			output.add('@:hlNative("haxeon_runtime", "structFromLinear") extern function __hxi_struct_from_linear(pointer:Int, size:Int):haxe.io.Bytes;\n');
-			output.add('@:hlNative("haxeon_runtime", "structToLinear") extern function __hxi_struct_to_linear(bytes:haxe.io.Bytes, pointer:Int, size:Int):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "structFromLinear") extern function __hxi_struct_from_linear(pointer:Int, size:Int):std.bytes.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structToLinear") extern function __hxi_struct_to_linear(bytes:std.bytes.Bytes, pointer:Int, size:Int):Void;\n');
 			output.add('@:hlNative("haxeon_runtime", "nativePointerFromAddress") extern function __hxi_native_pointer_from_address(address:Int):hl.Abstract<"native_pointer">;\n');
 			for (callbackDeclaration in callbackDeclarations)
 				switch callbackDeclaration {
@@ -737,11 +737,11 @@ class HxiHaxeEmitter {
 						if (projectedCallback != null) {
 							var projectedName = projectedCallback.name;
 							output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:hl.Abstract<"native_callback">):Bool;\n');
-							output.add('@:hlNative("haxeon_runtime", "native_callback_from_pointer") extern function __hxi_callback_from_pointer_$name(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, pointer:hl.Abstract<"native_pointer">):hl.Abstract<"native_callback">;\n');
+							output.add('@:hlNative("haxeon_runtime", "native_callback_from_pointer") extern function __hxi_callback_from_pointer_$name(signature:std.bytes.Bytes, pointerSizes:std.bytes.Bytes, pointerNullable:std.bytes.Bytes, pointer:hl.Abstract<"native_pointer">):hl.Abstract<"native_callback">;\n');
 							var invokeParameters = [for (index in 0...parameters.length) 'arg$index:Dynamic'];
 							output.add('@:hlNative("haxeon_runtime", "native_callback_invoke_${parameters.length}") extern function __hxi_callback_invoke_$name(callback:hl.Abstract<"native_callback">${invokeParameters.length == 0 ? "" : ", " + invokeParameters.join(", ")}):Dynamic;\n');
 							output.add('@:hlNative("haxeon_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:hl.Abstract<"native_callback">):Int;\n');
-							output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:hl.Abstract<"native_callback">):Null<haxe.io.Bytes>;\n');
+							output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:hl.Abstract<"native_callback">):Null<std.bytes.Bytes>;\n');
 						}
 					case _:
 				}
@@ -883,23 +883,23 @@ class HxiHaxeEmitter {
 						pointerFree = pointerFreeValue(Named(name), declarations, []);
 					emitDocumentation(output, model, name);
 					output.add('/** Managed storage; this struct value may be retained and reused across native calls. Native pointers derived from it are call-scoped. */\n');
-					output.add('abstract $projectedName(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
+					output.add('abstract $projectedName(std.bytes.Bytes) from std.bytes.Bytes to std.bytes.Bytes {\n');
 					output.add('\tpublic static inline function byteSize():Int return $size;\n');
 					if (pointerFree) {
 						// The managed bytes own numeric storage; only pointer-bearing records need extra roots.
-						output.add('\tpublic static inline function __hxi_attach(bytes:haxe.io.Bytes):$projectedName return cast bytes;\n');
+						output.add('\tpublic static inline function __hxi_attach(bytes:std.bytes.Bytes):$projectedName return cast bytes;\n');
 						output.add('\tpublic static function arrayOf(values:Array<$projectedName>):$projectedName { var bytes = ${model.name}.__hxi_struct_alloc(values.length * $size); for (index in 0...values.length) ${model.name}.__hxi_struct_copy(bytes, index * $size, values[index], $size); return cast bytes; }\n');
 					} else {
-						output.add('\tpublic static function __hxi_attach(bytes:haxe.io.Bytes):$projectedName { var roots:Array<haxe.io.Bytes> = []; for (__slot in 0...${rootSlots + 1}) roots.push(null); roots[0] = bytes; return cast ${model.name}.__hxi_struct_with_roots(bytes, roots); }\n');
-						output.add('\tpublic static function arrayOf(values:Array<$projectedName>):$projectedName { var bytes = ${model.name}.__hxi_struct_alloc(values.length * $size); var roots:Array<haxe.io.Bytes> = []; for (__slot in 0...(values.length * $rootSlots + 1)) roots.push(null); roots[0] = bytes; var result:$projectedName = cast ${model.name}.__hxi_struct_with_roots(bytes, roots); for (index in 0...values.length) { ${model.name}.__hxi_struct_copy(bytes, index * $size, values[index], $size); var sourceRoots = ${model.name}.__hxi_struct_get_roots(values[index]); for (__slot in 1...${rootSlots + 1}) { var __retained = sourceRoots[__slot]; if (__retained != null) roots[index * $rootSlots + __slot] = __retained; } } return result; }\n');
+						output.add('\tpublic static function __hxi_attach(bytes:std.bytes.Bytes):$projectedName { var roots:Array<std.bytes.Bytes> = []; for (__slot in 0...${rootSlots + 1}) roots.push(null); roots[0] = bytes; return cast ${model.name}.__hxi_struct_with_roots(bytes, roots); }\n');
+						output.add('\tpublic static function arrayOf(values:Array<$projectedName>):$projectedName { var bytes = ${model.name}.__hxi_struct_alloc(values.length * $size); var roots:Array<std.bytes.Bytes> = []; for (__slot in 0...(values.length * $rootSlots + 1)) roots.push(null); roots[0] = bytes; var result:$projectedName = cast ${model.name}.__hxi_struct_with_roots(bytes, roots); for (index in 0...values.length) { ${model.name}.__hxi_struct_copy(bytes, index * $size, values[index], $size); var sourceRoots = ${model.name}.__hxi_struct_get_roots(values[index]); for (__slot in 1...${rootSlots + 1}) { var __retained = sourceRoots[__slot]; if (__retained != null) roots[index * $rootSlots + __slot] = __retained; } } return result; }\n');
 					}
 					usesNestedStructures = true;
 					var sizeField = Lambda.find(fields, field -> field.structSize),
 						sizeInitialization = sizeField == null ? ""
 							: ' ${model.name}.__hxi_struct_setI32(bytes, ${abi.fieldOffset(name, sizeField.name)}, $size);';
 					var retainStorage = pointerFree ? ' this = bytes;'
-						: ' var roots:Array<haxe.io.Bytes> = []; for (__slot in 0...${rootSlots + 1}) roots.push(null); roots[0] = bytes; this = ${model.name}.__hxi_struct_with_roots(bytes, roots);';
-					output.add('\tpublic inline function new() { var bytes = haxe.io.Bytes.alloc($size); for (index in 0...$size) bytes.set(index, 0);$sizeInitialization$retainStorage }\n');
+						: ' var roots:Array<std.bytes.Bytes> = []; for (__slot in 0...${rootSlots + 1}) roots.push(null); roots[0] = bytes; this = ${model.name}.__hxi_struct_with_roots(bytes, roots);';
+					output.add('\tpublic inline function new() { var bytes = std.bytes.Bytes.alloc($size); for (index in 0...$size) bytes.set(index, 0);$sizeInitialization$retainStorage }\n');
 					for (field in fields) {
 						var projectedField = Lambda.find(projectedStruct.fields,
 							value -> value.nativeName == field.name);
@@ -956,7 +956,7 @@ class HxiHaxeEmitter {
 									rootSlot = Std.int(fieldOffset / pointerSize) + 1;
 								emitDocumentation(output, model, '$name.${field.name}', "\t");
 								output.add('\tpublic function get_$fieldName():Array<String> { var bytes = ${model.name}.__hxi_struct_get_roots(this)[$rootSlot]; var count = $countExpression; var values:Array<String> = []; if (bytes != null) for (index in 0...count) values.push(${model.name}.__hxi_struct_get_utf8(bytes, index * $pointerSize, false)); return values; }\n');
-								output.add('\tpublic function set_$fieldName(values:Array<String>):Void { var storage = ${model.name}.__hxi_struct_alloc(values.length * $pointerSize); var roots:Array<haxe.io.Bytes> = []; for (__slot in 0...values.length + 1) roots.push(null); roots[0] = storage; var bytes:haxe.io.Bytes = ${model.name}.__hxi_struct_with_roots(storage, roots); for (index in 0...values.length) { var __text = ${model.name}.__hxi_struct_utf8_copy(values[index]); ${model.name}.__hxi_struct_set_borrowed_bytes(bytes, index * $pointerSize, __text); roots[index + 1] = __text; } ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = bytes; ${model.name}.__hxi_struct_set_borrowed_bytes(this, $fieldOffset, bytes); ${model.name}.__hxi_struct_set$lengthAccess(this, ${abi.fieldOffset(name, lengthField.name)}, $lengthExpression); }\n');
+								output.add('\tpublic function set_$fieldName(values:Array<String>):Void { var storage = ${model.name}.__hxi_struct_alloc(values.length * $pointerSize); var roots:Array<std.bytes.Bytes> = []; for (__slot in 0...values.length + 1) roots.push(null); roots[0] = storage; var bytes:std.bytes.Bytes = ${model.name}.__hxi_struct_with_roots(storage, roots); for (index in 0...values.length) { var __text = ${model.name}.__hxi_struct_utf8_copy(values[index]); ${model.name}.__hxi_struct_set_borrowed_bytes(bytes, index * $pointerSize, __text); roots[index + 1] = __text; } ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = bytes; ${model.name}.__hxi_struct_set_borrowed_bytes(this, $fieldOffset, bytes); ${model.name}.__hxi_struct_set$lengthAccess(this, ${abi.fieldOffset(name, lengthField.name)}, $lengthExpression); }\n');
 								continue;
 							}
 							usesBorrowedBuffers = true;
@@ -965,8 +965,8 @@ class HxiHaxeEmitter {
 								rootSlot = Std.int(fieldOffset / pointerSize) + 1,
 								lengthExpression = lengthBytes == 8 ? "haxe.Int64.ofInt(value.length)" : "value.length";
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_${fieldName}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_copy_pointer(this, $fieldOffset, ${abi.fieldOffset(name, lengthField.name)}, $lengthBytes);\n');
-							output.add('\tpublic function set_${fieldName}_bytes(value:haxe.io.Bytes):Void { ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = value; ${model.name}.__hxi_struct_set_borrowed_bytes(this, $fieldOffset, value); ${model.name}.__hxi_struct_set$lengthAccess(this, ${abi.fieldOffset(name, lengthField.name)}, $lengthExpression); }\n');
+							output.add('\tpublic inline function get_${fieldName}_bytes():std.bytes.Bytes return ${model.name}.__hxi_struct_copy_pointer(this, $fieldOffset, ${abi.fieldOffset(name, lengthField.name)}, $lengthBytes);\n');
+							output.add('\tpublic function set_${fieldName}_bytes(value:std.bytes.Bytes):Void { ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = value; ${model.name}.__hxi_struct_set_borrowed_bytes(this, $fieldOffset, value); ${model.name}.__hxi_struct_set$lengthAccess(this, ${abi.fieldOffset(name, lengthField.name)}, $lengthExpression); }\n');
 							continue;
 						}
 						var array = arrayType(field.type, declarations);
@@ -982,7 +982,7 @@ class HxiHaxeEmitter {
 									output.add('\tpublic function set_${fieldName}(index:Int, value:${nestedElement.name}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_copy(this, $fieldOffset + index * ${nestedElement.size}, value, ${nestedElement.size}); }\n');
 									continue;
 								}
-								output.add('\tpublic function get_${fieldName}(index:Int):${nestedElement.name} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; var offset = $fieldOffset + index * ${nestedElement.size}; var bytes = ${model.name}.__hxi_struct_slice(this, offset, ${nestedElement.size}); var roots:Array<haxe.io.Bytes> = []; for (__root in 0...${nestedSlots + 1}) roots.push(null); roots[0] = bytes; var sourceRoots = ${model.name}.__hxi_struct_get_roots(this); var result:${nestedElement.name} = cast ${model.name}.__hxi_struct_with_roots(bytes, roots); for (__slot in 1...${nestedSlots + 1}) { var __retained = sourceRoots[$baseSlot + index * $nestedSlots + __slot]; if (__retained != null) roots[__slot] = __retained; } return result; }\n');
+								output.add('\tpublic function get_${fieldName}(index:Int):${nestedElement.name} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; var offset = $fieldOffset + index * ${nestedElement.size}; var bytes = ${model.name}.__hxi_struct_slice(this, offset, ${nestedElement.size}); var roots:Array<std.bytes.Bytes> = []; for (__root in 0...${nestedSlots + 1}) roots.push(null); roots[0] = bytes; var sourceRoots = ${model.name}.__hxi_struct_get_roots(this); var result:${nestedElement.name} = cast ${model.name}.__hxi_struct_with_roots(bytes, roots); for (__slot in 1...${nestedSlots + 1}) { var __retained = sourceRoots[$baseSlot + index * $nestedSlots + __slot]; if (__retained != null) roots[__slot] = __retained; } return result; }\n');
 								output.add('\tpublic function set_${fieldName}(index:Int, value:${nestedElement.name}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; var offset = $fieldOffset + index * ${nestedElement.size}; ${model.name}.__hxi_struct_copy(this, offset, value, ${nestedElement.size}); var destinationRoots = ${model.name}.__hxi_struct_get_roots(this); var sourceRoots = ${model.name}.__hxi_struct_get_roots(value); for (__slot in 1...${nestedSlots + 1}) destinationRoots[$baseSlot + index * $nestedSlots + __slot] = sourceRoots[__slot]; }\n');
 								continue;
 							}
@@ -1017,8 +1017,8 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function set_${fieldName}(index:Int, value:${element.haxeType}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_set${arrayAccess}(this, $fieldOffset + index * $stride, $arrayWrite); }\n');
 							if (element.code == 1 || element.code == 2) {
 								usesNestedStructures = true;
-								output.add('\tpublic inline function get_${fieldName}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_slice(this, $fieldOffset, ${array.length});\n');
-								output.add('\tpublic inline function set_${fieldName}_bytes(value:haxe.io.Bytes):Void ${model.name}.__hxi_struct_copy(this, $fieldOffset, value, ${array.length});\n');
+								output.add('\tpublic inline function get_${fieldName}_bytes():std.bytes.Bytes return ${model.name}.__hxi_struct_slice(this, $fieldOffset, ${array.length});\n');
+								output.add('\tpublic inline function set_${fieldName}_bytes(value:std.bytes.Bytes):Void ${model.name}.__hxi_struct_copy(this, $fieldOffset, value, ${array.length});\n');
 							}
 							continue;
 						}
@@ -1033,7 +1033,7 @@ class HxiHaxeEmitter {
 								output.add('\tpublic inline function set_$fieldName(value:${nested.name}):Void ${model.name}.__hxi_struct_copy(this, $fieldOffset, value, ${nested.size});\n');
 								continue;
 							}
-							output.add('\tpublic function get_$fieldName():${nested.name} { var bytes = ${model.name}.__hxi_struct_slice(this, $fieldOffset, ${nested.size}); var roots:Array<haxe.io.Bytes> = []; for (__root in 0...${nestedSlots + 1}) roots.push(null); roots[0] = bytes; var sourceRoots = ${model.name}.__hxi_struct_get_roots(this); var result:${nested.name} = cast ${model.name}.__hxi_struct_with_roots(bytes, roots); for (__slot in 1...${nestedSlots + 1}) { var __retained = sourceRoots[$baseSlot + __slot]; if (__retained != null) roots[__slot] = __retained; } return result; }\n');
+							output.add('\tpublic function get_$fieldName():${nested.name} { var bytes = ${model.name}.__hxi_struct_slice(this, $fieldOffset, ${nested.size}); var roots:Array<std.bytes.Bytes> = []; for (__root in 0...${nestedSlots + 1}) roots.push(null); roots[0] = bytes; var sourceRoots = ${model.name}.__hxi_struct_get_roots(this); var result:${nested.name} = cast ${model.name}.__hxi_struct_with_roots(bytes, roots); for (__slot in 1...${nestedSlots + 1}) { var __retained = sourceRoots[$baseSlot + __slot]; if (__retained != null) roots[__slot] = __retained; } return result; }\n');
 							output.add('\tpublic function set_$fieldName(value:${nested.name}):Void { ${model.name}.__hxi_struct_copy(this, $fieldOffset, value, ${nested.size}); var destinationRoots = ${model.name}.__hxi_struct_get_roots(this); var sourceRoots = ${model.name}.__hxi_struct_get_roots(value); for (__slot in 1...${nestedSlots + 1}) destinationRoots[$baseSlot + __slot] = sourceRoots[__slot]; }\n');
 							continue;
 						}
@@ -1102,7 +1102,7 @@ class HxiHaxeEmitter {
 						output.add('/** Owned contiguous records. The typed wrapper is erased; storage and bounds logic are shared. */\n@:forward(length) abstract ${projectedName}Buffer(haxe.io.StructBufferStorage) {\n');
 						var bufferSizeOffset = sizeField == null ? -1 : abi.fieldOffset(name, sizeField.name);
 						output.add('\tpublic function new(length:Int) { this = new haxe.io.StructBufferStorage(length, $size, $bufferSizeOffset); }\n');
-						output.add('\tpublic inline function __hxi_bytes():haxe.io.Bytes return this.bytes;\n');
+						output.add('\tpublic inline function __hxi_bytes():std.bytes.Bytes return this.bytes;\n');
 						output.add('\tpublic function copy(index:Int):$projectedName return cast ${model.name}.__hxi_struct_slice(this.bytes, this.offset(index), $size);\n');
 						output.add('\tpublic function set(index:Int, value:$projectedName):Void ${model.name}.__hxi_struct_copy(this.bytes, this.offset(index), value, $size);\n');
 						for (field in fields) {
@@ -1192,39 +1192,39 @@ class HxiHaxeEmitter {
 				case _:
 			}
 		if (emitFunctions && usesNestedStructures) {
-			output.add('@:hlNative("haxeon_runtime", "__bytes_alloc") extern function __hxi_struct_alloc(length:Int):haxe.io.Bytes;\n');
-			output.add('@:hlNative("haxeon_runtime", "structSlice") extern function __hxi_struct_slice(bytes:haxe.io.Bytes, offset:Int, length:Int):haxe.io.Bytes;\n');
-			output.add('@:hlNative("haxeon_runtime", "structCopy") extern function __hxi_struct_copy(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes, length:Int):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "__bytes_alloc") extern function __hxi_struct_alloc(length:Int):std.bytes.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structSlice") extern function __hxi_struct_slice(bytes:std.bytes.Bytes, offset:Int, length:Int):std.bytes.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structCopy") extern function __hxi_struct_copy(bytes:std.bytes.Bytes, offset:Int, value:std.bytes.Bytes, length:Int):Void;\n');
 		}
 		if (emitFunctions && (structureDeclarations.length > 0 || usesUtf8StringCopies)) {
-			output.add('@:hlNative("haxeon_runtime", "structWithRoots") extern function __hxi_struct_with_roots(bytes:haxe.io.Bytes, roots:Array<haxe.io.Bytes>):haxe.io.Bytes;\n');
-			output.add('@:hlNative("haxeon_runtime", "structGetRoots") extern function __hxi_struct_get_roots(bytes:haxe.io.Bytes):Array<haxe.io.Bytes>;\n');
+			output.add('@:hlNative("haxeon_runtime", "structWithRoots") extern function __hxi_struct_with_roots(bytes:std.bytes.Bytes, roots:Array<std.bytes.Bytes>):std.bytes.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structGetRoots") extern function __hxi_struct_get_roots(bytes:std.bytes.Bytes):Array<std.bytes.Bytes>;\n');
 		}
 		if (emitFunctions && usesPointerFields) {
-			output.add('@:hlNative("haxeon_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
-			output.add('@:hlNative("haxeon_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
-			output.add('@:hlNative("haxeon_runtime", "structSetBorrowedBytes") extern function __hxi_struct_set_borrowed_bytes(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:std.bytes.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
+			output.add('@:hlNative("haxeon_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:std.bytes.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "structSetBorrowedBytes") extern function __hxi_struct_set_borrowed_bytes(bytes:std.bytes.Bytes, offset:Int, value:std.bytes.Bytes):Void;\n');
 		}
 		if (emitFunctions && usesOwnedPointerSlots)
-			output.add('@:hlNative("haxeon_runtime", "native_pointer_owned_from_slot") extern function $pointerOwnedSlotHelper(bytes:haxe.io.Bytes, offset:Int, library:String, symbol:String, signature:String, release:String, nullable:Bool):hl.Abstract<"native_pointer">;\n');
+			output.add('@:hlNative("haxeon_runtime", "native_pointer_owned_from_slot") extern function $pointerOwnedSlotHelper(bytes:std.bytes.Bytes, offset:Int, library:String, symbol:String, signature:String, release:String, nullable:Bool):hl.Abstract<"native_pointer">;\n');
 		if (emitFunctions && usesUtf8Fields) {
-			output.add('@:hlNative("haxeon_runtime", "structGetUtf8") extern function __hxi_struct_get_utf8(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):Null<String>;\n');
-			output.add('@:hlNative("haxeon_runtime", "structSetUtf8") extern function __hxi_struct_set_utf8(bytes:haxe.io.Bytes, offset:Int, value:Null<String>, nullable:Bool):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "structGetUtf8") extern function __hxi_struct_get_utf8(bytes:std.bytes.Bytes, offset:Int, nullable:Bool):Null<String>;\n');
+			output.add('@:hlNative("haxeon_runtime", "structSetUtf8") extern function __hxi_struct_set_utf8(bytes:std.bytes.Bytes, offset:Int, value:Null<String>, nullable:Bool):Void;\n');
 		}
 		if (emitFunctions && usesUtf8StringCopies)
-			output.add('@:hlNative("haxeon_runtime", "structUtf8Copy") extern function __hxi_struct_utf8_copy(value:String):haxe.io.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structUtf8Copy") extern function __hxi_struct_utf8_copy(value:String):std.bytes.Bytes;\n');
 		if (emitFunctions && usesBorrowedBuffers)
-			output.add('@:hlNative("haxeon_runtime", "structCopyPointer") extern function __hxi_struct_copy_pointer(bytes:haxe.io.Bytes, pointerOffset:Int, lengthOffset:Int, lengthBytes:Int):haxe.io.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structCopyPointer") extern function __hxi_struct_copy_pointer(bytes:std.bytes.Bytes, pointerOffset:Int, lengthOffset:Int, lengthBytes:Int):std.bytes.Bytes;\n');
 		if (emitFunctions && hasCallbacks) {
-			output.add('@:hlNative("haxeon_runtime", "native_callback_create") extern function __hxi_callback_create(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
+			output.add('@:hlNative("haxeon_runtime", "native_callback_create") extern function __hxi_callback_create(signature:std.bytes.Bytes, pointerSizes:std.bytes.Bytes, pointerNullable:std.bytes.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
 		}
 		if (emitFunctions)
 			for (access in ["I8", "U8", "I16", "U16", "I32", "I64", "F32", "F64"]) {
 				var types = structAccesses.get(access);
 				if (types == null)
 					continue;
-				output.add('@:hlNative("haxeon_runtime", "get$access") extern function __hxi_struct_get$access(bytes:haxe.io.Bytes, offset:Int):${types.type};\n');
-				output.add('@:hlNative("haxeon_runtime", "set$access") extern function __hxi_struct_set$access(bytes:haxe.io.Bytes, offset:Int, value:${types.setterType}):Void;\n');
+				output.add('@:hlNative("haxeon_runtime", "get$access") extern function __hxi_struct_get$access(bytes:std.bytes.Bytes, offset:Int):${types.type};\n');
+				output.add('@:hlNative("haxeon_runtime", "set$access") extern function __hxi_struct_set$access(bytes:std.bytes.Bytes, offset:Int, value:${types.setterType}):Void;\n');
 			}
 		if (emitFunctions)
 			for (projectedFunction in plan.functions) {
@@ -1249,7 +1249,7 @@ class HxiHaxeEmitter {
 						case In | InArray(_) | OutArray(_) | OutBuffer(_): null;
 					};
 					argumentTypes.push(outputValue == null ? projected.haxeType : outputValue.structure
-						? outputValue.haxeType : "haxe.io.Bytes");
+						? outputValue.haxeType : "std.bytes.Bytes");
 					codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
 				}
 				var result = project(fn.result, true, profile);
@@ -1284,7 +1284,7 @@ class HxiHaxeEmitter {
 					resultType = 'runtime.memory.RawPtr<${spanResult.element}>';
 				else if (result.code == 11)
 					if (fn.resultPolicy.length != null)
-						resultType = result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes";
+						resultType = result.nullable ? "Null<std.bytes.Bytes>" : "std.bytes.Bytes";
 					else
 						switch fn.result {
 							case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
@@ -1957,7 +1957,7 @@ class HxiHaxeEmitter {
 				case InArray(_):
 					var bytes = isByteArray(parameter.type);
 					if (bytes) {
-						arguments.push('${parameter.name}:haxe.io.Bytes');
+						arguments.push('${parameter.name}:std.bytes.Bytes');
 						pass(parameter.name);
 					} else {
 						arguments.push('${parameter.name}:${inputArrayType(parameter.type, abi, profile)}');
@@ -1978,7 +1978,7 @@ class HxiHaxeEmitter {
 					if (info.structure)
 						setup.push('var $local:${info.haxeType} = ${(switch (parameter.direction) { case InOut: true; default: false; }) ? parameter.name : "new " + info.haxeType + "()"};');
 					else {
-						setup.push('var $local = haxe.io.Bytes.alloc(${info.size});');
+						setup.push('var $local = std.bytes.Bytes.alloc(${info.size});');
 						if ((switch (parameter.direction) {
 							case InOut: true;
 							default: false;
@@ -2032,7 +2032,7 @@ class HxiHaxeEmitter {
 						element: null
 					});
 					pass('__out_${parameter.name}');
-					values.push({name: parameter.name, type: "haxe.io.Bytes", expression: '__out_${parameter.name}'});
+					values.push({name: parameter.name, type: "std.bytes.Bytes", expression: '__out_${parameter.name}'});
 				case OutArray(count) if (queriedCounts.exists(count)):
 					var strings = utf8ArrayPointer(parameter.type),
 						element = strings ? null : arrayElementInfo(parameter.type, abi, profile);
@@ -2071,7 +2071,7 @@ class HxiHaxeEmitter {
 							case _:
 								setup.push('if ($count < 0 || $count > $maxCount) throw "HXI output array count exceeds the 256 MiB safety limit"; var $capacity = $count;');
 						}
-					setup.push('var $storage:haxe.io.Bytes = __hxi_struct_alloc($capacity == 0 ? 1 : $capacity * ${element.size});');
+					setup.push('var $storage:std.bytes.Bytes = __hxi_struct_alloc($capacity == 0 ? 1 : $capacity * ${element.size});');
 					setup.push('for (__byte in 0...$storage.length) $storage.set(__byte, 0);');
 					pass(storage);
 					var items = '__items_${parameter.name}';
@@ -2114,7 +2114,7 @@ class HxiHaxeEmitter {
 				var slot = '__out_${query.count}',
 					capacity = '__capacity_${query.name}';
 				output.add('\tvar $capacity:Int = ${retry ? query.initialCapacity : 0};\n');
-				output.add('\tvar $slot = haxe.io.Bytes.alloc(4);\n');
+				output.add('\tvar $slot = std.bytes.Bytes.alloc(4);\n');
 				output.add('\t__hxi_struct_setI32($slot, 0, $capacity);\n');
 				if (retry)
 					output.add('\t${queriedStorage(query, true)}\n');
@@ -2198,11 +2198,11 @@ class HxiHaxeEmitter {
 		var storage = '__out_${query.name}',
 			capacity = '__capacity_${query.name}',
 			assign = declare
-				? 'var $storage:${query.buffer ? "haxe.io.Bytes" : "Null<haxe.io.Bytes>"} = ' : '$storage = ';
+				? 'var $storage:${query.buffer ? "std.bytes.Bytes" : "Null<std.bytes.Bytes>"} = ' : '$storage = ';
 		if (query.buffer)
-			return '${assign}haxe.io.Bytes.alloc($capacity);';
+			return '${assign}std.bytes.Bytes.alloc($capacity);';
 		var allocate = query.strings
-			? 'haxe.io.Bytes.alloc($capacity * ${query.stride})' : '__hxi_struct_alloc($capacity * ${query.stride})';
+			? 'std.bytes.Bytes.alloc($capacity * ${query.stride})' : '__hxi_struct_alloc($capacity * ${query.stride})';
 		return '$assign$capacity == 0 ? null : $allocate; if ($storage != null) for (__byte in 0...$storage.length) $storage.set(__byte, 0);';
 	}
 
@@ -2270,10 +2270,10 @@ class HxiHaxeEmitter {
 					}
 				case InArray(_):
 					if (index == byteIndex) {
-						arguments.push('${parameter.name}:haxe.io.Bytes');
+						arguments.push('${parameter.name}:std.bytes.Bytes');
 						arguments.push('$offsetName:Int');
 						arguments.push('$lengthName:Int');
-						callArguments.push('haxe.io.Bytes.view(${parameter.name}, $offsetName, $lengthName)');
+						callArguments.push('std.bytes.Bytes.view(${parameter.name}, $offsetName, $lengthName)');
 					} else {
 						arguments.push('${parameter.name}:${inputArrayType(parameter.type, abi, profile)}');
 						callArguments.push(parameter.name);
@@ -2363,7 +2363,7 @@ class HxiHaxeEmitter {
 	static function inputArrayType(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi,
 			profile:HxiProjectionProfile):String {
 		if (isByteArray(type))
-			return "haxe.io.Bytes";
+			return "std.bytes.Bytes";
 		if (utf8ArrayPointer(type))
 			return "Array<String>";
 		return 'Array<${arrayElementInfo(type, abi, profile).haxeType}>';
@@ -2379,7 +2379,7 @@ class HxiHaxeEmitter {
 		if (utf8ArrayPointer(parameter.type)) {
 			var pointerSize = Std.int(abi.pointerBits / 8);
 			return [
-				'if ($name.length > ${maxArrayCount(pointerSize)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_storage_$name = __hxi_struct_alloc($name.length * $pointerSize); var __array_roots_$name:Array<haxe.io.Bytes> = []; for (__root in 0...($name.length + 1)) __array_roots_$name.push(null); __array_roots_$name[0] = __array_storage_$name; var __array_$name:haxe.io.Bytes = __hxi_struct_with_roots(__array_storage_$name, __array_roots_$name); for (__index in 0...$name.length) { var __text = __hxi_struct_utf8_copy($name[__index]); __array_roots_$name[__index + 1] = __text; __hxi_struct_set_borrowed_bytes(__array_$name, __index * $pointerSize, __text); }'
+				'if ($name.length > ${maxArrayCount(pointerSize)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_storage_$name = __hxi_struct_alloc($name.length * $pointerSize); var __array_roots_$name:Array<std.bytes.Bytes> = []; for (__root in 0...($name.length + 1)) __array_roots_$name.push(null); __array_roots_$name[0] = __array_storage_$name; var __array_$name:std.bytes.Bytes = __hxi_struct_with_roots(__array_storage_$name, __array_roots_$name); for (__index in 0...$name.length) { var __text = __hxi_struct_utf8_copy($name[__index]); __array_roots_$name[__index + 1] = __text; __hxi_struct_set_borrowed_bytes(__array_$name, __index * $pointerSize, __text); }'
 			];
 		}
 		var element = arrayElementInfo(parameter.type, abi, profile);
@@ -2769,7 +2769,7 @@ class HxiHaxeEmitter {
 					profile) : structure != null ? projectedTypeReferenceName(nullable
 					? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
 					profile),
-					profile) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
+					profile) : (nullable ? "Null<std.bytes.Bytes>" : "std.bytes.Bytes"),
 				code: 11,
 				nativePointer: opaquePointee != null,
 				nullable: nullable
@@ -2838,7 +2838,7 @@ class HxiHaxeEmitter {
 							return null;
 						rawParameters.push('$argument:${scalar.type}');
 						letters.push(scalar.letter);
-						statements.push('var __record$index = haxe.io.Bytes.alloc($size); __record$index.${scalar.set}(0, $argument);');
+						statements.push('var __record$index = std.bytes.Bytes.alloc($size); __record$index.${scalar.set}(0, $argument);');
 						values.push('${recordName(structure)}.__hxi_attach(__record$index)');
 					}
 				case Utf8Value(_) | CallbackValue(_, _, _, _):
@@ -2879,7 +2879,7 @@ class HxiHaxeEmitter {
 						return null;
 					resultLetter = scalar.letter;
 					returnType = scalar.type;
-					body = 'var __bytes:haxe.io.Bytes = cast $call; return __bytes.${scalar.get}(0);';
+					body = 'var __bytes:std.bytes.Bytes = cast $call; return __bytes.${scalar.get}(0);';
 					fallback = ' return ${scalar.zero};';
 				}
 			case PointerValue(_, _, _, _) | Utf8Value(_) | CallbackValue(_, _, _, _):

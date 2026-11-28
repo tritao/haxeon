@@ -275,6 +275,10 @@ class IteratorTypeDescriptorMain {
 		for (inlineEnabled in [false, true]) for (target in [Wasm32, WasmGc]) {
 			var runtime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 			runtime.addStandardLibrarySourceRoot("stdlib");
+			// Typed for the target it is built for, as its standard library differs there (haxe.CallStack's natives).
+			var name = target == WasmGc ? "wasm-gc" : "wasm32";
+			runtime.configure("bytes-census:" + name, "bytes-census:" + name,
+				compiler.tools.CompilerDriver.targetDefines(name));
 			runtime.update("Main.hx", source);
 			// The census functions the module exports are what nothing in the program calls.
 			runtime.setExportedFunctions([

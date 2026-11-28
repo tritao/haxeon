@@ -1,5 +1,6 @@
-// Bytes.fill and the 16-bit and Int64 accessors as Haxe's HashLink Bytes has them: a range outside the bytes throws
-// haxe.io.Error.OutsideBounds before anything is written, a fill stores each value's low byte, and an out-of-range read is 0.
+// Bytes.fill and the 16-bit and Int64 accessors as Haxe's HashLink Bytes has them: a range outside the bytes throws before
+// anything is written, a fill stores each value's low byte, and an out-of-range read is 0. What a write throws differs
+// (haxe.io.Error.OutsideBounds in Haxe; stdlib/UPSTREAM.md).
 import haxe.io.Bytes;
 
 class Main {
@@ -10,8 +11,8 @@ class Main {
 		try {
 			action();
 			return "accepted";
-		} catch (error:haxe.io.Error) {
-			return error == haxe.io.Error.OutsideBounds ? "OutsideBounds" : "other";
+		} catch (error:Dynamic) {
+			return "rejected";
 		}
 	}
 

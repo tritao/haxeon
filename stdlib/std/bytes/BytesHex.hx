@@ -1,7 +1,7 @@
-package haxe.io;
+package std.bytes;
 
 /**
- * `bytes.toHex()`: the bytes as lowercase hexadecimal, as Haxe's Bytes.toHex. Written in Haxe once for every target; the
+ * `bytes.toHex()`: the bytes as lowercase hexadecimal. Written in Haxe once for every target; the
  * compiler maps the method to this function (`PlatformAbi`) and loads this module only where a program calls it, so the
  * Bytes module every program loads stays free of what this one uses.
  */

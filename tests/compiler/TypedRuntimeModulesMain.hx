@@ -6,7 +6,7 @@ import compiler.runtime.CompilerIntrinsics;
  * (`RuntimeType.programModules`, `RuntimeType.companionModules`), so the frontend runs once and the program is the one a compile
  * that imports them makes:
  * - arithmetic on a Dynamic calls `haxeon.DynamicOps`, a field of a Dynamic `Reflect`;
- * - `Bytes.toHex` calls `haxe.io.BytesHex`, which comes with `haxe.io.Bytes`;
+ * - `Bytes.toHex` calls `std.bytes.BytesHex`, which comes with `std.bytes.Bytes`;
  * - a specialized map, met in a field type or only inside a body, needs the map owner's module, which also changes how the
  *   map is represented; without it (no stdlib root) the compiler stops and names the module.
  */
@@ -32,7 +32,7 @@ class TypedRuntimeModulesMain {
 		expectSameProgram(compile(field), compile("import Reflect; " + field), "A field of a Dynamic");
 
 		var hex = "function main():Int return haxe.io.Bytes.ofString(\"*\").toHex() == \"2a\" ? 42 : 1;";
-		expectSameProgram(compile(hex), compile("import haxe.io.BytesHex; " + hex), "Bytes.toHex");
+		expectSameProgram(compile(hex), compile("import std.bytes.BytesHex; " + hex), "Bytes.toHex");
 
 		var fieldSource = value
 			+ "class Holder { public var entries:Map<Int, Value>; public function new() {} } "

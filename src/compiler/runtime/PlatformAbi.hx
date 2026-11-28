@@ -97,7 +97,7 @@ class PlatformAbi {
 			default: null;
 		};
 
-	/** The methods of `haxe.io.Bytes` the platform implements, by name. */
+	/** The methods of `std.bytes.Bytes` the platform implements, by name. */
 	static final bytesMethods:Map<String, PlatformMethod> = [
 		"getData" => platformMethod([], THlBytes, "__bytes_get_data"),
 		"get" => platformMethod([TInt], TInt, "__bytes_get"),
@@ -111,23 +111,22 @@ class PlatformAbi {
 		"blit" => platformMethod([TInt, TBytes, TInt, TInt], TVoid, "__bytes_try_blit"),
 		"compare" => platformMethod([TBytes], TInt, "__bytes_compare"),
 		"toString" => platformMethod([], TString, "__bytes_to_string"),
-		// Haxe source in the stdlib (haxe/io/BytesBounds.hx), the same on every target.
+		// Haxe source in the stdlib (std/bytes/BytesBounds.hx), the same on every target.
 		"sub" => platformMethod([TInt, TInt], TBytes, StdlibNames.BYTES_SUB),
 		"getString" => platformMethod([TInt, TInt], TString, StdlibNames.BYTES_GET_STRING),
-		"readString" => platformMethod([TInt, TInt], TString, StdlibNames.BYTES_READ_STRING),
-		// Haxe source in the stdlib (haxe/io/BytesAccess.hx), the same on every target.
+		// Haxe source in the stdlib (std/bytes/BytesAccess.hx), the same on every target.
 		"fill" => platformMethod([TInt, TInt, TInt], TVoid, StdlibNames.BYTES_FILL),
 		"getUInt16" => platformMethod([TInt], TInt, StdlibNames.BYTES_GET_UINT16),
 		"setUInt16" => platformMethod([TInt, TInt], TVoid, StdlibNames.BYTES_SET_UINT16),
 		"getInt64" => platformMethod([TInt], TInt64, StdlibNames.BYTES_GET_INT64),
 		"setInt64" => platformMethod([TInt, TInt64], TVoid, StdlibNames.BYTES_SET_INT64),
-		// Haxe source in the stdlib (haxe/io/BytesHex.hx), the same on every target.
+		// Haxe source in the stdlib (std/bytes/BytesHex.hx), the same on every target.
 		"toHex" => platformMethod([], TString, StdlibNames.BYTES_TO_HEX)
 	];
 
 	/**
-	 * Whether a platform method's native returns whether its range was inside the bytes, where Haxe throws
-	 * `haxe.io.Error.OutsideBounds` when it was not: the call is typed as the method's result, after that check.
+	 * Whether a platform method's native returns whether its range was inside the bytes, where the method throws
+	 * (`BYTES_OUTSIDE_BOUNDS`) when it was not: the call is typed as the method's result, after that check.
 	 */
 	public static function signalsOutsideBounds(nativeName:String):Bool
 		return switch nativeName {

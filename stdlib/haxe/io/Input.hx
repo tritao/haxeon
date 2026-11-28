@@ -145,6 +145,6 @@ class Input {
 	public function readString(len:Int, ?encoding:Encoding):String {
 		var bytes = Bytes.alloc(len);
 		readFullBytes(bytes, 0, len);
-		return bytes.getString(0, len, encoding);
+		return bytes.getString(0, len, Encoding.stdEncoding(encoding));
 	}
 }

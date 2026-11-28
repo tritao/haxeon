@@ -396,7 +396,7 @@ class CxxProjection {
 				throw new InternalError('CXX201 unsupported Haxe std::string_view projection for $owner parameter ${index + 1}');
 			arguments.push('$argumentName:String');
 			var bytesName = '__cxx_${argumentName}_bytes_$index';
-			setup.push('var $bytesName = haxe.io.Bytes.ofString($argumentName);');
+			setup.push('var $bytesName = std.bytes.Bytes.ofString($argumentName);');
 			calls.push(argumentName);
 			calls.push(lengthValue.haxeType == "haxe.Int64"
 				? 'haxe.Int64.ofInt($bytesName.length)' : '$bytesName.length');
@@ -406,12 +406,12 @@ class CxxProjection {
 			var spanValue = HxiHaxeEmitter.project(nativeArguments[cursor], false, profile),
 				lengthValue = HxiHaxeEmitter.project(nativeArguments[cursor + 1], false, profile);
 			if (spanValue == null
-				|| spanValue.haxeType != "haxe.io.Bytes"
+				|| spanValue.haxeType != "std.bytes.Bytes"
 				|| lengthValue == null
 				|| lengthValue.haxeType != "Int"
 				&& lengthValue.haxeType != "haxe.Int64")
 				throw new InternalError('CXX201 unsupported Haxe std::span projection for $owner parameter ${index + 1}');
-			arguments.push('$argumentName:haxe.io.Bytes');
+			arguments.push('$argumentName:std.bytes.Bytes');
 			calls.push(argumentName);
 			calls.push(lengthValue.haxeType == "haxe.Int64"
 				? 'haxe.Int64.ofInt($argumentName.length)' : '$argumentName.length');

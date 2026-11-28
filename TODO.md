@@ -201,6 +201,13 @@ regular recursive generic enums are in the next section.
   Items 4 and 5 (nested generic calls and structured lambda names, then the
   pass replacing paths 6 to 8) have the naming function (`GeneratedNames`,
   `63914ff7d`) and wait for the boundary contract with haxeon-e4.
+- **A Bytes read outside the bytes should throw, as a write does.** `std.bytes` moved with
+  Haxe's HashLink reads kept: `get`, `getUInt16`, `getInt32`, `getInt64`, `getFloat` and
+  `getDouble` answer 0 outside the bytes, where every write, `sub` and `getString` throw.
+  The reads are runtime natives and inlined fast paths on each backend (HL, HL/C, the AOT
+  C backend, wasm32, Wasm GC), so making them throw is a change to each, measured on the
+  byte-heavy perf inputs; `tests/programs/bytes-bounds.hx` and the differential pair then
+  change with it.
 - **A rethrown exception is reported where it was rethrown.** Catching a value
   as `haxe.Exception` and throwing it again keeps the original frames in
   `error.stack`, but an uncaught one is printed with the stack of the rethrow,

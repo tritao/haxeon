@@ -75,7 +75,7 @@ class BytesInput extends Input {
 			throw Error.OutsideBounds;
 		if (len < count)
 			throw new Eof();
-		var text = b.getString(pos, count, encoding);
+		var text = b.getString(pos, count, Encoding.stdEncoding(encoding));
 		pos += count;
 		len -= count;
 		return text;

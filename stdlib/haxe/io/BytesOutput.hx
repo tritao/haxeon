@@ -29,7 +29,7 @@ class BytesOutput extends Output {
 				else b.addInt32(x);
 
 	override public function writeString(s:String, ?encoding:Encoding):Void
-		b.addString(s, encoding);
+		b.addString(s, Encoding.stdEncoding(encoding));
 
 	/** The bytes written, without copying them. */
 	public function getBytes():Bytes

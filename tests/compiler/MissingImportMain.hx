@@ -28,7 +28,7 @@ class MissingImportMain {
 				kind: UnresolvedNameKind.WantedVariable,
 				name: "Bytes",
 				message: 'Unknown variable "Bytes"',
-				imports: ["haxe.io.Bytes", "hl.Bytes"]
+				imports: ["haxe.io.Bytes", "hl.Bytes", "std.bytes.Bytes"]
 			},
 			{
 				body: "var value:NoSuchType;",

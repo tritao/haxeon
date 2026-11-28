@@ -104,7 +104,7 @@ class CHeaderEmitter {
 			case F64: "Float";
 			case Bytes: "Bytes";
 			case RawPtr: "RawPtr";
-			case ManagedBytes: "haxe.io.Bytes";
+			case ManagedBytes: "std.bytes.Bytes";
 			case Dyn, Nullable(_): "Dynamic";
 			case TypeRef: "Type";
 			case Array(element): 'Array<${typeName(element)}>';

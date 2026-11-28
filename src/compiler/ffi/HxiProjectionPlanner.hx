@@ -141,7 +141,7 @@ class HxiProjectionPlanner {
 				case OutputBuffer(_):
 					outputs.push({
 						parameter: parameter.name,
-						type: "haxe.io.Bytes",
+						type: "std.bytes.Bytes",
 						owned: false,
 						destroy: null,
 						semantics: parameter.kind
@@ -245,7 +245,7 @@ class HxiProjectionPlanner {
 						nullable ? 'Null<$name>' : name;
 					case _: projectedAbiType(value, profile);
 				}
-			case ManagedBytes(_, _, _, _): "haxe.io.Bytes";
+			case ManagedBytes(_, _, _, _): "std.bytes.Bytes";
 			case NativeSpan(_, element): 'runtime.memory.NativeSpan<${HxiHaxeEmitter.spanElementType(element, true)}>';
 			case BorrowedPointer(value) | PlainValue(value): projectedAbiType(value, profile);
 			case BorrowedHandle(name): HxiHaxeEmitter.projectedTypeName(name, profile);

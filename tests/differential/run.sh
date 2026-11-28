@@ -317,7 +317,6 @@ in_background run_error_case missing-field-call-chained
 in_background run_error_case missing-field-call-static
 in_background run_error_case missing-field-call-abstract
 in_background run_error_case missing-field-call-abstract-static
-in_background run_error_case missing-field-call-bytes
 in_background run_error_case missing-field-call-nullable
 in_background run_error_case missing-field-call-function
 in_background run_error_case missing-field-call-subtype

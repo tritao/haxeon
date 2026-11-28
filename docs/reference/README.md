@@ -20,6 +20,7 @@ Look up Haxeon language features, commands, libraries and target behavior.
 
 ## Libraries
 
+- [Bytes](BYTES.md) explains how to read and write bytes in place and build them with `std.bytes`.
 - [Files and directories](FILES.md) explains how to read, write and remove files with `std.fs`.
 - [Processes](PROCESSES.md) explains how to run programs and read what they write with `std.process`.
 - [Threads](THREADS.md) explains how to run work on threads and share state between them with `std.thread`.

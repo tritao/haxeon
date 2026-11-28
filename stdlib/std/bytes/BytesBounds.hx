@@ -1,4 +1,6 @@
-package haxe.io;
+package std.bytes;
+
+import std.bytes.Encoding;
 
 @:hlNative("haxeon_runtime", "__bytes_sub")
 internal extern function copyRange(bytes:Bytes, pos:Int, len:Int):Bytes;
@@ -7,25 +9,25 @@ internal extern function copyRange(bytes:Bytes, pos:Int, len:Int):Bytes;
 internal extern function decodeRange(bytes:Bytes, pos:Int, len:Int):String;
 
 /**
- * The Bytes methods that check a range and throw Haxe's `haxe.io.Error.OutsideBounds` outside it, written in Haxe once for every
- * target: `sub`, `getString` (and `readString`), and the throw of the writers the runtime checks. The compiler maps each method to its function here
- * (`PlatformAbi`) and loads this module with `haxe.io.Bytes`, as almost every use of Bytes calls one.
+ * The Bytes methods that check a range, written in Haxe once for every target: `sub`, `getString`, and the throw of the
+ * writers the runtime checks. The compiler maps each method to its function here (`PlatformAbi`) and loads this module with
+ * `std.bytes.Bytes`, as almost every use of Bytes calls one.
  */
 function sub(bytes:Bytes, pos:Int, len:Int):Bytes {
 	// `len > length - pos` rather than `pos + len > length`, which overflows for a large len.
 	if (pos < 0 || len < 0 || len > bytes.length - pos)
-		throw Error.OutsideBounds;
+		outsideBounds();
 	return copyRange(bytes, pos, len);
 }
 
 /**
- * The string `len` bytes at `pos` encode, as Haxe's `getString` on HashLink: UTF-8 by default, and with `RawNative` UTF-16 code
- * units, little-endian, up to the first zero unit (an odd last byte is a unit's low byte).
+ * The string `len` bytes at `pos` encode in `encoding`: UTF-8 by default, or UTF-16 code units, little-endian, up to the
+ * first zero unit (an odd last byte is a unit's low byte).
  */
-function getString(bytes:Bytes, pos:Int, len:Int, ?encoding:Encoding):String {
+function getString(bytes:Bytes, pos:Int, len:Int, encoding:Encoding = Utf8):String {
 	if (pos < 0 || len < 0 || len > bytes.length - pos)
-		throw Error.OutsideBounds;
-	if (encoding != RawNative)
+		outsideBounds();
+	if (encoding == Utf8)
 		return decodeRange(bytes, pos, len);
 	// Transcoded to UTF-8, which every target decodes the same way; a unit takes at most three bytes, a pair four.
 	var utf8 = Bytes.alloc(((len + 1) >> 1) * 3), size = 0, index = 0;
@@ -61,10 +63,9 @@ function getString(bytes:Bytes, pos:Int, len:Int, ?encoding:Encoding):String {
 internal function codeUnit(bytes:Bytes, pos:Int, len:Int, index:Int):Int
 	return bytes.get(pos + index) | (index + 1 < len ? bytes.get(pos + index + 1) << 8 : 0);
 
-@:deprecated("readString is deprecated, use getString instead")
-internal function readString(bytes:Bytes, pos:Int, len:Int):String
-	return getString(bytes, pos, len);
-
-/** What the writers the runtime checks (`set`, `setInt32`, `setFloat`, `setDouble`, `blit`) throw outside the bytes. */
+/**
+ * What a method throws for a position or range outside the bytes, a misuse: the writers the runtime checks (`set`,
+ * `setInt32`, `setFloat`, `setDouble`, `blit`) and the methods here.
+ */
 function outsideBounds():Void
-	throw Error.OutsideBounds;
+	throw new haxe.Exception("std.bytes.Bytes: the position or range is outside the bytes");

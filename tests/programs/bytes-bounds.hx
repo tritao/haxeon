@@ -1,13 +1,13 @@
-// Bytes outside its range, as Haxe's HashLink Bytes has it on every target: getters read 0, and writers, `sub` and `getString`
-// throw haxe.io.Error.OutsideBounds, catchable, without changing the bytes.
+// Bytes outside its range, on every target: getters read 0, and writers, `sub` and `getString` throw, catchable, without
+// changing the bytes.
 import haxe.io.Bytes;
 
 function rejects(action:() -> Void):Bool {
 	try {
 		action();
 		return false;
-	} catch (error:haxe.io.Error) {
-		return error == haxe.io.Error.OutsideBounds;
+	} catch (error:haxe.Exception) {
+		return error.message == "std.bytes.Bytes: the position or range is outside the bytes";
 	}
 }
 

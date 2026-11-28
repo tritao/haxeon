@@ -77,24 +77,23 @@ class StdlibNames {
 	public static inline final INT64_USHR = "haxe.Int64.ushr";
 	public static inline final INT64_COMPARE = "haxe.Int64.compare";
 
-	/** The module declaring `haxe.io.Bytes`, whose methods the platform implements. */
-	public static inline final BYTES = "haxe.io.Bytes";
+	/** The module declaring `std.bytes.Bytes`, whose methods the platform implements (`haxe.io.Bytes` names it too). */
+	public static inline final BYTES = "std.bytes.Bytes";
 
-	public static inline final BYTES_ALLOC = "haxe.io.Bytes.alloc";
-	public static inline final BYTES_SUB = "haxe.io.BytesBounds.sub";
-	public static inline final BYTES_GET_STRING = "haxe.io.BytesBounds.getString";
-	public static inline final BYTES_READ_STRING = "haxe.io.BytesBounds.readString";
+	public static inline final BYTES_ALLOC = "std.bytes.Bytes.alloc";
+	public static inline final BYTES_SUB = "std.bytes.BytesBounds.sub";
+	public static inline final BYTES_GET_STRING = "std.bytes.BytesBounds.getString";
 
-	/** The function that throws Haxe's `haxe.io.Error.OutsideBounds`. */
-	public static inline final BYTES_OUTSIDE_BOUNDS = "haxe.io.BytesBounds.outsideBounds";
+	/** The function that throws for a position or range outside the bytes. */
+	public static inline final BYTES_OUTSIDE_BOUNDS = "std.bytes.BytesBounds.outsideBounds";
 
-	public static inline final BYTES_FILL = "haxe.io.BytesAccess.fill";
-	public static inline final BYTES_GET_UINT16 = "haxe.io.BytesAccess.getUInt16";
-	public static inline final BYTES_SET_UINT16 = "haxe.io.BytesAccess.setUInt16";
-	public static inline final BYTES_GET_INT64 = "haxe.io.BytesAccess.getInt64";
-	public static inline final BYTES_SET_INT64 = "haxe.io.BytesAccess.setInt64";
-	public static inline final BYTES_TO_HEX = "haxe.io.BytesHex.toHex";
-	public static inline final ENCODING = "haxe.io.Encoding";
+	public static inline final BYTES_FILL = "std.bytes.BytesAccess.fill";
+	public static inline final BYTES_GET_UINT16 = "std.bytes.BytesAccess.getUInt16";
+	public static inline final BYTES_SET_UINT16 = "std.bytes.BytesAccess.setUInt16";
+	public static inline final BYTES_GET_INT64 = "std.bytes.BytesAccess.getInt64";
+	public static inline final BYTES_SET_INT64 = "std.bytes.BytesAccess.setInt64";
+	public static inline final BYTES_TO_HEX = "std.bytes.BytesHex.toHex";
+	public static inline final ENCODING = "std.bytes.Encoding";
 	public static inline final JSON = "haxe.Json";
 	public static inline final FILE = "sys.io.File";
 	public static inline final REST = "haxe.Rest";

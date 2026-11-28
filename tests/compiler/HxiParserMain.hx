@@ -229,7 +229,7 @@ class HxiParserMain {
 			genericNatives = HxiProjection.cNatives(genericModel, null, null, null, genericProfile);
 		expect(genericSource.indexOf("enum Color:Int {") >= 0
 			&& genericSource.indexOf("abstract Handle(Int)") >= 0
-			&& genericSource.indexOf("abstract Point(haxe.io.Bytes)") >= 0
+			&& genericSource.indexOf("abstract Point(std.bytes.Bytes)") >= 0
 			&& genericSource.indexOf("get_shade():Color") >= 0
 			&& genericSource.indexOf("extern function validate(arg0:Point):Handle") >= 0
 			&& genericSource.indexOf("public static inline final version:Int = 1") >= 0
@@ -493,7 +493,7 @@ class HxiParserMain {
 		}
 		var pointerOutputSource = HxiProjection.source(pointerOutputs),
 			pointerOutputNative = HxiProjection.cNatives(pointerOutputs)[0];
-		expect(pointerOutputSource.indexOf("function new() { var bytes = haxe.io.Bytes.alloc(") >= 0
+		expect(pointerOutputSource.indexOf("function new() { var bytes = std.bytes.Bytes.alloc(") >= 0
 			&& pointerOutputSource.indexOf("bytes.set(index, 0); this = bytes;") >= 0
 			&& pointerOutputSource.indexOf("function create_owned():Null<OwnedContext>") >= 0
 			&& pointerOutputSource.indexOf("function create_borrowed():Null<Context>") >= 0
@@ -525,7 +525,7 @@ class HxiParserMain {
 		var bufferSource = HxiProjection.source(buffers);
 		expect(bufferSource.indexOf("function read(seed:Int):ReadOutResult") >= 0
 			&& bufferSource.indexOf("__hxi_raw_read(seed, null, __out_size)") >= 0
-			&& bufferSource.indexOf("haxe.io.Bytes.alloc(__capacity_data)") >= 0,
+			&& bufferSource.indexOf("std.bytes.Bytes.alloc(__capacity_data)") >= 0,
 			"output buffers should project a bounded size-query and fill wrapper");
 		var bufferNatives = HxiProjection.cNatives(buffers),
 			bufferProgram = compiler.Frontend.compile("function main():Int return 0;");
@@ -590,7 +590,7 @@ class HxiParserMain {
 			var voidBytes = parseValidated("void-input-bytes.hxi",
 				'interface void_bytes @target("$target") @library("void_bytes") { extern fn send(data: ptr<const<void>> @in_array("size"), size: u64) -> i32; }');
 			var voidByteSource = HxiProjection.source(voidBytes);
-			expect(voidByteSource.indexOf("function send(data:haxe.io.Bytes)") >= 0
+			expect(voidByteSource.indexOf("function send(data:std.bytes.Bytes)") >= 0
 				&& voidByteSource.indexOf("haxe.Int64.ofInt(data.length)") >= 0,
 				"counted void pointers should project as borrowed byte buffers with inferred counts");
 		}
@@ -628,7 +628,7 @@ class HxiParserMain {
 			mixedSource = HxiProjection.source(mixed);
 		expect(mixedSource.indexOf("function read(n:Int):ReadOutResult") >= 0
 			&& mixedSource.indexOf("public var points:Array<point>;") >= 0
-			&& mixedSource.indexOf("public var bytes:haxe.io.Bytes;") >= 0
+			&& mixedSource.indexOf("public var bytes:std.bytes.Bytes;") >= 0
 			&& mixedSource.indexOf("public var total:Int;") >= 0
 			&& mixedSource.indexOf("public var last:point;") >= 0
 			&& mixedSource.indexOf("__hxi_raw_read(n, null, __out_pointCount, null, __out_byteCount, __out_total, __out_last);")
@@ -684,7 +684,7 @@ class HxiParserMain {
 		var callbackSource = HxiProjection.source(callbacks);
 		expect(callbackSource.indexOf("typedef Binary = (left:Int, right:Int)->Int") >= 0
 			&& callbackSource.indexOf("abstract BinaryCallback") >= 0
-			&& callbackSource.indexOf("function takeError():Null<haxe.io.Bytes>") >= 0
+			&& callbackSource.indexOf("function takeError():Null<std.bytes.Bytes>") >= 0
 			&& callbackSource.indexOf("extern function apply(arg0:BinaryCallback") >= 0,
 			"callbacks should project typed functions behind explicitly owned native handles");
 		var nullableCallbacks = parseValidated("nullable-callbacks.hxi",
@@ -707,7 +707,7 @@ class HxiParserMain {
 		var conventions = parseValidated("conventions.hxi",
 			'interface conventions @target("i686-pc-windows-msvc") @library("calls") { callback Hook = fn(value: i32) -> i32 @callconv("stdcall"); extern fn invoke(hook: Hook) -> i32 @callconv("system"); }');
 		var conventionSource = HxiProjection.source(conventions);
-		expect(conventionSource.indexOf('haxe.io.Bytes.ofString("5>5@stdcall")') >= 0
+		expect(conventionSource.indexOf('std.bytes.Bytes.ofString("5>5@stdcall")') >= 0
 			&& conventionSource.indexOf('@:cNative("calls", "invoke", "11>5@system")') >= 0,
 			"calling conventions should be part of callback and function ABI identity");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn value() -> i32 @callconv("stdcall"); }',
@@ -829,7 +829,7 @@ class HxiParserMain {
 		abiBooleanCompiler.addFfiInterface("abi_bool.hxi",
 			'interface abi_bool @target("x86_64-linux-gnu") @library("abi_bool") { type nk_bool = bool32; struct options { struct_size: u32 @struct_size; enabled: nk_bool; } extern fn get_enabled() -> nk_bool; extern fn set_enabled(value: nk_bool) -> i32; }');
 		abiBooleanCompiler.update("AbiBoolMain.hx",
-			"import abi_bool; function main():Int { var value:options = cast haxe.io.Bytes.alloc(8); value.enabled = true; return value.enabled ? 1 : 0; }");
+			"import abi_bool; function main():Int { var value:options = cast std.bytes.Bytes.alloc(8); value.enabled = true; return value.enabled ? 1 : 0; }");
 		abiBooleanCompiler.compile("AbiBoolMain");
 		var opaqueCompiler = newCompiler();
 		opaqueCompiler.addFfiInterface("opaque_handles.hxi",
@@ -905,7 +905,7 @@ class HxiParserMain {
 		var stringSource = HxiProjection.source(strings),
 			stringNatives = HxiProjection.cNatives(strings);
 		expect(stringSource.indexOf("typedef Filter = (value:String)->Null<String>") >= 0
-			&& stringSource.indexOf('haxe.io.Bytes.ofString("13>14")') >= 0
+			&& stringSource.indexOf('std.bytes.Bytes.ofString("13>14")') >= 0
 			&& stringSource.indexOf("extern function check(arg0:String, arg1:Null<String>):Int") >= 0
 			&& stringNatives[0].signature == "13,14>5"
 			&& stringNatives[1].signature == ">13",
@@ -1022,7 +1022,8 @@ class HxiParserMain {
 		expect(unknownDependencyRejected, "unknown HXI dependencies should be rejected before projection");
 		var projection = compiler.modules.get("nativekit");
 		expect(projection != null
-			&& projection.source.text.indexOf("abstract nk_options(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes")
+			&& projection.source.text
+			.indexOf("abstract nk_options(std.bytes.Bytes) from std.bytes.Bytes to std.bytes.Bytes")
 			>= 0
 			&& projection.source.text.indexOf("var flags(get, set):") >= 0
 			&& projection.source.text.indexOf('@:cNative("nativekit", "nk_open_v1", "11>6")') >= 0
@@ -1073,9 +1074,9 @@ class HxiParserMain {
 		var borrowedBuffer = parseValidated("borrowed-buffer.hxi",
 			'interface buffers @target("x86_64-linux-gnu") @library("buffers") { struct holder { data: ptr<const<void>> @borrowed @length_field("size"); size: u64; } }');
 		var borrowedBufferSource = HxiProjection.source(borrowedBuffer);
-		expect(borrowedBufferSource.indexOf("function get_data_bytes():haxe.io.Bytes") >= 0
+		expect(borrowedBufferSource.indexOf("function get_data_bytes():std.bytes.Bytes") >= 0
 			&& borrowedBufferSource.indexOf("__hxi_struct_copy_pointer(this, 0, 8, 8)") >= 0
-			&& borrowedBufferSource.indexOf("function set_data_bytes(value:haxe.io.Bytes)") >= 0
+			&& borrowedBufferSource.indexOf("function set_data_bytes(value:std.bytes.Bytes)") >= 0
 			&& borrowedBufferSource.indexOf("__hxi_struct_get_roots(this)[1] = value") >= 0,
 			"borrowed structure buffers should project bounded copying accessors and retained setters");
 		var borrowedArray = parseValidated("borrowed-array.hxi",
@@ -1101,9 +1102,9 @@ class HxiParserMain {
 		var inputArraySource = HxiProjection.source(inputArrays);
 		expect(inputArraySource.indexOf("function send(items:Array<item>):Int") >= 0
 			&& inputArraySource.indexOf("function paths(items:Array<String>):Int") >= 0
-			&& inputArraySource.indexOf("function bytes(data:haxe.io.Bytes):Int") >= 0
-			&& inputArraySource.indexOf("function bytes_slice(data:haxe.io.Bytes, offset:Int, length:Int):Int") >= 0
-			&& inputArraySource.indexOf("haxe.io.Bytes.view(data, offset, length)") >= 0
+			&& inputArraySource.indexOf("function bytes(data:std.bytes.Bytes):Int") >= 0
+			&& inputArraySource.indexOf("function bytes_slice(data:std.bytes.Bytes, offset:Int, length:Int):Int") >= 0
+			&& inputArraySource.indexOf("std.bytes.Bytes.view(data, offset, length)") >= 0
 			&& inputArraySource.indexOf("item.arrayOf(items)") >= 0
 			&& inputArraySource.indexOf("items.length") >= 0,
 			"input arrays should hide count parameters and project managed Haxe arrays");

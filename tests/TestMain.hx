@@ -1279,7 +1279,7 @@ class TestMain {
 			"import sample.Service; function main():Int { Service.create(); return 0; }");
 		methodDependencyCompiler.compile("Main");
 		var platformType = new Parser(new Lexer(new SourceFile("Platform.hx",
-			"function size(value:haxe.io.Bytes):Int return 0;")).tokenize()).parseProgram();
+			"function size(value:std.bytes.Bytes):Int return 0;")).tokenize()).parseProgram();
 		Typer.typeLibrary(platformType);
 		Sys.println("PASS: nested module and platform type names resolve canonically");
 		Frontend.compile("class InferredConstructor { public final value:Int; public function new(value) { this.value = value; } } function main():Int return new InferredConstructor(42).value;");

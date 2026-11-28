@@ -1,5 +1,5 @@
-// Bytes outside its range as Haxe's HashLink Bytes has it: getters read 0, and writers, `sub` and `getString` throw the
-// catchable haxe.io.Error.OutsideBounds without changing the bytes.
+// Bytes outside its range as Haxe's HashLink Bytes has it: getters read 0, and writers, `sub` and `getString` throw,
+// catchably, without changing the bytes. What they throw differs (haxe.io.Error.OutsideBounds in Haxe; stdlib/UPSTREAM.md).
 import haxe.io.Bytes;
 
 class Main {
@@ -7,8 +7,8 @@ class Main {
 		try {
 			action();
 			Sys.println(name + " accepted");
-		} catch (error:haxe.io.Error) {
-			Sys.println(name + " " + error);
+		} catch (error:Dynamic) {
+			Sys.println(name + " rejected");
 		}
 	}
 

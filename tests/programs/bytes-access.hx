@@ -1,12 +1,12 @@
-// Bytes.fill and the 16-bit and Int64 accessors, as Haxe's HashLink Bytes has them, on every target.
+// Bytes.fill and the 16-bit and Int64 accessors, on every target.
 import haxe.io.Bytes;
 
 function rejects(action:() -> Void):Bool {
 	try {
 		action();
 		return false;
-	} catch (error:haxe.io.Error) {
-		return error == haxe.io.Error.OutsideBounds;
+	} catch (error:haxe.Exception) {
+		return error.message == "std.bytes.Bytes: the position or range is outside the bytes";
 	}
 }
 

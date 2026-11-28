@@ -10,3 +10,7 @@ enum Encoding {
 	/** The string's own code units: UTF-16, little-endian, on HashLink. */
 	RawNative;
 }
+
+/** The `std.bytes.Encoding` that Haxe's `encoding` is, UTF-8 when it is left out. */
+function stdEncoding(encoding:Null<Encoding>):std.bytes.Encoding
+	return encoding == RawNative ? Utf16 : Utf8;
