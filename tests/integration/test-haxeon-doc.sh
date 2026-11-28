@@ -153,7 +153,7 @@ for command in check doc; do
 		exit 1
 	fi
 done
-sed -i 's|^	public final size:Size;|	/** The size it was made with. */\n	public final size:Size;|; s|^	public static function unit|	/** A box of one by one. */\n	public static function unit|' src/measured/Box.hx
+perl -pi -e 's|^	public final size:Size;|	/** The size it was made with. */\n	public final size:Size;|; s|^	public static function unit|	/** A box of one by one. */\n	public static function unit|' src/measured/Box.hx
 "$haxeon" check
 "$haxeon" doc
 python3 - build/api.json <<'PY'

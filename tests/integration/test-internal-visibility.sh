@@ -153,7 +153,7 @@ if "$haxeon" doc --output "$work/api.json" > "$work/out.txt" 2>&1 || ! grep -q "
 	exit 1
 fi
 # An internal or private member may name it.
-sed -i 's/public static function measure/internal static function measure/' "$work/widgets/src/widgets/Leak.hx"
+perl -pi -e 's/public static function measure/internal static function measure/' "$work/widgets/src/widgets/Leak.hx"
 
 # A friend the package names uses its internals as its own code does.
 mkdir -p "$work/widgets-tests/src"
