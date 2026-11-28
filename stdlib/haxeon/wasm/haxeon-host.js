@@ -22,6 +22,21 @@ var HaxeonWasmHost = (() => {
 
   const CONTRACT_FIELDS = ["version", "pageSize", "hostBase", "hostLimit", "guestBase", "guestLimit", "memorySize"];
 
+  /**
+   * The runtime's scalar services a guest imports from "haxeon_runtime" (math and the monotonic clock): they use no
+   * memory, so any host gives them as they are, a test harness included.
+   */
+  function scalarRuntime() {
+    return {
+      __sys_monotonic_time: () => performance.now() / 1000,
+      __math_ceil: Math.ceil, __math_floor: Math.floor, __math_round: Math.round,
+      __math_is_nan: Number.isNaN,
+      __math_fmod: (left, right) => left % right, __math_pow: Math.pow, __math_sqrt: Math.sqrt,
+      __math_sin: Math.sin, __math_cos: Math.cos, __math_tan: Math.tan, __math_atan2: Math.atan2,
+      __math_log: Math.log, __math_exp: Math.exp, __math_abs: Math.abs, __math_min: Math.min, __math_max: Math.max
+    };
+  }
+
   /** The guest's linear-memory contract (the haxeon.memory.contract custom section), or null without one. */
   function memoryContract(module) {
     const sections = WebAssembly.Module.customSections(module, "haxeon.memory.contract");
@@ -118,8 +133,7 @@ var HaxeonWasmHost = (() => {
         sys_get_char: () => -1,
         sys_exit: code => { throw new HaxeonExit(code); }
       },
-      haxeon_runtime: {
-        __sys_monotonic_time: () => performance.now() / 1000,
+      haxeon_runtime: Object.assign(scalarRuntime(), {
         native_alloc: size => {
           if (size <= 0) return fail("Native memory allocation size must be positive");
           if (typeof allocate !== "function") return fail("The host does not provide native memory allocation");
@@ -131,13 +145,8 @@ var HaxeonWasmHost = (() => {
           if (!address) return;
           if (typeof release !== "function") return fail("The host does not provide native memory release");
           release(address);
-        },
-        __math_ceil: Math.ceil, __math_floor: Math.floor, __math_round: Math.round,
-        __math_is_nan: Number.isNaN,
-        __math_fmod: (left, right) => left % right, __math_pow: Math.pow, __math_sqrt: Math.sqrt,
-        __math_sin: Math.sin, __math_cos: Math.cos, __math_tan: Math.tan, __math_atan2: Math.atan2,
-        __math_log: Math.log, __math_exp: Math.exp, __math_abs: Math.abs, __math_min: Math.min, __math_max: Math.max
-      }
+        }
+      })
     };
     const encoder = new TextEncoder();
     // Each argument is written once, NUL-terminated, where it stays while the guest runs.
@@ -305,5 +314,6 @@ var HaxeonWasmHost = (() => {
     return guest.exports;
   }
 
-  return {instantiate, memoryContract, emscriptenContract, instantiateEmscripten, runApp, mountApp, HaxeonExit};
+  return {instantiate, scalarRuntime, memoryContract, emscriptenContract, instantiateEmscripten, runApp, mountApp,
+    HaxeonExit};
 })();

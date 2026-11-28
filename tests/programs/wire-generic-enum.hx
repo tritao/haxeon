@@ -1,11 +1,9 @@
-#if !wasm
 import haxeon.wire.JsonWire;
-#end
 import haxeon.wire.MessagePack;
 
 // A generic enum is a wire type for wire-typed arguments: Result<T, E> round-trips through MessagePack and JSON for
 // each instantiation, a Void payload (Ok() of Result<Void, E>) is not written, and generic enums nest in records,
-// arrays and one another. (JSON is checked natively: the Wasm targets do not provide its float parsing yet.)
+// arrays and one another.
 
 private enum Refusal {
 	NotAllowed(reason:String);
@@ -67,12 +65,10 @@ function main():Int {
 	var root:Result<Void, Refusal> = Ok();
 	if (!MessagePack.decode<Result<Void, Refusal>>(MessagePack.encode(root)).unwrap().isOk())
 		return 3;
-	#if !wasm
 	if (describe(JsonWire.decode<Answer>(JsonWire.encode(answer)).unwrap()) != expected
 		|| describe(JsonWire.decode<Answer>(JsonWire.encode(refused)).unwrap()) != refusedExpected)
 		return 4;
 	if (JsonWire.encode(root) != '{"version":1,"value":{"Ok":[]}}')
 		return 5;
-	#end
 	return 42;
 }

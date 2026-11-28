@@ -244,6 +244,13 @@ haxeon_compile_wait
 node - "$root_dir" "$out_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2], out = process.argv[3];
+// The shipped host's scalar runtime services (haxeon-host.js), which every case is given.
+const scalarHost = (() => {
+  const vm = require("vm"), context = vm.createContext({WebAssembly, TextDecoder, TextEncoder, Uint8Array, performance});
+  vm.runInContext(fs.readFileSync(`${root}/stdlib/haxeon/wasm/haxeon-host.js`, "utf8")
+    + "\nglobalThis.host = HaxeonWasmHost;", context);
+  return context.host;
+})();
 const cases = [
   ["wasm-utf8-result-wasm32.wasm", 42],
   ["wasm-utf8-result-wasm-gc.wasm", 42],
@@ -785,7 +792,11 @@ const cases = [
       // The value-record fixture's natives need the scratch bridge, so it has memory and imports of its own.
       const valueRecords = relative.endsWith("wasm-cli-gc-hxi-value-records.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && !rawPointer && WebAssembly.Module.imports(compiled).length !== 0)
+      // The runtime's scalar services (math, the clock) are the host's in any program; anything else must be the case's own.
+      const scalar = scalarHost.scalarRuntime();
+      const foreignImports = WebAssembly.Module.imports(compiled)
+        .filter(entry => !(entry.module === "haxeon_runtime" && entry.name in scalar));
+      if ((!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && !rawPointer && foreignImports.length !== 0)
           || (rawPointer && WebAssembly.Module.imports(compiled).length !== 1)
           || (!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && hasMemory)
           || (utf8Results && (!hasMemory || WebAssembly.Module.imports(compiled).length !== 3))
@@ -796,8 +807,11 @@ const cases = [
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
         throw new Error(`${relative}: Wasm GC object module has unexpected imports, linear memory or custom root metadata (imports: ${WebAssembly.Module.imports(compiled).map(entry => entry.module + "." + entry.name).join(", ") || "none"}, memory: ${hasMemory})`);
+      imports.haxeon_runtime = Object.assign(scalarHost.scalarRuntime(), imports.haxeon_runtime || {});
       moduleInstance = new WebAssembly.Instance(compiled, imports);
     } else {
+      // Every guest gets the runtime's scalar services as the shipped host gives them, beside a case's own imports.
+      imports.haxeon_runtime = Object.assign(scalarHost.scalarRuntime(), imports.haxeon_runtime || {});
       moduleInstance = (await WebAssembly.instantiate(bytes, imports)).instance;
     }
     const instance = moduleInstance;
