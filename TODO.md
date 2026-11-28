@@ -182,6 +182,12 @@ regular recursive generic enums are in the next section.
      two groups there are representation decisions items 1 to 3 did not
      name: a constrained type parameter's member reached through its bound,
      and iteration and key-path arguments a specialization makes concrete.
+     The iteration-argument group now reaches the standard library: under
+     `--elaborate-generics`, `Lambda.exists(array, value -> ...)` fails to
+     type in `Lambda.hx` ("expected T, got String") with any element type,
+     and `std.process.Command` calls it, so every program that starts a
+     process (`std-process`, `stdlib-process`) is listed. A five-line
+     program with `Lambda.exists` over an `Array<String>` reproduces it.
   2. Finish step 2.4: type the parser's repaired syntax with the real typer,
      then delete the language service's approximate typer (the item below).
   3. The Android reload crash (below).
