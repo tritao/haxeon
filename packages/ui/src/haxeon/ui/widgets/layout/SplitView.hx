@@ -107,7 +107,7 @@ class SplitView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var horizontal = orientation == SplitOrientation.Horizontal;
 			var rootStyle = style.copy();
 			rootStyle.direction = horizontal ? LayoutDirection.LeftToRight : LayoutDirection.TopToBottom;
@@ -124,7 +124,7 @@ class SplitView implements View {
 				LayoutVisualKind.Box,
 				paneStyle(horizontal, resizableSide == SplitSide.Leading, paneExtent));
 			leadingPane.layout.style.visible = !collapsed || resizableSide != SplitSide.Leading;
-			var leadingNode = context.withScope(new Key("leading"), function() {
+			var leadingNode = context.withScope(new Key("leading"), () -> {
 				return leading.build(context);
 			});
 			leadingPane.add(paneContent(context, "leading-content", leadingNode));
@@ -146,7 +146,7 @@ class SplitView implements View {
 					var line = context.createNode(context.rootId("divider-visual"), LayoutVisualKind.Custom, lineStyle);
 					line.hitTestSelf = false;
 					line.cachePolicy = haxeon.ui.core.RenderNode.CachePolicy.None;
-					line.onPaint(function(canvas, geometry) {
+					line.onPaint((canvas, geometry) -> {
 						var density = context.environment.pixelDensity;
 						var transform = geometry.transform;
 						var scale = (horizontal ? transform.a : transform.d) * density;
@@ -219,7 +219,7 @@ class SplitView implements View {
 				LayoutVisualKind.Box,
 				paneStyle(horizontal, resizableSide == SplitSide.Trailing, paneExtent));
 			trailingPane.layout.style.visible = !collapsed || resizableSide != SplitSide.Trailing;
-			var trailingNode = context.withScope(new Key("trailing"), function() {
+			var trailingNode = context.withScope(new Key("trailing"), () -> {
 				return trailing.build(context);
 			});
 			trailingPane.add(paneContent(context, "trailing-content", trailingNode));
@@ -230,7 +230,7 @@ class SplitView implements View {
 
 	function installDividerHandlers(divider:RenderNode, horizontal:Bool, dragState:State<SplitDragState>,
 			pane:SplitPane):Void {
-		divider.on(UiEventKind.PointerDown, function(event:UiEvent) {
+		divider.on(UiEventKind.PointerDown, (event:UiEvent) -> {
 			if (event.button != 0) return;
 			var drag = dragState.value;
 			event.capturePointer();
@@ -240,7 +240,7 @@ class SplitView implements View {
 			dragState.update(drag);
 			event.preventDefault();
 		});
-		divider.on(UiEventKind.PointerMove, function(event:UiEvent) {
+		divider.on(UiEventKind.PointerMove, (event:UiEvent) -> {
 			var drag = dragState.value;
 			if (!drag.dragging) return;
 			var pointer = horizontal ? event.x : event.y;
@@ -249,7 +249,7 @@ class SplitView implements View {
 			updateExtent(pane, drag.startExtent + delta * direction, true);
 			event.preventDefault();
 		});
-		var handleKey = function(event:UiEvent) {
+		var handleKey = (event:UiEvent) -> {
 			var delta = 0.0;
 			var positive = horizontal ? (resizableSide
 				== SplitSide.Leading ? UiKey.Right : UiKey.Left)
@@ -267,18 +267,18 @@ class SplitView implements View {
 		};
 		divider.on(UiEventKind.KeyDown, handleKey);
 		divider.on(UiEventKind.KeyRepeat, handleKey);
-		divider.on(UiEventKind.AccessibilityIncrement, function(event) {
+		divider.on(UiEventKind.AccessibilityIncrement, event -> {
 			updateExtent(pane, pane.extent.value + keyboardStep() * actionGranularity(event), true);
 		});
-		divider.on(UiEventKind.AccessibilityDecrement, function(event) {
+		divider.on(UiEventKind.AccessibilityDecrement, event -> {
 			updateExtent(pane, pane.extent.value - keyboardStep() * actionGranularity(event), true);
 		});
-		divider.on(UiEventKind.PointerUp, function(_) {
+		divider.on(UiEventKind.PointerUp, _ -> {
 			var drag = dragState.value;
 			drag.dragging = false;
 			dragState.update(drag);
 		});
-		divider.on(UiEventKind.PointerCancel, function(_) {
+		divider.on(UiEventKind.PointerCancel, _ -> {
 			var drag = dragState.value;
 			drag.dragging = false;
 			dragState.update(drag);

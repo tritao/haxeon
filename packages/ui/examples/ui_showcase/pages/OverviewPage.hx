@@ -83,7 +83,7 @@ class OverviewPage {
 			page:String):Column {
 		return new Column("destination-" + page, [explorer.keyed("title", explorer.label(title)),
 			explorer.keyed("description", explorer.caption(description)),
-			explorer.keyed("open", explorer.button("Open", "open-" + page, function() {
+			explorer.keyed("open", explorer.button("Open", "open-" + page, () -> {
 				explorer.state.selectedPage = page;
 			}))], destinationStyle(explorer));
 	}

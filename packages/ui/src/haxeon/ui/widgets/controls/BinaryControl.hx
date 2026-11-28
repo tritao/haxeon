@@ -156,19 +156,19 @@ class BinaryControl implements ScopeView implements Observable {
 			indicator.add(thumb);
 		}
 		if (!toggle) {
-			indicator.onPaint(function(canvas, _) {
+			indicator.onPaint((canvas, _) -> {
 				if (!checked && !indeterminate) return;
 				var mark = checked ? Color.rgba(1.0, 1.0, 1.0, 1.0) : context.theme.tokens.textPrimary;
 				if (indeterminate) {
 					canvas.fillRect(new Rect(4, 8, 11, 3), mark);
 					return;
 				}
-				canvas.withState(function(target) {
+				canvas.withState(target -> {
 					target.translate(5.5, 10.5);
 					target.rotate(0.7853981634);
 					target.fillRect(new Rect(-2.5, -1.1, 5.0, 2.2), mark);
 				});
-				canvas.withState(function(target) {
+				canvas.withState(target -> {
 					target.translate(11.0, 8.5);
 					target.rotate(-0.7853981634);
 					target.fillRect(new Rect(-5.5, -1.1, 11.0, 2.2), mark);
@@ -190,7 +190,7 @@ class BinaryControl implements ScopeView implements Observable {
 		node.add(labelNode);
 
 		var latest = context.latestOf(this);
-		var activate = function(event:UiEvent) {
+		var activate = (event:UiEvent) -> {
 			if (!enabled) return;
 			indeterminate = false;
 			checked = !checked;

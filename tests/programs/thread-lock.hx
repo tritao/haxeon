@@ -11,7 +11,7 @@ function main():Int {
 		return 2;
 	var done = new Lock();
 	for (_ in 0...4)
-		Thread.create(function() done.release());
+		Thread.create(() -> done.release());
 	for (_ in 0...4)
 		if (!done.wait(5.0))
 			return 3;

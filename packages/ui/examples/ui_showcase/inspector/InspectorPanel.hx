@@ -78,7 +78,7 @@ class InspectorPanel {
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.fixed(30.0);
 		style.padding = new Insets(7.0, 5.0, 7.0, 5.0);
-		return ShowcaseKit.button(explorer, label, "inspector-tab-" + tab, function() {
+		return ShowcaseKit.button(explorer, label, "inspector-tab-" + tab, () -> {
 			explorer.state.inspector.tab = tab;
 		}, explorer.state.inspector.tab == tab, true, null, style);
 	}

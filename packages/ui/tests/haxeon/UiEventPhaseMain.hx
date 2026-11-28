@@ -27,7 +27,7 @@ import haxeon.ui.core.WidgetId;
 		node.invoke(descendant);
 		if (seen.join(",") != "bubble") return 4;
 		var outside = 0;
-		node.onPointerDownOutside(function(delivery) {
+		node.onPointerDownOutside(delivery -> {
 			if (delivery.phase != UiEventPhase.Target || !delivery.currentTarget.equals(node.id)
 				|| !delivery.target.equals(target.id)) throw "Invalid outside notification delivery";
 			outside++;

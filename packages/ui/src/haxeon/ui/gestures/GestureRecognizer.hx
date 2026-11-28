@@ -31,7 +31,7 @@ class GestureRecognizer {
 		this.threshold = threshold;
 		this.interval = interval;
 		hasHandler = onRecognized != null;
-		this.onRecognized = onRecognized == null ? function(_) {} : onRecognized;
+		this.onRecognized = onRecognized == null ? _ -> {} : onRecognized;
 	}
 
 	static inline function finite(value:Float):Bool
@@ -184,9 +184,9 @@ class DragRecognizer extends GestureRecognizer {
 		hasStart = onStart != null;
 		hasMove = onMove != null;
 		hasEnd = onEnd != null;
-		this.onStart = onStart == null ? function(_) {} : onStart;
-		this.onMove = onMove == null ? function(_) {} : onMove;
-		this.onEnd = onEnd == null ? function(_) {} : onEnd;
+		this.onStart = onStart == null ? _ -> {} : onStart;
+		this.onMove = onMove == null ? _ -> {} : onMove;
+		this.onEnd = onEnd == null ? _ -> {} : onEnd;
 	}
 
 	@:allow(haxeon.ui.gestures.GestureArena)
@@ -241,9 +241,9 @@ class PinchRecognizer extends GestureRecognizer {
 		hasBegin = onBegin != null;
 		hasUpdate = onUpdate != null;
 		hasEnd = onEnd != null;
-		this.onBegin = onBegin == null ? function(_) {} : onBegin;
-		this.onUpdate = onUpdate == null ? function(_) {} : onUpdate;
-		this.onEnd = onEnd == null ? function(_) {} : onEnd;
+		this.onBegin = onBegin == null ? _ -> {} : onBegin;
+		this.onUpdate = onUpdate == null ? _ -> {} : onUpdate;
+		this.onEnd = onEnd == null ? _ -> {} : onEnd;
 	}
 }
 

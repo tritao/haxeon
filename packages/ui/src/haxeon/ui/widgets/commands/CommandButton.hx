@@ -76,7 +76,7 @@ class CommandButton implements View {
 			commandId) : (command.isEnabled(invocation) ? 1 : 0) | (command.isChecked(invocation) ? 2 : 0);
 		// Visible text names the control; an icon-only presentation retains the command's full name.
 		var accessibleName = displayLabel != null && displayLabel.length == 0 ? command.label : null;
-		var button = new Button(displayLabel == null ? command.label : displayLabel, style, function() {
+		var button = new Button(displayLabel == null ? command.label : displayLabel, style, () -> {
 			var actualContext = invocation == null ? context.commandContext : invocation;
 			var result = commands.executeContext(commandId, actualContext);
 			if (onResult != null) onResult(result);

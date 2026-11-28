@@ -140,7 +140,7 @@ class WireCodecGenerator {
 		];
 		if (roots.length == 0)
 			return [];
-		roots.sort(function(left, right) return Reflect.compare(typeKey(left.type), typeKey(right.type)));
+		roots.sort((left, right) -> Reflect.compare(typeKey(left.type), typeKey(right.type)));
 		var reachable:Map<String, WireCodecRequest> = [],
 			visiting:Map<String, Bool> = [],
 			path:Array<String> = [];

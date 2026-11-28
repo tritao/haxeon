@@ -45,13 +45,13 @@ internal class NavUi {
 	public static function child(context:BuildContext, local:String, type:String, style:LayoutStyle,
 			?classes:Array<String>):RenderNode {
 		return context.withScope(new Key(local),
-			function() return box(context, context.rootId(type), type, local, style, classes));
+			() -> box(context, context.rootId(type), type, local, style, classes));
 	}
 
 	/** A single-line text node built under its own sub-scope. */
 	public static function label(context:BuildContext, local:String, value:String, size:Float, color:Color,
 			?letterSpacing:Float):RenderNode {
-		return context.withScope(new Key(local), function() {
+		return context.withScope(new Key(local), () -> {
 			var textOverride = new TextStyleOverride(null, size, letterSpacing);
 			return new Text(value, null, color, textOverride).makeNode(context);
 		});

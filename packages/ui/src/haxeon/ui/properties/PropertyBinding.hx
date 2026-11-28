@@ -93,9 +93,9 @@ class PropertyBinding {
 		var latest = value;
 		var key = coalesceKey == null ? "property:" + descriptor.id : coalesceKey;
 		var operation = new EditOperation("Set " + descriptor.label,
-			function() descriptor.write(context, latest),
-			function() descriptor.write(context, before), key,
-			function(nextOperation) {
+			() -> descriptor.write(context, latest),
+			() -> descriptor.write(context, before), key,
+			nextOperation -> {
 				if (nextOperation == null || nextOperation.mergeData == null)
 					return false;
 				latest = cast nextOperation.mergeData;

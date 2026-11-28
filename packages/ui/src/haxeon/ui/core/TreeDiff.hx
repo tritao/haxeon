@@ -65,7 +65,7 @@ class TreeDiff {
 		var currentIndex = currentById == null ? new Map<Int, RenderNode>():currentById;
 		if (frame == null) {
 			previousIndex.clear();
-			if (previous != null) previous.walk(function(node) previousIndex.set(node.id.value, node));
+			if (previous != null) previous.walk(node -> previousIndex.set(node.id.value, node));
 		}
 		currentIndex.clear();
 		// Nodes rebuilt in place are in `previous` already, as their replacements: what they replaced is the real prior.

@@ -271,7 +271,7 @@ class TreeView implements View {
 		var rows:Array<{key:String, index:Int}> = [for (key in keys) {
 			key: key, index: cast indexOfKey(key)
 		}];
-		rows.sort(function(a, b) return a.index - b.index);
+		rows.sort((a, b) -> a.index - b.index);
 		return [for (row in rows) row.key];
 	}
 
@@ -453,15 +453,15 @@ class TreeView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			// Model reads are tracked at their fields; child rows retain only the fields they actually read.
 			var guideVisibility = context.resourceState(context.id("guide-visibility"),
-				function() return new TreeGuideVisibility(context),
-				function(value) value.dispose()).value;
+				() -> new TreeGuideVisibility(context),
+				value -> value.dispose()).value;
 			var treeId = context.rootId("tree");
 			drag = context.resourceState(context.id("tree-drag"),
-				function() return new TreeItemDrag(),
-				function(value) value.dispose()).value;
+				() -> new TreeItemDrag(),
+				value -> value.dispose()).value;
 			// Hover and focus matter only to guides shown on interaction; reading them otherwise would make the whole tree
 			// depend on them.
 			var activeGuides = guidesOnInteraction
@@ -471,7 +471,7 @@ class TreeView implements View {
 				!guidesOnInteraction || context.environment.reducedMotion);
 			var guideOpacity = guideVisibility.opacity() * (guidesOnInteraction ? 0.65 : 1.0);
 			var clicks:State<PointerClickSequence> = context.lazyState(context.id("click-sequence"),
-				function() return new PointerClickSequence());
+				() -> new PointerClickSequence());
 			var expansion:State<Map<String, Bool>> = context.state(context.id("expanded-state"), expandedKeys);
 			expandedState = expansion;
 			if (expansion.value != expandedKeys) {
@@ -525,15 +525,15 @@ class TreeView implements View {
 					if (item == null) throw 'TreeView model returned null for key $nodeKey';
 					var row = new TreeViewRow("row", nodeKey, item,
 						entry, indentWidth, verticalGuidesOnly, compactLeafIndent, isSelected(nodeKey), guideOpacity,
-						function() {
+						() -> {
 							select(nodeKey);
-						}, function(event) {
+						}, event -> {
 						if (requestActivate(nodeKey, event)) return;
 						if (entry.hasChildren) toggleExpanded(nodeKey);
 						else activateItem(nodeKey, event);
-					}, function() {
+					}, () -> {
 						toggleExpanded(nodeKey);
-					}, function(event) {
+					}, event -> {
 						// Modified clicks only change the selection; they neither open nor expand.
 						if (selectWithModifiers(nodeKey, event.modifiers)) return;
 						select(nodeKey);
@@ -545,9 +545,9 @@ class TreeView implements View {
 							// second click recognized as part of a double-click sequence.
 							if (expandOnSingleClick || count == 2) toggleExpanded(nodeKey);
 						} else if (count == 2) activateItem(nodeKey, event);
-					}, function(event) {
+					}, event -> {
 						handleNodeKey(context, entry, event);
-					}, function(node) {
+					}, node -> {
 						itemIds.set(nodeKey, node.id);
 						drag.rows.set(nodeKey, node);
 						// Asked again on every build for a moment: the tree can be rebuilt more than once before it settles.
@@ -557,7 +557,7 @@ class TreeView implements View {
 								pendingFocusKey = null;
 							else context.requestFocusAfterLayout(node.id, nodeKey);
 						}
-					}, function(event) {
+					}, event -> {
 						// A menu on a selected row applies to the whole selection.
 						if (!isSelected(nodeKey)) select(nodeKey);
 						var handler = onItemContextMenu;
@@ -587,7 +587,7 @@ class TreeView implements View {
 			semantics.orientation = AccessibilityOrientation.Vertical;
 			semantics.actions = AccessibilityAction.ScrollForward | AccessibilityAction.ScrollBackward;
 			root.semantics = semantics;
-			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
+			var viewport = context.withScope(new Key("scroll-view"), () -> scroll.build(context));
 			root.add(viewport);
 			if (canDragItem != null && canDropItem != null && onItemDrop != null) drag.attach(root, this, context);
 			else drag.clear();
@@ -596,7 +596,7 @@ class TreeView implements View {
 			// State hydration is complete, but synchronization callbacks may write State. Run after the tracked build,
 			// when layout has supplied the geometry needed by scrollIntoView.
 			var ready = onStateReady;
-			if (ready != null || provider == null) root.onResolved(function(_) {
+			if (ready != null || provider == null) root.onResolved(_ -> {
 				// Reconcile invalid or hidden uncontrolled selection after the tracked build has settled.
 				if (provider == null) {
 					var stored = selectedKey == null ? "" : selectedKey;
@@ -1145,7 +1145,7 @@ private class TreeViewRow implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var id = context.rootId("tree-item");
 			var flags = context.interactionStates.peek(id);
 			var style = new LayoutStyle();
@@ -1162,7 +1162,7 @@ private class TreeViewRow implements View {
 			// Hover is read as the row paints, so a hover change repaints it (UiContext) without rebuilding anything.
 			var normalHover = context.theme.tokens.surfaceHover;
 			var selectedColor = context.theme.tokens.selection;
-			node.onPaint(function(canvas, geometry) {
+			node.onPaint((canvas, geometry) -> {
 				var hovered = (context.interactionStates.peek(id)).contains(StyleState.Hovered);
 				if (selected
 					|| hovered) canvas.fillRectIfPositive(new haxeon.ui.Rect(0.0, 0.0, geometry.width, geometry.height),
@@ -1185,16 +1185,16 @@ private class TreeViewRow implements View {
 			semantics.hierarchyLevel = entry.depth + 1;
 			node.semantics = semantics;
 			// The tree applies click and menu selection itself, so modifiers can extend it.
-			node.on(UiEventKind.Click, function(event) {
+			node.on(UiEventKind.Click, event -> {
 				if (event.button == 0) onClick(event);
 			});
-			node.on(UiEventKind.Activate, function(event) {
+			node.on(UiEventKind.Activate, event -> {
 				onSelect();
 				onActivate(event);
 			});
 			node.on(UiEventKind.KeyDown, onKey);
 			node.on(UiEventKind.KeyRepeat, onKey);
-			node.on(UiEventKind.PointerDown, function(event) {
+			node.on(UiEventKind.PointerDown, event -> {
 				if (event.button == 1) {
 					onContextMenu(event);
 					event.preventDefault();
@@ -1217,7 +1217,7 @@ private class TreeViewRow implements View {
 				var guideKey = "tree-guide:nested:" + depth + ":" + (hasNext
 					? "1" : "0") + ":" + (entry.hasChildren ? "branch" : "leaf") + ":";
 				for (level in 2...depth) guideKey += continuation[level] ? "1" : "0";
-				guideNode.onPaint(function(canvas, geometry) {
+				guideNode.onPaint((canvas, geometry) -> {
 					var path = new PathBuilder();
 					var hasSegments = false;
 					var centerY = geometry.height * 0.5;
@@ -1253,7 +1253,7 @@ private class TreeViewRow implements View {
 				onToggle) : new Spacer("disclosure-spacer",
 				LayoutAxis.fixed(compactLeafIndent ? 0.0 : 20.0),
 				LayoutAxis.fixed(entry.extent));
-			node.add(context.withScope(new Key("disclosure"), function() return disclosure.build(context)));
+			node.add(context.withScope(new Key("disclosure"), () -> disclosure.build(context)));
 			node.add(new KeyedView('item:$itemKey', child).build(context));
 			onBuilt(node);
 			return node;
@@ -1275,7 +1275,7 @@ private class TreeDisclosure implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(20.0);
 			style.height = LayoutAxis.fixed(rowHeight);
@@ -1289,11 +1289,11 @@ private class TreeDisclosure implements View {
 			var semantics = new Semantics(AccessibilityRole.Button, expanded ? "Collapse" : "Expand");
 			semantics.actions = AccessibilityAction.Activate;
 			node.semantics = semantics;
-			var activate = function(event:UiEvent) {
+			var activate = (event:UiEvent) -> {
 				onToggle();
 				event.stopPropagation();
 			};
-			node.on(UiEventKind.Click, function(event) {
+			node.on(UiEventKind.Click, event -> {
 				if (event.button == 0) activate(event);
 			});
 			node.on(UiEventKind.Activate, activate);

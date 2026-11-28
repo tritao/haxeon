@@ -115,7 +115,7 @@ class HlcFunctionLower {
 			}
 		}
 		scalarLocalTypes.resize(0);
-		scalarLocals.reset(body, module.view, function(type) {
+		scalarLocals.reset(body, module.view, type -> {
 			scalarLocalTypes.push(module.typeIndex(type));
 			return scalarLocalTypes.length - 1;
 		});
@@ -123,7 +123,7 @@ class HlcFunctionLower {
 		arrayBounds.startFunction(body, graph);
 		viewedArrays.clear();
 		var phis:Map<Int, Bool> = [];
-		eachRow(function(block, row) {
+		eachRow((block, row) -> {
 			if (body.opcode(row) == IrOpcode.Call && body.symbol(row).name == HlLoweringDecisions.VALUE_ARRAY_READ_I32
 				&& HlLoweringDecisions.inlineValueArraySlot(body, row) != null)
 				viewedArrays.set(body.operand(row, 0), true);
@@ -156,7 +156,7 @@ class HlcFunctionLower {
 			isArgument.set(arguments[index], true);
 		// Locals assigned after a trap's setjmp and read in its handler are phis in SSA; C keeps them only when volatile.
 		var declared:Map<Int, Bool> = [];
-		eachRow(function(block, row) {
+		eachRow((block, row) -> {
 			var value = body.output(row);
 			if (!value.exists() || isArgument.exists(value) || declared.exists(value) || types.isVoid(typeOf(value)))
 				return;
@@ -172,7 +172,7 @@ class HlcFunctionLower {
 			write('\tvbyte *${hasTry ? " volatile" : ""} va$array = NULL; int vs$array = 0;\n');
 		}
 		var traps:Map<Int, Bool> = [];
-		eachRow(function(block, row) {
+		eachRow((block, row) -> {
 			if (body.opcode(row) == IrOpcode.BeginTry) {
 				var catchBlock = body.auxInt(row, 0);
 				if (!traps.exists(catchBlock)) {

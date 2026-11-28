@@ -30,11 +30,11 @@ class NativeKitHttpEventTests {
 			request.maxResponseBytes = 4096;
 			var buffered = client.send(request);
 			var headersOk = false, completeOk = false;
-			buffered.response.onComplete(function(outcome) switch outcome {
+			buffered.response.onComplete(outcome -> switch outcome {
 				case Success(Ok(response)): headersOk = response.statusCode == 201 && response.body.length == 0;
 				case _:
 			});
-			buffered.complete.onComplete(function(outcome) switch outcome {
+			buffered.complete.onComplete(outcome -> switch outcome {
 				case Success(Ok(response)):
 					var token = "", state = "";
 					for (header in response.headers) {
@@ -51,9 +51,9 @@ class NativeKitHttpEventTests {
 			request.streaming = true;
 			var streamed = client.send(request);
 			var body = new StringBuf();
-			streamed.onData(function(piece) body.add(piece.toString()));
+			streamed.onData(piece -> body.add(piece.toString()));
 			var streamOk = false;
-			streamed.complete.onComplete(function(outcome) switch outcome {
+			streamed.complete.onComplete(outcome -> switch outcome {
 				case Success(Ok(response)): streamOk = response.statusCode == 201 && body.toString() == "ticket-ok";
 				case other:
 					trace("streaming HTTP request ended " + Std.string(other));

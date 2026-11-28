@@ -46,7 +46,7 @@ class WasmPatch {
 		var result:Array<WasmFunctionIdentity> = [];
 		for (fn in program.functions)
 			result.push({name: fn.name, stableId: stableId(fn.name), signature: signature(fn)});
-		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		result.sort((left, right) -> Reflect.compare(left.name, right.name));
 		return result;
 	}
 

@@ -73,7 +73,7 @@ internal class CustomPaintCache {
 				canvas.reset();
 				var geometry:ResolvedLayoutItem = cast resolved;
 				var inspectionStarted = onPaint == null || node == uninspected ? 0.0 : Sys.time();
-				canvas.withState(function(target) {
+				canvas.withState(target -> {
 					target.resetTransform();
 					// Custom painters own only node-local pixels. Native layout and
 					// compositing apply the resolved position, transform, and ancestor

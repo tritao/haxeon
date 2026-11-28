@@ -49,7 +49,7 @@ class TextDecoration {
 				new TextPosition(end, 0), minY, maxY))
 				rects.push(new Rect(rect.x, rect.y, rect.width, rect.height));
 		}
-		rects.sort(function(a, b) {
+		rects.sort((a, b) -> {
 			if (a.y < b.y) return -1;
 			if (a.y > b.y) return 1;
 			return a.x < b.x ? -1 : a.x > b.x ? 1 : 0;

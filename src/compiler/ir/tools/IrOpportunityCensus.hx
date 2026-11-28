@@ -138,7 +138,7 @@ class IrOpportunityCensus {
 				weights[i] += row.weighted[i];
 			}
 		}
-		rows.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		rows.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (row in rows)
 			Sys.stderr().writeString("IR_CENSUS " + encodeRow(row) + "\n");
 		Sys.stderr()

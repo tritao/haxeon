@@ -34,7 +34,7 @@ function main():Int {
 	if (scaled[0] != 10 || scaled[5] != 60)
 		return 7;
 	var evaluations = 0;
-	var counted = values.filter(function(value) {
+	var counted = values.filter(value -> {
 		evaluations++;
 		return value > 4;
 	});

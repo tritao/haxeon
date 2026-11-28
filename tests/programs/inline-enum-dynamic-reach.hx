@@ -46,7 +46,7 @@ class DynamicRoot {
 		byId = new Map();
 		byId.set("entry", new MapLeaf());
 		var captured = new ClosureLeaf();
-		update = function() {
+		update = () -> {
 			switch captured.intent {
 				case Value(_): captured.intent = Value(5);
 			}

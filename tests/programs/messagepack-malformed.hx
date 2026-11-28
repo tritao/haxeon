@@ -2,20 +2,20 @@ import haxe.io.Bytes;
 import haxeon.wire.MessagePackReader;
 
 function main():Int {
-	if (!rejects(function() new MessagePackReader(raw([0xd3, 0x00])).readInt64()))
+	if (!rejects(() -> new MessagePackReader(raw([0xd3, 0x00])).readInt64()))
 		return 1;
-	if (!rejects(function() new MessagePackReader(raw([0xc1])).skip()))
+	if (!rejects(() -> new MessagePackReader(raw([0xc1])).skip()))
 		return 2;
-	if (!rejects(function() new MessagePackReader(raw([0xd4])).readExtension()))
+	if (!rejects(() -> new MessagePackReader(raw([0xd4])).readExtension()))
 		return 3;
-	if (!rejects(function() new MessagePackReader(raw([0xdd, 0xff, 0xff, 0xff, 0xff])).skip()))
+	if (!rejects(() -> new MessagePackReader(raw([0xdd, 0xff, 0xff, 0xff, 0xff])).skip()))
 		return 4;
 
 	var deep = Bytes.alloc(10);
 	for (index in 0...9)
 		deep.set(index, 0x91);
 	deep.set(9, 0xc0);
-	if (!rejects(function() new MessagePackReader(deep, 100, 4).skip()))
+	if (!rejects(() -> new MessagePackReader(deep, 100, 4).skip()))
 		return 5;
 
 	var valid = new MessagePackReader(raw([0x81, 0xa1, 0x61, 0x92, 0x01, 0xc0]));

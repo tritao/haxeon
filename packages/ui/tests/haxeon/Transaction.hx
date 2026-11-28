@@ -116,14 +116,14 @@ class Transaction {
 		if (metrics.width <= 0.0 || position.offset < 0 || caret.slope != caret.slope)
 			return 8;
 		var canvas = new Canvas(8);
-		canvas.withState(function(canvas) {
+		canvas.withState(canvas -> {
 			canvas.translate(4.0, 5.0);
-			canvas.withClip(new Rect(0.0, 0.0, 100.0, 80.0), function(canvas) {
+			canvas.withClip(new Rect(0.0, 0.0, 100.0, 80.0), canvas -> {
 				canvas.setAlpha(0.5);
 				canvas.fill(path, paint);
 				canvas.stroke(path, paint, 2.0, LineCap.Round, LineJoin.Round);
 				canvas.drawText(text, 16.0, 24.0);
-				canvas.withLayer(0.6, function(canvas) {
+				canvas.withLayer(0.6, canvas -> {
 					canvas.drawImage(image, new Rect(4.0, 4.0, 12.0, 12.0));
 				});
 			});
@@ -140,7 +140,7 @@ class Transaction {
 		var failure:Null<haxeon.platform.NativeKitError> = null;
 		var attempts = 0;
 		var events = runtime.events;
-		var eventSubscription = events.listen(function(value) switch value {
+		var eventSubscription = events.listen(value -> switch value {
 			case SurfaceReady(source) if (source.rawValue == surface.rawValue): ready = true;
 			case SurfaceFrameComplete(source, token, outcome)
 				if (source.rawValue == surface.rawValue && submitted != null && submitted == token):

@@ -113,16 +113,16 @@ class WasmLinearArrays {
 		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
 		builder.i32Const(0);
 		builder.localSet(index);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(values);
 				builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(index);
 					builder.i32Eqz();
-					builder.ifElse(function(_) {}, function(builder) {
+					builder.ifElse(_ -> {}, builder -> {
 						builder.localGet(result);
 						builder.localGet(separator);
 						builder.call(builder.functionRef(stringConcat));
@@ -143,7 +143,7 @@ class WasmLinearArrays {
 					builder.i32Add();
 					builder.localSet(index);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(0)));
+				}, builder -> builder.emit(Br(0)));
 			});
 		});
 		builder.localGet(result);
@@ -163,13 +163,13 @@ class WasmLinearArrays {
 		builder.localSet(index);
 		builder.i32Const(-1);
 		builder.localSet(foundIndex);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(array);
 				builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(array);
 					builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 					builder.localGet(index);
@@ -179,7 +179,7 @@ class WasmLinearArrays {
 					builder.emit(arrayLoad(elementType, 0));
 					builder.localGet(searched);
 					builder.emit(stringEqual == null ? compare : Call(stringEqual));
-					builder.if_(function(builder) {
+					builder.if_(builder -> {
 						builder.localGet(index);
 						builder.localSet(foundIndex);
 						builder.emit(Br(3));
@@ -189,7 +189,7 @@ class WasmLinearArrays {
 					builder.i32Add();
 					builder.localSet(index);
 					builder.emit(Br(1));
-				}, function(_) {});
+				}, _ -> {});
 			});
 		});
 		builder.localGet(foundIndex);
@@ -214,59 +214,59 @@ class WasmLinearArrays {
 		builder.localGet(startIndex);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(sourceLength);
 			builder.localGet(startIndex);
 			builder.i32Add();
 			builder.localSet(start);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(startIndex);
 			builder.localSet(start);
 		});
 		builder.localGet(start);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.localSet(start);
 		});
 		builder.localGet(start);
 		builder.localGet(sourceLength);
 		builder.emit(I32LtS);
-		builder.ifElse(function(_) {}, function(builder) {
+		builder.ifElse(_ -> {}, builder -> {
 			builder.localGet(sourceLength);
 			builder.localSet(start);
 		});
 		builder.localGet(endIndex);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(sourceLength);
 			builder.localGet(endIndex);
 			builder.i32Add();
 			builder.localSet(end);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(endIndex);
 			builder.localSet(end);
 		});
 		builder.localGet(end);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.localSet(end);
 		});
 		builder.localGet(end);
 		builder.localGet(sourceLength);
 		builder.emit(I32LtS);
-		builder.ifElse(function(_) {}, function(builder) {
+		builder.ifElse(_ -> {}, builder -> {
 			builder.localGet(sourceLength);
 			builder.localSet(end);
 		});
 		builder.localGet(end);
 		builder.localGet(start);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(start);
 			builder.localSet(end);
 		});
@@ -413,15 +413,15 @@ class WasmLinearArrays {
 		builder.localGet(array);
 		builder.emit(I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET));
 		builder.emit(I32LtS);
-		builder.ifElse(function(_) {}, function(builder) {
+		builder.ifElse(_ -> {}, builder -> {
 			builder.localGet(array);
 			builder.emit(I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET));
 			builder.localTee(capacity);
 			builder.i32Eqz();
-			builder.ifElse(function(builder) {
+			builder.ifElse(builder -> {
 				builder.i32Const(8);
 				builder.localSet(capacity);
-			}, function(builder) {
+			}, builder -> {
 				builder.localGet(capacity);
 				builder.i32Const(2);
 				builder.emit(I32Mul);
@@ -484,7 +484,7 @@ class WasmLinearArrays {
 		builder.i32Const(0);
 		builder.localGet(length);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(length);
 			builder.i32Const(1);
 			builder.i32Sub();
@@ -500,7 +500,7 @@ class WasmLinearArrays {
 			builder.localGet(array);
 			builder.localGet(index);
 			builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
-		}, function(builder) builder.emit(Unreachable));
+		}, builder -> builder.emit(Unreachable));
 		builder.localGet(value);
 		builder.return_();
 		return module.addFunction(builder.finish());
@@ -522,15 +522,15 @@ class WasmLinearArrays {
 		builder.localGet(array);
 		builder.emit(I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET));
 		builder.emit(I32LtS);
-		builder.ifElse(function(_) {}, function(builder) {
+		builder.ifElse(_ -> {}, builder -> {
 			builder.localGet(array);
 			builder.emit(I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET));
 			builder.localTee(capacity);
 			builder.i32Eqz();
-			builder.ifElse(function(builder) {
+			builder.ifElse(builder -> {
 				builder.i32Const(8);
 				builder.localSet(capacity);
-			}, function(builder) {
+			}, builder -> {
 				builder.localGet(capacity);
 				builder.i32Const(2);
 				builder.emit(I32Mul);
@@ -564,12 +564,12 @@ class WasmLinearArrays {
 		});
 		builder.localGet(length);
 		builder.localSet(index);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.i32Const(0);
 				builder.localGet(index);
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(index);
 					builder.i32Const(1);
 					builder.i32Sub();
@@ -591,7 +591,7 @@ class WasmLinearArrays {
 					builder.emit(arrayLoad(elementType, 0));
 					builder.emit(arrayStore(elementType, 0));
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 		builder.localGet(array);
@@ -628,23 +628,23 @@ class WasmLinearArrays {
 		builder.localGet(index);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(index);
 			builder.localGet(length);
 			builder.i32Add();
 			builder.localSet(index);
-		}, function(_) {});
+		}, _ -> {});
 		builder.localGet(index);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.i32Const(0);
 			builder.localSet(index);
-		}, function(_) {});
+		}, _ -> {});
 		builder.localGet(index);
 		builder.localGet(length);
 		builder.emit(I32LtS);
-		builder.ifElse(function(_) {}, function(builder) {
+		builder.ifElse(_ -> {}, builder -> {
 			builder.localGet(length);
 			builder.localSet(index);
 		});
@@ -652,15 +652,15 @@ class WasmLinearArrays {
 		builder.localGet(array);
 		builder.emit(I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET));
 		builder.emit(I32LtS);
-		builder.ifElse(function(_) {}, function(builder) {
+		builder.ifElse(_ -> {}, builder -> {
 			builder.localGet(array);
 			builder.emit(I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET));
 			builder.localTee(capacity);
 			builder.i32Eqz();
-			builder.ifElse(function(builder) {
+			builder.ifElse(builder -> {
 				builder.i32Const(8);
 				builder.localSet(capacity);
-			}, function(builder) {
+			}, builder -> {
 				builder.localGet(capacity);
 				builder.i32Const(2);
 				builder.emit(I32Mul);
@@ -694,12 +694,12 @@ class WasmLinearArrays {
 		});
 		builder.localGet(length);
 		builder.localSet(cursor);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(cursor);
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(cursor);
 					builder.i32Const(1);
 					builder.i32Sub();
@@ -721,7 +721,7 @@ class WasmLinearArrays {
 					builder.emit(arrayLoad(elementType, 0));
 					builder.emit(arrayStore(elementType, 0));
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 		builder.localGet(array);
@@ -752,19 +752,19 @@ class WasmLinearArrays {
 		builder.i32Const(0);
 		builder.localGet(length);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(array);
 			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 			builder.emit(arrayLoad(elementType, 0));
 			builder.localSet(value);
 			builder.i32Const(1);
 			builder.localSet(index);
-			builder.block(function(builder) {
-				builder.loop(function(builder) {
+			builder.block(builder -> {
+				builder.loop(builder -> {
 					builder.localGet(index);
 					builder.localGet(length);
 					builder.emit(I32LtS);
-					builder.ifElse(function(builder) {
+					builder.ifElse(builder -> {
 						builder.localGet(array);
 						builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 						builder.localGet(index);
@@ -786,7 +786,7 @@ class WasmLinearArrays {
 						builder.i32Add();
 						builder.localSet(index);
 						builder.emit(Br(1));
-					}, function(builder) builder.emit(Br(2)));
+					}, builder -> builder.emit(Br(2)));
 				});
 			});
 			builder.localGet(array);
@@ -794,7 +794,7 @@ class WasmLinearArrays {
 			builder.i32Const(1);
 			builder.i32Sub();
 			builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
-		}, function(builder) builder.emit(Unreachable));
+		}, builder -> builder.emit(Unreachable));
 		builder.localGet(value);
 		builder.return_();
 		return module.addFunction(builder.finish());
@@ -816,14 +816,14 @@ class WasmLinearArrays {
 		builder.localGet(newLength);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.emit(Unreachable);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(newLength);
 			builder.localGet(array);
 			builder.emit(I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET));
 			builder.emit(I32LeS);
-			builder.ifElse(function(builder) {}, function(builder) {
+			builder.ifElse(builder -> {}, builder -> {
 				builder.localGet(array);
 				builder.emit(I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET));
 				builder.i32Const(2);
@@ -832,7 +832,7 @@ class WasmLinearArrays {
 				builder.localGet(newCapacity);
 				builder.localGet(newLength);
 				builder.emit(I32LtS);
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.localGet(newLength);
 					builder.localSet(newCapacity);
 				});
@@ -867,23 +867,23 @@ class WasmLinearArrays {
 			builder.localGet(length);
 			builder.localGet(newLength);
 			builder.emit(I32LtS);
-			builder.ifElse(function(builder) {
+			builder.ifElse(builder -> {
 				builder.localGet(length);
 				builder.localSet(cursor);
 				builder.localGet(newLength);
 				builder.localSet(clearEnd);
-			}, function(builder) {
+			}, builder -> {
 				builder.localGet(newLength);
 				builder.localSet(cursor);
 				builder.localGet(length);
 				builder.localSet(clearEnd);
 			});
-			builder.block(function(builder) {
-				builder.loop(function(builder) {
+			builder.block(builder -> {
+				builder.loop(builder -> {
 					builder.localGet(cursor);
 					builder.localGet(clearEnd);
 					builder.emit(I32LtS);
-					builder.ifElse(function(builder) {
+					builder.ifElse(builder -> {
 						builder.localGet(array);
 						builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 						builder.localGet(cursor);
@@ -897,7 +897,7 @@ class WasmLinearArrays {
 						builder.i32Add();
 						builder.localSet(cursor);
 						builder.emit(Br(1));
-					}, function(builder) builder.emit(Br(2)));
+					}, builder -> builder.emit(Br(2)));
 				});
 			});
 			builder.localGet(array);
@@ -923,12 +923,12 @@ class WasmLinearArrays {
 		builder.localSet(index);
 		builder.i32Const(-1);
 		builder.localSet(foundIndex);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(length);
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(array);
 					builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 					builder.localGet(index);
@@ -938,7 +938,7 @@ class WasmLinearArrays {
 					builder.emit(arrayLoad(elementType, 0));
 					builder.localGet(searched);
 					builder.emit(stringEqual == null ? compare : Call(stringEqual));
-					builder.if_(function(builder) {
+					builder.if_(builder -> {
 						builder.localGet(index);
 						builder.localSet(foundIndex);
 						builder.emit(Br(3));
@@ -948,23 +948,23 @@ class WasmLinearArrays {
 					builder.i32Add();
 					builder.localSet(index);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 		builder.i32Const(-1);
 		builder.localGet(foundIndex);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(foundIndex);
 			builder.i32Const(1);
 			builder.i32Add();
 			builder.localSet(index);
-			builder.block(function(builder) {
-				builder.loop(function(builder) {
+			builder.block(builder -> {
+				builder.loop(builder -> {
 					builder.localGet(index);
 					builder.localGet(length);
 					builder.emit(I32LtS);
-					builder.ifElse(function(builder) {
+					builder.ifElse(builder -> {
 						builder.localGet(array);
 						builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 						builder.localGet(index);
@@ -986,7 +986,7 @@ class WasmLinearArrays {
 						builder.i32Add();
 						builder.localSet(index);
 						builder.emit(Br(1));
-					}, function(builder) builder.emit(Br(2)));
+					}, builder -> builder.emit(Br(2)));
 				});
 			});
 			builder.localGet(array);
@@ -996,7 +996,7 @@ class WasmLinearArrays {
 			builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
 			builder.i32Const(1);
 			builder.localSet(foundIndex);
-		}, function(builder) {
+		}, builder -> {
 			builder.i32Const(0);
 			builder.localSet(foundIndex);
 		});
@@ -1021,12 +1021,12 @@ class WasmLinearArrays {
 		builder.i32Const(1);
 		builder.i32Sub();
 		builder.localSet(right);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(left);
 				builder.localGet(right);
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(array);
 					builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 					builder.localGet(left);
@@ -1066,7 +1066,7 @@ class WasmLinearArrays {
 					builder.i32Sub();
 					builder.localSet(right);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 		return module.addFunction(builder.finish());
@@ -1089,36 +1089,36 @@ class WasmLinearArrays {
 		builder.localGet(requestedStart);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(length);
 			builder.localGet(requestedStart);
 			builder.i32Add();
 			builder.localSet(start);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(requestedStart);
 			builder.localSet(start);
 		});
 		builder.localGet(start);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.localSet(start);
 		});
 		builder.localGet(start);
 		builder.localGet(length);
 		builder.emit(I32LtS);
-		builder.ifElse(function(_) {}, function(builder) {
+		builder.ifElse(_ -> {}, builder -> {
 			builder.localGet(length);
 			builder.localSet(start);
 		});
 		builder.localGet(requestedDeleteCount);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.i32Const(0);
 			builder.localSet(deleteCount);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(requestedDeleteCount);
 			builder.localSet(deleteCount);
 		});
@@ -1127,7 +1127,7 @@ class WasmLinearArrays {
 		builder.localGet(start);
 		builder.i32Sub();
 		builder.emit(I32LtS);
-		builder.ifElse(function(_) {}, function(builder) {
+		builder.ifElse(_ -> {}, builder -> {
 			builder.localGet(length);
 			builder.localGet(start);
 			builder.i32Sub();

@@ -49,7 +49,7 @@ class WindowFrame implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			style.height = LayoutAxis.grow();

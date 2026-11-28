@@ -105,7 +105,7 @@ class CHeaderImporter {
 			Reflect.setField(declaration, "_hxiDocumentationNode", alias);
 			Reflect.setField(alias, "_hxiEnumAlias", true);
 		}
-		declarations.sort(function(left, right) return Reflect.compare(key(left), key(right)));
+		declarations.sort((left, right) -> Reflect.compare(key(left), key(right)));
 		var handleNames:Map<String, Bool> = [],
 			handleRecords:Map<String, Dynamic> = [],
 			handleDestroySymbols:Map<String, String> = [];
@@ -147,7 +147,7 @@ class CHeaderImporter {
 								var combined = previousValues.concat(values);
 								// Anonymous C groups need not have a stable AST order across targets.
 								// Raw values, rather than declaration order, define this native domain.
-								combined.sort(function(left, right) {
+								combined.sort((left, right) -> {
 									var order = flags ? Int64.ucompare(left.value,
 										right.value) : Int64.compare(left.value, right.value);
 									return order == 0 ? Reflect.compare(left.name, right.name) : order;

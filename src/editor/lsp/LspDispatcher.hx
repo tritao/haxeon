@@ -43,11 +43,11 @@ class LspDispatcher {
 		debounceSeconds = debounceMs / 1000.0;
 		protocol.enableDeferredDiagnostics();
 		protocol.enableProfilerNotifications(emit);
-		Thread.create(function() {
+		Thread.create(() -> {
 			runtime.ThreadName.setCurrent("haxeon.lsp.dispatch");
 			run();
 		});
-		Thread.create(function() {
+		Thread.create(() -> {
 			runtime.ThreadName.setCurrent("haxeon.lsp.debounce");
 			runDebounce();
 		});

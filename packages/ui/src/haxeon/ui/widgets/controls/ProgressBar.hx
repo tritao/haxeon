@@ -108,11 +108,11 @@ class ProgressBar implements ScopeView implements Observable {
 		node.semantics = semantics;
 		var fraction = (value - minimum) / (maximum - minimum);
 		var stored:State<ProgressPainter> = context.resourceState(node.id,
-			function() return new ProgressPainter(context.animations, fraction),
-			function(painter:ProgressPainter) painter.dispose());
+			() -> new ProgressPainter(context.animations, fraction),
+			(painter:ProgressPainter) -> painter.dispose());
 		var painter:ProgressPainter = cast stored.value;
 		painter.configure(mode, fraction, animationDuration, context.environment.reducedMotion);
-		node.onPaint(function(canvas, geometry) {
+		node.onPaint((canvas, geometry) -> {
 			var liveStyle:haxeon.ui.style.ComputedStyle = cast node.computedStyle;
 			painter.paint(canvas,
 				geometry,

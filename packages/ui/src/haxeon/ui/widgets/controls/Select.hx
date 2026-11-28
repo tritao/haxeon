@@ -50,7 +50,7 @@ class Select<T> implements View {
 		this.options = options == null ? [] : options.copy();
 		this.value = value;
 		hasChangeHandler = onChange != null;
-		this.onChange = onChange == null ? function(_:T) {}
+		this.onChange = onChange == null ? (_:T) -> {}
 			: onChange;
 		this.style = style == null ? defaultStyle() : style.copy();
 		if (this.style.height.sizing == LayoutSizing.Fit) this.style.height = LayoutAxis.fixed(36.0);
@@ -67,7 +67,7 @@ class Select<T> implements View {
 	public function build(context:BuildContext):ViewRoot {
 		// What the user picks while this build is shown; the field stays the caller's input.
 		var value = this.value;
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var rootStyle = style.copy();
 			rootStyle.direction = LayoutDirection.TopToBottom;
 			rootStyle.padding = new Insets(0.0, 0.0, 0.0, 0.0);
@@ -90,7 +90,7 @@ class Select<T> implements View {
 			var isOpen:Bool = openState.value;
 			var firstEnabled = firstEnabledIndex();
 			if (!enabled || firstEnabled < 0) {
-				if (isOpen) root.onResolved(function(_) openState.update(false));
+				if (isOpen) root.onResolved(_ -> openState.update(false));
 				isOpen = false;
 			}
 			root.layout.style.zIndex = isOpen ? 10 : 0;
@@ -100,17 +100,17 @@ class Select<T> implements View {
 			var active:Int = activeState.value;
 			if (!isEnabledIndex(active)) active = initialActive;
 			var storedActive:Int = activeState.value;
-			if (active != storedActive) root.onResolved(function(_) activeState.update(active));
+			if (active != storedActive) root.onResolved(_ -> activeState.update(active));
 
 			var triggerNode:Null<ViewRoot> = null;
 			// The open popup's option rows, so the trigger's keys can move focus into the list.
 			var popupLink = context.lazyState(context.id("popup-link"),
-				function() return new SelectionPopupLink()).value;
-			var close = function() {
+				() -> new SelectionPopupLink()).value;
+			var close = () -> {
 				if (openState.value == true) openState.update(false);
 				if (triggerNode != null) context.requestFocus(triggerNode.id);
 			};
-			var setActive = function(index:Int) {
+			var setActive = (index:Int) -> {
 				var current:Int = activeState.value;
 				if (isEnabledIndex(index)) {
 					if (index != current) {
@@ -119,10 +119,10 @@ class Select<T> implements View {
 					}
 				}
 			};
-			var focusOption = function(index:Int) {
+			var focusOption = (index:Int) -> {
 				if (index >= 0 && index < popupLink.optionIds.length) context.requestFocus(popupLink.optionIds[index]);
 			};
-			var nextEnabled = function(index:Int, direction:Int) {
+			var nextEnabled = (index:Int, direction:Int) -> {
 				if (options.length == 0) return -1;
 				var candidate = index;
 				for (_ in 0...options.length) {
@@ -131,7 +131,7 @@ class Select<T> implements View {
 				}
 				return index;
 			};
-			var selectOption = function(index:Int) {
+			var selectOption = (index:Int) -> {
 				if (!enabled || !isEnabledIndex(index)) return;
 				var option = options[index];
 				var changed = !sameValue(value, option.value);
@@ -141,7 +141,7 @@ class Select<T> implements View {
 				close();
 				if (changed && hasChangeHandler) onChange(value);
 			};
-			var toggleOpen = function() {
+			var toggleOpen = () -> {
 				if (!enabled || firstEnabled < 0) return;
 				if (openState.value == true) close();
 				else {
@@ -183,7 +183,7 @@ class Select<T> implements View {
 				null,
 				triggerSemantics);
 			var triggerModifier = new RootModifier();
-			triggerModifier.on(UiEventKind.KeyDown, function(event) {
+			triggerModifier.on(UiEventKind.KeyDown, event -> {
 				if (!enabled || firstEnabled < 0) return;
 				if (event.key == UiKey.Escape && openState.value == true) {
 					close();
@@ -203,7 +203,7 @@ class Select<T> implements View {
 				if (wasOpen) focusOption(next);
 				event.preventDefault();
 			});
-			triggerModifier.on(UiEventKind.AccessibilitySetValue, function(event) {
+			triggerModifier.on(UiEventKind.AccessibilitySetValue, event -> {
 				if (!enabled || event.text == null) return;
 				for (index in 0...options.length) if (options[index].enabled
 					&& (options[index].key == event.text || options[index].label == event.text)) {
@@ -213,7 +213,7 @@ class Select<T> implements View {
 				}
 			});
 			var builtTrigger = context.withScope(new Key("trigger"),
-				function() return context.build(trigger, triggerModifier));
+				() -> context.build(trigger, triggerModifier));
 			triggerNode = builtTrigger;
 			root.add(builtTrigger);
 
@@ -225,17 +225,17 @@ class Select<T> implements View {
 				for (option in options) popupOptions.push(cast option);
 				var popup = new SelectionPopup(popupOptions,
 					visibleIndices, value, active, builtTrigger.id, popupLink,
-					function(index:Int) {
+					(index:Int) -> {
 						selectOption(index);
-					}, close, function(index:Int) {
+					}, close, (index:Int) -> {
 					setActive(index);
 				});
 				root.add(context.build(popup));
-				root.onPointerDownOutside(function(event) {
+				root.onPointerDownOutside(event -> {
 					if (event.button == 0) close();
 				});
 			}
-			root.on(UiEventKind.KeyDown, function(event) {
+			root.on(UiEventKind.KeyDown, event -> {
 				if (event.key == UiKey.Escape && openState.value == true) {
 					close();
 					event.preventDefault();

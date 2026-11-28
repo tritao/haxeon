@@ -79,9 +79,9 @@ function main():Int {
 	if (WireFinalRecord.constructions != 1 || WireFinalChild.constructions != 1 || WireFinalCalls.evaluations != 1)
 		return 3;
 	var observableBytes = JsonWire.encode(new WireFinalObservable("observed"));
-	var effect = new Effect(function() {});
+	var effect = new Effect(() -> {});
 	var observed:WireFinalObservable = null;
-	ReactiveRuntime.withTracking(effect, function() {
+	ReactiveRuntime.withTracking(effect, () -> {
 		observed = JsonWire.decode<WireFinalObservable>(observableBytes).unwrap();
 	});
 	effect.dispose();

@@ -44,7 +44,7 @@ class VirtualListBenchmark {
 		var fullRows:Array<Int> = [];
 		var fullContext = new UiContext(LayoutSession.create(), fonts);
 		var fullList = new VirtualList('submit-full-$itemCount', itemCount, itemHeight,
-			function(index) {
+			index -> {
 				fullRows.push(index);
 				return new Text('Row $index');
 			}, fullStyle, null, fullController, viewportHeight);
@@ -70,11 +70,11 @@ class VirtualListBenchmark {
 		var retainedRows:Array<Int> = [];
 		var retainedContext = new UiContext(LayoutSession.create(), fonts);
 		var retainedList = new VirtualList('submit-retained-$itemCount', itemCount, itemHeight,
-			function(index) {
+			index -> {
 				retainedRows.push(index);
 				return new Text('Row $index');
 			}, retainedStyle, null, retainedController, viewportHeight);
-		retainedContext.submitCached(function() return retainedList, frame,
+		retainedContext.submitCached(() -> retainedList, frame,
 			'submit-retained-$itemCount');
 		var retainedSeconds = 0.0;
 		var retainedNodes = 0;
@@ -82,7 +82,7 @@ class VirtualListBenchmark {
 		for (_ in 0...samples) {
 			retainedRows.resize(0);
 			var started = Sys.time();
-			retainedContext.submitCached(function() return retainedList, frame,
+			retainedContext.submitCached(() -> retainedList, frame,
 				'submit-retained-$itemCount');
 			retainedSeconds += Sys.time() - started;
 			var metrics:Null<UiFrameMetrics> = retainedContext.frameMetrics;
@@ -111,7 +111,7 @@ class VirtualListBenchmark {
 		var builtRows:Array<Int> = [];
 		var context = new UiContext(LayoutSession.create(), fonts);
 		var list = new VirtualList('benchmark-$itemCount', itemCount, itemHeight,
-			function(index) {
+			index -> {
 				builtRows.push(index);
 				return new Text('Row $index');
 			}, style, null, controller, viewportHeight);

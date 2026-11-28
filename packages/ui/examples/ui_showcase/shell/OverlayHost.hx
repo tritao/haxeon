@@ -21,9 +21,9 @@ class OverlayHost {
 			var dialog = new Dialog("showcase-dialog", "Haxeon dialog",
 				new Column("dialog-content",
 				[explorer.keyed("copy", explorer.caption("A modal overlay rendered in the same resolved UI tree.")),
-				explorer.keyed("close", explorer.button("Done", "dialog-done", function() {
+				explorer.keyed("close", explorer.button("Done", "dialog-done", () -> {
 					explorer.state.overlays.dialogOpen = false;
-				}))], contentStyle), function() {
+				}))], contentStyle), () -> {
 				explorer.state.overlays.dialogOpen = false;
 			}, 390.0);
 			layers.push(new StackChild("dialog-layer", dialog, 0.0, 0.0, 30));
@@ -46,11 +46,11 @@ class OverlayHost {
 				? belowY : Math.max(edge, anchorTop - 6.0 - popupHeight);
 			var popupContent = new Column("popup-content", [explorer.keyed("title", explorer.heading("Quick actions")),
 				explorer.keyed("copy", explorer.caption("This popup escapes the page clip.")),
-				explorer.keyed("dismiss", explorer.button("Close popup", "popup-close", function() {
+				explorer.keyed("dismiss", explorer.button("Close popup", "popup-close", () -> {
 					explorer.state.overlays.popupOpen = false;
 				}))], explorer.panelStyle(250.0));
 			var popup = new Popup("showcase-popup", popupContent,
-				popupX, popupY, null, function() {
+				popupX, popupY, null, () -> {
 					explorer.state.overlays.popupOpen = false;
 				}, label: "Quick actions", modal: false);
 			layers.push(new StackChild("popup-layer", popup, 0.0, 0.0, 20));
@@ -72,13 +72,13 @@ class OverlayHost {
 			var belowY = anchorBottom + 6.0;
 			var menuY = belowY + menuHeight <= explorer.height - edge
 				? belowY : Math.max(edge, anchorTop - 6.0 - menuHeight);
-			var menu = new Menu("showcase-menu", [new MenuItem("menu-new", "New document", function() {
+			var menu = new Menu("showcase-menu", [new MenuItem("menu-new", "New document", () -> {
 				explorer.state.controls.menuSelection = "New document";
 			}),
-				new MenuItem("menu-copy", "Copy selection", function() {
+				new MenuItem("menu-copy", "Copy selection", () -> {
 				explorer.state.controls.menuSelection = "Copy selection";
 			}),
-				new MenuItem("menu-disabled", "Unavailable action", null, false)], menuX, menuY, function() {
+				new MenuItem("menu-disabled", "Unavailable action", null, false)], menuX, menuY, () -> {
 				explorer.state.overlays.menuOpen = false;
 			}, selectFirstOnOpen: openedWithoutPointer);
 			layers.push(new StackChild("menu-layer", menu, 0.0, 0.0, 20));

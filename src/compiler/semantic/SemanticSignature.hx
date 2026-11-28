@@ -51,7 +51,7 @@ class SemanticSignature {
 	static function anonymousFields(fields:Array<compiler.types.Type.AnonymousField>, provisional:Bool = false):String {
 		anonymousSpellings++;
 		var ordered = fields.copy();
-		ordered.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		ordered.sort((left, right) -> Reflect.compare(left.name, right.name));
 		return '{${[for (field in ordered) (field.optional ? "?" : "") + (field.isFinal ? "final " : "") + field.name + ":" + spell(field.type, provisional)].join(",")}}';
 	}
 
@@ -251,7 +251,7 @@ class SemanticSignature {
 				'(${[for (index in 0...arguments.length) optionalMark(optional, index) + parsedType(arguments[index], aliases, resolving)].join(",")})->${parsedType(result, aliases, resolving)}';
 			case AnonymousType(fields):
 				var ordered = fields.copy();
-				ordered.sort(function(left, right) return Reflect.compare(left.name, right.name));
+				ordered.sort((left, right) -> Reflect.compare(left.name, right.name));
 				'{${[for (field in ordered) (field.optional ? "?" : "") + field.name + ":" + parsedType(field.type, aliases, resolving)].join(",")}}';
 		};
 }

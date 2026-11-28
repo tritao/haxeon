@@ -231,7 +231,7 @@ class LayoutSessionSmoke {
 	static function measuredVersion(fonts:FontCollection):Void {
 		var measurement:Null<LayoutMeasuredContent> = null;
 		var calls = 0;
-		measurement = new LayoutMeasuredContent(function(_) {
+		measurement = new LayoutMeasuredContent(_ -> {
 			calls++;
 			var current = measurement;
 			if (current != null) current.invalidate();
@@ -493,7 +493,7 @@ class LayoutSessionSmoke {
 		if (resolved[2].x != resolved[1].x + 20.0 || resolved[2].y != resolved[1].y + 10.0) return 7;
 
 		var measureCalls = 0;
-		var measureContent = new LayoutMeasuredContent(function(constraints:LayoutMeasureConstraints) {
+		var measureContent = new LayoutMeasuredContent((constraints:LayoutMeasureConstraints) -> {
 			measureCalls++;
 			if (constraints.maxWidth < constraints.minWidth
 				|| constraints.maxHeight < constraints.minHeight) throw "Invalid intrinsic measurement constraints";
@@ -516,7 +516,7 @@ class LayoutSessionSmoke {
 		if (stats.requests < 2 || stats.cacheHits == 0 || stats.callbackCalls != measureCalls) return 46;
 
 		var paintCalls = 0;
-		var renderable = new LayoutRenderableContent(measureContent, function(canvas, geometry) {
+		var renderable = new LayoutRenderableContent(measureContent, (canvas, geometry) -> {
 			paintCalls++;
 			canvas.fillRect(new Rect(0.0, 0.0, geometry.width, geometry.height), Color.rgba(0.2, 0.4, 0.8, 1.0));
 		});
@@ -552,7 +552,7 @@ class LayoutSessionSmoke {
 		measuredNode.intrinsicContent = null;
 		measuredNode.measureVersion = 2;
 		var fallbackCalls = 0;
-		session.setMeasureCallback(function(nodeId:Int, constraints:LayoutMeasureConstraints) {
+		session.setMeasureCallback((nodeId:Int, constraints:LayoutMeasureConstraints) -> {
 			fallbackCalls++;
 			if (nodeId != 103) throw "Unexpected fallback measurement request";
 			return new LayoutMeasureResult(32.0, 12.0);

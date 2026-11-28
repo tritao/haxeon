@@ -1269,7 +1269,7 @@ internal class TextEditorParagraphRecord implements Disposable {
 			?onShaped:TextEditorParagraphRecord->Void) {
 		this.text = text;
 		this.shapeText = shapeText;
-		this.onShaped = onShaped == null ? function(_) {} : onShaped;
+		this.onShaped = onShaped == null ? _ -> {} : onShaped;
 		start = 0;
 		end = 0;
 		y = 0.0;

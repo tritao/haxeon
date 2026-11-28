@@ -40,7 +40,7 @@ class WasmGcRoots {
 				if (output != null)
 					addReferenceId(referenceIds, seenReferences, output);
 			}
-		referenceIds.sort(function(left, right) return left - right);
+		referenceIds.sort((left, right) -> left - right);
 		var referenceIndices:Map<Int, Int> = [];
 		for (index in 0...referenceIds.length)
 			referenceIndices.set(referenceIds[index], index);
@@ -102,7 +102,7 @@ class WasmGcRoots {
 					});
 			}
 		}
-		result.sort(function(left, right) return left.block == right.block
+		result.sort((left, right) -> left.block == right.block
 			? left.instruction - right.instruction : left.block - right.block);
 		return result;
 	}

@@ -77,7 +77,7 @@ private class DecoratedControl implements View {
 
 	public function build(context:BuildContext):ViewRoot {
 		var modifier = new RootModifier();
-		modifier.on(UiEventKind.PointerDown, function(_) presses++);
+		modifier.on(UiEventKind.PointerDown, _ -> presses++);
 		modifier.zIndex = 3;
 		// As a dock host does with a tab header: an overlay child added by the caller.
 		var overlayStyle = new LayoutStyle();
@@ -225,7 +225,7 @@ private class MotionRig {
 
 	/** The panel as a new description: the reference rig submits a new one each time, so its body always runs again. */
 	function panel():View {
-		return new TrackedScope("motion-panel", function() {
+		return new TrackedScope("motion-panel", () -> {
 			panelBuilds++;
 			return new Column("motion-column",
 				[
@@ -241,7 +241,7 @@ private class MotionRig {
 
 	public function submit():RenderNode {
 		frame.deltaSeconds = 0.1;
-		return ui.submitCached(function() return patched ? view : panel(), frame,
+		return ui.submitCached(() -> patched ? view : panel(), frame,
 			patched ? "motion" : "motion:" + submissions++);
 	}
 }
@@ -273,22 +273,22 @@ private class Rig {
 		var rig = this;
 		decorated = controls ? [
 			new DecoratedControl("decorated-icon",
-				_ -> new IconButton("decorated-icon", IconName.Search, "Decorated icon", function() rig.clicks++)),
+				_ -> new IconButton("decorated-icon", IconName.Search, "Decorated icon", () -> rig.clicks++)),
 			new DecoratedControl("decorated-check",
-				_ -> new Checkbox("decorated-check", "Decorated check", false, function(_) rig.clicks++)),
+				_ -> new Checkbox("decorated-check", "Decorated check", false, _ -> rig.clicks++)),
 			new DecoratedControl("decorated-radio",
-				_ -> new Radio("decorated-radio", "Decorated radio", "d", false, function(_) rig.clicks++))
+				_ -> new Radio("decorated-radio", "Decorated radio", "d", false, _ -> rig.clicks++))
 		] : [new DecoratedControl("decorated", _ -> new Button("Decorated", null, null, "decorated"))];
 		this.restyleInPlace = restyleInPlace;
-		panel = () -> new TrackedScope("panel", function() {
+		panel = () -> new TrackedScope("panel", () -> {
 			rig.panelBuilds++;
 			var items:Array<KeyedView> = controls ? [
-				new KeyedView("icon", new IconButton("icon", IconName.Close, "Close", function() rig.clicks++)),
+				new KeyedView("icon", new IconButton("icon", IconName.Close, "Close", () -> rig.clicks++)),
 				new KeyedView("check",
-					new Checkbox("check", "Check", rig.checked.value, function(value) rig.checked.value = value)),
+					new Checkbox("check", "Check", rig.checked.value, value -> rig.checked.value = value)),
 				new KeyedView("toggle",
-					new Toggle("toggle", "Toggle", rig.toggled, function(value) rig.toggled = value)),
-				new KeyedView("radio", new Radio("radio", "Radio", "r", false, function(_) rig.clicks++)),
+					new Toggle("toggle", "Toggle", rig.toggled, value -> rig.toggled = value)),
+				new KeyedView("radio", new Radio("radio", "Radio", "r", false, _ -> rig.clicks++)),
 				new KeyedView("group",
 					new RadioGroup("group",
 					[
@@ -296,17 +296,17 @@ private class Rig {
 						new RadioOption("beta", "Beta", "b")
 					],
 					"a",
-					function(value) rig.chosen = value)),
+					value -> rig.chosen = value)),
 				new KeyedView("disabled",
-					new Radio("disabled", "Disabled", "x", false, function(_) rig.clicks++, null, false)),
+					new Radio("disabled", "Disabled", "x", false, _ -> rig.clicks++, null, false)),
 			] : [
-				new KeyedView("one", new Button("One", null, function() rig.clicks++, "one")),
-				new KeyedView("two", new Button("Two", null, function() rig.clicks++, "two")),
+				new KeyedView("one", new Button("One", null, () -> rig.clicks++, "one")),
+				new KeyedView("two", new Button("Two", null, () -> rig.clicks++, "two")),
 			];
 			for (control in rig.decorated) items.push(new KeyedView(control.key, control));
 			if (!controls) {
-				items.push(new KeyedView("three", new Button("Three", null, function() rig.clicks++, "three")));
-				items.push(new KeyedView("four", new Button("Four", null, function() rig.clicks++, "four")));
+				items.push(new KeyedView("three", new Button("Three", null, () -> rig.clicks++, "three")));
+				items.push(new KeyedView("four", new Button("Four", null, () -> rig.clicks++, "four")));
 			}
 			var column = new Column("column", items);
 			if (!scrolling) return column;
@@ -321,7 +321,7 @@ private class Rig {
 	public function submit():RenderNode {
 		frame.deltaSeconds = 0.1;
 		// The reference never reuses its panel, so everything in it, the scrollbar too, is built from scratch on every frame.
-		return ui.submitCached(function() return restyleInPlace ? view : panel(), frame, "panel");
+		return ui.submitCached(() -> restyleInPlace ? view : panel(), frame, "panel");
 	}
 }
 
@@ -369,7 +369,7 @@ private class FieldDecoration implements View {
 
 	public function build(context:BuildContext):ViewRoot {
 		var modifier = new RootModifier();
-		modifier.on(UiEventKind.PointerDown, function(_) onPress());
+		modifier.on(UiEventKind.PointerDown, _ -> onPress());
 		return context.build(field, modifier);
 	}
 }
@@ -662,7 +662,7 @@ private class PopupHost implements View {
 	/** Everything a user could see or interact with, per node. */
 	static function signature(root:RenderNode):String {
 		var out = new StringBuf();
-		root.walk(function(node) {
+		root.walk(node -> {
 			var style = node.layout.style, color = style.background, text = node.layout.textColor;
 			// State routed onto a node that no widget built from is invisible; a rebuilt node starts without it.
 			out.add(node.id.value + "|" + node.styleType + "|" + (node.recordsInteraction ? node.states.rawValue
@@ -679,7 +679,7 @@ private class PopupHost implements View {
 	/** The node of a control that restyles itself, by its key. */
 	static function control(root:RenderNode, key:String):RenderNode {
 		var found:Null<RenderNode> = null;
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.styleKey == key && (node.styleType == "button"
 				|| node.styleType == "checkbox" || node.styleType == "toggle" || node.styleType == "radio")) found =
 				node;
@@ -766,13 +766,13 @@ private class PopupHost implements View {
 			check(decoratedNode.id.equals(previousNode.id),
 				"The decorated control changed its widget identity: " + key);
 			var attached = false;
-			patchedRoot.walk(function(node) {
+			patchedRoot.walk(node -> {
 				if (node == decoratedNode) attached = true;
 			});
 			check(attached, "The node decorated by the caller was removed on " + key);
 			check(decoratedNode.layout.style.zIndex == 3, "A style change made after build was lost on " + key);
 			var overlays = 0;
-			decoratedNode.walk(function(node) {
+			decoratedNode.walk(node -> {
 				if (node.layout.style.width.value == 5.5 && node.layout.style.height.value == 7.5) overlays++;
 			});
 			check(overlays == 1, "A child added after build was lost or duplicated on " + key + " (" + overlays + ")");
@@ -790,7 +790,7 @@ private class PopupHost implements View {
 
 	static function find(root:RenderNode, text:String):Null<RenderNode> {
 		var found:Null<RenderNode> = null;
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.layout.text == text) found = node;
 		});
 		return found;
@@ -818,7 +818,7 @@ private class PopupHost implements View {
 		var slider = left.children[0], progress = left.children[1];
 		var overlaySlider = slider.children[0], overlayProgress = progress.children[0];
 		var previousPaint = paintTrace(progress, 1), animatedSteps = 0, steps = 0;
-		var compare = function(?callerChanged:Bool) {
+		var compare = (?callerChanged:Bool) -> {
 			left = patched.submit();
 			right = reference.submit();
 			steps++;
@@ -909,14 +909,14 @@ private class PopupHost implements View {
 		var ui = new UiContext(null, fonts);
 		var field = new TextField("name", "abc");
 		var presses = 0, panelBuilds = 0;
-		var decorated = new FieldDecoration(field, function() presses++);
-		var view:View = new TrackedScope("field-panel", function() {
+		var decorated = new FieldDecoration(field, () -> presses++);
+		var view:View = new TrackedScope("field-panel", () -> {
 			panelBuilds++;
 			return decorated;
 		});
 		var frame = new LayoutFrame(240.0, 60.0);
-		var build = function() return view;
-		var submit = function() return ui.submitCached(build, frame, "field");
+		var build = () -> view;
+		var submit = () -> ui.submitCached(build, frame, "field");
 		var root = submit();
 		check(ui.focusWidget(root.id), "The field did not take focus");
 		root = submit();
@@ -929,7 +929,7 @@ private class PopupHost implements View {
 			root = submit();
 		}
 		var typed:Null<RenderNode> = null;
-		root.walk(function(child) {
+		root.walk(child -> {
 			if (child.layout.text != null && child.layout.text.length == 6) typed = child;
 		});
 		check(typed != null, "The typed text is not shown");
@@ -1119,7 +1119,7 @@ private class PopupHost implements View {
 			"Verification missed a cache whose key leaves out what it shows: " + difference);
 		// The automatic mode reports through the callback.
 		var reported:Null<String> = null;
-		ui.onRetentionMismatch = function(text) reported = text;
+		ui.onRetentionMismatch = text -> reported = text;
 		ui.verifyRetentionEvery = 1;
 		label = "fourth";
 		ui.submitCached(build, frame, "verify-5");
@@ -1134,16 +1134,16 @@ private class PopupHost implements View {
 		var ui = new UiContext(null, fonts);
 		var frame = new LayoutFrame(240.0, 120.0);
 		var input = new TextInput("first"), builds = 0, frameNumber = 0;
-		var inner:View = new TrackedScope("inner", function() {
+		var inner:View = new TrackedScope("inner", () -> {
 			builds++;
 			return new haxeon.ui.widgets.text.Text(input.title);
 		});
 		// An outer scope around the inner one must let the inner read rerun the inner scope.
-		var view:View = new TrackedScope("outer", function() return inner);
-		var build = function() return view;
+		var view:View = new TrackedScope("outer", () -> inner);
+		var build = () -> view;
 		var shown = function():String {
 			var found = "";
-			ui.submitCached(build, frame, "observed-" + (frameNumber++)).walk(function(node) {
+			ui.submitCached(build, frame, "observed-" + (frameNumber++)).walk(node -> {
 				if (node.layout.text != null) found = node.layout.text;
 			});
 			return found;
@@ -1187,16 +1187,16 @@ private class PopupHost implements View {
 		var frame = new LayoutFrame(240.0, 120.0);
 		// The edited text sits inside the scope's column: the scope's own root may only change through a modifier.
 		var view:View = new TrackedScope("edited",
-			function() return new Column("edited-column",
+			() -> new Column("edited-column",
 			[new KeyedView("label", new haxeon.ui.widgets.text.Text("label"))]));
-		var build = function() return view;
+		var build = () -> view;
 		var reported:Null<String> = null;
-		ui.onRetentionMismatch = function(text) reported = text;
+		ui.onRetentionMismatch = text -> reported = text;
 		ui.verifyRetentionEvery = 1000;
 		var frameNumber = 0;
-		var submit = function() return ui.submitCached(build, frame, "edits-" + (frameNumber++));
+		var submit = () -> ui.submitCached(build, frame, "edits-" + (frameNumber++));
 		var text:Null<RenderNode> = null;
-		submit().walk(function(node) {
+		submit().walk(node -> {
 			if (node.layout.text == "label") text = node;
 		});
 		check(text != null, "No text node");
@@ -1270,8 +1270,8 @@ private class PopupHost implements View {
 			3.0,
 			5.0),
 			"InkOverflow equality is wrong");
-		var definition = function(id:Int, overflow:Float,
-				types:Array<haxeon.ui.style.CustomEffect.EffectParameterType>) return new haxeon.ui.style.CustomEffect
+		var definition = (id:Int, overflow:Float,
+			types:Array<haxeon.ui.style.CustomEffect.EffectParameterType>) -> new haxeon.ui.style.CustomEffect
 			.CustomEffectDefinition(id,
 			"effect",
 			types,
@@ -1328,12 +1328,12 @@ private class PopupHost implements View {
 	/** A build reparents a cached subtree; its old membership and topology must still compare as the submitted frame. */
 	static function submittedIndex(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts), builds = 0;
-		var retained = new TrackedScope("membership", function() {
+		var retained = new TrackedScope("membership", () -> {
 			builds++;
 			return new Text("kept child");
 		});
 		var frame = new LayoutFrame(240, 160);
-		var build = function() return new Column("membership-host",
+		var build = () -> new Column("membership-host",
 			[
 				new KeyedView("kept", retained),
 				new KeyedView("other", new Text("other child"))
@@ -1346,7 +1346,7 @@ private class PopupHost implements View {
 			check(metrics != null && metrics.styleChangedNodes == 0 && metrics.nativeLayoutReused,
 				"Reparenting while rebuilding treated unchanged nodes as new inputs or changed topology");
 		}
-		var reordered = function() return new Column("membership-host",
+		var reordered = () -> new Column("membership-host",
 			[
 				new KeyedView("other", new Text("other child")),
 				new KeyedView("kept", retained)

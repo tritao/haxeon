@@ -145,7 +145,7 @@ function main():Int {
 	var watched = new Holder();
 	watched.value = new Value(7, "watched");
 	var seen = 0;
-	if (watched.value != null) watched.value.child.bumpAndCall(function() seen = readX(watched.value));
+	if (watched.value != null) watched.value.child.bumpAndCall(() -> seen = readX(watched.value));
 	if (seen != 8 || readX(watched.value) != 8) return 21;
 	try {
 		if (watched.value != null) watched.value.child.bumpAndThrow();

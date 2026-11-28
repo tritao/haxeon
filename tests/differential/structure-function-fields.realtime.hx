@@ -11,7 +11,7 @@ class Main {
 	static function main() {
 		var square:Shape = {
 			area: (width, height) -> width * height,
-			describe: function(?label: String) Sys.println(label == null ? "unlabelled" : label),
+			describe: (?label: String) -> Sys.println(label == null ? "unlabelled" : label),
 			sides: 4
 		};
 		Sys.println(square.area(3, 4) + square.sides);

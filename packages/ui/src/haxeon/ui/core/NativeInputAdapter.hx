@@ -50,7 +50,7 @@ class NativeInputAdapter {
 		cursor = new NativeCursorController(source);
 		attachedEvents = null;
 		eventSubscription = null;
-		eventListener = function(event) {
+		eventListener = event -> {
 			switch event {
 				case Key(_, _, _, _, _): return;
 				case _:
@@ -75,7 +75,7 @@ class NativeInputAdapter {
 		detach();
 		this.redrawOnInput = redrawOnInput;
 		eventSubscription = events.listen(eventListener);
-		keySubscription = events.listenSource(source, function(event) return switch event {
+		keySubscription = events.listenSource(source, event -> switch event {
 			case Key(_, key, scancode, action, modifiers):
 				var handled = dispatchKey(key, scancode, action, modifiers);
 				if (this.redrawOnInput) context.requestFrameIfDirty();
@@ -83,7 +83,7 @@ class NativeInputAdapter {
 			case _: false;
 		});
 		attachedEvents = events;
-		context.setPointerCaptureHandler(function(captured) {
+		context.setPointerCaptureHandler(captured -> {
 			try {
 				// NativeKit exposes physical capture through the window's pointer
 				// mode. Logical capture remains authoritative when a backend does
@@ -93,7 +93,7 @@ class NativeInputAdapter {
 				// Unsupported capture must not interrupt logical event routing.
 			}
 		});
-		context.setCursorHandler(function(shape) {
+		context.setCursorHandler(shape -> {
 			cursor.apply(shape);
 		});
 	}

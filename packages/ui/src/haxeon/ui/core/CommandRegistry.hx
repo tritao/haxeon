@@ -101,7 +101,7 @@ class CommandRegistry implements Observable {
 			throw "Custom shortcuts require a command ID and a list";
 		var unique:Array<Shortcut> = [];
 		for (shortcut in shortcuts)
-			if (shortcut != null && !Lambda.exists(unique, function(existing) return existing.equals(shortcut)))
+			if (shortcut != null && !Lambda.exists(unique, existing -> existing.equals(shortcut)))
 				unique.push(shortcut);
 		var command = get(id);
 		var nextShortcuts = copyShortcuts(customShortcuts);
@@ -133,7 +133,7 @@ class CommandRegistry implements Observable {
 		var result:Array<String> = [];
 		for (id in commandOrder)
 			if (commandScopes.get(id) == scope
-				&& Lambda.exists(shortcutsFor(id), function(existing) return existing.equals(shortcut)))
+				&& Lambda.exists(shortcutsFor(id), existing -> existing.equals(shortcut)))
 				result.push(id);
 		return result;
 	}
@@ -325,14 +325,14 @@ class CommandRegistry implements Observable {
 			undoId:String = "edit.undo", redoId:String = "edit.redo"):Void {
 		if (history == null)
 			throw "History commands require an edit history";
-		register(new Command(undoId, "Undo", function() {
+		register(new Command(undoId, "Undo", () -> {
 			history.undo();
 		},
-			new Shortcut(UiKey.Z, UiModifier.Control), function() return history.canUndo));
-		register(new Command(redoId, "Redo", function() {
+			new Shortcut(UiKey.Z, UiModifier.Control), () -> history.canUndo));
+		register(new Command(redoId, "Redo", () -> {
 			history.redo();
 		},
-			new Shortcut(UiKey.Y, UiModifier.Control), function() return history.canRedo));
+			new Shortcut(UiKey.Y, UiModifier.Control), () -> history.canRedo));
 	}
 
 	/** Adds undo/redo commands that follow the document in the invocation context. */
@@ -340,18 +340,18 @@ class CommandRegistry implements Observable {
 			undoId:String = "edit.undo", redoId:String = "edit.redo"):Void {
 		if (document == null)
 			throw "Document history commands require a document";
-		register(Command.contextual(undoId, "Undo", function(context) {
+		register(Command.contextual(undoId, "Undo", context -> {
 			if (context.document != document)
 				return CommandResult.rejected("The active document changed");
 			return document.undo() ? CommandResult.executed() : CommandResult.rejected("Nothing to undo");
-		}, new Shortcut(UiKey.Z, UiModifier.Control), function(context) {
+		}, new Shortcut(UiKey.Z, UiModifier.Control), context -> {
 			return context.document == document && document.canUndo;
 		}));
-		register(Command.contextual(redoId, "Redo", function(context) {
+		register(Command.contextual(redoId, "Redo", context -> {
 			if (context.document != document)
 				return CommandResult.rejected("The active document changed");
 			return document.redo() ? CommandResult.executed() : CommandResult.rejected("Nothing to redo");
-		}, new Shortcut(UiKey.Y, UiModifier.Control), function(context) {
+		}, new Shortcut(UiKey.Y, UiModifier.Control), context -> {
 			return context.document == document && document.canRedo;
 		}));
 	}

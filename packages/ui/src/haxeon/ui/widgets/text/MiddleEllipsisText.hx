@@ -50,7 +50,7 @@ class MiddleEllipsisText implements View {
 
 	/** The text node itself, for a widget that shows it as its own text, as an unfocused text field does. */
 	public function makeNode(context:BuildContext):RenderNode {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			style.clipHorizontal = true;

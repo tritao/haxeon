@@ -36,7 +36,7 @@ class Main implements App {
 		var window = runtime.createWindow(options);
 		var surface = window.createSurface(SurfaceOptions.forGpu(width, height));
 		overlay = UiOverlay.attach(window, surface, runtime.events);
-		window.onClose(function() running = false);
+		window.onClose(() -> running = false);
 		runtime.drive(surface);
 		initialized = true;
 	}

@@ -26,8 +26,8 @@ import nativekit.ffi.NativeKitTypes.WindowStateFlags;
 		style.height = LayoutAxis.fixed(40);
 		var children:Array<KeyedView> = [];
 		if (showFirst) children.push(new KeyedView("first",
-			new CanvasView("first", function(_, _) {}, style, "First")));
-		children.push(new KeyedView("second", new CanvasView("second", function(_, _) {}, style, "Second")));
+			new CanvasView("first", (_, _) -> {}, style, "First")));
+		children.push(new KeyedView("second", new CanvasView("second", (_, _) -> {}, style, "Second")));
 		var root = new Column("focus-test", children).build(context).node();
 		for (child in root.children) child.focusable = true;
 		if (showFirst) root.children[0].enabled = enableFirst;
@@ -47,10 +47,10 @@ import nativekit.ffi.NativeKitTypes.WindowStateFlags;
 		var source = new Handle(17);
 		var input = new NativeInputAdapter(context, source);
 		var gained = 0, lost = 0;
-		root.children[0].on(UiEventKind.Focus, function(_) {
+		root.children[0].on(UiEventKind.Focus, _ -> {
 			gained++;
 		});
-		root.children[0].on(UiEventKind.FocusLost, function(_) {
+		root.children[0].on(UiEventKind.FocusLost, _ -> {
 			lost++;
 		});
 		check(context.focusWidget(first), "initial focus");

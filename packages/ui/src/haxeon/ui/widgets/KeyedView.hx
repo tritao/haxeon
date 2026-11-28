@@ -24,5 +24,5 @@ class KeyedView {
 
 	/** Builds the view under its key. */
 	public function build(context:BuildContext):ViewRoot
-		return context.withScope(key, function() return view.build(context));
+		return context.withScope(key, () -> view.build(context));
 }

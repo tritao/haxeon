@@ -88,7 +88,7 @@ class DesktopFrameRecorder {
 
 	public function attach(pump:EventPump, window:WindowHandle):Null<EventSubscription> {
 		if (!enabled) return null;
-		return pump.listen(function(value) {
+		return pump.listen(value -> {
 			switch value {
 				case PointerMove(source, _, _) if (source.rawValue == window.rawValue):
 					latestPointerAt = Sys.time();
@@ -250,7 +250,7 @@ class DesktopFrameRecorder {
 		};
 		timingRecorder.collect();
 		if (presentation != null && presentation.frameId != null)
-			timingRecorder.track(presentation, function(seconds) record.presentedMonotonicSeconds = seconds);
+			timingRecorder.track(presentation, seconds -> record.presentedMonotonicSeconds = seconds);
 		frameHistory.push(record);
 		record.bookkeepingSeconds = Sys.time() - frameFinishedAt;
 		record.gcCollectionsTotal = Gc.collections();

@@ -32,8 +32,8 @@ class NativeKitLifetimeTests {
 		var source = new Handle(900001);
 		var task = Task.adopt(new TaskHandle(source.rawValue));
 		var value = 0;
-		var future = requests.trackTask(task, function(bytes) return bytes.length);
-		future.onComplete(function(outcome) switch outcome {
+		var future = requests.trackTask(task, bytes -> bytes.length);
+		future.onComplete(outcome -> switch outcome {
 			case Success(Ok(length)): value = length;
 			case _: value = -1;
 		});
@@ -48,7 +48,7 @@ class NativeKitLifetimeTests {
 		var bad = requests.trackTask(task, function(bytes):Int {
 			throw new haxe.Exception("bad payload");
 		});
-		bad.onComplete(function(outcome) switch outcome {
+		bad.onComplete(outcome -> switch outcome {
 			case Stopped: badStopped = true;
 			case _:
 		});
@@ -57,8 +57,8 @@ class NativeKitLifetimeTests {
 		if (!decodingFailed || !badStopped || requests.pending() != 0) return false;
 
 		var cancelled = false;
-		var cancelling = requests.trackTask(task, function(bytes) return bytes.length);
-		cancelling.onComplete(function(outcome) switch outcome {
+		var cancelling = requests.trackTask(task, bytes -> bytes.length);
+		cancelling.onComplete(outcome -> switch outcome {
 			case Cancelled: cancelled = true;
 			case _:
 		});
@@ -67,7 +67,7 @@ class NativeKitLifetimeTests {
 
 		// A failed native cancellation must propagate and leave completion retryable.
 		var cancellationFailed = false;
-		var retry = requests.trackTask(task, function(bytes) return bytes.length);
+		var retry = requests.trackTask(task, bytes -> bytes.length);
 		try retry.cancel() catch (_:Dynamic) cancellationFailed = true;
 		if (!cancellationFailed || retry.isComplete() || retry.isCancellationRequested()
 			|| !retry.canCancel()) return false;
@@ -76,8 +76,8 @@ class NativeKitLifetimeTests {
 
 		// Stop observation is independent of native cancellation, including for tasks.
 		var taskStopped = false;
-		var stoppedTask = requests.trackTask(task, function(bytes) return bytes.length);
-		stoppedTask.onComplete(function(outcome) switch outcome {
+		var stoppedTask = requests.trackTask(task, bytes -> bytes.length);
+		stoppedTask.onComplete(outcome -> switch outcome {
 			case Stopped: taskStopped = true;
 			case _:
 		});
@@ -92,7 +92,7 @@ class NativeKitLifetimeTests {
 			case Raw(_, _, _, _, _, _, data): Success(data.length);
 			case _: Cancelled;
 		});
-		raw.onComplete(function(outcome) switch outcome {
+		raw.onComplete(outcome -> switch outcome {
 			case Success(n): rawValue = n;
 			case _:
 		});
@@ -101,7 +101,7 @@ class NativeKitLifetimeTests {
 			function(_):Outcome<Int> return Success(0)) catch (error:haxeon.platform.BindingError) {
 			duplicateRejected = error.kind == haxeon.platform.BindingErrorKind.InvalidState;
 		}
-		var sameNumberTask = requests.trackTask(task, function(bytes) return bytes.length);
+		var sameNumberTask = requests.trackTask(task, bytes -> bytes.length);
 		if (!duplicateRejected || requests.pending() != 2) return false;
 		requests.handle(rawAnswer(id, "abc"));
 		if (rawValue != 3 || requests.pending() != 1 || sameNumberTask.isComplete()) return false;
@@ -110,7 +110,7 @@ class NativeKitLifetimeTests {
 
 		// Native cancellation is idempotent, awaits acknowledgement, and tolerates a completion race.
 		var calls = 0;
-		var racing = requests.trackNative(id, function(_):Outcome<Int> return Success(9), function() {
+		var racing = requests.trackNative(id, function(_):Outcome<Int> return Success(9), () -> {
 			calls++;
 		});
 		if (!racing.cancel() || racing.cancel() || calls != 1 || racing.isComplete()
@@ -144,10 +144,10 @@ class NativeKitLifetimeTests {
 		// One throwing observer must not starve other completion observers.
 		var promise = new Promise<Int>();
 		var observed = false;
-		promise.future.onComplete(function(_) {
+		promise.future.onComplete(_ -> {
 			throw "observer failed";
 		});
-		promise.future.onComplete(function(_) {
+		promise.future.onComplete(_ -> {
 			observed = true;
 		});
 		var observerFailed = false;
@@ -155,14 +155,14 @@ class NativeKitLifetimeTests {
 		if (!observed || !observerFailed || !promise.future.isComplete()) return false;
 
 		var registry = new DisposalRegistry();
-		for (_ in 0...1000) registry.register(function() {}).detach();
+		for (_ in 0...1000) registry.register(() -> {}).detach();
 		if (registry.count() != 0) return false;
 		var order = "";
-		registry.register(function() {
+		registry.register(() -> {
 			order += "a";
 		});
 		var shouldFail = true;
-		registry.register(function() {
+		registry.register(() -> {
 			if (shouldFail) throw "busy";
 			order += "b";
 		});
@@ -196,15 +196,15 @@ class NativeKitLifetimeTests {
 		if (asked.get_checkbox_label() != "Don't ask again" || asked.get_yes_label() != "Delete") return false;
 
 		// Retain a tracked future until runtime shutdown; it must settle and detach.
-		var pending = requests.trackTask(task, function(bytes) return bytes.length);
-		pending.onComplete(function(outcome) switch outcome {
+		var pending = requests.trackTask(task, bytes -> bytes.length);
+		pending.onComplete(outcome -> switch outcome {
 			case Cancelled: shutdownCompleted = true;
 				throw "shutdown observer";
 			case _:
 		});
 		var secondTask = Task.adopt(new TaskHandle(900002));
 		requests.trackTask(secondTask,
-			function(bytes) return bytes.length).onComplete(function(outcome) switch outcome {
+			bytes -> bytes.length).onComplete(outcome -> switch outcome {
 				case Cancelled: secondShutdownCompleted = true;
 				case _:
 			});

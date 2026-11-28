@@ -11,7 +11,7 @@ class Base implements Builder {
 		this.value = value;
 
 	public function build(context:Int):Int
-		return run(function() return inner(context));
+		return run(() -> inner(context));
 
 	function inner(context:Int):Int
 		return value + context;

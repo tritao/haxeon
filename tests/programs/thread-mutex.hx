@@ -10,7 +10,7 @@ function main():Int {
 	mutex.release();
 	var total = [0], done = new Lock();
 	for (_ in 0...4)
-		Thread.create(function() {
+		Thread.create(() -> {
 			for (_ in 0...20000) {
 				mutex.acquire();
 				total[0] = total[0] + 1;

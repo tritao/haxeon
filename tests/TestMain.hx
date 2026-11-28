@@ -1026,10 +1026,10 @@ class TestMain {
 			throw "legacy IR type state did not remain readable";
 		var trailingType = HaxeBytes.alloc(persistedTypeBytes.length + 1);
 		trailingType.blit(0, persistedTypeBytes, 0, persistedTypeBytes.length);
-		expectStringError(function() IrTypeCodec.decode(trailingType), "Trailing IR type state data");
+		expectStringError(() -> IrTypeCodec.decode(trailingType), "Trailing IR type state data");
 		var unknownType = persistedTypeBytes.sub(0, persistedTypeBytes.length);
 		unknownType.set(4, 255);
-		expectStringError(function() IrTypeCodec.decode(unknownType), "Unknown IR type tag");
+		expectStringError(() -> IrTypeCodec.decode(unknownType), "Unknown IR type tag");
 		Sys.println("PASS: IR types persist deterministically and reject malformed state");
 		var persistedValues = [
 			new compiler.ir.model.Ir.IrValue(9, "result", I32),
@@ -1049,7 +1049,7 @@ class TestMain {
 		var referenceBytes = new haxe.io.BytesOutput();
 		referenceBytes.bigEndian = false;
 		referenceBytes.writeInt32(99);
-		expectStringError(function() IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()),
+		expectStringError(() -> IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()),
 			badReference), "Unknown IR value reference");
 		Sys.println("PASS: canonical IR value tables preserve identity and reject unknown references");
 		var instructionProgram =

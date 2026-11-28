@@ -215,7 +215,7 @@ class ProfilerService {
 		if (workerStarted)
 			return;
 		workerStarted = true;
-		Thread.create(function() {
+		Thread.create(() -> {
 			runtime.ThreadName.setCurrent("haxeon.profiler");
 			run();
 		});

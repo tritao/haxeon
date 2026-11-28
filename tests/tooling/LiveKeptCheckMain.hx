@@ -49,8 +49,8 @@ class LiveKeptCheckMain {
 	static function checkOpcodeComparison():Void {
 		var left:Array<HlInstruction> = [Jump(0), Label(0), CallN(0, 3, [1, 2]), LoadBool(0, true)];
 		var right:Array<HlInstruction> = [Jump(1), Label(1), CallN(0, 3, [1, 2]), LoadBool(0, true)];
-		var functionOf = function(ops:Array<HlInstruction>) return new HlFunction(0, 0, [], ops);
-		var compare = function(ops:Array<HlInstruction>) return compiler.hl.HlFunctionEquality
+		var functionOf = (ops:Array<HlInstruction>) -> new HlFunction(0, 0, [], ops);
+		var compare = (ops:Array<HlInstruction>) -> compiler.hl.HlFunctionEquality
 			.difference(functionOf(left), functionOf(ops));
 		if (compare(right) != null)
 			throw "Equivalent labels and copied register arrays must compare equal";

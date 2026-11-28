@@ -297,7 +297,7 @@ class IrValueInterfaceBoxes extends IrFunctionPass {
 					input = builder.argument("value", Dyn),
 					physical = builder.call("__dynamic_object_type_id", [input], I32),
 					missing = builder.createBlock();
-				IrTypeHashDispatch.emit(builder, physical, [for (id in byId.keys()) id], function(id) {
+				IrTypeHashDispatch.emit(builder, physical, [for (id in byId.keys()) id], id -> {
 					for (value in byId.get(id) ?? []) {
 						var matched = builder.createBlock(), next = builder.createBlock();
 						builder.branch(builder.call("__std_is_exact_type",

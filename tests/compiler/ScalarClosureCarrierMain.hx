@@ -42,7 +42,7 @@ class ScalarClosureCarrierMain {
 		compiler.ir.verify.IrVerifier.verify(p);
 		Sys.println("PASS: exact carrier argument through verified scalar closure");
 		for (stack in [false, true]) reject(stack ? "native borrowing scalar prefix with stack reference"
-			: "native borrowing scalar prefix with carrier", function(p) {
+			: "native borrowing scalar prefix with carrier", p -> {
 				var type:IrType = stack ? compiler.ir.passes.scalars.IrHlScalarRef.type(I32) : carrier,
 					signature:IrType = Function([type], I32);
 				p.natives = [{name: name, library: "test", symbol: "not_verified", arguments: [type], result: I32}];
@@ -51,7 +51,7 @@ class ScalarClosureCarrierMain {
 				b.returnValue(b.constInt(42));
 				p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 			}, "A scalar closure must target a verified scalar function");
-		reject("native prefix cannot consume a scalar stack reference directly", function(p) {
+		reject("native prefix cannot consume a scalar stack reference directly", p -> {
 			var type = compiler.ir.passes.scalars.IrHlScalarRef.type(I32);
 			p.natives = [{name: name, library: "test", symbol: "not_verified", arguments: [type], result: Void}];
 			var b = new IrBuilder(),
@@ -60,7 +60,7 @@ class ScalarClosureCarrierMain {
 			b.returnValue(b.constInt(42));
 			p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		}, "A scalar stack reference cannot escape its call");
-		reject("carrier callable Dynamic escape", function(p) {
+		reject("carrier callable Dynamic escape", p -> {
 			var c = new IrBuilder();
 			c.argument("value", carrier);
 			c.returnValue(c.constInt(42));
@@ -72,13 +72,13 @@ class ScalarClosureCarrierMain {
 				new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)
 			];
 		}, "requires a logical Dynamic adapter");
-		reject("carrier callable unchecked cast", function(p) {
+		reject("carrier callable unchecked cast", p -> {
 			var b = new IrBuilder();
 			b.safeCast(b.constNull(Dyn), signature);
 			b.returnValue(b.constInt(42));
 			p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		}, "requires a logical cast adapter");
-		reject("one matching position cannot hide a mismatched repeated argument", function(p) {
+		reject("one matching position cannot hide a mismatched repeated argument", p -> {
 			var c = new IrBuilder();
 			c.argument("value", carrier);
 			c.argument("other", Dyn);
@@ -92,7 +92,7 @@ class ScalarClosureCarrierMain {
 				new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)
 			];
 		}, "Wrong IR closure argument type");
-		reject("ordinary callable cannot consume a carrier", function(p) {
+		reject("ordinary callable cannot consume a carrier", p -> {
 			var b = new IrBuilder(), fn = b.argument("fn", Function([Dyn], I32));
 			b.returnValue(b.callClosure(fn, [b.constNull(carrier)], I32));
 			p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];

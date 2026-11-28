@@ -27,17 +27,17 @@ class Column implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		var id = context.withScope(key, function() return context.rootId("column"));
+		var id = context.withScope(key, () -> context.rootId("column"));
 		return buildWithId(context, id);
 	}
 
 	/** Build with an ID already claimed by a self-updating owner. */
 	public function buildWithId(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var node = context.styled(id, LayoutVisualKind.Box,
 				new StyleIdentity("column", key.rawValue, key.rawValue, null, ["column"]), style);
 			var computed = node.computedStyle;
-			for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
+			for (child in children) node.add(context.withStyleParent(computed, () -> child.build(context)));
 			return node;
 		});
 	}

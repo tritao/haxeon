@@ -32,6 +32,6 @@ class WindowChrome implements View {
 		var modifier = new haxeon.ui.core.RootModifier();
 		modifier.windowDecoration = kind;
 		modifier.windowDecorationCursor = cursor;
-		return context.withScope(key, function() return context.build(child, modifier));
+		return context.withScope(key, () -> context.build(child, modifier));
 	}
 }

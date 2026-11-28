@@ -20,3 +20,4 @@ class Main {
 		Sys.exit(0);
 	}
 }
+// @lint:off function-lambda: this test is about the function form

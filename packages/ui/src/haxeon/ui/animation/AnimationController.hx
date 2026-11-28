@@ -30,8 +30,8 @@ class AnimationController implements Animation {
 		this.scheduler = scheduler;
 		animationToken = this;
 		registration = null;
-		this.onUpdate = onUpdate == null ? function(_) {} : onUpdate;
-		this.onComplete = onComplete == null ? function() {} : onComplete;
+		this.onUpdate = onUpdate == null ? _ -> {} : onUpdate;
+		this.onComplete = onComplete == null ? () -> {} : onComplete;
 		hasUpdate = onUpdate != null;
 		hasComplete = onComplete != null;
 		value = 0.0;
@@ -227,7 +227,7 @@ class SpringController implements Animation {
 		this.scheduler = scheduler;
 		animationToken = this;
 		registration = null;
-		this.onUpdate = onUpdate == null ? function(_) {} : onUpdate;
+		this.onUpdate = onUpdate == null ? _ -> {} : onUpdate;
 		hasUpdate = onUpdate != null;
 	}
 

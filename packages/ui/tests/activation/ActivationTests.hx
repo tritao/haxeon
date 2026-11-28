@@ -32,7 +32,7 @@ class ActivationTests {
 		var ui = new UiContext(null, fonts);
 		var root = ui.submit(view, new LayoutFrame(320, 160));
 		var target:Null<RenderNode> = null;
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (target == null && node.semantics != null
 				&& node.semantics.actions.contains(AccessibilityAction.Activate)
 				&& (label == "" || node.semantics.label == label)) target = node;
@@ -42,7 +42,7 @@ class ActivationTests {
 		var bounds = node.globalBounds();
 		var x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
 		var rawClicks = 0;
-		node.on(UiEventKind.Click, function(_) rawClicks++);
+		node.on(UiEventKind.Click, _ -> rawClicks++);
 		for (button in [1, 2, 3, 4]) {
 			ui.pointerDown(x, y, button);
 			check(!ui.interactionStates.get(node.id).contains(StyleState.Pressed),
@@ -92,32 +92,32 @@ class ActivationTests {
 		var fonts = FontCollection.create();
 		fonts.addDefaultFonts();
 		var calls = 0;
-		exercise(fonts, new Button("Button", style(), function() calls++), "Button", function() return calls);
+		exercise(fonts, new Button("Button", style(), () -> calls++), "Button", () -> calls);
 		calls = 0;
 		var eventButton = new Button("Event button",
 			style(), null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-			function(event) {
+			event -> {
 				if (event.kind == UiEventKind.Click) check(event.button == 0
 					&& event.modifiers.contains(UiModifier.Control),
 					"Click event metadata changed");
 				calls++;
 			});
-		exercise(fonts, eventButton, "Event button", function() return calls);
+		exercise(fonts, eventButton, "Event button", () -> calls);
 		calls = 0;
 		exercise(fonts,
-			new IconButton("icon", IconName.Settings, "Icon", function() calls++, style()),
+			new IconButton("icon", IconName.Settings, "Icon", () -> calls++, style()),
 			"Icon",
-			function() return calls);
+			() -> calls);
 		calls = 0;
 		exercise(fonts,
-			new Checkbox("check", "Checkbox", false, function(_) calls++, style()),
+			new Checkbox("check", "Checkbox", false, _ -> calls++, style()),
 			"Checkbox",
-			function() return calls);
+			() -> calls);
 		calls = 0;
 		exercise(fonts,
-			new Radio("radio", "Radio", "value", false, function(_) calls++, style()),
+			new Radio("radio", "Radio", "value", false, _ -> calls++, style()),
 			"Radio",
-			function() return calls);
+			() -> calls);
 		calls = 0;
 		exercise(fonts,
 			new VirtualGrid("grid",
@@ -125,18 +125,18 @@ class ActivationTests {
 			1,
 			40,
 			140,
-			function(_, _) return new Text("Cell"),
+			(_, _) -> new Text("Cell"),
 			style(),
 			null,
 			null,
 			140,
 			40,
-			function(_, _) calls++),
+			(_, _) -> calls++),
 			"",
-			function() return calls);
+			() -> calls);
 		calls = 0;
-		var disabled = new Button("Disabled", style(), function() calls++, null, false);
-		exercise(fonts, disabled, "Disabled", function() return calls, true);
+		var disabled = new Button("Disabled", style(), () -> calls++, null, false);
+		exercise(fonts, disabled, "Disabled", () -> calls, true);
 		fonts.dispose();
 		runtime.dispose();
 		Sys.println("PASS: primary-only controls, raw auxiliary clicks, matching releases, cancellation, keyboard and accessibility");

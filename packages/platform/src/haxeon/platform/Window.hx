@@ -47,7 +47,7 @@ class Window implements Disposable {
 		ensureCanCreate();
 		if (handler == null)
 			throw BindingError.invalidArgument("Window.onKey", "Key handler is required");
-		return events.listenSource(new Handle(value.rawValue), function(event) return switch event {
+		return events.listenSource(new Handle(value.rawValue), event -> switch event {
 			case Key(_, key, scancode, action, modifiers): handler(key, scancode, action, modifiers);
 			case _: false;
 		}).ownedBy(children);
@@ -58,7 +58,7 @@ class Window implements Disposable {
 		ensureCanCreate();
 		if (handler == null)
 			throw BindingError.invalidArgument("Window.onClose", "Close handler is required");
-		return events.listenSource(new Handle(value.rawValue), function(event) {
+		return events.listenSource(new Handle(value.rawValue), event -> {
 			switch event {
 				case WindowClose(_): handler();
 				case _:
@@ -72,7 +72,7 @@ class Window implements Disposable {
 		ensureCanCreate();
 		if (handler == null)
 			throw BindingError.invalidArgument("Window.onResize", "Resize handler is required");
-		return events.listenSource(new Handle(value.rawValue), function(event) {
+		return events.listenSource(new Handle(value.rawValue), event -> {
 			switch event {
 				case WindowResize(_, width, height): handler(width, height);
 				case _:

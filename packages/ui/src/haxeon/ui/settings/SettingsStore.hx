@@ -148,7 +148,7 @@ class SettingsStore implements Observable {
 
 	/** Resets every setting at or below the prefix. */
 	public function resetUnder(prefix:String):Void
-		batch(function() {
+		batch(() -> {
 			for (definition in registry.under(prefix))
 				reset(definition.path);
 		});
@@ -169,7 +169,7 @@ class SettingsStore implements Observable {
 			throw "Settings listeners cannot be null";
 		var entry = new SettingsListener(prefix == null ? "" : prefix, listener);
 		listeners.push(entry);
-		return function() listeners.remove(entry);
+		return () -> listeners.remove(entry);
 	}
 
 	/** Application state saved under the key, or null. */
@@ -318,7 +318,7 @@ class SettingsStore implements Observable {
 
 	static function sortedKeys<T>(map:Map<String, T>):Array<String> {
 		var keys = [for (key in map.keys()) key];
-		keys.sort(function(first, second) return Reflect.compare(first, second));
+		keys.sort((first, second) -> Reflect.compare(first, second));
 		return keys;
 	}
 

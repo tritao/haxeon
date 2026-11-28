@@ -60,7 +60,7 @@ class RuntimeDomainMain {
 		if (domain.active || domain.generation != 2)
 			throw "runtime domain did not deactivate cleanly";
 		var disposed = 0,
-			owned = new RuntimeDomain("owned", function(_) disposed++),
+			owned = new RuntimeDomain("owned", _ -> disposed++),
 			firstModule:Dynamic = {},
 			secondModule:Dynamic = {};
 		owned.activateWithModule(new TestPlugin("owned-first", events), firstModule);
@@ -143,7 +143,7 @@ class RuntimeDomainMain {
 
 	static function testCandidateCleanupFailure(events:Array<String>):Void {
 		var disposed = 0,
-			domain = new RuntimeDomain("candidate-cleanup", function(_) disposed++),
+			domain = new RuntimeDomain("candidate-cleanup", _ -> disposed++),
 			previous = new TestPlugin("candidate-cleanup-first", events),
 			candidate = new TestPlugin("candidate-cleanup-second", events);
 		previous.state = "cursor:9";
@@ -168,7 +168,7 @@ class RuntimeDomainMain {
 	}
 
 	static function testRecoveryFailure(events:Array<String>):Void {
-		var disposed = 0, domain = new RuntimeDomain("recovery", function(_) disposed++);
+		var disposed = 0, domain = new RuntimeDomain("recovery", _ -> disposed++);
 		var previous = new TestPlugin("recovery-first", events),
 			candidate = new TestPlugin("recovery-candidate", events);
 		domain.activateWithModule(previous, {});

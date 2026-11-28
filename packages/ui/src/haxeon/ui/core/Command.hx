@@ -49,7 +49,7 @@ class Command {
 		if (value == null)
 			throw "Alternate shortcuts cannot be null";
 		if ((shortcut == null || !shortcut.equals(value))
-			&& !Lambda.exists(alternateShortcuts, function(existing) return existing.equals(value)))
+			&& !Lambda.exists(alternateShortcuts, existing -> existing.equals(value)))
 			alternateShortcuts.push(value);
 		return this;
 	}
@@ -79,7 +79,7 @@ class Command {
 			checked:CommandContext->Bool = null):Command {
 		if (action == null)
 			throw "Contextual commands require an action";
-		var result = new Command(id, label, function() {}, shortcut);
+		var result = new Command(id, label, () -> {}, shortcut);
 		result.contextualAction = action;
 		result.contextualEnabledPredicate = enabled;
 		result.contextualCheckedPredicate = checked;

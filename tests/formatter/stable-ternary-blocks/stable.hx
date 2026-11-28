@@ -7,3 +7,4 @@ class A {
 		}) + 2;
 	}
 }
+// @lint:off function-lambda: the formatter is tested on the function form

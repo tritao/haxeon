@@ -35,7 +35,7 @@ class CountBadge implements View {
 			null,
 			context.theme.tokens.textPrimary,
 			new TextStyleOverride(null, 11, null, haxeon.ui.TextStyle.TextWrap.None)).build(context));
-		node.walk(function(child) child.hitTestSelf = false);
+		node.walk(child -> child.hitTestSelf = false);
 		return node;
 	}
 }

@@ -54,7 +54,7 @@ function main():Int {
 	}
 	var value = new WithOptional(null);
 	try {
-		value.update(new Child(label), function() {
+		value.update(new Child(label), () -> {
 			throw "expected";
 		});
 	}

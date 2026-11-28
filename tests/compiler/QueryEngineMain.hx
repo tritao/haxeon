@@ -87,12 +87,12 @@ class QueryEngineMain {
 		function callsOf(name:String):Int
 			return calls.get(name) ?? 0;
 		// magnitude(k) = |source(k)|; total = magnitude(0) + magnitude(1); flag(k) = source(k) > 100 ? magnitude(k) : 0
-		var magnitude = database.register(QueryKind.derived("magnitude", function(db, key) {
+		var magnitude = database.register(QueryKind.derived("magnitude", (db, key) -> {
 			count("magnitude");
 			var value = db.get(source, key);
 			return value < 0 ? -value : value;
 		}, digestInt, sameInt));
-		var total = database.register(QueryKind.derived("total", function(db, _) {
+		var total = database.register(QueryKind.derived("total", (db, _) -> {
 			count("total");
 			return db.get(magnitude, 0) + db.get(magnitude, 1);
 		}, digestInt, sameInt));
@@ -117,7 +117,7 @@ class QueryEngineMain {
 		expect(callsOf("magnitude") == 4 && callsOf("total") == 2, "early cutoff: an equal magnitude reuses the total");
 
 		// Reads are verified in order: a guard that changes stops verification before the reads behind it.
-		var guarded = database.register(QueryKind.derived("guarded", function(db, _) {
+		var guarded = database.register(QueryKind.derived("guarded", (db, _) -> {
 			count("guarded");
 			return db.get(source, 2) > 0 ? db.get(magnitude, 3) : 0;
 		}, digestInt, sameInt));
@@ -132,10 +132,10 @@ class QueryEngineMain {
 
 		// Cycles: an error without a recovery value, the recovery value with one.
 		var loop:Null<QueryKind<Int>> = null;
-		loop = database.register(QueryKind.derived("loop", function(db, key) {
+		loop = database.register(QueryKind.derived("loop", (db, key) -> {
 			var self = loop;
 			return self == null ? 0 : db.get(self, 1 - key) + 1;
-		}, digestInt, sameInt, null, function(key) return "k" + key));
+		}, digestInt, sameInt, null, key -> "k" + key));
 		var cycle:Null<QueryCycle> = null;
 		try
 			database.get(loop, 0)
@@ -143,10 +143,10 @@ class QueryEngineMain {
 			cycle = error;
 		expect(cycle != null && cycle.path.join(" ") == "loop(k0) loop(k1) loop(k0)", "a cycle names its path");
 		var recovering:Null<QueryKind<Int>> = null;
-		recovering = database.register(QueryKind.derived("recovering", function(db, key) {
+		recovering = database.register(QueryKind.derived("recovering", (db, key) -> {
 			var self = recovering;
 			return self == null ? 0 : db.get(self, 1 - key) + 1;
-		}, digestInt, sameInt, function(_) return 100));
+		}, digestInt, sameInt, _ -> 100));
 		expect(database.get(recovering, 0) == 102, "a read closing a cycle takes the kind's recovery value");
 
 		// Sweep drops what the build did not use.
@@ -160,7 +160,7 @@ class QueryEngineMain {
 		// Check mode catches a query that reads something it did not record.
 		var checked = new QueryDatabase(true);
 		var input = checked.register(QueryKind.input("input", digestInt, sameInt));
-		var leaky = checked.register(QueryKind.derived("leaky", function(db, _) return db.get(input, 0) + hidden,
+		var leaky = checked.register(QueryKind.derived("leaky", (db, _) -> db.get(input, 0) + hidden,
 			digestInt,
 			sameInt));
 		checked.set(input, 0, 1);
@@ -356,12 +356,12 @@ class QueryEngineMain {
 		var database = new QueryDatabase();
 		var source = database.register(QueryKind.input("source", digestInt, sameInt));
 		var magnitudes = 0, readers = 0;
-		var magnitude = database.register(new ComputedQueryKind<Box>("magnitude", Box.same, function(db, key) {
+		var magnitude = database.register(new ComputedQueryKind<Box>("magnitude", Box.same, (db, key) -> {
 			magnitudes++;
 			var value = db.get(source, key);
 			return new Box(value < 0 ? -value : value);
 		}));
-		var reader = database.register(new ComputedQueryKind<Box>("reader", Box.same, function(db, key) {
+		var reader = database.register(new ComputedQueryKind<Box>("reader", Box.same, (db, key) -> {
 			readers++;
 			return new Box(magnitude.get(db, key).value + 1);
 		}));
@@ -388,7 +388,7 @@ class QueryEngineMain {
 		expect(database.get(digested, 0) == 14 && magnitudes == 4, "and is cut off by its equality");
 
 		var loop:Null<ComputedQueryKind<Box>> = null;
-		loop = database.register(new ComputedQueryKind<Box>("loop", Box.same, function(db, key) {
+		loop = database.register(new ComputedQueryKind<Box>("loop", Box.same, (db, key) -> {
 			var self = loop;
 			return self == null ? new Box(0) : self.get(db, 1 - key);
 		}));
@@ -519,17 +519,17 @@ class QueryEngineMain {
 		var database = new QueryDatabase();
 		var functions = database.register(QueryKind.input("function", digestInt, sameInt));
 		var uses = database.register(new ComputedQueryKind<Array<Int>>("uses",
-			(left, right) -> left.join(",") == right.join(","), function(db, key) {
+			(left, right) -> left.join(",") == right.join(","), (db, key) -> {
 				var bits = db.get(functions, key);
 				return [for (bit in 0...8) if (bits & (1 << bit) != 0) bit];
 			}));
 		var summary = database.register(new QuerySummary("used"));
 		var keyRuns = [0, 0, 0, 0], wholeRuns = 0;
-		var reader = database.register(new ComputedQueryKind<Box>("has", Box.same, function(db, key) {
+		var reader = database.register(new ComputedQueryKind<Box>("has", Box.same, (db, key) -> {
 			keyRuns[key]++;
 			return new Box(summary.has(db, key) ? 1 : 0);
 		}));
-		var whole = database.register(new ComputedQueryKind<Box>("all", Box.same, function(db, _) {
+		var whole = database.register(new ComputedQueryKind<Box>("all", Box.same, (db, _) -> {
 			wholeRuns++;
 			return new Box(summary.keys(db).length);
 		}));
@@ -698,7 +698,7 @@ class QueryEngineMain {
 		var middle = database.register(new ComputedQueryKind<Box>("middle", Box.same,
 			(db, key) -> new Box(db.get(source, key))));
 		var runs = 0;
-		var reader = database.register(new ComputedQueryKind<Box>("reader", Box.same, function(db, key) {
+		var reader = database.register(new ComputedQueryKind<Box>("reader", Box.same, (db, key) -> {
 			runs++;
 			return new Box(middle.get(db, 1).value * 10);
 		}));
@@ -731,7 +731,7 @@ class QueryEngineMain {
 		for (_ in 0...2)
 			written.own.push(0);
 		var runs = 0;
-		var reader = database.register(new ComputedQueryKind<Box>("over-written", Box.same, function(db, key) {
+		var reader = database.register(new ComputedQueryKind<Box>("over-written", Box.same, (db, key) -> {
 			runs++;
 			db.record(written, key);
 			return new Box(db.get(source, key) + written.latestChange(key));
@@ -771,7 +771,7 @@ class QueryEngineMain {
 		var database = new QueryDatabase();
 		var given = database.register(new ComputedQueryKind<Box>("given", Box.same));
 		var runs = 0;
-		var reader = database.register(new ComputedQueryKind<Box>("reader", Box.same, function(db, key) {
+		var reader = database.register(new ComputedQueryKind<Box>("reader", Box.same, (db, key) -> {
 			runs++;
 			return new Box(given.get(db, key).value * 10);
 		}));

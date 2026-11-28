@@ -185,16 +185,16 @@ class EditHistory implements Observable {
 		var affectsPersistence = false;
 		for (operation in operations) if (operation.affectsPersistence) affectsPersistence = true;
 		var composite = new EditOperation(transaction.label,
-			function() {
+			() -> {
 				for (operation in operations)
 					operation.apply();
-			}, function() {
+			}, () -> {
 			var index = operations.length - 1;
 			while (index >= 0) {
 				operations[index].undo();
 				index--;
 			}
-		}, transaction.coalesceKey, function(next) {
+		}, transaction.coalesceKey, next -> {
 			if (next == null || next.transactionOperations == null)
 				return false;
 			for (operation in next.transactionOperations)

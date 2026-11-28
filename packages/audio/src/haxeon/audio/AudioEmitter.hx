@@ -57,7 +57,7 @@ class AudioEmitter implements Disposable {
 		if (value == null)
 			throw BindingError.invalidArgument("AudioEmitter.setPosition", "Audio emitter position must not be null");
 		position = value;
-		forEachVoice(function(voice) voice.setPosition(position));
+		forEachVoice(voice -> voice.setPosition(position));
 	}
 
 	/** Updates the forward direction for all active voices. */
@@ -66,7 +66,7 @@ class AudioEmitter implements Disposable {
 		if (value == null)
 			throw BindingError.invalidArgument("AudioEmitter.setDirection", "Audio emitter direction must not be null");
 		direction = value;
-		forEachVoice(function(voice) voice.setDirection(direction));
+		forEachVoice(voice -> voice.setDirection(direction));
 	}
 
 	/** Updates the world velocity for all active voices. */
@@ -75,7 +75,7 @@ class AudioEmitter implements Disposable {
 		if (value == null)
 			throw BindingError.invalidArgument("AudioEmitter.setVelocity", "Audio emitter velocity must not be null");
 		velocity = value;
-		forEachVoice(function(voice) voice.setVelocity(velocity));
+		forEachVoice(voice -> voice.setVelocity(velocity));
 	}
 
 	/** Returns the latest emitter position. */

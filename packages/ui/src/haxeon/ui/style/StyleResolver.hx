@@ -299,7 +299,7 @@ internal class StyleResolver {
 		for (rule in sheet.rules)
 			if (rule.selector.hasState() == stateRules && rule.matches(target, environment))
 				matches.push(rule);
-		matches.sort(function(left, right) {
+		matches.sort((left, right) -> {
 			var specificity = left.selector.specificity() - right.selector.specificity();
 			return specificity == 0 ? left.order - right.order : specificity;
 		});
@@ -466,10 +466,10 @@ internal class StyleResolver {
 				var current:StyleValue = animatedValues.get(key);
 				stop(key);
 				var animation = new StyleTransitionAnimation(current, next, transition.duration, transition.easing,
-					function(value) {
+					value -> {
 						animatedValues.set(key, value);
 					},
-						function() {
+						() -> {
 					animatedValues.set(key, next);
 					activeAnimations.remove(key);
 				});

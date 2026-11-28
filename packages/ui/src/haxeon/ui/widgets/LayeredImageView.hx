@@ -72,12 +72,12 @@ class LayeredImageView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var node = context.createNode(context.rootId("layered-image"), LayoutVisualKind.Custom, style);
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Image, label);
-			node.onPaint(function(canvas:Canvas, geometry:ResolvedLayoutItem) {
+			node.onPaint((canvas:Canvas, geometry:ResolvedLayoutItem) -> {
 				for (layer in layers) {
-					canvas.withState(function(target) {
+					canvas.withState(target -> {
 						if (layer.opacity < 1.0) target.setAlpha(layer.opacity);
 						target.drawImage(layer.image,
 							new Rect(layer.x * geometry.width,

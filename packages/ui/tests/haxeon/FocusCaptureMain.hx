@@ -13,26 +13,26 @@ class FocusCaptureMain {
 		root.add(wrapper);
 		wrapper.add(target);
 		for (kind in [UiEventKind.Focus, UiEventKind.Blur]) {
-			root.on(kind, function(event) {
+			root.on(kind, event -> {
 				if (!event.target.equals(target.id) || event.phase != UiEventPhase.Capture
 					|| !event.currentTarget.equals(root.id)) throw "Invalid captured focus event";
 				seen.push("root");
 				if (detach) wrapper.detach();
 			}, UiEventPhase.Capture);
-			wrapper.on(kind, function(event) {
+			wrapper.on(kind, event -> {
 				seen.push("wrapper");
 				if (stop) event.stopPropagation();
 			}, UiEventPhase.Capture);
-			target.on(kind, function(event) {
+			target.on(kind, event -> {
 				if (event.phase != UiEventPhase.Capture) throw "Target capture listener ran in the wrong phase";
 				seen.push("target-capture");
 			}, UiEventPhase.Capture);
-			target.on(kind, function(event) {
+			target.on(kind, event -> {
 				if (event.phase != UiEventPhase.Target) throw "Target listener ran outside target delivery";
 				seen.push("target");
 			});
-			root.on(kind, function(_) bubbles++);
-			wrapper.on(kind, function(_) bubbles++);
+			root.on(kind, _ -> bubbles++);
+			wrapper.on(kind, _ -> bubbles++);
 		}
 		var events = new EventDispatcher(new FocusManager());
 		events.setRoot(root);

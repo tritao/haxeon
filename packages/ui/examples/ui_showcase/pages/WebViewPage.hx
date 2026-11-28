@@ -21,7 +21,7 @@ class WebViewPage {
 			[explorer.keyed("heading", explorer.heading("Native content, Haxeon layout")),
 			explorer.keyed("copy",
 			explorer.caption("The viewport below follows resolved Haxeon bounds. NativeKit supplies the platform WebView dependency and lifecycle.")),
-			explorer.keyed("reload", explorer.button("Reload demo", "reload-webview", function() {
+			explorer.keyed("reload", explorer.button("Reload demo", "reload-webview", () -> {
 				explorer.reloadWebView();
 			}))])));
 		items.push(explorer.keyed("webview-slot", new WebViewSlot("catalog-webview")));

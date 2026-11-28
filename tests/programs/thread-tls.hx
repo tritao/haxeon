@@ -19,7 +19,7 @@ function main():Int {
 		unset = [true, true, true, true],
 		done = new Lock();
 	for (t in 0...4)
-		Thread.create(function() {
+		Thread.create(() -> {
 			unset[t] = local.value == null;
 			local.value = new Counter();
 			for (_ in 0...10000)

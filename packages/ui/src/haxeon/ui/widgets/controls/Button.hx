@@ -118,7 +118,7 @@ class Button implements ScopeView {
 		if (semantics == null) semanticDescription.actions = AccessibilityAction.Activate;
 		if (this.selected) semanticDescription.states |= AccessibilityState.Selected;
 		activation = !this.enabled
-			? null : onClickEvent != null ? onClickEvent : onClick == null ? null : function(_:UiEvent) onClick();
+			? null : onClickEvent != null ? onClickEvent : onClick == null ? null : (_:UiEvent) -> onClick();
 	}
 
 	public function scopeKey():String return key;
@@ -166,7 +166,7 @@ class Button implements ScopeView {
 		if (enabled && activation != null) {
 			// An equal description from a later parent run keeps this body: call its callback, not the one built here.
 			var latest = context.latestOf(this);
-			node.onActivate(function(event:UiEvent) {
+			node.onActivate((event:UiEvent) -> {
 				var handler = latest().activation;
 				if (handler != null) handler(event);
 			});
@@ -175,14 +175,14 @@ class Button implements ScopeView {
 			resolvedStyle.background,
 			variant == ButtonVariant.Primary ? context.theme.tokens.textOnAccent : context.theme.tokens.textPrimary);
 		if (leadingView != null) node.add(context.withScope(new Key("leading-view"),
-			function() return context.withStyleParent(computed, function() return leadingView.build(context))));
+			() -> context.withStyleParent(computed, () -> leadingView.build(context))));
 		else if (leadingIcon != null) node.add(new Icon("leading-icon", leadingIcon, iconSize,
 			foreground).build(context));
 		if (labelView != null) {
 			node.add(context.withScope(new Key("label"),
-				function() return context.withStyleParent(computed, function() return labelView.build(context))));
+				() -> context.withStyleParent(computed, () -> labelView.build(context))));
 		} else if (label.length > 0) {
-			var labelNode = context.withScope(new Key("label"), function() {
+			var labelNode = context.withScope(new Key("label"), () -> {
 				var fontSource = computed.source(StyleProperty.FontSize);
 				var letterSource = computed.source(StyleProperty.LetterSpacing);
 				var labelStyle = context.resolveTextRole(TextRole.Button,
@@ -219,7 +219,7 @@ class Button implements ScopeView {
 			node.add(labelNode);
 		}
 		if (trailingView != null) node.add(context.withScope(new Key("trailing-view"),
-			function() return context.withStyleParent(computed, function() return trailingView.build(context))));
+			() -> context.withStyleParent(computed, () -> trailingView.build(context))));
 		else if (trailingIcon != null) node.add(new Icon("trailing-icon",
 			trailingIcon, iconSize, foreground).build(context));
 		return node;

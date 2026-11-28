@@ -108,19 +108,19 @@ function exercise(count:Int):Int {
 		panel.frame.offset.moveThenThrow();
 	} catch (error:Dynamic) {}
 	if (panel.frame.offset.x != 13) return -1;
-	panel.frame.offset.around(function() {
+	panel.frame.offset.around(() -> {
 		if (panel.frame.offset.x != 14) throw "receiver update was delayed";
 		panel.frame.offset.x = 20;
 	});
 	if (panel.frame.offset.x != 22) return -1;
 	var local = new Offset(30, 2);
 	var calls = 0;
-	local.around(function() {
+	local.around(() -> {
 		calls += 1;
 	});
 	if (local.x != 33 || calls != 1) return -1;
 	try {
-		local.around(function() {
+		local.around(() -> {
 			throw "callback";
 		});
 	} catch (error:Dynamic) {}

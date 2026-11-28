@@ -45,14 +45,14 @@ class Dialog implements View {
 		this.content = content;
 		this.width = width;
 		hasDismissHandler = onDismiss != null;
-		this.onDismiss = onDismiss == null ? function() {}
+		this.onDismiss = onDismiss == null ? () -> {}
 			: onDismiss;
 		this.dismissOnOutside = dismissOnOutside;
 		this.dismissOnEscape = dismissOnEscape;
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var rootStyle = new LayoutStyle();
 			rootStyle.width = LayoutAxis.grow();
 			rootStyle.height = LayoutAxis.grow();
@@ -75,7 +75,7 @@ class Dialog implements View {
 			var backdropId = context.id("backdrop");
 			var backdrop = context.styled(backdropId, LayoutVisualKind.Box,
 				new StyleIdentity("dialog-backdrop", "backdrop", "backdrop", null, ["dialog"]), backdropStyle);
-			if (dismissOnOutside && hasDismissHandler) backdrop.on(UiEventKind.Click, function(event) {
+			if (dismissOnOutside && hasDismissHandler) backdrop.on(UiEventKind.Click, event -> {
 				onDismiss();
 				event.stopPropagation();
 			});
@@ -100,7 +100,7 @@ class Dialog implements View {
 			var panelComputed = panel.computedStyle;
 			if (title.length > 0) {
 				var heading = context.withStyleParent(panelComputed,
-					function() return context.withScope(new Key("title"), function() {
+					() -> context.withScope(new Key("title"), () -> {
 						var headingId = context.id("heading");
 						var headingIdentity = new StyleIdentity("dialog-heading", "title", "title", null,
 							["dialog-heading"]);
@@ -120,17 +120,17 @@ class Dialog implements View {
 				panel.add(heading);
 			}
 			var child = context.withStyleParent(panelComputed,
-				function() return context.withScope(new Key("content"), function() return content.build(context)));
+				() -> context.withScope(new Key("content"), () -> content.build(context)));
 			panel.add(child);
 			center.add(panel);
 			root.add(center);
-			root.on(UiEventKind.KeyDown, function(event) {
+			root.on(UiEventKind.KeyDown, event -> {
 				if (event.key == UiKey.Escape && dismissOnEscape && hasDismissHandler) {
 					event.preventDefault();
 					onDismiss();
 				}
 			});
-			if (hasDismissHandler) root.on(UiEventKind.Activate, function(event) {
+			if (hasDismissHandler) root.on(UiEventKind.Activate, event -> {
 				if (event.target.equals(root.id)) onDismiss();
 			});
 			return root;

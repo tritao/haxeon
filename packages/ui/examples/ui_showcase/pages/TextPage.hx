@@ -22,34 +22,34 @@ class TextPage {
 			explorer.panel("latin-and-rtl-card", [explorer.keyed("heading", explorer.heading("Latin, Arabic & Hebrew")),
 			explorer.keyed("latin-label", explorer.label("Display name · Enter submits")),
 			explorer.keyed("latin", editor(explorer, "demo-name", explorer.state.controls.nameValue,
-			"Display name", false, function(value) {
+			"Display name", false, value -> {
 				explorer.state.controls.nameValue = value;
 			})),
 				explorer.keyed("arabic-label", explorer.label("Arabic")),
 				explorer.keyed("arabic", editor(explorer, "text-arabic", explorer.state.textArabicValue,
-				"Arabic", false, function(value) {
+				"Arabic", false, value -> {
 			explorer.state.textArabicValue = value;
 		})),
 			explorer.keyed("hebrew-label", explorer.label("Hebrew")),
 			explorer.keyed("hebrew", editor(explorer, "text-hebrew", explorer.state.textHebrewValue,
-			"Hebrew", false, function(value) {
+			"Hebrew", false, value -> {
 			explorer.state.textHebrewValue = value;
 		}))])),
 			explorer.keyed("cjk-and-emoji", explorer.panel("cjk-and-emoji-card",
 			[explorer.keyed("heading", explorer.heading("Japanese, emoji & multiline")),
 			explorer.keyed("japanese-label", explorer.label("Japanese")),
 			explorer.keyed("japanese", editor(explorer, "text-japanese", explorer.state.textJapaneseValue,
-			"Japanese", false, function(value) {
+			"Japanese", false, value -> {
 			explorer.state.textJapaneseValue = value;
 		})),
 			explorer.keyed("emoji-label", explorer.label("Emoji")),
 			explorer.keyed("emoji", editor(explorer, "text-emoji", explorer.state.textEmojiValue,
-			"Emoji", false, function(value) {
+			"Emoji", false, value -> {
 			explorer.state.textEmojiValue = value;
 		})),
 			explorer.keyed("notes-label", explorer.caption("Multilingual notes · ↑ / ↓ and Home / End are line-aware")),
 			explorer.keyed("notes", editor(explorer, "demo-notes", explorer.state.controls.notesValue,
-			"Multilingual notes", true, function(value) {
+			"Multilingual notes", true, value -> {
 			explorer.state.controls.notesValue = value;
 		}))])),
 			], explorer.rowStyle(14.0))));
@@ -59,27 +59,27 @@ class TextPage {
 			explorer.keyed("copy",
 			explorer.caption("The buttons focus Display name before invoking the same shortcuts used by the platform keyboard.")),
 			explorer.keyed("buttons", new Row("text-action-buttons",
-			[explorer.keyed("copy-button", explorer.button("Copy", "text-copy", function() {
+			[explorer.keyed("copy-button", explorer.button("Copy", "text-copy", () -> {
 				if (explorer.textCommand("Display name", UiKey.C))
 					explorer.recordTextClipboardAction("Copy requested from Display name");
 			})),
-				explorer.keyed("cut-button", explorer.button("Cut", "text-cut", function() {
+				explorer.keyed("cut-button", explorer.button("Cut", "text-cut", () -> {
 			if (explorer.textCommand("Display name", UiKey.X))
 				explorer.recordTextClipboardAction("Cut requested from Display name");
 		})),
-			explorer.keyed("paste-button", explorer.button("Paste", "text-paste", function() {
+			explorer.keyed("paste-button", explorer.button("Paste", "text-paste", () -> {
 			if (explorer.textCommand("Display name", UiKey.V))
 				explorer.recordTextClipboardAction("Paste requested into Display name");
 		})),
-			explorer.keyed("select-button", explorer.button("Select all", "text-select-all", function() {
+			explorer.keyed("select-button", explorer.button("Select all", "text-select-all", () -> {
 			if (explorer.textCommand("Display name", UiKey.A))
 				explorer.recordTextClipboardAction("Select all requested in Display name");
 		}))], explorer.rowStyle(8.0))),
 			explorer.keyed("focus-buttons", new Row("text-focus-buttons",
-			[explorer.keyed("focus-latin", explorer.button("Focus Latin", "text-focus-latin", function() {
+			[explorer.keyed("focus-latin", explorer.button("Focus Latin", "text-focus-latin", () -> {
 			explorer.focusTextEditor("Display name");
 		})),
-			explorer.keyed("focus-notes", explorer.button("Focus notes", "text-focus-notes", function() {
+			explorer.keyed("focus-notes", explorer.button("Focus notes", "text-focus-notes", () -> {
 			explorer.focusTextEditor("Multilingual notes");
 		}))], explorer.rowStyle(8.0))),
 			explorer.keyed("tab-hint",

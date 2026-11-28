@@ -82,7 +82,7 @@ class IconButton implements ScopeView {
 		node.semantics = semantics;
 		if (enabled && onClick != null) {
 			var latest = context.latestOf(this);
-			var activate = function(_:UiEvent) {
+			var activate = (_:UiEvent) -> {
 				var handler = latest().onClick;
 				if (handler != null) handler();
 			};

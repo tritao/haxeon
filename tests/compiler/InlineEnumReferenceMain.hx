@@ -128,12 +128,12 @@ class InlineEnumReferenceMain {
 				}
 		if (casts != 4)
 			throw "Reference leaves must use two non-boxing casts";
-		checkRejected("Dynamic escape", function(b) return b.toDyn(b.constNull(IrValueLaneReference.type())), Dyn,
+		checkRejected("Dynamic escape", b -> b.toDyn(b.constNull(IrValueLaneReference.type())), Dyn,
 			"A value lane reference cannot escape its operation");
-		checkRejected("function return", function(b) return b.constNull(IrValueLaneReference.type()),
+		checkRejected("function return", b -> b.constNull(IrValueLaneReference.type()),
 			IrValueLaneReference.type(),
 			"A value lane reference cannot be returned");
-		checkRejected("mismatched field", function(b) {
+		checkRejected("mismatched field", b -> {
 			b.fieldGet(b.newObject("Source"), "code", IrValueLaneReference.type());
 			return b.constInt(42);
 		}, I32, "Unknown or mismatched IR field");

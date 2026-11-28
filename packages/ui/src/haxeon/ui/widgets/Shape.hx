@@ -148,14 +148,14 @@ class Shape implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var nodeId = context.rootId("shape");
 			var node = context.styled(nodeId, LayoutVisualKind.Custom,
 				new StyleIdentity("shape", key, key, null, ["shape"]), style);
 			node.hitTestSelf = hitTestSelf;
 			node.cachePolicy = cachePolicy;
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Group, label);
-			node.onPaint(function(canvas, _) {
+			node.onPaint((canvas, _) -> {
 				if (path.isDisposed() || paint.isDisposed()) return;
 				if (filled) canvas.fill(path, paint);
 				else canvas.stroke(path, paint, strokeWidth, strokeCap, strokeJoin, miterLimit);

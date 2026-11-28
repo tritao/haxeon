@@ -27,14 +27,14 @@ class Stack implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var id = context.rootId("stack");
 			var root = context.styled(id, LayoutVisualKind.Box,
 				new StyleIdentity("stack", key.rawValue, key.rawValue, null, ["stack"]), style);
 			var computed = root.computedStyle;
 			for (layer in layers) {
 				var child = context.withStyleParent(computed,
-					function() return context.withScope(new Key(layer.key), function() {
+					() -> context.withScope(new Key(layer.key), () -> {
 						var placement = new RootModifier();
 						placement.positioning = LayoutPositioning.Absolute;
 						placement.positionX = layer.x;

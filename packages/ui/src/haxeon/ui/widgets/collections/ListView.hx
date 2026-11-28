@@ -159,7 +159,7 @@ class ListView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var layoutFeedback = context.state(context.id("resolved-layout-feedback"), 0);
 			var layoutGeneration = layoutFeedback.value;
 			ensureModelMetrics(context);
@@ -204,13 +204,13 @@ class ListView implements View {
 					if (item == null) throw 'ListView model returned null for index $itemIndex';
 					var row = new ListViewRow("row", itemKey, item, cachedCount, itemIndex, window.extentAt(itemIndex),
 						selectedIndex == itemIndex, itemMetadata == null ? null : itemMetadata.labelAt(itemIndex),
-						itemEnabled(itemIndex), activateOnClick, function() {
+						itemEnabled(itemIndex), activateOnClick, () -> {
 							select(itemIndex);
-						}, function() {
+						}, () -> {
 						if (onItemActivated != null) onItemActivated(itemIndex);
-					}, function(event) {
+					}, event -> {
 						handleItemKey(context, itemIndex, event);
-					}, function(id) {
+					}, id -> {
 						itemIds.set(itemIndex, id);
 					});
 					var slotKey = virtualization.recycleSlots ? 'slot:${index - window.first}' : 'item:$itemKey';
@@ -248,7 +248,7 @@ class ListView implements View {
 				}
 			});
 			root.add(context.withScope(new Key("scroll-view"),
-				function() return context.build(scroll, viewportModifier)));
+				() -> context.build(scroll, viewportModifier)));
 			return root;
 		});
 	}
@@ -448,7 +448,7 @@ private class ListViewRow implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			style.height = LayoutAxis.fixed(extent);
@@ -466,11 +466,11 @@ private class ListViewRow implements View {
 			semantics.positionInSet = index + 1;
 			node.semantics = semantics;
 			if (enabled) {
-				node.on(UiEventKind.Click, function(event) {
+				node.on(UiEventKind.Click, event -> {
 					onSelect();
 					if (activateOnClick && event.button == 0) onActivate();
 				});
-				node.on(UiEventKind.Activate, function(_) {
+				node.on(UiEventKind.Activate, _ -> {
 					onSelect();
 					onActivate();
 				});

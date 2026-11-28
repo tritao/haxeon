@@ -78,7 +78,7 @@ class WasmFunctionLowerContext {
 		valueLocals = placement.values;
 		locals = placement.locals;
 		var functionContext:WasmFunctionRepresentationContext = {
-			allocateLocal: function(type: WasmValueType) return placement.allocate(type),
+			allocateLocal: (type: WasmValueType) -> placement.allocate(type),
 			exceptionTag: exceptionTag,
 			irFunction: fn
 		};

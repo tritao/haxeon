@@ -116,7 +116,7 @@ private class ShortcutKeycap implements View {
 			surfaceStyle);
 		surface.hitTestSelf = false;
 		var border = blend(base, ink, selected ? 0.35 : 0.20);
-		surface.onPaint(function(canvas, geometry) {
+		surface.onPaint((canvas, geometry) -> {
 			if (geometry.width <= 2 || geometry.height <= 3) return;
 			canvas.strokeTransient(new haxeon.ui.Path.PathBuilder().roundRect(0.5, 0.5, geometry.width - 1,
 				geometry.height - 1, 3.5).build(),

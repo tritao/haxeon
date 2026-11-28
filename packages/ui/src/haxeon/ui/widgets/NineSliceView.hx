@@ -63,7 +63,7 @@ class NineSliceView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var nodeId = context.rootId("nine-slice");
 			var identity = new StyleIdentity("nine-slice", key, key, null, ["nine-slice"]);
 			var computed = context.resolveStyled(nodeId, identity, style);

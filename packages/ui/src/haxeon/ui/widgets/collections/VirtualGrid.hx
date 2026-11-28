@@ -120,7 +120,7 @@ class VirtualGrid implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var stateId = context.id("scroll-state");
 			var stored:State<ScrollController> = context.state(stateId, controller);
 			controller = stored.value;
@@ -200,7 +200,7 @@ class VirtualGrid implements View {
 			semantics.columnCount = columnCount;
 			semantics.setSize = rowCount * columnCount;
 			root.semantics = semantics;
-			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
+			var viewport = context.withScope(new Key("scroll-view"), () -> scroll.build(context));
 			root.add(viewport);
 			return root;
 		});
@@ -275,7 +275,7 @@ private class VirtualGridRow implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var children:Array<KeyedView> = [];
 			children.push(new KeyedView("before",
 				new Spacer("before-spacer", LayoutAxis.fixed(beforeWidth), LayoutAxis.grow())));
@@ -356,7 +356,7 @@ private class VirtualGridCell implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(columnWidth);
 			style.height = LayoutAxis.fixed(rowHeight);
@@ -372,14 +372,14 @@ private class VirtualGridCell implements View {
 			if (onCellActivate != null) {
 				var callback:Int->Int->Void = cast onCellActivate;
 				semantics.actions = AccessibilityAction.Activate;
-				var activate = function(event:UiEvent) {
+				var activate = (event:UiEvent) -> {
 					callback(rowIndex, columnIndex);
 				};
 				node.onActivate(activate);
 			}
 			if (onCellKeyDown != null) {
 				var keyCallback:Int->Int->WidgetId->UiEvent->Void = cast onCellKeyDown;
-				node.on(UiEventKind.KeyDown, function(event:UiEvent) {
+				node.on(UiEventKind.KeyDown, (event:UiEvent) -> {
 					keyCallback(rowIndex, columnIndex, node.id, event);
 				});
 			}
@@ -388,7 +388,7 @@ private class VirtualGridCell implements View {
 				builtCallback(rowIndex, columnIndex, node.id);
 			}
 			node.semantics = semantics;
-			node.add(context.withScope(new Key("content"), function() return child.build(context)));
+			node.add(context.withScope(new Key("content"), () -> child.build(context)));
 			return node;
 		});
 	}

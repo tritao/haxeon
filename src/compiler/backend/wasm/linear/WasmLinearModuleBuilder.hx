@@ -567,7 +567,7 @@ class WasmLinearModuleBuilder {
 	}
 
 	function lowerFunctions():haxe.io.Bytes {
-		var metadata = WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
+		var metadata = WasmGcRoots.encodeAndVisit(program, (fn, rootPoints) -> {
 			if (!reachable.exists(fn.name)
 				|| (fn.name == "__entry" && preferredEntry != "__entry")
 				|| fn.name == WasmLinearClosureAdapters.SIGNATURE_FUNCTION)

@@ -65,7 +65,7 @@ class InlineConstantResolver {
 			constantType = field.type == null ? null : session.declarations.types.fieldType(owner, field),
 			typeParameters = classDecl.typeParameters;
 		try {
-			session.typeSharedUnit(unit, function() {
+			session.typeSharedUnit(unit, () -> {
 				var initializer = bodyTyper.typeInlineInitializer(field, constantOwner, constantType, typeParameters),
 					literal = InlineConstantEvaluator.evaluate(initializer);
 				if (literal == null)

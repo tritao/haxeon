@@ -41,7 +41,7 @@ class RadioGroup implements View {
 		this.value = value == null ? "" : value;
 		this.style = style == null ? defaultStyle() : style.copy();
 		hasChangeHandler = onChange != null;
-		this.onChange = onChange == null ? function(_) {}
+		this.onChange = onChange == null ? _ -> {}
 			: onChange;
 		var keys:Map<String, Bool> = new Map();
 		var values:Map<String, Bool> = new Map();
@@ -57,7 +57,7 @@ class RadioGroup implements View {
 	public function build(context:BuildContext):ViewRoot {
 		// What the user picks while this build is shown; the field stays the caller's input.
 		var value = this.value;
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var root = context.createNode(context.rootId("radio-group"), LayoutVisualKind.Box, style.copy());
 			root.semantics = new Semantics(AccessibilityRole.Group, "Radio group");
 			// The user's last choice, until the caller gives a different value; a disabled one shows the first enabled.
@@ -67,19 +67,19 @@ class RadioGroup implements View {
 			value = active;
 
 			var nodes:Array<ViewRoot> = [];
-			var select = function(next:String) {
+			var select = (next:String) -> {
 				if (next == value) return;
 				value = next;
 				chosen.set(next);
 				if (hasChangeHandler) onChange(next);
 			};
 			for (option in options) {
-				var radio = new Radio(option.key, option.label, option.value, option.value == active, function(next) {
+				var radio = new Radio(option.key, option.label, option.value, option.value == active, next -> {
 					select(next);
 				}, null, option.enabled);
 				var radioIndex = nodes.length;
 				var modifier = new RootModifier();
-				modifier.on(UiEventKind.KeyDown, function(event) {
+				modifier.on(UiEventKind.KeyDown, event -> {
 					var direction = event.key == UiKey.Right
 						|| event.key == UiKey.Down ? 1 : event.key == UiKey.Left || event.key == UiKey.Up ? -1 : 0;
 					if (direction == 0 || nodes.length == 0) return;

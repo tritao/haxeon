@@ -43,7 +43,7 @@ class HighlightedText implements View {
 				offset = found + term.length;
 			}
 		}
-		result.sort(function(a, b) return a.start - b.start);
+		result.sort((a, b) -> a.start - b.start);
 		var merged:Array<{start:Int, end:Int}> = [];
 		for (range in result) {
 			var previous = merged.length == 0 ? null : merged[merged.length - 1];
@@ -62,7 +62,7 @@ class HighlightedText implements View {
 		var text = node.layout.textStyle, paragraph = node.layout.paragraphStyle;
 		var foreground = node.layout.textColor, accent = context.theme.tokens.accent;
 		var resource = context.resourceState(context.id("highlight-layout"),
-			function() return new SearchTextLayout(fonts), function(layout) layout.dispose()).value;
+			() -> new SearchTextLayout(fonts), layout -> layout.dispose()).value;
 		resource.update(value, text, paragraph, foreground,
 			Color.rgba(accent.red, accent.green, accent.blue, 0.20), ranges, query);
 		node.layout.visualKind = LayoutVisualKind.Custom;
@@ -85,13 +85,13 @@ private class SearchTextLayout implements Disposable {
 		text = new TextStyle();
 		paragraph = new ParagraphStyle();
 		layout = TextLayout.create(fonts, "", 100000, text, paragraph);
-		measurement = new LayoutMeasuredContent(function(constraints) {
+		measurement = new LayoutMeasuredContent(constraints -> {
 			var width = Math.max(1, Math.min(100000, constraints.maxWidth));
 			if (layout.width != width) layout.update(value, width, text, paragraph);
 			var size = layout.measure();
 			return new LayoutMeasureResult(Math.min(width, size.width), size.height);
 		});
-		content = new LayoutRenderableContent(measurement, function(canvas, _) {
+		content = new LayoutRenderableContent(measurement, (canvas, _) -> {
 			for (range in ranges) for (rect in layout.selectionRects(new TextPosition(range.start, 0),
 				new TextPosition(range.end, 0)))
 				canvas.fillRectIfPositive(rect, highlight);

@@ -156,16 +156,16 @@ class Runtime {
 	}
 
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int
-		return invoke(module, stableIndex, 0, function(handle) return RuntimeNative.call_i32(handle, stableIndex));
+		return invoke(module, stableIndex, 0, handle -> RuntimeNative.call_i32(handle, stableIndex));
 
 	public static function callVoid(module:LoadedModule, stableIndex:Int):Void
-		invoke(module, stableIndex, 1, function(handle) {
+		invoke(module, stableIndex, 1, handle -> {
 			RuntimeNative.call_void(handle, stableIndex);
 		});
 
 	public static function callString(module:LoadedModule, stableIndex:Int):String {
 		var bytes = invoke(module, stableIndex, 2,
-			function(handle) return RuntimeNative.call_bytes(handle, stableIndex));
+			handle -> RuntimeNative.call_bytes(handle, stableIndex));
 		if (bytes == null)
 			return null;
 		return @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
@@ -174,27 +174,27 @@ class Runtime {
 	/** Call an isolated function that returns a copy of its packed haxe.io.Bytes value. */
 	public static function callBytes(module:LoadedModule, stableIndex:Int):Bytes
 		return cast invoke(module, stableIndex, 7,
-			function(handle) return RuntimeNative.call_managed_bytes(handle, stableIndex));
+			handle -> RuntimeNative.call_managed_bytes(handle, stableIndex));
 
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
-		invoke(module, stableIndex, 3, function(handle) {
+		invoke(module, stableIndex, 3, handle -> {
 			RuntimeNative.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes);
 		});
 
 	public static function retainClosure(module:LoadedModule, stableIndex:Int):RetainedValue
 		return new RetainedValue(module,
-			retain(module, stableIndex, 4, function(handle) return RuntimeNative.call_closure(handle, stableIndex)));
+			retain(module, stableIndex, 4, handle -> RuntimeNative.call_closure(handle, stableIndex)));
 
 	public static function callRetainedClosureInt(closure:RetainedValue):Int
 		return closure.access(RuntimeNative.call_closure_i32);
 
 	public static function retainObject(module:LoadedModule, stableIndex:Int):RetainedValue
 		return new RetainedValue(module,
-			retain(module, stableIndex, 5, function(handle) return RuntimeNative.call_object(handle, stableIndex)));
+			retain(module, stableIndex, 5, handle -> RuntimeNative.call_object(handle, stableIndex)));
 
 	public static function callIntObject(module:LoadedModule, stableIndex:Int, argument:RetainedValue):Int
 		return invoke(module, stableIndex, 6,
-			function(handle) return RuntimeNative.call_i32_object(handle, stableIndex, argument.get()));
+			handle -> RuntimeNative.call_i32_object(handle, stableIndex, argument.get()));
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.allocation_count);
@@ -204,7 +204,7 @@ class Runtime {
 
 	/** Resolve the currently published JIT target to its function/opcode location. */
 	public static function jitLocation(module:LoadedModule, stableIndex:Int):Null<String> {
-		var bytes = module.access(function(handle) return RuntimeNative.jit_location(handle, stableIndex));
+		var bytes = module.access(handle -> RuntimeNative.jit_location(handle, stableIndex));
 		return bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 	}
 
@@ -213,11 +213,11 @@ class Runtime {
 	 * -1 when the module has no original entry for it. A test hook.
 	 */
 	@:noCompletion public static function entryState(module:LoadedModule, stableIndex:Int):Int
-		return module.access(function(handle) return RuntimeNative.entry_state(handle, stableIndex));
+		return module.access(handle -> RuntimeNative.entry_state(handle, stableIndex));
 
 	/** Whether the base code of `caller` calls the original entry of `callee` directly (1), not (0) or is unknown (-1). A test hook. */
 	@:noCompletion public static function callsDirectly(module:LoadedModule, caller:Int, callee:Int):Int
-		return module.access(function(handle) return RuntimeNative.calls_directly(handle, caller, callee));
+		return module.access(handle -> RuntimeNative.calls_directly(handle, caller, callee));
 
 	public static function debugRegionCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.debug_region_count);
@@ -238,7 +238,7 @@ class Runtime {
 		return module.access(RuntimeNative.native_root_count);
 
 	public static function retirementStatus(module:LoadedModule):ModuleRetirementStatus
-		return module.access(function(handle) {
+		return module.access(handle -> {
 			// Native ABI: four consecutive little-endian Int32 fields in declaration order.
 			var bytes = Bytes.alloc(16);
 			RuntimeNative.retirement_status(handle, bytes.getData());
@@ -250,7 +250,7 @@ class Runtime {
 		return module.access(RuntimeNative.revision);
 
 	@:noCompletion public static function injectPatchFailure(module:LoadedModule, stage:Int):Void
-		module.access(function(handle) {
+		module.access(handle -> {
 			RuntimeNative.set_patch_failure_stage(handle, stage);
 		});
 
@@ -312,7 +312,7 @@ class Runtime {
 		retirementMutex.acquire();
 		try {
 			var descriptions = [for (module in retirementBacklog) {
-				var description = module.describeBorrowers(function(handle) {
+				var description = module.describeBorrowers(handle -> {
 					var bytes = RuntimeNative.describe_borrowers(handle);
 					return bytes == null ? null : copiedMessage(bytes);
 				});
@@ -327,7 +327,7 @@ class Runtime {
 	}
 
 	static function tryDispose(module:LoadedModule):Bool
-		return module.close(function(handle) {
+		return module.close(handle -> {
 			RuntimeNative.clear_unused_stack();
 			var status:RuntimeStatus = RuntimeNative.dispose(handle);
 			if (status != RuntimeStatus.Ok)
@@ -390,7 +390,7 @@ class Runtime {
 
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
 		var message:Null<String> = null;
-		var status:RuntimeStatus = module.access(function(handle) {
+		var status:RuntimeStatus = module.access(handle -> {
 			var result:RuntimeStatus = RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length);
 			if (result != RuntimeStatus.Ok) {
 				var bytes = RuntimeNative.patch_message(handle);
@@ -413,7 +413,7 @@ class Runtime {
 
 	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int,
 			operation:hl.Abstract<"realtime_module">->T):T
-		return module.access(function(handle) {
+		return module.access(handle -> {
 			validateCall(handle, stableIndex, shape);
 			try {
 				return operation(handle);
@@ -426,7 +426,7 @@ class Runtime {
 
 	static function retain(module:LoadedModule, stableIndex:Int, shape:Int,
 			operation:hl.Abstract<"realtime_module">->Dynamic):Dynamic
-		return module.accessRetained(function(handle) {
+		return module.accessRetained(handle -> {
 			validateCall(handle, stableIndex, shape);
 			try {
 				return operation(handle);

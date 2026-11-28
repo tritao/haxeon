@@ -95,7 +95,7 @@ class ShowcaseWeb implements UiFrameApplication {
 		if (config.visualCase >= 0 && !explorer.setVisualCase(config.visualCase))
 			throw BindingError.invalidArgument("ShowcaseWeb", "UI Explorer rejected the visual case");
 		if (config.graphics) openGraphics();
-		input = host.events.listen(function(event) {
+		input = host.events.listen(event -> {
 			var lab = graphics;
 			switch event {
 				case PointerMove(source, x, y) if (lab != null && matches(source)):

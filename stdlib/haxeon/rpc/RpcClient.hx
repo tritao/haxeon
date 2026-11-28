@@ -194,7 +194,7 @@ class RpcClient {
 		connectDeadline = clock() + connectTimeoutMs;
 		var pending:RpcConnectAttempt;
 		try
-			pending = connector.connect(function(result) {
+			pending = connector.connect(result -> {
 				if (generation != token || state != Connecting || clock() >= connectDeadline) {
 					switch result {
 						case Ok(transport):

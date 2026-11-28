@@ -98,7 +98,7 @@ class ShortcutBindings {
 			store.setState(STATE_KEY, null);
 			return;
 		}
-		ids.sort(function(first, second) return Reflect.compare(first, second));
+		ids.sort((first, second) -> Reflect.compare(first, second));
 		var saved:Dynamic = {};
 		for (id in ids)
 			Reflect.setField(saved, id, [for (shortcut in commands.shortcutsFor(id)) shortcut.serialize()]);

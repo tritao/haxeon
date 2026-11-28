@@ -56,7 +56,7 @@ class Radio implements ScopeView {
 		this.enabled = enabled;
 		this.style = style == null ? defaultStyle() : style.copy();
 		hasSelectHandler = onSelect != null;
-		this.onSelect = onSelect == null ? function(_) {}
+		this.onSelect = onSelect == null ? _ -> {}
 			: onSelect;
 	}
 
@@ -145,7 +145,7 @@ class Radio implements ScopeView {
 		node.add(text);
 		if (enabled && hasSelectHandler) {
 			var latest = context.latestOf(this);
-			var select = function(_:UiEvent) {
+			var select = (_:UiEvent) -> {
 				latest().onSelect(value);
 			};
 			node.onActivate(select);

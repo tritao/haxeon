@@ -447,7 +447,7 @@ class RenderNode {
 	 */
 	public function onActivate(handler:UiEvent->Void, phase:UiEventPhase = UiEventPhase.Bubble):RenderNode {
 		if (handler == null) throw "Activation handlers require a callback";
-		on(UiEventKind.Click, function(event) {
+		on(UiEventKind.Click, event -> {
 			if (event.button == 0) handler(event);
 		}, phase);
 		return on(UiEventKind.Activate, handler, phase);
@@ -709,7 +709,7 @@ class RenderNode {
 	@:allow(haxeon.ui.core.UiContext) function paint(canvas:Canvas):Bool {
 		if (!hasPaintHandler() || resolved == null || !resolved.visible) return false;
 		if (hasCompositePaint()) {
-			var content:Canvas->Void = function(target:Canvas) {
+			var content:Canvas->Void = (target:Canvas) -> {
 				paintContent(target);
 			};
 			var style = computedStyle == null ? new ComputedStyle() : computedStyle;

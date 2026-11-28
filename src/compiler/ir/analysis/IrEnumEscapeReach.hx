@@ -431,7 +431,7 @@ class IrEnumEscapeReach {
 				default:
 			}
 		}
-		var walk:IrObject->Void = function(_) {},
+		var walk:IrObject->Void = _ -> {},
 			referenceEnums:Map<String, Bool> = [];
 		function firstReference(type:IrType):Bool {
 			if (referenceTypes.exists(type))

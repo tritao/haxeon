@@ -346,7 +346,7 @@ class BodyTyper implements BodyTyping {
 			if (compiler.types.analysis.AstScan.returns(fn.statements))
 				fail(DiagnosticCode.FUNCTION_COMPLETION, 'Function ${fn.name} is declared @:noReturn but returns',
 					fn.span);
-			if (!ControlFlow.alwaysExits(statements, function(type, cases) return this.exhaustiveSwitch(type, cases)))
+			if (!ControlFlow.alwaysExits(statements, (type, cases) -> this.exhaustiveSwitch(type, cases)))
 				fail(DiagnosticCode.FUNCTION_COMPLETION,
 					'Function ${fn.name} is declared @:noReturn but can finish without throwing', fn.span);
 		}
@@ -354,7 +354,7 @@ class BodyTyper implements BodyTyping {
 			case TVoid: false;
 			default: true;
 		}) && !ControlFlow.returnsOnEveryPath(statements,
-			function(type, cases) return this.exhaustiveSwitch(type, cases)))
+			(type, cases) -> this.exhaustiveSwitch(type, cases)))
 			fail(DiagnosticCode.FUNCTION_COMPLETION, 'Function ${fn.name} does not return on every path', fn.span);
 		// Typed with its own type parameters, the body is made into the code of the representation asked for, in its context.
 		if (elaboration != null) {
@@ -814,7 +814,7 @@ class BodyTyper implements BodyTyping {
 			mark = session.checkpoint();
 		for (statementIndex in 0...statements.length) {
 			var typedBefore = output.length;
-			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveSwitch(type, cases))) {
+			if (ControlFlow.alwaysReturns(output, (type, cases) -> this.exhaustiveSwitch(type, cases))) {
 				if (isNoReturnPlaceholder(output, statements[statementIndex]))
 					continue;
 				// Every statement after it is unreachable too: the first is reported.
@@ -2335,7 +2335,7 @@ class BodyTyper implements BodyTyping {
 			}
 		var blockScope = new Scope(scope),
 			typedStatements = typeStatements(statements, blockScope, context.expectedReturnType);
-		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveSwitch(type, cases)))
+		if (ControlFlow.alwaysExits(typedStatements, (type, cases) -> this.exhaustiveSwitch(type, cases)))
 			return new TypedExpression(TBlockExpression(typedStatements,
 				new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 		var typedResult = typeExpression(result, blockScope, expectedType);

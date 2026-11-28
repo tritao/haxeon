@@ -129,7 +129,7 @@ class RpcConnection {
 	public function onNotification<T>(id:Int, decode:Bytes->Result<T, WireError>, handler:T->Void):Void {
 		if (id <= 0 || notifications.exists(id))
 			throw new haxe.Exception("Invalid or duplicate notification id");
-		notifications.set(id, function(bytes) switch decode(bytes) {
+		notifications.set(id, bytes -> switch decode(bytes) {
 			case Ok(value): handler(value);
 			case Err(_): closeWith(ProtocolViolation("invalid_notification"));
 		});
@@ -177,10 +177,10 @@ class RpcConnection {
 			}),
 				failure: error -> promise.complete(Err(error))});
 		pendingCount++;
-		promise.setControls(function() {
+		promise.setControls(() -> {
 			takePending(id);
 			sendCancellation(id, promise.cancel);
-		}, function() takePending(id));
+		}, () -> takePending(id));
 		return promise.future;
 	}
 

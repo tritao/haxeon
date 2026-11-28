@@ -37,13 +37,13 @@ class Align implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var id = context.rootId("align");
 			var node = context.styled(id, LayoutVisualKind.Box,
 				new StyleIdentity("align", key.rawValue, key.rawValue, null, ["align"]), style);
 			var computed = node.computedStyle;
-			var content = context.withStyleParent(computed, function() {
-				return context.withScope(new Key("content"), function() return child.build(context));
+			var content = context.withStyleParent(computed, () -> {
+				return context.withScope(new Key("content"), () -> child.build(context));
 			});
 			node.add(content);
 			return node;

@@ -602,7 +602,7 @@ class WasmGcDynamicArrays {
 	// Natives.
 
 	function allocTypedRef(length:Int, elementTypeLocal:Int, result:Int):Void
-		dispatch(elementTypeLocal, function(element) {
+		dispatch(elementTypeLocal, element -> {
 			push([
 				LocalGet(length),
 				LocalGet(length),
@@ -647,7 +647,7 @@ class WasmGcDynamicArrays {
 	 * is validated before the array changes, then converted into new storage of the same capacity.
 	 */
 	function retype(array:Int, target:Int):Void
-		dispatch(target, function(element) push([
+		dispatch(target, element -> push([
 			LocalGet(array),
 			LocalGet(target),
 			Call(WasmModuleSupport.requiredFunctionIndex(functions, retypeName(element, plan)))
@@ -669,7 +669,7 @@ class WasmGcDynamicArrays {
 		push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([LocalSet(length)]));
 		push(loadStorage(array, Dyn).concat([LocalSet(source)]));
 		function eachValue(each:Void->Void):Void
-			forEach(index, length, function() {
+			forEach(index, length, () -> {
 				push([
 					LocalGet(source),
 					LocalGet(index),
@@ -678,7 +678,7 @@ class WasmGcDynamicArrays {
 				]);
 				each();
 			});
-		eachValue(function() {
+		eachValue(() -> {
 			accepts(element, valueLocal, ok);
 			push([LocalGet(ok), I32Eqz, If(null)]);
 			var indexText = allocateLocal(plan.valueType(Bytes));
@@ -699,7 +699,7 @@ class WasmGcDynamicArrays {
 			body.push(End);
 		});
 		push([LocalGet(source), ArrayLen, ArrayNewDefault(storageType), LocalSet(converted)]);
-		eachValue(function() {
+		eachValue(() -> {
 			var encoded = encode(element, valueLocal, target);
 			push([LocalGet(converted), LocalGet(index), LocalGet(encoded), ArraySet(storageType)]);
 		});
@@ -759,7 +759,7 @@ class WasmGcDynamicArrays {
 			]);
 		}
 		var current = elementType(array);
-		dispatch(current, function(element) push([LocalGet(read(element, array, index)), LocalSet(result)]));
+		dispatch(current, element -> push([LocalGet(read(element, array, index)), LocalSet(result)]));
 	}
 
 	/** Write through the storage element type, converting before the array grows. */
@@ -805,7 +805,7 @@ class WasmGcDynamicArrays {
 			]);
 		}
 		var current = elementType(array);
-		dispatch(current, function(element) {
+		dispatch(current, element -> {
 			var encoded = encode(element, valueLocal, current);
 			push(handled(representation.arraySet(value(Array(element)), value(I32), value(element), array, index,
 				encoded)));
@@ -865,7 +865,7 @@ class WasmGcDynamicArrays {
 			push([Return, End]);
 		}
 		var current = elementType(array);
-		dispatch(current, function(element) {
+		dispatch(current, element -> {
 			var encoded = encode(element, valueLocal, current),
 				arguments = [value(Array(element))].concat([for (_ in extra) value(I32)]).concat([value(element)]);
 			lower(concrete(operation, element), value(result >= 0 ? I32 : Void), arguments, result,
@@ -916,7 +916,7 @@ class WasmGcDynamicArrays {
 			push([LocalGet(saved), Return, End]);
 		}
 		var current = elementType(array);
-		dispatch(current, function(element) {
+		dispatch(current, element -> {
 			var taken = allocateLocal(plan.valueType(element));
 			lower(concrete(operation, element), value(element), [value(Array(element))], taken, [array]);
 			push([LocalGet(box(element, taken)), LocalSet(result)]);
@@ -936,7 +936,7 @@ class WasmGcDynamicArrays {
 				End
 			]);
 		var current = elementType(array);
-		dispatch(current, function(element) {
+		dispatch(current, element -> {
 			lower(concrete("remove_at", element), value(Void), [value(Array(element)), value(I32)], -1, [array, index]);
 		});
 	}
@@ -997,7 +997,7 @@ class WasmGcDynamicArrays {
 				if (source.first)
 					push([I32Const(0), LocalSet(offset)]);
 				push(loadField(source.array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([LocalSet(length)]));
-				forEach(index, length, function() {
+				forEach(index, length, () -> {
 					push([
 						LocalGet(source.array),
 						LocalGet(index),
@@ -1024,7 +1024,7 @@ class WasmGcDynamicArrays {
 			index = allocateLocal(I32),
 			length = allocateLocal(I32);
 		push([LocalGet(leftType), LocalGet(rightType), I32Eq, If(null)]);
-		dispatch(leftType, function(element) {
+		dispatch(leftType, element -> {
 			lower(concrete("concat", element), value(Array(element)), [value(Array(element)), value(Array(element))],
 				result, [
 					left,
@@ -1043,8 +1043,8 @@ class WasmGcDynamicArrays {
 			if (source.first)
 				push([I32Const(0), LocalSet(offset)]);
 			push(loadField(source.array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([LocalSet(length)]));
-			dispatch(source.type, function(element) {
-				forEach(index, length, function() {
+			dispatch(source.type, element -> {
+				forEach(index, length, () -> {
 					var boxed = read(element, source.array, index);
 					push(loadStorage(result, Dyn));
 					push([
@@ -1079,7 +1079,7 @@ class WasmGcDynamicArrays {
 			]);
 		}
 		var current = elementType(array);
-		dispatch(current, function(element) {
+		dispatch(current, element -> {
 			var output = (switch (resultType) {
 				case Void: true;
 				default: false;
@@ -1105,7 +1105,7 @@ class WasmGcDynamicArrays {
 				End
 			]);
 		var current = elementType(array);
-		dispatch(current, function(element) {
+		dispatch(current, element -> {
 			lower(concrete("resize", element), value(Void), [value(Array(element)), value(I32)], -1, [array, length]);
 		});
 	}

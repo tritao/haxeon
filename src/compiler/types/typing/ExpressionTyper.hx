@@ -1270,7 +1270,7 @@ class ExpressionTyper {
 					optional: false,
 					isFinal: false
 				}];
-			inferred.sort(function(left, right) return Reflect.compare(left.name, right.name));
+			inferred.sort((left, right) -> Reflect.compare(left.name, right.name));
 			// Without an expected structure, the literal's structure stays open while its unit is typed, gaining the optional fields of
 			// the structures it meets; it is named and registered when it closes (MonomorphFrames).
 			var open = isDynamic ? null : session.monomorphs.openStructure(inferred, span);

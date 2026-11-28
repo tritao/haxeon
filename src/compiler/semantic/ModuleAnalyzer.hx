@@ -567,7 +567,7 @@ class ModuleAnalyzer {
 		parsed.resize(pending.length);
 		for (index in 0...pending.length)
 			parsed[index] = null;
-		compiler.core.Parallel.forEach(pending.length, threads, function(index) {
+		compiler.core.Parallel.forEach(pending.length, threads, index -> {
 			try
 				parsed[index] = parseText(pending[index])
 			catch (_:haxe.Exception) {}

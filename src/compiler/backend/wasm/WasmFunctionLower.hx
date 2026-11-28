@@ -228,7 +228,7 @@ class WasmFunctionLower {
 			}
 		}
 		var rootValueIds = [for (valueId in rootIds.keys()) valueId];
-		rootValueIds.sort(function(left, right) return left - right);
+		rootValueIds.sort((left, right) -> left - right);
 		var slotByValue:Map<Int, Int> = [];
 		for (index in 0...rootValueIds.length) {
 			slotByValue.set(rootValueIds[index], index);
@@ -682,7 +682,7 @@ class WasmFunctionLower {
 			emit(body, [LocalGet(exceptionState.handler), I32Const(-1), I32Eq, If(null)]);
 			emit(body, [LocalGet(exceptionState.exception), Throw(exceptionTag), Else]);
 			var catches = [for (catchBlock in exceptionState.saved.keys()) catchBlock];
-			catches.sort(function(left, right) return left - right);
+			catches.sort((left, right) -> left - right);
 			for (catchBlock in catches) {
 				emit(body,
 					[
@@ -733,7 +733,7 @@ class WasmFunctionLower {
 				GlobalSet(requiredPendingExceptionValue())
 			]);
 		var catches = [for (catchBlock in exceptionState.saved.keys()) catchBlock];
-		catches.sort(function(left, right) return left - right);
+		catches.sort((left, right) -> left - right);
 		for (index in 0...catches.length) {
 			var catchBlock = catches[index];
 			emit(body,
@@ -2589,7 +2589,7 @@ class WasmFunctionLower {
 				}
 			}
 		}
-		result.sort(function(left, right) return objectInheritanceDepth(program,
+		result.sort((left, right) -> objectInheritanceDepth(program,
 			right.typeName) - objectInheritanceDepth(program,
 			left.typeName));
 		return result;
@@ -2622,7 +2622,7 @@ class WasmFunctionLower {
 				}
 			}
 		}
-		result.sort(function(left, right) return objectInheritanceDepth(program,
+		result.sort((left, right) -> objectInheritanceDepth(program,
 			right.typeName) - objectInheritanceDepth(program,
 			left.typeName));
 		return result;

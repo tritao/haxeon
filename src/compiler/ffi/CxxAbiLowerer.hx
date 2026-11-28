@@ -111,7 +111,7 @@ class CxxAbiLowerer {
 				method.loweredName = name;
 				declarations.push(lowerMethod(method, name, records, enums, aliases, callbackNames));
 			}
-		declarations.sort(function(left, right) return Reflect.compare(declarationName(left), declarationName(right)));
+		declarations.sort((left, right) -> Reflect.compare(declarationName(left), declarationName(right)));
 		requireClangLayouts(model, declarations, target);
 		var source = model.span.file;
 		return new HxiInterface(interfaceName == null ? HxiInterface.defaultName(model.header) : interfaceName, target,

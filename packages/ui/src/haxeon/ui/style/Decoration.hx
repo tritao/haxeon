@@ -392,7 +392,7 @@ class NineSliceDecoration extends Decoration {
 				var destinationOriginX = destinationX[column];
 				var destinationOriginY = destinationY[row];
 				canvas.withClip(new Rect(destinationOriginX, destinationOriginY,
-					destinationWidthValue, destinationHeightValue), function(target) {
+					destinationWidthValue, destinationHeightValue), target -> {
 						target.translate(destinationOriginX - sourceOriginX * destinationWidthValue / sourceWidthValue,
 							destinationOriginY - sourceOriginY * destinationHeightValue / sourceHeightValue);
 						target.scale(destinationWidthValue / sourceWidthValue,

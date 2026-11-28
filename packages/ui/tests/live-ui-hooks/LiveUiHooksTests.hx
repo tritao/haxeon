@@ -21,8 +21,8 @@ import haxeon.ui.widgets.layout.Column;
 		style.width = LayoutAxis.fixed(120);
 		style.height = LayoutAxis.fixed(40);
 		var root = new Column("buttons", [
-			new KeyedView("first", new CanvasView("first", function(_, _) {}, style, "First")),
-			new KeyedView("second", new CanvasView("second", function(_, _) {}, style, "Second"))
+			new KeyedView("first", new CanvasView("first", (_, _) -> {}, style, "First")),
+			new KeyedView("second", new CanvasView("second", (_, _) -> {}, style, "Second"))
 		]).build(context).node();
 		for (child in root.children) child.focusable = true;
 		root.children[0].on(UiEventKind.Click, handler);
@@ -47,7 +47,7 @@ import haxeon.ui.widgets.layout.Column;
 	static function main():Int {
 		var context = new UiContext();
 		var oldClicks = 0, newClicks = 0, builds = 0;
-		var view = new ButtonsView(function(_) oldClicks++);
+		var view = new ButtonsView(_ -> oldClicks++);
 		var build = function():View {
 			builds++;
 			return view;
@@ -85,7 +85,7 @@ import haxeon.ui.widgets.layout.Column;
 		context.windowFocusGained();
 
 		// The patched code installs a new handler; the same cache key must still build afresh.
-		view.handler = function(_) newClicks++;
+		view.handler = _ -> newClicks++;
 		root = context.submitCached(build, frame, "buttons");
 		check(builds == buildsBeforeRelease + 1, "the submit after release must build, not reuse the released tree");
 		check(context.root == root && root.children.length == 2, "the rebuilt tree must be the context's root");

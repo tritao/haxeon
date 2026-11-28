@@ -34,21 +34,21 @@ class DockVariantRootMain {
 		var frame = new LayoutFrame(640.0, 480.0);
 		function tabs(root:RenderNode):Null<RenderNode> {
 			var found:Null<RenderNode> = null;
-			root.walk(function(node) {
+			root.walk(node -> {
 				if (node.styleType == "tabs") found = node;
 			});
 			return found;
 		}
 		function hasText(root:RenderNode, value:String):Bool {
 			var found = false;
-			root.walk(function(node) {
+			root.walk(node -> {
 				if (node.layout.text == value) found = true;
 			});
 			return found;
 		}
 		function clickTab(root:RenderNode, label:String):Bool {
 			var target:Null<RenderNode> = null;
-			root.walk(function(node) {
+			root.walk(node -> {
 				if (node.semantics != null
 					&& node.semantics.role == AccessibilityRole.Tab && node.semantics.label == label) target = node;
 			});
@@ -106,7 +106,7 @@ class DockVariantRootMain {
 				DockPanelContent.observing("pane-b", _ -> new Text("replacement B"))
 			]);
 		var replacementRoot = uiContext.submit(replacementWorkspace, frame), target:Null<RenderNode> = null;
-		replacementRoot.walk(function(node) {
+		replacementRoot.walk(node -> {
 			if (node.semantics != null
 				&& node.semantics.role == AccessibilityRole.Tab && node.semantics.label == "pane-b") target = node;
 		});

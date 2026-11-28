@@ -122,7 +122,7 @@ internal class SelectionPopup implements ScopeView {
 			&& popupDecorationSource.selector == "default")
 			dropdownComputed.setDecorations(DecorationChain.of([new ShadowDecoration()]),
 				new StyleSource("framework", "selection-popup", -1, "default"));
-		dropdown.onPaint(function(canvas, geometry) {
+		dropdown.onPaint((canvas, geometry) -> {
 			canvas.fillRectIfPositive(new Rect(0.0, 0.0, geometry.width, geometry.height),
 				context.theme.tokens.surface);
 			var border = context.theme.tokens.border;
@@ -137,7 +137,7 @@ internal class SelectionPopup implements ScopeView {
 		dropdown.semantics = listSemantics;
 		// A menu owns wheel input even at its limits or when all options fit.
 		// Otherwise its enclosing scroll view moves underneath the open popup.
-		var ownWheel = function(event:UiEvent) {
+		var ownWheel = (event:UiEvent) -> {
 			if (!event.defaultPrevented && scrollController != null) scrollController.scrollBy(0.0, event.deltaY);
 			event.preventDefault();
 			event.stopPropagation();
@@ -146,7 +146,7 @@ internal class SelectionPopup implements ScopeView {
 		var optionParent:RenderNode;
 		{
 			var scrollState = context.resourceState(context.id("option-scroll"),
-				function() return new SelectionPopupScrollState(activeIndex), function(_) {}).value;
+				() -> new SelectionPopupScrollState(activeIndex), _ -> {}).value;
 			if (scrollState.activeIndex != activeIndex) {
 				scrollState.activeIndex = activeIndex;
 				scrollState.revealPending = true;
@@ -197,7 +197,7 @@ internal class SelectionPopup implements ScopeView {
 			optionSemantics.actions = optionEnabled ? AccessibilityAction.Select : AccessibilityAction.empty();
 			optionSemantics.setSize = visibleIndices.length;
 			optionSemantics.positionInSet = position + 1;
-			var optionButton = new Button(option.label, optionStyle, function() {
+			var optionButton = new Button(option.label, optionStyle, () -> {
 				var handler = latest().onSelect;
 				if (handler != null) handler(originalIndex);
 			}, option.key, optionEnabled, ButtonVariant.Navigation,
@@ -206,7 +206,7 @@ internal class SelectionPopup implements ScopeView {
 				context.theme.tokens.textPrimary) : null, null, true, null, null, null, optionSemantics);
 			var optionPosition = position;
 			var optionModifier = new RootModifier();
-			optionModifier.on(UiEventKind.KeyDown, function(event) {
+			optionModifier.on(UiEventKind.KeyDown, event -> {
 				if (event.key == UiKey.Escape) {
 					var close = latest().onClose;
 					if (close != null) close();
@@ -230,7 +230,7 @@ internal class SelectionPopup implements ScopeView {
 				event.preventDefault();
 			});
 			var optionNode = context.withScope(new haxeon.ui.core.Key("option-" + option.key),
-				function() return context.build(optionButton, optionModifier));
+				() -> context.build(optionButton, optionModifier));
 			link.optionIds.push(optionNode.id);
 			optionParent.add(optionNode);
 		}

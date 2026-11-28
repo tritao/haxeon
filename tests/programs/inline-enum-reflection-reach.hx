@@ -27,7 +27,7 @@ class ReflectedRoot {
 		items = [branch];
 		byId = new Map();
 		byId.set("branch", branch);
-		create = function() return branch;
+		create = () -> branch;
 	}
 }
 

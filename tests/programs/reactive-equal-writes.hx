@@ -19,7 +19,7 @@ function negativeZero():Float {
 function main():Int {
 	var model = new EqualWriteModel(new EqualWritePart(2));
 	var runs = 0;
-	var effect = new Effect(function() {
+	var effect = new Effect(() -> {
 		var a = model.item;
 		var b = model.ratio;
 		runs++;
@@ -30,7 +30,7 @@ function main():Int {
 	if (1.0 / model.ratio >= 0.0 || effect.dirty) return 2;
 	var signal = new Signal<Float>(0.0);
 	var signalRuns = 0;
-	var signalEffect = new Effect(function() {
+	var signalEffect = new Effect(() -> {
 		var value = signal.value;
 		signalRuns++;
 	});

@@ -36,7 +36,7 @@ class ListsPage {
 			explorer.context.buildContext.theme.tokens.success),
 			explorer.keyed("copy",
 			explorer.caption("Scroll inside the list. ListView materializes only the viewport window and a small overscan as Haxe widgets.")),
-			explorer.keyed("jump", explorer.button("Jump to row 415", "jump-row", function() {
+			explorer.keyed("jump", explorer.button("Jump to row 415", "jump-row", () -> {
 				explorer.listView.scrollTo(414);
 			}))])));
 		items.push(explorer.keyed("list-view", explorer.listView));

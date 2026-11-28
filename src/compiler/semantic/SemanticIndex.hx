@@ -296,7 +296,7 @@ class SemanticIndex {
 		indexStatements(fn, fn.statements, resolve, resolveEnumCase);
 		indexCallTokens(fn, functionId, resolve);
 		currentCaller = null;
-		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		bindings.sort((left, right) -> Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
 		indexingMs += (Sys.time() - started) * 1000.0;
@@ -324,7 +324,7 @@ class SemanticIndex {
 			for (fn in owner.methods)
 				if (typed == null || !typed.exists(fn.span.start))
 					indexRecoveredFunction(fn, owner.name);
-		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		bindings.sort((left, right) -> Reflect.compare(left.span.start, right.span.start));
 	}
 
 	function rememberRecoveredMember(owner:String, name:String, span:SourceSpan):Void
@@ -764,7 +764,7 @@ class SemanticIndex {
 			if (id != null)
 				bind(id, tokens.span(token));
 		}
-		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		bindings.sort((left, right) -> Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
 		indexingMs += (Sys.time() - started) * 1000.0;
@@ -786,7 +786,7 @@ class SemanticIndex {
 					visible.set(local.name, local);
 			}
 		var locals = [for (local in visible) local];
-		locals.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		locals.sort((left, right) -> Reflect.compare(left.name, right.name));
 		var receiver:Null<CompilerType> = null;
 		if (qualifier != null) {
 			if (qualifier == "this")

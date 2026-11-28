@@ -60,7 +60,7 @@ class Spinner implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var node = context.createNode(context.rootId("spinner"), LayoutVisualKind.Custom, style);
 			var semantics = new Semantics(AccessibilityRole.ProgressBar, label, running ? "Indeterminate" : "Paused");
 			if (running) semantics.states = AccessibilityState.Busy;
@@ -68,16 +68,16 @@ class Spinner implements View {
 
 			var resolvedColor = color == null ? context.theme.tokens.accent : color;
 			var stored:State<SpinnerPainter> = context.resourceState(node.id,
-				function() return new SpinnerPainter(context.animations,
+				() -> new SpinnerPainter(context.animations,
 				resolvedColor,
 				speed,
-				kind), function(painter:SpinnerPainter) {
+				kind), (painter:SpinnerPainter) -> {
 					painter.dispose();
 				});
 			var painter:SpinnerPainter = cast stored.value;
 			painter.configure(kind, resolvedColor, speed);
 			painter.setRunning(running);
-			node.onPaint(function(canvas, geometry) painter.paintFrame(canvas, geometry));
+			node.onPaint((canvas, geometry) -> painter.paintFrame(canvas, geometry));
 			return node;
 		});
 	}
@@ -195,7 +195,7 @@ internal class SpinnerPainter implements Disposable {
 		if (size <= 0.0)
 			return;
 
-		canvas.withState(function(target) {
+		canvas.withState(target -> {
 			target.translate(geometry.width * 0.5, geometry.height * 0.5);
 			target.scale(size * 0.42, size * 0.42);
 			switch (kind) {
@@ -231,7 +231,7 @@ internal class SpinnerPainter implements Disposable {
 				distance += 1.0;
 			var alpha = 0.18 + 0.82 * (1.0 - distance);
 			var angle = normalized * TwoPi - Math.PI * 0.5;
-			canvas.withState(function(dot) {
+			canvas.withState(dot -> {
 				dot.translate(Math.cos(angle) * 0.74, Math.sin(angle) * 0.74);
 				dot.scale(0.11, 0.11);
 				dot.setAlpha(alpha);
@@ -248,7 +248,7 @@ internal class SpinnerPainter implements Disposable {
 				distance += 1.0;
 			var alpha = 0.18 + 0.82 * (1.0 - distance);
 			var angle = normalized * TwoPi;
-			canvas.withState(function(barCanvas) {
+			canvas.withState(barCanvas -> {
 				barCanvas.rotate(angle);
 				barCanvas.setAlpha(alpha);
 				barCanvas.fill(bar, paintResource);
@@ -265,7 +265,7 @@ internal class SpinnerPainter implements Disposable {
 	}
 
 	function paintPulseCircle(canvas:Canvas, progress:Float):Void {
-		canvas.withState(function(circleCanvas) {
+		canvas.withState(circleCanvas -> {
 			circleCanvas.scale(0.16 + progress * 0.60, 0.16 + progress * 0.60);
 			circleCanvas.setAlpha(0.68 * (1.0 - progress));
 			circleCanvas.fill(circle, paintResource);

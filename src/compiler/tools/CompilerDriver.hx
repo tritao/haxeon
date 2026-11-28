@@ -35,10 +35,10 @@ class CompilerDriver {
 			?published:() -> Void, ?diagnostics:String->Void):CompileResult {
 		if (cancellation != null)
 			cancellation.check();
-		var report = progress == null ? function(message:String) {} : progress,
+		var report = progress == null ? (message:String) -> {} : progress,
 			verbosity = request.verbosity;
 		// Progress at `normal`; the phase, pass and allocation reports, which tools parse, at `diagnostic`.
-		var progressReport = verbosity.atLeast(Verbosity.Normal) ? report : function(message:String) {};
+		var progressReport = verbosity.atLeast(Verbosity.Normal) ? report : (message:String) -> {};
 		var requestStartedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var memoryContract = request.memoryContract == null ? null : MemoryContractCodec.load(request.memoryContract);
@@ -108,7 +108,7 @@ class CompilerDriver {
 			var backendDoneAt = Sys.time() * 1000.0;
 			var allocationAfterEncode = AllocationMeter.sample();
 			var stampedAt = -1.0;
-			var publishPatch = function() {
+			var publishPatch = () -> {
 				var build = BackendArtifacts.hashLink(result.artifact);
 				var patch = build.patchBytes;
 				if (patch != null)
@@ -230,8 +230,8 @@ class CompilerDriver {
 			?cancellation:CancellationToken, ?diagnostics:String->Void):compiler.Compiler.AnalysisResult {
 		if (!request.noOutput)
 			throw new InternalError("CompilerDriver.check takes a --no-output request");
-		var report = progress == null ? function(message:String) {} : progress,
-			progressReport = request.verbosity.atLeast(Verbosity.Normal) ? report : function(message:String) {};
+		var report = progress == null ? (message:String) -> {} : progress,
+			progressReport = request.verbosity.atLeast(Verbosity.Normal) ? report : (message:String) -> {};
 		progressReport("loading " + Std.string(request.paths.length) + " sources");
 		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report),
 			apiJsonOutput = request.apiJsonOutput;

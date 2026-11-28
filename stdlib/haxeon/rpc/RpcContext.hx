@@ -35,7 +35,7 @@ class RpcContext<Response> {
 
 	function respondFuture(future:Future<Response>):Void {
 		@:privateAccess state.onCancel = () -> future.cancel();
-		future.onComplete(function(outcome) {
+		future.onComplete(outcome -> {
 			if (!state.isActive())
 				return;
 			// An answer the service expects to give is in its response type; a bug in its producer throws there.

@@ -59,7 +59,7 @@ class ComponentLab implements Observable {
 					new Text(story.group.toUpperCase(), null, Color.rgba(0.43, 0.55, 0.7, 1.0))));
 			}
 			var captured = story;
-			var button = new Button(story.title, null, function() {
+			var button = new Button(story.title, null, () -> {
 				selectedId = captured.id;
 
 			}, "story:" + story.id, null, ButtonVariant.Navigation, story.id == selected.id);
@@ -127,7 +127,7 @@ class ComponentLab implements Observable {
 			{key: "wide", label: "768", width: 768.0}
 		]) {
 			var captured = entry;
-			var button = new Button(entry.label, null, function() {
+			var button = new Button(entry.label, null, () -> {
 				previewWidth = captured.width;
 
 			}, "width:" + entry.key, null, ButtonVariant.Navigation, previewWidth == entry.width);
@@ -216,9 +216,9 @@ class ComponentLab implements Observable {
 	];
 
 	function buttonStates():View {
-		var primary = new Button("Primary", null, function() {}, "primary", null, ButtonVariant.Primary);
-		var secondary = new Button("Navigation", null, function() {}, "navigation", null, ButtonVariant.Navigation);
-		var selected = new Button("Selected", null, function() {}, "selected", null, null, true);
+		var primary = new Button("Primary", null, () -> {}, "primary", null, ButtonVariant.Primary);
+		var secondary = new Button("Navigation", null, () -> {}, "navigation", null, ButtonVariant.Navigation);
+		var selected = new Button("Selected", null, () -> {}, "selected", null, null, true);
 		var disabled = new Button("Disabled", null, null, "disabled", false);
 		return new Row("button-states",
 			[
@@ -233,7 +233,7 @@ class ComponentLab implements Observable {
 	function textFieldStory():View {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(360.0);
-		return new TextField("editable-text", textValue, function(next) {
+		return new TextField("editable-text", textValue, next -> {
 			textValue = next;
 		}, style);
 	}
@@ -244,7 +244,7 @@ class ComponentLab implements Observable {
 		return new Row("selection-controls",
 			[
 				new KeyedView("checkbox",
-					new Checkbox("enabled", "Enabled", checkboxValue, function(next) checkboxValue = next)),
+					new Checkbox("enabled", "Enabled", checkboxValue, next -> checkboxValue = next)),
 				new KeyedView("select",
 					new Select<String>("quality",
 					[
@@ -253,7 +253,7 @@ class ComponentLab implements Observable {
 						new SelectOption<String>("quality", "High quality", "quality")
 					],
 					selectValue,
-					function(next) selectValue = next,
+					next -> selectValue = next,
 					selectStyle))
 			],
 			rowStyle());
@@ -278,14 +278,14 @@ class ComponentLab implements Observable {
 		var columnStyle = new LayoutStyle();
 		columnStyle.width = LayoutAxis.fixed(480.0);
 		columnStyle.childGap = 18.0;
-		var slider = new Slider("volume", "Volume", sliderValue, 0.0, 1.0, 0.01, function(next) sliderValue = next);
+		var slider = new Slider("volume", "Volume", sliderValue, 0.0, 1.0, 0.01, next -> sliderValue = next);
 		var progress = new ProgressBar("progress", sliderValue, 0.0, 1.0, "Progress", animationDuration: 0.0);
 		return new Column("value-controls",
 			[
 				new KeyedView("slider", slider),
 				new KeyedView("progress", progress),
 				new KeyedView("toggle",
-					new Toggle("notifications", "Notifications", checkboxValue, function(next) checkboxValue = next)),
+					new Toggle("notifications", "Notifications", checkboxValue, next -> checkboxValue = next)),
 				new KeyedView("radio",
 					new RadioGroup("quality",
 					[
@@ -294,7 +294,7 @@ class ComponentLab implements Observable {
 						new RadioOption("high", "High", "high")
 					],
 					radioValue,
-					function(next) radioValue = next))
+					next -> radioValue = next))
 			],
 			columnStyle);
 	}
@@ -312,9 +312,9 @@ class ComponentLab implements Observable {
 		columnStyle.width = LayoutAxis.fixed(560.0);
 		columnStyle.childGap = 16.0;
 		var disabled = new Button("Disabled action", null, null, "token-disabled", false);
-		var nav = new Button("Navigation item", null, function() {}, "token-navigation", null, ButtonVariant.Navigation,
+		var nav = new Button("Navigation item", null, () -> {}, "token-navigation", null, ButtonVariant.Navigation,
 			true);
-		var primary = new Button("Primary action", null, function() {}, "token-primary", null, ButtonVariant.Primary);
+		var primary = new Button("Primary action", null, () -> {}, "token-primary", null, ButtonVariant.Primary);
 		return new Column("design-tokens",
 			[
 				new KeyedView("heading", new Text("Typography / Heading")),

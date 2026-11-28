@@ -27,7 +27,7 @@ import haxeon.ui.widgets.text.TextField;
 		style.background = explorer.state.lightTheme ? color(0.92, 0.94, 0.98) : color(0.09, 0.12, 0.18);
 		style.radiusTopLeft = style.radiusTopRight = 5.0;
 		style.radiusBottomLeft = style.radiusBottomRight = 5.0;
-		return new TextField("demo-name", explorer.state.controls.nameValue, function(value) {
+		return new TextField("demo-name", explorer.state.controls.nameValue, value -> {
 			explorer.state.controls.nameValue = value;
 		}, style, "Display name");
 	}
@@ -40,7 +40,7 @@ import haxeon.ui.widgets.text.TextField;
 		style.background = explorer.state.lightTheme ? color(0.92, 0.94, 0.98) : color(0.09, 0.12, 0.18);
 		style.radiusTopLeft = style.radiusTopRight = 5.0;
 		style.radiusBottomLeft = style.radiusBottomRight = 5.0;
-		return new TextField("demo-notes", explorer.state.controls.notesValue, function(value) {
+		return new TextField("demo-notes", explorer.state.controls.notesValue, value -> {
 			explorer.state.controls.notesValue = value;
 		}, style, "Multilingual notes", multiline: true);
 	}
@@ -49,7 +49,7 @@ import haxeon.ui.widgets.text.TextField;
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.fixed(36.0);
-		return new Slider("volume-slider", "Volume", explorer.state.controls.volume, 0.0, 1.0, 0.01, function(value) {
+		return new Slider("volume-slider", "Volume", explorer.state.controls.volume, 0.0, 1.0, 0.01, value -> {
 			explorer.state.controls.volume = value;
 		}, style);
 	}
@@ -81,7 +81,7 @@ import haxeon.ui.widgets.text.TextField;
 	}
 
 	static function disabledButton(explorer:UiExplorer, label:String):Button {
-		var result = button(explorer, label, "disabled-demo", function() {}, false, false);
+		var result = button(explorer, label, "disabled-demo", () -> {}, false, false);
 		return result;
 	}
 

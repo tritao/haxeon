@@ -88,7 +88,7 @@ class WasmLinearGc {
 			guardBuilder.emit(I32Const(rootLimit));
 			guardBuilder.emit(I32LeS);
 			guardBuilder.emit(I32Eqz);
-			guardBuilder.if_(function(builder) builder.emit(Unreachable));
+			guardBuilder.if_(builder -> builder.emit(Unreachable));
 			guardBuilder.emit(GlobalGet(rootTop));
 			guardBuilder.emit(LocalTee(frame));
 			guardBuilder.emit(GlobalGet(rootTop));
@@ -136,7 +136,7 @@ class WasmLinearGc {
 			var wrapper = new WasmFunctionBuilder(fn.name, fn.type);
 			for (index in 0...locals.length)
 				wrapper.local('local_$index', locals[index].type);
-			wrapper.try_(function(builder) {
+			wrapper.try_(builder -> {
 				builder.emitAll(body);
 				builder.emit(Catch(exceptionTag));
 				builder.localSet(new WasmLocalRef(exceptionLocal));
@@ -259,13 +259,13 @@ class WasmLinearGc {
 		loadHeapTop(builder, context);
 		builder.localGet(header);
 		builder.emit(I32LeS);
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.localGet(value);
 		loadHeapTop(builder, context);
 		builder.emit(I32LeS);
 		builder.i32Eqz();
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.localGet(header);
 		builder.emit(I32Load(WasmLayout.GC_BLOCK_FLAGS_OFFSET));
@@ -276,20 +276,20 @@ class WasmLinearGc {
 		builder.i32Const(WasmLayout.GC_BLOCK_MAGIC);
 		builder.emit(I32Eq);
 		builder.i32Eqz();
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.localGet(flags);
 		builder.i32Const(WasmLayout.GC_BLOCK_ALLOCATED);
 		builder.emit(I32And);
 		builder.i32Eqz();
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.localGet(header);
 		builder.emit(I32Load(WasmLayout.GC_BLOCK_OWNER_OFFSET));
 		builder.localGet(value);
 		builder.emit(I32Eq);
 		builder.i32Eqz();
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.localGet(header);
 		builder.emit(I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET));
@@ -297,14 +297,14 @@ class WasmLinearGc {
 		builder.localGet(size);
 		builder.i32Const(WasmLayout.GC_BLOCK_HEADER_SIZE);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.localGet(size);
 		builder.i32Const(7);
 		builder.emit(I32And);
 		builder.i32Eqz();
 		builder.i32Eqz();
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.localGet(size);
 		loadHeapTop(builder, context);
@@ -312,12 +312,12 @@ class WasmLinearGc {
 		builder.i32Sub();
 		builder.emit(I32LeS);
 		builder.i32Eqz();
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.localGet(flags);
 		builder.i32Const(WasmLayout.GC_BLOCK_MARKED);
 		builder.emit(I32And);
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.localGet(header);
 		builder.i32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET);
@@ -331,7 +331,7 @@ class WasmLinearGc {
 		builder.i32Const(WasmLayout.GC_BLOCK_SCAN_REFERENCES);
 		builder.emit(I32And);
 		builder.i32Eqz();
-		builder.if_(function(builder) builder.return_());
+		builder.if_(builder -> builder.return_());
 
 		builder.globalGet(builder.global(markStackTop));
 		builder.i32Const(4);
@@ -341,12 +341,12 @@ class WasmLinearGc {
 		builder.emit(I32Mul);
 		builder.emit(I32LeS);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(1);
 			builder.emit(MemoryGrow);
 			builder.i32Const(-1);
 			builder.emit(I32Eq);
-			builder.if_(function(builder) builder.emit(Unreachable));
+			builder.if_(builder -> builder.emit(Unreachable));
 		});
 
 		builder.globalGet(builder.global(markStackTop));
@@ -395,14 +395,14 @@ class WasmLinearGc {
 		builder.emit(I32Load(WasmLayout.GC_BLOCK_LINK_OFFSET));
 		builder.localTee(backingOwner);
 		builder.i32Eqz();
-		builder.ifElse(function(_) {}, function(builder) {
+		builder.ifElse(_ -> {}, builder -> {
 			appendGcBackingTraceCase(builder, backingOwner, context.module.runtimeTypeId(Array(Dyn)),
-				function(builder) {
+				builder -> {
 					appendGcArrayContents(builder, value, backingOwner, entryCount, entryIndex, mark);
 				});
 			for (mapName in mapNames)
 				appendGcBackingTraceCase(builder, backingOwner, context.module.runtimeTypeId(Abstract(mapName)),
-					function(builder) {
+					builder -> {
 						appendGcMapContents(builder, value, backingOwner, entryCount, entryIndex, mark, mapName);
 					});
 			appendGcConservativeTrace(builder, value, header, entryCount, entryIndex, mark);
@@ -413,14 +413,14 @@ class WasmLinearGc {
 		// known layouts are traced from declared reference fields.
 		var leafTypes:Array<IrType> = [I32, Bool, I64, F64, RawPtr, TypeRef, Abstract("native_callback")];
 		for (leaf in leafTypes)
-			appendGcTraceCase(builder, value, context.module.runtimeTypeId(leaf), function(_) {});
+			appendGcTraceCase(builder, value, context.module.runtimeTypeId(leaf), _ -> {});
 		for (bytesType in [Bytes, ManagedBytes])
-			appendGcTraceCase(builder, value, context.module.runtimeTypeId(bytesType), function(builder) {
+			appendGcTraceCase(builder, value, context.module.runtimeTypeId(bytesType), builder -> {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET));
 				builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
 				builder.emit(I32Eq);
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.localGet(value);
 					builder.emit(I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET));
 					builder.call(builder.functionRef(mark));
@@ -430,14 +430,14 @@ class WasmLinearGc {
 				});
 			});
 		for (object in program.objects)
-			appendGcTraceCase(builder, value, context.module.runtimeTypeId(Obj(object.name)), function(builder) {
+			appendGcTraceCase(builder, value, context.module.runtimeTypeId(Obj(object.name)), builder -> {
 				if (object.nativeLayout != null) {
 					// A nested flat-value view keeps its owning root object alive in header word one.
 					builder.localGet(value);
 					builder.emit(I32Load(4));
 					builder.localTee(backingOwner);
 					builder.i32Eqz();
-					builder.ifElse(function(_) {}, function(builder) {
+					builder.ifElse(_ -> {}, builder -> {
 						builder.localGet(backingOwner);
 						builder.call(builder.functionRef(mark));
 					});
@@ -455,7 +455,7 @@ class WasmLinearGc {
 			builder.emit(I32Load(0));
 			builder.i32Const(context.module.runtimeTypeId(Enum(enumDecl.name)));
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.HEADER_SIZE));
 				builder.localSet(enumConstructor);
@@ -463,7 +463,7 @@ class WasmLinearGc {
 					builder.localGet(enumConstructor);
 					builder.i32Const(caseIndex);
 					builder.emit(I32Eq);
-					builder.if_(function(builder) {
+					builder.if_(builder -> {
 						for (fieldIndex in 0...enumLayout.cases[caseIndex].length) {
 							var field = layout.enumField(enumDecl.name, caseIndex, fieldIndex);
 							if (WasmTarget.isReference(field.type)) {
@@ -479,12 +479,12 @@ class WasmLinearGc {
 			});
 		}
 		for (mapName in mapNames)
-			appendGcTraceCase(builder, value, context.module.runtimeTypeId(Abstract(mapName)), function(builder) {
+			appendGcTraceCase(builder, value, context.module.runtimeTypeId(Abstract(mapName)), builder -> {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 				builder.call(builder.functionRef(mark));
 			});
-		appendGcTraceCase(builder, value, context.module.runtimeTypeId(Array(Dyn)), function(builder) {
+		appendGcTraceCase(builder, value, context.module.runtimeTypeId(Array(Dyn)), builder -> {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 			builder.call(builder.functionRef(mark));
@@ -492,7 +492,7 @@ class WasmLinearGc {
 			builder.emit(I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET));
 			builder.i32Const(WasmLayout.VALUE_ARRAY_MARKER);
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				for (offset in [
 					WasmLayout.VALUE_ARRAY_REFERENCE_DATA_OFFSET,
 					WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET,
@@ -507,12 +507,12 @@ class WasmLinearGc {
 			});
 		});
 		appendGcTraceCase(builder, value, context.module.runtimeTypeId(Abstract("realtime_iterator")),
-			function(builder) {
+			builder -> {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET));
 				builder.call(builder.functionRef(mark));
 			});
-		appendGcTraceCase(builder, value, WasmLayout.CLOSURE_TYPE_ID, function(builder) {
+		appendGcTraceCase(builder, value, WasmLayout.CLOSURE_TYPE_ID, builder -> {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET));
 			builder.call(builder.functionRef(mark));
@@ -529,7 +529,7 @@ class WasmLinearGc {
 		builder.emit(I32Load(0));
 		builder.i32Const(id);
 		builder.emit(I32Eq);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			traceBody(builder);
 			builder.return_();
 		});
@@ -541,7 +541,7 @@ class WasmLinearGc {
 		builder.emit(I32Load(0));
 		builder.i32Const(id);
 		builder.emit(I32Eq);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			traceBody(builder);
 			builder.return_();
 		});
@@ -557,7 +557,7 @@ class WasmLinearGc {
 		builder.emit(I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET));
 		builder.i32Const(WasmLayout.VALUE_ARRAY_MARKER);
 		builder.emit(I32Eq);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(entryCount);
 			builder.localGet(owner);
 			builder.emit(I32Load(WasmLayout.VALUE_ARRAY_REFERENCE_STRIDE_OFFSET));
@@ -566,12 +566,12 @@ class WasmLinearGc {
 		});
 		builder.i32Const(0);
 		builder.localSet(entryIndex);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(entryIndex);
 				builder.localGet(entryCount);
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(backing);
 					builder.localGet(entryIndex);
 					builder.i32Const(4);
@@ -584,7 +584,7 @@ class WasmLinearGc {
 					builder.i32Add();
 					builder.localSet(entryIndex);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 	}
@@ -601,12 +601,12 @@ class WasmLinearGc {
 		builder.localSet(entryCount);
 		builder.i32Const(0);
 		builder.localSet(entryIndex);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(entryIndex);
 				builder.localGet(entryCount);
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					if (WasmTarget.isReference(keyType)) {
 						builder.localGet(backing);
 						builder.localGet(entryIndex);
@@ -630,7 +630,7 @@ class WasmLinearGc {
 					builder.i32Add();
 					builder.localSet(entryIndex);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 	}
@@ -645,12 +645,12 @@ class WasmLinearGc {
 		builder.localSet(entryCount);
 		builder.i32Const(0);
 		builder.localSet(entryIndex);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(entryIndex);
 				builder.localGet(entryCount);
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(value);
 					builder.localGet(entryIndex);
 					builder.i32Add();
@@ -661,7 +661,7 @@ class WasmLinearGc {
 					builder.i32Add();
 					builder.localSet(entryIndex);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 	}
@@ -685,24 +685,24 @@ class WasmLinearGc {
 		builder.globalSet(builder.global(markStackTop));
 		builder.globalGet(builder.global(rootFrameTop));
 		builder.localSet(rootFrame);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(rootFrame);
 				builder.i32Eqz();
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.emit(Br(2));
-				}, function(builder) {
+				}, builder -> {
 					builder.localGet(rootFrame);
 					builder.emit(I32Load(WasmLayout.ROOT_COUNT_OFFSET));
 					builder.localSet(rootCount);
 					builder.i32Const(0);
 					builder.localSet(rootIndex);
-					builder.block(function(builder) {
-						builder.loop(function(builder) {
+					builder.block(builder -> {
+						builder.loop(builder -> {
 							builder.localGet(rootIndex);
 							builder.localGet(rootCount);
 							builder.emit(I32LtS);
-							builder.ifElse(function(builder) {
+							builder.ifElse(builder -> {
 								builder.localGet(rootFrame);
 								builder.i32Const(WasmLayout.ROOT_VALUES_OFFSET);
 								builder.i32Add();
@@ -717,7 +717,7 @@ class WasmLinearGc {
 								builder.i32Add();
 								builder.localSet(rootIndex);
 								builder.emit(Br(1));
-							}, function(builder) {
+							}, builder -> {
 								builder.emit(Br(2));
 							});
 						});
@@ -733,8 +733,8 @@ class WasmLinearGc {
 			builder.globalGet(builder.global(global));
 			builder.call(builder.functionRef(mark));
 		}
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.globalGet(builder.global(markStackTop));
 				loadHeapTop(builder, context);
 				builder.emit(I32LeS);

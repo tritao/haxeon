@@ -201,14 +201,14 @@ class ShortcutsPanel implements View implements Observable {
 		var captureStyle = new LayoutStyle();
 		captureStyle.width = LayoutAxis.fixed(shortcutWidth);
 		var capture = new Button(recording ? "Press a shortcut... (Esc cancels)" : shortcutText(id), captureStyle,
-			function() record(id), "shortcut:" + id);
+			() -> record(id), "shortcut:" + id);
 		children.push(new KeyedView("capture", new ShortcutCapture(capture, recording, this)));
 		if (bindings.commands.hasCustomShortcuts(id))
 			children.push(new KeyedView("reset", new IconButton("shortcut-reset:" + id, IconName.Reset,
-				"Reset " + labelOf(id) + " to its default shortcut", function() reset(id))));
+				"Reset " + labelOf(id) + " to its default shortcut", () -> reset(id))));
 		if (bindings.commands.shortcutsFor(id).length > 0)
 			children.push(new KeyedView("clear", new IconButton("shortcut-clear:" + id, IconName.Close,
-				"Remove the shortcuts of " + labelOf(id), function() clear(id))));
+				"Remove the shortcuts of " + labelOf(id), () -> clear(id))));
 		var rowStyle = new LayoutStyle();
 		rowStyle.width = LayoutAxis.grow();
 		rowStyle.height = LayoutAxis.fit();
@@ -272,7 +272,7 @@ private class ShortcutCapture implements View {
 	public function build(context:BuildContext):ViewRoot {
 		if (!recording) return button.build(context);
 		var modifier = new haxeon.ui.core.RootModifier();
-		modifier.on(UiEventKind.KeyDown, function(event:UiEvent) {
+		modifier.on(UiEventKind.KeyDown, (event:UiEvent) -> {
 			if (panel.press(event.key, event.modifiers)) {
 				// Keep the chord from running a command or closing the dialog.
 				event.preventDefault();

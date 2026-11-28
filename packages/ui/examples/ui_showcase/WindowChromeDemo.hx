@@ -198,7 +198,7 @@ class WindowChromeDemo implements Disposable {
 			NativeKit.nk_last_error());
 		ready = true;
 		frameInfo = new FrameInfo(width, height, size.out_width, size.out_height, scale);
-		frameSubscription = activeSurface.onFrame(function(framebufferWidth, framebufferHeight) {
+		frameSubscription = activeSurface.onFrame((framebufferWidth, framebufferHeight) -> {
 			try {
 				renderFrame(framebufferWidth, framebufferHeight);
 				if (!closeRequested
@@ -274,10 +274,10 @@ class WindowChromeDemo implements Disposable {
 
 		var controls = new Row("demo-controls",
 			[new KeyedView("action", new WindowChrome("action-client", WindowDecorationRegionKind.Client,
-			chromeButton(clientActionPressed ? "Client clicked" : "Client button", "client-action", function() {
+			chromeButton(clientActionPressed ? "Client clicked" : "Client button", "client-action", () -> {
 				clientActionPressed = !clientActionPressed;
 			}, theme))), new KeyedView("close", new WindowChrome("close-client",
-				WindowDecorationRegionKind.Client, chromeButton("Close", "close-demo", function() {
+				WindowDecorationRegionKind.Client, chromeButton("Close", "close-demo", () -> {
 			closeRequested = true;
 		}, theme)))], buttonRowStyle(8.0));
 		var titlebar = new WindowChrome("titlebar-drag",

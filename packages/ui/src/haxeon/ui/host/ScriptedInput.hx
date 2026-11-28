@@ -50,7 +50,7 @@ internal class ScriptedInput {
 			for (part in expand(event, at)) expanded.push({at: part.at, order: expanded.length, event: part.event});
 		}
 		// A drag's moves can pass the next event's time: deliver in time order, keeping the script's order for ties.
-		expanded.sort(function(a, b) return a.at < b.at ? -1 : a.at > b.at ? 1 : a.order - b.order);
+		expanded.sort((a, b) -> a.at < b.at ? -1 : a.at > b.at ? 1 : a.order - b.order);
 		events = [for (item in expanded) item.event];
 	}
 

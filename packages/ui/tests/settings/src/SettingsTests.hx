@@ -368,7 +368,7 @@ class SettingsTests {
 		// A batch saves once at the end.
 		var batched = prepareFile("batched.json");
 		var batch = new SettingsStore(sampleRegistry(), batched);
-		batch.batch(function() {
+		batch.batch(() -> {
 			batch.set("interface/editor/fonts/main_font_size", PropertyValue.Int(20));
 			batch.set("interface/editor/fonts/main_font_size", PropertyValue.Int(21));
 			check(!FileSystem.exists(batched), "nothing is saved in the middle of a batch");

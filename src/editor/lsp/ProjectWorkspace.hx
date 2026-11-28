@@ -233,7 +233,7 @@ class ProjectWorkspace {
 			for (configuration in configurations)
 				if (configuration.owns(normalized)) configuration
 		];
-		matches.sort(function(left, right) {
+		matches.sort((left, right) -> {
 			var leftDepth = longestOwningPath(left, normalized),
 				rightDepth = longestOwningPath(right, normalized);
 			return leftDepth == rightDepth ? Reflect.compare(left.id, right.id) : rightDepth - leftDepth;

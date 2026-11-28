@@ -219,9 +219,9 @@ class WasmLinearDynamicArrays {
 			f64:WasmFunctionBuilder->Void,
 			i64:WasmFunctionBuilder->Void, reference:WasmFunctionBuilder->Void, ?result:WasmValueType):Void {
 		isOneOf(builder, elementType, [I32, Bool]);
-		builder.ifElse(i32, function(builder) {
+		builder.ifElse(i32, builder -> {
 			isOneOf(builder, elementType, [F64]);
-			builder.ifElse(f64, function(builder) {
+			builder.ifElse(f64, builder -> {
 				isOneOf(builder, elementType, [I64]);
 				builder.ifElse(i64, reference, result);
 			}, result);
@@ -251,12 +251,12 @@ class WasmLinearDynamicArrays {
 
 	function literal(value:String):WasmFunctionBuilder->Void {
 		var offset = string(value);
-		return function(builder) builder.i32Const(offset);
+		return builder -> builder.i32Const(offset);
 	}
 
 	function typeNameOf(local:WasmLocalRef):WasmFunctionBuilder->Void {
 		var name = typeName();
-		return function(builder) {
+		return builder -> {
 			builder.localGet(local);
 			builder.call(builder.functionRef(name));
 		};
@@ -264,7 +264,7 @@ class WasmLinearDynamicArrays {
 
 	function valueTypeNameOf(local:WasmLocalRef):WasmFunctionBuilder->Void {
 		var name = valueTypeName();
-		return function(builder) {
+		return builder -> {
 			builder.localGet(local);
 			builder.call(builder.functionRef(name));
 		};
@@ -289,7 +289,7 @@ class WasmLinearDynamicArrays {
 
 	/** Throw the message as a Haxe exception, or trap when the program cannot catch one. */
 	function fail():Int
-		return helper("__haxeon_array_fail", function(name) {
+		return helper("__haxeon_array_fail", name -> {
 			var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: []}),
 				message = builder.parameter("message", 0);
 			if (throws) {
@@ -313,7 +313,7 @@ class WasmLinearDynamicArrays {
 		});
 
 	function typeName():Int
-		return helper("__haxeon_array_type_name", function(name) {
+		return helper("__haxeon_array_type_name", name -> {
 			var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
 				id = builder.parameter("typeId", 0),
 				named:Array<{id:Int, name:String}> = [],
@@ -335,7 +335,7 @@ class WasmLinearDynamicArrays {
 				builder.localGet(id);
 				builder.i32Const(entry.id);
 				builder.emit(I32Eq);
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.i32Const(string(entry.name));
 					builder.return_();
 				});
@@ -346,13 +346,13 @@ class WasmLinearDynamicArrays {
 		});
 
 	function valueTypeName():Int
-		return helper("__haxeon_array_value_type_name", function(name) {
+		return helper("__haxeon_array_value_type_name", name -> {
 			var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
 				value = builder.parameter("value", 0),
 				names = typeName();
 			builder.localGet(value);
 			builder.i32Eqz();
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.i32Const(string("null"));
 				builder.return_();
 			});
@@ -365,21 +365,21 @@ class WasmLinearDynamicArrays {
 
 	/** Storage stride: eight bytes for Float and Int64 storage, four otherwise. */
 	function stride():Int
-		return helper("__haxeon_array_stride", function(name) {
+		return helper("__haxeon_array_stride", name -> {
 			var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
 				array = builder.parameter("array", 0),
 				elementType = builder.local("elementType", I32);
 			loadElementType(builder, array);
 			builder.localSet(elementType);
 			isOneOf(builder, elementType, [F64, I64]);
-			builder.ifElse(function(builder) builder.i32Const(8), function(builder) builder.i32Const(4), I32);
+			builder.ifElse(builder -> builder.i32Const(8), builder -> builder.i32Const(4), I32);
 			builder.return_();
 			return module.addFunction(builder.finish());
 		});
 
 	/** Read element `index` as a dynamic value, boxing primitive storage (`realtime_any_read`). */
 	function box():Int
-		return helper("__haxeon_array_box", function(name) {
+		return helper("__haxeon_array_box", name -> {
 			var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
 				array = builder.parameter("array", 0),
 				index = builder.parameter("index", 1),
@@ -430,19 +430,19 @@ class WasmLinearDynamicArrays {
 			}
 			loadElementType(builder, array);
 			builder.localSet(elementType);
-			byStorage(builder, elementType, function(builder) {
+			byStorage(builder, elementType, builder -> {
 				allocateBox(builder, WasmLayout.DYN_I32_SIZE);
 				builder.emit(I32Load(0));
 				builder.emit(I32Store(WasmLayout.DYN_PAYLOAD_OFFSET));
-			}, function(builder) {
+			}, builder -> {
 				allocateBox(builder, WasmLayout.DYN_F64_SIZE);
 				builder.emit(F64Load(0));
 				builder.emit(F64Store(WasmLayout.DYN_PAYLOAD_OFFSET));
-			}, function(builder) {
+			}, builder -> {
 				allocateBox(builder, WasmLayout.DYN_I64_SIZE);
 				builder.emit(I64Load(0));
 				builder.emit(I64Store(WasmLayout.DYN_PAYLOAD_OFFSET));
-			}, function(builder) {
+			}, builder -> {
 				builder.localGet(array);
 				builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 				builder.localGet(index);
@@ -463,7 +463,7 @@ class WasmLinearDynamicArrays {
 	 * and class, enum and array storage require a matching runtime type.
 	 */
 	function accepts():Int
-		return helper("__haxeon_array_accepts", function(name) {
+		return helper("__haxeon_array_accepts", name -> {
 			var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
 				target = builder.parameter("target", 0),
 				value = builder.parameter("value", 1),
@@ -476,7 +476,7 @@ class WasmLinearDynamicArrays {
 			function returnNullOr(builder:WasmFunctionBuilder, check:WasmFunctionBuilder->Void):Void {
 				builder.localGet(value);
 				builder.i32Eqz();
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.i32Const(1);
 					builder.return_();
 				});
@@ -485,39 +485,39 @@ class WasmLinearDynamicArrays {
 			}
 			builder.localGet(value);
 			builder.i32Eqz();
-			builder.ifElse(function(builder) builder.i32Const(0), function(builder) {
+			builder.ifElse(builder -> builder.i32Const(0), builder -> {
 				builder.localGet(value);
 				builder.emit(I32Load(0));
 			}, I32);
 			builder.localSet(valueType);
-			when([I32, I64], function(builder) {
+			when([I32, I64], builder -> {
 				isOneOf(builder, valueType, [I32, I64]);
 				builder.return_();
 			});
-			when([F64], function(builder) {
+			when([F64], builder -> {
 				isOneOf(builder, valueType, [I32, I64, F64]);
 				builder.return_();
 			});
-			when([Bool], function(builder) {
+			when([Bool], builder -> {
 				isOneOf(builder, valueType, [Bool]);
 				builder.return_();
 			});
 			when([Bytes],
-				function(builder) returnNullOr(builder, function(builder) isOneOf(builder, valueType, [Bytes])));
+				builder -> returnNullOr(builder, builder -> isOneOf(builder, valueType, [Bytes])));
 			for (type in elementTypes)
 				switch type {
 					case Obj(_) | Virtual(_) if (nominal(type)):
-						when([type], function(builder) returnNullOr(builder, function(builder) {
+						when([type], builder -> returnNullOr(builder, builder -> {
 							builder.localGet(value);
 							builder.localGet(target);
 							builder.call(builder.functionRef(test));
 						}));
 					case Enum(_):
-						when([type], function(builder) returnNullOr(builder,
-							function(builder) isOneOf(builder, valueType, [type])));
+						when([type], builder -> returnNullOr(builder,
+							builder -> isOneOf(builder, valueType, [type])));
 					case Array(_):
-						when([type], function(builder) returnNullOr(builder,
-							function(builder) isOneOf(builder, valueType, [Array(Dyn)])));
+						when([type], builder -> returnNullOr(builder,
+							builder -> isOneOf(builder, valueType, [Array(Dyn)])));
 					default:
 				}
 			// Dynamic, structural and function storage converts through the ordinary dynamic cast.
@@ -555,7 +555,7 @@ class WasmLinearDynamicArrays {
 			case I64: "i64";
 			default: "i32";
 		};
-		return helper('__haxeon_array_encode_$suffix', function(name) {
+		return helper('__haxeon_array_encode_$suffix', name -> {
 			var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [kind]}),
 				array = builder.parameter("array", 0),
 				value = builder.parameter("value", 1),
@@ -570,7 +570,7 @@ class WasmLinearDynamicArrays {
 				builder.localGet(value);
 				builder.call(builder.functionRef(check));
 				builder.emit(I32Or);
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.localGet(value);
 					builder.return_();
 				});
@@ -579,7 +579,7 @@ class WasmLinearDynamicArrays {
 			}
 			builder.localGet(value);
 			builder.i32Eqz();
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.emit((switch (kind) {
 					case F64: true;
 					default: false;
@@ -594,7 +594,7 @@ class WasmLinearDynamicArrays {
 			builder.localSet(valueType);
 			function from(types:Array<IrType>, convert:WasmFunctionBuilder->Void):Void {
 				isOneOf(builder, valueType, types);
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.localGet(value);
 					convert(builder);
 					builder.return_();
@@ -602,42 +602,42 @@ class WasmLinearDynamicArrays {
 			}
 			switch kind {
 				case F64:
-					from([I32, Bool], function(builder) {
+					from([I32, Bool], builder -> {
 						builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.emit(F64ConvertI32S);
 					});
 					from([F64], builder -> builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET)));
-					from([I64], function(builder) {
+					from([I64], builder -> {
 						builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.emit(F64ConvertI64S);
 					});
 				case I64:
-					from([I32, Bool], function(builder) {
+					from([I32, Bool], builder -> {
 						builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.emit(I64ExtendI32S);
 					});
 					from([I64], builder -> builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET)));
-					from([F64], function(builder) {
+					from([F64], builder -> {
 						builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.emit(I64FromF64);
 					});
 				default:
 					// Bool storage keeps HashLink's normalized truth value.
-					from([I32, Bool], function(builder) {
+					from([I32, Bool], builder -> {
 						builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.localSet(valueType);
 						isOneOf(builder, elementType, [Bool]);
-						builder.ifElse(function(builder) {
+						builder.ifElse(builder -> {
 							builder.localGet(valueType);
 							builder.i32Eqz();
 							builder.i32Eqz();
 						}, builder -> builder.localGet(valueType), I32);
 					});
-					from([F64], function(builder) {
+					from([F64], builder -> {
 						builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.emit(I32FromF64);
 					});
-					from([I64], function(builder) {
+					from([I64], builder -> {
 						builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.emit(I32WrapI64);
 					});
@@ -660,7 +660,7 @@ class WasmLinearDynamicArrays {
 			before:Array<WasmLocalRef>, value:WasmLocalRef,
 			elementType:WasmLocalRef, ?result:WasmValueType):Void {
 		function call(kind:WasmValueType, reference:Bool, suffix:String):WasmFunctionBuilder->Void
-			return function(builder) {
+			return builder -> {
 				var encoded = builder.local('encoded_$suffix', kind);
 				pushEncoded(builder, kind, reference, array, value);
 				builder.localSet(encoded);
@@ -683,10 +683,10 @@ class WasmLinearDynamicArrays {
 		builder.call(builder.functionRef(strideOf));
 		builder.i32Const(8);
 		builder.emit(I32Eq);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			pushArguments(builder);
 			builder.call(builder.functionRef(concrete('__array_${operation}_f64')));
-		}, function(builder) {
+		}, builder -> {
 			pushArguments(builder);
 			builder.call(builder.functionRef(concrete('__array_${operation}_i32')));
 		}, result);
@@ -717,7 +717,7 @@ class WasmLinearDynamicArrays {
 			elementType = builder.local("elementType", I32);
 		builder.localGet(array);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.return_();
 		});
@@ -727,12 +727,12 @@ class WasmLinearDynamicArrays {
 		builder.emit(I32Eq);
 		isOneOf(builder, target, [Dyn]);
 		builder.emit(I32Or);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(array);
 			builder.return_();
 		});
 		isOneOf(builder, elementType, [Dyn]);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(array);
 			builder.localGet(target);
 			builder.call(builder.functionRef(retype()));
@@ -754,7 +754,7 @@ class WasmLinearDynamicArrays {
 	 * is validated before the array changes; primitive storage is converted into a new block.
 	 */
 	function retype():Int
-		return helper("__haxeon_array_retype", function(name) {
+		return helper("__haxeon_array_retype", name -> {
 			var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: []}),
 				array = builder.parameter("array", 0),
 				target = builder.parameter("target", 1),
@@ -773,8 +773,8 @@ class WasmLinearDynamicArrays {
 			function forEachElement(builder:WasmFunctionBuilder, body:WasmFunctionBuilder->Void):Void {
 				builder.i32Const(0);
 				builder.localSet(index);
-				builder.block(function(builder) {
-					builder.loop(function(builder) {
+				builder.block(builder -> {
+					builder.loop(builder -> {
 						builder.localGet(index);
 						builder.localGet(length);
 						builder.emit(I32LtS);
@@ -802,13 +802,13 @@ class WasmLinearDynamicArrays {
 			builder.localGet(array);
 			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 			builder.localSet(source);
-			forEachElement(builder, function(builder) {
+			forEachElement(builder, builder -> {
 				builder.localGet(target);
 				builder.localGet(value);
 				builder.call(builder.functionRef(check));
 				builder.i32Eqz();
-				builder.if_(function(builder) {
-					var indexText = function(builder:WasmFunctionBuilder) {
+				builder.if_(builder -> {
+					var indexText = (builder:WasmFunctionBuilder) -> {
 						builder.localGet(index);
 						builder.call(builder.functionRef(digits));
 					};
@@ -827,15 +827,15 @@ class WasmLinearDynamicArrays {
 				});
 			});
 			isOneOf(builder, target, [I32, Bool, F64, I64]);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				isOneOf(builder, target, [F64, I64]);
-				builder.ifElse(function(builder) builder.i32Const(8), function(builder) builder.i32Const(4), I32);
+				builder.ifElse(builder -> builder.i32Const(8), builder -> builder.i32Const(4), I32);
 				builder.localSet(targetStride);
 				builder.localGet(array);
 				builder.emit(I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET));
 				builder.localTee(capacity);
 				builder.i32Eqz();
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.i32Const(1);
 					builder.localSet(capacity);
 				});
@@ -860,7 +860,7 @@ class WasmLinearDynamicArrays {
 				builder.i32Const(WasmLayout.GC_BLOCK_CLEAR_SCAN_MASK);
 				builder.emit(I32And);
 				builder.emit(I32Store(0));
-				forEachElement(builder, function(builder) {
+				forEachElement(builder, builder -> {
 					// Validation admitted only null-free numeric boxes for primitive storage.
 					builder.localGet(value);
 					builder.emit(I32Load(0));
@@ -884,24 +884,24 @@ class WasmLinearDynamicArrays {
 						builder.emitAll(convert);
 					}
 					isOneOf(builder, target, [F64]);
-					builder.ifElse(function(builder) {
+					builder.ifElse(builder -> {
 						builder.localGet(slot);
 						isOneOf(builder, valueType, [F64]);
-						builder.ifElse(builder -> payload(builder, F64, []), function(builder) {
+						builder.ifElse(builder -> payload(builder, F64, []), builder -> {
 							isOneOf(builder, valueType, [I64]);
 							builder.ifElse(builder -> payload(builder, I64, [F64ConvertI64S]),
 								builder -> payload(builder, I32, [F64ConvertI32S]), F64);
 						}, F64);
 						builder.emit(F64Store(0));
-					}, function(builder) {
+					}, builder -> {
 						isOneOf(builder, target, [I64]);
-						builder.ifElse(function(builder) {
+						builder.ifElse(builder -> {
 							builder.localGet(slot);
 							isOneOf(builder, valueType, [I64]);
 							builder.ifElse(builder -> payload(builder, I64, []),
 								builder -> payload(builder, I32, [I64ExtendI32S]), I64);
 							builder.emit(I64Store(0));
-						}, function(builder) {
+						}, builder -> {
 							builder.localGet(slot);
 							isOneOf(builder, valueType, [I64]);
 							builder.ifElse(builder -> payload(builder, I64, [I32WrapI64]),
@@ -936,7 +936,7 @@ class WasmLinearDynamicArrays {
 		builder.emit(I32LtS);
 		builder.i32Eqz();
 		builder.emit(I32Or);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(string("Array index out of bounds"));
 			raise(builder);
 		});
@@ -998,7 +998,7 @@ class WasmLinearDynamicArrays {
 		loadElementType(builder, array);
 		builder.localSet(elementType);
 		function encodeInto(kind:WasmValueType, reference:Bool, target:WasmLocalRef):WasmFunctionBuilder->Void
-			return function(builder) {
+			return builder -> {
 				pushEncoded(builder, kind, reference, array, value);
 				builder.localSet(target);
 			};
@@ -1008,7 +1008,7 @@ class WasmLinearDynamicArrays {
 		builder.localGet(index);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(string("Array index out of bounds"));
 			raise(builder);
 		});
@@ -1017,8 +1017,8 @@ class WasmLinearDynamicArrays {
 		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
 		builder.emit(I32LtS);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
-			dispatchStride(builder, "resize", array, function(builder) {
+		builder.if_(builder -> {
+			dispatchStride(builder, "resize", array, builder -> {
 				builder.localGet(array);
 				builder.localGet(index);
 				builder.i32Const(1);
@@ -1031,7 +1031,7 @@ class WasmLinearDynamicArrays {
 		slotAddress(builder, array, index, strideLocal);
 		builder.localSet(slot);
 		function store(local:WasmLocalRef, instruction:WasmInstruction):WasmFunctionBuilder->Void
-			return function(builder) {
+			return builder -> {
 				builder.localGet(slot);
 				builder.localGet(local);
 				builder.emit(instruction);
@@ -1125,7 +1125,7 @@ class WasmLinearDynamicArrays {
 		builder.localTee(length);
 		builder.i32Const(0);
 		builder.emit(I32LeS);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(string(first ? "Array.shift on an empty array" : "Array.pop on an empty array"));
 			raise(builder);
 		});
@@ -1160,11 +1160,11 @@ class WasmLinearDynamicArrays {
 		builder.call(builder.functionRef(strideOf));
 		builder.i32Const(8);
 		builder.emit(I32Eq);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(array);
 			builder.call(builder.functionRef(concrete('__array_${operation}_f64')));
 			builder.emit(Drop);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(array);
 			builder.call(builder.functionRef(concrete('__array_${operation}_i32')));
 			builder.emit(Drop);
@@ -1286,8 +1286,8 @@ class WasmLinearDynamicArrays {
 		loadElementType(builder, right);
 		builder.emit(I32Eq);
 		builder.emitAll([LocalGet(hasInline), I32Eqz, I32And]);
-		builder.if_(function(builder) {
-			dispatchStride(builder, "concat", left, function(builder) {
+		builder.if_(builder -> {
+			dispatchStride(builder, "concat", left, builder -> {
 				builder.localGet(left);
 				builder.localGet(right);
 			}, I32);
@@ -1304,8 +1304,8 @@ class WasmLinearDynamicArrays {
 		function copyFrom(source:WasmLocalRef, offset:Null<WasmLocalRef>):Void {
 			builder.i32Const(0);
 			builder.localSet(index);
-			builder.block(function(builder) {
-				builder.loop(function(builder) {
+			builder.block(builder -> {
+				builder.loop(builder -> {
 					builder.localGet(index);
 					builder.localGet(source);
 					builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
@@ -1360,7 +1360,7 @@ class WasmLinearDynamicArrays {
 			for (local in locals) builder.localGet(local);
 			builder.emitAll([Call(concrete("$lane-runtime:" + operation)), Return, End]);
 		}
-		dispatchStride(builder, operation, locals[0], function(builder) {
+		dispatchStride(builder, operation, locals[0], builder -> {
 			for (local in locals)
 				builder.localGet(local);
 		}, results.length == 0 ? null : results[0]);
@@ -1376,7 +1376,7 @@ class WasmLinearDynamicArrays {
 		builder.localGet(length);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(string("Array.resize length must be non-negative"));
 			raise(builder);
 		});
@@ -1395,7 +1395,7 @@ class WasmLinearDynamicArrays {
 				End
 			]);
 		}
-		dispatchStride(builder, "resize", array, function(builder) {
+		dispatchStride(builder, "resize", array, builder -> {
 			builder.localGet(array);
 			builder.localGet(length);
 		});

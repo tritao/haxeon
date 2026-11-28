@@ -89,7 +89,7 @@ class VirtualList implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			// Retain an internally owned controller, but never replace one supplied
 			// by the caller. Keyboard reveal and scrolling must share one instance.
 			if (!suppliedController) {
@@ -136,7 +136,7 @@ class VirtualList implements View {
 			semantics.setSize = itemCount;
 			semantics.orientation = AccessibilityOrientation.Vertical;
 			root.semantics = semantics;
-			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
+			var viewport = context.withScope(new Key("scroll-view"), () -> scroll.build(context));
 			root.add(viewport);
 			return root;
 		});
@@ -178,7 +178,7 @@ private class VirtualCollectionRow implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			style.height = LayoutAxis.fixed(height);

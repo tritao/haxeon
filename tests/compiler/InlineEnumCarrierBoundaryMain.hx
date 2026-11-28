@@ -29,13 +29,13 @@ class InlineEnumCarrierBoundaryMain {
 	}
 
 	static function main():Void {
-		reject("ordinary carrier argument", function(p) {
+		reject("ordinary carrier argument", p -> {
 			var b = new IrBuilder();
 			b.argument("value", IrValueLaneReference.type());
 			b.returnValue(b.constInt(42));
 			p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		}, "A value lane reference cannot cross an ordinary function boundary");
-		reject("scalar function returning a carrier", function(p) {
+		reject("scalar function returning a carrier", p -> {
 			p.entryPoint = IrScalarArguments.PREFIX + "bad";
 			var b = new IrBuilder();
 			b.returnValue(b.constNull(IrValueLaneReference.type()));
@@ -44,7 +44,7 @@ class InlineEnumCarrierBoundaryMain {
 			];
 		}, "A value lane reference cannot be returned");
 		for (name in ["nativeEscape", IrScalarArguments.PREFIX + "fakeNative"])
-			reject(name, function(p) {
+			reject(name, p -> {
 				p.natives = [
 					{
 						name: name,
@@ -59,7 +59,7 @@ class InlineEnumCarrierBoundaryMain {
 				b.returnValue(b.constInt(42));
 				p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 			}, "A value lane reference cannot escape its operation");
-		reject("wrong private argument signature", function(p) {
+		reject("wrong private argument signature", p -> {
 			var name = IrScalarArguments.PREFIX + "typed",
 				callee = new IrBuilder();
 			callee.argument("value", I32);
@@ -72,7 +72,7 @@ class InlineEnumCarrierBoundaryMain {
 				new IrFunction(name, callee.arguments, Void, callee.blocks, Ordinary)
 			];
 		}, "Wrong IR argument type");
-		reject("wrong scalar load element", function(p) {
+		reject("wrong scalar load element", p -> {
 			var b = new IrBuilder(),
 				pointer = b.call(IrHlScalarRef.ADDRESS, [b.constInt(42)], IrHlScalarRef.type(I32));
 			b.call(IrHlScalarRef.LOAD, [pointer], IrValueLaneReference.type());
@@ -81,7 +81,7 @@ class InlineEnumCarrierBoundaryMain {
 		}, "Invalid scalar reference intrinsic");
 		for (array in [false, true])
 			reject(array ? "scalar enum storage array boxed as Dynamic" : "scalar enum storage boxed as Dynamic",
-				function(p) {
+				p -> {
 					var name = "$inline-enum:Scalar";
 					p.objects = [
 						{
@@ -99,7 +99,7 @@ class InlineEnumCarrierBoundaryMain {
 					p.functions = [new IrFunction("main", b.arguments, Dyn, b.blocks, Ordinary)];
 				}, "requires a logical Dynamic adapter");
 		for (nested in [false, true])
-			reject(nested ? "nested carrier record boxed as Dynamic" : "carrier record boxed as Dynamic", function(p) {
+			reject(nested ? "nested carrier record boxed as Dynamic" : "carrier record boxed as Dynamic", p -> {
 				var packet:IrObject = {
 					name: "Packet",
 					isValue: true,
@@ -127,7 +127,7 @@ class InlineEnumCarrierBoundaryMain {
 				b.returnValue(b.toDyn(value));
 				p.functions = [new IrFunction("main", b.arguments, Dyn, b.blocks, Ordinary)];
 			}, "requires a logical Dynamic adapter");
-		reject("carrier record recovered from Dynamic without an adapter", function(p) {
+		reject("carrier record recovered from Dynamic without an adapter", p -> {
 			p.objects = [
 				{
 					name: "Packet",
@@ -143,7 +143,7 @@ class InlineEnumCarrierBoundaryMain {
 			b.returnValue(b.constInt(42));
 			p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		}, "requires a logical cast adapter");
-		reject("negative slot namespace", function(p) {
+		reject("negative slot namespace", p -> {
 			var b = new IrBuilder();
 			b.returnValue(b.constInt(42));
 			p.functions = [
@@ -151,7 +151,7 @@ class InlineEnumCarrierBoundaryMain {
 					ValueArraySlot(-1, Obj("Packet"), Read(0, [], false)))
 			];
 		}, "Invalid value-array slot namespace");
-		reject("negative slot index", function(p) {
+		reject("negative slot index", p -> {
 			var b = new IrBuilder();
 			b.returnValue(b.constInt(42));
 			p.functions = [
@@ -160,7 +160,7 @@ class InlineEnumCarrierBoundaryMain {
 			];
 		}, "Invalid value-array slot");
 		for (wrongPath in [false, true])
-			reject(wrongPath ? "forged lane field path" : "wrong lane array signature", function(p) {
+			reject(wrongPath ? "forged lane field path" : "wrong lane array signature", p -> {
 				var element:IrType = Obj("Packet");
 				var packet:IrObject = {
 					name: "Packet",

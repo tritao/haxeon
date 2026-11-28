@@ -23,13 +23,13 @@ class Store {
 // Void callbacks may end in switch or conditional branches whose values are discarded.
 function main():Int {
 	var store = new Store();
-	var apply:Setting->Void = function(setting) switch (setting) {
+	var apply:Setting->Void = setting -> switch (setting) {
 		case Flag(value):
 			store.setFlag(value);
 		case Count(value):
 			store.setCount(value);
 	};
-	var toggle:Bool->Void = function(on) on ? store.setFlag(on) : store.setCount(1);
+	var toggle:Bool->Void = on -> on ? store.setFlag(on) : store.setCount(1);
 	apply(Flag(true));
 	apply(Count(3));
 	toggle(true);

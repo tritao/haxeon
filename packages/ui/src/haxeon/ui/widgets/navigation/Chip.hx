@@ -90,7 +90,7 @@ class Chip implements ScopeView {
 		node.semantics = semantics;
 		if (onClick != null) {
 			var latest = context.latestOf(this);
-			node.onActivate(function(_:UiEvent) {
+			node.onActivate((_:UiEvent) -> {
 				var handler = latest().onClick;
 				if (handler != null) handler();
 			});
@@ -102,7 +102,7 @@ class Chip implements ScopeView {
 			case None:
 			case Chevron:
 				node.add(context.withScope(new Key("trailing"),
-					function() return new Icon("chevron", IconName.ChevronDown, 14.0, foreground).build(context)));
+					() -> new Icon("chevron", IconName.ChevronDown, 14.0, foreground).build(context)));
 			case Clear(onClear):
 				var clearStyle = new LayoutStyle();
 				clearStyle.width = LayoutAxis.fixed(24.0);
@@ -110,7 +110,7 @@ class Chip implements ScopeView {
 				clearStyle.childAlignX = LayoutAlignmentX.Center;
 				clearStyle.childAlignY = LayoutAlignmentY.Center;
 				clearStyle.childDistribution = LayoutDistribution.Center;
-				var clear = context.withScope(new Key("clear"), function() {
+				var clear = context.withScope(new Key("clear"), () -> {
 					var clearNode = NavUi.box(context, context.rootId("chip-clear"), "chip-clear", "clear", clearStyle,
 						["chip-clear"]);
 					clearNode.focusable = true;
@@ -118,7 +118,7 @@ class Chip implements ScopeView {
 					var clearSemantics = new Semantics(AccessibilityRole.Button, "Clear " + label);
 					clearSemantics.actions = AccessibilityAction.Activate;
 					clearNode.semantics = clearSemantics;
-					clearNode.onActivate(function(event:UiEvent) {
+					clearNode.onActivate((event:UiEvent) -> {
 						event.stopPropagation();
 						if (onClear != null) onClear();
 					});

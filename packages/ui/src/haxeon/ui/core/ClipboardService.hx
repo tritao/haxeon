@@ -50,7 +50,7 @@ class ClipboardService implements Disposable {
 		}
 		var read = source.readClipboardText();
 		reads.push(read);
-		read.onComplete(function(outcome) {
+		read.onComplete(outcome -> {
 			reads.remove(read);
 			switch outcome {
 				case Success(answer): handler(answer);

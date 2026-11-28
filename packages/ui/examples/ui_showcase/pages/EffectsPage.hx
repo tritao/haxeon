@@ -115,7 +115,7 @@ class EffectsPage {
 		style.width = LayoutAxis.stretch();
 		style.height = LayoutAxis.fixed(132.0);
 		style.clipToParent = true;
-		return new CanvasView(key, function(canvas:Canvas, geometry) {
+		return new CanvasView(key, (canvas:Canvas, geometry) -> {
 			var background = explorer.state.lightTheme
 				? UiExplorer.color(0.91, 0.94, 0.99) : UiExplorer.color(0.07, 0.10, 0.16);
 			canvas.fillRoundedRect(new Rect(0.0, 0.0, geometry.width, geometry.height), 10.0, background);

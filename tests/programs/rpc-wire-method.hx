@@ -14,11 +14,11 @@ import haxeon.rpc.RpcMethod;
 
 function main():Int {
 	var pair = MemoryTransport.pair();
-	var clock = function() return 0.0;
+	var clock = () -> 0.0;
 	var client = new RpcConnection(pair.client, clock);
 	var server = new RpcConnection(pair.server, clock);
 	var method = RpcMethod.wire<Query, Answer>(100);
-	server.register(method, function(request, context) {
+	server.register(method, (request, context) -> {
 		context.respond({text: "Hello " + request.name, length: request.name.length});
 	});
 	var result = 1;
@@ -35,7 +35,7 @@ function main():Int {
 		return result;
 	// A handler's own error reaches the caller as it sent it.
 	var refusing = RpcMethod.wire<Query, Answer>(101), refusal:Null<RpcError> = null;
-	server.register(refusing, function(request, context) {
+	server.register(refusing, (request, context) -> {
 		context.fail(Remote("rejected", "Greeting rejected", true));
 	});
 	client.call(refusing, {name: "Ada"}, 25).onComplete(outcome -> switch outcome {

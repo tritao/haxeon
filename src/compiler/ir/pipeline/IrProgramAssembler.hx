@@ -634,7 +634,7 @@ class IrProgramAssembler {
 				if (field.isStatic && !field.isInline)
 					result.push({name: classDecl.name + "." + field.name, type: generator.lowerType(field.type)});
 			}
-		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		result.sort((a, b) -> Reflect.compare(a.name, b.name));
 		return result;
 	}
 

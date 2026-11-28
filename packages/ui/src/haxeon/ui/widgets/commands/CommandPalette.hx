@@ -66,24 +66,24 @@ class CommandPalette implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var commands = registry == null ? context.commands : registry;
 			var actualContext = invocationContext == null ? context.commandContext : invocationContext;
 			var queryState:State<String> = context.state(context.id("query"), query);
 			var query = queryState.value;
 			var selection:State<Int> = context.state(context.id("selection"), -1);
 			var model = new CommandPaletteModel(commands, actualContext, query, selection.value,
-				function(next) {
+				next -> {
 					queryState.update(next);
 					selection.update(-1);
 				},
-					function(next) selection.update(next), onResult, onDismiss);
+					next -> selection.update(next), onResult, onDismiss);
 			var listHeight = Math.min(Math.max(36, model.count() * 36),
 				Math.max(36, Math.min(320, context.viewportHeight - 80)));
 			return new SearchPicker(key, model,
-				(_, index, selected, hovered, _) -> model.buildItem(index, selected, hovered), function() {
+				(_, index, selected, hovered, _) -> model.buildItem(index, selected, hovered), () -> {
 					if (onDismiss != null) onDismiss();
-				}, function() {}, width: 504, rowHeight: 36, maxListHeight: 320, x:,
+				}, () -> {}, width: 504, rowHeight: 36, maxListHeight: 320, x:,
 					y: centered ? Math.max(8, (context.viewportHeight - listHeight - 58) / 2) : y, centered:,
 					label: "Command palette", placeholder: "Search commands", dimBackdrop: true, menuSurface: false,
 					layerZIndex: centered ? 1000 : 0).build(context);

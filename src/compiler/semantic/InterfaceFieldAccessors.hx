@@ -195,7 +195,7 @@ class InterfaceFieldAccessors {
 				return;
 			var methods:Array<AstFunction> = [];
 			for (implemented in declaration.interfaces)
-				collect(implemented, interfaceByName, [], function(member, type, read) {
+				collect(implemented, interfaceByName, [], (member, type, read) -> {
 					if (!hasMethod(className, member.accessor)
 						&& [for (method in methods) method.name].indexOf(member.accessor) < 0
 						&& (member.dynamicMethod ? hasMethod(className, member.name) : hasVariable(className,

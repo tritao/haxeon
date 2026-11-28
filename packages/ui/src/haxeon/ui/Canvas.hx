@@ -149,7 +149,7 @@ class Canvas {
 
 	/** Runs `action` clipped to `rect`, then restores the state. */
 	public function withClip(rect:Rect, action:Canvas->Void):Void
-		withState(function(canvas) {
+		withState(canvas -> {
 			canvas.clip(rect);
 			action(canvas);
 		});

@@ -26,7 +26,7 @@ function main():Int {
 		return 8;
 	// A lambda a `var` holds is not in scope in its own initializer: `step` there is the one before it.
 	var step = () -> 1;
-	var step = function() return step() + 1;
+	var step = () -> step() + 1;
 	if (step() != 2)
 		return 9;
 
@@ -58,7 +58,7 @@ function main():Int {
 	call(4);
 	if (total != 10)
 		return 5;
-	var counts = [3, 2].map(function(n) {
+	var counts = [3, 2].map(n -> {
 		function count(k:Int):Int
 			return k == 0 ? 0 : 1 + count(k - 1);
 		return count(n);

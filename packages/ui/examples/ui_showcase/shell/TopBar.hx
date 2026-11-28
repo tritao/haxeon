@@ -32,7 +32,7 @@ class TopBar {
 			],
 			clusterStyle(12.0));
 		var themeButton = ShowcaseKit.button(explorer,
-			explorer.state.lightTheme ? "Dark mode" : "Light mode", "theme-toggle", function() {
+			explorer.state.lightTheme ? "Dark mode" : "Light mode", "theme-toggle", () -> {
 				explorer.toggleTheme();
 			}, false, true, explorer.state.lightTheme ? IconName.Moon : IconName.Sun);
 		var actions:Array<KeyedView> = [explorer.keyed("theme",
@@ -50,7 +50,7 @@ class TopBar {
 	}
 
 	static function inspectButton(explorer:UiExplorer):Button return ShowcaseKit.button(explorer,
-		explorer.state.inspector.picking ? "Cancel inspect" : "Inspect", "inspector-toggle", function() {
+		explorer.state.inspector.picking ? "Cancel inspect" : "Inspect", "inspector-toggle", () -> {
 			if (explorer.state.inspector.picking) {
 				explorer.state.inspector.picking = false;
 				explorer.state.inspector.hoveredNodeId = 0;

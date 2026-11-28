@@ -63,7 +63,7 @@ class Smoke {
 		var events = runtime.events;
 		var promise = new Promise<Int>();
 		var futureValue = 0;
-		promise.future.onComplete(function(outcome) switch outcome {
+		promise.future.onComplete(outcome -> switch outcome {
 			case Success(value): futureValue = value;
 			case _: futureValue = -1;
 		});
@@ -71,7 +71,7 @@ class Smoke {
 		var cancelPromise = new Promise<Int>();
 		cancelPromise.future.stopObserving();
 		var futureOk = futureValue == 42 && promise.future.isComplete() && cancelPromise.future.isComplete();
-		var lifetimeSubscription = events.listen(function(_) {});
+		var lifetimeSubscription = events.listen(_ -> {});
 		var eventOk = !events.poll();
 		try {
 			EventBytes.decodeClipboardFiles(haxe.io.Bytes.alloc(4), 0);
@@ -82,7 +82,7 @@ class Smoke {
 			var completed = false;
 			var requests = events.requests;
 			var future = requests.readClipboardText();
-			future.onComplete(function(outcome) {
+			future.onComplete(outcome -> {
 				payloadOk = switch outcome {
 					case Success(Ok(text)): text == "nativekit ffi";
 					case _: false;
@@ -91,7 +91,7 @@ class Smoke {
 			});
 			// The read's answer settles its future and no listener: listeners see what happens, not answers.
 			var leaked = false;
-			var subscription = events.listen(function(value) switch value {
+			var subscription = events.listen(value -> switch value {
 				case Raw(kind, _, _, _, _, _, _) if (kind == EventKind.ClipboardTextComplete): leaked = true;
 				case _:
 			});
@@ -107,7 +107,7 @@ class Smoke {
 
 			var stopped = requests.readClipboardText();
 			var stoppedCount = 0, successAfterStop = false;
-			stopped.onComplete(function(outcome) switch outcome {
+			stopped.onComplete(outcome -> switch outcome {
 				case Stopped: stoppedCount++;
 				case Success(_): successAfterStop = true;
 				case _:
@@ -204,7 +204,7 @@ class Smoke {
 				options.title = "Cancellation smoke";
 				var completed = false, cancelled = false;
 				var future = requests.openResource(window, options);
-				future.onComplete(function(outcome) {
+				future.onComplete(outcome -> {
 					cancelled = switch outcome {
 						case Cancelled: true;
 						case _: false;
@@ -227,7 +227,7 @@ class Smoke {
 				options.buttons = MessageButtons.Yes | MessageButtons.No;
 				var completed = false, cancelled = false;
 				var future = requests.messageDialog(window, options);
-				future.onComplete(function(outcome) {
+				future.onComplete(outcome -> {
 					cancelled = switch outcome {
 						case Cancelled: true;
 						case _: false;
@@ -246,7 +246,7 @@ class Smoke {
 
 			window.setDecorationRegions([]);
 			var childBusy = true;
-			window.registerDependent(function() {
+			window.registerDependent(() -> {
 				if (!window.nativeHandle().isValid()) throw "dependent lost its parent handle";
 				if (childBusy) throw "child is busy";
 			});

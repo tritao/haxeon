@@ -65,7 +65,7 @@ class TreeHoverTests {
 		};
 		var root = ui.submitCached(build, frame, "files");
 		var rows:Array<RenderNode> = [];
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.TreeItem && node.resolved != null
 				&& node.globalBounds().y >= 0 && node.globalBounds().y < 240) rows.push(node);
 		});
@@ -86,7 +86,7 @@ class TreeHoverTests {
 			root = ui.submitCached(build, frame, "files");
 			samples.push((Sys.time() - start) * 1000);
 		}
-		samples.sort(function(a, b) return a < b ? -1 : a > b ? 1 : 0);
+		samples.sort((a, b) -> a < b ? -1 : a > b ? 1 : 0);
 		Sys.println("HOVER submit: builds=" + (builds - beforeBuilds) + " p50_ms=" + samples[60] + " p95_ms="
 			+ samples[114]);
 		if (Sys.args().indexOf("--baseline") < 0) {
@@ -108,7 +108,7 @@ class TreeHoverTests {
 			ui.pointerMove(-20, -20);
 			root = ui.submitCached(build, frame, "files");
 			var rebuiltRows:Array<RenderNode> = [];
-			root.walk(function(node) {
+			root.walk(node -> {
 				if (node.semantics != null && node.semantics.role == AccessibilityRole.TreeItem) rebuiltRows.push(node);
 			});
 			check(commands(rebuiltRows[2]) == 0, "Leaving the tree left a stale highlight");
@@ -133,7 +133,7 @@ class TreeHoverTests {
 			ui.submitCached(build, frame, "files");
 			check(builds > count, "Resize bypassed rebuilding");
 			var clicks = 0;
-			var button = new haxeon.ui.widgets.controls.Button("Action", null, function() clicks++, "action");
+			var button = new haxeon.ui.widgets.controls.Button("Action", null, () -> clicks++, "action");
 			var buttonBuilds = 0;
 			var buildButton = function():View {
 				buttonBuilds++;

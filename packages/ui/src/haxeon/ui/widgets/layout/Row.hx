@@ -27,12 +27,12 @@ class Row implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var id = context.rootId("row");
 			var node = context.styled(id, LayoutVisualKind.Box,
 				new StyleIdentity("row", key.rawValue, key.rawValue, null, ["row"]), style);
 			var computed = node.computedStyle;
-			for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
+			for (child in children) node.add(context.withStyleParent(computed, () -> child.build(context)));
 			return node;
 		});
 	}

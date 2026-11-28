@@ -76,7 +76,7 @@ class PatchPlanner {
 		if (previous == null)
 			return Patch;
 		var reasons:Array<AbiChange> = [];
-		compare(previous.functions, next.functions, function(name, oldValue, newValue) {
+		compare(previous.functions, next.functions, (name, oldValue, newValue) -> {
 			if (oldValue == null)
 				return FunctionAdded(name);
 			if (newValue == null)
@@ -84,7 +84,7 @@ class PatchPlanner {
 			return FunctionSignatureChanged(name);
 		}, reasons);
 		var objectReasons:Array<AbiChange> = [];
-		compare(previous.objects, next.objects, function(name, oldValue, newValue) {
+		compare(previous.objects, next.objects, (name, oldValue, newValue) -> {
 			if (oldValue == null)
 				return ObjectAdded(name);
 			if (newValue == null)
@@ -100,10 +100,10 @@ class PatchPlanner {
 					reasons.push(reason);
 			}
 		compare(previous.interfaces, next.interfaces,
-			function(name, oldValue, _) return oldValue == null ? InterfaceAdded(name) : InterfaceChanged(name),
+			(name, oldValue, _) -> oldValue == null ? InterfaceAdded(name) : InterfaceChanged(name),
 			reasons);
-		compare(previous.enums, next.enums, function(name, _, _) return EnumChanged(name), reasons);
-		compare(previous.globals, next.globals, function(name, _, _) return GlobalLayoutChanged(name), reasons);
+		compare(previous.enums, next.enums, (name, _, _) -> EnumChanged(name), reasons);
+		compare(previous.globals, next.globals, (name, _, _) -> GlobalLayoutChanged(name), reasons);
 		for (group in renumberedGroups(previous.positional, next.positional, LambdaAlignment.placesOf(previous, next)))
 			reasons.push(GeneratedFunctionsRenumbered(group));
 		if (addsFunctions) {
@@ -113,7 +113,7 @@ class PatchPlanner {
 					if (!keepsLayout(reason, dispatched)) reason
 			];
 		}
-		reasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
+		reasons.sort((a, b) -> Reflect.compare(Std.string(a), Std.string(b)));
 		return reasons.length == 0 ? Patch : ReloadDomain(reasons);
 	}
 

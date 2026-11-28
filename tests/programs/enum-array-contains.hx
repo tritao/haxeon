@@ -32,7 +32,7 @@ function main():Int {
 	check("contains in typed array", all.contains(Blue), failed);
 	check("indexOf", all.indexOf(Blue) == 2, failed);
 	check("indexOf absent", colors.indexOf(Blue) == -1, failed);
-	var fromParam = function(c:Color) return all.contains(c);
+	var fromParam = (c:Color) -> all.contains(c);
 	check("contains via parameter", fromParam(Red) && fromParam(Green) && fromParam(Blue), failed);
 	var built:Array<Color> = [];
 	built.push(Blue);

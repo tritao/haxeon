@@ -23,7 +23,7 @@ class RetainedValue {
 		var retained = value;
 		if (retained == null)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Retained runtime value has been released");
-		return module.accessBorrowed(function(handle) return operation(handle, retained));
+		return module.accessBorrowed(handle -> operation(handle, retained));
 	}
 
 	public function release():Void {

@@ -91,7 +91,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		refresh();
 		var saved:Dynamic = store.getState(key + ":category");
 		if (Std.isOfType(saved, String)) select(cast saved);
-		unsubscribeStore = store.onChanged("", function(_) refresh());
+		unsubscribeStore = store.onChanged("", _ -> refresh());
 		this.labelWidth = labelWidth;
 		this.compact = compact;
 	}
@@ -213,7 +213,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 			inspectorNode:Null<ViewRoot> = null;
 		function firstControl(node:Null<ViewRoot>):Null<haxeon.ui.core.WidgetId> {
 			var first:Null<haxeon.ui.core.WidgetId> = null;
-			if (node != null) node.walk(function(child:haxeon.ui.core.NodeInfo) {
+			if (node != null) node.walk((child:haxeon.ui.core.NodeInfo) -> {
 				if (first == null && child.focusable && child.enabled
 					&& !child.hasStyleClass("inspector-section-header")
 					&& child.styleType != "scrollbar-thumb"
@@ -228,7 +228,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		var search = new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter Settings",
 			onSubmit: _ -> focusRegion(inspectorNode));
 		var headerChildren:Array<KeyedView> = [
-			new KeyedView("filter", new SettingsFocusRegion(search, function(node) searchNode = node)),
+			new KeyedView("filter", new SettingsFocusRegion(search, node -> searchNode = node)),
 			new KeyedView("modified", new Toggle(key + ":modified", "Modified only", modifiedOnly, setModifiedOnly)),
 			new KeyedView("advanced", new Toggle(key + ":advanced", "Advanced Settings", showAdvanced, setShowAdvanced))
 		];
@@ -265,12 +265,12 @@ class SettingsPanel implements View implements Observable implements Disposable 
 		columnStyle.childGap = 8.0;
 		var children:Array<KeyedView> = [new KeyedView("header", header),
 			new KeyedView("body",
-			compact ? compactBody(new SettingsFocusRegion(inspectorView, function(node) inspectorNode = node),
-			function(node) categoryNode = node) : new SplitView(key + ":keyboard-split",
-			new SettingsFocusRegion(tree, function(node) categoryNode = node),
-			new SettingsFocusRegion(inspectorView, function(node) inspectorNode = node),
+			compact ? compactBody(new SettingsFocusRegion(inspectorView, node -> inspectorNode = node),
+			node -> categoryNode = node) : new SplitView(key + ":keyboard-split",
+			new SettingsFocusRegion(tree, node -> categoryNode = node),
+			new SettingsFocusRegion(inspectorView, node -> inspectorNode = node),
 			resizableSide: SplitSide.Leading, extent: treeWidth, minimumExtent: 140.0, maximumExtent: 420.0,
-			dividerVisualExtent: 1.0, style: fill(), onResize: function(width) {
+			dividerVisualExtent: 1.0, style: fill(), onResize: width -> {
 				treeWidth = width;
 				changed();
 			})),
@@ -303,7 +303,7 @@ class SettingsPanel implements View implements Observable implements Disposable 
 			null,
 			haxeon.ui.theme.TextRole.Caption)));
 		var keys = new haxeon.ui.core.RootModifier();
-		keys.on(haxeon.ui.core.UiEvent.UiEventKind.KeyDown, function(event) {
+		keys.on(haxeon.ui.core.UiEvent.UiEventKind.KeyDown, event -> {
 			if (event.key == haxeon.ui.core.UiKey.F
 				&& (event.modifiers.contains(haxeon.ui.core.UiEvent.UiModifier.Control)
 				|| event.modifiers.contains(haxeon.ui.core.UiEvent.UiModifier.Super))) {

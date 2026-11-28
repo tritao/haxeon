@@ -21,7 +21,7 @@ class ExplorerCatalog {
 			"native",
 			"runtime"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 			OverviewPage.build(explorer, items);
 		}),
 			new ExplorerPage("controls", "Controls", "components", "Interactive control states",
@@ -37,7 +37,7 @@ class ExplorerCatalog {
 				"loading",
 				"indeterminate"
 			],
-			function(explorer, items) {
+			(explorer, items) -> {
 		ControlsPage.build(explorer, items);
 	}),
 		new ExplorerPage("text", "Text & Input", "components", "Text editing and platform input",
@@ -49,7 +49,7 @@ class ExplorerCatalog {
 			"clipboard",
 			"multilingual"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		TextPage.build(explorer, items);
 	}),
 		new ExplorerPage("layout", "Layout", "components", "Composable layout primitives",
@@ -62,7 +62,7 @@ class ExplorerCatalog {
 			"clip",
 			"z-order"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		LayoutPage.build(explorer, items);
 	}),
 		new ExplorerPage("lists", "Scrolling & Data", "components", "Scrolling and fixed-row virtualization",
@@ -72,7 +72,7 @@ class ExplorerCatalog {
 			"virtualization",
 			"10000 rows"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		ListsPage.build(explorer, items);
 	}),
 		new ExplorerPage("overlays", "Navigation & Overlays", "components", "Tabs and floating UI",
@@ -84,7 +84,7 @@ class ExplorerCatalog {
 			"dialog",
 			"overlay"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		OverlaysPage.build(explorer, items);
 	}, "Overlays"),
 		new ExplorerPage("gestures", "Gestures & Motion", "components", "Gesture arbitration and animation",
@@ -97,7 +97,7 @@ class ExplorerCatalog {
 			"spring",
 			"animation"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		GesturesPage.build(explorer, items);
 	}),
 		new ExplorerPage("webview", "WebView", "components", "Embedded platform web content",
@@ -108,7 +108,7 @@ class ExplorerCatalog {
 			"javascript",
 			"native view"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		WebViewPage.build(explorer, items);
 	}),
 		new ExplorerPage("graphics-paths", "Paths & Paint", "graphics", "Vector geometry, strokes and compositing",
@@ -121,7 +121,7 @@ class ExplorerCatalog {
 			"alpha",
 			"blend"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		GraphicsPage.buildPaths(explorer, items);
 	}),
 		new ExplorerPage("graphics-gradients", "Gradients", "graphics",
@@ -133,7 +133,7 @@ class ExplorerCatalog {
 			"alpha",
 			"interpolation"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		GraphicsPage.buildGradients(explorer, items);
 	}),
 		new ExplorerPage("graphics-decorations", "Decorations", "graphics",
@@ -148,7 +148,7 @@ class ExplorerCatalog {
 			"nine slice",
 			"style"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		DecorationsPage.build(explorer, items);
 	}),
 		new ExplorerPage("graphics-effects", "Effects", "graphics",
@@ -164,7 +164,7 @@ class ExplorerCatalog {
 			"mask",
 			"backdrop"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		EffectsPage.build(explorer, items);
 	}),
 		new ExplorerPage("graphics-3d", "3D Views", "graphics", "Perspective meshes and composited native surfaces",
@@ -177,7 +177,7 @@ class ExplorerCatalog {
 			"surface",
 			"offscreen"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		GraphicsPage.build3d(explorer, items);
 	}),
 		new ExplorerPage("graphics-text", "Text Shaping", "graphics", "Multilingual shaping and text geometry",
@@ -192,7 +192,7 @@ class ExplorerCatalog {
 			"japanese",
 			"emoji"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		GraphicsPage.buildText(explorer, items);
 	}),
 		new ExplorerPage("graphics-images", "Images & Layers", "graphics", "Clipping, opacity and layered composition",
@@ -204,7 +204,7 @@ class ExplorerCatalog {
 			"nine slice",
 			"composite"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		GraphicsPage.buildImages(explorer, items);
 	}),
 		new ExplorerPage("graphics-rendering", "Rendering", "graphics",
@@ -218,7 +218,7 @@ class ExplorerCatalog {
 			"cube",
 			"performance"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		GraphicsPage.buildRendering(explorer, items);
 	}),
 		new ExplorerPage("window-chrome", "Window Chrome", "developer", "Custom native window decorations",
@@ -231,7 +231,7 @@ class ExplorerCatalog {
 			"decorations",
 			"multi-window"
 		],
-		function(explorer, items) {
+		(explorer, items) -> {
 		WindowChromePage.build(explorer, items);
 	})];
 

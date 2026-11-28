@@ -43,7 +43,7 @@ class WasmRuntimeAbi {
 						result.push(operation);
 					}
 				}
-		result.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
+		result.sort((left, right) -> Reflect.compare(Std.string(left), Std.string(right)));
 		return result;
 	}
 

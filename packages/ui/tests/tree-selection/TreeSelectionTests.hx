@@ -35,7 +35,7 @@ class TreeSelectionTests {
 
 	static function rowY(root:RenderNode, key:String):Float {
 		var y = -1.0;
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.TreeItem
 				&& node.semantics.label == key)
 				y = node.globalBounds().y + 12;
@@ -46,7 +46,7 @@ class TreeSelectionTests {
 
 	static function selectedRows(root:RenderNode):String {
 		var keys:Array<String> = [];
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.TreeItem
 				&& node.semantics.states.contains(AccessibilityState.Selected)) keys.push(node.semantics.label);
 		});
@@ -122,8 +122,8 @@ class TreeSelectionTests {
 		var controlled = new UiContext(null, fonts);
 		controlled.buildContext.environment.reducedMotion = true;
 		var choice = new Signal<Null<String>>(null), notifications = 0;
-		var controlledBuild = function():View return new TrackedScope("controlled-tree", function() {
-			return new TreeView("controlled-items", new Items(), style, onSelectionChanged: function(key) {
+		var controlledBuild = function():View return new TrackedScope("controlled-tree", () -> {
+			return new TreeView("controlled-items", new Items(), style, onSelectionChanged: key -> {
 				choice.value = key;
 				notifications++;
 			}, selectionProvider: () -> choice.value);

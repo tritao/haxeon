@@ -170,7 +170,7 @@ class WasmFunctionBuilder {
 	public function returnIfZero(local:WasmLocalRef):Void {
 		localGet(local);
 		i32Eqz();
-		if_(function(builder) builder.return_());
+		if_(builder -> builder.return_());
 	}
 
 	/** Return when the selected i32 local is not aligned to a power-of-two byte size. */
@@ -182,7 +182,7 @@ class WasmFunctionBuilder {
 		emit(I32And);
 		i32Eqz();
 		i32Eqz();
-		if_(function(builder) builder.return_());
+		if_(builder -> builder.return_());
 	}
 
 	/** Return when the selected i32 local compares less than a constant. */
@@ -190,6 +190,6 @@ class WasmFunctionBuilder {
 		localGet(local);
 		i32Const(value);
 		emit(I32LtS);
-		if_(function(builder) builder.return_());
+		if_(builder -> builder.return_());
 	}
 }

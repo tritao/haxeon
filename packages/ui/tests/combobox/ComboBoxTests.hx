@@ -30,7 +30,7 @@ class ComboBoxTests {
 		check(historyProbe.undo() && historyProbe.text == "external", "A repeated resolve cleared new editing history");
 		historyProbe.insert("ab");
 		var beforeSelection = historyProbe.text;
-		haxeon.reactive.ReactiveRuntime.withTracking(new haxeon.ui.core.Dependencies(), function() {
+		haxeon.reactive.ReactiveRuntime.withTracking(new haxeon.ui.core.Dependencies(), () -> {
 			historyProbe.setAnchoredSelection(new haxeon.ui.widgets.text.TextEditorState.TextSelection(0, 0), true);
 			return 0;
 		});
@@ -50,7 +50,7 @@ class ComboBoxTests {
 				new SelectOption("one", "One", "one"),
 				new SelectOption("two", "Two", "two"),
 				new SelectOption("blocked", "Blocked", "blocked", false)
-			], comboValue, function(next) {
+			], comboValue, next -> {
 				changes++;
 				comboValue = next;
 			}, comboStyle, enabled: comboEnabled);

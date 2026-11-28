@@ -188,9 +188,9 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 			lastHistoryEdit = null;
 			return;
 		}
-		history.record(new EditOperation("Edit text", function() replayHistory(edit, false),
-			function() replayHistory(edit, true), edit.typing ? "typing" : edit.composition ? "composition" : null,
-			function(next) {
+		history.record(new EditOperation("Edit text", () -> replayHistory(edit, false),
+			() -> replayHistory(edit, true), edit.typing ? "typing" : edit.composition ? "composition" : null,
+			next -> {
 				var following:FieldHistoryEdit = cast next.mergeData;
 				edit.inserted = edit.composition ? following.inserted : edit.inserted + following.inserted;
 				edit.composing = following.composing;
@@ -229,12 +229,12 @@ class TextEditorState implements SemanticsValueSource implements Disposable {
 		layout = new TextEditorLayout(fonts, initialText, initialLayoutWidth, this.textStyle,
 			this.paragraphStyle, offsets);
 		renderColor = Color.rgba(1.0, 1.0, 1.0, 1.0);
-		renderMeasurement = new LayoutMeasuredContent(function(constraints:LayoutMeasureConstraints) {
+		renderMeasurement = new LayoutMeasuredContent((constraints:LayoutMeasureConstraints) -> {
 			if (Math.isFinite(constraints.maxWidth) && constraints.maxWidth > 0.0)
 				updateLayout(constraints.maxWidth);
 			return layout.measureForConstraints(constraints);
 		});
-		renderContent = new LayoutRenderableContent(renderMeasurement, function(canvas, geometry) {
+		renderContent = new LayoutRenderableContent(renderMeasurement, (canvas, geometry) -> {
 			var visible = geometry.visibleLocalBounds();
 			canvas.translate(0.0, -scrollOffsetY);
 			layout.paint(canvas, renderColor, scrollOffsetY + visible.y,

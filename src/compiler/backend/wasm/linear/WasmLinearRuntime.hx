@@ -634,14 +634,14 @@ class WasmLinearRuntime {
 			builder.localGet(value);
 			builder.i32Const(0);
 			builder.emit(I32LtS);
-			builder.ifElse(function(builder) builder.emit(Unreachable), function(_) {});
+			builder.ifElse(builder -> builder.emit(Unreachable), _ -> {});
 		}
 		builder.localGet(arrayLength);
 		builder.localGet(length);
 		builder.i32Sub();
 		builder.localGet(offset);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) builder.emit(Unreachable), function(_) {});
+		builder.ifElse(builder -> builder.emit(Unreachable), _ -> {});
 		builder.localGet(chars);
 		builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 		builder.localSet(data);
@@ -661,12 +661,12 @@ class WasmLinearRuntime {
 		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
 		builder.i32Const(0);
 		builder.localSet(index);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(length);
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(result);
 					builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
 					builder.i32Add();
@@ -686,7 +686,7 @@ class WasmLinearRuntime {
 					builder.i32Add();
 					builder.localSet(index);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(0)));
+				}, builder -> builder.emit(Br(0)));
 			});
 		});
 		builder.localGet(result);
@@ -756,8 +756,8 @@ class WasmLinearRuntime {
 		builder.localSet(index);
 		builder.i32Const(0);
 		builder.localSet(result);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(leftLength);
 				builder.emit(I32LtS);
@@ -784,14 +784,14 @@ class WasmLinearRuntime {
 				builder.localGet(rightByte);
 				builder.emit(I32Eq);
 				builder.i32Eqz();
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.localGet(leftByte);
 					builder.localGet(rightByte);
 					builder.emit(I32LtS);
-					builder.ifElse(function(builder) {
+					builder.ifElse(builder -> {
 						builder.i32Const(-1);
 						builder.localSet(result);
-					}, function(builder) {
+					}, builder -> {
 						builder.i32Const(1);
 						builder.localSet(result);
 					});
@@ -806,18 +806,18 @@ class WasmLinearRuntime {
 		});
 		builder.localGet(result);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(leftLength);
 			builder.localGet(rightLength);
 			builder.emit(I32LtS);
-			builder.ifElse(function(builder) {
+			builder.ifElse(builder -> {
 				builder.i32Const(-1);
 				builder.localSet(result);
-			}, function(builder) {
+			}, builder -> {
 				builder.localGet(rightLength);
 				builder.localGet(leftLength);
 				builder.emit(I32LtS);
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.i32Const(1);
 					builder.localSet(result);
 				});
@@ -842,7 +842,7 @@ class WasmLinearRuntime {
 		builder.emit(I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET));
 		builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
 		builder.emit(I32Eq);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(bytes);
 			builder.emit(I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET));
 			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
@@ -851,7 +851,7 @@ class WasmLinearRuntime {
 			builder.emit(I32Load(WasmLayout.BYTES_VIEW_DATA_OFFSET));
 			builder.i32Add();
 			builder.localSet(data);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(bytes);
 			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
 			builder.i32Add();
@@ -914,7 +914,7 @@ class WasmLinearRuntime {
 			offset = builder.parameter("offset", 1);
 		if (checkedWidth > 0) {
 			bytesOutsideWidth(builder, bytes, offset, checkedWidth);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.emit(switch result {
 					case F64: F64Const(0);
 					case I64: I64Const(0);
@@ -950,7 +950,7 @@ class WasmLinearRuntime {
 			value = builder.parameter("value", 2);
 		if (checkedWidth > 0) {
 			bytesOutsideWidth(builder, bytes, offset, checkedWidth);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.i32Const(0);
 				builder.return_();
 			});
@@ -980,7 +980,7 @@ class WasmLinearRuntime {
 		bytesOutsideRange(builder, destination, position, length);
 		bytesOutsideRange(builder, source, sourcePosition, length);
 		builder.emit(I32Or);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.return_();
 		});
@@ -1073,7 +1073,7 @@ class WasmLinearRuntime {
 		builder.emit(I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET));
 		builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
 		builder.emit(I32Eq);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(bytes);
 			builder.emit(I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET));
 			builder.localSet(owner);
@@ -1085,7 +1085,7 @@ class WasmLinearRuntime {
 			builder.localGet(bytes);
 			builder.emit(I32Load(WasmLayout.BYTES_VIEW_ROOTS_OFFSET));
 			builder.localSet(roots);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(bytes);
 			builder.localSet(owner);
 			builder.localGet(offset);
@@ -1159,23 +1159,23 @@ class WasmLinearRuntime {
 		builder.localGet(offset);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.if_(builder -> builder.emit(Unreachable));
 		builder.localGet(length);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.if_(builder -> builder.emit(Unreachable));
 		builder.localGet(bytes);
 		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
 		builder.localGet(offset);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.if_(builder -> builder.emit(Unreachable));
 		builder.localGet(bytes);
 		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
 		builder.localGet(offset);
 		builder.i32Sub();
 		builder.localGet(length);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.if_(builder -> builder.emit(Unreachable));
 	}
 
 	static function addBytesPrefix(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
@@ -1421,13 +1421,13 @@ class WasmLinearRuntime {
 		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
 		builder.emit(I32LtS);
 		builder.i32Eqz();
-		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.if_(builder -> builder.emit(Unreachable));
 		builder.localGet(input);
 		builder.i32Eqz();
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(nullable);
 			builder.i32Eqz();
-			builder.if_(function(builder) builder.emit(Unreachable));
+			builder.if_(builder -> builder.emit(Unreachable));
 			builder.localGet(roots);
 			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 			builder.localGet(rootIndex);
@@ -1442,7 +1442,7 @@ class WasmLinearRuntime {
 			builder.i32Add();
 			builder.i32Const(0);
 			builder.emit(I32Store(0));
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(input);
 			builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
 			builder.localSet(length);
@@ -1515,14 +1515,14 @@ class WasmLinearRuntime {
 		builder.localSet(pointer);
 		builder.localGet(pointer);
 		builder.i32Eqz();
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.i32Const(0);
 			builder.localSet(result);
-		}, function(builder) {
+		}, builder -> {
 			builder.i32Const(0);
 			builder.localSet(index);
-			builder.block(function(builder) {
-				builder.loop(function(builder) {
+			builder.block(builder -> {
+				builder.loop(builder -> {
 					builder.localGet(pointer);
 					builder.localGet(index);
 					builder.i32Add();
@@ -1767,13 +1767,13 @@ class WasmLinearRuntime {
 			entries = builder.local("entries", I32);
 		builder.i32Const(0);
 		builder.localSet(index);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(map);
 				builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(map);
 					builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 					builder.localSet(entries);
@@ -1791,7 +1791,7 @@ class WasmLinearRuntime {
 						builder.call(builder.functionRef(stringEqual));
 					else
 						builder.emit(I32Eq);
-					builder.if_(function(builder) {
+					builder.if_(builder -> {
 						builder.localGet(index);
 						builder.return_();
 					});
@@ -1800,7 +1800,7 @@ class WasmLinearRuntime {
 					builder.i32Add();
 					builder.localSet(index);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 		builder.i32Const(-1);
@@ -1831,13 +1831,13 @@ class WasmLinearRuntime {
 			newEntries = builder.local("newEntries", I32);
 		builder.i32Const(0);
 		builder.localSet(index);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(map);
 				builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(map);
 					builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 					builder.localSet(entries);
@@ -1855,7 +1855,7 @@ class WasmLinearRuntime {
 						builder.call(builder.functionRef(stringEqual));
 					else
 						builder.emit(I32Eq);
-					builder.if_(function(builder) {
+					builder.if_(builder -> {
 						builder.localGet(entries);
 						builder.localGet(index);
 						builder.i32Const(entrySize);
@@ -1877,7 +1877,7 @@ class WasmLinearRuntime {
 					builder.i32Add();
 					builder.localSet(index);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 		builder.localGet(map);
@@ -1889,7 +1889,7 @@ class WasmLinearRuntime {
 		builder.localGet(count);
 		builder.localGet(capacity);
 		builder.emit(I32Eq);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(capacity);
 			builder.i32Const(2);
 			builder.emit(I32Mul);
@@ -2006,10 +2006,10 @@ class WasmLinearRuntime {
 		builder.localGet(index);
 		builder.i32Const(-1);
 		builder.emit(I32Eq);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.i32Const(0);
 			builder.localSet(result);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(map);
 			builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 			builder.localSet(entries);
@@ -2107,13 +2107,13 @@ class WasmLinearRuntime {
 		builder.localSet(entries);
 		builder.i32Const(0);
 		builder.localSet(index);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(map);
 				builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
 				builder.emit(I32LtS);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(array);
 					builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 					builder.localGet(index);
@@ -2132,7 +2132,7 @@ class WasmLinearRuntime {
 					builder.i32Add();
 					builder.localSet(index);
 					builder.emit(Br(1));
-				}, function(builder) builder.emit(Br(2)));
+				}, builder -> builder.emit(Br(2)));
 			});
 		});
 		builder.localGet(array);
@@ -2158,9 +2158,9 @@ class WasmLinearRuntime {
 		builder.localTee(index);
 		builder.i32Const(-1);
 		builder.emit(I32Eq);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.i32Const(0);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(map);
 			builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 			builder.localSet(entries);
@@ -2176,7 +2176,7 @@ class WasmLinearRuntime {
 			builder.i32Const(0);
 			builder.localGet(tailCount);
 			builder.emit(I32LtS);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.localGet(entries);
 				builder.localGet(index);
 				builder.i32Const(entrySize);
@@ -2277,7 +2277,7 @@ class WasmLinearRuntime {
 			dynamicTypes:Array<IrType> = [I32, Bool];
 		builder.localGet(value);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.return_();
 		});
@@ -2286,7 +2286,7 @@ class WasmLinearRuntime {
 			builder.emit(I32Load(0));
 			builder.i32Const(module.runtimeTypeId(type));
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 				builder.return_();
@@ -2296,7 +2296,7 @@ class WasmLinearRuntime {
 		builder.emit(I32Load(0));
 		builder.i32Const(module.runtimeTypeId(F64));
 		builder.emit(I32Eq);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(value);
 			builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 			builder.emit(I32FromF64);
@@ -2306,7 +2306,7 @@ class WasmLinearRuntime {
 		builder.emit(I32Load(0));
 		builder.i32Const(module.runtimeTypeId(I64));
 		builder.emit(I32Eq);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(value);
 			builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 			builder.emit(I32WrapI64);
@@ -2323,7 +2323,7 @@ class WasmLinearRuntime {
 			builder.localGet(value);
 			builder.i32Const(module.runtimeTypeId(Obj(object.name)));
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.i32Const(1);
 				builder.return_();
 			});
@@ -2332,7 +2332,7 @@ class WasmLinearRuntime {
 			builder.localGet(value);
 			builder.i32Const(module.runtimeTypeId(Enum(enumDecl.name)));
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.i32Const(1);
 				builder.return_();
 			});
@@ -2340,13 +2340,13 @@ class WasmLinearRuntime {
 		builder.localGet(value);
 		builder.i32Const(1);
 		builder.emit(I32And);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.return_();
 		});
 		builder.localGet(value);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.return_();
 		});
@@ -2366,7 +2366,7 @@ class WasmLinearRuntime {
 			builder.emit(I32Load(0));
 			builder.i32Const(typeId);
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.i32Const(0);
 				builder.return_();
 			});
@@ -2383,15 +2383,15 @@ class WasmLinearRuntime {
 			result = builder.local("result", I32);
 		builder.localGet(value);
 		builder.i32Eqz();
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.i32Const(0);
 			builder.localSet(result);
-		}, function(builder) {
+		}, builder -> {
 			// Static closures are tagged table slots, not heap headers.
 			builder.localGet(value);
 			builder.i32Const(1);
 			builder.emit(I32And);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.i32Const(0);
 				builder.return_();
 			});
@@ -2412,7 +2412,7 @@ class WasmLinearRuntime {
 										builder.localGet(typeId);
 										builder.i32Const(module.runtimeTypeId(type));
 										builder.emit(I32Eq);
-										builder.if_(function(builder) {
+										builder.if_(builder -> {
 											builder.localGet(value);
 											builder.emit(I32Load(0));
 											builder.i32Const(module.runtimeTypeId(Abstract("realtime_iterator")));
@@ -2462,7 +2462,7 @@ class WasmLinearRuntime {
 					builder.emit(I32Load(0));
 					builder.i32Const(module.runtimeTypeId(Obj(object.name)));
 					builder.emit(I32Eq);
-					builder.if_(function(builder) {
+					builder.if_(builder -> {
 						for (index in 0...accepted.length) {
 							builder.localGet(typeId);
 							builder.i32Const(accepted[index]);
@@ -2662,8 +2662,8 @@ class WasmLinearRuntime {
 		builder.emit(MemoryCopy);
 		builder.i32Const(0);
 		builder.localSet(index);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(length);
 				builder.emit(I32LtS);
@@ -2684,7 +2684,7 @@ class WasmLinearRuntime {
 				builder.i32Const(lowercase ? 90 : 122);
 				builder.emit(I32LeS);
 				builder.emit(I32And);
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.localGet(result);
 					builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
 					builder.i32Add();
@@ -2812,27 +2812,27 @@ class WasmLinearRuntime {
 		builder.localGet(startArg);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) builder.i32Const(0), function(builder) builder.localGet(startArg), I32);
+		builder.ifElse(builder -> builder.i32Const(0), builder -> builder.localGet(startArg), I32);
 		builder.localSet(start);
 		builder.localGet(endArg);
 		builder.localGet(start);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) builder.localGet(start), function(builder) builder.localGet(endArg), I32);
+		builder.ifElse(builder -> builder.localGet(start), builder -> builder.localGet(endArg), I32);
 		builder.localSet(end);
 		builder.localGet(start);
 		builder.localGet(length);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) builder.localGet(start), function(builder) builder.localGet(length), I32);
+		builder.ifElse(builder -> builder.localGet(start), builder -> builder.localGet(length), I32);
 		builder.localSet(start);
 		builder.localGet(end);
 		builder.localGet(length);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) builder.localGet(end), function(builder) builder.localGet(length), I32);
+		builder.ifElse(builder -> builder.localGet(end), builder -> builder.localGet(length), I32);
 		builder.localSet(end);
 		builder.localGet(end);
 		builder.localGet(start);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) builder.localGet(start), function(builder) builder.localGet(end), I32);
+		builder.ifElse(builder -> builder.localGet(start), builder -> builder.localGet(end), I32);
 		builder.localSet(end);
 		builder.localGet(end);
 		builder.localGet(start);
@@ -2933,10 +2933,10 @@ class WasmLinearRuntime {
 		builder.localSet(start);
 		builder.localGet(separatorLength);
 		builder.i32Eqz();
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			// Haxe splits an empty separator at UTF-8 code-point boundaries.
-			builder.block(function(builder) {
-				builder.loop(function(builder) {
+			builder.block(builder -> {
+				builder.loop(builder -> {
 					builder.localGet(scan);
 					builder.localGet(sourceLength);
 					builder.emit(I32LtS);
@@ -2953,26 +2953,26 @@ class WasmLinearRuntime {
 					builder.i32Const(240);
 					builder.emit(I32LtS);
 					builder.i32Eqz();
-					builder.ifElse(function(builder) {
+					builder.ifElse(builder -> {
 						builder.i32Const(4);
 						builder.localSet(step);
-					}, function(builder) {
+					}, builder -> {
 						builder.localGet(firstByte);
 						builder.i32Const(224);
 						builder.emit(I32LtS);
 						builder.i32Eqz();
-						builder.ifElse(function(builder) {
+						builder.ifElse(builder -> {
 							builder.i32Const(3);
 							builder.localSet(step);
-						}, function(builder) {
+						}, builder -> {
 							builder.localGet(firstByte);
 							builder.i32Const(192);
 							builder.emit(I32LtS);
 							builder.i32Eqz();
-							builder.ifElse(function(builder) {
+							builder.ifElse(builder -> {
 								builder.i32Const(2);
 								builder.localSet(step);
-							}, function(builder) {
+							}, builder -> {
 								builder.i32Const(1);
 								builder.localSet(step);
 							});
@@ -2988,9 +2988,9 @@ class WasmLinearRuntime {
 					builder.emit(Br(0));
 				});
 			});
-		}, function(builder) {
-			builder.block(function(builder) {
-				builder.loop(function(builder) {
+		}, builder -> {
+			builder.block(builder -> {
+				builder.loop(builder -> {
 					builder.localGet(scan);
 					builder.localGet(separatorLength);
 					builder.i32Add();
@@ -3000,8 +3000,8 @@ class WasmLinearRuntime {
 					builder.emit(BrIf(1));
 					builder.i32Const(0);
 					builder.localSet(separatorIndex);
-					builder.block(function(builder) {
-						builder.loop(function(builder) {
+					builder.block(builder -> {
+						builder.loop(builder -> {
 							builder.localGet(separatorIndex);
 							builder.localGet(separatorLength);
 							builder.emit(I32LtS);
@@ -3034,7 +3034,7 @@ class WasmLinearRuntime {
 					builder.localGet(separatorIndex);
 					builder.localGet(separatorLength);
 					builder.emit(I32Eq);
-					builder.ifElse(function(builder) {
+					builder.ifElse(builder -> {
 						appendLinearSplitPart(builder, source, result, data, count, start, scan, part, substring);
 						builder.localGet(scan);
 						builder.localGet(separatorLength);
@@ -3042,7 +3042,7 @@ class WasmLinearRuntime {
 						builder.localSet(scan);
 						builder.localGet(scan);
 						builder.localSet(start);
-					}, function(builder) {
+					}, builder -> {
 						builder.localGet(scan);
 						builder.i32Const(1);
 						builder.i32Add();
@@ -3167,8 +3167,8 @@ class WasmLinearRuntime {
 		builder.i32Const(0);
 		builder.emit(I32LtS);
 		builder.localSet(isNegative);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(digitCount);
 				builder.i32Const(1);
 				builder.i32Add();
@@ -3210,8 +3210,8 @@ class WasmLinearRuntime {
 		builder.i32Const(1);
 		builder.i32Sub();
 		builder.localSet(lastIndex);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(digitCount);
 				builder.i32Eqz();
 				builder.emit(BrIf(1));
@@ -3229,12 +3229,12 @@ class WasmLinearRuntime {
 				builder.localGet(lastIndex);
 				builder.i32Add();
 				builder.localGet(isNegative);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.i32Const(48);
 					builder.localGet(digit);
 					builder.i32Sub();
 					builder.localSet(character);
-				}, function(builder) {
+				}, builder -> {
 					builder.i32Const(48);
 					builder.localGet(digit);
 					builder.i32Add();
@@ -3254,7 +3254,7 @@ class WasmLinearRuntime {
 			});
 		});
 		builder.localGet(isNegative);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(result);
 			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
 			builder.i32Add();
@@ -3309,8 +3309,8 @@ class WasmLinearRuntime {
 		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
 		builder.localSet(length);
 		// Skip ASCII whitespace: space and \t through \r.
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				whenIndexBelowLength(builder);
 				builder.i32Eqz();
 				builder.emit(BrIf(1));
@@ -3339,7 +3339,7 @@ class WasmLinearRuntime {
 			});
 		});
 		whenIndexBelowLength(builder);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			loadCharacter(builder);
 			builder.localGet(character);
 			builder.i32Const(45);
@@ -3350,7 +3350,7 @@ class WasmLinearRuntime {
 			builder.i32Const(43);
 			builder.emit(I32Eq);
 			builder.emit(I32Or);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.localGet(index);
 				builder.i32Const(1);
 				builder.i32Add();
@@ -3361,8 +3361,8 @@ class WasmLinearRuntime {
 		whenIndexBelowLength(builder);
 		builder.i32Eqz();
 		builder.if_(failure.emit);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				whenIndexBelowLength(builder);
 				builder.i32Eqz();
 				builder.emit(BrIf(1));
@@ -3409,7 +3409,7 @@ class WasmLinearRuntime {
 			});
 		});
 		builder.localGet(negative);
-		builder.ifElse(builder -> builder.localGet(value), function(builder) {
+		builder.ifElse(builder -> builder.localGet(value), builder -> {
 			builder.localGet(value);
 			builder.localGet(minimum);
 			builder.emit(I64Eq);
@@ -3434,7 +3434,7 @@ class WasmLinearRuntime {
 		for (entry in [{string: value, length: valueLength}, {string: affix, length: affixLength}]) {
 			builder.localGet(entry.string);
 			builder.i32Eqz();
-			builder.ifElse(builder -> builder.i32Const(0), function(builder) {
+			builder.ifElse(builder -> builder.i32Const(0), builder -> {
 				builder.localGet(entry.string);
 				builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
 			}, I32);
@@ -3443,7 +3443,7 @@ class WasmLinearRuntime {
 		builder.localGet(valueLength);
 		builder.localGet(affixLength);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.return_();
 		});
@@ -3453,8 +3453,8 @@ class WasmLinearRuntime {
 			builder.i32Sub();
 			builder.localSet(start);
 		}
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(affixLength);
 				builder.emit(I32LtS);
@@ -3471,7 +3471,7 @@ class WasmLinearRuntime {
 				builder.i32Add();
 				builder.emit(I32Load8U(WasmLayout.STRING_DATA_OFFSET));
 				builder.emit(I32Eq);
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					builder.localGet(index);
 					builder.i32Const(1);
 					builder.i32Add();
@@ -3502,9 +3502,9 @@ class WasmLinearRuntime {
 		builder.emit(I64LtS);
 		builder.localSet(isNegative);
 		builder.localGet(isNegative);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(value);
-		}, function(builder) {
+		}, builder -> {
 			builder.emit(I64Const(0));
 			builder.localGet(value);
 			builder.emit(I64Sub);
@@ -3512,8 +3512,8 @@ class WasmLinearRuntime {
 		builder.localSet(number);
 		builder.i32Const(1);
 		builder.localSet(digitCount);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(number);
 				builder.emit(I64Const(-10));
 				builder.emit(I64LeS);
@@ -3531,9 +3531,9 @@ class WasmLinearRuntime {
 			});
 		});
 		builder.localGet(isNegative);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(value);
-		}, function(builder) {
+		}, builder -> {
 			builder.emit(I64Const(0));
 			builder.localGet(value);
 			builder.emit(I64Sub);
@@ -3562,8 +3562,8 @@ class WasmLinearRuntime {
 		builder.localGet(isNegative);
 		builder.i32Add();
 		builder.localSet(index);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.i32Const(0);
 				builder.localGet(number);
 				builder.emit(I64Const(10));
@@ -3595,7 +3595,7 @@ class WasmLinearRuntime {
 			});
 		});
 		builder.localGet(isNegative);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(result);
 			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
 			builder.i32Add();
@@ -3620,7 +3620,7 @@ class WasmLinearRuntime {
 			value = builder.parameter("value", 0);
 		builder.localGet(value);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(nullString);
 			builder.return_();
 		});
@@ -3629,7 +3629,7 @@ class WasmLinearRuntime {
 			builder.emit(I32Load(0));
 			builder.i32Const(module.runtimeTypeId(type));
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.localGet(value);
 				switch type {
 					case I64:
@@ -3657,7 +3657,7 @@ class WasmLinearRuntime {
 			builder.emit(I32Load(0));
 			builder.i32Const(module.runtimeTypeId(Array(Dyn)));
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.localGet(value);
 				builder.call(builder.functionRef(arrayString));
 				builder.return_();
@@ -3672,7 +3672,7 @@ class WasmLinearRuntime {
 			builder.emit(I32Load(0));
 			builder.i32Const(module.runtimeTypeId(Obj(object.name)));
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				if (methodIndex != null) {
 					builder.localGet(value);
 					builder.call(builder.functionRef(methodIndex));
@@ -3685,12 +3685,12 @@ class WasmLinearRuntime {
 		builder.emit(I32Load(0));
 		builder.i32Const(module.runtimeTypeId(Bool));
 		builder.emit(I32Eq);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
-			builder.ifElse(function(builder) {
+			builder.ifElse(builder -> {
 				builder.i32Const(trueString);
-			}, function(builder) {
+			}, builder -> {
 				builder.i32Const(falseString);
 			}, I32);
 			builder.return_();
@@ -3956,12 +3956,12 @@ class WasmLinearRuntime {
 		builder.localGet(right);
 		builder.emit(I32Eqz);
 		builder.emit(I32Or);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(left);
 			builder.localGet(right);
 			builder.emit(I32Eq);
 			builder.emit(Return);
-		}, function(builder) {});
+		}, builder -> {});
 		builder.localGet(left);
 		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
 		builder.localSet(leftLength);
@@ -3975,15 +3975,15 @@ class WasmLinearRuntime {
 		builder.localGet(leftLength);
 		builder.localGet(rightLength);
 		builder.emit(I32Eq);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.i32Const(1);
 			builder.localSet(result);
-			builder.block(function(builder) {
-				builder.loop(function(builder) {
+			builder.block(builder -> {
+				builder.loop(builder -> {
 					builder.localGet(index);
 					builder.localGet(leftLength);
 					builder.emit(I32LtS);
-					builder.ifElse(function(builder) {
+					builder.ifElse(builder -> {
 						builder.localGet(left);
 						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
 						builder.i32Add();
@@ -3997,21 +3997,21 @@ class WasmLinearRuntime {
 						builder.i32Add();
 						builder.emit(I32Load8U(0));
 						builder.emit(I32Eq);
-						builder.ifElse(function(builder) {
+						builder.ifElse(builder -> {
 							builder.localGet(index);
 							builder.i32Const(1);
 							builder.i32Add();
 							builder.localSet(index);
 							builder.emit(Br(2));
-						}, function(builder) {
+						}, builder -> {
 							builder.i32Const(0);
 							builder.localSet(result);
 							builder.emit(Br(3));
 						});
-					}, function(builder) builder.emit(Br(2)));
+					}, builder -> builder.emit(Br(2)));
 				});
 			});
-		}, function(builder) {
+		}, builder -> {
 			builder.i32Const(0);
 			builder.localSet(result);
 		});
@@ -4034,19 +4034,19 @@ class WasmLinearRuntime {
 		builder.localGet(left);
 		builder.localGet(right);
 		builder.emit(I32Eq);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(0);
 			builder.return_();
 		});
 		builder.localGet(left);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(-1);
 			builder.return_();
 		});
 		builder.localGet(right);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.i32Const(1);
 			builder.return_();
 		});
@@ -4059,9 +4059,9 @@ class WasmLinearRuntime {
 		builder.localGet(leftLength);
 		builder.localGet(rightLength);
 		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(leftLength);
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(rightLength);
 		}, I32);
 		builder.localSet(limit);
@@ -4069,8 +4069,8 @@ class WasmLinearRuntime {
 		builder.localSet(index);
 		builder.i32Const(0);
 		builder.localSet(result);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
+		builder.block(builder -> {
+			builder.loop(builder -> {
 				builder.localGet(index);
 				builder.localGet(limit);
 				builder.emit(I32LtS);
@@ -4097,7 +4097,7 @@ class WasmLinearRuntime {
 				builder.localGet(result);
 				builder.i32Eqz();
 				builder.i32Eqz();
-				builder.if_(function(builder) builder.emit(Br(2)));
+				builder.if_(builder -> builder.emit(Br(2)));
 				builder.localGet(index);
 				builder.i32Const(1);
 				builder.i32Add();
@@ -4107,7 +4107,7 @@ class WasmLinearRuntime {
 		});
 		builder.localGet(result);
 		builder.i32Eqz();
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(leftLength);
 			builder.localGet(rightLength);
 			builder.i32Sub();
@@ -4179,7 +4179,7 @@ class WasmLinearRuntime {
 		builder.i32Const(1);
 		builder.emit(I32And);
 		builder.emit(I32Or);
-		builder.if_(function(builder) {
+		builder.if_(builder -> {
 			builder.localGet(left);
 			builder.i32Const(1);
 			builder.emit(I32And);
@@ -4188,7 +4188,7 @@ class WasmLinearRuntime {
 			builder.emit(I32And);
 			builder.emit(I32And);
 			builder.i32Eqz();
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.i32Const(0);
 				builder.return_();
 			});
@@ -4208,36 +4208,36 @@ class WasmLinearRuntime {
 		builder.localGet(left);
 		builder.localGet(right);
 		builder.emit(I32Eq);
-		builder.ifElse(function(builder) {
+		builder.ifElse(builder -> {
 			builder.localGet(left);
 			builder.i32Eqz();
-			builder.ifElse(function(builder) {
+			builder.ifElse(builder -> {
 				builder.i32Const(1);
 				builder.localSet(result);
-			}, function(builder) {
+			}, builder -> {
 				builder.localGet(left);
 				builder.emit(I32Load(0));
 				builder.i32Const(module.runtimeTypeId(F64));
 				builder.emit(I32Eq);
-				builder.ifElse(function(builder) {
+				builder.ifElse(builder -> {
 					builder.localGet(left);
 					builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 					builder.localGet(right);
 					builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 					builder.emit(F64Eq);
 					builder.localSet(result);
-				}, function(builder) {
+				}, builder -> {
 					builder.i32Const(1);
 					builder.localSet(result);
 				});
 			});
-		}, function(builder) {
+		}, builder -> {
 			builder.localGet(left);
 			builder.i32Eqz();
-			builder.ifElse(function(_) {}, function(builder) {
+			builder.ifElse(_ -> {}, builder -> {
 				builder.localGet(right);
 				builder.i32Eqz();
-				builder.ifElse(function(_) {}, function(builder) {
+				builder.ifElse(_ -> {}, builder -> {
 					builder.localGet(left);
 					builder.emit(I32Load(0));
 					builder.localSet(leftType);
@@ -4247,16 +4247,16 @@ class WasmLinearRuntime {
 					builder.localGet(leftType);
 					builder.localGet(rightType);
 					builder.emit(I32Eq);
-					builder.ifElse(function(builder) {
+					builder.ifElse(builder -> {
 						builder.localGet(leftType);
 						builder.i32Const(module.runtimeTypeId(Bytes));
 						builder.emit(I32Eq);
-						builder.ifElse(function(builder) {
+						builder.ifElse(builder -> {
 							builder.localGet(left);
 							builder.localGet(right);
 							builder.call(builder.functionRef(stringEqual));
 							builder.localSet(result);
-						}, function(builder) {
+						}, builder -> {
 							builder.localGet(leftType);
 							builder.i32Const(module.runtimeTypeId(I32));
 							builder.emit(I32Eq);
@@ -4272,47 +4272,47 @@ class WasmLinearRuntime {
 							builder.i32Const(module.runtimeTypeId(Abstract("native_callback")));
 							builder.emit(I32Eq);
 							builder.emit(I32Or);
-							builder.ifElse(function(builder) {
+							builder.ifElse(builder -> {
 								builder.localGet(left);
 								builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 								builder.localGet(right);
 								builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 								builder.emit(I32Eq);
 								builder.localSet(result);
-							}, function(builder) {
+							}, builder -> {
 								builder.localGet(leftType);
 								builder.i32Const(module.runtimeTypeId(Bool));
 								builder.emit(I32Eq);
-								builder.ifElse(function(builder) {
+								builder.ifElse(builder -> {
 									builder.localGet(left);
 									builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 									builder.localGet(right);
 									builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 									builder.emit(I32Eq);
 									builder.localSet(result);
-								}, function(builder) {
+								}, builder -> {
 									builder.localGet(leftType);
 									builder.i32Const(module.runtimeTypeId(F64));
 									builder.emit(I32Eq);
-									builder.ifElse(function(builder) {
+									builder.ifElse(builder -> {
 										builder.localGet(left);
 										builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 										builder.localGet(right);
 										builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 										builder.emit(F64Eq);
 										builder.localSet(result);
-									}, function(builder) {
+									}, builder -> {
 										builder.localGet(leftType);
 										builder.i32Const(module.runtimeTypeId(I64));
 										builder.emit(I32Eq);
-										builder.ifElse(function(builder) {
+										builder.ifElse(builder -> {
 											builder.localGet(left);
 											builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 											builder.localGet(right);
 											builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 											builder.emit(I64Eq);
 											builder.localSet(result);
-										}, function(builder) {
+										}, builder -> {
 											appendNullaryEnumEqual(module, builder, program, left, right, leftType,
 												result);
 										});
@@ -4320,7 +4320,7 @@ class WasmLinearRuntime {
 								});
 							});
 						});
-					}, function(builder) {
+					}, builder -> {
 						// A boxed Int equals a boxed Float of the same value, as Dynamic comparison does in Haxe.
 						appendMixedNumberEqual(module, builder, left, right, leftType, rightType, result);
 					});
@@ -4346,13 +4346,13 @@ class WasmLinearRuntime {
 			builder.localGet(leftType);
 			builder.i32Const(module.runtimeTypeId(Enum(enumDecl.name)));
 			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.localGet(left);
 				builder.emit(I32Load(WasmLayout.HEADER_SIZE));
 				builder.localGet(right);
 				builder.emit(I32Load(WasmLayout.HEADER_SIZE));
 				builder.emit(I32Eq);
-				builder.if_(function(builder) {
+				builder.if_(builder -> {
 					for (position in 0...nullary.length) {
 						builder.localGet(left);
 						builder.emit(I32Load(WasmLayout.HEADER_SIZE));
@@ -4378,7 +4378,7 @@ class WasmLinearRuntime {
 			builder.i32Const(module.runtimeTypeId(intOnLeft ? F64 : I32));
 			builder.emit(I32Eq);
 			builder.emit(I32And);
-			builder.if_(function(builder) {
+			builder.if_(builder -> {
 				builder.localGet(left);
 				if (intOnLeft) {
 					builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));

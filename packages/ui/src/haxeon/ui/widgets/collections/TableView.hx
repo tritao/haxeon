@@ -145,14 +145,14 @@ class TableView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			columnRevisionState = context.state(context.id("column-revision"), columnRevision);
 			columnRevision = columnRevisionState.value;
 			var selectionRow:State<Int> = context.state(context.id("selected-row"), selectedRow);
 			var selectionColumn:State<Int> = context.state(context.id("selected-column"), selectedColumn);
 			selectedRow = selectionRow.value;
 			selectedColumn = selectionColumn.value;
-			var selectCell = function(row:Int, column:Int) {
+			var selectCell = (row:Int, column:Int) -> {
 				if (row < 0 || row >= rowCount || column < 0 || column >= columns.length) return;
 				var rowChanged = row != selectedRow;
 				var columnChanged = column != selectedColumn;
@@ -165,7 +165,7 @@ class TableView implements View {
 				if (onCellSelected != null) onCellSelected(row, column);
 			};
 			cellIds = new Map();
-			var handleCellKeyDown = function(row:Int, column:Int, id:WidgetId, event:UiEvent) {
+			var handleCellKeyDown = (row:Int, column:Int, id:WidgetId, event:UiEvent) -> {
 				var nextRow = row;
 				var nextColumn = column;
 				switch (event.key) {
@@ -206,26 +206,26 @@ class TableView implements View {
 				LayoutAxis.fixed(bodyFallbackHeight);
 			else bodyStyle.height = LayoutAxis.grow();
 			var body = new VirtualGrid('${key}-body', rowCount, columns.length, rowHeight, columnWidthAt(0),
-				function(row:Int,
-					column:Int) {
-						var columnData = columns[column];
-						var child = cellBuilder(row, columnData);
-						if (child == null) throw 'TableView cell builder returned null for $row,${columnData.key}';
-						return new TableSelectionCell("selection", child,
-							selectionRow.value == row && selectionColumn.value == column);
-					}, bodyStyle, function(row:Int, column:Int) {
+				(row:Int,
+				column:Int) -> {
+					var columnData = columns[column];
+					var child = cellBuilder(row, columnData);
+					if (child == null) throw 'TableView cell builder returned null for $row,${columnData.key}';
+					return new TableSelectionCell("selection", child,
+						selectionRow.value == row && selectionColumn.value == column);
+				}, bodyStyle, (row:Int, column:Int) -> {
 				var rowKey = rowKeyForIndex == null ? Std.string(row) : rowKeyForIndex(row);
 				if (rowKey == null || rowKey.length == 0) throw 'TableView row $row has an empty key';
 				return '$rowKey:${columns[column].key}';
-			}, controller, fallbackViewportWidth, bodyFallbackHeight, selectCell, function(row:Int, column:Int) {
+			}, controller, fallbackViewportWidth, bodyFallbackHeight, selectCell, (row:Int, column:Int) -> {
 				return selectionRow.value == row && selectionColumn.value == column;
-			}, handleCellKeyDown, function(row:Int, column:Int, id:WidgetId) {
+			}, handleCellKeyDown, (row:Int, column:Int, id:WidgetId) -> {
 				cellIds.set(cellKey(row, column), id);
 			}, columnWidths(), virtualization);
-			var header = new TableHeader("header", columns, headerHeight, totalWidth, controller, function(index:Int,
-					delta:Float) {
-						resizeColumn(index, columns[index].width + delta);
-					}, function(index:Int) {
+			var header = new TableHeader("header", columns, headerHeight, totalWidth, controller, (index:Int,
+				delta:Float) -> {
+					resizeColumn(index, columns[index].width + delta);
+				}, (index:Int) -> {
 				toggleSort(index);
 			}, sortColumn, sortAscending);
 			var children:Array<KeyedView> = [new KeyedView("header", header), new KeyedView("body", body)];
@@ -328,7 +328,7 @@ private class TableHeader implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var viewportStyle = new LayoutStyle();
 			viewportStyle.width = LayoutAxis.grow();
 			viewportStyle.height = LayoutAxis.fixed(headerHeight);
@@ -345,9 +345,9 @@ private class TableHeader implements View {
 				var columnIndex = index;
 				headerCells.push(new KeyedView('column:${column.key}', new TableHeaderCell("cell", column, columnIndex,
 					headerHeight, sortColumn == columnIndex ? (sortAscending ? " ↑" : " ↓") : "",
-					function(delta:Float) {
+					(delta:Float) -> {
 						onResize(columnIndex, delta);
-					}, function() {
+					}, () -> {
 					onSort(columnIndex);
 				})));
 			}
@@ -387,7 +387,7 @@ private class TableHeaderCell implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(column.width);
 			style.height = LayoutAxis.fixed(headerHeight);
@@ -401,7 +401,7 @@ private class TableHeaderCell implements View {
 			var resizing = false;
 			var didResize = false;
 			var lastX = 0.0;
-			node.on(UiEventKind.PointerDown, function(event:UiEvent) {
+			node.on(UiEventKind.PointerDown, (event:UiEvent) -> {
 				didResize = false;
 				if (event.button != 0 || event.localX < column.width - 8.0) return;
 				resizing = true;
@@ -410,7 +410,7 @@ private class TableHeaderCell implements View {
 				event.capturePointer();
 				event.preventDefault();
 			});
-			node.on(UiEventKind.PointerMove, function(event:UiEvent) {
+			node.on(UiEventKind.PointerMove, (event:UiEvent) -> {
 				if (!resizing) return;
 				var delta = event.globalX - lastX;
 				lastX = event.globalX;
@@ -420,7 +420,7 @@ private class TableHeaderCell implements View {
 				}
 				event.preventDefault();
 			});
-			var finishResize = function(event:UiEvent) {
+			var finishResize = (event:UiEvent) -> {
 				if (!resizing) return;
 				resizing = false;
 				event.releasePointer();
@@ -428,14 +428,14 @@ private class TableHeaderCell implements View {
 			};
 			node.on(UiEventKind.PointerUp, finishResize);
 			node.on(UiEventKind.PointerCancel, finishResize);
-			node.onActivate(function(event:UiEvent) {
+			node.onActivate((event:UiEvent) -> {
 				if (event.kind == UiEventKind.Click && didResize) {
 					didResize = false;
 					return;
 				}
 				onSort();
 			});
-			node.add(context.withScope(new Key("content"), function() {
+			node.add(context.withScope(new Key("content"), () -> {
 				return new Text(column.label + sortSuffix).build(context);
 			}));
 			return node;
@@ -455,13 +455,13 @@ private class TableSelectionCell implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			style.height = LayoutAxis.grow();
 			style.background = selected ? context.theme.tokens.selection : Color.rgba(0.0, 0.0, 0.0, 0.0);
 			var node = context.createNode(context.rootId("table-selection"), LayoutVisualKind.Box, style);
-			node.add(context.withScope(new Key("content"), function() return child.build(context)));
+			node.add(context.withScope(new Key("content"), () -> child.build(context)));
 			return node;
 		});
 	}

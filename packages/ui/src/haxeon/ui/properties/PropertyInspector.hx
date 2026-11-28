@@ -182,12 +182,12 @@ class PropertyInspector implements View {
 	public function build(context:BuildContext):ViewRoot {
 		var observed = context.buildProbe != null;
 		var started = observed ? Sys.time() : 0.0;
-		var result = context.withScope(new Key(key), function() {
+		var result = context.withScope(new Key(key), () -> {
 			var children:Array<KeyedView> = [];
 			for (section in sections) {
 				var editor = editors.get(section.id);
 				editor.configure(enabled, labelWidth, stackedRows, searchQuery);
-				var header = new PropertyInspectorSectionHeader("header", section, function() {
+				var header = new PropertyInspectorSectionHeader("header", section, () -> {
 					setSectionExpanded(section.id, !section.expanded);
 				});
 				children.push(new KeyedView("section:" + section.id + ":header", header));

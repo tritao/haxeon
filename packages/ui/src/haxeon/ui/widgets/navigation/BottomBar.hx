@@ -97,7 +97,7 @@ class BottomBar implements ScopeView {
 		for (position in 0...items.length) {
 			var item = items[position];
 			row.add(context.withScope(new Key("item:" + item.id),
-				function() return buildItem(context, item, position)));
+				() -> buildItem(context, item, position)));
 		}
 		root.add(row);
 		return root;
@@ -124,12 +124,12 @@ class BottomBar implements ScopeView {
 		node.semantics = semantics;
 		if (onSelect != null) {
 			var chosen = item.id;
-			node.onActivate(function(_:UiEvent) onSelect(chosen));
+			node.onActivate((_:UiEvent) -> onSelect(chosen));
 		}
 
 		var foreground = active ? context.theme.tokens.accent : context.theme.tokens.textSecondary;
 		node.add(context.withScope(new Key("icon"),
-			function() return new Icon("glyph", item.icon, 22.0, foreground).build(context)));
+			() -> new Icon("glyph", item.icon, 22.0, foreground).build(context)));
 
 		var labelRowStyle = new LayoutStyle();
 		labelRowStyle.direction = LayoutDirection.LeftToRight;

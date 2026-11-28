@@ -233,7 +233,7 @@ class EventDispatcher {
 			0,
 			pointerId,
 			timestamp < 0.0 ? NativeKit.nk_time_seconds() : timestamp);
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (event.propagationStopped || contains(path, node)) return;
 			event.setCurrentTarget(node);
 			node.invokePointerDownOutside(event);

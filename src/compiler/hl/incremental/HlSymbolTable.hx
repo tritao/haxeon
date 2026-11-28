@@ -448,7 +448,7 @@ class HlSymbolTable {
 		var result:Array<HlNamedIndex> = [for (name => index in values) {
 			name: name, index: index
 		}];
-		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		result.sort((a, b) -> Reflect.compare(a.name, b.name));
 		return result;
 	}
 
@@ -456,7 +456,7 @@ class HlSymbolTable {
 		var result:Array<HlNamedSlots> = [for (name => slots in values) {
 			name: name, slots: orderedMap(slots)
 		}];
-		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		result.sort((a, b) -> Reflect.compare(a.name, b.name));
 		return result;
 	}
 
@@ -1184,7 +1184,7 @@ class HlSymbolTable {
 		for (name => index in globalIndices)
 			if (StringTools.startsWith(name, STRING_CONSTANT_PREFIX))
 				result.push({global: index, value: name.substr(STRING_CONSTANT_PREFIX.length)});
-		result.sort(function(left, right) return left.global < right.global ? -1 : left.global > right.global ? 1 : 0);
+		result.sort((left, right) -> left.global < right.global ? -1 : left.global > right.global ? 1 : 0);
 		return result;
 	}
 

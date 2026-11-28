@@ -11,7 +11,7 @@ class Main {
 		hits++;
 
 	static function main() {
-		var apply = function(value:Value) switch (value) {
+		var apply = (value:Value) -> switch (value) {
 			case Flag(keep):
 				if (!keep)
 					touch();

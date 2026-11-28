@@ -132,8 +132,8 @@ class Marker {}
 
 		// Only cycles through an anonymous structure are allowed: anything else could never be expanded.
 		for (name in ["Direct", "Second", "Boxed", "Optional"])
-			expectError(function() resolve(name), 'the cyclic typedef "$name" must still be rejected');
-		expectError(function() index.resolve(AstType.AppliedType("Poly", [AstType.IntType])),
+			expectError(() -> resolve(name), 'the cyclic typedef "$name" must still be rejected');
+		expectError(() -> index.resolve(AstType.AppliedType("Poly", [AstType.IntType])),
 			"a generic typedef that recurses at a different instantiation must still be rejected");
 		expect(fieldsOf(resolve("Tree")) == treeFields, "rejected cycles leave resolved types alone");
 

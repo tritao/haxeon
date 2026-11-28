@@ -38,8 +38,8 @@ import haxeon.ui.widgets.controls.Button;
 		var decoration = new ButtonDecoration(), focuses = 0, blurs = 0;
 		// What the caller adds goes through a modifier: listeners, a placement and an extra child.
 		var modifier = new RootModifier();
-		modifier.on(UiEventKind.Focus, function(_) focuses++, UiEventPhase.Capture);
-		modifier.on(UiEventKind.Blur, function(_) blurs++, UiEventPhase.Capture);
+		modifier.on(UiEventKind.Focus, _ -> focuses++, UiEventPhase.Capture);
+		modifier.on(UiEventKind.Blur, _ -> blurs++, UiEventPhase.Capture);
 		modifier.zIndex = 9;
 		context.beginFrame();
 		var extra = context.createNode(context.rootId("caller-extra"), LayoutVisualKind.Box);
@@ -100,12 +100,12 @@ import haxeon.ui.widgets.controls.Button;
 		store.endFrame();
 		if (disabled.enabled || disabled.focusable || !disabled.states.contains(StyleState.Disabled)) return 4;
 		var parentBuilds = 0, parentEnabled = new Signal<Bool>(true);
-		var parent = new TrackedScope("cached-button-parent", function() {
+		var parent = new TrackedScope("cached-button-parent", () -> {
 			parentBuilds++;
 			return new Button("Cached", null, null, "cached-button", parentEnabled.value);
 		});
 		context.beginFrame();
-		var cachedRoot = context.trackReads(function() return parent.build(context).node());
+		var cachedRoot = context.trackReads(() -> parent.build(context).node());
 		store.endFrame();
 		var cachedControl = cachedRoot;
 		var cachedOwner = context.renderScopeAt(cachedControl);
@@ -115,7 +115,7 @@ import haxeon.ui.widgets.controls.Button;
 		if (!cachedOwner.pending) return 31;
 		context.flushRenderScopes(cachedRoot);
 		context.beginFrame();
-		var reusedRoot = context.trackReads(function() return parent.build(context).node());
+		var reusedRoot = context.trackReads(() -> parent.build(context).node());
 		store.endFrame();
 		if (parentBuilds != 1 || reusedRoot != context.currentRoot(cachedRoot)
 			|| !reusedRoot.states.contains(StyleState.Hovered) || reusedRoot.layout.style.width.value != 150) return 8;
@@ -124,13 +124,13 @@ import haxeon.ui.widgets.controls.Button;
 		if (!cachedOwner.pending) return 31;
 		context.flushRenderScopes(reusedRoot);
 		context.beginFrame();
-		reusedRoot = context.trackReads(function() return parent.build(context).node());
+		reusedRoot = context.trackReads(() -> parent.build(context).node());
 		store.endFrame();
 		if (parentBuilds != 1 || reusedRoot != context.currentRoot(cachedRoot)
 			|| !reusedRoot.states.contains(StyleState.Focused) || reusedRoot.layout.style.width.value != 120) return 10;
 		parentEnabled.value = false;
 		context.beginFrame();
-		var changedRoot = context.trackReads(function() return parent.build(context).node());
+		var changedRoot = context.trackReads(() -> parent.build(context).node());
 		store.endFrame();
 		// The parent runs again and describes the button with new inputs; the button's own scope builds them.
 		if (parentBuilds != 2 || changedRoot.enabled || changedRoot.focusable) return 11;

@@ -43,7 +43,7 @@ class Parallel {
 			}
 		}
 		for (_ in 1...threads)
-			Thread.create(function() {
+			Thread.create(() -> {
 				run();
 				finished.release();
 			});

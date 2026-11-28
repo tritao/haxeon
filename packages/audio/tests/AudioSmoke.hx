@@ -222,7 +222,7 @@ class AudioSmoke {
 			audioBank = new AudioBank(resourceCache, runtime.events);
 			var bankFailed = false;
 			var bankFailure:Null<haxeon.platform.NativeKitError> = null;
-			audioBank.onFailed = function(entry, result) {
+			audioBank.onFailed = (entry, result) -> {
 				if (entry.name == "missing-audio") {
 					bankFailed = true;
 					bankFailure = result;
@@ -457,7 +457,7 @@ class AudioSmoke {
 			}
 			if (!rejected)
 				throw "Haxe audio bus concurrency limit did not reject a voice";
-			transitionSubscription = runtime.events.listen(function(value) {
+			transitionSubscription = runtime.events.listen(value -> {
 				switch value {
 					case AudioVoiceStolen(source) if (source.rawValue == first.nativeHandle().rawValue):
 						stolenTransition = true;
@@ -589,18 +589,18 @@ class AudioSmoke {
 			var firstTrackStarts = 0;
 			var secondTrackStarts = 0;
 			var finiteTrackStarts = 0;
-			trackPlayer.onTrackEnded = function(_) {
+			trackPlayer.onTrackEnded = _ -> {
 				trackEnded++;
 			};
-			trackPlayer.onTransitionStarted = function(from, to) {
+			trackPlayer.onTransitionStarted = (from, to) -> {
 				if (from == firstTrack && to == secondTrack)
 					transitionStarted = true;
 			};
-			trackPlayer.onTransitionCompleted = function(track) {
+			trackPlayer.onTransitionCompleted = track -> {
 				if (track == secondTrack)
 					transitionCompleted = true;
 			};
-			trackPlayer.onTrackStarted = function(track) {
+			trackPlayer.onTrackStarted = track -> {
 				trackStarted++;
 				if (track == firstTrack) {
 					firstTrackStarts++;
@@ -731,7 +731,7 @@ class AudioSmoke {
 			if (!bus.isPlaying())
 				throw "Haxe audio bus did not observe playback";
 			var completed = false;
-			completionSubscription = runtime.events.listen(function(value) {
+			completionSubscription = runtime.events.listen(value -> {
 				switch value {
 					case AudioVoiceComplete(source) if (source.rawValue == completion.nativeHandle().rawValue):
 						completed = true;

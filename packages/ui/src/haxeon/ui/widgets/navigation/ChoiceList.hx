@@ -92,7 +92,7 @@ class ChoiceList implements ScopeView {
 	}
 
 	function buildList(context:BuildContext, id:WidgetId):RenderNode {
-		var query = context.lazyState(context.id("query"), function() return new Signal<String>("")).value;
+		var query = context.lazyState(context.id("query"), () -> new Signal<String>("")).value;
 		var needle = query.value.toLowerCase();
 
 		var rootStyle = new LayoutStyle();
@@ -115,10 +115,10 @@ class ChoiceList implements ScopeView {
 		fieldStyle.radiusTopRight = 10.0;
 		fieldStyle.radiusBottomLeft = 10.0;
 		fieldStyle.radiusBottomRight = 10.0;
-		var search = new SearchField("search", query.value, function(next:String) {
+		var search = new SearchField("search", query.value, (next:String) -> {
 			query.value = next;
 		}, fieldStyle, searchPlaceholder);
-		searchWrap.add(context.withScope(new Key("search-field"), function() return search.build(context)));
+		searchWrap.add(context.withScope(new Key("search-field"), () -> search.build(context)));
 		root.add(searchWrap);
 
 		var listStyle = new LayoutStyle();
@@ -132,7 +132,7 @@ class ChoiceList implements ScopeView {
 				|| (item.detail != null && item.detail.toLowerCase().indexOf(needle) >= 0);
 			if (!matches) continue;
 			shown++;
-			list.add(context.withScope(new Key("item:" + item.id), function() return buildRow(context, item, shown)));
+			list.add(context.withScope(new Key("item:" + item.id), () -> buildRow(context, item, shown)));
 		}
 		if (shown == 0) {
 			var emptyStyle = new LayoutStyle();
@@ -168,7 +168,7 @@ class ChoiceList implements ScopeView {
 		semantics.hierarchyLevel = depth + 1;
 		row.semantics = semantics;
 		var itemId = item.id;
-		row.onActivate(function(_:UiEvent) choose(itemId));
+		row.onActivate((_:UiEvent) -> choose(itemId));
 
 		if (multi) row.add(buildCheckbox(context, chosen));
 
@@ -184,7 +184,7 @@ class ChoiceList implements ScopeView {
 
 		if (!multi && chosen)
 			row.add(context.withScope(new Key("check"),
-				function() return new Icon("check", IconName.Check, 18.0, NavUi.accent).build(context)));
+				() -> new Icon("check", IconName.Check, 18.0, NavUi.accent).build(context)));
 		return row;
 	}
 

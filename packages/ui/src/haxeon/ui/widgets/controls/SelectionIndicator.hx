@@ -67,8 +67,8 @@ private class SelectionIndicatorView implements View {
 
 	function paintSearch(indicator:RenderNode):Void {
 		var color = this.color;
-		indicator.onPaint(function(canvas, geometry) {
-			canvas.withState(function(target) {
+		indicator.onPaint((canvas, geometry) -> {
+			canvas.withState(target -> {
 				target.translate(11.0, geometry.height * 0.5 - 7.0);
 				target.scale(14.0 / 24.0, 14.0 / 24.0);
 				target.strokeTransient(IconData.build(IconName.Search), color, 2.0, LineCap.Round, LineJoin.Round);
@@ -81,7 +81,7 @@ private class SelectionIndicatorView implements View {
 		var color = context.inheritedStyle.getColor(StyleProperty.BorderColor);
 		var width = context.inheritedStyle.getNumber(StyleProperty.BorderWidth);
 		if (color.alpha <= 0.0 || width <= 0.0) return;
-		indicator.onPaint(function(canvas, geometry) {
+		indicator.onPaint((canvas, geometry) -> {
 			var edge = Math.min(width, Math.min(geometry.width, geometry.height) * 0.5);
 			canvas.fillRectIfPositive(new Rect(0.0, 0.0, geometry.width, edge), color);
 			canvas.fillRectIfPositive(new Rect(0.0, geometry.height - edge, geometry.width, edge), color);
@@ -93,7 +93,7 @@ private class SelectionIndicatorView implements View {
 	function paintChevron(indicator:RenderNode):Void {
 		var color = this.color;
 		var open = this.open;
-		indicator.onPaint(function(canvas, geometry) {
+		indicator.onPaint((canvas, geometry) -> {
 			var centerX = geometry.width - 16.0;
 			var centerY = geometry.height * 0.5;
 			var path = open ? new PathBuilder().moveTo(centerX - 4.0, centerY + 2.0).lineTo(centerX,
@@ -108,7 +108,7 @@ private class SelectionIndicatorView implements View {
 
 	function paintCheck(indicator:RenderNode):Void {
 		var color = this.color;
-		indicator.onPaint(function(canvas, geometry) {
+		indicator.onPaint((canvas, geometry) -> {
 			var centerY = geometry.height * 0.5;
 			var path = new PathBuilder().moveTo(10.0,
 				centerY).lineTo(13.0, centerY + 3.0).lineTo(18.0, centerY - 3.0).build();

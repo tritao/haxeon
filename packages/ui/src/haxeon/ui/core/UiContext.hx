@@ -223,10 +223,10 @@ class UiContext implements Disposable {
 		disposed = false;
 		// The verification build lays out a throwaway copy of the tree: focus it asks for there (a widget that takes focus when
 		// first laid out) must not move the real focus, or the compared trees differ by something no frame did.
-		buildContext.setFocusRequester(function(id) {
+		buildContext.setFocusRequester(id -> {
 			return !verifying && focusWidget(id);
 		});
-		buildContext.setDeferredFocusRequester(function(id) {
+		buildContext.setDeferredFocusRequester(id -> {
 			if (verifying) return;
 			ensureLive();
 			pendingFocus = id;
@@ -242,10 +242,10 @@ class UiContext implements Disposable {
 		decorationAvailable = false;
 		cursorHandler = null;
 		currentCursor = UiCursorShape.Arrow;
-		animations.onFrameRequested = function() {
+		animations.onFrameRequested = () -> {
 			if (!disposed && onAnimationFrameRequested != null) onAnimationFrameRequested();
 		};
-		buildContext.onBindingFrameRequested = function() {
+		buildContext.onBindingFrameRequested = () -> {
 			if (!disposed && onAnimationFrameRequested != null) onAnimationFrameRequested();
 		};
 		lastFrameMetrics = null;
@@ -313,7 +313,7 @@ class UiContext implements Disposable {
 
 	/** Builds a fresh view tree, resolves native layout, and reconnects geometry by stable ID. */
 	public function submit(view:View, frame:LayoutFrame):RenderNode {
-		var build = function() return view;
+		var build = () -> view;
 		var focusBefore = focus.focusedId;
 		var result = submitInternal(frame, null, build);
 		// Focus moved during this frame: the nodes take on their focused state in the next one, so this frame's tree is
@@ -402,7 +402,7 @@ class UiContext implements Disposable {
 
 	function recordFingerprints(tree:RenderNode):Void {
 		submittedFingerprints.clear();
-		tree.walk(function(node) submittedFingerprints.set(node.id.value, node.fingerprint()));
+		tree.walk(node -> submittedFingerprints.set(node.id.value, node.fingerprint()));
 	}
 
 	/**
@@ -412,7 +412,7 @@ class UiContext implements Disposable {
 	function checkUnannouncedEdits(tree:RenderNode):Void {
 		var patched = buildContext.patchedPriors();
 		var found:Array<String> = [];
-		tree.walk(function(node) {
+		tree.walk(node -> {
 			var id = node.id.value;
 			if (currentNodesById.get(id) != node
 				|| !submittedFingerprints.exists(id) || patched.exists(id) || buildContext.editAnnounced(node)) return;
@@ -554,8 +554,8 @@ class UiContext implements Disposable {
 		var viewBuiltAllocatedAt = AllocationProbe.now();
 		var next = patchOnly ? (root == null
 			? null : buildContext.currentRoot(root))
-			: buildContext.trackReads(function() return buildContext.withScope(new haxeon.ui.core.Key("root"),
-			function() return view == null ? null : view.build(buildContext).node()));
+			: buildContext.trackReads(() -> buildContext.withScope(new haxeon.ui.core.Key("root"),
+			() -> view == null ? null : view.build(buildContext).node()));
 		if (!patchOnly) buildContext.captureRootDependencies();
 		if (next == null
 			|| (!patchOnly && next.parent != null)) throw "A view must produce one unparented render tree root";
@@ -564,7 +564,7 @@ class UiContext implements Disposable {
 		if (inspectionEnabled) appendInspectionOverlay(next, frame);
 		// Decorations may be assigned by view wrappers after widget construction.
 		// Promote those boxes before invalidation compares their native visual kind.
-		next.walk(function(node) node.syncPaintKind());
+		next.walk(node -> node.syncPaintKind());
 		diagnosticStage = 5;
 		var treeBuiltAllocatedAt = AllocationProbe.now();
 		// Nodes changed in place since the last frame are compared against how they were (currentNodesById is still that frame's).
@@ -594,7 +594,7 @@ class UiContext implements Disposable {
 		var nativeLayoutReused = !verifying && !styleInvalidation.nativeLayoutRequired
 			&& buildContext.layoutRequestRevision == submittedLayoutRequestRevision
 			&& submittedFrameWidth == frame.width && submittedFrameHeight == frame.height;
-		if (nativeLayoutReused) next.walk(function(node) {
+		if (nativeLayoutReused) next.walk(node -> {
 			var previous = previousById.get(node.id.value);
 			var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
 			if (previousResolved == null) nativeLayoutReused = false;
@@ -604,7 +604,7 @@ class UiContext implements Disposable {
 		var nativeLayoutStartAllocatedAt = AllocationProbe.now();
 		if (nativeLayoutReused) {
 			resolved = [];
-			next.walk(function(node) {
+			next.walk(node -> {
 				var previous = previousById.get(node.id.value);
 				var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
 				if (previousResolved != null) resolved.push(previousResolved);
@@ -713,7 +713,7 @@ class UiContext implements Disposable {
 		}
 		var picker = retainedHitTestProvider;
 		if (picker == null) {
-			picker = function(x:Float, y:Float) {
+			picker = (x:Float, y:Float) -> {
 				session.hitTestInto(x, y, hitTestIds);
 				var cached = retainedHitPath;
 				if (cached != null && cached.length == hitTestIds.length) {
@@ -1334,11 +1334,11 @@ class UiContext implements Disposable {
 		style.zIndex = 32767;
 		style.clipToParent = false;
 		var id = buildContext.withScope(new haxeon.ui.core.Key("__devtools_inspection"),
-			function() return buildContext.id("overlay"));
+			() -> buildContext.id("overlay"));
 		var node = new RenderNode(id, haxeon.ui.LayoutNode.LayoutVisualKind.Custom, style);
 		node.setStyleIdentity(new StyleIdentity("devtools-overlay", null, null));
 		node.hitTestSelf = false;
-		node.onPaint(function(canvas, geometry) {
+		node.onPaint((canvas, geometry) -> {
 			if (inspectionHighlight <= 0 || root == null) return;
 			var inspected = root.find(new WidgetId(inspectionHighlight));
 			if (inspected == null || inspected.resolved == null || !inspected.resolved.visible) return;
@@ -1443,7 +1443,7 @@ class UiContext implements Disposable {
 	function syncWindowDecorations(tree:RenderNode):Void {
 		if (decorationWindow == null || !supportsWindowDecorations()) return;
 		var regions:Array<NativeWindowDecorationRegion> = [];
-		tree.walk(function(node) {
+		tree.walk(node -> {
 			if (node.windowDecoration == null || node.resolved == null || !node.resolved.visible) return;
 			var bounds = node.resolved.clippedViewportBounds();
 			var left = Math.max(0.0, bounds.x);

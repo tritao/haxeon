@@ -72,7 +72,7 @@ class BottomSheet implements ScopeView {
 
 	public function buildBody(context:BuildContext):ViewRoot {
 		var id = context.rootId("bottom-sheet");
-		var motion = context.lazyState(context.id("sheet-motion"), function() return new SheetMotion()).value;
+		var motion = context.lazyState(context.id("sheet-motion"), () -> new SheetMotion()).value;
 		return buildSheet(context, id, motion);
 	}
 
@@ -85,7 +85,7 @@ class BottomSheet implements ScopeView {
 	function buildSheet(context:BuildContext, id:WidgetId, motion:SheetMotion):RenderNode {
 		if (!motion.started) {
 			motion.started = true;
-			motion.animation = new AnimationController(context.animations, function(value:Float) {
+			motion.animation = new AnimationController(context.animations, (value:Float) -> {
 				motion.progress.value = value;
 			});
 			motion.animation.play(0.0, 1.0, NavUi.slideSeconds, Easing.EaseOut);
@@ -105,7 +105,7 @@ class BottomSheet implements ScopeView {
 		semantics.states |= AccessibilityState.Modal;
 		semantics.actions |= AccessibilityAction.Dismiss;
 		root.semantics = semantics;
-		root.on(UiEventKind.KeyDown, function(event:UiEvent) {
+		root.on(UiEventKind.KeyDown, (event:UiEvent) -> {
 			if (event.key == UiKey.Escape) {
 				event.preventDefault();
 				dismiss();
@@ -121,7 +121,7 @@ class BottomSheet implements ScopeView {
 		var scrimSemantics = new Semantics(AccessibilityRole.Button, "Dismiss");
 		scrimSemantics.actions = AccessibilityAction.Activate;
 		scrim.semantics = scrimSemantics;
-		scrim.on(UiEventKind.Click, function(event:UiEvent) {
+		scrim.on(UiEventKind.Click, (event:UiEvent) -> {
 			dismiss();
 			event.stopPropagation();
 		});
@@ -161,7 +161,7 @@ class BottomSheet implements ScopeView {
 			panel.add(row);
 		}
 		var body = context.withStyleParent(panel.computedStyle,
-			function() return context.withScope(new Key("content"), function() return content.build(context)));
+			() -> context.withScope(new Key("content"), () -> content.build(context)));
 		panel.add(body);
 		holder.add(panel);
 		root.add(holder);
@@ -180,16 +180,16 @@ class BottomSheet implements ScopeView {
 		// First in the sheet's focus trap, so opening a sheet focuses the handle, not a search field: a touch device would
 		// otherwise raise its keyboard over the sheet. Tab still reaches the field.
 		header.focusable = true;
-		header.on(UiEventKind.PointerDown, function(event:UiEvent) {
+		header.on(UiEventKind.PointerDown, (event:UiEvent) -> {
 			motion.dragging = true;
 			motion.dragStartY = event.y;
 			event.capturePointer();
 		});
-		header.on(UiEventKind.PointerMove, function(event:UiEvent) {
+		header.on(UiEventKind.PointerMove, (event:UiEvent) -> {
 			if (!motion.dragging) return;
 			motion.dragY.value = Math.max(0.0, event.y - motion.dragStartY);
 		});
-		var finish = function(event:UiEvent) {
+		var finish = (event:UiEvent) -> {
 			if (!motion.dragging) return;
 			motion.dragging = false;
 			var far = motion.dragY.value >= DismissDrag;
@@ -197,7 +197,7 @@ class BottomSheet implements ScopeView {
 			if (far) dismiss();
 		};
 		header.on(UiEventKind.PointerUp, finish);
-		header.on(UiEventKind.PointerCancel, function(event:UiEvent) {
+		header.on(UiEventKind.PointerCancel, (event:UiEvent) -> {
 			motion.dragging = false;
 			motion.dragY.value = 0.0;
 		});

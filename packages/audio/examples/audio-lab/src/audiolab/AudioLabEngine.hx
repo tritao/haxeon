@@ -301,10 +301,10 @@ class AudioLabEngine implements Disposable {
 		}
 		lastBlockEventCount = events.length;
 		eventCount += events.length;
-		events.sort(function(a, b) return a.frameOffset - b.frameOffset);
+		events.sort((a, b) -> a.frameOffset - b.frameOffset);
 		dsp.render(target, events);
 		if (liveDsp != null) {
-			liveEvents.sort(function(a, b) return a.frameOffset - b.frameOffset);
+			liveEvents.sort((a, b) -> a.frameOffset - b.frameOffset);
 			if (liveEvents.length > 0) liveDsp.schedule(nextLiveFrame, liveEvents);
 			nextLiveFrame = haxe.Int64.add(nextLiveFrame, haxe.Int64.ofInt(BLOCK_SIZE));
 		}

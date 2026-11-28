@@ -266,7 +266,7 @@ class PropertyEditor implements View implements Observable {
 					default:
 						checked = false;
 				}
-				var checkbox = new Checkbox(editorKey, "", checked, function(next) {
+				var checkbox = new Checkbox(editorKey, "", checked, next -> {
 					applyValue(context, descriptor, PropertyValue.Bool(next));
 				}, accessibilityLabel: accessibleName(descriptor), enabled: writable);
 				result = checkbox;
@@ -283,7 +283,7 @@ class PropertyEditor implements View implements Observable {
 					option.label,
 					option.key,
 					option.enabled));
-				var select = new Select<String>(editorKey, enumOptions, selected, function(next) {
+				var select = new Select<String>(editorKey, enumOptions, selected, next -> {
 					applyValue(context, descriptor, PropertyValue.Enum(next));
 				}, GrowInputStyle, enabled: writable, accessibilityLabel: accessibleName(descriptor));
 				result = select;
@@ -294,7 +294,7 @@ class PropertyEditor implements View implements Observable {
 			case PropertyType.Custom(typeId):
 				var extension = registry.get(typeId);
 				result = extension == null ? new Text("No editor for " + typeId) : extension.build(editorKey,
-					descriptor, value, context, writable, function(next) {
+					descriptor, value, context, writable, next -> {
 						applyValue(context, descriptor, next);
 					});
 		}
@@ -314,7 +314,7 @@ class PropertyEditor implements View implements Observable {
 				option.key,
 				option.enabled));
 		}
-		var select = new Select<String>(editorKey, choices, "__mixed__", function(next) {
+		var select = new Select<String>(editorKey, choices, "__mixed__", next -> {
 			if (next == "__mixed__") return;
 			if (descriptor.type == PropertyType.Bool) applyValue(context, descriptor,
 				PropertyValue.Bool(next == "true"));
@@ -344,7 +344,7 @@ class PropertyEditor implements View implements Observable {
 			writable);
 		var step = descriptor.step == null ? 0.01 : descriptor.step;
 		var slider = new Slider(editorKey + ":slider",
-			accessibleName(descriptor), number, descriptor.minimum, descriptor.maximum, step, function(next) {
+			accessibleName(descriptor), number, descriptor.minimum, descriptor.maximum, step, next -> {
 				if (descriptor.type == PropertyType.Int) applyValue(context, descriptor,
 					PropertyValue.Int(Std.int(next)));
 				else applyValue(context, descriptor, PropertyValue.Float(next));
@@ -472,12 +472,12 @@ private class PropertyEditorRowContent implements View {
 
 	function buildRoot(context:BuildContext, id:Null<WidgetId>, children:Array<KeyedView>,
 			style:LayoutStyle):RenderNode {
-		return context.withScope(RootKey, function() {
+		return context.withScope(RootKey, () -> {
 			var rootId = id == null ? context.id("column") : id;
 			var node = context.styled(rootId, LayoutVisualKind.Box,
 				new StyleIdentity("column", "row", "row", null, ["column"]), style);
 			var computed = node.computedStyle;
-			for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
+			for (child in children) node.add(context.withStyleParent(computed, () -> child.build(context)));
 			return node;
 		});
 	}
@@ -510,7 +510,7 @@ private class PropertyEditorRowContent implements View {
 			var reset = new IconButton("reset",
 				IconName.Reset,
 				"Reset " + descriptor.label + " to default",
-				function() owner.resetValue(context, descriptor),
+				() -> owner.resetValue(context, descriptor),
 				null,
 				owner.options.enabled && owner.rowState(descriptor).pending == null);
 			children.push(new KeyedView("reset", reset));

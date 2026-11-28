@@ -29,25 +29,25 @@ class GestureDetector implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var node = context.createNode(context.rootId("gesture-detector"), LayoutVisualKind.Box, style);
 			node.hitTestSelf = false;
-			var content = context.withScope(new Key("content"), function() return child.build(context));
+			var content = context.withScope(new Key("content"), () -> child.build(context));
 			node.add(content);
 			var arena = context.gestures;
-			node.on(UiEventKind.PointerDown, function(event) {
+			node.on(UiEventKind.PointerDown, event -> {
 				if (event.button == 0) {
 					event.capturePointer();
 					arena.pointerDown(content.id, event, recognizers);
 				}
 			});
-			node.on(UiEventKind.PointerMove, function(event) {
+			node.on(UiEventKind.PointerMove, event -> {
 				arena.pointerMove(event);
 			});
-			node.on(UiEventKind.PointerUp, function(event) {
+			node.on(UiEventKind.PointerUp, event -> {
 				arena.pointerUp(event);
 			});
-			node.on(UiEventKind.PointerCancel, function(event) {
+			node.on(UiEventKind.PointerCancel, event -> {
 				arena.pointerCancel(event.pointerId);
 			});
 			return node;

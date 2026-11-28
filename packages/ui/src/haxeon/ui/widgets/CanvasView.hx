@@ -69,7 +69,7 @@ class CanvasView implements View {
 			cachePolicy:CachePolicy = CachePolicy.None,
 			?cacheKey:String):CanvasView {
 		if (painter == null) throw "Simple canvas views require a painter";
-		return new CanvasView(key, function(canvas, _) painter(canvas), style, label, hitTestSelf, cachePolicy,
+		return new CanvasView(key, (canvas, _) -> painter(canvas), style, label, hitTestSelf, cachePolicy,
 			cacheKey);
 	}
 
@@ -90,7 +90,7 @@ class CanvasView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var nodeId = context.rootId("canvas");
 			var node = context.styled(nodeId, LayoutVisualKind.Custom,
 				new StyleIdentity("canvas", key, key, null, ["canvas"]), style);

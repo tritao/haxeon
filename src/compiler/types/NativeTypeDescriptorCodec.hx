@@ -101,7 +101,7 @@ class NativeTypeDescriptorCodec {
 
 	static function orderedDescriptors(descriptors:Array<NativeTypeDescriptorData>):Array<NativeTypeDescriptorData> {
 		var result = descriptors.copy();
-		result.sort(function(left, right) {
+		result.sort((left, right) -> {
 			var byName = Reflect.compare(left.name, right.name);
 			return byName == 0 ? Reflect.compare(left.type, right.type) : byName;
 		});

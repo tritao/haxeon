@@ -13,3 +13,4 @@ class A {
 		}, 10);
 	}
 }
+// @lint:off function-lambda: the formatter is tested on the function form

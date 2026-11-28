@@ -121,13 +121,13 @@ class Tabs implements ScopeView {
 
 	public function buildBody(context:BuildContext):ViewRoot {
 		var rootId = context.rootId("tabs");
-		var selection = context.lazyState(context.id("selected-tab"), function() return new Signal<String>(selectedKey))
+		var selection = context.lazyState(context.id("selected-tab"), () -> new Signal<String>(selectedKey))
 			.value;
 		var active = selectionMode == TabsSelectionMode.Controlled ? selectedKey : selection.value;
 		if (!isEnabled(active)) active = firstEnabled();
 		selectedKey = active;
 		var latest = context.latestOf(this);
-		var select = function(next:String) {
+		var select = (next:String) -> {
 			var tabs = latest();
 			if (next == tabs.selectedKey) return;
 			if (tabs.selectionMode == TabsSelectionMode.Local) {
@@ -157,7 +157,7 @@ class Tabs implements ScopeView {
 			var header = context.createNode(context.rootId("header-with-actions"), LayoutVisualKind.Box, headerStyle);
 			header.hitTestSelf = false;
 			header.add(strip);
-			header.add(context.withScope(new Key("header-actions"), function() return context.build(trailing)));
+			header.add(context.withScope(new Key("header-actions"), () -> context.build(trailing)));
 			root.add(header);
 		} else root.add(strip);
 
@@ -168,7 +168,7 @@ class Tabs implements ScopeView {
 		}
 		if (selectedItem != null) {
 			var item:TabItem = cast selectedItem;
-			var panel = context.withScope(new Key("panel:" + item.key), function() {
+			var panel = context.withScope(new Key("panel:" + item.key), () -> {
 				var panelStyle = new LayoutStyle();
 				panelStyle.width = LayoutAxis.stretch();
 				panelStyle.height = LayoutAxis.grow();
@@ -177,8 +177,8 @@ class Tabs implements ScopeView {
 				node.semantics = new Semantics(AccessibilityRole.TabPanel, item.label);
 				var contentModifier = new RootModifier();
 				contentModifier.width = LayoutAxis.stretch();
-				var content = context.withStyleParent(rootComputed, function() {
-					return context.withScope(new Key("content"), function() return context.build(item.content,
+				var content = context.withStyleParent(rootComputed, () -> {
+					return context.withScope(new Key("content"), () -> context.build(item.content,
 						contentModifier));
 				});
 				// A quiet content boundary is independent of the active-tab accent.
@@ -211,7 +211,7 @@ class Tabs implements ScopeView {
 		var strip = context.createNode(context.rootId("tab-strip"), LayoutVisualKind.Box, stripStyle);
 		var buttonNodes:Array<ViewRoot> = [];
 		var drag = dragged() ? context.lazyState(context.id("tab-drag"),
-			function() return new TabDragState()).value : null;
+			() -> new TabDragState()).value : null;
 		for (item in items) {
 			var tabKey = item.key;
 			var buttonStyle = new LayoutStyle();
@@ -224,7 +224,7 @@ class Tabs implements ScopeView {
 				item.enabled, ButtonVariant.Navigation, tabKey == active, ["tab-header"], item.icon, null,
 				item.iconView,
 				item.badgeCount > 0 ? new CountBadge(item.badgeCount) : null, null, null, 14.0, tabName,
-				function(event) {
+				event -> {
 					if (event.kind == UiEventKind.Activate || event.button == 0) select(tabKey);
 				}, tabSemantics);
 			// What the strip adds to each tab button goes through its modifier: the button owns its root.
@@ -233,28 +233,28 @@ class Tabs implements ScopeView {
 			var closeFocus:Null<Signal<Bool>> = null;
 			if (item.onClose != null) {
 				var focus = context.lazyState(context.id("tab-close-focus:" + tabKey),
-					function() return new Signal(false))
+					() -> new Signal(false))
 					.value;
 				trackFocus(buttonModifier, focus);
 				closeFocus = focus;
 			}
 			if (drag != null) installTabDragHandlers(buttonModifier, tabKey, drag, latest);
 			if (item.enabled && onTabContextMenu != null) {
-				var requestMenu = function(event:UiEvent) {
+				var requestMenu = (event:UiEvent) -> {
 					var handler = latest().onTabContextMenu;
 					if (handler == null) return;
 					handler(tabKey, event);
 					event.preventDefault();
 					event.stopPropagation();
 				};
-				buttonModifier.on(UiEventKind.PointerDown, function(event) {
+				buttonModifier.on(UiEventKind.PointerDown, event -> {
 					if (event.button == 1) requestMenu(event);
 				});
-				buttonModifier.on(UiEventKind.KeyDown, function(event) {
+				buttonModifier.on(UiEventKind.KeyDown, event -> {
 					if (event.isContextMenuRequest()) requestMenu(event);
 				});
 			}
-			buttonModifier.on(UiEventKind.KeyDown, function(event) {
+			buttonModifier.on(UiEventKind.KeyDown, event -> {
 				var direction = event.key == UiKey.Right
 					|| event.key == UiKey.Down ? 1 : event.key == UiKey.Left || event.key == UiKey.Up ? -1 : 0;
 				if (direction == 0 || buttonNodes.length == 0) return;
@@ -269,15 +269,15 @@ class Tabs implements ScopeView {
 					event.preventDefault();
 				}
 			});
-			var buttonNode = context.withStyleParent(rootComputed, function() {
-				return context.withScope(new Key(tabKey), function() return context.build(button, buttonModifier));
+			var buttonNode = context.withStyleParent(rootComputed, () -> {
+				return context.withScope(new Key(tabKey), () -> context.build(button, buttonModifier));
 			});
 			var headerStyle = new LayoutStyle();
 			headerStyle.direction = LayoutDirection.TopToBottom;
 			headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 			var header = context.createNode(context.rootId("tab-header:" + tabKey), LayoutVisualKind.Box, headerStyle);
 			header.hitTestSelf = false;
-			if (item.enabled && item.onClose != null) header.on(UiEventKind.Click, function(event) {
+			if (item.enabled && item.onClose != null) header.on(UiEventKind.Click, event -> {
 				if (event.button != 2) return;
 				event.preventDefault();
 				event.stopPropagation();
@@ -311,7 +311,7 @@ class Tabs implements ScopeView {
 
 	/** Keep intrinsic header widths; overflow belongs to a clipped viewport, not the labels. */
 	function scrollStrip(strip:RenderNode, context:BuildContext, active:String, width:LayoutAxis):ViewRoot {
-		var state = context.lazyState(context.id("tab-scroll-state"), function() return new TabsScrollState()).value;
+		var state = context.lazyState(context.id("tab-scroll-state"), () -> new TabsScrollState()).value;
 		var style = new LayoutStyle();
 		style.width = width;
 		style.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
@@ -320,7 +320,7 @@ class Tabs implements ScopeView {
 			style,
 			ScrollAxis.Horizontal,
 			state.controller,
-			onScroll: function(event) {
+			onScroll: event -> {
 				if (event.deltaX == 0 && state.controller.scrollBy(event.deltaY, 0)) {
 					event.preventDefault();
 					event.stopPropagation();
@@ -336,7 +336,7 @@ class Tabs implements ScopeView {
 				state.selected = active;
 				state.controller.revealNode(false, header.layout.id);
 			}
-			header.onResolved(function(_) {
+			header.onResolved(_ -> {
 				var bounds = viewport.resolved;
 				if (bounds == null || state.width == bounds.width) return;
 				var resized = state.width >= 0;
@@ -360,7 +360,7 @@ class Tabs implements ScopeView {
 		row.hitTestSelf = false;
 		row.add(buttonNode);
 		var hover = context.lazyState(context.id("tab-close-hover:" + tabKey),
-			function() return new Signal(false)).value;
+			() -> new Signal(false)).value;
 		var slotStyle = new LayoutStyle();
 		slotStyle.width = LayoutAxis.fixed(28);
 		slotStyle.height = LayoutAxis.fixed(24);
@@ -372,21 +372,21 @@ class Tabs implements ScopeView {
 		closeStyle.padding = new Insets(4, 4, 4, 4);
 		var close = new Button("",
 			closeStyle, null, "tab-close:" + tabKey, item.enabled, ButtonVariant.Navigation, null, ["tab-close"],
-			haxeon.ui.icons.IconName.Close, null, null, null, null, null, 14, "Close " + item.label, function(event) {
+			haxeon.ui.icons.IconName.Close, null, null, null, null, null, 14, "Close " + item.label, event -> {
 				event.stopPropagation();
 				if (event.kind == UiEventKind.Activate || event.button == 0) closeTab(latest(), tabKey);
 			});
 		var closeModifier = new RootModifier();
-		closeModifier.on(UiEventKind.PointerDown, function(event) event.stopPropagation());
-		closeModifier.on(UiEventKind.PointerUp, function(event) event.stopPropagation());
+		closeModifier.on(UiEventKind.PointerDown, event -> event.stopPropagation());
+		closeModifier.on(UiEventKind.PointerUp, event -> event.stopPropagation());
 		// Built from the hover and focus signals, which the handlers only set: the rerun they cause shows or hides it.
 		closeModifier.visible = hover.value || focused.value;
 		trackFocus(closeModifier, focused);
 		var closeNode = context.build(close, closeModifier);
-		row.onTargetBubble(UiEventKind.HoverEnter, function(event) {
+		row.onTargetBubble(UiEventKind.HoverEnter, event -> {
 			if (event.target.equals(row.id)) hover.value = true;
 		});
-		row.onTargetBubble(UiEventKind.HoverLeave, function(event) {
+		row.onTargetBubble(UiEventKind.HoverLeave, event -> {
 			if (event.target.equals(row.id)) hover.value = false;
 		});
 		slot.add(closeNode);
@@ -395,8 +395,8 @@ class Tabs implements ScopeView {
 	}
 
 	static function trackFocus(modifier:RootModifier, focused:Signal<Bool>):Void {
-		modifier.on(UiEventKind.Focus, function(_) focused.value = true, UiEventPhase.Capture);
-		modifier.on(UiEventKind.Blur, function(_) focused.value = false, UiEventPhase.Capture);
+		modifier.on(UiEventKind.Focus, _ -> focused.value = true, UiEventPhase.Capture);
+		modifier.on(UiEventKind.Blur, _ -> focused.value = false, UiEventPhase.Capture);
 	}
 
 	/** Calls the close action of the tab `tabKey` in the latest description, if it still has one. */
@@ -433,7 +433,7 @@ class Tabs implements ScopeView {
 	/** The drag is the strip's own bookkeeping, read only by these handlers, so changing it reruns nothing. */
 	static function installTabDragHandlers(modifier:RootModifier, tabKey:String, drag:TabDragState,
 			latest:Void->Tabs):Void {
-		modifier.on(UiEventKind.PointerDown, function(event) {
+		modifier.on(UiEventKind.PointerDown, event -> {
 			if (event.button != 0) return;
 			drag.active = true;
 			drag.dragging = false;
@@ -445,7 +445,7 @@ class Tabs implements ScopeView {
 			// drag routed to this tab without grabbing the native window pointer.
 			event.capturePointer(false);
 		});
-		modifier.on(UiEventKind.PointerMove, function(event) {
+		modifier.on(UiEventKind.PointerMove, event -> {
 			if (!drag.active || drag.pointerId != event.pointerId || drag.tabKey != tabKey) return;
 			var tabs = latest();
 			var dx = event.x - drag.startX;
@@ -461,7 +461,7 @@ class Tabs implements ScopeView {
 				event.preventDefault();
 			}
 		});
-		modifier.on(UiEventKind.PointerUp, function(event) {
+		modifier.on(UiEventKind.PointerUp, event -> {
 			if (!drag.active || drag.pointerId != event.pointerId || drag.tabKey != tabKey) return;
 			var tabs = latest();
 			var end = tabs.onTabDragEnd;
@@ -472,7 +472,7 @@ class Tabs implements ScopeView {
 			drag.clear();
 			event.releasePointer();
 		});
-		modifier.on(UiEventKind.PointerCancel, function(event) {
+		modifier.on(UiEventKind.PointerCancel, event -> {
 			if (!drag.active || drag.pointerId != event.pointerId || drag.tabKey != tabKey) return;
 			var tabs = latest();
 			var cancel = tabs.onTabDragCancel;
@@ -480,7 +480,7 @@ class Tabs implements ScopeView {
 			drag.clear();
 			event.releasePointer();
 		});
-		modifier.on(UiEventKind.KeyDown, function(event) {
+		modifier.on(UiEventKind.KeyDown, event -> {
 			if (event.key != UiKey.Escape || !drag.active) return;
 			event.cancelPointerCapture();
 			event.preventDefault();

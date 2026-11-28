@@ -168,7 +168,7 @@ class IrValueDynamicDispatch extends IrFunctionPass {
 		}
 		var ids = [for (id in byId.keys()) id];
 		var actual = builder.call("__dynamic_object_type_id", [left], I32), fallback = builder.createBlock();
-		IrTypeHashDispatch.emit(builder, actual, ids, function(id) {
+		IrTypeHashDispatch.emit(builder, actual, ids, id -> {
 			// Every id is one of byId's.
 			for (request in byId.get(id) ?? []) {
 				var type = request.type,

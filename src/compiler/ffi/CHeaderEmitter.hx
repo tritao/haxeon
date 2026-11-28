@@ -12,7 +12,7 @@ class CHeaderEmitter {
 		var selected = [for (native in natives) if (native.library == library) native];
 		if (selected.length == 0)
 			throw new InternalError('No typed native declarations found for FFI library "$library"');
-		selected.sort(function(left, right) return Reflect.compare(left.symbol, right.symbol));
+		selected.sort((left, right) -> Reflect.compare(left.symbol, right.symbol));
 		var seen:Map<String, String> = [], canonical:Array<String> = [];
 		for (native in selected) {
 			var signature = signature(native);

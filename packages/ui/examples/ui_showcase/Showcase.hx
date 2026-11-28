@@ -594,8 +594,8 @@ class Showcase implements Disposable {
 		fillMapped(canvas, surfaceCardPath, 564.0, 538.0, 312.0, 90.0, surfaceBounds, card);
 		var cubeRect = new Rect(surfaceBounds.x + surfaceBounds.width - 88.0,
 			surfaceBounds.y + 5.0, 80.0, 80.0);
-		canvas.withClip(surfaceBounds, function(c) {
-			c.withLayer(layerOpacity, function(c) {
+		canvas.withClip(surfaceBounds, c -> {
+			c.withLayer(layerOpacity, c -> {
 				c.drawSurface(cubeSurface, cubeRect);
 			});
 		});

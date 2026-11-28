@@ -755,7 +755,7 @@ class HlModuleAssembler {
 				layout.migrations.push({type: published.index, className: object.name, initializer: initializer});
 		}
 		// Bases first, so a subclass's initializers see the fields of its base initialized.
-		layout.migrations.sort(function(a, b) return baseDepth(a.type) - baseDepth(b.type));
+		layout.migrations.sort((a, b) -> baseDepth(a.type) - baseDepth(b.type));
 		return {reasons: reasons, layout: layout.fields.length > 0 || layout.migrations.length > 0 ? layout : null};
 	}
 
@@ -1044,7 +1044,7 @@ class HlModuleAssembler {
 					present.set(fn.name, true);
 				retained = [];
 			}
-			cache.dropRetired(function(name) return RetiredName.is(name) || !present.exists(name));
+			cache.dropRetired(name -> RetiredName.is(name) || !present.exists(name));
 			ordered.functions = cache.ordered();
 		}
 		var reuseLowered = initialized && !reload;

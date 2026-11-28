@@ -56,8 +56,8 @@ class HlFunctionCache {
 			{
 				name: name, bytes: IrFunctionStateCodec.encode(fn)
 			}];
-		signatureState.sort(function(a, b) return Reflect.compare(a.name, b.name));
-		functionState.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		signatureState.sort((a, b) -> Reflect.compare(a.name, b.name));
+		functionState.sort((a, b) -> Reflect.compare(a.name, b.name));
 		return {
 			slots: slots.copy(),
 			signatures: signatureState,

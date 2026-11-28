@@ -182,7 +182,7 @@ class HashLinkBackendSession implements BackendSession {
 				case ReloadDomain(reasons): reasons;
 				case Reject(diagnostics): throw new InternalError(diagnostics.join("; "));
 			};
-		reloadReasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
+		reloadReasons.sort((a, b) -> Reflect.compare(Std.string(a), Std.string(b)));
 		if (reloadReasons.length > 0)
 			decision = ReloadDomain(reloadReasons);
 		var abiPlanningDoneAt = Sys.time() * 1000.0;

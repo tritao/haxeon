@@ -18,7 +18,7 @@ class IrFunctionStages {
 	/** An assembly stage that runs the pass `make` gives, on the assembly's functions; `done` reads the pass after the run. */
 	public static function stage(name:String, make:(IrAssembly, IrPipelineContext) -> IrFunctionPass,
 			?done:(IrAssembly, IrFunctionPass) -> Void):compiler.ir.pipeline.IrStage.IrAssemblyStage {
-		return new compiler.ir.pipeline.IrStage.IrAssemblyStage(name, function(assembly, context) {
+		return new compiler.ir.pipeline.IrStage.IrAssemblyStage(name, (assembly, context) -> {
 			var pass = make(assembly, context);
 			assembly.functions = run(name, pass, assembly.functions, context.stageMemos,
 				context.passScratch.bodyBuilder);
@@ -35,7 +35,7 @@ class IrFunctionStages {
 	public static function programStage(name:String,
 			make:(IrProgram, IrPipelineContext) -> IrFunctionPass,
 			?done:(IrProgram, IrFunctionPass) -> IrProgram):compiler.ir.pipeline.IrStage {
-		return new compiler.ir.pipeline.IrStage(name, function(program, context) {
+		return new compiler.ir.pipeline.IrStage(name, (program, context) -> {
 			var pass = make(program, context);
 			program.functions = run(name, pass, program.functions, context.stageMemos, context.passScratch.bodyBuilder);
 			return done != null ? done(program, pass) : program;

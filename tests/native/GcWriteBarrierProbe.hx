@@ -14,7 +14,7 @@ class GcWriteBarrierProbe {
 	static var head:BarrierCell;
 
 	static function capture(cell:BarrierCell):Void->BarrierCell {
-		return function() return cell;
+		return () -> cell;
 	}
 
 	static function exerciseNativePaths(cell:BarrierCell) {

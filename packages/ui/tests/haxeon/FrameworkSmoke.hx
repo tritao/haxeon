@@ -404,7 +404,7 @@ class FrameworkSmoke {
 		editor.paragraphStyle = editor.paragraphStyle.withLineHeight(24.0);
 		editor.updateLayout(400.0);
 		var paintedRanges:Array<Int> = [];
-		editor.layout.colorRangeProvider = function(start, end) {
+		editor.layout.colorRangeProvider = (start, end) -> {
 			paintedRanges.push(start);
 			paintedRanges.push(end);
 			return [];
@@ -498,7 +498,7 @@ class FrameworkSmoke {
 		var calls = 0;
 		var requestedEnd = 0;
 		var tint = Color.rgba(1.0, 0.0, 0.0);
-		editor.layout.colorRangeProvider = function(start, end) {
+		editor.layout.colorRangeProvider = (start, end) -> {
 			calls++;
 			requestedEnd = end;
 			return [new TextColorRange(0, 600, tint)];
@@ -510,7 +510,7 @@ class FrameworkSmoke {
 		editor.layout.paint(canvas, Color.rgba(1.0, 1.0, 1.0), 0.0, 20.0);
 		var afterColors = editor.layout.measure();
 		if (calls != 2 || measured.width != afterColors.width || measured.height != afterColors.height) return false;
-		editor.layout.colorRangeProvider = function(start, end) {
+		editor.layout.colorRangeProvider = (start, end) -> {
 			return [new TextColorRange(0, 3, tint), new TextColorRange(2, 4, tint)];
 		};
 		var rejected = false;
@@ -602,7 +602,7 @@ class FrameworkSmoke {
 		var layered = new TextEditorState(decorationFonts, value.toString());
 		layered.updateLayout(200.0);
 		var calls = 0;
-		layered.layout.decorationProvider = function(start, end) {
+		layered.layout.decorationProvider = (start, end) -> {
 			calls++;
 			layered.layout.decorationProvider = null;
 			return [new TextDecoration(start, start, color, WholeLineBackground)];
@@ -645,7 +645,7 @@ class FrameworkSmoke {
 			var end = new TextPosition(reverse == 0 ? document.codepointCount - 1 : 1, 0);
 			var full = layout.selectionRects(start, end);
 			for (bounds in [[0.0, 0.0], [0.0, 80.0], [2500.5, 2670.25], [9000.0, 9100.0], [1.0e20, 1.0e21]]) {
-				var expected = full.filter(function(rect) return rect.y < bounds[1]
+				var expected = full.filter(rect -> rect.y < bounds[1]
 					&& rect.y + rect.height > bounds[0]);
 				var actual = layout.selectionRects(start, end, bounds[0], bounds[1]);
 				if (actual.length != expected.length) valid = false;
@@ -722,11 +722,11 @@ class FrameworkSmoke {
 		var appKeys = 0;
 		var observedKeys = 0;
 		keyboardInput.attach(keyboardPump);
-		var shortcutListener = keyboardPump.listenSource(keyboardSource, function(_) {
+		var shortcutListener = keyboardPump.listenSource(keyboardSource, _ -> {
 			appKeys++;
 			return true;
 		});
-		var keyObserver = keyboardPump.listen(function(_) observedKeys++);
+		var keyObserver = keyboardPump.listen(_ -> observedKeys++);
 		var letter = PlatformEvent.Key(keyboardSource, nativekit.ffi.NativeKitTypes.Key.R, 0,
 			InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty());
 		keyboardPump.dispatch(letter);
@@ -1014,13 +1014,13 @@ class FrameworkSmoke {
 		blinkEditor.dispose();
 		var editedValue = "";
 		var submittedValue = "";
-		var emptyField = new TextField("empty-entry", "", function(_) {}, null, "Empty message",
+		var emptyField = new TextField("empty-entry", "", _ -> {}, null, "Empty message",
 			placeholder: "Type a message…");
 		var emptyRoot = context.submit(emptyField, new LayoutFrame(256.0, 192.0));
 		if (emptyRoot.semantics == null || emptyRoot.semantics.value != ""
 			|| emptyRoot.children[0].children[0].layout.text != "Type a message…") return 39;
 		var searchChange = "unchanged";
-		var search = new SearchField("search", "query", function(next) searchChange = next, null, "Search components…");
+		var search = new SearchField("search", "query", next -> searchChange = next, null, "Search components…");
 		var searchRoot = context.submit(search, new LayoutFrame(256.0, 38.0));
 		var searchIcon = searchRoot.children[0].children[0];
 		var searchInputSemantics:Semantics = cast searchRoot.children[1].semantics;
@@ -1047,12 +1047,12 @@ class FrameworkSmoke {
 			-1,
 			1) || searchChange != "") return 228;
 		// The caller controls the query: it describes the field again with what the clear reported.
-		searchRoot = context.submit(new SearchField("search", searchChange, function(next) searchChange = next, null,
+		searchRoot = context.submit(new SearchField("search", searchChange, next -> searchChange = next, null,
 			"Search components…"), new LayoutFrame(256.0, 38.0));
 		if (searchRoot.children.length != 2
 			|| searchRoot.children[1].children[0].children[0].layout.text != "Search components…") return 229;
 		var fieldDiagnostics:Null<TextEditorDiagnostics> = null;
-		var field = new TextField("entry", "hello", function(next) {
+		var field = new TextField("entry", "hello", next -> {
 			editedValue = next;
 		}, null, "Message", onSubmit: next -> submittedValue = next, onDiagnostics: next -> fieldDiagnostics = next);
 		var fieldRoot = context.submit(field, new LayoutFrame(256.0, 192.0));
@@ -1076,7 +1076,7 @@ class FrameworkSmoke {
 				var id = "test.application-arrow-" + key + "-" + modifiers;
 				context.commands.register(new Command(id,
 					"Application navigation",
-					function() applicationArrows++,
+					() -> applicationArrows++,
 					new Shortcut(key, modifiers)));
 				context.key(UiEventKind.KeyDown, key, modifiers);
 				context.commands.unregister(id);
@@ -1101,7 +1101,7 @@ class FrameworkSmoke {
 		var leakedUndo = 0;
 		context.commands.register(new Command("field-history-global-undo",
 			"Global undo",
-			function() leakedUndo++,
+			() -> leakedUndo++,
 			new Shortcut(UiKey.Z, historyModifier)));
 		for (letter in ["a", "b", "c"]) context.text(UiEventKind.TextInput, letter);
 		context.key(UiEventKind.KeyDown, UiKey.Z, historyModifier);
@@ -1255,7 +1255,7 @@ class FrameworkSmoke {
 		function controlled(?onEditIntent:(TextEditIntent, TextEditorLayout) -> Bool):TextField
 			return new TextField("controlled-selection", document: controlledDocument,
 				onEdit: _ -> editDelivered = true,
-				onSelectionChange: function(next) {
+				onSelectionChange: next -> {
 					if (controlledDocument.text == "ax" && !editDelivered) callbackOrdered = false;
 					controlledSelection.value = next;
 				}, onEditIntent: onEditIntent, selectionProvider: () -> controlledSelection.value);
@@ -1276,7 +1276,7 @@ class FrameworkSmoke {
 		context.key(UiEventKind.KeyDown, UiKey.Right, UiModifier.Shift);
 		if (controlledSelection.value.anchor != 0 || controlledSelection.value.focus != 1) return 343;
 		editDelivered = false;
-		controlledField = controlled(function(intent, layout) {
+		controlledField = controlled((intent, layout) -> {
 			switch intent {
 				case Insert(text):
 					controlledDocument.replace(0, controlledDocument.codepointCount, text + "!");
@@ -1563,7 +1563,7 @@ class FrameworkSmoke {
 		context.pointerUp(clickX, clickY, 0);
 		if (clickEditor.selectionStart != 6 || clickEditor.selectionEnd != 10) return 107;
 		var areaChanged = "";
-		var area = new TextField("area-smoke", "line", function(next) {
+		var area = new TextField("area-smoke", "line", next -> {
 			areaChanged = next;
 		}, multiline: true);
 		var areaRoot = context.submit(area, new LayoutFrame(256.0, 192.0));
@@ -1613,9 +1613,9 @@ class FrameworkSmoke {
 		if (spacerGeometry.width <= 0.0 || rightTextGeometry.x <= leftTextGeometry.x) return 53;
 		var lowerLayerClicks = 0;
 		var upperLayerClicks = 0;
-		var stack = new Stack("stack-smoke", [new StackChild("lower", new Button("Lower", null, function() {
+		var stack = new Stack("stack-smoke", [new StackChild("lower", new Button("Lower", null, () -> {
 			lowerLayerClicks++;
-		}), 20.0, 20.0, 1), new StackChild("upper", new Button("Upper", null, function() {
+		}), 20.0, 20.0, 1), new StackChild("upper", new Button("Upper", null, () -> {
 			upperLayerClicks++;
 		}), 20.0, 20.0, 5)]);
 		var stackRoot = context.submit(stack, new LayoutFrame(256.0, 192.0));
@@ -1628,7 +1628,7 @@ class FrameworkSmoke {
 		context.pointerUp(stackX, stackY, 0);
 		if (lowerLayerClicks != 0 || upperLayerClicks != 1) return 65;
 		var checkboxChanged = false;
-		var checkbox = new Checkbox("check-smoke", "Remember", false, function(next) {
+		var checkbox = new Checkbox("check-smoke", "Remember", false, next -> {
 			checkboxChanged = next;
 		});
 		var checkboxRoot = context.submit(checkbox, new LayoutFrame(256.0, 192.0));
@@ -1661,7 +1661,7 @@ class FrameworkSmoke {
 		if (labeledIconRoot.children.length != 2
 			|| labeledIconSemantics == null || labeledIconSemantics.label != "Search") return 236;
 		var toggleChanged = false;
-		var toggle = new Toggle("toggle-smoke", "Enabled", false, function(next) {
+		var toggle = new Toggle("toggle-smoke", "Enabled", false, next -> {
 			toggleChanged = next;
 		});
 		var toggleRoot = context.submit(toggle, new LayoutFrame(256.0, 192.0));
@@ -1786,10 +1786,10 @@ class FrameworkSmoke {
 		if (shadowInfo.commandCount != 1 || shadowInfo.commandBytes != 72) return 240;
 		shadowList.dispose();
 		var canvasEvents = 0;
-		var canvasView = new CanvasView("canvas-smoke", function(canvas, geometry) {
+		var canvasView = new CanvasView("canvas-smoke", (canvas, geometry) -> {
 			canvas.fillRect(new Rect(0.0, 0.0, geometry.width, geometry.height), Color.rgba(0.3, 0.4, 0.5, 1.0));
 		}, null, "Drawing region", true, CachePolicy.Raster, "canvas-static");
-		canvasView.on(UiEventKind.PointerDown, function(_) {
+		canvasView.on(UiEventKind.PointerDown, _ -> {
 			canvasEvents++;
 		});
 		var canvasRoot = context.submit(canvasView, new LayoutFrame(256.0, 192.0));
@@ -1799,7 +1799,7 @@ class FrameworkSmoke {
 		if (canvasEvents != 1
 			|| canvasSemantics.role != AccessibilityRole.Group
 			|| canvasRoot.cachePolicy != CachePolicy.Raster) return 66;
-		var simpleCanvas = CanvasView.simple("simple-canvas", function(canvas) {
+		var simpleCanvas = CanvasView.simple("simple-canvas", canvas -> {
 			canvas.fillRect(new Rect(0.0, 0.0, 12.0, 12.0), Color.rgba(0.8, 0.2, 0.2, 1.0));
 		}, null, "Simple drawing", true, CachePolicy.Raster, "simple-static");
 		var simpleCanvasRoot = context.submit(simpleCanvas, new LayoutFrame(64.0, 64.0));
@@ -1823,7 +1823,7 @@ class FrameworkSmoke {
 		var responsiveCanvasStyle = new LayoutStyle();
 		responsiveCanvasStyle.width = LayoutAxis.stretch();
 		responsiveCanvasStyle.height = LayoutAxis.fixed(48.0);
-		var responsiveCanvas = new CanvasView("responsive-canvas", function(canvas, geometry) {
+		var responsiveCanvas = new CanvasView("responsive-canvas", (canvas, geometry) -> {
 			canvas.fillRectIfPositive(new Rect(0.0, 0.0, geometry.width, geometry.height),
 				Color.rgba(0.2, 0.4, 0.8, 1.0));
 		}, responsiveCanvasStyle, "Responsive drawing");
@@ -1842,7 +1842,7 @@ class FrameworkSmoke {
 		if (cycleRoot.find(new WidgetId(0x7fffff02)) != null) return 105;
 		var rejectedBoxPaint = false;
 		try {
-			new RenderNode(new WidgetId(0x7fffff03), LayoutVisualKind.Box).onPaint(function(_, _) {});
+			new RenderNode(new WidgetId(0x7fffff03), LayoutVisualKind.Box).onPaint((_, _) -> {});
 		} catch (_:Dynamic) {
 			rejectedBoxPaint = true;
 		}
@@ -1866,7 +1866,7 @@ class FrameworkSmoke {
 		// The coordinate probe is the caller's listener on the button, so it is passed as a modifier.
 		var buttonLocalX = -1.0;
 		var buttonProbe = new RootModifier();
-		buttonProbe.on(UiEventKind.PointerDown, function(event) {
+		buttonProbe.on(UiEventKind.PointerDown, event -> {
 			if (Std.isOfType(event.data, String) && event.data == "coordinate-test") {
 				buttonLocalX = event.localX;
 				event.preventDefault();
@@ -1876,7 +1876,7 @@ class FrameworkSmoke {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(256.0);
 			style.height = LayoutAxis.fixed(192.0);
-			var button = new Button("Increment", null, function() {
+			var button = new Button("Increment", null, () -> {
 				clicks++;
 			}, null, buttonEnabled);
 			return new Column("main",
@@ -1890,13 +1890,13 @@ class FrameworkSmoke {
 
 		var root = context.submit(makeView(true), frame);
 		if (context.isDirty()) root = context.submit(makeView(true), frame);
-		root.on(UiEventKind.Click, function(_) {
+		root.on(UiEventKind.Click, _ -> {
 			bubbled++;
 		});
-		root.on(UiEventKind.Click, function(_) {
+		root.on(UiEventKind.Click, _ -> {
 			captured++;
 		}, UiEventPhase.Capture);
-		root.on(UiEventKind.PointerDown, function(event) {
+		root.on(UiEventKind.PointerDown, event -> {
 			if (suppressNextClick) {
 				event.preventDefault();
 				event.stopPropagation();
@@ -1910,7 +1910,7 @@ class FrameworkSmoke {
 			4.0) || context.isDirty()) return 3;
 		if (context.dirtyFlags != UiDirtyFlag.None) return 221;
 		var rootLocalX = -1.0;
-		root.on(UiEventKind.PointerDown, function(event) {
+		root.on(UiEventKind.PointerDown, event -> {
 			if (event.data == "coordinate-test") rootLocalX = event.localX;
 		}, UiEventPhase.Capture);
 		var coordinatePoint = new Point(6.0, 7.0);
@@ -1962,40 +1962,40 @@ class FrameworkSmoke {
 			|| restored.value != 7 || context.focus.focusedId == null
 			|| !context.focus.focusedId.equals(initialId)) return 6;
 
-		buttonNode.on(UiEventKind.Scroll, function(_) {
+		buttonNode.on(UiEventKind.Scroll, _ -> {
 			scrollEvents++;
 		});
-		buttonNode.on(UiEventKind.KeyDown, function(event) {
+		buttonNode.on(UiEventKind.KeyDown, event -> {
 			if (event.key == UiKey.Enter && event.scancode == 28) keyEvents++;
 		});
-		buttonNode.on(UiEventKind.KeyRepeat, function(_) {
+		buttonNode.on(UiEventKind.KeyRepeat, _ -> {
 			repeatEvents++;
 		});
-		buttonNode.on(UiEventKind.HoverEnter, function(_) {
+		buttonNode.on(UiEventKind.HoverEnter, _ -> {
 			hoverEnters++;
 		});
-		buttonNode.on(UiEventKind.HoverLeave, function(_) {
+		buttonNode.on(UiEventKind.HoverLeave, _ -> {
 			hoverLeaves++;
 		});
-		buttonNode.on(UiEventKind.PointerDown, function(event) {
+		buttonNode.on(UiEventKind.PointerDown, event -> {
 			if (event.pointerId != 0 && event.data != null) {
 				var touchData:UiTouchData = cast event.data;
 				touchPressure = touchData.pressure;
 			}
 		});
-		buttonNode.on(UiEventKind.PointerCancel, function(_) {
+		buttonNode.on(UiEventKind.PointerCancel, _ -> {
 			cancelEvents++;
 		});
-		buttonNode.on(UiEventKind.FocusLost, function(_) {
+		buttonNode.on(UiEventKind.FocusLost, _ -> {
 			focusLostEvents++;
 		});
-		buttonNode.on(UiEventKind.Blur, function(_) {
+		buttonNode.on(UiEventKind.Blur, _ -> {
 			blurEvents++;
 		});
-		buttonNode.on(UiEventKind.TextInput, function(event) {
+		buttonNode.on(UiEventKind.TextInput, event -> {
 			committedText = event.text;
 		});
-		buttonNode.on(UiEventKind.TextEdit, function(event) {
+		buttonNode.on(UiEventKind.TextEdit, event -> {
 			editSeen = event.data != null && event.text == "compose";
 		});
 		var source = new Handle(17);
@@ -2004,7 +2004,7 @@ class FrameworkSmoke {
 		var eventRuntime = Runtime.start();
 		var eventPump = eventRuntime.events;
 		var pumpEvents = 0;
-		var pumpSubscription = eventPump.listen(function(_) {
+		var pumpSubscription = eventPump.listen(_ -> {
 			pumpEvents++;
 		});
 		input.attach(eventPump);
@@ -2022,7 +2022,7 @@ class FrameworkSmoke {
 		if (!eventPump.isDisposed()) return 104;
 		// Without a host's requests attached, a clipboard read answers Unsupported at once.
 		var unsupported = false;
-		context.clipboard.readText(function(answer) unsupported = answer.match(Err(Unsupported(_))));
+		context.clipboard.readText(answer -> unsupported = answer.match(Err(Unsupported(_))));
 		if (!unsupported) return 39;
 		if (input.consume(PointerMove(new Handle(18), 4.0, 4.0))) return 12;
 		if (!input.consume(PointerMove(source, 4.0, 4.0)) || hoverEnters != 0 || !input.consume(PointerScroll(source,
@@ -2160,8 +2160,8 @@ class FrameworkSmoke {
 			1) || context.focus.focusedId != null) return 29;
 		var moveModifiers = UiModifier.empty();
 		var wheelModifiers = UiModifier.empty();
-		buttonNode.on(UiEventKind.PointerMove, function(event) moveModifiers = event.modifiers);
-		buttonNode.on(UiEventKind.Scroll, function(event) wheelModifiers = event.modifiers);
+		buttonNode.on(UiEventKind.PointerMove, event -> moveModifiers = event.modifiers);
+		buttonNode.on(UiEventKind.Scroll, event -> wheelModifiers = event.modifiers);
 		input.consume(Key(source,
 			nativekit.ffi.NativeKitTypes.Key.LeftShift,
 			0,
@@ -2229,19 +2229,19 @@ class FrameworkSmoke {
 		var eventRoot = context.submit(eventRootView, frame);
 		var stopNode = eventRoot.children[0];
 		var immediateNode = eventRoot.children[1];
-		stopNode.on(UiEventKind.Click, function(event) {
+		stopNode.on(UiEventKind.Click, event -> {
 			event.stopPropagation();
 		}, UiEventPhase.Target);
-		stopNode.on(UiEventKind.Click, function(_) {
+		stopNode.on(UiEventKind.Click, _ -> {
 			sameTargetHandlers++;
 		}, UiEventPhase.Target);
-		immediateNode.on(UiEventKind.Click, function(event) {
+		immediateNode.on(UiEventKind.Click, event -> {
 			event.stopImmediatePropagation();
 		}, UiEventPhase.Target);
-		immediateNode.on(UiEventKind.Click, function(_) {
+		immediateNode.on(UiEventKind.Click, _ -> {
 			immediateTargetHandlers++;
 		}, UiEventPhase.Target);
-		eventRoot.on(UiEventKind.Click, function(_) {
+		eventRoot.on(UiEventKind.Click, _ -> {
 			parentHandlers++;
 		});
 		var stopGeometry:ResolvedLayoutItem = cast stopNode.resolved;
@@ -2305,7 +2305,7 @@ class FrameworkSmoke {
 		contentGeometry = cast scrollRoot.children[0].resolved;
 		if (contentGeometry.transform.ty != -50.0) return 27;
 		var nestedScrollControl = scrollRoot.children[0].children[0].children[0];
-		nestedScrollControl.on(UiEventKind.KeyDown, function(event) {
+		nestedScrollControl.on(UiEventKind.KeyDown, event -> {
 			if (event.key == UiKey.Down) event.preventDefault();
 		});
 		if (!context.focusWidget(nestedScrollControl.id)) return 229;
@@ -2402,7 +2402,7 @@ class FrameworkSmoke {
 		gridStyle.width = LayoutAxis.fixed(240.0);
 		gridStyle.height = LayoutAxis.fixed(160.0);
 		var builtCells:Array<String> = [];
-		var virtualGrid = new VirtualGrid("grid-smoke", 1000, 100, 24.0, 80.0, function(row, column) {
+		var virtualGrid = new VirtualGrid("grid-smoke", 1000, 100, 24.0, 80.0, (row, column) -> {
 			builtCells.push('$row:$column');
 			return new Text('Cell $row,$column');
 		}, gridStyle, null, gridController, 240.0, 160.0);
@@ -2430,17 +2430,17 @@ class FrameworkSmoke {
 		var tableSortAscending = false;
 		var tableResizeColumn = -1;
 		var tableResizeWidth = 0.0;
-		var table = new TableView("table-smoke", 100000, tableColumns, 24.0, function(row, column) {
+		var table = new TableView("table-smoke", 100000, tableColumns, 24.0, (row, column) -> {
 			tableBuiltCells.push('$row:${column.key}');
 			return new Text('$row ${column.label}');
-		}, tableStyle, null, null, 240.0, 184.0, 24.0, 2, function(row:Int) {
+		}, tableStyle, null, null, 240.0, 184.0, 24.0, 2, (row:Int) -> {
 			tableSelection = row;
-		}, 0, function(row:Int, column:Int) {
+		}, 0, (row:Int, column:Int) -> {
 			tableCellSelection = row * 10 + column;
-		}, function(column:Int, ascending:Bool) {
+		}, (column:Int, ascending:Bool) -> {
 			tableSortColumn = column;
 			tableSortAscending = ascending;
-		}, function(column:Int, width:Float) {
+		}, (column:Int, width:Float) -> {
 			tableResizeColumn = column;
 			tableResizeWidth = width;
 		});
@@ -2457,7 +2457,7 @@ class FrameworkSmoke {
 		context.pointerUp(12.0, 24.0 + 3.0 * 24.0 + 12.0, 0);
 		if (table.selectedRow != 3 || tableSelection != 3) return 252;
 		var selectedCell:Null<RenderNode> = null;
-		tableRoot.walk(function(node) {
+		tableRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Cell
 				&& node.semantics.rowIndex == 3 && node.semantics.columnIndex == 0) selectedCell = node;
 		});
@@ -2481,14 +2481,14 @@ class FrameworkSmoke {
 		var virtualStyle = new LayoutStyle();
 		virtualStyle.width = LayoutAxis.fixed(256.0);
 		virtualStyle.height = LayoutAxis.fixed(80.0);
-		var virtualList = new VirtualList("virtual-smoke", 100, 20.0, function(index) {
+		var virtualList = new VirtualList("virtual-smoke", 100, 20.0, index -> {
 			builtRows.push(index);
 			return new Text('Row $index');
 		}, virtualStyle, null, listController, 80.0);
 		var virtualRoot = context.submit(virtualList, new LayoutFrame(256.0, 80.0));
 		var virtualSemantics:Semantics = cast virtualRoot.semantics;
 		var firstVirtualRowId = 0;
-		virtualRoot.walk(function(node) {
+		virtualRoot.walk(node -> {
 			var semantics:Null<Semantics> = node.semantics;
 			if (semantics != null && semantics.role == AccessibilityRole.CollectionItem
 				&& semantics.positionInSet == 1) firstVirtualRowId = node.id.value;
@@ -2501,7 +2501,7 @@ class FrameworkSmoke {
 		builtRows.resize(0);
 		virtualRoot = context.submit(virtualList, new LayoutFrame(256.0, 80.0));
 		var recycledVirtualRowId = 0;
-		virtualRoot.walk(function(node) {
+		virtualRoot.walk(node -> {
 			var semantics:Null<Semantics> = node.semantics;
 			if (semantics != null && semantics.role == AccessibilityRole.CollectionItem
 				&& semantics.positionInSet == 25) recycledVirtualRowId = node.id.value;
@@ -2514,7 +2514,7 @@ class FrameworkSmoke {
 		largeVirtualStyle.width = LayoutAxis.fixed(256.0);
 		largeVirtualStyle.height = LayoutAxis.fixed(350.0);
 		var largeBuiltRows:Array<Int> = [];
-		var largeVirtualList = new VirtualList("large-virtual-smoke", 100000, 32.0, function(index) {
+		var largeVirtualList = new VirtualList("large-virtual-smoke", 100000, 32.0, index -> {
 			largeBuiltRows.push(index);
 			return new Text('Row ${index + 1}');
 		}, largeVirtualStyle, null, largeListController, 350.0);
@@ -2534,13 +2534,13 @@ class FrameworkSmoke {
 		modelStyle.width = LayoutAxis.fixed(256.0);
 		modelStyle.height = LayoutAxis.fixed(120.0);
 		var modelList = new ListView("model-list-smoke", model, modelStyle, modelController, 120.0, -1,
-			function(index) {
+			index -> {
 				modelSelection = index;
 			});
 		var modelRoot = context.submit(modelList, new LayoutFrame(256.0, 120.0));
 		var modelSemantics:Semantics = cast modelRoot.semantics;
 		var firstModelRowId = 0;
-		modelRoot.walk(function(node) {
+		modelRoot.walk(node -> {
 			var semantics:Null<Semantics> = node.semantics;
 			if (semantics != null && semantics.role == AccessibilityRole.CollectionItem
 				&& semantics.positionInSet == 1) firstModelRowId = node.id.value;
@@ -2554,7 +2554,7 @@ class FrameworkSmoke {
 		modelBuiltRows.resize(0);
 		modelRoot = context.submit(modelList, new LayoutFrame(256.0, 120.0));
 		var recycledModelRowId = 0;
-		modelRoot.walk(function(node) {
+		modelRoot.walk(node -> {
 			var semantics:Null<Semantics> = node.semantics;
 			if (semantics != null && semantics.role == AccessibilityRole.CollectionItem
 				&& semantics.positionInSet == 50000) recycledModelRowId = node.id.value;
@@ -2571,7 +2571,7 @@ class FrameworkSmoke {
 		if (!modelList.select(50000) || modelList.selectedIndex != 50000 || modelSelection != 50000) return 162;
 		modelRoot = context.submit(modelList, new LayoutFrame(256.0, 120.0));
 		var selectedModelItem:Null<RenderNode> = null;
-		modelRoot.walk(function(node) {
+		modelRoot.walk(node -> {
 			var nodeSemantics:Null<Semantics> = node.semantics;
 			if (nodeSemantics != null && nodeSemantics.role == AccessibilityRole.CollectionItem
 				&& nodeSemantics.positionInSet == 50001) selectedModelItem = node;
@@ -2596,9 +2596,9 @@ class FrameworkSmoke {
 		// The tree is described afresh with or without a state-ready callback; its state lives in the context.
 		function smokeTree(?onStateReady:TreeView->Void):TreeView
 			return new TreeView("tree-smoke", treeModel, treeStyle, treeController, 120.0, null, null,
-				function(nodeKey) {
+				nodeKey -> {
 					treeSelection = nodeKey;
-				}, null, function(nodeKey, expanded) {
+				}, null, (nodeKey, expanded) -> {
 				treeExpansionKey = nodeKey;
 				treeExpansionValue = expanded;
 			}, onStateReady: onStateReady);
@@ -2612,7 +2612,7 @@ class FrameworkSmoke {
 		if (!tree.scrollTo("root:0:child:2") || treeController.offsetY <= 0.0) return 170;
 		// External controllers synchronize after retained state loads, without a feedback callback.
 		var treeStateReady = false;
-		tree = smokeTree(function(current) {
+		tree = smokeTree(current -> {
 			treeStateReady = true;
 			current.select("root:0:child:1", false);
 			current.scrollIntoView("root:0:child:1");
@@ -2652,12 +2652,12 @@ class FrameworkSmoke {
 		pressureCanvasStyle.height = LayoutAxis.fixed(24.0);
 		var pressureChildren:Array<KeyedView> = [new KeyedView("before-custom",
 			new Text("Before custom canvas")),
-			new KeyedView("custom-canvas", new CanvasView("custom-canvas-view", function(canvas,
-				geometry) {
-					canvas.fillRect(new Rect(0.0, 0.0, geometry.width, geometry.height),
-						Color.rgba(0.2, 0.4, 0.7, 1.0));
-				}, pressureCanvasStyle, "Custom settings illustration")), new KeyedView("after-custom",
-					new Text("After custom canvas"))];
+			new KeyedView("custom-canvas", new CanvasView("custom-canvas-view", (canvas,
+			geometry) -> {
+				canvas.fillRect(new Rect(0.0, 0.0, geometry.width, geometry.height),
+					Color.rgba(0.2, 0.4, 0.7, 1.0));
+			}, pressureCanvasStyle, "Custom settings illustration")), new KeyedView("after-custom",
+				new Text("After custom canvas"))];
 		for (index in 0...2000) {
 			var row = new SizedBox("row", new Text('Setting $index'), LayoutAxis.grow(), LayoutAxis.fixed(24.0));
 			pressureChildren.push(new KeyedView('setting:$index', row));
@@ -2696,7 +2696,7 @@ class FrameworkSmoke {
 			outerController);
 		var pressureRoot = context.submit(pressureView, new LayoutFrame(256.0, 192.0));
 		var pressureNodeCount = 0;
-		pressureRoot.walk(function(_) {
+		pressureRoot.walk(_ -> {
 			pressureNodeCount++;
 		});
 		var innerNode = pressureRoot.children[0].children[0].children[1];
@@ -2717,7 +2717,7 @@ class FrameworkSmoke {
 		context.windowFocusGained();
 		if (!context.focusWidget(returnFocusRoot.id)) return 69;
 		var dialogDismissals = 0;
-		var dialog = new Dialog("dialog-smoke", "Settings", new Button("Apply"), function() {
+		var dialog = new Dialog("dialog-smoke", "Settings", new Button("Apply"), () -> {
 			dialogDismissals++;
 		}, 240.0);
 		var dialogFrame = new LayoutFrame(256.0, 192.0);
@@ -2727,10 +2727,10 @@ class FrameworkSmoke {
 				new StackChild("dialog-layer", dialog, 0.0, 0.0, 10, LayoutAxis.grow(), LayoutAxis.grow())
 			]);
 		var focusFrameRequests = 0;
-		context.onAnimationFrameRequested = function() focusFrameRequests++;
+		context.onAnimationFrameRequested = () -> focusFrameRequests++;
 		var dialogRoot = context.submit(modalStack, dialogFrame);
 		var dialogFocus:Null<WidgetId> = null;
-		dialogRoot.walk(function(node) {
+		dialogRoot.walk(node -> {
 			if (node.focusable) dialogFocus = node.id;
 		});
 		var dialogLayer = dialogRoot.children[1];
@@ -2762,7 +2762,7 @@ class FrameworkSmoke {
 		if (context.focus.focusedId == null || !context.focus.focusedId.equals(returnFocusRoot.id)) return 72;
 
 		var popupDismissals = 0;
-		var popup = new Popup("popup-smoke", new Button("Popup action"), 100.0, 60.0, null, function() {
+		var popup = new Popup("popup-smoke", new Button("Popup action"), 100.0, 60.0, null, () -> {
 			popupDismissals++;
 		});
 		var popupRoot = context.submit(popup, dialogFrame);
@@ -2772,9 +2772,9 @@ class FrameworkSmoke {
 
 		var selectedMenuItem = "";
 		var menuDismissals = 0;
-		var menu = new Menu("menu-smoke", [new MenuItem("open", "Open", function() {
+		var menu = new Menu("menu-smoke", [new MenuItem("open", "Open", () -> {
 			selectedMenuItem = "open";
-		}), new MenuItem("disabled", "Unavailable", null, false)], 32.0, 24.0, function() {
+		}), new MenuItem("disabled", "Unavailable", null, false)], 32.0, 24.0, () -> {
 			menuDismissals++;
 		}, selectFirstOnOpen: true);
 		var menuRoot = context.submit(menu, dialogFrame);
@@ -2786,7 +2786,7 @@ class FrameworkSmoke {
 			throw 'Menu at ${menuGeometry.x}, ${menuGeometry.y} (${menuGeometry.width} wide) in a ${dialogFrame.width} frame (check 74)';
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
 		var disabledMenuPresent = false;
-		menuRoot.walk(function(node) {
+		menuRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem
 				&& node.semantics.label == "Unavailable" && !node.enabled) disabledMenuPresent = true;
 		});
@@ -2794,7 +2794,7 @@ class FrameworkSmoke {
 
 		var unavailableMenuDismissals = 0;
 		var unavailableMenu = new Menu("unavailable-menu-smoke",
-			[new MenuItem("disabled-only", "Unavailable", null, false)], 4.0, 4.0, function() {
+			[new MenuItem("disabled-only", "Unavailable", null, false)], 4.0, 4.0, () -> {
 				unavailableMenuDismissals++;
 			});
 		var unavailableMenuRoot = context.submit(unavailableMenu, dialogFrame);
@@ -2811,7 +2811,7 @@ class FrameworkSmoke {
 		var overflowMenuItems:Array<MenuItem> = [];
 		for (index in 0...18) {
 			var choice = index;
-			overflowMenuItems.push(new MenuItem("choice-" + index, "Choice " + index, function() {
+			overflowMenuItems.push(new MenuItem("choice-" + index, "Choice " + index, () -> {
 				overflowChoice = choice;
 			}));
 		}
@@ -2858,7 +2858,7 @@ class FrameworkSmoke {
 		if (boundedMenuBounds == null || boundedMenuBounds.width > 360.1
 			|| boundedMenuBounds.x < 7.9 || boundedMenuBounds.x + boundedMenuBounds.width > 792.1) return 1021;
 		var hasEllipsis = false, hasFullActionName = false;
-		boundedMenuRoot.walk(function(node) {
+		boundedMenuRoot.walk(node -> {
 			var shown = node.layout.shownText;
 			if (shown != null && shown != longMenuLabel && StringTools.endsWith(shown, "…")) hasEllipsis = true;
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem
@@ -2913,7 +2913,7 @@ class FrameworkSmoke {
 				new RadioOption("red", "Red", "red"),
 				new RadioOption("blocked", "Blocked", "blocked", false),
 				new RadioOption("green", "Green", "green")
-			], radioValue, function(next) {
+			], radioValue, next -> {
 				radioChanges++;
 				radioValue = next;
 			});
@@ -2936,7 +2936,7 @@ class FrameworkSmoke {
 
 		var tabChanges = 0;
 		var retainedHeaderBuilds = 0;
-		var retainedHeaderBuilt = function(_:String, _:haxeon.ui.core.RenderNode) {
+		var retainedHeaderBuilt = function(_:String, _:haxeon.ui.core.RenderNode):Void {
 			retainedHeaderBuilds++;
 		};
 		var firstPage = new Text("first page"), secondPage = new Text("second page");
@@ -2953,7 +2953,7 @@ class FrameworkSmoke {
 		if (retainedHeaderBuilds != 4) throw "Selection changes must build the tab headers again";
 		context.submit(retainedTabs("second", "First *"), new LayoutFrame(320, 192));
 		if (retainedHeaderBuilds != 6) throw "Label changes must build the tab headers again";
-		var onTabChange = function(_:String) {
+		var onTabChange = function(_:String):Void {
 			tabChanges++;
 		};
 		var tabs = new Tabs("tabs-smoke", [
@@ -2981,7 +2981,7 @@ class FrameworkSmoke {
 		var tabMenus = 0;
 		var menuTab = "";
 		// The same key keeps the strip and its local selection.
-		tabs = new Tabs("tabs-smoke", tabs.items, "first", onTabChange, onTabContextMenu: function(key, event) {
+		tabs = new Tabs("tabs-smoke", tabs.items, "first", onTabChange, onTabContextMenu: (key, event) -> {
 			tabMenus++;
 			menuTab = key;
 		});
@@ -3009,9 +3009,9 @@ class FrameworkSmoke {
 		var closeTabs = new Tabs("close-tabs",
 			[new TabItem("keep", "Keep", new Text("keep page")), closable],
 			"keep",
-			function(_) closeSelections++,
+			_ -> closeSelections++,
 			null,
-			function(_, _) closeDrags++);
+			(_, _) -> closeDrags++);
 		context.pointerMove(0, 180);
 		var closeRoot = context.submit(closeTabs, tabsFrame);
 		var closeRow = tabStrip(closeRoot).children[1].children[0];
@@ -3378,7 +3378,7 @@ class FrameworkSmoke {
 			|| colorMatrix[4] != 0.25 || colorMatrix[9] != 0.25 || colorMatrix[14] != 0.25) return 247;
 		var effectCanvas = new Canvas();
 		var effectList = DisplayList.create();
-		effectCanvas.withLayer(1.0, function(canvas) {
+		effectCanvas.withLayer(1.0, canvas -> {
 			canvas.fillRect(new Rect(4.0, 6.0, 24.0, 18.0), Color.rgba(0.2, 0.4, 0.8, 1.0));
 		}, CompositeMode.SourceOver, new Rect(4.0, 6.0, 24.0, 18.0), colorAdjustments);
 		effectCanvas.update(effectList);
@@ -3386,14 +3386,14 @@ class FrameworkSmoke {
 		effectList.dispose();
 		effectCanvas.reset();
 		var boundedEmptyList = DisplayList.create();
-		effectCanvas.withLayer(1.0, function(_) {}, CompositeMode.SourceOver, new Rect(4.0, 6.0, 24.0, 18.0));
+		effectCanvas.withLayer(1.0, _ -> {}, CompositeMode.SourceOver, new Rect(4.0, 6.0, 24.0, 18.0));
 		effectCanvas.update(boundedEmptyList);
 		var boundedEmptyInfo = boundedEmptyList.info();
 		if (boundedEmptyInfo.commandCount != 2 || boundedEmptyInfo.commandBytes >= 3220) return 256;
 		boundedEmptyList.dispose();
 		effectCanvas.reset();
 		var customList = DisplayList.create();
-		effectCanvas.withLayer(1.0, function(canvas) {
+		effectCanvas.withLayer(1.0, canvas -> {
 			canvas.fillRect(new Rect(4.0, 6.0, 24.0, 18.0), Color.rgba(0.2, 0.4, 0.8, 1.0));
 		}, CompositeMode.SourceOver, new Rect(4.0, 6.0, 24.0, 18.0), EffectChain.of([customRuntime]));
 		effectCanvas.update(customList);
@@ -3401,7 +3401,7 @@ class FrameworkSmoke {
 		customList.dispose();
 		effectCanvas.reset();
 		var blurList = DisplayList.create();
-		effectCanvas.withLayer(1.0, function(canvas) {
+		effectCanvas.withLayer(1.0, canvas -> {
 			canvas.fillRect(new Rect(4.0, 6.0, 24.0, 18.0), Color.rgba(0.2, 0.4, 0.8, 1.0));
 		}, CompositeMode.SourceOver, new Rect(4.0, 6.0, 24.0, 18.0), EffectChain.of([new BlurEffect(4.0)]));
 		effectCanvas.update(blurList);
@@ -3409,7 +3409,7 @@ class FrameworkSmoke {
 		blurList.dispose();
 		effectCanvas.reset();
 		var dropShadowList = DisplayList.create();
-		effectCanvas.withLayer(1.0, function(canvas) {
+		effectCanvas.withLayer(1.0, canvas -> {
 			canvas.fillRect(new Rect(4.0, 6.0, 24.0, 18.0), Color.rgba(0.2, 0.4, 0.8, 1.0));
 		}, CompositeMode.SourceOver, new Rect(4.0, 6.0, 24.0, 18.0), EffectChain.of([dropShadow]));
 		effectCanvas.update(dropShadowList);
@@ -3440,7 +3440,7 @@ class FrameworkSmoke {
 		if (!maskDiff.changed || maskDiff.impact != StyleImpact.Composite) return 253;
 		var maskList = DisplayList.create();
 		var noMaskEffects:EffectChain = null;
-		effectCanvas.withLayer(1.0, function(canvas) {
+		effectCanvas.withLayer(1.0, canvas -> {
 			canvas.fillRect(new Rect(4.0, 6.0, 24.0, 18.0), Color.rgba(0.2, 0.4, 0.8, 1.0));
 		}, CompositeMode.SourceOver, new Rect(4.0, 6.0, 24.0, 18.0), noMaskEffects, roundedMask);
 		effectCanvas.update(maskList);
@@ -3448,7 +3448,7 @@ class FrameworkSmoke {
 		maskList.dispose();
 		effectCanvas.reset();
 		var backdropList = DisplayList.create();
-		effectCanvas.withLayer(1.0, function(canvas) {
+		effectCanvas.withLayer(1.0, canvas -> {
 			canvas.fillRect(new Rect(4.0, 6.0, 24.0, 18.0), Color.rgba(0.2, 0.4, 0.8, 1.0));
 		}, CompositeMode.SourceOver,
 			new Rect(4.0, 6.0, 24.0, 18.0), null, null, EffectChain.of([ColorFactorEffect.brightness(1.1)]));
@@ -3660,7 +3660,7 @@ class FrameworkSmoke {
 			return new SplitView("split-smoke", new Text("Primary"), new Text("Secondary"),
 				resizableSide: SplitSide.Trailing,
 				extent: splitExtent, minimumExtent: 64.0, maximumExtent: 144.0, collapsed: splitCollapsed,
-				onResize: function(value) {
+				onResize: value -> {
 					resizedExtent = value;
 					splitExtent = value;
 				}, onCollapsedChanged: next -> splitCollapsed = next);
@@ -3677,7 +3677,7 @@ class FrameworkSmoke {
 		var splitPointerX = splitDividerGeometry.x + splitDividerGeometry.width * 0.5;
 		var splitPointerY = splitDividerGeometry.y + splitDividerGeometry.height * 0.5;
 		var observedCursor = UiCursorShape.Arrow;
-		context.setCursorHandler(function(shape) {
+		context.setCursorHandler(shape -> {
 			observedCursor = shape;
 		});
 		context.pointerMove(splitPointerX, splitPointerY);
@@ -3707,7 +3707,7 @@ class FrameworkSmoke {
 			|| !splitRoot.children[2].id.equals(expandedSplitRoot.children[2].id)) return 233;
 		var verticalSplit = new SplitView("vertical-split-smoke", new Text("Top"), new Text("Bottom"),
 			orientation: SplitOrientation.Vertical, resizableSide: SplitSide.Trailing, extent: 72.0,
-			minimumExtent: 48.0, maximumExtent: 120.0, onResize: function(value) {
+			minimumExtent: 48.0, maximumExtent: 120.0, onResize: value -> {
 				resizedExtent = value;
 			});
 		var verticalRoot = context.submit(verticalSplit, new LayoutFrame(320.0, 192.0));
@@ -3726,20 +3726,20 @@ class FrameworkSmoke {
 		var captureClicks = 0;
 		var captureExtent = 120.0;
 		var captureSplit = new SplitView("pointer-capture-split",
-			new Text("Leading"), new Button("Drag target", null, function() {
+			new Text("Leading"), new Button("Drag target", null, () -> {
 				captureClicks++;
 			}), resizableSide: SplitSide.Trailing, extent: 120.0, onResize: next -> captureExtent = next);
 		var captureRoot = context.submit(captureSplit, new LayoutFrame(320.0, 192.0));
 		var platformCaptureStates:Array<Bool> = [];
-		context.setPointerCaptureHandler(function(captured) platformCaptureStates.push(captured));
+		context.setPointerCaptureHandler(captured -> platformCaptureStates.push(captured));
 		var captureDivider = captureRoot.children[1];
 		var captureButton = captureRoot.children[2].children[0];
 		var captureHoverEnters = 0;
 		var capturePointerDowns = 0;
-		captureButton.on(UiEventKind.HoverEnter, function(event) {
+		captureButton.on(UiEventKind.HoverEnter, event -> {
 			if (event.target.equals(captureButton.id)) captureHoverEnters++;
 		});
-		captureButton.on(UiEventKind.PointerDown, function(_) {
+		captureButton.on(UiEventKind.PointerDown, _ -> {
 			capturePointerDowns++;
 		});
 		var captureDividerGeometry:ResolvedLayoutItem = cast captureDivider.resolved;
@@ -3788,7 +3788,7 @@ class FrameworkSmoke {
 		context.setPointerCaptureHandler(null);
 		if (!context.events.hasPointerCapture(captureDivider.id)
 			|| platformCaptureStates.length != 6 || platformCaptureStates[5]) return 256;
-		context.setPointerCaptureHandler(function(captured) platformCaptureStates.push(captured));
+		context.setPointerCaptureHandler(captured -> platformCaptureStates.push(captured));
 		if (!context.events.hasPointerCapture(captureDivider.id)
 			|| platformCaptureStates.length != 7 || !platformCaptureStates[6]) return 257;
 		context.windowFocusLost();
@@ -3877,7 +3877,7 @@ class FrameworkSmoke {
 			|| siblingParagraph.wrap != TextWrap.Word
 			|| siblingParagraph.tabWidth != 3) throw "A text field changed its sibling's inherited paragraph style";
 		var themedClicks = 0;
-		var themedButton = new Button("Themed", null, function() {
+		var themedButton = new Button("Themed", null, () -> {
 			themedClicks++;
 		}, "theme-key", null, ButtonVariant.Primary);
 		var themedFrame = new LayoutFrame(256.0, 192.0);
@@ -3911,7 +3911,7 @@ class FrameworkSmoke {
 			|| !themedSnapshot[0].pressed || themedSnapshot[1].pressed) return 83;
 		context.pointerUp(themedX, themedY, 0);
 		if (themedClicks != 1 || context.inspect()[0].pressed) return 84;
-		themedButton = new Button("Themed", null, function() {
+		themedButton = new Button("Themed", null, () -> {
 			themedClicks++;
 		}, "theme-key", false, ButtonVariant.Primary);
 		themedRoot = context.submit(themedButton, themedFrame);
@@ -3932,7 +3932,7 @@ class FrameworkSmoke {
 				StyleValue.mask(Mask.roundedRect(6.0))
 			]);
 		context.setStyleSheet(inspectorEffects);
-		context.submit(new Button("Inspector effects", null, function() {}, "inspector-effects"),
+		context.submit(new Button("Inspector effects", null, () -> {}, "inspector-effects"),
 			new LayoutFrame(256.0, 192.0));
 		var effectSnapshot = context.inspect()[0];
 		if (!effectSnapshot.causesIsolation || effectSnapshot.effectPasses != 3
@@ -4029,17 +4029,17 @@ class FrameworkSmoke {
 		var gestures = new GestureDetector("gesture-smoke", new SizedBox("gesture-area",
 			new Text("Drag here"),
 			LayoutAxis.fixed(100.0),
-			LayoutAxis.fixed(60.0)), [new TapRecognizer(function(_:GestureEvent) {
+			LayoutAxis.fixed(60.0)), [new TapRecognizer((_:GestureEvent) -> {
 				taps++;
-			}), new DoubleTapRecognizer(function(_:GestureEvent) {
+			}), new DoubleTapRecognizer((_:GestureEvent) -> {
 			doubleTaps++;
-		}), new LongPressRecognizer(function(_:GestureEvent) {
+		}), new LongPressRecognizer((_:GestureEvent) -> {
 			longPresses++;
-		}), new DragRecognizer(6.0, function(_:GestureEvent) {
+		}), new DragRecognizer(6.0, (_:GestureEvent) -> {
 			dragStarts++;
-		}, function(_:GestureEvent) {
+		}, (_:GestureEvent) -> {
 			dragMoves++;
-		}, function(_:GestureEvent) {
+		}, (_:GestureEvent) -> {
 			dragEnds++;
 		})]);
 		var gestureFrame = new LayoutFrame(256.0, 192.0);
@@ -4068,9 +4068,9 @@ class FrameworkSmoke {
 
 		var animationUpdates = 0;
 		var animationCompletions = 0;
-		var animation = new AnimationController(context.animations, function(_) {
+		var animation = new AnimationController(context.animations, _ -> {
 			animationUpdates++;
-		}, function() {
+		}, () -> {
 			animationCompletions++;
 		});
 		animation.play(0.0, 100.0, 1.0, Easing.EaseInOut);
@@ -4086,7 +4086,7 @@ class FrameworkSmoke {
 		var transformStyle = new LayoutStyle();
 		transformStyle.width = LayoutAxis.fixed(120.0);
 		transformStyle.height = LayoutAxis.fixed(48.0);
-		var transformCanvas = CanvasView.simple("transform-animation", function(_) {}, transformStyle);
+		var transformCanvas = CanvasView.simple("transform-animation", _ -> {}, transformStyle);
 		var transformFrame = new LayoutFrame(256.0, 192.0);
 		transformFrame.deltaSeconds = 0.0;
 		var transformRoot = context.submit(transformCanvas, transformFrame);
@@ -4096,7 +4096,7 @@ class FrameworkSmoke {
 		var initialContentRevision = transformRoot.contentRevision;
 		var initialGeometryRevision = transformRoot.geometryRevision;
 		var initialCompositeRevision = transformRoot.compositeRevision;
-		var transformAnimation = new AnimationController(context.animations, function(value) {
+		var transformAnimation = new AnimationController(context.animations, value -> {
 			transformCanvas.style.transform = Transform2D.translation(value, 0.0);
 		});
 		transformAnimation.play(0.0, 48.0, 1.0, Easing.EaseInOut);
@@ -4135,7 +4135,7 @@ class FrameworkSmoke {
 		if (spring.value < 0.99 || spring.active || context.animations.activeCount != 0) return 91;
 		var restart:AnimationController = null;
 		var restartCompletions = 0;
-		restart = new AnimationController(context.animations, null, function() {
+		restart = new AnimationController(context.animations, null, () -> {
 			restartCompletions++;
 			if (restartCompletions == 1) restart.play(0.0, 1.0, 0.1);
 		});
@@ -4158,7 +4158,7 @@ class FrameworkSmoke {
 		var spinner = spinnerView(true);
 		var spinnerFrame = new LayoutFrame(256.0, 192.0);
 		var animationRequests = 0;
-		context.onAnimationFrameRequested = function() {
+		context.onAnimationFrameRequested = () -> {
 			animationRequests++;
 		};
 		var spinnerRoot = context.submit(spinner, spinnerFrame);
@@ -4176,7 +4176,7 @@ class FrameworkSmoke {
 		context.submit(spinner, spinnerFrame);
 		if (context.animations.activeCount != 1
 			|| context.needsAnimationFrame || context.isDirty() || context.animationWaitSeconds() <= 0.0) return 110;
-		var cachedSpinner = function() return spinner;
+		var cachedSpinner = () -> spinner;
 		context.submitCached(cachedSpinner, spinnerFrame, "spinner-smoke");
 		spinnerFrame.deltaSeconds = 1.0 / SpinnerClock.StepsPerSecond;
 		context.submitCached(cachedSpinner, spinnerFrame, "spinner-smoke");
@@ -4299,11 +4299,11 @@ class FrameworkSmoke {
 
 		var cachedBuilds = 0;
 		var cachedFrame = new LayoutFrame(256.0, 192.0);
-		var cachedRoot = context.submitCached(function() {
+		var cachedRoot = context.submitCached(() -> {
 			cachedBuilds++;
 			return new Text("Cached");
 		}, cachedFrame, "framework-cache");
-		var reusedRoot = context.submitCached(function() {
+		var reusedRoot = context.submitCached(() -> {
 			cachedBuilds++;
 			return new Text("Should not build");
 		}, cachedFrame, "framework-cache");
@@ -4312,7 +4312,7 @@ class FrameworkSmoke {
 			|| cachedMetrics == null || !cachedMetrics.reusedSubmission
 			|| cachedMetrics.styleResolutions != 0) return 109;
 		cachedFrame.deltaSeconds = 0.1;
-		var jitteredRoot = context.submitCached(function() {
+		var jitteredRoot = context.submitCached(() -> {
 			cachedBuilds++;
 			return new Text("Should still reuse on timing jitter");
 		}, cachedFrame, "framework-cache");
@@ -4323,7 +4323,7 @@ class FrameworkSmoke {
 		checkUiOverlay();
 
 		var cleaned = 0;
-		context.stateStore.onDispose(initialId, function() {
+		context.stateStore.onDispose(initialId, () -> {
 			cleaned++;
 		});
 		context.dispose();
@@ -4410,8 +4410,8 @@ class FrameworkSmoke {
 		var other:State<Int> = context.state(context.id("other"), 0);
 		var openCapture = new Dependencies(true);
 		var otherCapture = new Dependencies(true);
-		ReactiveRuntime.withTracking(openCapture, function() open.value);
-		ReactiveRuntime.withTracking(otherCapture, function() other.value);
+		ReactiveRuntime.withTracking(openCapture, () -> open.value);
+		ReactiveRuntime.withTracking(otherCapture, () -> other.value);
 		var openDependencies = new Dependencies();
 		var otherDependencies = new Dependencies();
 		openDependencies.replaceSlice(openCapture, 0);
@@ -4421,15 +4421,16 @@ class FrameworkSmoke {
 		if (openDependencies.current() || !otherDependencies.current()) return false;
 		other.update(3);
 		var failed = false;
-		try ReactiveRuntime.withTracking(otherCapture, function() other.update(4)) catch (_:Dynamic) failed = true;
+		try ReactiveRuntime.withTracking(otherCapture, () -> other.update(4)) catch (_:Dynamic) failed = true;
 		var fresh:Signal<Int> = null, freshSignalRejected = false, freshStateRejected = false;
-		ReactiveRuntime.withTracking(openCapture, function() {
+		var createFresh:Void->Void = () -> {
 			fresh = new Signal<Int>(1);
 			try fresh.update(2) catch (_:Dynamic) freshSignalRejected = true;
-		});
+		};
+		ReactiveRuntime.withTracking(openCapture, createFresh);
 		var freshState:State<Int> = context.state(context.id("fresh"), 0);
 		try ReactiveRuntime.withTracking(openCapture,
-			function() freshState.update(1)) catch (_:Dynamic) freshStateRejected = true;
+			() -> freshState.update(1)) catch (_:Dynamic) freshStateRejected = true;
 		return !otherDependencies.current() && failed
 			&& freshSignalRejected && freshStateRejected && fresh != null && fresh.value == 1 && freshState.value == 0;
 	}
@@ -4437,12 +4438,12 @@ class FrameworkSmoke {
 	/** Observable fields share one source while keeping independent reader versions and capture bits. */
 	static function observableFieldsTrackIndependently():Bool {
 		var source = new ObservableSource(5), firstValue = 1, secondValue = 2, firstRuns = 0, secondRuns = 0;
-		var first = new Derived<Int>(function() {
+		var first = new Derived<Int>(() -> {
 			firstRuns++;
 			source.recordFieldRead(3);
 			return firstValue;
 		});
-		var second = new Derived<Int>(function() {
+		var second = new Derived<Int>(() -> {
 			secondRuns++;
 			source.recordFieldRead(4);
 			return secondValue;
@@ -4455,7 +4456,7 @@ class FrameworkSmoke {
 		source.invalidateField(4);
 		if (!second.dirty || first.dirty || second.value != 6 || firstRuns != 2 || secondRuns != 2) return false;
 		var capture = new Dependencies(true);
-		ReactiveRuntime.withTracking(capture, function() {
+		ReactiveRuntime.withTracking(capture, () -> {
 			source.recordFieldRead(3);
 			source.recordFieldRead(3);
 			source.recordFieldRead(4);
@@ -4470,9 +4471,9 @@ class FrameworkSmoke {
 	/** Derived values pull latest inputs once, suppress equal outputs, and effects coalesce writes. */
 	static function reactiveValuesRecomputeWithoutGlitches():Bool {
 		var source = new Signal<Int>(2);
-		var derived = new Derived<Int>(function() return source.value * 3);
+		var derived = new Derived<Int>(() -> source.value * 3);
 		var effectRuns = 0;
-		var effect = new Effect(function() {
+		var effect = new Effect(() -> {
 			source.value;
 			effectRuns++;
 		});
@@ -4487,15 +4488,15 @@ class FrameworkSmoke {
 		if (!ok) return false;
 
 		var paritySource = new Signal<Int>(0), foldedRuns = 0, projectionRuns = 0, downstreamRuns = 0;
-		var folded = new Derived<Int>(function() {
+		var folded = new Derived<Int>(() -> {
 			foldedRuns++;
 			return paritySource.value & 1;
 		});
-		var projection = new Derived<String>(function() {
+		var projection = new Derived<String>(() -> {
 			projectionRuns++;
 			return folded.value == 0 ? "even" : "odd";
 		});
-		var downstream = new Effect(function() {
+		var downstream = new Effect(() -> {
 			projection.value;
 			downstreamRuns++;
 		});
@@ -4510,19 +4511,19 @@ class FrameworkSmoke {
 		folded.dispose();
 
 		var diamondSource = new Signal<Int>(1), leftRuns = 0, rightRuns = 0, sumRuns = 0, diamondEffects = 0;
-		var left = new Derived<Int>(function() {
+		var left = new Derived<Int>(() -> {
 			leftRuns++;
 			return diamondSource.value + 1;
 		});
-		var right = new Derived<Int>(function() {
+		var right = new Derived<Int>(() -> {
 			rightRuns++;
 			return diamondSource.value * 2;
 		});
-		var sum = new Derived<Int>(function() {
+		var sum = new Derived<Int>(() -> {
 			sumRuns++;
 			return left.value + right.value;
 		});
-		var diamondEffect = new Effect(function() {
+		var diamondEffect = new Effect(() -> {
 			sum.value;
 			diamondEffects++;
 		});
@@ -4591,7 +4592,7 @@ class FrameworkSmoke {
 		var colorId = new WidgetId(90502);
 		var color:State<Color> = build.state(colorId, Color.rgba(0.1, 0.2, 0.3));
 		var observed = 0.0;
-		var reader = new Effect(function() {
+		var reader = new Effect(() -> {
 			observed = color.value.red;
 		});
 		color.value = Color.rgba(0.1, 0.2, 0.3);
@@ -4606,7 +4607,7 @@ class FrameworkSmoke {
 		var disposals = 0;
 		store.beginFrame();
 		store.initialize(id, "editor");
-		store.onUnmount(id, function() disposals++);
+		store.onUnmount(id, () -> disposals++);
 		store.endFrame();
 		store.beginFrame();
 		var parentMarker = store.usageMarker();
@@ -4625,7 +4626,7 @@ class FrameworkSmoke {
 
 	static function tabStrip(root:RenderNode):RenderNode {
 		var found:RenderNode = null;
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.children.length == 0
 				|| node.children[0].children.length == 0 || node.children[0].children[0].children.length == 0) return;
 			var semantics = node.children[0].children[0].semantics;
@@ -4703,7 +4704,7 @@ class FrameworkSmoke {
 
 	static function hostSessionLifecycleValid():Bool {
 		var stops = 0;
-		var session = new UiHostSession(function() stops++);
+		var session = new UiHostSession(() -> stops++);
 		if (!session.isActive() || session.state != UiHostLifecycle.Starting) return false;
 		session.stop();
 		session.stop();
@@ -4764,7 +4765,7 @@ class FrameworkSmoke {
 
 	@:access(haxeon.ui.core.RenderNode) static function retainedPaintFingerprintFollowsInputs():Bool {
 		var node = new RenderNode(new WidgetId(913), LayoutVisualKind.Custom);
-		node.onPaint(function(_, _) {}, "first");
+		node.onPaint((_, _) -> {}, "first");
 		var first = node.retainedPaintKey();
 		if (first == null || node.retainedPaintKey() != first) return false;
 		node.states = StyleState.Hovered;
@@ -4780,17 +4781,17 @@ class FrameworkSmoke {
 		node.syncRevisions(node, haxeon.ui.style.ComputedStyle.StyleDiff.compare(before, decorated));
 		var styled = node.retainedPaintKey();
 		if (styled == normal) return false;
-		node.onPaint(function(_, _) {}, "second");
+		node.onPaint((_, _) -> {}, "second");
 		if (node.retainedPaintKey() == styled) return false;
 		node.invalidatePaint();
 		return node.retainedPaintKey() != null;
 	}
 
 	static function hostRuntimeLifecycleValid(fonts:FontCollection):Bool {
-		var failedSession = new UiHostSession(function() {});
+		var failedSession = new UiHostSession(() -> {});
 		var failedRuntime = testHostRuntime(failedSession, fonts);
 		var factoryCalls = 0;
-		failedRuntime.start(function(_) {
+		failedRuntime.start(_ -> {
 			factoryCalls++;
 			throw "factory failure";
 		});
@@ -4798,7 +4799,7 @@ class FrameworkSmoke {
 			|| factoryCalls != 1) return false;
 		var originalError:haxeon.ui.host.UiHostRuntime.UiHostError = cast failedSession.error;
 		var originalFailure = originalError.message;
-		failedRuntime.start(function(_) {
+		failedRuntime.start(_ -> {
 			factoryCalls++;
 			return new SmokeHostApplication(false);
 		});
@@ -4807,12 +4808,12 @@ class FrameworkSmoke {
 			|| originalError.stack.length == 0) return false;
 
 		var stoppedRuntime:Null<UiHostRuntime> = null;
-		var stoppedSession = new UiHostSession(function() {
+		var stoppedSession = new UiHostSession(() -> {
 			if (stoppedRuntime != null) stoppedRuntime.dispose();
 		});
 		stoppedRuntime = testHostRuntime(stoppedSession, fonts);
 		var stoppedApp = new SmokeHostApplication(true);
-		stoppedRuntime.start(function(_) {
+		stoppedRuntime.start(_ -> {
 			stoppedSession.stop();
 			return stoppedApp;
 		});
@@ -4822,7 +4823,7 @@ class FrameworkSmoke {
 	}
 
 	static function testHostRuntime(session:UiHostSession, fonts:FontCollection):UiHostRuntime {
-		var context = new UiHostContext(fonts, new EventPump(), function() session.stop(), function() {});
+		var context = new UiHostContext(fonts, new EventPump(), () -> session.stop(), () -> {});
 		return new UiHostRuntime(session, context, WindowHandle.invalid(), SurfaceHandle.invalid(), 800, 600);
 	}
 
@@ -4939,7 +4940,7 @@ class FrameworkSmoke {
 		}
 		var surface = window.createSurfaceNative(surfaceOptions);
 		var ready = false;
-		surface.onReady(function() ready = true);
+		surface.onReady(() -> ready = true);
 		var deadline = Sys.monotonicTime() + 5.0;
 		while (!ready && Sys.monotonicTime() < deadline)
 			if (!runtime.events.poll()) runtime.events.wait(0.01);
@@ -4949,7 +4950,7 @@ class FrameworkSmoke {
 		defer overlay.dispose();
 		var context = overlay.context;
 		var view = new OverlaySmokeView();
-		var draw = function(width:Int, height:Int) {
+		var draw = (width:Int, height:Int) -> {
 			var frame = surface.acquireFrame();
 			defer frame.cancel();
 			scoped var step = overlay.frameStep(view, frame, new FrameTick(Sys.monotonicTime(), width, height, 0.016));
@@ -5068,10 +5069,10 @@ class FrameworkSmoke {
 		function leadingView():SplitView
 			return new SplitView("keyboard-leading-split", new Text("Leading"), new Text("Trailing"),
 				resizableSide: SplitSide.Leading, extent: leadingExtent, minimumExtent: 64.0, maximumExtent: 144.0,
-				collapsed: leadingCollapsed, onResize: function(value) {
+				collapsed: leadingCollapsed, onResize: value -> {
 					leadingResizes = Std.int(value);
 					leadingExtent = value;
-				}, onCollapsedChanged: function(collapsed) {
+				}, onCollapsedChanged: collapsed -> {
 				leadingCollapsed = collapsed;
 				if (!collapsed) leadingExpansions++;
 			});
@@ -5185,12 +5186,12 @@ class FrameworkSmoke {
 		var history = new EditHistory();
 		var value = 0;
 		var latest = 1;
-		var first = new EditOperation("Move", function() value = latest, function() value = 0, "drag", function(next) {
+		var first = new EditOperation("Move", () -> value = latest, () -> value = 0, "drag", next -> {
 			latest = cast next.mergeData;
 			return true;
 		}, 1);
 		if (!history.apply(first) || value != 1 || history.undoCount != 1) return false;
-		var second = new EditOperation("Move", function() value = 2, function() value = 1, "drag", null, 2);
+		var second = new EditOperation("Move", () -> value = 2, () -> value = 1, "drag", null, 2);
 		if (!history.apply(second) || value != 2 || history.undoCount != 1) return false;
 		if (!history.undo() || value != 0 || history.canUndo || !history.canRedo) return false;
 		if (!history.redo() || value != 2 || !history.canUndo || history.canRedo) return false;
@@ -5198,25 +5199,25 @@ class FrameworkSmoke {
 		history.clear();
 		value = 0;
 		var transaction = history.begin("Transform");
-		transaction.apply(new EditOperation("Translate X", function() value = 4, function() value = 0));
-		transaction.apply(new EditOperation("Translate Y", function() value = 9, function() value = 4));
+		transaction.apply(new EditOperation("Translate X", () -> value = 4, () -> value = 0));
+		transaction.apply(new EditOperation("Translate Y", () -> value = 9, () -> value = 4));
 		if (!transaction.commit()
 			|| value != 9 || history.undoCount != 1 || history.undoLabel() != "Transform") return false;
 		if (!history.undo() || value != 0 || !history.redo() || value != 9) return false;
 		history.clear();
 		value = 0;
 		var dragStart = history.begin("Drag", "drag-transaction");
-		dragStart.apply(new EditOperation("Move", function() value = 4, function() value = 0));
+		dragStart.apply(new EditOperation("Move", () -> value = 4, () -> value = 0));
 		if (!dragStart.commit()) return false;
 		var dragEnd = history.begin("Drag", "drag-transaction");
-		dragEnd.apply(new EditOperation("Move", function() value = 9, function() value = 4));
+		dragEnd.apply(new EditOperation("Move", () -> value = 9, () -> value = 4));
 		if (!dragEnd.commit() || history.undoCount != 1 || value != 9 || !history.undo() || value != 0) return false;
 
 		var document = new EditorDocument("scene");
 		var documentValue = 0;
 		if (document.isDirty || !document.apply(new EditOperation("Set value",
-			function() documentValue = 7,
-			function() documentValue = 0)) || documentValue != 7 || !document.isDirty) return false;
+			() -> documentValue = 7,
+			() -> documentValue = 0)) || documentValue != 7 || !document.isDirty) return false;
 		document.markSaved();
 		if (document.isDirty || !document.undo() || documentValue != 0
 			|| !document.isDirty || !document.redo() || documentValue != 7 || document.isDirty) return false;
@@ -5228,16 +5229,16 @@ class FrameworkSmoke {
 		var checked = false;
 		registry.register(new Command("save",
 			"Save",
-			function() globalRuns++,
+			() -> globalRuns++,
 			new Shortcut(UiKey.S, UiModifier.Control),
-			function() return enabled,
-			function() return checked));
+			() -> enabled,
+			() -> checked));
 		if (!registry.dispatch(UiKey.S, UiModifier.Control)
 			|| globalRuns != 1 || !registry.get("save").isEnabled() || registry.get("save").isChecked()) return false;
 		checked = true;
 		if (!registry.get("save").isChecked()) return false;
 		registry.pushScope("viewport");
-		registry.register(new Command("viewport.save", "Save viewport", function() scopedRuns++,
+		registry.register(new Command("viewport.save", "Save viewport", () -> scopedRuns++,
 			new Shortcut(UiKey.S, UiModifier.Control)),
 			"viewport");
 		if (!registry.dispatch(UiKey.S,
@@ -5247,7 +5248,7 @@ class FrameworkSmoke {
 		var paletteRuns = 0;
 		var paletteCommand = new Command("palette",
 			"Open palette",
-			function() paletteRuns++,
+			() -> paletteRuns++,
 			new Shortcut(UiKey.K, UiModifier.Control));
 		paletteCommand.addShortcut(new Shortcut(UiKey.P, UiModifier.Control));
 		registry.register(paletteCommand);
@@ -5269,37 +5270,37 @@ class FrameworkSmoke {
 		massSettings.unit = "kg";
 		massSettings.defaultValue = PropertyValue.Float(2.0);
 		var massProperty = new PropertyDescriptor("mass",
-			"Mass", PropertyType.Float, function() return PropertyValue.Float(mass), function(_,
-				value) {
-					switch (value) {
-						case PropertyValue.Float(next):
-							mass = next;
-						case PropertyValue.Int(next):
-							mass = next;
-						default:
-							throw "Mass requires a numeric value";
-					}
-				}, massSettings);
+			"Mass", PropertyType.Float, () -> PropertyValue.Float(mass), (_,
+			value) -> {
+				switch (value) {
+					case PropertyValue.Float(next):
+						mass = next;
+					case PropertyValue.Int(next):
+						mass = next;
+					default:
+						throw "Mass requires a numeric value";
+				}
+			}, massSettings);
 		var mode = "solid";
 		var modeSettings = new PropertyDescriptorOptions();
 		modeSettings.category = "Display";
 		modeSettings.options = [new PropertyOption("solid", "Solid"), new PropertyOption("wire", "Wire")];
 		var modeProperty = new PropertyDescriptor("mode",
-			"Mode", PropertyType.Enum, function() return PropertyValue.Enum(mode), function(_,
-				value) {
-					switch (value) {
-						case PropertyValue.Enum(next):
-							mode = next;
-						default:
-							throw "Mode requires an enum value";
-					}
-				}, modeSettings);
+			"Mode", PropertyType.Enum, () -> PropertyValue.Enum(mode), (_,
+			value) -> {
+				switch (value) {
+					case PropertyValue.Enum(next):
+						mode = next;
+					default:
+						throw "Mode requires an enum value";
+				}
+			}, modeSettings);
 		if (modeProperty.validateValue(commandContext, PropertyValue.Enum("wire")) != null
 			|| modeProperty.validateValue(commandContext,
 			PropertyValue.Enum("invalid")) == null) return false;
 		var mixedProperty = new PropertyDescriptor("visible",
-			"Visible", PropertyType.Bool, function() return PropertyValue.Mixed, function(_,
-				_) {}, null);
+			"Visible", PropertyType.Bool, () -> PropertyValue.Mixed, (_,
+			_) -> {}, null);
 		var inspector = new PropertyEditor("inspector", [massProperty, modeProperty, mixedProperty]);
 		var inspectorRoot = uiContext.submit(inspector, new LayoutFrame(480.0, 320.0));
 		if (inspectorRoot == null || inspectorRoot.children.length < 4
@@ -5311,7 +5312,7 @@ class FrameworkSmoke {
 				[
 					new PropertyInspectorSection("physics", "Physics", [massProperty]),
 					new PropertyInspectorSection("display", "Display", [modeProperty, mixedProperty])
-				], scrollable: scrollable, onSectionExpanded: function(id, expanded) {
+				], scrollable: scrollable, onSectionExpanded: (id, expanded) -> {
 					if (id == "display" && !expanded) sectionChanges++;
 				});
 		var composedInspector = composed(true);
@@ -5330,7 +5331,7 @@ class FrameworkSmoke {
 		if (composedRoot.styleType != "column" || composedRoot.semantics == null || composedRoot.semantics.role
 			!= AccessibilityRole.Group || composedRoot.semantics.label != "Inspector") return false;
 		var embeddedScrolls = 0;
-		composedRoot.walk(function(node) {
+		composedRoot.walk(node -> {
 			if (node.styleType == "scroll-view") embeddedScrolls++;
 		});
 		if (embeddedScrolls != 0) return false;
@@ -5347,15 +5348,15 @@ class FrameworkSmoke {
 		var bindingValue = 1;
 		var bindingDocument = new EditorDocument("binding");
 		var bindingDescriptor = new PropertyDescriptor("value",
-			"Value", PropertyType.Int, function() return PropertyValue.Int(bindingValue), function(_,
-				value) {
-					switch (value) {
-						case PropertyValue.Int(next):
-							bindingValue = next;
-						default:
-							throw "Binding value requires an integer";
-					}
-				});
+			"Value", PropertyType.Int, () -> PropertyValue.Int(bindingValue), (_,
+			value) -> {
+				switch (value) {
+					case PropertyValue.Int(next):
+						bindingValue = next;
+					default:
+						throw "Binding value requires an integer";
+				}
+			});
 		var binding = new PropertyBinding(bindingDescriptor, new CommandContext(bindingDocument));
 		if (binding.read() == null || binding.validate(PropertyValue.Int(2)) != null) return false;
 		switch (binding.apply(PropertyValue.Int(2), "binding-drag")) {
@@ -5400,9 +5401,9 @@ class FrameworkSmoke {
 		var vector = new SmokeVector(1.0, 2.0, 3.0);
 		var customRegistry = new PropertyEditorRegistry();
 		customRegistry.register(new SmokeVectorExtension());
-		var vectorProperty = new PropertyDescriptor("position", "Position", PropertyType.Custom("vec3"), function() {
+		var vectorProperty = new PropertyDescriptor("position", "Position", PropertyType.Custom("vec3"), () -> {
 			return PropertyValue.Custom("vec3", vector);
-		}, function(_, value) {
+		}, (_, value) -> {
 			switch (value) {
 				case PropertyValue.Custom("vec3", next):
 					vector = cast next;
@@ -5433,13 +5434,13 @@ class FrameworkSmoke {
 			!= nextVector || !document.undo() || vector.x != 1.0 || vector.y != 2.0 || vector.z != 3.0) return false;
 		var contextualRuns = 0;
 		var contextualRegistry = new CommandRegistry();
-		contextualRegistry.register(Command.contextual("property.reset", "Reset property", function(context) {
+		contextualRegistry.register(Command.contextual("property.reset", "Reset property", context -> {
 			if (context.document != document || !context.hasSelected("body-1")
 				|| context.parameters.getString("property") != "mass")
 				return CommandResult.rejected("Wrong command context");
 			contextualRuns++;
 			return CommandResult.executed();
-		}, new Shortcut(UiKey.R, UiModifier.Control), function(context) {
+		}, new Shortcut(UiKey.R, UiModifier.Control), context -> {
 			return context.document == document && context.hasSelection;
 		}));
 		var contextualResult = contextualRegistry.dispatchContext(UiKey.R, UiModifier.Control, commandContext);
@@ -5485,13 +5486,13 @@ class FrameworkSmoke {
 		if (!focus.focus(routingTarget.id)) return false;
 		var routed = 0;
 		var routingCommands = new CommandRegistry();
-		routingCommands.register(Command.contextual("focus.command", "Focus command", function(context) {
+		routingCommands.register(Command.contextual("focus.command", "Focus command", context -> {
 			if (context.document != document) return CommandResult.rejected("Missing active document");
 			routed++;
 			return CommandResult.executed();
 		}, new Shortcut(UiKey.K, UiModifier.Control)), "focused");
 		var globalRouted = 0;
-		routingCommands.register(new Command("global.command", "Global command", function() {
+		routingCommands.register(new Command("global.command", "Global command", () -> {
 			globalRouted++;
 		}, new Shortcut(UiKey.K, UiModifier.Control)));
 		routingRoot.commandScope = "focused";
@@ -5506,14 +5507,14 @@ class FrameworkSmoke {
 
 		var surfaceRegistry = new CommandRegistry();
 		var surfaceRuns = 0;
-		surfaceRegistry.register(new Command("surface.run", "Run simulation", function() {
+		surfaceRegistry.register(new Command("surface.run", "Run simulation", () -> {
 			surfaceRuns++;
 		}, new Shortcut(UiKey.R, UiModifier.Control)));
-		surfaceRegistry.register(new Command("surface.stop", "Stop simulation", function() {}));
+		surfaceRegistry.register(new Command("surface.stop", "Stop simulation", () -> {}));
 		var toolbar = new Toolbar("command-toolbar", ["surface.run"], surfaceRegistry);
 		var toolbarRoot = uiContext.submit(toolbar, new LayoutFrame(480.0, 48.0));
 		var commandButton:Null<RenderNode> = null;
-		toolbarRoot.walk(function(node) {
+		toolbarRoot.walk(node -> {
 			if (commandButton == null && node.styleType == "button"
 				&& node.styleKey == "surface.run") commandButton = node;
 		});
@@ -5531,7 +5532,7 @@ class FrameworkSmoke {
 		if (menuRoot == null
 			|| menuRoot.semantics == null || menuRoot.semantics.role != AccessibilityRole.Menu) return false;
 		var firstItem:Null<RenderNode> = null;
-		menuRoot.walk(function(node) {
+		menuRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.label == "Run simulation"
 				&& node.semantics.role == AccessibilityRole.MenuItem) firstItem = node;
 		});
@@ -5543,7 +5544,7 @@ class FrameworkSmoke {
 		if (settledFirst == null || settledFirst.computedStyle.getColor(StyleProperty.Background).red
 			!= firstItemNode.computedStyle.getColor(StyleProperty.Background).red) return false;
 		var sceneNudges = 0;
-		uiContext.commands.register(new Command("scene.nudge", "Nudge scene", function() {
+		uiContext.commands.register(new Command("scene.nudge", "Nudge scene", () -> {
 			sceneNudges++;
 		}, new Shortcut(UiKey.Down)));
 		uiContext.key(UiEventKind.KeyDown, UiKey.Down);
@@ -5557,7 +5558,7 @@ class FrameworkSmoke {
 			|| paletteRoot.semantics == null || paletteRoot.semantics.label != "Command palette") return false;
 		var resultRows = 0;
 		var nestedButtons = 0;
-		paletteRoot.walk(function(node) {
+		paletteRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem) {
 				resultRows++;
 				if (node.semantics.label == null || node.semantics.label.length == 0) nestedButtons++;
@@ -5574,13 +5575,13 @@ class FrameworkSmoke {
 			|| centeredGeometry.x + centeredGeometry.width > 473.0
 			|| centeredGeometry.y < 7.0 || centeredGeometry.y + centeredGeometry.height > 353.0) return false;
 		var centeredSearch:Null<RenderNode> = null;
-		centeredRoot.walk(function(node) {
+		centeredRoot.walk(node -> {
 			if (node.semantics != null
 				&& node.semantics.label == "Search commands" && node.styleType == "text-field") centeredSearch = node;
 		});
 		if (centeredSearch == null) return false;
 		var localCaretLayer = false;
-		centeredSearch.walk(function(node) {
+		centeredSearch.walk(node -> {
 			if (node.layout.visualKind == LayoutVisualKind.Custom
 				&& node.layout.style.zIndex == 2) localCaretLayer = true;
 		});
@@ -5592,13 +5593,13 @@ class FrameworkSmoke {
 		uiContext.key(UiEventKind.KeyDown, UiKey.Enter);
 		if (surfaceRuns != 2) return false;
 		var disabledRuns = 0;
-		surfaceRegistry.register(new Command("surface.disabled", "Unavailable", function() {
+		surfaceRegistry.register(new Command("surface.disabled", "Unavailable", () -> {
 			disabledRuns++;
-		}, null, function() return false));
+		}, null, () -> false));
 		var disabledPalette = new CommandPalette("disabled-palette", surfaceRegistry, null, 0.0, 0.0, "Unavailable");
 		var disabledRoot = uiContext.submit(disabledPalette, new LayoutFrame(480.0, 360.0));
 		var disabledRow:Null<RenderNode> = null;
-		disabledRoot.walk(function(node) {
+		disabledRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem) disabledRow = node;
 		});
 		if (disabledRow == null) return false;
@@ -5614,12 +5615,12 @@ class FrameworkSmoke {
 			0,
 			0,
 			"",
-			function() pointerDismissals++,
-			function(_) pointerResults++);
+			() -> pointerDismissals++,
+			_ -> pointerResults++);
 		var pointerFrame = new LayoutFrame(640, 480);
 		var pointerRoot = uiContext.submit(pointerPalette, pointerFrame);
 		var runRow:Null<RenderNode> = null;
-		pointerRoot.walk(function(node) {
+		pointerRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem
 				&& node.semantics.label == "Run simulation") runRow = node;
 		});
@@ -5710,7 +5711,7 @@ class FrameworkSmoke {
 	static function scrollbarVisibilityValid(context:UiContext):Bool {
 		var clock = new AnimationScheduler();
 		var visibility = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
-		visibility.attach(clock, function() {});
+		visibility.attach(clock, () -> {});
 		visibility.setAvailable(true);
 		scrollbarCheck(visibility.opacity == 0, "new scrollbar is hidden");
 		visibility.reveal();
@@ -5799,8 +5800,8 @@ class FrameworkSmoke {
 		var coarseClock = new AnimationScheduler(), fineClock = new AnimationScheduler();
 		var coarse = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
 		var fine = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
-		coarse.attach(coarseClock, function() {});
-		fine.attach(fineClock, function() {});
+		coarse.attach(coarseClock, () -> {});
+		fine.attach(fineClock, () -> {});
 		coarse.setAvailable(true);
 		fine.setAvailable(true);
 		coarse.reveal();
@@ -5996,17 +5997,17 @@ class FrameworkSmoke {
 	static function sidebarValid(context:UiContext):Bool {
 		var model = new haxeon.ui.sidebar.SidebarModel();
 		var files = 0, search = 0;
-		model.register("search", function() {
+		model.register("search", () -> {
 			search++;
 			return new Text("Search content");
 		}, new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Search", 10, true));
-		model.register("files", function() {
+		model.register("files", () -> {
 			files++;
 			return new Text("Files content");
 		}, new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Files", 0, true));
 		model.select("files");
 		if (files != 0 || search != 0 || model.modes[0].id != "files") return false;
-		var view = new haxeon.ui.sidebar.SidebarHost("sidebar-regression", model, function(id) {
+		var view = new haxeon.ui.sidebar.SidebarHost("sidebar-regression", model, id -> {
 			model.select(id);
 		});
 		context.submit(view, new LayoutFrame(240, 240));
@@ -6021,10 +6022,10 @@ class FrameworkSmoke {
 		var state = model.encode(), restored = new haxeon.ui.sidebar.SidebarModel();
 		if (!restored.restore(state)) return false;
 		restored.register("files",
-			function() return new Text("Files"),
+			() -> new Text("Files"),
 			new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Files"));
 		restored.register("search",
-			function() return new Text("Search"),
+			() -> new Text("Search"),
 			new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Search"));
 		var searchMode = restored.find("search");
 		if (searchMode == null || restored.activeId != "search" || restored.visible
@@ -6074,7 +6075,7 @@ class FrameworkSmoke {
 		}
 		if (!restored.unregister("search") || !restored.restore("1|future|1|future,360,1")) return false;
 		restored.register("future",
-			function() return new Text("Future"),
+			() -> new Text("Future"),
 			new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions("Future"));
 		var future = restored.selected();
 		if (future == null || future.id != "future" || restored.width != 360) return false;
@@ -6088,7 +6089,7 @@ class FrameworkSmoke {
 			var model = new haxeon.ui.sidebar.SidebarModel();
 			var order = 0;
 			for (name in names) model.register(name,
-				function() return new Text(name),
+				() -> new Text(name),
 				new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions(name, order++));
 			return model;
 		}
@@ -6097,7 +6098,7 @@ class FrameworkSmoke {
 		function require(value:Bool, message:String):Void if (!value) throw "sidebar order: " + message;
 		var model = make(["files", "search", "scm", "agents"]);
 		var changes = 0;
-		model.onChange = function() changes++;
+		model.onChange = () -> changes++;
 		require(!model.customOrder && !model.moveMode("files", "search") && !model.moveMode("files", "files")
 			&& changes == 0,
 			"a move to the same place changed the order");
@@ -6114,7 +6115,7 @@ class FrameworkSmoke {
 		require(restored.restore(saved), "saved order rejected");
 		var order = 0;
 		for (name in ["files", "search", "extra", "scm", "agents"]) restored.register(name,
-			function() return new Text(name),
+			() -> new Text(name),
 			new haxeon.ui.sidebar.SidebarModel.SidebarModeOptions(name, order++));
 		require(ids(restored) == "agents,search,extra,scm,files",
 			"late registration ignored the saved order: " + ids(restored));
@@ -6223,19 +6224,19 @@ class FrameworkSmoke {
 		model.register(new DockPanelDescriptor("viewport", "Viewport"));
 		model.register(new DockPanelDescriptor("inspector", "Inspector"));
 		model.register(new DockPanelDescriptor("console", "Console"));
-		var panelContents = [new DockPanelContent("hierarchy", function(_) {
+		var panelContents = [new DockPanelContent("hierarchy", _ -> {
 			hierarchyBuilds++;
 			return new Text("Hierarchy");
-		}), new DockPanelContent("viewport", function(_) {
+		}), new DockPanelContent("viewport", _ -> {
 			throw "Width-aware viewport builder was bypassed";
-		}, function(_, width) {
+		}, (_, width) -> {
 			viewportBuilds++;
 			viewportDockWidth = width;
 			return new Text("Viewport");
-		}), new DockPanelContent("inspector", function(_) {
+		}), new DockPanelContent("inspector", _ -> {
 			inspectorBuilds++;
 			return new Text("Inspector");
-		}), new DockPanelContent("console", function(_) {
+		}), new DockPanelContent("console", _ -> {
 			consoleBuilds++;
 			return new Text("Console");
 		})];
@@ -6316,7 +6317,7 @@ class FrameworkSmoke {
 		var contentHeaderRoot = uiContext.submit(contentHeaderWorkspace, new LayoutFrame(640.0, 480.0));
 		var contentHeaderTabs = 0;
 		if (contentHeaderRoot == null) return failDock();
-		contentHeaderRoot.walk(function(node) {
+		contentHeaderRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab) contentHeaderTabs++;
 		});
 		if (contentHeaderTabs != 0) return failDock();
@@ -6324,7 +6325,7 @@ class FrameworkSmoke {
 		contentHeaderRoot = uiContext.submit(contentHeaderWorkspace, new LayoutFrame(640.0, 480.0));
 		contentHeaderTabs = 0;
 		if (contentHeaderRoot == null) return failDock();
-		contentHeaderRoot.walk(function(node) {
+		contentHeaderRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab) contentHeaderTabs++;
 		});
 		if (contentHeaderTabs != 2) return failDock();
@@ -6332,7 +6333,7 @@ class FrameworkSmoke {
 		contentHeaderRoot = uiContext.submit(contentHeaderWorkspace, new LayoutFrame(640.0, 480.0));
 		contentHeaderTabs = 0;
 		if (contentHeaderRoot == null) return failDock();
-		contentHeaderRoot.walk(function(node) {
+		contentHeaderRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab) contentHeaderTabs++;
 		});
 		if (contentHeaderTabs != 0) return failDock();
@@ -6347,7 +6348,7 @@ class FrameworkSmoke {
 		var singletonTabs:Array<RenderNode> = [];
 		var singletonSourceTab:Null<RenderNode> = null;
 		var singletonTargetTab:Null<RenderNode> = null;
-		if (singletonRoot != null) singletonRoot.walk(function(node) {
+		if (singletonRoot != null) singletonRoot.walk(node -> {
 			if (node.styleType == "tabs") singletonTabs.push(node);
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab) {
 				if (node.semantics.label == "single-source") singletonSourceTab = node;
@@ -6365,7 +6366,7 @@ class FrameworkSmoke {
 		var ownPaneX = ownPaneBounds.x + ownPaneBounds.width * 0.5;
 		var ownPaneY = ownPaneBounds.y + ownPaneBounds.height * 0.5;
 		var tabPlatformCaptureStates:Array<Bool> = [];
-		uiContext.setPointerCaptureHandler(function(captured) tabPlatformCaptureStates.push(captured));
+		uiContext.setPointerCaptureHandler(captured -> tabPlatformCaptureStates.push(captured));
 		uiContext.pointerDown(sourceX, sourceY, 0);
 		if (tabPlatformCaptureStates.length != 0) return failDock();
 		uiContext.pointerMove(ownPaneX, ownPaneY);
@@ -6398,7 +6399,7 @@ class FrameworkSmoke {
 		}
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		singletonTargetTab = null;
-		if (singletonRoot != null) singletonRoot.walk(function(node) {
+		if (singletonRoot != null) singletonRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab
 				&& node.semantics.label == "single-target") singletonTargetTab = node;
 		});
@@ -6410,7 +6411,7 @@ class FrameworkSmoke {
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		singletonSourceTab = null;
 		singletonTargetTab = null;
-		if (singletonRoot != null) singletonRoot.walk(function(node) {
+		if (singletonRoot != null) singletonRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab) {
 				if (node.semantics.label == "single-source") singletonSourceTab = node;
 				if (node.semantics.label == "single-target") singletonTargetTab = node;
@@ -6446,7 +6447,7 @@ class FrameworkSmoke {
 		}
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		singletonTargetTab = null;
-		if (singletonRoot != null) singletonRoot.walk(function(node) {
+		if (singletonRoot != null) singletonRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab
 				&& node.semantics.label == "single-target") singletonTargetTab = node;
 		});
@@ -6458,7 +6459,7 @@ class FrameworkSmoke {
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		singletonSourceTab = null;
 		singletonTargetTab = null;
-		if (singletonRoot != null) singletonRoot.walk(function(node) {
+		if (singletonRoot != null) singletonRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab) {
 				if (node.semantics.label == "single-source") singletonSourceTab = node;
 				if (node.semantics.label == "single-target") singletonTargetTab = node;
@@ -6483,7 +6484,7 @@ class FrameworkSmoke {
 			return failDock();
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		var previewTab:Null<RenderNode> = null;
-		singletonRoot.walk(function(node) {
+		singletonRoot.walk(node -> {
 			if (node.semantics != null
 				&& node.semantics.role == AccessibilityRole.Tab
 				&& node.semantics.label == "single-target") previewTab = node;
@@ -6500,7 +6501,7 @@ class FrameworkSmoke {
 			|| uiContext.events.hasPointerCapture(singletonSourceId)) return failDock();
 		uiContext.setPointerCaptureHandler(null);
 		var changes = 0;
-		model.listen(function() changes++);
+		model.listen(() -> changes++);
 		var workspace = new DockWorkspace("editor-workspace", model, panelContents);
 		var workspaceRoot = uiContext.submit(workspace, new LayoutFrame(640.0, 480.0));
 		if (workspaceRoot == null
@@ -6515,7 +6516,7 @@ class FrameworkSmoke {
 		workspaceRoot = uiContext.submit(workspace, new LayoutFrame(640.0, 480.0));
 		if (workspaceRoot == null || consoleBuilds != 1) return failDock();
 		var tabsNode:Null<RenderNode> = null;
-		workspaceRoot.walk(function(node) {
+		workspaceRoot.walk(node -> {
 			if (tabsNode == null && node.styleType == "tabs") tabsNode = node;
 		});
 		if (tabsNode == null) return failDock();
@@ -6531,7 +6532,7 @@ class FrameworkSmoke {
 		// the target panel's own root is a Text or Box render node.
 		workspaceRoot = uiContext.submit(workspace, new LayoutFrame(640.0, 480.0));
 		var sawDropPreview = false;
-		if (workspaceRoot != null) workspaceRoot.walk(function(node) {
+		if (workspaceRoot != null) workspaceRoot.walk(node -> {
 			if (node.styleType == "dock-drop-preview"
 				&& node.layout.visualKind == LayoutVisualKind.Custom) sawDropPreview = true;
 		});
@@ -6579,7 +6580,7 @@ class FrameworkSmoke {
 			|| fallback.activePanelId != "fallback") return failDock();
 		workspaceRoot = uiContext.submit(workspace, new LayoutFrame(640.0, 480.0));
 		var inspectorTab:Null<RenderNode> = null;
-		workspaceRoot.walk(function(node) {
+		workspaceRoot.walk(node -> {
 			if (inspectorTab == null && node.styleType == "button" && node.styleKey == "inspector") inspectorTab = node;
 		});
 		if (inspectorTab == null) return failDock();
@@ -6682,23 +6683,23 @@ class FrameworkSmoke {
 		var rootLocalX = 0.0;
 		var panelLocalX = 0.0;
 		var targetLocalX = 0.0;
-		root.on(UiEventKind.PointerDown, function(event) {
+		root.on(UiEventKind.PointerDown, event -> {
 			order.push("root-capture");
 			rootLocalX = event.localX;
 		}, UiEventPhase.Capture);
-		panel.on(UiEventKind.PointerDown, function(event) {
+		panel.on(UiEventKind.PointerDown, event -> {
 			order.push("panel-capture");
 			panelLocalX = event.localX;
 		}, UiEventPhase.Capture);
-		target.on(UiEventKind.PointerDown, function(event) {
+		target.on(UiEventKind.PointerDown, event -> {
 			order.push("target");
 			targetLocalX = event.localX;
 		});
-		panel.on(UiEventKind.PointerDown, function(event) {
+		panel.on(UiEventKind.PointerDown, event -> {
 			order.push("panel-bubble");
 			if (!near(event.localX, expectedPanel.x)) order.push("panel-coordinate-error");
 		});
-		root.on(UiEventKind.PointerDown, function(event) {
+		root.on(UiEventKind.PointerDown, event -> {
 			order.push("root-bubble");
 			if (!near(event.localX, expectedRoot.x)) order.push("root-coordinate-error");
 		});
@@ -6897,8 +6898,8 @@ private class SmokeVectorExtension implements PropertyEditorExtension {
 			context:BuildContext,
 			enabled:Bool,
 			apply:PropertyValue->Void):View {
-		return new TextField(key, editableTextValue(value), function(_) {}, null, descriptor.label, enabled: enabled,
-			onSubmit: function(text) {
+		return new TextField(key, editableTextValue(value), _ -> {}, null, descriptor.label, enabled: enabled,
+			onSubmit: text -> {
 				var parsed = parse(text);
 				if (parsed != null) apply(PropertyValue.Custom(typeId(), parsed));
 			});
@@ -6952,7 +6953,7 @@ private class ExternalScrollbarSmoke implements View {
 	final controller:ScrollController;
 	public function new(controller:ScrollController) this.controller = controller;
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new haxeon.ui.core.Key("external-scrollbar-smoke"), function() {
+		return context.withScope(new haxeon.ui.core.Key("external-scrollbar-smoke"), () -> {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(240);
 			style.height = LayoutAxis.fixed(80);

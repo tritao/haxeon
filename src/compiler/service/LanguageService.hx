@@ -471,7 +471,7 @@ class LanguageService {
 		workspaceIndexOrder = [];
 		workspaceIndexCoverage = [];
 		workspaceIndexCursor = 0;
-		result.sort(function(left, right) {
+		result.sort((left, right) -> {
 			var leftPrefix = StringTools.startsWith(left.name.toLowerCase(), normalized),
 				rightPrefix = StringTools.startsWith(right.name.toLowerCase(), normalized);
 			if (leftPrefix != rightPrefix)
@@ -540,7 +540,7 @@ class LanguageService {
 				if (normalized.length == 0 || symbol.name.toLowerCase().indexOf(normalized) >= 0)
 					result.push(symbol);
 		}
-		result.sort(function(left, right) {
+		result.sort((left, right) -> {
 			var leftPrefix = StringTools.startsWith(left.name.toLowerCase(), normalized),
 				rightPrefix = StringTools.startsWith(right.name.toLowerCase(), normalized);
 			if (leftPrefix != rightPrefix)
@@ -602,7 +602,7 @@ class LanguageService {
 				|| tokens.kind(TokenId.ofRow(index - 1)) == New))
 				addParameterHints(path, tokens, index, start, end, result);
 		}
-		result.sort(function(left, right) return Reflect.compare(left.position, right.position));
+		result.sort((left, right) -> Reflect.compare(left.position, right.position));
 		return result;
 	}
 
@@ -696,7 +696,7 @@ class LanguageService {
 			for (span in structure.containers)
 				if (position >= span.start && position <= span.end)
 					spans.push(span);
-			spans.sort(function(left, right) return Reflect.compare(left.end - left.start, right.end - right.start));
+			spans.sort((left, right) -> Reflect.compare(left.end - left.start, right.end - right.start));
 			var unique:Array<SourceSpan> = [];
 			for (span in spans)
 				if (unique.length == 0 || unique[unique.length - 1].start != span.start
@@ -818,9 +818,9 @@ class LanguageService {
 			relation.ranges.push(edge.span);
 		}
 		var result = [for (relation in grouped) relation];
-		result.sort(function(left, right) return Reflect.compare(left.item.identity, right.item.identity));
+		result.sort((left, right) -> Reflect.compare(left.item.identity, right.item.identity));
 		for (relation in result)
-			relation.ranges.sort(function(left, right) return Reflect.compare(left.start, right.start));
+			relation.ranges.sort((left, right) -> Reflect.compare(left.start, right.start));
 		return result;
 	}
 
@@ -857,7 +857,7 @@ class LanguageService {
 			if (item != null)
 				result.push(item);
 		}
-		result.sort(function(left, right) {
+		result.sort((left, right) -> {
 			var name = Reflect.compare(left.name, right.name);
 			return name == 0 ? Reflect.compare(left.identity, right.identity) : name;
 		});
@@ -949,7 +949,7 @@ class LanguageService {
 					span: method.span
 				});
 		}
-		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		result.sort((a, b) -> Reflect.compare(a.name, b.name));
 		tagResults(result, state);
 		return result;
 	}
@@ -1140,7 +1140,7 @@ class LanguageService {
 					|| assignmentFollows(source, span.end)
 			});
 		}
-		result.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		result.sort((left, right) -> Reflect.compare(left.span.start, right.span.start));
 		return result;
 	}
 
@@ -1190,7 +1190,7 @@ class LanguageService {
 			}
 		}
 		addCommentTokens(state.source, result);
-		result.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		result.sort((left, right) -> Reflect.compare(left.span.start, right.span.start));
 		return result;
 	}
 
@@ -1563,7 +1563,7 @@ class LanguageService {
 				revision: snapshotRevision(location.state),
 				stale: snapshotRevision(location.state) != location.state.revision
 			}];
-		result.sort(function(left, right) {
+		result.sort((left, right) -> {
 			var path = Reflect.compare(left.path, right.path);
 			return path == 0 ? Reflect.compare(left.span.start, right.span.start) : path;
 		});
@@ -1823,7 +1823,7 @@ class LanguageService {
 	}
 
 	static function sortCompletion(result:Array<CompletionItem>):Void
-		result.sort(function(left, right) return Reflect.compare(left.sortText, right.sortText));
+		result.sort((left, right) -> Reflect.compare(left.sortText, right.sortText));
 
 	static function completionResult(result:Array<CompletionItem>, ?workspaceIncomplete:Bool = false):CompletionResult {
 		var incomplete = workspaceIncomplete || result.length > MAX_COMPLETION_ITEMS;
@@ -2152,7 +2152,7 @@ class LanguageService {
 		for (symbol in indexedWorkspaceSymbols(state))
 			containers.push(symbol.span);
 		containers.push(source.span(0, source.bytes.length));
-		folds.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		folds.sort((left, right) -> Reflect.compare(left.span.start, right.span.start));
 		structuralIndex.set(state.name, cached = {revision: state.revision, folds: folds, containers: containers});
 		return cached;
 	}

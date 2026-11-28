@@ -259,7 +259,7 @@ class GraphicsPage {
 			explorer.keyed("preview", retainedRevisionPreview(explorer, offset)),
 			explorer.keyed("controls", new Row("retained-revisions-controls",
 			[explorer.keyed("move", explorer.button(offset == 0.0 ? "Move cached layer" : "Reset cached layer",
-			"move-cached-layer", function() {
+			"move-cached-layer", () -> {
 				explorer.state.retainedLayerOffset = offset == 0.0 ? 42.0 : 0.0;
 			})),
 				explorer.keyed("hint",
@@ -273,7 +273,7 @@ class GraphicsPage {
 		style.height = LayoutAxis.fixed(150.0);
 		style.padding = new Insets(12.0, 12.0, 12.0, 12.0);
 		style.transform = Transform2D.translation(offset, 0.0);
-		return new CanvasView("retained-layer", function(canvas, geometry) {
+		return new CanvasView("retained-layer", (canvas, geometry) -> {
 			var background = explorer.state.lightTheme
 				? Color.rgba(0.06, 0.10, 0.18, 1.0)
 				: Color.rgba(0.02, 0.04, 0.08, 1.0);
@@ -324,7 +324,7 @@ class GraphicsPage {
 	}
 
 	static function pathPreview(explorer:UiExplorer):View {
-		return new CanvasView("paths-canvas", function(canvas, geometry) {
+		return new CanvasView("paths-canvas", (canvas, geometry) -> {
 			var width = geometry.width;
 			canvas.fillRectIfPositive(new Rect(0.0, 0.0, geometry.width, geometry.height),
 				explorer.state.lightTheme ? UiExplorer.color(0.93, 0.95, 0.98) : UiExplorer.color(0.07, 0.10, 0.16));
@@ -342,14 +342,14 @@ class GraphicsPage {
 	}
 
 	static function paintPreview(explorer:UiExplorer):View {
-		return new CanvasView("paint-canvas", function(canvas, geometry) {
+		return new CanvasView("paint-canvas", (canvas, geometry) -> {
 			canvas.fillRectIfPositive(new Rect(0.0, 0.0, geometry.width, geometry.height),
 				explorer.state.lightTheme ? UiExplorer.color(0.93, 0.95, 0.98) : UiExplorer.color(0.07, 0.10, 0.16));
 			var top = 18.0;
 			var height = geometry.height - 36.0;
 			canvas.fillRectIfPositive(new Rect(18.0, top, geometry.width * 0.38, height),
 				Color.rgba(0.18, 0.48, 0.82, 1.0));
-			canvas.withLayer(0.58, function(layer) {
+			canvas.withLayer(0.58, layer -> {
 				layer.fillRectIfPositive(new Rect(geometry.width * 0.24, top + 10.0,
 					geometry.width * 0.34, height - 4.0), Color.rgba(0.16, 0.70, 0.46, 1.0));
 			});
@@ -357,7 +357,7 @@ class GraphicsPage {
 			var border = explorer.context.buildContext.theme.tokens.textSecondary;
 			canvas.fillRectIfPositive(new Rect(clip.x - 1.0, clip.y - 1.0,
 				clip.width + 2.0, clip.height + 2.0), border);
-			canvas.withClip(clip, function(clipped) {
+			canvas.withClip(clip, clipped -> {
 				clipped.fillRectIfPositive(new Rect(clip.x - 24.0, clip.y + 10.0,
 					clip.width + 48.0, clip.height - 20.0), Color.rgba(0.50, 0.28, 0.72, 1.0));
 			});
@@ -378,7 +378,7 @@ class GraphicsPage {
 	}
 
 	static function gradientPreview(explorer:UiExplorer, key:String, kind:Int):View {
-		return new CanvasView("gradient-" + key, function(canvas, geometry) {
+		return new CanvasView("gradient-" + key, (canvas, geometry) -> {
 			var bounds = new Rect(14.0, 14.0, geometry.width - 28.0, geometry.height - 28.0);
 			if (kind == 2) {
 				var size = 12.0;

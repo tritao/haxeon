@@ -226,10 +226,10 @@ private class CxxAstBuilder {
 					if (closure.declarations.exists(functionModel.qualifiedName)) functionModel
 			];
 		}
-		selectedRecords.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
-		selectedEnums.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
-		selectedAliases.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
-		selectedFunctions.sort(function(left, right) return Reflect.compare(left.symbol, right.symbol));
+		selectedRecords.sort((left, right) -> Reflect.compare(left.qualifiedName, right.qualifiedName));
+		selectedEnums.sort((left, right) -> Reflect.compare(left.qualifiedName, right.qualifiedName));
+		selectedAliases.sort((left, right) -> Reflect.compare(left.qualifiedName, right.qualifiedName));
+		selectedFunctions.sort((left, right) -> Reflect.compare(left.symbol, right.symbol));
 		var source = new SourceFile(sourcePath,
 			FileSystem.exists(sourcePath) ? sys.io.File.getContent(sourcePath) : "");
 		return new CxxModel(target, sourcePath, source.span(0, source.bytes.length), selectedRecords, selectedEnums,

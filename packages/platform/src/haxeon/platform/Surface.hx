@@ -65,7 +65,7 @@ class Surface implements Disposable {
 	public function onReady(handler:Void->Void):EventSubscription {
 		if (handler == null)
 			throw BindingError.invalidArgument("Surface.onReady", "Ready handler is required");
-		return listen(function(event) switch event {
+		return listen(event -> switch event {
 			case SurfaceReady(_): handler();
 			case _:
 		});
@@ -75,7 +75,7 @@ class Surface implements Disposable {
 	public function onLost(handler:Void->Void):EventSubscription {
 		if (handler == null)
 			throw BindingError.invalidArgument("Surface.onLost", "Lost handler is required");
-		return listen(function(event) switch event {
+		return listen(event -> switch event {
 			case SurfaceLost(_): handler();
 			case _:
 		});
@@ -85,7 +85,7 @@ class Surface implements Disposable {
 	public function onResize(handler:Int->Int->Int->Int->Void):EventSubscription {
 		if (handler == null)
 			throw BindingError.invalidArgument("Surface.onResize", "Resize handler is required");
-		return listen(function(event) switch event {
+		return listen(event -> switch event {
 			case SurfaceResize(_, width, height, framebufferWidth, framebufferHeight):
 				handler(width, height, framebufferWidth, framebufferHeight);
 			case _:
@@ -96,7 +96,7 @@ class Surface implements Disposable {
 	public function onFrameComplete(handler:Int64->Result<Void, NativeKitError>->Void):EventSubscription {
 		if (handler == null)
 			throw BindingError.invalidArgument("Surface.onFrameComplete", "Completion handler is required");
-		return listen(function(event) switch event {
+		return listen(event -> switch event {
 			case SurfaceFrameComplete(_, token, outcome): handler(token, outcome);
 			case _:
 		});
@@ -106,7 +106,7 @@ class Surface implements Disposable {
 		ensureLive();
 		if (events == null)
 			throw BindingError.invalidState("Surface.listen", "Borrow the surface with its event pump to subscribe");
-		return events.listenSource(new Handle(value.rawValue), function(event) {
+		return events.listenSource(new Handle(value.rawValue), event -> {
 			handler(event);
 			return false;
 		}).ownedBy(dependents);
@@ -133,7 +133,7 @@ class Surface implements Disposable {
 	public function onFrameTick(handler:FrameTick->Void):SurfaceFrameSubscription {
 		if (handler == null)
 			throw BindingError.invalidArgument("Surface.onFrameTick", "Frame handler must not be null");
-		return onFrame(function(width, height) handler(new FrameTick(Sys.monotonicTime(), width, height)));
+		return onFrame((width, height) -> handler(new FrameTick(Sys.monotonicTime(), width, height)));
 	}
 
 	/** Sets the surface's bounds in logical window pixels. */

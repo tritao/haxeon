@@ -8,7 +8,7 @@ package haxeon.agent;
 **/
 class Agent {
 	/** Receives every event. Set before `send`. */
-	public var onEvent:AgentEvent->Void = function(_) {};
+	public var onEvent:AgentEvent->Void = _ -> {};
 
 	/** What the agent is doing now. */
 	public var state(default, null):AgentState = Idle;

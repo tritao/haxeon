@@ -48,14 +48,14 @@ class ImageView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var nodeId = context.rootId("image");
 			var identity = new StyleIdentity("image", key, key, null, ["image"]);
 			var computed = context.resolveStyled(nodeId, identity, style);
 			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			context.applyStyled(node, identity, computed);
 			if (label != null) node.semantics = new Semantics(AccessibilityRole.Image, label);
-			node.onPaint(function(canvas:Canvas, geometry:ResolvedLayoutItem) {
+			node.onPaint((canvas:Canvas, geometry:ResolvedLayoutItem) -> {
 				if (image.isDisposed() || geometry.width <= 0.0 || geometry.height <= 0.0) return;
 				var scale = switch fit {
 					case ImageFit.Contain:
@@ -76,7 +76,7 @@ class ImageView implements View {
 				var destination = new Rect((geometry.width - width) * 0.5, (geometry.height - height) * 0.5, width,
 					height);
 				canvas.withClip(new Rect(0.0, 0.0, geometry.width, geometry.height),
-					function(target) target.drawImage(image, destination));
+					target -> target.drawImage(image, destination));
 			});
 			return node;
 		});

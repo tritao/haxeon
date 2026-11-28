@@ -41,7 +41,7 @@ class Census {
 		var dynamicField:Dynamic = field;
 		var checkedField:CallbackField = cast dynamicField;
 		if (checkedField != field) throw "Checked class cast changed a managed reference";
-		field.onEdit = function(intent, layout) {
+		field.onEdit = (intent, layout) -> {
 			return switch intent {
 				case Insert(text): text == payload && layout.number == 42 && layout.owner == field.owner;
 				case Delete: false;
@@ -49,7 +49,7 @@ class Census {
 		};
 		var escaped:Dynamic = Reflect.field(field, "onEdit");
 		Reflect.setField(field, "onEdit", escaped);
-		var wrong:(String, CallbackLayout) -> Bool = function(_, _) return true;
+		var wrong:(String, CallbackLayout) -> Bool = (_, _) -> true;
 		var rejected = false;
 		try Reflect.setField(field, "onEdit", wrong) catch (_:Dynamic) rejected = true;
 		if (!rejected) throw "Reflection accepted a closure with the wrong enum argument type";

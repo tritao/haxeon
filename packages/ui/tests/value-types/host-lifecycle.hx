@@ -5,7 +5,7 @@ import haxeon.ui.host.UiHostRuntime.UiHostLifecycle;
 private class LifecycleProbe {
 	public static function run():Int {
 		var stops = 0;
-		var session = new UiHostSession(function() stops++);
+		var session = new UiHostSession(() -> stops++);
 		if (session.state != UiHostLifecycle.Starting || !session.isActive()) return 1;
 		session.transition(UiHostLifecycle.LoadingResources);
 		if (session.state != UiHostLifecycle.LoadingResources || !session.isActive()) return 2;
@@ -21,7 +21,7 @@ private class LifecycleProbe {
 		var rejected = false;
 		try session.transition(UiHostLifecycle.Running) catch (_:Dynamic) rejected = true;
 		if (!rejected) return 6;
-		var failed = new UiHostSession(function() stops++);
+		var failed = new UiHostSession(() -> stops++);
 		failed.transition(UiHostLifecycle.Failed);
 		failed.stop();
 		if (failed.state != UiHostLifecycle.Failed || failed.isActive() || stops != 1) return 7;

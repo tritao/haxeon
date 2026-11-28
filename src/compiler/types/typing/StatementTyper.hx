@@ -58,7 +58,7 @@ class StatementTyper {
 
 	function alwaysExits(statements:Array<TypedStatement>):Bool
 		return ControlFlow.alwaysExits(statements,
-			function(type, cases) return bodyTyper.exhaustiveSwitch(type, cases));
+			(type, cases) -> bodyTyper.exhaustiveSwitch(type, cases));
 
 	/**
 	 * A local initialized with a reference to a declared function and never reassigned is that function: calls

@@ -227,7 +227,7 @@ class SemanticWorkspace {
 			if (symbol != null)
 				addTypeIdentity(result, symbol.id);
 		}
-		result.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
+		result.sort((left, right) -> Reflect.compare(Std.string(left), Std.string(right)));
 		return result;
 	}
 
@@ -259,7 +259,7 @@ class SemanticWorkspace {
 						addTypeIdentity(result, symbol.id);
 				}
 		}
-		result.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
+		result.sort((left, right) -> Reflect.compare(Std.string(left), Std.string(right)));
 		return result;
 	}
 
@@ -347,7 +347,7 @@ class SemanticWorkspace {
 							addImplementation(result, seen, state, 'class:${decl.name}:method:$member', method.span);
 			}
 		}
-		result.sort(function(left, right) {
+		result.sort((left, right) -> {
 			var path = Reflect.compare(left.span.file.path, right.span.file.path);
 			return path == 0 ? left.span.start - right.span.start : path;
 		});
@@ -444,7 +444,7 @@ class SemanticWorkspace {
 						result.push(symbol);
 					}
 		}
-		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		result.sort((left, right) -> Reflect.compare(left.name, right.name));
 		return result;
 	}
 
@@ -475,7 +475,7 @@ class SemanticWorkspace {
 		for (matches in byName)
 			if (matches.length == 1)
 				result.push(matches[0]);
-		result.sort(function(left, right) return Reflect.compare(left.symbol.name, right.symbol.name));
+		result.sort((left, right) -> Reflect.compare(left.symbol.name, right.symbol.name));
 		return result;
 	}
 
@@ -501,7 +501,7 @@ class SemanticWorkspace {
 						result.push(symbol);
 				}
 		}
-		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		result.sort((left, right) -> Reflect.compare(left.name, right.name));
 		return result;
 	}
 

@@ -11,3 +11,4 @@ class A {
 		call(function(x:Int->Int):Void {});
 	}
 }
+// @lint:off function-lambda: the formatter is tested on the function form

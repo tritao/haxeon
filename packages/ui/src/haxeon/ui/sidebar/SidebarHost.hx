@@ -55,7 +55,7 @@ class SidebarHost implements View {
 		var tabs = new Tabs(key, items, selected.id, onSelect, style, selectionMode: TabsSelectionMode.Controlled,
 			headerTrailing: headerActions == null ? null : headerActions(selected.id));
 		var modifier = new RootModifier();
-		modifier.onResolved(function(bounds) model.rememberWidth(bounds.width));
+		modifier.onResolved(bounds -> model.rememberWidth(bounds.width));
 		return context.build(tabs, modifier);
 	}
 }

@@ -140,19 +140,19 @@ class SettingsCatalog {
 		options.recordHistory = false;
 		options.description = definition.tooltip;
 		options.restartRequired = definition.restartRequired;
-		options.modified = function() return !store.isDefault(definition.path);
-		options.reset = function() store.reset(definition.path);
+		options.modified = () -> !store.isDefault(definition.path);
+		options.reset = () -> store.reset(definition.path);
 		options.minimum = definition.minimum;
 		options.maximum = definition.maximum;
 		options.step = definition.step;
 		options.unit = definition.unit;
 		options.defaultValue = definition.defaultValue;
 		options.options = definition.options;
-		options.validator = function(_, value) return definition.validate(value);
+		options.validator = (_, value) -> definition.validate(value);
 		var target = store;
 		var path = definition.path;
 		var created = new PropertyDescriptor(path, definition.label,
-			definition.type, function() return target.get(path), function(_, value:PropertyValue) {
+			definition.type, () -> target.get(path), (_, value:PropertyValue) -> {
 				var error = target.set(path, value);
 				if (error != null)
 					throw error;

@@ -322,7 +322,7 @@ class TextField implements ScopeView {
 		var editor:TextEditorState = stored.value;
 		// The editor is a mutable resource: the body depends on its version, which every change below bumps.
 		editor.version.value;
-		var refresh = function() editor.changed();
+		var refresh = () -> editor.changed();
 		editor.layout.codeWordBoundaries = codeWordBoundaries;
 		editor.configureTail(followTail && readOnly);
 		// A caller's value is adopted when it gives a new description; the body running again for its own state keeps
@@ -390,7 +390,7 @@ class TextField implements ScopeView {
 				LayoutVisualKind.Custom,
 				backgroundStyle);
 			backgroundNode.hitTestSelf = false;
-			backgroundNode.onPaint(function(canvas, geometry) {
+			backgroundNode.onPaint((canvas, geometry) -> {
 				if (!editor.isDisposed()) {
 					var visible = geometry.visibleLocalBounds();
 					canvas.translate(0.0, -editor.scrollOffsetY);
@@ -419,7 +419,7 @@ class TextField implements ScopeView {
 				LayoutVisualKind.Custom,
 				selectionStyle);
 			selectionNode.hitTestSelf = false;
-			selectionNode.onPaint(function(canvas, geometry) {
+			selectionNode.onPaint((canvas, geometry) -> {
 				if (!editor.isDisposed()) {
 					var visible = geometry.visibleLocalBounds();
 					paintSelection(canvas,
@@ -445,7 +445,7 @@ class TextField implements ScopeView {
 				LayoutVisualKind.Custom,
 				whitespaceStyle);
 			whitespaceNode.hitTestSelf = false;
-			whitespaceNode.onPaint(function(canvas, geometry) {
+			whitespaceNode.onPaint((canvas, geometry) -> {
 				if (editor.isDisposed()) return;
 				var visible = geometry.visibleLocalBounds();
 				var selections = additionalSelections.copy();
@@ -533,7 +533,7 @@ class TextField implements ScopeView {
 			paintStyle.zIndex = 2;
 			var paintNode = context.createNode(context.rootId("editor-paint"), LayoutVisualKind.Custom, paintStyle);
 			paintNode.hitTestSelf = false;
-			paintNode.onPaint(function(canvas, _) {
+			paintNode.onPaint((canvas, _) -> {
 				if (!editor.isDisposed()) {
 					var now = Sys.time();
 					var active = context.textInput.isOwner(id);
@@ -545,11 +545,11 @@ class TextField implements ScopeView {
 			editorContent.add(paintNode);
 		}
 		node.add(editorContent);
-		if (overlays.length > 0) context.withStyleParent(computed, function() {
+		if (overlays.length > 0) context.withStyleParent(computed, () -> {
 			for (overlay in overlays) node.add(overlay.build(context));
 		});
 
-		var refreshState = function(revealCaret:Bool = true) {
+		var refreshState = (revealCaret:Bool = true) -> {
 			if (revealCaret) {
 				editor.requestCaretReveal();
 				var reveal = latest().onCaretRevealRequest;
@@ -560,7 +560,7 @@ class TextField implements ScopeView {
 			semantics.selectionEnd = editor.selectionEnd;
 			refresh();
 		};
-		var updateState = function(revealCaret:Bool = true) {
+		var updateState = (revealCaret:Bool = true) -> {
 			latest().publishSelection(editor);
 			refreshState(revealCaret);
 		};
@@ -576,7 +576,7 @@ class TextField implements ScopeView {
 			updateState();
 			return true;
 		};
-		var publishTextChange = function(previousRevision:Int) {
+		var publishTextChange = (previousRevision:Int) -> {
 			var field = latest(), edited = field.onEdit, changed = field.onChange;
 			if (editor.documentRevision() != previousRevision && editor.lastEditTransaction != null && edited != null)
 				edited(editor.lastEditTransaction);
@@ -585,7 +585,7 @@ class TextField implements ScopeView {
 			refreshState();
 		};
 
-		editorContent.onResolved(function(geometry) {
+		editorContent.onResolved(geometry -> {
 			editor.finishBuildSynchronization();
 			editor.configureHistory(!historyManagedExternally);
 			if (multiline) {
@@ -598,9 +598,9 @@ class TextField implements ScopeView {
 			}
 		});
 		var drag = context.resourceState(context.id("selection-drag"),
-			function() return new SelectionDragController(),
-			function(value) value.dispose()).value;
-		textNode.onResolved(function(geometry) {
+			() -> new SelectionDragController(),
+			value -> value.dispose()).value;
+		textNode.onResolved(geometry -> {
 			editor.updateLayout(geometry.width);
 			drag.layoutResolved();
 			var resolvedHandler = latest().onLayoutResolved;
@@ -610,7 +610,7 @@ class TextField implements ScopeView {
 				&& editor.resolveCaretReveal(editorContent.resolved.height)) refresh();
 			latest().syncCursor(editor, context, id, geometry);
 		});
-		node.on(UiEventKind.Focus, function(_) {
+		node.on(UiEventKind.Focus, _ -> {
 			if (!enabled) return;
 			editor.focused = true;
 			editor.resetCaretBlink(Sys.time());
@@ -620,7 +620,7 @@ class TextField implements ScopeView {
 			if (textNode.resolved != null) latest().syncCursor(editor, context, id, cast textNode.resolved);
 			else latest().publishDiagnostics(editor, context, null);
 		});
-		var blur = function(event:UiEvent) {
+		var blur = (event:UiEvent) -> {
 			if (!editor.focused && !editor.draggingSelection) return;
 			editor.breakHistoryGroup();
 			editor.focused = false;
@@ -649,13 +649,13 @@ class TextField implements ScopeView {
 				updateState(false);
 			}
 		};
-		drag.configure(context.animations, editor, function() return textNode.resolved, extendDrag, function(delta) {
+		drag.configure(context.animations, editor, () -> textNode.resolved, extendDrag, delta -> {
 			var dragScroll = latest().onSelectionDragScroll;
 			var changed = dragScroll == null ? editor.scrollBy(delta) : dragScroll(delta);
 			if (changed) refresh();
 			return changed;
 		});
-		node.on(UiEventKind.PointerDown, function(event) {
+		node.on(UiEventKind.PointerDown, event -> {
 			var pointerAction = latest().onTextPointerDown;
 			if (enabled && pointerAction != null && textNode.resolved != null) {
 				var geometry:ResolvedLayoutItem = cast textNode.resolved;
@@ -684,7 +684,7 @@ class TextField implements ScopeView {
 			editor.draggingSelection = true;
 			event.preventDefault();
 		});
-		node.on(UiEventKind.PointerMove, function(event) {
+		node.on(UiEventKind.PointerMove, event -> {
 			var pointerMove = latest().onTextPointerMove;
 			if (enabled && pointerMove != null && textNode.resolved != null) {
 				var geometry:ResolvedLayoutItem = cast textNode.resolved;
@@ -697,18 +697,18 @@ class TextField implements ScopeView {
 			extendDrag(event.x, event.y);
 			drag.update(event.x, event.y);
 		});
-		node.on(UiEventKind.PointerUp, function(event) {
+		node.on(UiEventKind.PointerUp, event -> {
 			drag.stop();
 			editor.completePointerClick(event.x, event.y);
 			editor.draggingSelection = false;
 		});
-		node.on(UiEventKind.PointerCancel, function(_) {
+		node.on(UiEventKind.PointerCancel, _ -> {
 			drag.stop();
 			editor.cancelPointerClick();
 			editor.draggingSelection = false;
 		});
 
-		var handleKey = function(event:UiEvent) {
+		var handleKey = (event:UiEvent) -> {
 			if (!enabled) return;
 			// Ctrl+Alt arrows belong to application navigation, including its
 			// Shift variant. Leave them unconsumed for the command route.
@@ -769,7 +769,7 @@ class TextField implements ScopeView {
 				}
 			} else if (command && event.key == UiKey.V) {
 				if (readOnly) handled = false;
-				else context.clipboard.readText(function(answer) {
+				else context.clipboard.readText(answer -> {
 					// Nothing pastes when the platform has no text for it, or refused.
 					var pasted = switch answer {
 						case Ok(text): text;
@@ -870,14 +870,14 @@ class TextField implements ScopeView {
 		node.on(UiEventKind.KeyDown, handleKey);
 		node.on(UiEventKind.KeyRepeat, handleKey);
 
-		if (multiline && readOnly) node.on(UiEventKind.Scroll, function(event) {
+		if (multiline && readOnly) node.on(UiEventKind.Scroll, event -> {
 			if (scrollReadOnly(editor, event.deltaY)) {
 				refresh();
 				event.stopPropagation();
 			}
 		});
 
-		node.on(UiEventKind.TextInput, function(event) {
+		node.on(UiEventKind.TextInput, event -> {
 			if (enabled && !readOnly && delegateEdit(Insert(event.text))) return;
 			var previousRevision = editor.documentRevision();
 			if (enabled && !readOnly && editor.insert(event.text)) {
@@ -885,7 +885,7 @@ class TextField implements ScopeView {
 				publishTextChange(previousRevision);
 			}
 		});
-		node.on(UiEventKind.TextEdit, function(event) {
+		node.on(UiEventKind.TextEdit, event -> {
 			if (!enabled || readOnly || event.data == null) return;
 			var edit:TextEdit = cast event.data;
 			// Windows sends Backspace/Delete as both a key event and a text-edit
@@ -898,14 +898,14 @@ class TextField implements ScopeView {
 				publishTextChange(previousRevision);
 			}
 		});
-		node.on(UiEventKind.AccessibilitySetValue, function(event) {
+		node.on(UiEventKind.AccessibilitySetValue, event -> {
 			var previousRevision = editor.documentRevision();
 			if (enabled && !readOnly && editor.replace(0, editor.documentLength(), event.text)) {
 				editor.resetCaretBlink(Sys.time());
 				publishTextChange(previousRevision);
 			}
 		});
-		node.on(UiEventKind.AccessibilitySetSelection, function(event) {
+		node.on(UiEventKind.AccessibilitySetSelection, event -> {
 			if (!enabled || event.data == null) return;
 			var request:AccessibilityActionData = cast event.data;
 			if (editor.setSelection(request.selectionStart, request.selectionEnd)) {
@@ -1061,9 +1061,9 @@ class TextField implements ScopeView {
 			|| context.fonts.isDisposed()) throw "Text fields require fonts on their build context";
 		if (context.stateStore.contains(id)) return context.existingState(id);
 		var fonts = context.fonts;
-		return context.resourceState(id, function() {
+		return context.resourceState(id, () -> {
 			return new TextEditorState(cast fonts, value, textStyle, paragraphStyle, document);
-		}, function(editor:TextEditorState) {
+		}, (editor:TextEditorState) -> {
 			editor.dispose();
 		});
 	}

@@ -18,7 +18,7 @@ class WindowChromePage {
 			explorer.caption("The demo window is created by NativeKit, rendered by the UI framework, and routed through the same event pump as this explorer.")),
 			explorer.keyed("actions", new Row("window-chrome-actions",
 			[explorer.keyed("open", explorer.button("Open Window Chrome Demo", "open-window-chrome",
-			function() {
+			() -> {
 				explorer.openWindowChromeDemo();
 			})),
 				explorer.keyed("status", explorer.caption(explorer.windowChromeStatus()))],

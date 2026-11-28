@@ -21,7 +21,7 @@ function main():Int {
 	if (copy.count != 7)
 		return 2;
 	var rejected = false;
-	var effect = new Effect(function() {
+	var effect = new Effect(() -> {
 		var read = model.count;
 		try
 			Reflect.setField(model, "count", 8)

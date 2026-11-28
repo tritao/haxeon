@@ -47,7 +47,7 @@ class AccessibilityContract {
 		var tabs = new Tabs("accessibility-tabs", [
 			new TabItem("first", "First", new Text("First content")),
 			new TabItem("second", "Second", new Text("Second content"))
-		], "first", function(_) {
+		], "first", _ -> {
 			changes++;
 		});
 		var tabsRoot = context.submit(tabs, frame);
@@ -92,7 +92,7 @@ class AccessibilityContract {
 			|| firstNativeRole != nativekit.ffi.NativeKitTypes.NativeAccessibilityRole.TabList) return 6;
 
 		var dismissals = 0;
-		var dialog = new Dialog("accessibility-dialog", "Preferences", new Button("Apply"), function() {
+		var dialog = new Dialog("accessibility-dialog", "Preferences", new Button("Apply"), () -> {
 			dismissals++;
 		});
 		var dialogRoot = context.submit(dialog, frame);
@@ -110,9 +110,9 @@ class AccessibilityContract {
 
 		var selectedMenu = "";
 		var menuDismissals = 0;
-		var menu = new Menu("accessibility-menu", [new MenuItem("save", "Save", function() {
+		var menu = new Menu("accessibility-menu", [new MenuItem("save", "Save", () -> {
 			selectedMenu = "save";
-		})], 8.0, 8.0, function() {
+		})], 8.0, 8.0, () -> {
 			menuDismissals++;
 		});
 		var menuRoot = context.submit(menu, frame);
@@ -120,7 +120,7 @@ class AccessibilityContract {
 		var menuItem = findSnapshot(menuSnapshot, AccessibilityRole.MenuItem);
 		var menuRootSemantics:Semantics = cast menuRoot.semantics;
 		var menuItemId = 0;
-		menuRoot.walk(function(node) {
+		menuRoot.walk(node -> {
 			var semantics:Null<Semantics> = cast node.semantics;
 			if (semantics != null && semantics.role == AccessibilityRole.MenuItem) menuItemId = node.id.value;
 		});
@@ -142,7 +142,7 @@ class AccessibilityContract {
 				new SelectOption("one", "Öne", "one"),
 				new SelectOption("blocked", "Blocked", "blocked", false),
 				new SelectOption("two", "Two", "two")
-			], selectInput, function(next) {
+			], selectInput, next -> {
 				selectChanges++;
 				selectedSelectValue = next;
 				selectInput = next;
@@ -208,7 +208,7 @@ class AccessibilityContract {
 		if (!checkComboBox(context)) return 32;
 
 		var toggles = 0;
-		var toggle = new Toggle("accessibility-switch", "Enabled", false, function(value) {
+		var toggle = new Toggle("accessibility-switch", "Enabled", false, value -> {
 			if (value) toggles++;
 		});
 		var toggleRoot = context.submit(toggle, frame);
@@ -235,7 +235,7 @@ class AccessibilityContract {
 		var logicalRows = new VirtualList("accessibility-large-list",
 			10000,
 			20.0,
-			function(index) return new Text('Row $index'),
+			index -> new Text('Row $index'),
 			listStyle,
 			null,
 			controller,
@@ -395,11 +395,11 @@ class AccessibilityContract {
 		var select = new Select("overlap-select", [
 			new SelectOption("comfortable", "Comfortable", "comfortable"),
 			new SelectOption("compact", "Compact", "compact")
-		], selected, function(value) {
+		], selected, value -> {
 			selected = value;
 		});
 		var column = new Column("overlap-column",
-			[new KeyedView("select", select), new KeyedView("underlying", new Button("Underlying", null, function() {
+			[new KeyedView("select", select), new KeyedView("underlying", new Button("Underlying", null, () -> {
 				underlyingClicks++;
 			}))]);
 		var frame = new LayoutFrame(256.0, 192.0);
@@ -510,7 +510,7 @@ class AccessibilityContract {
 				new SelectOption("one", "One", "one"),
 				new SelectOption("two", "Two", "two"),
 				new SelectOption("blocked", "Blocked", "blocked", false)
-			], selected, function(value) {
+			], selected, value -> {
 				changes++;
 				selected = value;
 			});
@@ -584,7 +584,7 @@ class AccessibilityContract {
 
 	static function findAccessibleNode(root:RenderNode, role:AccessibilityRole, label:String):RenderNode {
 		var found:Null<RenderNode> = null;
-		root.walk(function(node) {
+		root.walk(node -> {
 			var semantics:Null<Semantics> = cast node.semantics;
 			if (semantics != null && semantics.role == role && semantics.label == label) found = node;
 		});
@@ -680,7 +680,7 @@ private class DisabledSemanticContainer implements haxeon.ui.core.View {
 		root.enabled = false;
 		root.semantics = new Semantics(AccessibilityRole.Group, "Unavailable controls");
 		var child = new Button("Unavailable action");
-		root.add(context.withScope(new Key("child"), function() return child.build(context)));
+		root.add(context.withScope(new Key("child"), () -> child.build(context)));
 		return root;
 	}
 }

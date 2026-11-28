@@ -112,7 +112,7 @@ class WasmModuleSupport {
 							case _:
 						}
 		var result:Array<String> = [for (key in used.keys()) key];
-		result.sort(function(left, right) return Reflect.compare(left, right));
+		result.sort((left, right) -> Reflect.compare(left, right));
 		return result;
 	}
 

@@ -161,10 +161,10 @@ class BuildContext implements Disposable {
 		styleParent = null;
 		viewportWidth = 0.0;
 		viewportHeight = 0.0;
-		focusRequester = function(_) {
+		focusRequester = _ -> {
 			return false;
 		};
-		deferredFocusRequester = function(_) {};
+		deferredFocusRequester = _ -> {};
 		claimed = new IdSet();
 		idsByPath = new WidgetIdCache();
 		prunedMountedHash = 0;
@@ -183,7 +183,7 @@ class BuildContext implements Disposable {
 	/** Command presentation changes only when its enabled or checked result changes. */
 	public function commandFlags(registry:CommandRegistry, id:String):Int {
 		for (entry in commandFlagEntries) if (entry.registry == registry && entry.id == id) return entry.value.value;
-		var value = new Derived(function() {
+		var value = new Derived(() -> {
 			var command = registry.get(id);
 			if (command == null) return -1;
 			var invocation = commandContextState.value;
@@ -410,7 +410,7 @@ class BuildContext implements Disposable {
 		var probe = buildProbe;
 		if (probe == null) return;
 		var nodes = 0;
-		root.node().walk(function(_) nodes++);
+		root.node().walk(_ -> nodes++);
 		probe(name, preparationSeconds, buildSeconds, nodes);
 	}
 
@@ -700,7 +700,7 @@ class BuildContext implements Disposable {
 			&& scopeEntries >= prunedScopeEntries && scopeEntries - prunedScopeEntries < SCOPE_GROWTH_PRUNE) return;
 		keyCachePrunes++;
 		idsByPath.prune(mounted, stateStore);
-		rootScope.prune(function(path) return idsByPath.exists(path));
+		rootScope.prune(path -> idsByPath.exists(path));
 		prunedMountedHash = mountedHash;
 		prunedIdCount = idsByPath.count;
 		prunedScopeEntries = rootScope.cachedEntries();
@@ -1183,7 +1183,7 @@ class BuildContext implements Disposable {
 		if (!stateStore.contains(id)) {
 			var value = create();
 			stateStore.initialize(id, value);
-			stateStore.onUnmount(id, function() {
+			stateStore.onUnmount(id, () -> {
 				dispose(value);
 			});
 		} else stateStore.touch(id);

@@ -182,12 +182,12 @@ function main():Int {
 		return 9;
 	var factoryCalls = 0;
 	var iteratorCalls = 0;
-	var collection = {iterator: function() {
+	var collection = {iterator: () -> {
 		iteratorCalls++;
 		return new Counter();
 	}
 	};
-	var factory = function() {
+	var factory = () -> {
 		factoryCalls++;
 		return collection;
 	};
@@ -202,7 +202,7 @@ function main():Int {
 	if (factoryCalls != 1 || iteratorCalls != 1 || once != 4)
 		return 10;
 	var n = 0;
-	var anonymous = {hasNext: function() return n < 3, next: function() return ++n};
+	var anonymous = {hasNext: () -> n < 3, next: () -> ++n};
 	var anonymousSum = 0;
 	for (x in anonymous)
 		anonymousSum += x;

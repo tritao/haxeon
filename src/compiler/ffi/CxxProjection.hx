@@ -157,7 +157,7 @@ class CxxProjection {
 		output.add('\tpublic inline function isClosed():Bool return __closed;\n');
 
 		var methods = record.methods.copy();
-		methods.sort(function(left, right) {
+		methods.sort((left, right) -> {
 			var result = Reflect.compare(left.name, right.name);
 			return result == 0 ? Reflect.compare(left.symbol, right.symbol) : result;
 		});

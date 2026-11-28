@@ -19,10 +19,10 @@ class Main {
 		Sys.println(s(1));
 		Sys.println(s(2, 1.5));
 		Sys.println(s(3, 2.5, 4));
-		var typed:(x:Int, ?step:Int) -> String = function(x:Int, step:Int = 6) return x + ":" + step;
+		var typed:(x:Int, ?step:Int) -> String = (x:Int, step:Int = 6) -> x + ":" + step;
 		Sys.println(typed(1));
 		Sys.println(typed(1, 2));
-		var opt:(?n:Int) -> Int = function(?n:Int = 8) return n;
+		var opt:(?n:Int) -> Int = (?n:Int = 8) -> n;
 		Sys.println(opt());
 		Sys.println(opt(1));
 		function loc(x:Int = 4, ?y:String = "y") return x + y;

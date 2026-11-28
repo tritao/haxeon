@@ -23,7 +23,7 @@ class WebViewSlot implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var node = new RenderNode(context.id("webview-slot"), LayoutVisualKind.Box, style);
 			node.semantics = new Semantics(AccessibilityRole.Group, SemanticLabel);
 			return node;

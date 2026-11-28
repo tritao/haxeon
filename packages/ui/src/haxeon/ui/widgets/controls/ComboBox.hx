@@ -72,13 +72,13 @@ class ComboBox<T> implements View {
 		}
 		this.value = value;
 		hasChangeHandler = onChange != null;
-		this.onChange = onChange == null ? function(_:T) {}
+		this.onChange = onChange == null ? (_:T) -> {}
 			: onChange;
 		usesDefaultStyle = style == null;
 		this.style = style == null ? defaultStyle() : style;
 		if (this.style.height.sizing == LayoutSizing.Fit) this.style.height = LayoutAxis.fixed(40.0);
 		this.placeholder = placeholder == null || placeholder.length == 0 ? "Search" : placeholder;
-		this.onQueryChange = onQueryChange == null ? function(_:String) {}
+		this.onQueryChange = onQueryChange == null ? (_:String) -> {}
 			: onQueryChange;
 		hasQueryChangeHandler = onQueryChange != null;
 		this.enabled = enabled;
@@ -87,7 +87,7 @@ class ComboBox<T> implements View {
 	public function build(context:BuildContext):ViewRoot {
 		// What the user picks while this build is shown; the field stays the caller's input.
 		var value = this.value;
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var rootStyle = style.copy();
 			rootStyle.direction = LayoutDirection.TopToBottom;
 			rootStyle.padding = new Insets(0.0, 0.0, 0.0, 0.0);
@@ -114,7 +114,7 @@ class ComboBox<T> implements View {
 			if (storedLabel != selectedLabel && followsSelection) query = selectedLabel;
 			if (storedLabel != selectedLabel) {
 				var nextLabel = selectedLabel;
-				root.onResolved(function(_) {
+				root.onResolved(_ -> {
 					labelState.update(nextLabel);
 					if (followsSelection) queryState.update(nextLabel);
 				});
@@ -130,7 +130,7 @@ class ComboBox<T> implements View {
 			var openState:State<Bool> = context.state(context.id("open"), false);
 			var isOpen:Bool = openState.value;
 			if (!enabled || filteredIndices.length == 0) {
-				if (isOpen) root.onResolved(function(_) openState.update(false));
+				if (isOpen) root.onResolved(_ -> openState.update(false));
 				isOpen = false;
 			}
 			root.layout.style.zIndex = isOpen ? 10 : 0;
@@ -140,17 +140,17 @@ class ComboBox<T> implements View {
 			var active:Int = activeState.value;
 			if (!contains(filteredIndices, active)) active = initialActive;
 			var storedActive:Int = activeState.value;
-			if (active != storedActive) root.onResolved(function(_) activeState.update(active));
+			if (active != storedActive) root.onResolved(_ -> activeState.update(active));
 
 			var inputNode:Null<ViewRoot> = null;
 			// The open popup's option rows, so the trigger's keys can move focus into the list.
 			var popupLink = context.lazyState(context.id("popup-link"),
-				function() return new SelectionPopupLink()).value;
-			var close = function() {
+				() -> new SelectionPopupLink()).value;
+			var close = () -> {
 				if (openState.value == true) openState.update(false);
 				if (inputNode != null) context.requestFocus(inputNode.id);
 			};
-			var setActive = function(index:Int) {
+			var setActive = (index:Int) -> {
 				if (contains(filteredIndices, index)) {
 					var current:Int = activeState.value;
 					if (index != current) {
@@ -159,10 +159,10 @@ class ComboBox<T> implements View {
 					}
 				}
 			};
-			var focusOption = function(index:Int) {
+			var focusOption = (index:Int) -> {
 				if (index >= 0 && index < popupLink.optionIds.length) context.requestFocus(popupLink.optionIds[index]);
 			};
-			var selectOption = function(index:Int) {
+			var selectOption = (index:Int) -> {
 				if (!enabled || !isEnabledIndex(index)) return;
 				var option = options[index];
 				var changed = !sameValue(value, option.value);
@@ -175,12 +175,12 @@ class ComboBox<T> implements View {
 				close();
 				if (changed && hasChangeHandler) onChange(value);
 			};
-			var open = function() {
+			var open = () -> {
 				if (!enabled || filteredIndices.length == 0) return;
 				if (openState.value != true) openState.update(true);
 				setActive(contains(filteredIndices, selectedIndex) ? selectedIndex : filteredIndices[0]);
 			};
-			var submitActive = function() {
+			var submitActive = () -> {
 				var submittedIndex:Int = activeState.value;
 				if (contains(filteredIndices, submittedIndex)) selectOption(submittedIndex);
 				else close();
@@ -189,7 +189,7 @@ class ComboBox<T> implements View {
 			var inputStyle = style.copy();
 			if (usesDefaultStyle) inputStyle.background = context.theme.tokens.surface;
 			inputStyle.width = LayoutAxis.grow();
-			var input = new TextField("input", query, function(next) {
+			var input = new TextField("input", query, next -> {
 				query = next == null ? "" : next;
 				queryState.update(query);
 				if (hasQueryChangeHandler) onQueryChange(query);
@@ -205,21 +205,21 @@ class ComboBox<T> implements View {
 					SelectionIndicator.search("input-search",
 						enabled ? context.theme.tokens.textSecondary : context.theme.tokens.textDisabled)
 				],
-				onSubmit: function(_) {
+				onSubmit: _ -> {
 				if (openState.value != true) open();
 				else submitActive();
 			});
 			var inputModifier = new RootModifier();
-			inputModifier.on(UiEventKind.PointerDown, function(event) {
+			inputModifier.on(UiEventKind.PointerDown, event -> {
 				if (enabled && event.button == 0) open();
 			});
-			inputModifier.on(UiEventKind.Activate, function(event) {
+			inputModifier.on(UiEventKind.Activate, event -> {
 				if (!enabled) return;
 				if (openState.value != true) open();
 				else submitActive();
 				event.preventDefault();
 			});
-			inputModifier.on(UiEventKind.AccessibilitySetValue, function(event) {
+			inputModifier.on(UiEventKind.AccessibilitySetValue, event -> {
 				if (!enabled || event.text == null) return;
 				for (index in 0...options.length) if (options[index].enabled
 					&& (options[index].key == event.text || options[index].label == event.text)) {
@@ -228,7 +228,7 @@ class ComboBox<T> implements View {
 					return;
 				}
 			});
-			inputModifier.on(UiEventKind.KeyDown, function(event) {
+			inputModifier.on(UiEventKind.KeyDown, event -> {
 				if (!enabled) return;
 				if (event.key == UiKey.Escape && openState.value == true) {
 					close();
@@ -259,7 +259,7 @@ class ComboBox<T> implements View {
 			rowStyle.direction = LayoutDirection.LeftToRight;
 			var triggerRow = context.createNode(context.rootId("trigger-row"), LayoutVisualKind.Box, rowStyle);
 			triggerRow.hitTestSelf = false;
-			var builtInput = context.withScope(new Key("input"), function() return context.build(input, inputModifier));
+			var builtInput = context.withScope(new Key("input"), () -> context.build(input, inputModifier));
 			inputNode = builtInput;
 			triggerRow.add(builtInput);
 			var anchorStyle = new LayoutStyle();
@@ -276,7 +276,7 @@ class ComboBox<T> implements View {
 				? AccessibilityAction.Collapse : AccessibilityAction.Expand);
 			arrowSemantics.states |= AccessibilityState.HasPopup;
 			if (isOpen) arrowSemantics.states |= AccessibilityState.Expanded;
-			var arrow = new Button("", arrowStyle, function() {
+			var arrow = new Button("", arrowStyle, () -> {
 				if (openState.value == true) close();
 				else {
 					open();
@@ -292,13 +292,13 @@ class ComboBox<T> implements View {
 			arrowModifier.positionX = -32;
 			arrowModifier.zIndex = 3;
 			arrowModifier.clipToParent = false;
-			arrowModifier.on(UiEventKind.KeyDown, function(event) {
+			arrowModifier.on(UiEventKind.KeyDown, event -> {
 				if (event.key == UiKey.Escape && openState.value == true) {
 					close();
 					event.preventDefault();
 				}
 			});
-			var arrowNode = context.withScope(new Key("toggle"), function() return context.build(arrow, arrowModifier));
+			var arrowNode = context.withScope(new Key("toggle"), () -> context.build(arrow, arrowModifier));
 			arrowAnchor.add(arrowNode);
 			triggerRow.add(arrowAnchor);
 			root.add(triggerRow);
@@ -309,17 +309,17 @@ class ComboBox<T> implements View {
 				for (option in options) popupOptions.push(cast option);
 				var popup = new SelectionPopup(popupOptions,
 					filteredIndices, value, active, builtInput.id, popupLink,
-					function(index:Int) {
+					(index:Int) -> {
 						selectOption(index);
-					}, close, function(index:Int) {
+					}, close, (index:Int) -> {
 					setActive(index);
 				});
 				root.add(context.build(popup));
-				root.onPointerDownOutside(function(event) {
+				root.onPointerDownOutside(event -> {
 					if (event.button == 0) close();
 				});
 			}
-			root.on(UiEventKind.KeyDown, function(event) {
+			root.on(UiEventKind.KeyDown, event -> {
 				if (event.key == UiKey.Escape && openState.value == true) {
 					close();
 					event.preventDefault();

@@ -100,9 +100,9 @@ class DockWorkspace implements View {
 	public function build(context:BuildContext):ViewRoot {
 		var observed = context.buildProbe != null;
 		var started = observed ? Sys.time() : 0.0;
-		var mounted:State<DockWorkspaceMount> = context.resourceState(context.id("workspace-mount:" + key), function() {
+		var mounted:State<DockWorkspaceMount> = context.resourceState(context.id("workspace-mount:" + key), () -> {
 			return new DockWorkspaceMount(model, interaction);
-		}, function(value) {
+		}, value -> {
 			value.dispose();
 		});
 		var mount = mounted.value;
@@ -110,15 +110,15 @@ class DockWorkspace implements View {
 		interaction = mount.interaction;
 		interaction.beginFrame();
 		var labelWidths:DockTextWidthCache = context.lazyState(context.id("tab-label-width-cache"),
-			function() return new DockTextWidthCache()).value;
+			() -> new DockTextWidthCache()).value;
 		var panelCache:DockPanelCache = context.resourceState(context.id("panel-tree-cache:" + key),
-			function() return new DockPanelCache(),
-			function(cache) cache.dispose()).value;
+			() -> new DockPanelCache(),
+			cache -> cache.dispose()).value;
 		panelCache.bind(model, interaction);
 		panelCache.retain(context);
 		var paneCache:DockPanelCache = context.resourceState(context.id("pane-tree-cache:" + key),
-			function() return new DockPanelCache(16, true),
-			function(cache) cache.dispose()).value;
+			() -> new DockPanelCache(16, true),
+			cache -> cache.dispose()).value;
 		paneCache.bind(model, interaction);
 		paneCache.retain(context);
 		panelScope = context.currentScope().child(new Key("dock-panels:" + key));
@@ -155,7 +155,7 @@ class DockWorkspace implements View {
 				if (hiddenPanels.indexOf(panelId) >= 0) return new haxeon.ui.widgets.layout.Spacer(nodeKey,
 					LayoutAxis.fixed(0),
 					LayoutAxis.fixed(0));
-				return paneView([panelId], panelId, context, nodeKey, availableWidth, paneCache, function() {
+				return paneView([panelId], panelId, context, nodeKey, availableWidth, paneCache, () -> {
 					return targetView(panelId,
 						buildTabs([panelId], panelId, context, nodeKey, availableWidth, labelWidths, panelCache));
 				});
@@ -169,7 +169,7 @@ class DockWorkspace implements View {
 				}
 				var targetPanelId = activePanelId == null
 					&& panelIds != null && panelIds.length > 0 ? panelIds[0] : activePanelId;
-				return paneView(panelIds, activePanelId, context, nodeKey, availableWidth, paneCache, function() {
+				return paneView(panelIds, activePanelId, context, nodeKey, availableWidth, paneCache, () -> {
 					return targetPanelId == null ? buildTabs(panelIds,
 						activePanelId,
 						context,
@@ -237,7 +237,7 @@ class DockWorkspace implements View {
 				&& (descriptor.id != selectedId || !showSelectedLabel) ? "" : null,
 				descriptor.badgeCount));
 		}
-		var onTabHeaderBuilt = function(panelId:String, node:RenderNode) {
+		var onTabHeaderBuilt:String->RenderNode->Void = (panelId, node) -> {
 			interaction.registerTabTarget(new DockTabDropTarget(panelId, node));
 			// Preview changes invalidate the pane through the tracked interaction fields. A node that has nothing to paint
 			// until then does not need its own layout, style and paint callback in every idle tab header.
@@ -255,7 +255,7 @@ class DockWorkspace implements View {
 			indicator.hitTestSelf = false;
 			var tabPreviewKey = tabPreview.sourcePanelId + ":" + tabPreview.targetPanelId + ":"
 				+ Std.string(tabPreview.zone);
-			indicator.onPaint(function(canvas, geometry) {
+			indicator.onPaint((canvas, geometry) -> {
 				var preview = interaction.preview;
 				if (preview == null || preview.targetPanelId != panelId
 					|| (preview.zone != DockDropZone.TabBefore && preview.zone != DockDropZone.TabAfter)) return;
@@ -542,7 +542,7 @@ private class DockPanelView implements View {
 		var buildStarted = 0.0;
 		// Keyed under the workspace, not the split path to the pane, so a panel keeps its state when the layout around it
 		// changes: a neighbour closing, or the panel moving to another split.
-		var root = context.withScopeUnder(scope, new Key("panel:" + descriptor.id), function() {
+		var root = context.withScopeUnder(scope, new Key("panel:" + descriptor.id), () -> {
 			var widthBuilder = content.buildWithWidth, builder = content.build;
 			var view = widthBuilder != null ? widthBuilder(context,
 				availableWidth) : builder != null ? builder(context) : null;
@@ -860,7 +860,7 @@ private class DockDropTargetView implements View {
 			previewNode.hitTestSelf = false;
 			var previewKey = activePreview.sourcePanelId
 				+ ":" + activePreview.targetPanelId + ":" + Std.string(activePreview.zone);
-			previewNode.onPaint(function(canvas, geometry) {
+			previewNode.onPaint((canvas, geometry) -> {
 				var preview = interaction.preview;
 				if (preview == null || preview.targetPanelId != targetPanelId) return;
 				canvas.fillRectIfPositive(previewRect(preview.zone, geometry.width, geometry.height),

@@ -25,7 +25,7 @@ class IrClassIds {
 				ids.set(name, id);
 		}
 		var fresh = [for (name in classes) if (!ids.exists(name)) name];
-		fresh.sort(function(left, right) return left < right ? -1 : left > right ? 1 : 0);
+		fresh.sort((left, right) -> left < right ? -1 : left > right ? 1 : 0);
 		for (name in fresh) {
 			ids.set(name, next);
 			next++;

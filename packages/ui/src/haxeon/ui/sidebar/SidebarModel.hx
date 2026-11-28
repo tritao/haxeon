@@ -14,7 +14,7 @@ class SidebarModel {
 	public var visible(default, null):Bool = true;
 
 	/** Called after every change, so the host rebuilds and saves. */
-	public var onChange:Void->Void = function() {};
+	public var onChange:Void->Void = () -> {};
 	var savedActive:String = "";
 	var sequence:Int = 0;
 	static final widthPattern = ~/^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$/;
@@ -147,7 +147,7 @@ class SidebarModel {
 			slots.push(i);
 			placed.push(modes[i]);
 		}
-		placed.sort(function(a, b) return savedOrder.indexOf(a.id) - savedOrder.indexOf(b.id));
+		placed.sort((a, b) -> savedOrder.indexOf(a.id) - savedOrder.indexOf(b.id));
 		for (i in 0...slots.length) modes[slots[i]] = placed[i];
 	}
 

@@ -54,7 +54,7 @@ class Menu implements View {
 		this.x = x;
 		this.y = y;
 		hasDismissHandler = onDismiss != null;
-		this.onDismiss = onDismiss == null ? function() {}
+		this.onDismiss = onDismiss == null ? () -> {}
 			: onDismiss;
 		this.onOutsideClick = onOutsideClick;
 		this.selectFirstOnOpen = selectFirstOnOpen;
@@ -64,8 +64,8 @@ class Menu implements View {
 		var children:Array<KeyedView> = [];
 		var widestItem = 160.0;
 		var focusState:MenuFocusState = context.resourceState(context.id("menu-focus"),
-			function() return new MenuFocusState(),
-			function(_) {}).value;
+			() -> new MenuFocusState(),
+			_ -> {}).value;
 		// The enabled items, in order, as their modifiers report them: the keyboard moves through these.
 		var itemIds:Array<Null<WidgetId>> = [];
 		var itemGeometry:Array<Null<ResolvedLayoutItem>> = [];
@@ -148,7 +148,7 @@ class Menu implements View {
 			var label = new MiddleEllipsisText("menu-label", item.label, false, labelStyle);
 			var itemSemantics = new Semantics(AccessibilityRole.MenuItem, item.label);
 			itemSemantics.actions = AccessibilityAction.Select;
-			var button = new Button(item.label, null, function() {
+			var button = new Button(item.label, null, () -> {
 				if (item.hasSelectHandler) item.onSelect();
 				if (hasDismissHandler) onDismiss();
 			}, item.key, item.enabled, ButtonVariant.Navigation,
@@ -166,7 +166,7 @@ class Menu implements View {
 				var itemModifier = new RootModifier();
 				itemModifier.onRoot(root -> itemIds[index] = root.id);
 				itemModifier.onResolved(geometry -> itemGeometry[index] = geometry);
-				itemModifier.on(UiEventKind.PointerMove, function(event) {
+				itemModifier.on(UiEventKind.PointerMove, event -> {
 					var id = itemIds[index];
 					if (id == null) return;
 					itemMove = event;
@@ -176,7 +176,7 @@ class Menu implements View {
 				anchor = itemModifier.modify(button);
 			}
 			var tooltip = new Tooltip("menu-label-tooltip", anchor, new Text(item.label), 0.0, 28.0, fillAnchor: true,
-				showWhen: function() return label.truncated);
+				showWhen: () -> label.truncated);
 			children.push(new KeyedView(item.key, tooltip));
 		}
 		var menuStyle = new LayoutStyle();
@@ -207,19 +207,19 @@ class Menu implements View {
 		// Keep the modal keyboard owner independent of the highlighted action.
 		menu.focusable = true;
 		if (selectFirstOnOpen) menu.tabIndex = -1;
-		menu.onResolved(function(_) {
+		menu.onResolved(_ -> {
 			if (!focusState.initialFocusPending) return;
 			focusState.initialFocusPending = false;
 			var initial = selectFirstOnOpen && itemIds.length > 0 ? itemIds[0] : rootId;
 			if (initial != null) context.requestFocusAfterLayout(initial);
 		});
 		// Blank space clears a pointer selection. Keyboard selection survives movement outside the items.
-		menu.on(UiEventKind.PointerMove, function(event) {
+		menu.on(UiEventKind.PointerMove, event -> {
 			if (itemMove == event || !focusState.pointerSelection || rootId == null) return;
 			focusState.pointerSelection = false;
 			context.requestFocus(rootId);
 		});
-		var navigate = function(event:haxeon.ui.core.UiEvent) {
+		var navigate = (event:haxeon.ui.core.UiEvent) -> {
 			if (rootId != null && event.target.equals(rootId)
 				&& (event.key == UiKey.Enter || event.key == UiKey.Space)) {
 				event.preventDefault();
@@ -265,7 +265,7 @@ class Menu implements View {
 		semantics.states |= AccessibilityState.Modal;
 		if (hasDismissHandler) semantics.actions |= AccessibilityAction.Dismiss;
 		menu.semantics = semantics;
-		if (hasDismissHandler) menu.on(UiEventKind.Activate, function(event) {
+		if (hasDismissHandler) menu.on(UiEventKind.Activate, event -> {
 			if (rootId != null && event.target.equals(rootId)) onDismiss();
 		});
 		return context.build(popup, menu);
@@ -309,7 +309,7 @@ class MenuItem {
 		this.key = key;
 		this.label = label == null ? "" : label;
 		hasSelectHandler = onSelect != null;
-		this.onSelect = onSelect == null ? function() {} : onSelect;
+		this.onSelect = onSelect == null ? () -> {} : onSelect;
 		this.enabled = enabled;
 	}
 	/** A non-interactive section label, excluded from menu keyboard navigation. */

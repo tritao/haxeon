@@ -32,13 +32,13 @@ function main():Int {
 	capture.trackField(source, 1);
 	if (capture.pendingCount() != 1) return 4;
 	var runs = 0, secondRuns = 0;
-	var effect = new Effect(function() {
+	var effect = new Effect(() -> {
 		source.recordFieldRead(0);
 		source.recordFieldRead(0);
 		source.recordFieldRead(999999);
 		runs++;
 	});
-	var second = new Effect(function() {
+	var second = new Effect(() -> {
 		source.recordFieldRead(0);
 		secondRuns++;
 	});

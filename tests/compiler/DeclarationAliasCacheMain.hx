@@ -63,12 +63,12 @@ class Marker {}
 		expect(shown(index.resolve(AstType.NamedType("Inner"))) == inner, "the plain alias is unchanged afterwards");
 
 		// Failures throw every time: a cyclic or broken alias is never cached as a value.
-		expectError(function() index.resolve(AstType.NamedType("Loop")), "a cyclic alias should be rejected");
-		expectError(function() index.resolve(AstType.NamedType("Loop")),
+		expectError(() -> index.resolve(AstType.NamedType("Loop")), "a cyclic alias should be rejected");
+		expectError(() -> index.resolve(AstType.NamedType("Loop")),
 			"a cyclic alias should still be rejected on the second try");
-		expectError(function() index.resolve(AstType.NamedType("Broken")),
+		expectError(() -> index.resolve(AstType.NamedType("Broken")),
 			"an alias to a missing type should be rejected");
-		expectError(function() index.resolve(AstType.NamedType("Broken")),
+		expectError(() -> index.resolve(AstType.NamedType("Broken")),
 			"a broken alias should still be rejected on the second try");
 		expect(spell(index.resolve(AstType.NamedType("Outer"))) == spell(first),
 			"failures must not disturb cached aliases");

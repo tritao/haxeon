@@ -33,7 +33,7 @@ class Requests {
 	/** Reads the clipboard's text. */
 	public function readClipboardText():Future<Result<String, NativeKitError>> {
 		ensureLive();
-		return registerRequest(NativeKit.nk_clipboard_read_text_checked(), function(value, _) switch value {
+		return registerRequest(NativeKit.nk_clipboard_read_text_checked(), (value, _) -> switch value {
 			case Answered(ClipboardText(_, text)): settled(text);
 			case _: wrongEvent("clipboard text read");
 		});
@@ -42,7 +42,7 @@ class Requests {
 	/** Reads the clipboard's file paths. */
 	public function readClipboardFiles():Future<Result<Array<String>, NativeKitError>> {
 		ensureLive();
-		return registerRequest(NativeKit.nk_clipboard_read_files_checked(), function(value, _) switch value {
+		return registerRequest(NativeKit.nk_clipboard_read_files_checked(), (value, _) -> switch value {
 			case Answered(ClipboardFiles(_, paths)): settled(paths);
 			case _: wrongEvent("clipboard file read");
 		});
@@ -51,7 +51,7 @@ class Requests {
 	/** Reads the clipboard's resources. */
 	public function readClipboardResources():Future<Result<Array<Resource>, NativeKitError>> {
 		ensureLive();
-		return registerRequest(NativeKit.nk_clipboard_read_resources_checked(), function(value, _) switch value {
+		return registerRequest(NativeKit.nk_clipboard_read_resources_checked(), (value, _) -> switch value {
 			case Answered(ClipboardResources(_, items)): settled(items);
 			case _: wrongEvent("clipboard resource read");
 		});
@@ -92,16 +92,16 @@ class Requests {
 		ensureLive();
 		if (resource == null) throw BindingError.invalidArgument("Requests.loadResource", "Resource cannot be null");
 		var request = NativeKit.nk_resource_load_async_checked(resource.nativeValue());
-		return registerRequest(request, function(value, _) switch value {
+		return registerRequest(request, (value, _) -> switch value {
 			case Answered(ResourceData(_, bytes)): settled(bytes);
 			case _: wrongEvent("resource load");
-		}, function() NativeKit.nk_resource_load_cancel_checked(request));
+		}, () -> NativeKit.nk_resource_load_cancel_checked(request));
 	}
 
 	/** Commits a raw writable stream; `Ok(true)` means a download was initiated. */
 	public function commitResourceNative(stream:ResourceStreamHandle):Future<Result<Bool, NativeKitError>> {
 		ensureLive();
-		return registerRequest(NativeKit.nk_resource_commit_checked(stream), function(value, _) switch value {
+		return registerRequest(NativeKit.nk_resource_commit_checked(stream), (value, _) -> switch value {
 			case Answered(ResourceCommit(_, downloadInitiated)): settled(downloadInitiated);
 			case _: wrongEvent("resource commit");
 		});
@@ -115,10 +115,10 @@ class Requests {
 			"Parent and options cannot be null");
 		var request = NativeKit.nk_dialog_message_checked(new Handle(parent.nativeHandle().rawValue),
 			options.nativeValue());
-		return registerRequest(request, function(value, cancellationRequested) switch value {
+		return registerRequest(request, (value, cancellationRequested) -> switch value {
 			case Answered(DialogMessage(_, answer)): cancellationRequested ? Outcome.Cancelled : settled(answer);
 			case _: wrongEvent("message dialog");
-		}, function() NativeKit.nk_dialog_cancel_checked(request));
+		}, () -> NativeKit.nk_dialog_cancel_checked(request));
 	}
 
 	/** Runs `script` in a web view and resolves with its result as JSON. */
@@ -127,7 +127,7 @@ class Requests {
 		if (webview == null || script == null) throw BindingError.invalidArgument("Requests.evaluateWebView",
 			"WebView and script cannot be null");
 		return registerRequest(NativeKit.nk_webview_eval_checked(webview.nativeHandle(), script),
-			function(value, _) switch value {
+			(value, _) -> switch value {
 				case Answered(WebViewEvaluation(_, json)): settled(json);
 				case _: wrongEvent("WebView evaluation");
 			});
@@ -141,7 +141,7 @@ class Requests {
 			?cancelNative:Void->Void):Future<T> {
 		ensureLive();
 		if (decode == null) throw BindingError.invalidArgument("Requests.trackNative", "Decoder cannot be null");
-		return registerRequest(request, function(value, _) return switch value {
+		return registerRequest(request, (value, _) -> switch value {
 			case Happened(event): decode(event);
 			case _: wrongEvent("native request");
 		}, cancelNative);
@@ -152,7 +152,7 @@ class Requests {
 		ensureLive();
 		if (task == null || decode == null) throw BindingError.invalidArgument("Requests.trackTask",
 			"Task and decoder cannot be null");
-		return register("task:" + Std.string(task.nativeHandle().rawValue), function(value, _) switch value {
+		return register("task:" + Std.string(task.nativeHandle().rawValue), (value, _) -> switch value {
 			// register() catches decoder exceptions separately from completion-observer exceptions.
 			case Answered(TaskComplete(_, data)): Success(Ok(decode(data)));
 			case Answered(TaskFailed(_, error, _)): settled(Err(error));
@@ -162,10 +162,10 @@ class Requests {
 	}
 
 	function resourceDialog(request:haxe.Int64):Future<Result<Array<Resource>, NativeKitError>> {
-		return registerRequest(request, function(value, _) switch value {
+		return registerRequest(request, (value, _) -> switch value {
 			case Answered(DialogResources(_, items)): settled(items);
 			case _: wrongEvent("resource dialog");
-		}, function() NativeKit.nk_dialog_cancel_checked(request));
+		}, () -> NativeKit.nk_dialog_cancel_checked(request));
 	}
 
 	function registerRequest<T>(request:haxe.Int64, decode:Delivery->Bool->Outcome<T>,
@@ -180,7 +180,7 @@ class Requests {
 		ensureLive();
 		if (entries.exists(key)) throw BindingError.invalidState("Requests.register", "Operation is already tracked");
 		var promise = new Promise<T>();
-		var entry = new NativeRequestEntry(function(value) {
+		var entry = new NativeRequestEntry(value -> {
 			// A decoder that throws has a bug, which the event pump reports; the future's observers learn it ended.
 			var outcome:Outcome<T>;
 			try {
@@ -194,7 +194,7 @@ class Requests {
 			promise.resolve(outcome);
 		}, promise.cancel);
 		entries.set(key, entry);
-		promise.setControls(cancelNative, function() {
+		promise.setControls(cancelNative, () -> {
 			if (entries.get(key) == entry) entries.remove(key);
 		});
 		return promise.future;

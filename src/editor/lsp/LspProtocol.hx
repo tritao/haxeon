@@ -548,7 +548,7 @@ class LspProtocol {
 	function diagnosticNotifications(generation:Int):Array<String> {
 		var pending:Array<{uri:String, fingerprint:String, message:String}> = [],
 			states = [for (state in service.compiler.modules) state];
-		states.sort(function(left, right) return Reflect.compare(left.source.path, right.source.path));
+		states.sort((left, right) -> Reflect.compare(left.source.path, right.source.path));
 		for (state in states) {
 			if (generation != analysisGeneration)
 				return [];
@@ -637,7 +637,7 @@ class LspProtocol {
 			catch (_:CompileError) {} catch (_:Dynamic) {}
 		}
 		var states = [for (state in service.compiler.modules) state];
-		states.sort(function(left, right) return Reflect.compare(project.diskPath(left.source.path),
+		states.sort((left, right) -> Reflect.compare(project.diskPath(left.source.path),
 			project.diskPath(right.source.path)));
 		var items:Array<Dynamic> = [];
 		for (state in states) {

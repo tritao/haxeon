@@ -41,12 +41,12 @@ class Main implements App {
 		hud = UiOverlay.attach(window, surface, runtime.events, CircuitRenderer.width);
 		hudView = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
 
-		window.onClose(function() running = false);
+		window.onClose(() -> running = false);
 		window.onKey(handleKey);
 		snapshotPositions();
 		var recorder = Sys.getEnv("CIRCUIT_RUN_TIMING") == "1"
-			? new FrameRecorder(function(timing) Sys.println('frame ${timing.frameId} callback=${timing.callbackSeconds} submitted=${timing.submittedSeconds}'),
-			function(timing, seconds) Sys.println('frame ${timing.frameId} presented=${seconds}')) : null;
+			? new FrameRecorder(timing -> Sys.println('frame ${timing.frameId} callback=${timing.callbackSeconds} submitted=${timing.submittedSeconds}'),
+			(timing, seconds) -> Sys.println('frame ${timing.frameId} presented=${seconds}')) : null;
 		runtime.drive(surface, recorder);
 		initialized = true;
 	}

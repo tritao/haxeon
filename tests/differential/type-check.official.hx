@@ -57,7 +57,7 @@ class Main {
 		Sys.println(optional);
 		var nothing = (maybe(false):Null<Int>);
 		Sys.println(nothing);
-		var callback = (function(x:Int) return x * 2:Int->Int);
+		var callback = ((x:Int) -> x * 2:Int->Int);
 		Sys.println(callback(4));
 		var record = ({x: 1, y: 2}:{x:Int, y:Int});
 		Sys.println(record.x + record.y);

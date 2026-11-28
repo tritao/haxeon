@@ -74,7 +74,7 @@ function main():Int {
 	snapshot[1].offset.x = 70;
 	if (records[1].offset.x != 50 || snapshot[1].marker != records[1].marker) failures += 64;
 	// Growth during a method call must not redirect the pending write to an old backing store.
-	records[0].offset.around(function() {
+	records[0].offset.around(() -> {
 		if (records[0].offset.x != 8) throw "write not visible during callback";
 		for (i in 0...128) records.push(new ArrayRecord(i, "grown", null));
 		records[0].offset.x = 20;
@@ -83,7 +83,7 @@ function main():Int {
 	// Evaluating the right-hand side may mutate another field of the same element.
 	records[0].offset.x = changeOtherField(records);
 	if (records[0].offset.x != 30 || records[0].text != "changed during assignment" || records.length != 448) return 5;
-	var saved = records[0].snapshotAfter(function() {
+	var saved = records[0].snapshotAfter(() -> {
 		records[0].offset.x = 44;
 	});
 	if (saved != 30 || records[0].offset.x != 44) return 6;

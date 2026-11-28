@@ -249,10 +249,10 @@ class HxiParserMain {
 			"result projection policies should preserve raw status calls and generate checked calls with typed output values");
 		var invalidSuccessPolicy = HxiProjectionProfile.parse("bad-result-policy.hxmap",
 			'{"interface":"result_policy","resultPolicies":{"nk_status":{"successValue":"NK_MISSING","failure":"ProjectionError.of"}}}');
-		expectProfileError(function() HxiProjection.validateProfile("bad-result-policy.hxmap", resultPolicyModel, null,
+		expectProfileError(() -> HxiProjection.validateProfile("bad-result-policy.hxmap", resultPolicyModel, null,
 			null, invalidSuccessPolicy),
 			"resultPolicies.nk_status.successValue");
-		expectProfileError(function() HxiProjection.validateProfile("omitted-diagnostic.hxmap", resultPolicyModel,
+		expectProfileError(() -> HxiProjection.validateProfile("omitted-diagnostic.hxmap", resultPolicyModel,
 			["nk_last_error" => true], null,
 			resultPolicyProfile),
 			"cannot use omitted diagnostic function");
@@ -348,7 +348,7 @@ class HxiParserMain {
 			&& mappedDependencyCompiler.modules.get("derived").source.text.indexOf("import library.base.Types;") >= 0
 			&& mappedDependencyCompiler.modules.get("derived").source.text.indexOf("Base.Handle") >= 0,
 			"dependency type mappings should accept qualified Haxe type paths");
-		expectProfileError(function() {
+		expectProfileError(() -> {
 			var compiler = newCompiler();
 			compiler.addFfiProjection("unknown-before.hxmap",
 				'{"interface":"unknown_before","functionNames":{"z_missing":"valid","a_missing":"valid"}}');
@@ -358,66 +358,66 @@ class HxiParserMain {
 		var unknownAfterCompiler = newCompiler();
 		unknownAfterCompiler.addFfiInterface("unknown-after.hxi",
 			'interface unknown_after @target("x86_64-linux-gnu") @library("unknown_after") { extern fn check() -> i32; }');
-		expectProfileError(function() unknownAfterCompiler.addFfiProjection("unknown-after.hxmap",
+		expectProfileError(() -> unknownAfterCompiler.addFfiProjection("unknown-after.hxmap",
 			'{"interface":"unknown_after","functionNames":{"missing":"valid"}}'),
 			"functionNames.missing");
 		var invalidIdentifierCompiler = newCompiler();
 		invalidIdentifierCompiler.addFfiInterface("invalid-identifier.hxi",
 			'interface invalid_identifier @target("x86_64-linux-gnu") @library("invalid_identifier") { extern fn check() -> i32; }');
-		expectProfileError(function() invalidIdentifierCompiler.addFfiProjection("invalid-identifier.hxmap",
+		expectProfileError(() -> invalidIdentifierCompiler.addFfiProjection("invalid-identifier.hxmap",
 			'{"interface":"invalid_identifier","functionNames":{"check":"not-valid"}}'),
 			"invalid Haxe identifier");
 		var keywordCompiler = newCompiler();
 		keywordCompiler.addFfiInterface("keyword.hxi",
 			'interface keyword @target("x86_64-linux-gnu") @library("keyword") { extern fn lib_class() -> i32; }');
-		expectProfileError(function() keywordCompiler.addFfiProjection("keyword.hxmap",
+		expectProfileError(() -> keywordCompiler.addFfiProjection("keyword.hxmap",
 			'{"interface":"keyword","functionPrefix":"lib_","functionCase":"camel"}'),
 			"invalid Haxe identifier \"class\"");
 		var functionCollisionCompiler = newCompiler();
 		functionCollisionCompiler.addFfiInterface("function-collision.hxi",
 			'interface function_collision @target("x86_64-linux-gnu") @library("function_collision") { extern fn lib_open_file() -> i32; extern fn lib_open__file() -> i32; }');
-		expectProfileError(function() functionCollisionCompiler.addFfiProjection("function-collision.hxmap",
+		expectProfileError(() -> functionCollisionCompiler.addFfiProjection("function-collision.hxmap",
 			'{"interface":"function_collision","functionPrefix":"lib_","functionCase":"camel"}'),
 			"both project to \"openFile\"");
 		var typeCollisionCompiler = newCompiler();
 		typeCollisionCompiler.addFfiInterface("type-collision.hxi",
 			'interface type_collision @target("x86_64-linux-gnu") @library("type_collision") { handle lib_point : u32; handle lib__point : u32; }');
-		expectProfileError(function() typeCollisionCompiler.addFfiProjection("type-collision.hxmap",
+		expectProfileError(() -> typeCollisionCompiler.addFfiProjection("type-collision.hxmap",
 			'{"interface":"type_collision","typePrefix":"lib_"}'),
 			"both project to \"Point\"");
 		var fieldCollisionCompiler = newCompiler();
 		fieldCollisionCompiler.addFfiInterface("field-collision.hxi",
 			'interface field_collision @target("x86_64-linux-gnu") @library("field_collision") { struct point { text_value: i32; text__value: i32; } }');
-		expectProfileError(function() fieldCollisionCompiler.addFfiProjection("field-collision.hxmap",
+		expectProfileError(() -> fieldCollisionCompiler.addFfiProjection("field-collision.hxmap",
 			'{"interface":"field_collision","fieldCase":"camel"}'),
 			"both project to \"textValue\"");
 		var unknownFieldCompiler = newCompiler();
 		unknownFieldCompiler.addFfiInterface("unknown-field.hxi",
 			'interface unknown_field @target("x86_64-linux-gnu") @library("unknown_field") { struct point { x: i32; } }');
-		expectProfileError(function() unknownFieldCompiler.addFfiProjection("unknown-field.hxmap",
+		expectProfileError(() -> unknownFieldCompiler.addFfiProjection("unknown-field.hxmap",
 			'{"interface":"unknown_field","fieldNames":{"point":{"missing":"value"}}}'),
 			"fieldNames.point.missing");
 		var enumCollisionCompiler = newCompiler();
 		enumCollisionCompiler.addFfiInterface("enum-collision.hxi",
 			'interface enum_collision @target("x86_64-linux-gnu") @library("enum_collision") { enum mode : i32 { MODE_FAST = 1; MODE__FAST = 2; } }');
-		expectProfileError(function() enumCollisionCompiler.addFfiProjection("enum-collision.hxmap",
+		expectProfileError(() -> enumCollisionCompiler.addFfiProjection("enum-collision.hxmap",
 			'{"interface":"enum_collision"}'),
 			"both project to \"Fast\"");
 		var constantCollisionCompiler = newCompiler();
 		constantCollisionCompiler.addFfiInterface("constant-collision.hxi",
 			'interface constant_collision @target("x86_64-linux-gnu") @library("constant_collision") { const LIB_VERSION = 1; const VERSION = 2; }');
-		expectProfileError(function() constantCollisionCompiler.addFfiProjection("constant-collision.hxmap",
+		expectProfileError(() -> constantCollisionCompiler.addFfiProjection("constant-collision.hxmap",
 			'{"interface":"constant_collision","constantPrefix":"LIB_","constantCase":"camel"}'),
 			"both project to \"version\"");
 		var outputTypeCollisionCompiler = newCompiler();
 		outputTypeCollisionCompiler.addFfiInterface("output-type-collision.hxi",
 			'interface output_type_collision @target("x86_64-linux-gnu") @library("output_type_collision") { handle lib_read_out_result : u32; extern fn read(value: ptr<i32> @out) -> i32; }');
-		expectProfileError(function() outputTypeCollisionCompiler.addFfiProjection("output-type-collision.hxmap",
+		expectProfileError(() -> outputTypeCollisionCompiler.addFfiProjection("output-type-collision.hxmap",
 			'{"interface":"output_type_collision","typePrefix":"lib_"}'),
 			'both project to "ReadOutResult"');
 		var unknownInterfaceCompiler = newCompiler();
 		unknownInterfaceCompiler.addFfiProjection("unknown-interface.hxmap", '{"interface":"unknown_interface"}');
-		expectProfileError(function() unknownInterfaceCompiler.ffi.cNatives(),
+		expectProfileError(() -> unknownInterfaceCompiler.ffi.cNatives(),
 			"names unknown interface \"unknown_interface\"");
 		var aliasCompiler = newCompiler();
 		aliasCompiler.addFfiProjection("native-names.hxmap",

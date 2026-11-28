@@ -5,3 +5,4 @@ function apply(callback:(Int) -> Int):Int {
 function main():Int {
 	return apply(function(value) return value + 1);
 }
+// @lint:off function-lambda: this test is about the function form

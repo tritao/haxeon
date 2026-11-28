@@ -95,22 +95,22 @@ class LayoutPage {
 			explorer.keyed("copy",
 				explorer.caption("Distribution, baseline alignment, wrapped flow, and bounded aspect-ratio content compose without spacer nodes.")),
 			explorer.keyed("distributed-toolbar", new Row("distributed-toolbar", [
-				explorer.keyed("back", explorer.button("Back", "layout-back", function() {})),
+				explorer.keyed("back", explorer.button("Back", "layout-back", () -> {})),
 				explorer.keyed("toolbar-label", explorer.label("SpaceBetween toolbar")),
-				explorer.keyed("save", explorer.button("Save", "layout-save", function() {}))
+				explorer.keyed("save", explorer.button("Save", "layout-save", () -> {}))
 			], toolbarStyle)),
 			explorer.keyed("baseline-row", new Row("baseline-row", [
 				explorer.keyed("large", explorer.heading("Aa")),
 				explorer.keyed("label", explorer.label("Shared baseline")),
 				explorer.keyed("caption", explorer.caption("mixed text metrics")),
-				explorer.keyed("control", explorer.button("Apply", "baseline-apply", function() {}))
+				explorer.keyed("control", explorer.button("Apply", "baseline-apply", () -> {}))
 			], baselineStyle)),
 			explorer.keyed("wrapped-flow", new Row("wrapped-flow", [
-				explorer.keyed("new", explorer.button("New file", "flow-new", function() {})),
-				explorer.keyed("recent", explorer.button("Open recent", "flow-recent", function() {})),
-				explorer.keyed("share", explorer.button("Share", "flow-share", function() {})),
-				explorer.keyed("export", explorer.button("Export", "flow-export", function() {})),
-				explorer.keyed("settings", explorer.button("Settings", "flow-settings", function() {}))
+				explorer.keyed("new", explorer.button("New file", "flow-new", () -> {})),
+				explorer.keyed("recent", explorer.button("Open recent", "flow-recent", () -> {})),
+				explorer.keyed("share", explorer.button("Share", "flow-share", () -> {})),
+				explorer.keyed("export", explorer.button("Export", "flow-export", () -> {})),
+				explorer.keyed("settings", explorer.button("Settings", "flow-settings", () -> {}))
 			], flowStyle)),
 			explorer.keyed("aspect-preview", new Align("aspect-preview",
 				explorer.caption("2:1 surface · min 160 · max 420"),

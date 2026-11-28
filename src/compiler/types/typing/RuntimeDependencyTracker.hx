@@ -32,7 +32,7 @@ class RuntimeDependencyTracker {
 			{
 				functionName: functionName, target: target
 			}];
-		result.sort(function(left, right) {
+		result.sort((left, right) -> {
 			var functionOrder = Reflect.compare(left.functionName, right.functionName);
 			return functionOrder == 0 ? Reflect.compare(left.target, right.target) : functionOrder;
 		});

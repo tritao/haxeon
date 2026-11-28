@@ -30,18 +30,18 @@ class Holder {
 }
 function main():Int {
 	var a = new Holder(1), b = new Holder(5), previous = a.value;
-	var result = a.value.child.observe(function() {
+	var result = a.value.child.observe(() -> {
 		a.value = new Outer(3, "z");
 	});
 	if (result != 31 || previous.child.x != 1 || previous.child.label != "abc") return 1;
-	result = a.value.child.change(function() {
+	result = a.value.child.change(() -> {
 		a.value = b.value;
 	});
 	if (result != 6 || a.value.child.x != 6 || b.value.child.x != 5) return 2;
-	var captured:Void->Int = function() return a.value.child.x;
+	var captured:Void->Int = () -> a.value.child.x;
 	a.value = b.value;
 	if (captured() != 5 || previous.child.x != 1) return 3;
-	var callback:Void->Void = function() {
+	var callback:Void->Void = () -> {
 		a.value = b.value;
 		throw "expected";
 	};
@@ -51,8 +51,8 @@ function main():Int {
 	}
 		catch (error:Dynamic) if (error != "expected") return 5;
 	if (a.value.child.x != 5 || b.value.child.x != 5) return 6;
-	result = a.value.child.change(function() {
-		a.value.child.change(function() {});
+	result = a.value.child.change(() -> {
+		a.value.child.change(() -> {});
 	});
 	if (result != 9 || a.value.child.x != 9) return 7;
 	a.value = a.value;

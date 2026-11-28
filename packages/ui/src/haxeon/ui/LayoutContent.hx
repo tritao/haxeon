@@ -90,7 +90,7 @@ class LayoutRenderableContent implements LayoutContent implements Disposable {
 			return list;
 
 		canvas.reset();
-		canvas.withState(function(target) {
+		canvas.withState(target -> {
 			target.resetTransform();
 			target.clip(geometry.visibleLocalBounds());
 			painter(target, geometry);

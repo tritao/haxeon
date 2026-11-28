@@ -54,7 +54,7 @@ function main():Int {
 	var results = [for (i in 0...threads) 0];
 	var finished = [0];
 	for (index in 0...threads) {
-		Thread.create(function() {
+		Thread.create(() -> {
 			var result = worker((index + 1) * 100000, rounds);
 			mutex.acquire();
 			results[index] = result;

@@ -185,7 +185,7 @@ class ProtocolMain {
 			done = new sys.thread.Lock(),
 			response = "",
 			token = new CheckpointCancellationToken(entered, resume);
-		sys.thread.Thread.create(function() {
+		sys.thread.Thread.create(() -> {
 			response = protocol.handleWithToken('{"id":99,"method":"compile","entry":"Large"}', token);
 			done.release();
 		});

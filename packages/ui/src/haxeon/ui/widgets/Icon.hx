@@ -88,12 +88,12 @@ class Icon implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var node = context.createNode(context.rootId("icon"), LayoutVisualKind.Custom, style);
 			node.hitTestSelf = false;
 			var paintColor = color == null ? context.theme.tokens.textPrimary : color;
 			var paintKey = namePrefix(name) + colorKey(paintColor);
-			node.onPaint(function(canvas, geometry:ResolvedLayoutItem) {
+			node.onPaint((canvas, geometry:ResolvedLayoutItem) -> {
 				if (geometry.width <= 0.0 || geometry.height <= 0.0) return;
 				canvas.save();
 				defer canvas.restore();

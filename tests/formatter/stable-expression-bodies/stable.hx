@@ -16,3 +16,4 @@ class A {
 	@:native("x") static function native():Int->Void
 		return null;
 }
+// @lint:off function-lambda: the formatter is tested on the function form

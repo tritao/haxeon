@@ -466,7 +466,7 @@ class WasmBackendMain {
 			Frontend.compile("function sum(value:Int):Int { var result = 0; while (value > 0) { result = result + value; value = value - 1; } return result; } function main():Int return sum(3);");
 		var visitedRootFunctions:Array<String> = [];
 		var streamedRoots = WasmGcRoots.encodeAndVisit(referenceProgram,
-			function(fn, _) visitedRootFunctions.push(fn.name));
+			(fn, _) -> visitedRootFunctions.push(fn.name));
 		if (streamedRoots.compare(WasmGcRoots.encode(referenceProgram)) != 0
 			|| visitedRootFunctions.length != referenceProgram.functions.length)
 			throw "Streaming Wasm GC-root analysis changed canonical metadata or skipped a function";

@@ -90,7 +90,7 @@ class StageCostMain {
 			database.register(new ComputedQueryKind<IrFunction>("ir-generation", IrFunctionStateEquality.same)));
 		var names = [for (stage in 0...stages) "stage" + stage];
 		var passes = [for (_ in 0...stages) new BenchPass(reads, cutoff)];
-		return function(build:Int) {
+		return (build:Int) -> {
 			database.newRevision();
 			var list = functions.copy();
 			memos.startBuild(list, false);
@@ -119,7 +119,7 @@ class StageCostMain {
 			made.push([index % FACT_KEYS]);
 		// One contributor beyond the functions names the key every rewrite reads in the cutoff case, every other build.
 		var flipper = count + 1, flipKey = FACT_KEYS, flipped = [flipKey], none:Array<Int> = [];
-		return function(build:Int) {
+		return (build:Int) -> {
 			database.newRevision();
 			for (index in 0...count)
 				generation.put(database, keys[index], functions[index]);
@@ -188,7 +188,7 @@ class StageCostMain {
 				builder.blocks, Ordinary));
 		}
 		var entry = "bench.F" + (count - 1) + ".run";
-		return function(build:Int) {
+		return (build:Int) -> {
 			database.newRevision();
 			var program = new compiler.ir.model.Ir.IrProgram(entry);
 			program.functions = copies ? [for (fn in functions) fn.withBlocks(fn.blocks)] : functions.copy();
@@ -226,7 +226,7 @@ class StageCostMain {
 			fn.freezeBody(scratch.bodyBuilder);
 			functions.push(fn);
 		}
-		return function(build:Int) {
+		return (build:Int) -> {
 			database.newRevision();
 			var program = new compiler.ir.model.Ir.IrProgram("bench.F0.run");
 			program.objects.push({
@@ -265,7 +265,7 @@ class StageCostMain {
 		for (index in 0...count)
 			made.push([index % FACT_KEYS]);
 		var reads = access == "current2" ? 1 : 0;
-		return function(build:Int) {
+		return (build:Int) -> {
 			database.newRevision();
 			for (index in 0...count)
 				generation.put(database, keys[index], functions[index]);

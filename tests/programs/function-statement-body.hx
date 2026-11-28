@@ -2,13 +2,13 @@
 // `else`, or a loop (Haxe types both Void).
 function main():Int {
 	var total = 0;
-	var positive = function(x:Int) if (x > 0) total += x;
+	var positive = (x:Int) -> if (x > 0) total += x;
 	positive(30);
 	positive(-5);
-	var each = function(values:Array<Int>) for (value in values) total += value;
+	var each = (values:Array<Int>) -> for (value in values) total += value;
 	each([5, 7]);
 	var count = 0;
-	var countdown = function(n:Int) while (n > 0) {
+	var countdown = (n:Int) -> while (n > 0) {
 		n--;
 		count++;
 	};

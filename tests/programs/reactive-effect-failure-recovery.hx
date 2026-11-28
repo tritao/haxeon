@@ -11,18 +11,18 @@ class EffectFieldModel implements Observable {
 
 function main():Int {
 	var source = new Signal<Int>(0), firstRuns = 0, secondRuns = 0, thirdRuns = 0, fail = false, order = "";
-	var second = new Effect(function() {
+	var second = new Effect(() -> {
 		var value = source.value;
 		secondRuns++;
 		order += "B";
 	});
-	var third = new Effect(function() {
+	var third = new Effect(() -> {
 		var value = source.value;
 		thirdRuns++;
 		order += "C";
 		if (fail) throw "second";
 	});
-	var first = new Effect(function() {
+	var first = new Effect(() -> {
 		var value = source.value;
 		firstRuns++;
 		order += "A";
@@ -52,7 +52,7 @@ function main():Int {
 	third.dispose();
 
 	var input = new Signal<Int>(0), failValidation = false, observed = -1, derivedRuns = 0;
-	var derived = new Derived<Int>(function() {
+	var derived = new Derived<Int>(() -> {
 		var value = input.value;
 		derivedRuns++;
 		if (failValidation) {
@@ -61,7 +61,7 @@ function main():Int {
 		}
 		return value;
 	});
-	var reader = new Effect(function() observed = derived.value);
+	var reader = new Effect(() -> observed = derived.value);
 	failValidation = true;
 	input.value = 1;
 	caught = null;
@@ -76,7 +76,7 @@ function main():Int {
 	derived.dispose();
 
 	var disposableSource = new Signal<Int>(0), disposableRuns = 0, disposableFail = false;
-	var disposable = new Effect(function() {
+	var disposable = new Effect(() -> {
 		var value = disposableSource.value;
 		disposableRuns++;
 		if (disposableFail) throw "dispose";
@@ -90,7 +90,7 @@ function main():Int {
 	if (disposableRuns != 2) return 8;
 
 	var constructorRuns = 0, constructorFail = true;
-	try new Effect(function() {
+	try new Effect(() -> {
 		var value = source.value;
 		constructorRuns++;
 		if (constructorFail) {
@@ -106,7 +106,7 @@ function main():Int {
 	if (constructorRuns != 2) return 11;
 
 	var partialA = new Signal<Int>(0), partialB = new Signal<Int>(0), partialFail = false, partialRuns = 0;
-	var partial = new Effect(function() {
+	var partial = new Effect(() -> {
 		var a = partialA.value;
 		partialRuns++;
 		if (partialFail) throw "partial";
@@ -125,12 +125,12 @@ function main():Int {
 	partial.dispose();
 
 	var initialInput = new Signal<Int>(0), initialRuns = 0, initialFail = true;
-	var initialDerived = new Derived<Int>(function() {
+	var initialDerived = new Derived<Int>(() -> {
 		var value = initialInput.value;
 		if (initialFail) throw "initial derived";
 		return value;
 	});
-	try new Effect(function() {
+	try new Effect(() -> {
 		var value = initialDerived.value;
 		initialRuns++;
 	}) catch (_:Dynamic) {}
@@ -143,13 +143,13 @@ function main():Int {
 	initialDerived.dispose();
 
 	var model = new EffectFieldModel(), input2 = new Signal<Int>(0), leftRuns = 0, rightRuns = 0;
-	var parity = new Derived<Int>(function() return input2.value % 2);
-	var leftReader = new Effect(function() {
+	var parity = new Derived<Int>(() -> input2.value % 2);
+	var leftReader = new Effect(() -> {
 		var left = model.left;
 		var value = parity.value;
 		leftRuns++;
 	});
-	var rightReader = new Effect(function() {
+	var rightReader = new Effect(() -> {
 		var right = model.right;
 		rightRuns++;
 	});

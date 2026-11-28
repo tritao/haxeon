@@ -91,48 +91,48 @@ function main():Int {
 	var identityValue:IdentityValue = null;
 	var freshEffectValue = 0;
 	var freshSignalEffectValue = 0;
-	var base = new Effect(function() {
+	var base = new Effect(() -> {
 		baseValue = model.baseValue;
 	});
-	var count = new Effect(function() {
+	var count = new Effect(() -> {
 		countValue = model.count;
 	});
-	var other = new Effect(function() {
+	var other = new Effect(() -> {
 		otherValue = model.other;
 	});
-	var item = new Effect(function() {
+	var item = new Effect(() -> {
 		itemValue = model.item;
 	});
-	var valueRecord = new Effect(function() {
+	var valueRecord = new Effect(() -> {
 		valueRecordValue = model.valueRecord;
 	});
-	var optionalRecord = new Effect(function() {
+	var optionalRecord = new Effect(() -> {
 		optionalRecordValue = model.optionalRecord;
 	});
-	var ratio = new Effect(function() {
+	var ratio = new Effect(() -> {
 		ratioValue = model.ratio;
 	});
-	var label = new Effect(function() {
+	var label = new Effect(() -> {
 		labelValue = model.optionalLabel;
 	});
-	var identity = new Effect(function() {
+	var identity = new Effect(() -> {
 		identityValue = model.identity;
 	});
-	var freshEffect = new Effect(function() {
+	var freshEffect = new Effect(() -> {
 		var fresh = new FreshModel();
 		fresh.initialize(6);
 		freshEffectValue = fresh.value;
 	});
-	var freshDerived = new haxeon.reactive.Derived<Int>(function() {
+	var freshDerived = new haxeon.reactive.Derived<Int>(() -> {
 		var fresh = new FreshModel();
 		fresh.initialize(7);
 		return fresh.value;
 	});
-	var freshSignalEffect = new Effect(function() {
+	var freshSignalEffect = new Effect(() -> {
 		var fresh = new Signal<Int>(6);
 		freshSignalEffectValue = fresh.value;
 	});
-	var freshSignalDerived = new haxeon.reactive.Derived<Int>(function() {
+	var freshSignalDerived = new haxeon.reactive.Derived<Int>(() -> {
 		var fresh = new Signal<Int>(7);
 		return fresh.value;
 	});
@@ -141,7 +141,7 @@ function main():Int {
 	if (base.dirty || count.dirty || other.dirty || item.dirty || ratio.dirty || label.dirty
 		|| identity.dirty) return fail(11);
 	var structuredSignal = new Signal<ValueRecord>(new ValueRecord(4)), structuredValue = 0;
-	var structuredReader = new Effect(function() {
+	var structuredReader = new Effect(() -> {
 		structuredValue = structuredSignal.value.value;
 	});
 	structuredSignal.value = new ValueRecord(4);
@@ -222,23 +222,23 @@ function main():Int {
 
 	var threw = false;
 	try {
-		new Effect(function() model.count = 9);
+		new Effect(() -> model.count = 9);
 	} catch (_:Dynamic) threw = true;
 	ReactiveRuntime.flushEffects();
 	var constructed:Model = null, constructorWriteThrew = false;
 	try {
-		ReactiveRuntime.withTracking(count, function() {
+		ReactiveRuntime.withTracking(count, () -> {
 			constructed = new Model();
 		});
 	} catch (_:Dynamic) return fail(25);
 	try {
-		ReactiveRuntime.withTracking(count, function() {
-			new ConstructorMutation(model);
+		ReactiveRuntime.withTracking(count, () -> {
+			_ = new ConstructorMutation(model);
 		});
 	} catch (_:Dynamic) constructorWriteThrew = true;
 	var wire = new WireModel();
 	var enumModel = new EnumModel(), enumPhase:ObservablePhase = null;
-	var enumReader = new Effect(function() {
+	var enumReader = new Effect(() -> {
 		enumPhase = enumModel.phase;
 	});
 	enumModel.phase = Idle;
@@ -256,7 +256,7 @@ function main():Int {
 	if (!enumReader.dirty) return fail(44);
 	ReactiveRuntime.flushEffects();
 	enumReader.dispose();
-	var wireReader = new Effect(function() {
+	var wireReader = new Effect(() -> {
 		var value = wire.label;
 	});
 	var encoded = haxeon.wire.JsonWire.encode(wire);
@@ -265,7 +265,7 @@ function main():Int {
 		|| encoded.indexOf("haxeonObservableState") >= 0 || Reflect.fields(wire).indexOf("$haxeonObservableState") >= 0
 		|| Reflect.hasField(wire, "$haxeonObservableState")) return fail(34);
 	var decodedLabel = "";
-	var decodedReader = new Effect(function() {
+	var decodedReader = new Effect(() -> {
 		decodedLabel = decoded.label;
 	});
 	decoded.label = "changed";

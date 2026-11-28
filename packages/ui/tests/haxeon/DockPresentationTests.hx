@@ -12,7 +12,7 @@ class DockPresentationTests {
 	}
 	static function has(root:RenderNode, label:String):Bool {
 		var found = false;
-		root.walk(function(n) {
+		root.walk(n -> {
 			if (n.semantics != null && n.semantics.label == label) found = true;
 		});
 		return found;
@@ -23,9 +23,9 @@ class DockPresentationTests {
 		// The workspace is described again for each set of panels it hides.
 		function view(hiddenPanels:Array<String>):DockWorkspace
 			return new DockWorkspace("presentation-test", model, [
-				new DockPanelContent("nav", function(_) return new Text("NAV CONTENT")),
-				new DockPanelContent("main", function(_) return new Text("MAIN CONTENT")),
-				new DockPanelContent("right", function(_) return new Text("RIGHT CONTENT"))
+				new DockPanelContent("nav", _ -> new Text("NAV CONTENT")),
+				new DockPanelContent("main", _ -> new Text("MAIN CONTENT")),
+				new DockPanelContent("right", _ -> new Text("RIGHT CONTENT"))
 			], hiddenPanels:);
 		model.setRoot(DockNode.Split(Horizontal, 0.25, Panel("nav"),
 			Split(Horizontal, 0.6, Panel("main"), Panel("right"))));
@@ -37,7 +37,7 @@ class DockPresentationTests {
 		// Hiding the first branch keeps the surviving divider's original model path.
 		root = context.submit(view(["nav"]), new LayoutFrame(1000, 400));
 		var divider:RenderNode = null;
-		root.walk(function(n) {
+		root.walk(n -> {
 			if (n.styleType == "split-divider") divider = n;
 		});
 		if (divider == null) throw "Surviving dock split lost its divider";

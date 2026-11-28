@@ -51,7 +51,7 @@ class AppShell implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var bodyChildren:Array<KeyedView> = [];
 			if (sidebar != null)
 				bodyChildren.push(new KeyedView("sidebar", sidebar));

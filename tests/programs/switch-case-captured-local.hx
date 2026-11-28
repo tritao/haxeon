@@ -15,7 +15,7 @@ function collect(arguments:Array<String>):Int {
 				var folder = arguments[index] + "!";
 				if (!find(folders, folder))
 					folders.push(folder);
-				var same = function(existing:String) return existing == folder;
+				var same = (existing:String) -> existing == folder;
 				if (!same(folder))
 					return -1;
 			default:
@@ -29,7 +29,7 @@ function counted(value:Int):Int {
 	switch value {
 		case 1 | 2:
 			var count = 0;
-			var increment = function() {
+			var increment = () -> {
 				count = count + 1;
 			};
 			increment();
@@ -37,8 +37,8 @@ function counted(value:Int):Int {
 			return count;
 		case 3, 4:
 			var base = value * 2;
-			var outer = function() {
-				var inner = function() return base;
+			var outer = () -> {
+				var inner = () -> base;
 				return inner();
 			};
 			return outer();
@@ -52,7 +52,7 @@ function selected(value:Int):Int {
 		case 1 | 2:
 			{
 				var local = value + 1;
-				var read = function() return local;
+				var read = () -> local;
 				read();
 			}
 		default: 0;

@@ -46,7 +46,7 @@ class IrValueTableCodec {
 		if (values.length > MAX_VALUES)
 			throw new InternalError("Too many IR values");
 		var ordered = values.copy();
-		ordered.sort(function(a, b) return (a.id:Int) - (b.id:Int));
+		ordered.sort((a, b) -> (a.id:Int) - (b.id:Int));
 		output.writeInt32(ordered.length);
 		var previous = -1;
 		for (value in ordered) {

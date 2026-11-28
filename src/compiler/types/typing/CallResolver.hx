@@ -2844,8 +2844,8 @@ class CallResolver {
 			if (StdlibNames.names(name, StdlibNames.DIFF_ALL))
 				bindTypeArguments(name, ["T"], written, span);
 			return bodyTyper.typeExpression(DiffIntrinsics.expand(session, name, written.get("T"), arguments, span,
-				function(argument) return typeExpressionValue(argument, scope).type,
-				function(argument) return typeExpressionValue(argument, scope)),
+				argument -> typeExpressionValue(argument, scope).type,
+				argument -> typeExpressionValue(argument, scope)),
 				scope, expectedType);
 		}
 		if (EnumCreation.handles(name))
@@ -3349,7 +3349,7 @@ class CallResolver {
 			default: throw new InternalError("Not an array");
 		};
 		// An element still to be fixed (`var list = []`) is checked once the push that fixes it has been typed.
-		session.monomorphs.whenKnown(element, function() {
+		session.monomorphs.whenKnown(element, () -> {
 			if (RuntimeType.arrayName(session.monomorphs.settled(element)) == null)
 				fail(DiagnosticCode.RUNTIME_SUPPORT, "This array element type has no compiler-owned runtime ABI", span);
 		});

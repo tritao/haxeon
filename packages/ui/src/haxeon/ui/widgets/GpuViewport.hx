@@ -177,7 +177,7 @@ class GpuViewport implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var nodeId = context.rootId("viewport");
 			var identity = new StyleIdentity("gpu-viewport", key, key, null, ["gpu-viewport"]);
 			var computed = context.resolveStyled(nodeId, identity, style);
@@ -190,8 +190,8 @@ class GpuViewport implements View {
 			var cacheKey = "viewport:" + content.revision()
 				+ ":camera:" + camera.revision + ":fit:" + (fitMargin == null ? "off" : Std.string(fitMargin))
 				+ ":appearance:" + appearanceKey() + ":overlay:" + overlayRevision;
-			node.onPaint(function(canvas, geometry) paint(canvas, geometry), cacheKey);
-			node.on(UiEventKind.PointerDown, function(event) {
+			node.onPaint((canvas, geometry) -> paint(canvas, geometry), cacheKey);
+			node.on(UiEventKind.PointerDown, event -> {
 				if (!enabled || event.button != panButton) return;
 				draggingPointer = event.pointerId;
 				lastPointerX = event.localX;
@@ -199,7 +199,7 @@ class GpuViewport implements View {
 				event.capturePointer();
 				event.stopPropagation();
 			});
-			node.on(UiEventKind.PointerMove, function(event) {
+			node.on(UiEventKind.PointerMove, event -> {
 				if (draggingPointer == null || event.pointerId != draggingPointer) return;
 				takeCamera();
 				camera.panByScreen(event.localX - lastPointerX, event.localY - lastPointerY);
@@ -209,7 +209,7 @@ class GpuViewport implements View {
 			});
 			node.on(UiEventKind.PointerUp, finishPointer);
 			node.on(UiEventKind.PointerCancel, finishPointer);
-			node.on(UiEventKind.Scroll, function(event) {
+			node.on(UiEventKind.Scroll, event -> {
 				if (!enabled || event.deltaY == 0.0) return;
 				takeCamera();
 				camera.zoomAt(Math.pow(1.1, -event.deltaY / 100.0), event.localX, event.localY);
@@ -254,7 +254,7 @@ class GpuViewport implements View {
 				new GradientStop(0.0, backgroundTop),
 				new GradientStop(1.0, backgroundBottom)
 			]);
-		canvas.withState(function(viewCanvas) {
+		canvas.withState(viewCanvas -> {
 			viewCanvas.translate(-shown.panX * shown.zoom, -shown.panY * shown.zoom);
 			viewCanvas.scale(shown.zoom, shown.zoom);
 			if (gridEnabled) paintGrid(viewCanvas, geometry);

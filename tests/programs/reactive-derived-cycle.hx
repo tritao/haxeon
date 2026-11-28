@@ -5,7 +5,7 @@ function main():Int {
 	var self:Derived<Int> = null;
 	var directCalls = 0;
 	var directCycle = true;
-	self = new Derived<Int>(function() {
+	self = new Derived<Int>(() -> {
 		directCalls++;
 		if (directCalls > 32) throw "unbounded direct recursion";
 		return directCycle ? self.value : 7;
@@ -24,12 +24,12 @@ function main():Int {
 	var input = new Signal<Int>(3);
 	var indirectCalls = 0;
 	var indirectCycle = true;
-	left = new Derived<Int>(function() {
+	left = new Derived<Int>(() -> {
 		indirectCalls++;
 		if (indirectCalls > 32) throw "unbounded indirect recursion";
 		return indirectCycle ? right.value : input.value;
 	});
-	right = new Derived<Int>(function() return left.value + 1);
+	right = new Derived<Int>(() -> left.value + 1);
 	error = null;
 	try {
 		var value = left.value;
@@ -46,11 +46,11 @@ function main():Int {
 	var trigger = new Signal<Int>(0);
 	var a:Derived<Int> = null;
 	var b:Derived<Int> = null;
-	b = new Derived<Int>(function() {
+	b = new Derived<Int>(() -> {
 		var flag = trigger.value;
 		return flag == 0 ? 1 : a.value;
 	});
-	a = new Derived<Int>(function() return b.value + 1);
+	a = new Derived<Int>(() -> b.value + 1);
 	if (a.value != 2) return 6;
 	trigger.value = 1;
 	error = null;

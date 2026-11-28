@@ -95,10 +95,10 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 				new Array<Dynamic>();
 		};
 		var base = display(root);
-		var draftRevision:State<Int> = context.lazyState(context.id(key + ":draft-revision"), function() return 0);
+		var draftRevision:State<Int> = context.lazyState(context.id(key + ":draft-revision"), () -> 0);
 		var observedDraftRevision = draftRevision.value;
 		var draftState:State<StructuredPropertyDrafts> = context.lazyState(context.id(key + ":drafts"),
-			function() return new StructuredPropertyDrafts(base));
+			() -> new StructuredPropertyDrafts(base));
 		var found = retainDrafts ? retainedDrafts.get(descriptor.id) : draftState.value;
 		if (found != null && found.base != base) {
 			found.reset(base);
@@ -411,7 +411,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 		children.push(new KeyedView("items", tree(new Array<String>(), root, descriptor.structure)));
 		var choose = chooseItems;
 		if (!vector && choose != null) {
-			var browse = new Button("Choose files…", null, function() choose(function(paths) {
+			var browse = new Button("Choose files…", null, () -> choose(paths -> {
 				if (paths.length == 0) return;
 				try {
 					var copy:Array<Dynamic> = cast candidate();

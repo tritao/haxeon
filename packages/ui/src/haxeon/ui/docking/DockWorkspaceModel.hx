@@ -40,9 +40,9 @@ class DockWorkspaceModel implements Observable {
 	/** Registers a change listener and returns a cleanup callback. */
 	public function listen(callback:Void->Void):Void->Void {
 		if (callback == null || listeners.contains(callback))
-			return function() {};
+			return () -> {};
 		listeners.push(callback);
-		return function() {
+		return () -> {
 			listeners.remove(callback);
 		};
 	}
@@ -357,20 +357,20 @@ class DockWorkspaceCommands {
 			prefix:String = "dock", scope:String = CommandRegistry.GlobalScope):Void {
 		if (model == null || registry == null || prefix == null || prefix.length == 0)
 			throw "Dock commands require a workspace, registry, and stable prefix";
-		registry.register(Command.contextual(prefix + ".close", "Close panel", function(context) {
+		registry.register(Command.contextual(prefix + ".close", "Close panel", context -> {
 			var panelId = context.parameters.getString("panel");
 			if (panelId == null)
 				panelId = model.activePanelId;
 			return panelId != null && model.close(panelId)
 				? CommandResult.executed() : CommandResult.rejected("The active panel cannot be closed");
-		}, null, function(context) {
+		}, null, context -> {
 			var panelId = context.parameters.getString("panel");
 			if (panelId == null)
 				panelId = model.activePanelId;
 			var panel = panelId == null ? null : model.get(panelId);
 			return panel != null && panel.closable && model.isOpen(panelId);
 		}), scope);
-		registry.register(Command.contextual(prefix + ".reset", "Reset workspace", function(_) {
+		registry.register(Command.contextual(prefix + ".reset", "Reset workspace", _ -> {
 			model.reset();
 			return CommandResult.executed();
 		}), scope);

@@ -34,7 +34,7 @@ function main():Int {
 	hl.Gc.censusDump(directory + "/census.json");
 	hl.Gc.dumpMemory(directory + "/heap-é.dump");
 	var names = FileSystem.readDirectory(directory);
-	names.sort(function(left, right) return left < right ? -1 : left > right ? 1 : 0);
+	names.sort((left, right) -> left < right ? -1 : left > right ? 1 : 0);
 	var exact = names.length == 2 && names[0] == "census.json" && names[1] == "heap-é.dump";
 	var written = exact && sizeOf(directory + "/census.json") > 0 && sizeOf(directory + "/heap-é.dump") > 0;
 	clear(directory);

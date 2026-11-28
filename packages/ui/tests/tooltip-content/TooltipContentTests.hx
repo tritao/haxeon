@@ -29,7 +29,7 @@ class WidthBox implements View {
 		style.height = LayoutAxis.fixed(20);
 		var root = new RenderNode(context.id("box"), LayoutVisualKind.Box, style);
 		root.add(new Text("width " + width.value).build(context));
-		root.onResolved(function(geometry) {
+		root.onResolved(geometry -> {
 			if (width.value != geometry.width) width.update(geometry.width);
 		});
 		return root;
@@ -44,7 +44,7 @@ class TooltipContentTests {
 
 	static function hints(root:RenderNode):Int {
 		var count = 0;
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.layout.text == "Hint") count++;
 		});
 		return count;
@@ -70,7 +70,7 @@ class TooltipContentTests {
 	/** Positioned tooltips in the tree, and how many of them TooltipOverlayHost has lifted to the root. */
 	static function tooltips(root:RenderNode):{count:Int, lifted:Int} {
 		var count = 0, lifted = 0;
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.styleType != "tooltip") return;
 			count++;
 			if (node.parent == root) lifted++;
@@ -90,7 +90,7 @@ class TooltipContentTests {
 		function content():View {
 			bump.value;
 			bodyRuns++;
-			var tip = new Tooltip("scoped-tip", new Button("Anchor", null, function() {}, "scoped-anchor"),
+			var tip = new Tooltip("scoped-tip", new Button("Anchor", null, () -> {}, "scoped-anchor"),
 				new Text("Hint"), placement: TooltipPlacement.Above, fillAnchor: true);
 			return mode == "feedback" ? new Column("scoped", [
 				new KeyedView("box", new WidthBox()),
@@ -193,9 +193,9 @@ class TooltipContentTests {
 			ui.pointerMove(anchor.x + 4.0, anchor.y + 4.0);
 			check(ui.animations.rebuildingCount == 0 && !ui.animations.needsFrame && ui.animations.waitSeconds() > 0,
 				"waiting for a tooltip requested continuous rebuilding frames");
-			root = settle(ui, side, frame, 0.2, 2, function(tree) return hints(tree) > 0);
+			root = settle(ui, side, frame, 0.2, 2, tree -> hints(tree) > 0);
 			check(hints(root) == 0, "a " + Std.string(placement) + " tooltip appeared before its hover delay");
-			root = settle(ui, side, frame, 0.2, 6, function(tree) return hints(tree) > 0);
+			root = settle(ui, side, frame, 0.2, 6, tree -> hints(tree) > 0);
 			check(hints(root) == 1, "a " + Std.string(placement) + " tooltip never showed its content");
 			var tip = root.children[1];
 			check(visible(tip), "a " + Std.string(placement) + " tooltip has content but is hidden");
@@ -211,7 +211,7 @@ class TooltipContentTests {
 					"a " + Std.string(placement) + " tooltip is outside the viewport");
 			}
 			ui.pointerMove(250.0, 190.0);
-			root = settle(ui, side, frame, 0.2, 6, function(tree) return hints(tree) == 0);
+			root = settle(ui, side, frame, 0.2, 6, tree -> hints(tree) == 0);
 			check(hints(root) == 0, "a " + Std.string(placement) + " tooltip kept its content after the pointer left");
 			check(ui.focusWidget(root.children[0].id), "the tooltip anchor cannot receive keyboard focus");
 			root = ui.submit(side, frame);

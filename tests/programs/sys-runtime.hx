@@ -120,7 +120,7 @@ function main():Int {
 	if (sys.FileSystem.exists(fsRenamed))
 		return 10;
 	var mutex = new sys.thread.Mutex(), threaded = [0];
-	sys.thread.Thread.create(function() {
+	sys.thread.Thread.create(() -> {
 		mutex.acquire();
 		threaded[0] = 42;
 		mutex.release();

@@ -116,7 +116,7 @@ class EventPump {
 		if (listener == null)
 			throw BindingError.invalidArgument("EventPump.listen", "NativeKit event listeners cannot be null");
 		listeners.push(listener);
-		return new EventSubscription(this, function() listeners.remove(listener));
+		return new EventSubscription(this, () -> listeners.remove(listener));
 	}
 
 	/**
@@ -137,7 +137,7 @@ class EventPump {
 		final routes = known;
 		var route = new SourceRoute(listener);
 		routes.push(route);
-		return new EventSubscription(this, function() {
+		return new EventSubscription(this, () -> {
 			route.active = false;
 			routes.remove(route);
 			if (routes.length == 0)

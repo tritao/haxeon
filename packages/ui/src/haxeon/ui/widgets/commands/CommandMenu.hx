@@ -64,7 +64,7 @@ class CommandMenu implements View {
 			if (command == null)
 				continue;
 			var capturedId = commandId;
-			items.push(new MenuItem(capturedId, command.label, function() {
+			items.push(new MenuItem(capturedId, command.label, () -> {
 				var result = commands.executeContext(capturedId, actualContext);
 				if (onResult != null)
 					onResult(result);

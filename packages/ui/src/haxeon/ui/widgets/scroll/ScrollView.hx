@@ -91,7 +91,7 @@ class ScrollView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var viewportStyle = style.copy();
 			var id = context.rootId("scroll");
 			var viewport = context.styled(id, LayoutVisualKind.Box,
@@ -109,7 +109,7 @@ class ScrollView implements View {
 				|| axis == ScrollAxis.Vertical || axis == ScrollAxis.Both;
 			if (!suppliedController) {
 				var stored:State<ScrollController> = context.resourceState(viewport.id,
-					function() return controller, function(_) {});
+					() -> controller, _ -> {});
 				controller = stored.value;
 			}
 			// Virtual content is built by the surrounding owner before ScrollView builds. Subscribe that owner to
@@ -121,13 +121,13 @@ class ScrollView implements View {
 			var builtViewportWidth = controller.viewportWidth, builtViewportHeight = controller.viewportHeight;
 			// Fully materialized content only moves in place; it reads no scroll-dependent signal.
 			var binding = context.resourceState(context.id("controller-binding"),
-				function() return new ScrollBinding(),
-				function(value) value.dispose());
+				() -> new ScrollBinding(),
+				value -> value.dispose());
 			var visibility = context.resourceState(context.id("scrollbar-visibility"),
-				function() return new ScrollbarVisibilityController(),
-				function(value) value.dispose());
+				() -> new ScrollbarVisibilityController(),
+				value -> value.dispose());
 			// The scrollbar, when there is one, attaches its own callback, which edits its nodes in place (see addScrollbar).
-			visibility.value.attach(context.animations, function() {});
+			visibility.value.attach(context.animations, () -> {});
 			visibility.value.bindSource(controller);
 			var policy:ScrollbarVisibility = scrollbarVisibility == null
 				? context.environment.scrollbarVisibility : scrollbarVisibility;
@@ -135,10 +135,10 @@ class ScrollView implements View {
 				context.environment.reducedMotion);
 
 			visibility.value.setViewportHovered(hovered);
-			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) {
+			viewport.onTargetBubble(UiEventKind.HoverEnter, event -> {
 				if (event.target.equals(viewport.id)) visibility.value.setViewportHovered(true);
 			});
-			viewport.onTargetBubble(UiEventKind.HoverLeave, function(event) {
+			viewport.onTargetBubble(UiEventKind.HoverLeave, event -> {
 				if (event.target.equals(viewport.id)) visibility.value.setViewportHovered(false);
 			});
 
@@ -153,21 +153,21 @@ class ScrollView implements View {
 				contentStyle);
 			// Layout settles the offset against the viewport and the content, and moves the content by it.
 			translatedContent.layout.scroll = new ContentScroll(controller, contentExtentProvider);
-			var content = context.withStyleParent(computed, function() {
-				return context.withScope(new Key("content"), function() return child.build(context));
+			var content = context.withStyleParent(computed, () -> {
+				return context.withScope(new Key("content"), () -> child.build(context));
 			});
 			translatedContent.add(content);
 			var horizontalVisibility = context.resourceState(context.id("horizontal-scrollbar-visibility"),
-				function() return new ScrollbarVisibilityController(),
-				function(value) value.dispose());
+				() -> new ScrollbarVisibilityController(),
+				value -> value.dispose());
 			horizontalVisibility.value.bindSource(controller);
 			horizontalVisibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden,
 				context.environment.reducedMotion);
 			horizontalVisibility.value.setViewportHovered(hovered);
-			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) {
+			viewport.onTargetBubble(UiEventKind.HoverEnter, event -> {
 				if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(true);
 			});
-			viewport.onTargetBubble(UiEventKind.HoverLeave, function(event) {
+			viewport.onTargetBubble(UiEventKind.HoverLeave, event -> {
 				if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false);
 			});
 			viewport.add(translatedContent);
@@ -184,7 +184,7 @@ class ScrollView implements View {
 				horizontalVisibility.value,
 				false) : null;
 			var lastOffsetX = controller.offsetX, lastOffsetY = controller.offsetY;
-			binding.value.attach(controller, context.animations, function(_) {
+			binding.value.attach(controller, context.animations, _ -> {
 				// A scroll from input or an animation moves the window: tell the owner. An offset set while a view is
 				// building (an owner keeping its anchor or a selection in view) is already in the window being built,
 				// and writing state there is forbidden; the resolved-geometry check below covers any later change.
@@ -200,7 +200,7 @@ class ScrollView implements View {
 				horizontalVisibility.value.reveal();
 			});
 
-			translatedContent.onResolved(function(geometry) {
+			translatedContent.onResolved(geometry -> {
 				// Layout has settled the controller's metrics and offset (ContentScroll).
 				var materializedViewportChanged = (axis != ScrollAxis.Horizontal
 					&& builtViewportHeight != controller.viewportHeight)
@@ -224,7 +224,7 @@ class ScrollView implements View {
 				if (scrollbar != null) syncScrollbar(scrollbar, true);
 				if (horizontal != null) syncScrollbar(horizontal, false);
 			});
-			viewport.on(UiEventKind.Scroll, function(event) {
+			viewport.on(UiEventKind.Scroll, event -> {
 				if (onScroll != null) onScroll(event);
 				if (event.defaultPrevented) return;
 				var dx = axis == ScrollAxis.Horizontal || axis == ScrollAxis.Both ? event.deltaX : 0.0;
@@ -239,15 +239,15 @@ class ScrollView implements View {
 			// A touch drag scrolls 1:1 and flings on release. Mouse input has no UiTouchData and keeps its wheel and
 			// scrollbar behaviour. The drag claims the pointer (capture and preventDefault) only once it passes the
 			// slop, so taps reach their buttons and an inner scroll view keeps a drag from the outer one.
-			var touch = context.resourceState(context.id("touch-scroll"), function() return new TouchScrollState(),
-				function(_) {}).value;
-			viewport.on(UiEventKind.PointerDown, function(event) {
+			var touch = context.resourceState(context.id("touch-scroll"), () -> new TouchScrollState(),
+				_ -> {}).value;
+			viewport.on(UiEventKind.PointerDown, event -> {
 				if (event.button != 0 || !Std.isOfType(event.data, UiTouchData)) return;
 				if (touch.tracking && touch.scrolling && touch.pointer != event.pointerId) return;
 				controller.stopFling();
 				touch.begin(event.pointerId, event.x, event.y);
 			});
-			viewport.on(UiEventKind.PointerMove, function(event) {
+			viewport.on(UiEventKind.PointerMove, event -> {
 				if (!touch.tracking || touch.pointer != event.pointerId) return;
 				if (!touch.scrolling) {
 					if (event.defaultPrevented) {
@@ -284,7 +284,7 @@ class ScrollView implements View {
 				controller.jumpTo(controller.offsetX + deltaX, controller.offsetY + deltaY);
 				event.preventDefault();
 			});
-			viewport.on(UiEventKind.PointerUp, function(event) {
+			viewport.on(UiEventKind.PointerUp, event -> {
 				if (!touch.tracking || touch.pointer != event.pointerId) return;
 				var wasScrolling = touch.scrolling;
 				touch.tracking = false;
@@ -296,12 +296,12 @@ class ScrollView implements View {
 					axis != ScrollAxis.Horizontal ? -touch.velocity.velocityY : 0.0);
 				event.preventDefault();
 			});
-			viewport.on(UiEventKind.PointerCancel, function(event) {
+			viewport.on(UiEventKind.PointerCancel, event -> {
 				if (!touch.tracking || touch.pointer != event.pointerId) return;
 				touch.tracking = false;
 				touch.scrolling = false;
 			});
-			var handleKey = function(event:UiEvent) {
+			var handleKey = (event:UiEvent) -> {
 				if (event.defaultPrevented) return;
 				var amount = 0.0;
 				if (event.key == UiKey.Down) amount = 40.0;
@@ -322,7 +322,7 @@ class ScrollView implements View {
 			if (scrollbar != null && overlayHost != viewport) {
 				scrollbar.on(UiEventKind.KeyDown, handleKey);
 				scrollbar.on(UiEventKind.KeyRepeat, handleKey);
-				scrollbar.on(UiEventKind.Scroll, function(event) {
+				scrollbar.on(UiEventKind.Scroll, event -> {
 					visibility.value.reveal();
 					if (controller.scrollBy(0, event.deltaY)) event.stopPropagation();
 				});
@@ -376,19 +376,19 @@ class ScrollView implements View {
 		thumb.add(visual);
 		track.add(thumb);
 		viewport.add(track);
-		var maximum = function() return vertical ? controller.maxScrollY : controller.maxScrollX;
-		var offset = function() return vertical ? controller.offsetY : controller.offsetX;
-		var extent = function() return vertical ? controller.viewportHeight : controller.viewportWidth;
-		var jump = function(value:Float) return vertical ? controller.jumpTo(controller.offsetX,
+		var maximum = () -> vertical ? controller.maxScrollY : controller.maxScrollX;
+		var offset = () -> vertical ? controller.offsetY : controller.offsetX;
+		var extent = () -> vertical ? controller.viewportHeight : controller.viewportWidth;
+		var jump = (value:Float) -> vertical ? controller.jumpTo(controller.offsetX,
 			value) : controller.jumpTo(value,
 			controller.offsetY);
-		var travel = function() {
+		var travel = () -> {
 			var trackGeometry = track.resolved, thumbGeometry = thumb.resolved;
 			if (trackGeometry == null || thumbGeometry == null) return 0.0;
 			return Math.max(0.0, vertical ? trackGeometry.height - thumbGeometry.height : trackGeometry.width
 				- thumbGeometry.width);
 		};
-		var updatePaint = function() {
+		var updatePaint = () -> {
 			var opacity = visibility.opacity;
 			var active = visibility.hovered || visibility.dragging || visibility.focused;
 			var color = context.theme.tokens.textSecondary;
@@ -415,25 +415,25 @@ class ScrollView implements View {
 		};
 		// Fades and hover change only these nodes, so they are edited in place: the frame lays them out and paints them
 		// without rebuilding the view or any cache around it.
-		visibility.attach(context.animations, function() {
+		visibility.attach(context.animations, () -> {
 			context.willEditRetained(track);
 			context.willEditRetained(thumb);
 			context.willEditRetained(visual);
 			updatePaint();
 		});
 		updatePaint();
-		track.onTargetBubble(UiEventKind.HoverEnter, function(event) {
+		track.onTargetBubble(UiEventKind.HoverEnter, event -> {
 			if (event.target.equals(track.id)) visibility.setHovered(true);
 		});
-		track.onTargetBubble(UiEventKind.HoverLeave, function(event) {
+		track.onTargetBubble(UiEventKind.HoverLeave, event -> {
 			if (event.target.equals(track.id)) visibility.setHovered(false);
 		});
-		thumb.on(UiEventKind.Focus, function(_) visibility.setFocused(true));
-		thumb.on(UiEventKind.Blur, function(_) visibility.setFocused(false));
-		thumb.on(UiEventKind.FocusLost, function(_) visibility.setFocused(false));
+		thumb.on(UiEventKind.Focus, _ -> visibility.setFocused(true));
+		thumb.on(UiEventKind.Blur, _ -> visibility.setFocused(false));
+		thumb.on(UiEventKind.FocusLost, _ -> visibility.setFocused(false));
 		var dragState:State<ScrollbarDragState> = context.resourceState(thumbId,
-			function() return new ScrollbarDragState(), function(_) {});
-		thumb.on(UiEventKind.PointerDown, function(event) {
+			() -> new ScrollbarDragState(), _ -> {});
+		thumb.on(UiEventKind.PointerDown, event -> {
 			if (event.button != 0) return;
 			var drag = dragState.value;
 			drag.dragging = true;
@@ -448,7 +448,7 @@ class ScrollView implements View {
 			event.stopPropagation();
 			event.preventDefault();
 		});
-		track.onResolved(function(_) {
+		track.onResolved(_ -> {
 			var drag = dragState.value;
 			if (drag.dragging && (drag.maximum != maximum() || drag.travel != travel())) {
 				drag.pointer = drag.lastPointer;
@@ -457,14 +457,14 @@ class ScrollView implements View {
 				drag.travel = travel();
 			}
 		});
-		thumb.on(UiEventKind.PointerMove, function(event) {
+		thumb.on(UiEventKind.PointerMove, event -> {
 			var drag = dragState.value;
 			drag.lastPointer = vertical ? event.y : event.x;
 			if (!drag.dragging || travel() <= 0.0) return;
 			jump(drag.offset + (drag.lastPointer - drag.pointer) * maximum() / travel());
 			event.preventDefault();
 		});
-		var finish = function(event:UiEvent) {
+		var finish = (event:UiEvent) -> {
 			if (!dragState.value.dragging) return;
 			dragState.value.dragging = false;
 			visibility.setDragging(false);
@@ -474,13 +474,13 @@ class ScrollView implements View {
 		};
 		thumb.on(UiEventKind.PointerUp, finish);
 		thumb.on(UiEventKind.PointerCancel, finish);
-		thumb.on(UiEventKind.AccessibilityIncrement, function(event) {
+		thumb.on(UiEventKind.AccessibilityIncrement, event -> {
 			if (jump(offset() + Math.max(40.0, extent() * 0.1))) event.preventDefault();
 		});
-		thumb.on(UiEventKind.AccessibilityDecrement, function(event) {
+		thumb.on(UiEventKind.AccessibilityDecrement, event -> {
 			if (jump(offset() - Math.max(40.0, extent() * 0.1))) event.preventDefault();
 		});
-		track.on(UiEventKind.PointerDown, function(event) {
+		track.on(UiEventKind.PointerDown, event -> {
 			if (event.button != 0 || track.resolved == null) return;
 			visibility.reveal();
 			var geometry:ResolvedLayoutItem = cast track.resolved;

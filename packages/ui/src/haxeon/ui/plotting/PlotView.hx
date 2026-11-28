@@ -82,7 +82,7 @@ class PlotView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var nodeId = context.rootId("plot");
 			var identity = new StyleIdentity("plot", key, key, null, ["plot"]);
 			var computed = context.resolveStyled(nodeId, identity, style);
@@ -93,11 +93,11 @@ class PlotView implements View {
 			node.cachePolicy = CachePolicy.Raster;
 			node.semantics = new Semantics(AccessibilityRole.Group, label == null ? "Plot" : label);
 			var watch = context.resourceState(context.id("plot-paint-watch"),
-				function() return new PlotPaintWatch(model),
-				function(value) value.dispose()).value;
+				() -> new PlotPaintWatch(model),
+				value -> value.dispose()).value;
 			watch.update(model, node);
 			var cacheKey = "plot:appearance:" + appearanceKey();
-			node.onPaint(function(canvas, geometry) paint(canvas, geometry), cacheKey);
+			node.onPaint((canvas, geometry) -> paint(canvas, geometry), cacheKey);
 			return node;
 		});
 	}
@@ -171,7 +171,7 @@ private class PlotPaintWatch implements Disposable {
 
 	public function new(model:PlotModel) {
 		this.model = model;
-		effect = new haxeon.reactive.Effect(function() {
+		effect = new haxeon.reactive.Effect(() -> {
 			this.model.trackPaintData();
 			var current = this.node;
 			if (current != null) RenderNode.latest(current).invalidatePaint();

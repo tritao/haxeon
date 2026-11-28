@@ -35,7 +35,7 @@ class PopupOverlayTests {
 		for (index in 3...40)
 			options.push(new SelectOption("item-" + index, "Item " + index, "item-" + index));
 		var selected = "one";
-		var onChange = function(value:String) {
+		var onChange:String->Void = value -> {
 			selected = value;
 			changes++;
 		};
@@ -54,7 +54,7 @@ class PopupOverlayTests {
 		var tree = ui.submit(view, frame);
 		tree = ui.submit(view, frame);
 		var arrow:RenderNode = null;
-		tree.walk(function(node) {
+		tree.walk(node -> {
 			if (node.semantics != null && node.semantics.label == "Show options")
 				arrow = node;
 		});
@@ -68,7 +68,7 @@ class PopupOverlayTests {
 		tree = ui.submit(view, frame);
 		tree = ui.submit(view, frame);
 		var option:RenderNode = null;
-		tree.walk(function(node) {
+		tree.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.ListItem
 				&& node.semantics.label == "Two")
 				option = node;
@@ -82,7 +82,7 @@ class PopupOverlayTests {
 		if (session.hitTest(x, y).indexOf(option.id.value) < 0)
 			throw "Hit testing lost the overlay behind the console or ancestor clip";
 		var hidden:RenderNode = null;
-		tree.walk(function(node) {
+		tree.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.ListItem
 				&& node.semantics.label == "Item 39")
 				hidden = node;

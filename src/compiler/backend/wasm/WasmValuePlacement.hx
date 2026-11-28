@@ -104,7 +104,7 @@ class WasmValuePlacement {
 						end: requiredPosition(ends, output.id)
 					});
 			}
-		intervals.sort(function(left, right) return left.start == right.start
+		intervals.sort((left, right) -> left.start == right.start
 			? left.valueId - right.valueId : left.start - right.start);
 		var active:Array<WasmLocalInterval> = [];
 		for (interval in intervals) {

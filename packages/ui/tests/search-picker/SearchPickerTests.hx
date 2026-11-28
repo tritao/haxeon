@@ -44,7 +44,7 @@ class SearchPickerTests {
 	static function check(value:Bool, message:String):Void if (!value) throw message;
 	static function row(root:RenderNode, label:String):RenderNode {
 		var found:RenderNode = null;
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem
 				&& node.semantics.label == label) found = node;
 		});
@@ -60,7 +60,7 @@ class SearchPickerTests {
 		// These defaults must compile and run without an application's settings package.
 		var scheduler = new haxeon.ui.animation.AnimationScheduler(), visible = false;
 		var delay = new haxeon.ui.widgets.overlays.Tooltip.TooltipHoverDelay(scheduler,
-			function(value) visible = value);
+			value -> visible = value);
 		var revision = scheduler.revision;
 		delay.start();
 		check(scheduler.revision == revision && scheduler.rebuildingCount == 0 && !scheduler.needsFrame,
@@ -85,7 +85,7 @@ class SearchPickerTests {
 		fonts.addDefaultFonts();
 		var ui = new UiContext(null, fonts);
 		var model = new Results(), built = 0, rowBuildPasses = 0, previousBuildPass = -1;
-		var picker = new SearchPicker("results", model, function(context, index, selected, hovered, revision) {
+		var picker = new SearchPicker("results", model, (context, index, selected, hovered, revision) -> {
 			built++;
 			if (context.buildFeedbackPass != previousBuildPass) {
 				rowBuildPasses++;
@@ -95,7 +95,7 @@ class SearchPickerTests {
 			style.width = LayoutAxis.grow();
 			style.height = LayoutAxis.fixed(32);
 			return new Text(model.labelAt(index), style);
-		}, function() {}, function() {});
+		}, () -> {}, () -> {});
 		var frame = new LayoutFrame(720, 480);
 		var root = ui.submit(picker, frame);
 		check(built > 0 && built < 40, "Picker materialized all results");
@@ -134,10 +134,10 @@ class SearchPickerTests {
 
 		ui = new UiContext(null, fonts);
 		var commands = new CommandRegistry(), calls = 0, dismissals = 0;
-		commands.register(new Command("enabled", "Enabled command", function() calls++));
-		commands.register(new Command("disabled", "Disabled command", function() calls++, null,
-			function() return false));
-		var palette = new CommandPalette("palette", commands, null, 0, 0, "", function() dismissals++, centered: true);
+		commands.register(new Command("enabled", "Enabled command", () -> calls++));
+		commands.register(new Command("disabled", "Disabled command", () -> calls++, null,
+			() -> false));
+		var palette = new CommandPalette("palette", commands, null, 0, 0, "", () -> dismissals++, centered: true);
 		root = ui.submit(palette, new LayoutFrame(480, 360));
 		var panel = root.children[1].globalBounds();
 		check(panel.x >= 7 && panel.x + panel.width <= 473 && panel.y >= 7 && panel.y + panel.height <= 353,

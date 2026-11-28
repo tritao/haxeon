@@ -86,7 +86,7 @@ class EnumTagRewriteMain {
 
 		var edge = new IrValue(10, "edge", EnumTag("Missing")), output = new IrValue(11, "phi", I32);
 		var instruction = Phi(output, [{block: 0, value: edge}]), seen = 0;
-		IrOperands.anyValue(instruction, function(value) {
+		IrOperands.anyValue(instruction, value -> {
 			seen++;
 			return false;
 		});

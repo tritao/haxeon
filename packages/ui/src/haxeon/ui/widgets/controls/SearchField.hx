@@ -66,7 +66,7 @@ class SearchField implements View {
 
 	public function build(context:BuildContext):ViewRoot {
 		var value = this.value;
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			// What the user typed last, until the caller gives a different query.
 			var chosen = context.adopted("query", value);
 			value = chosen.value;
@@ -80,7 +80,7 @@ class SearchField implements View {
 			inputStyle.width = LayoutAxis.grow();
 			inputStyle.height = LayoutAxis.fixed(24.0);
 			// The field's box is the row around it; the theme's search-input rule makes the input's own box invisible.
-			var input = new TextField("input", value, function(next) {
+			var input = new TextField("input", value, next -> {
 				value = next;
 				chosen.set(next);
 				if (onChange != null) onChange(next);
@@ -95,7 +95,7 @@ class SearchField implements View {
 				clearStyle.padding = new Insets(2.0, 2.0, 2.0, 2.0);
 				clearStyle.childDistribution = LayoutDistribution.Center;
 				clearStyle.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
-				var clear = new Button("", clearStyle, function() {
+				var clear = new Button("", clearStyle, () -> {
 					value = "";
 					chosen.set("");
 					if (onChange != null) onChange("");

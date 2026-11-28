@@ -24,7 +24,7 @@ class InspectionOverlay {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.grow();
-		var highlight = new CanvasView("inspector-highlight", function(canvas, overlayGeometry) {
+		var highlight = new CanvasView("inspector-highlight", (canvas, overlayGeometry) -> {
 			var root = explorer.context.root;
 			var node = root == null ? null : root.find(new WidgetId(highlightId));
 			drawHighlight(canvas, node == null ? null : node.resolved, overlayGeometry);
@@ -41,16 +41,16 @@ class InspectionOverlay {
 		}
 		var hovered = explorer.context.events.hoveredId();
 		explorer.state.inspector.hoveredNodeId = hovered == null ? 0 : inspectionTargetId(explorer, hovered);
-		root.on(UiEventKind.PointerMove, function(event) {
+		root.on(UiEventKind.PointerMove, event -> {
 			updateHoveredAt(explorer, event.x, event.y);
 		});
-		root.on(UiEventKind.HoverEnter, function(event) {
+		root.on(UiEventKind.HoverEnter, event -> {
 			updateHoveredAt(explorer, event.x, event.y);
 		});
-		root.on(UiEventKind.HoverLeave, function(event) {
+		root.on(UiEventKind.HoverLeave, event -> {
 			updateHoveredAt(explorer, event.x, event.y);
 		});
-		root.on(UiEventKind.PointerDown, function(event) {
+		root.on(UiEventKind.PointerDown, event -> {
 			if (isPreviewPoint(explorer, event.x, event.y)) {
 				var selected = inspectionTargetId(explorer, event.target);
 				if (selected != 0) {

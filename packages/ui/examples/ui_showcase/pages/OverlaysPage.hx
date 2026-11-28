@@ -28,16 +28,16 @@ class OverlaysPage {
 					new Insets(0.0, 8.0, 0.0, 0.0))),
 				new TabItem("disabled", "Disabled", new Padding("disabled-caption",
 					explorer.caption("This tab is not enabled."), new Insets(0.0, 8.0, 0.0, 0.0)), false)
-			], explorer.state.controls.selectedTab, function(value) {
+			], explorer.state.controls.selectedTab, value -> {
 				explorer.state.controls.selectedTab = value;
 			}))])));
 		items.push(explorer.keyed("overlay-actions",
 			explorer.panel("overlay-actions", [explorer.keyed("heading", explorer.heading("Open an overlay")),
 			explorer.keyed("actions", new Row("overlay-buttons",
-			[explorer.keyed("dialog", explorer.button("Show dialog", "show-dialog", function() {
+			[explorer.keyed("dialog", explorer.button("Show dialog", "show-dialog", () -> {
 				explorer.state.overlays.dialogOpen = true;
 			})),
-				explorer.keyed("popup", explorer.button("Show popup", "show-popup", function() {
+				explorer.keyed("popup", explorer.button("Show popup", "show-popup", () -> {
 			for (record in explorer.context.inspect())
 				if (record.focusable && record.label == "Show popup") {
 					explorer.state.overlays.popupAnchorX = record.bounds.x;
@@ -48,7 +48,7 @@ class OverlaysPage {
 				}
 			explorer.state.overlays.popupOpen = true;
 		})),
-			explorer.keyed("menu", explorer.button("Show menu", "show-menu", function() {
+			explorer.keyed("menu", explorer.button("Show menu", "show-menu", () -> {
 			for (record in explorer.context.inspect())
 				if (record.focusable && record.label == "Show menu") {
 					explorer.state.overlays.menuAnchorX = record.bounds.x;
@@ -61,7 +61,7 @@ class OverlaysPage {
 		}))], explorer.rowStyle(10.0))),
 			explorer.keyed("menu-state", explorer.caption(explorer.state.controls.menuSelection)),
 			explorer.keyed("tooltip", new Tooltip("tooltip-demo",
-			explorer.button("Hover for tooltip", "tooltip-anchor", function() {}),
+			explorer.button("Hover for tooltip", "tooltip-anchor", () -> {}),
 			explorer.caption("Tooltip content is positioned in a Stack layer."),
 			0.0, -32.0))])));
 	}

@@ -103,7 +103,7 @@ class DecorationsPage {
 		style.width = LayoutAxis.stretch();
 		style.height = LayoutAxis.fixed(126.0);
 		style.clipToParent = false;
-		return new CanvasView(key, function(canvas:Canvas, geometry) {
+		return new CanvasView(key, (canvas:Canvas, geometry) -> {
 			var inset = 18.0;
 			var width = Math.max(30.0, geometry.width - inset * 2.0);
 			var height = Math.max(24.0, geometry.height - inset * 2.0);

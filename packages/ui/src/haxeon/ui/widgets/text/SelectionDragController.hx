@@ -20,7 +20,7 @@ internal class SelectionDragController implements Animation implements Disposabl
 
 	public function configure(scheduler:AnimationScheduler, editor:TextEditorState,
 			geometry:Void->Null<ResolvedLayoutItem>, selectAt:(Float, Float) -> Void, scroll:Float->Bool):Void {
-		configureAdapter(scheduler, function() return !editor.isDisposed() && editor.draggingSelection, geometry,
+		configureAdapter(scheduler, () -> !editor.isDisposed() && editor.draggingSelection, geometry,
 			selectAt, scroll);
 	}
 

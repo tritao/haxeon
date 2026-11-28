@@ -1015,7 +1015,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		rootRelocator = index;
 		gc.functions.set(name, index);
 		var lowering = new WasmGcInterop(gc, scratchTop, scratchAllocator, [],
-			new WasmGcFunctionContext(gc, null, null, function(valueType) {
+			new WasmGcFunctionContext(gc, null, null, valueType -> {
 				locals.push({type: valueType});
 				return nextLocal++;
 			}), this);
@@ -1027,7 +1027,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		rootTokenRestorer = module.addFunction(new WasmFunction(restoreName, type));
 		gc.functions.set(restoreName, rootTokenRestorer);
 		var restoring = new WasmGcInterop(gc, scratchTop, scratchAllocator, [],
-			new WasmGcFunctionContext(gc, null, null, function(valueType) {
+			new WasmGcFunctionContext(gc, null, null, valueType -> {
 				restoreLocals.push({type: valueType});
 				return restoreNext++;
 			}), this);

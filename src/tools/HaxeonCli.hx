@@ -1109,7 +1109,7 @@ class HaxeonCli {
 					cachedLock = lockfileStamp(projectConfigPath);
 				return WatchRun.run(project, hashlink, output, options.runtimeArguments, liveHost,
 					project.manifest.entry, profiling,
-					function(change:WatchChange) {
+					(change:WatchChange) -> {
 						var windows = Sys.systemName() == "Windows" && buildPath != null;
 						if (windows)
 							Sys.putEnv("PATH", buildPath);
@@ -1438,7 +1438,7 @@ class HaxeonCli {
 	}
 
 	static function pumpProcessOutput(input:haxe.io.Input, output:haxe.io.Output, done:sys.thread.Lock):Void {
-		sys.thread.Thread.create(function() {
+		sys.thread.Thread.create(() -> {
 			runtime.ThreadName.setCurrent("haxeon.cli.pump");
 			try {
 				var bytes = haxe.io.Bytes.alloc(8192),

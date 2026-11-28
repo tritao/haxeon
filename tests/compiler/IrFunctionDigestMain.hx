@@ -40,9 +40,9 @@ class IrFunctionDigestMain {
 
 		var database = new QueryDatabase(true);
 		var functions = database.register(QueryKind.input("function", IrFunctionDigest.feed, IrFunctionDigest.same));
-		var blockCount = database.register(QueryKind.derived("block-count", function(db, key) return db.get(functions,
-			key).blocks.length, function(value:Int, digest:Digest) digest.int(value),
-			function(left:Int, right:Int) return left == right));
+		var blockCount = database.register(QueryKind.derived("block-count", (db, key) -> db.get(functions,
+			key).blocks.length, (value:Int, digest:Digest) -> digest.int(value),
+			(left:Int, right:Int) -> left == right));
 		database.set(functions, 0, base);
 		var revision = database.revision;
 		expect(database.get(blockCount, 0) == base.blocks.length, "a query over a function");

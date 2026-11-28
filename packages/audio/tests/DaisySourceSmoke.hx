@@ -17,18 +17,18 @@ class DaisySourceSmoke {
 			7);
 		if (fm.get(DspSourceParameter.Ratio) != 3
 			|| fm.get(DspSourceParameter.Index) != 7) throw "DaisySP source controls did not round-trip";
-		reject(function() {
+		reject(() -> {
 			fm.set(DspSourceParameter.Damping, 0.5);
 		});
-		reject(function() {
+		reject(() -> {
 			fm.set(DspSourceParameter.Ratio, -1);
 		});
 		var resonator = new DspSourceOptions(DspSourceKind.Resonator);
-		reject(function() {
+		reject(() -> {
 			resonator.set(DspSourceParameter.Resolution, 5);
 		});
 		var bank = new DspSourceOptions(DspSourceKind.OscillatorBank);
-		reject(function() {
+		reject(() -> {
 			bank.spectrum([0, 0, 0, 0, 0, 0, 0]);
 		});
 		bank.spectrum([1, 1, 1, 1, 1, 1, 1]);

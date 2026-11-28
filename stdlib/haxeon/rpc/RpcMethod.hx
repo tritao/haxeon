@@ -60,7 +60,7 @@ class RpcMethod<Request, Response> {
 		var selectors = [key];
 		if (id > 0 && name != null)
 			selectors.push(Name(name));
-		var handle = function(payload:Bytes, state:RpcRequestState) {
+		var handle = (payload:Bytes, state:RpcRequestState) -> {
 			var request = switch decodeRequest(payload) {
 				case Ok(request): request;
 				case Err(_):
@@ -68,7 +68,7 @@ class RpcMethod<Request, Response> {
 					return;
 			};
 			var context = new RpcContext(state, encodeResponse,
-				function(bytes, error) return finish(state, bytes, error));
+				(bytes, error) -> finish(state, bytes, error));
 			handler(request, context);
 		};
 		return {selectors: selectors, handle: handle};

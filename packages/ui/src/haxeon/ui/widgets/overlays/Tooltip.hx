@@ -116,13 +116,13 @@ class Tooltip implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		if (!hoverEnabled) return context.withScope(key, function() return anchor.build(context));
+		if (!hoverEnabled) return context.withScope(key, () -> anchor.build(context));
 		if (placement != null) return buildPositioned(context);
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var state:State<Bool> = context.state(context.id("visible"), false);
 			var focused = context.state(context.id("focused"), false);
 			var pointer = context.resourceState(context.id("pointer-state"),
-				function() return new TooltipPointerState(), function(_) {}).value;
+				() -> new TooltipPointerState(), _ -> {}).value;
 			if (pointer.dismissRevision != dismissRevision) {
 				pointer.dismissRevision = dismissRevision;
 				pointer.suppressed = true;
@@ -137,12 +137,12 @@ class Tooltip implements View {
 			var tooltip = new AnonymousTooltipContent(content, tooltipStyle, visible);
 			var rootStyle = fillAnchor ? FillRootStyle : FitRootStyle;
 			var anchorModifier = new RootModifier();
-			anchorModifier.on(UiEventKind.HoverEnter, function(_) {
+			anchorModifier.on(UiEventKind.HoverEnter, _ -> {
 				focused.update(false);
 				pointer.suppressed = false;
 				state.update(!requirePointerMovement && (showWhen == null || showWhen()));
 			});
-			if (requirePointerMovement) anchorModifier.on(UiEventKind.PointerMove, function(event) {
+			if (requirePointerMovement) anchorModifier.on(UiEventKind.PointerMove, event -> {
 				var moved = !pointer.known || pointer.x != event.x || pointer.y != event.y;
 				pointer.x = event.x;
 				pointer.y = event.y;
@@ -152,30 +152,30 @@ class Tooltip implements View {
 					state.update(true);
 				}
 			});
-			anchorModifier.on(UiEventKind.Focus, function(event) {
+			anchorModifier.on(UiEventKind.Focus, event -> {
 				pointer.suppressed = false;
 				focused.update(!context.interactionStates.peek(event.target).contains(StyleState.Hovered)
 					&& (showWhen == null || showWhen()));
 			}, UiEventPhase.Capture);
-			anchorModifier.on(UiEventKind.Blur, function(_) {
+			anchorModifier.on(UiEventKind.Blur, _ -> {
 				focused.update(false);
 			}, UiEventPhase.Capture);
-			anchorModifier.on(UiEventKind.FocusLost, function(_) {
+			anchorModifier.on(UiEventKind.FocusLost, _ -> {
 				focused.update(false);
 			}, UiEventPhase.Capture);
-			anchorModifier.on(UiEventKind.HoverLeave, function(_) {
+			anchorModifier.on(UiEventKind.HoverLeave, _ -> {
 				state.update(false);
 			});
-			var root = context.withScope(new Key("layers"), function() {
+			var root = context.withScope(new Key("layers"), () -> {
 				var rootId = context.rootId("stack");
 				var result = context.styled(rootId, LayoutVisualKind.Box,
 					new StyleIdentity("tooltip-layer", key.rawValue, key.rawValue, null, ["tooltip-layer"]), rootStyle);
 				var rootComputed = result.computedStyle;
 				var anchorNode = context.withStyleParent(rootComputed,
-					function() return context.withScope(new Key("anchor"),
-					function() return context.build(anchor, anchorModifier)));
+					() -> context.withScope(new Key("anchor"),
+					() -> context.build(anchor, anchorModifier)));
 				var tooltipNode = context.withStyleParent(rootComputed,
-					function() return context.withScope(new Key("tooltip"), function() return tooltip.build(context)));
+					() -> context.withScope(new Key("tooltip"), () -> tooltip.build(context)));
 				result.add(anchorNode);
 				result.add(tooltipNode);
 				return result;
@@ -192,13 +192,13 @@ class Tooltip implements View {
 		});
 	}
 	function buildPositioned(context:BuildContext):RenderNode {
-		return context.withScope(key, function() {
-			var state = context.resourceState(context.id("visible"), function() return false, function(_) {});
+		return context.withScope(key, () -> {
+			var state = context.resourceState(context.id("visible"), () -> false, _ -> {});
 			var focused = context.state(context.id("focused"), false);
 			var delay = context.resourceState(context.id("hover-delay"),
-				function() return new TooltipHoverDelay(context.animations, function(value) {
+				() -> new TooltipHoverDelay(context.animations, value -> {
 					state.update(value);
-				}, delaySeconds), function(value) value.dispose()).value;
+				}, delaySeconds), value -> value.dispose()).value;
 			delay.durationSeconds = delaySeconds;
 			var style = new LayoutStyle();
 			style.clipToParent = false;
@@ -208,29 +208,29 @@ class Tooltip implements View {
 			var headerModifier = new RootModifier();
 			if (fillAnchor) headerModifier.width = LayoutAxis.stretch();
 			var headerId:Null<WidgetId> = null;
-			headerModifier.on(UiEventKind.Focus, function(_) {
+			headerModifier.on(UiEventKind.Focus, _ -> {
 				focused.update((headerId == null
 					|| !context.interactionStates.peek(headerId).contains(StyleState.Hovered))
 					&& (showWhen == null || showWhen()));
 			});
-			headerModifier.on(UiEventKind.Blur, function(_) {
+			headerModifier.on(UiEventKind.Blur, _ -> {
 				focused.update(false);
 			});
-			headerModifier.on(UiEventKind.FocusLost, function(_) {
+			headerModifier.on(UiEventKind.FocusLost, _ -> {
 				focused.update(false);
 			});
-			headerModifier.on(UiEventKind.HoverEnter, function(_) {
+			headerModifier.on(UiEventKind.HoverEnter, _ -> {
 				focused.update(false);
 				if (showWhen == null || showWhen()) {
 					if (hoverGroup != null) hoverGroup.enter(key.rawValue);
 					else delay.start();
 				}
 			});
-			headerModifier.on(UiEventKind.HoverLeave, function(_) {
+			headerModifier.on(UiEventKind.HoverLeave, _ -> {
 				if (hoverGroup != null) hoverGroup.leave(key.rawValue);
 				else delay.cancel();
 			});
-			headerModifier.on(UiEventKind.PointerDown, function(_) {
+			headerModifier.on(UiEventKind.PointerDown, _ -> {
 				if (hoverGroup != null) hoverGroup.cancel();
 				else delay.cancel();
 			}, UiEventPhase.Capture);
@@ -258,7 +258,7 @@ class Tooltip implements View {
 				var box = context.createNode(context.rootId("tooltip-content"), LayoutVisualKind.Box, boxStyle);
 				box.hitTestSelf = false;
 				box.add(context.withStyleParent(computed,
-					function() return context.withScope(new Key("content"), function() return content.build(context))));
+					() -> context.withScope(new Key("content"), () -> content.build(context))));
 				tip.add(box);
 			}
 			// Below its header (from the header's middle with startAtAnchorMiddle), above it, or beside it centred and on
@@ -295,7 +295,7 @@ private class AnonymousTooltipContent implements View {
 		var computed = node.computedStyle;
 		if (showContent) {
 			var child = context.withStyleParent(computed,
-				function() return context.withScope(new Key("content"), function() return content.build(context)));
+				() -> context.withScope(new Key("content"), () -> content.build(context)));
 			node.add(child);
 		}
 		return node;
@@ -450,7 +450,7 @@ class TooltipOverlayHost implements View {
 	public function new(content:View) this.content = content;
 	public function build(context:BuildContext):ViewRoot {
 		var lifted = context.lazyState(context.id("lifted-tooltips"),
-			function() return new Array<{
+			() -> new Array<{
 				tip:RenderNode,
 				anchor:RenderNode
 			}>()).value;
@@ -460,7 +460,7 @@ class TooltipOverlayHost implements View {
 		// Hosting lifts nodes out of its content's subtree, which only an overlay host may do.
 		var root = content.build(context).node();
 		var tooltips:Array<RenderNode> = [];
-		root.walk(function(node) {
+		root.walk(node -> {
 			if (node.styleType == "tooltip") tooltips.push(node);
 		});
 		for (tip in tooltips) {
@@ -471,10 +471,10 @@ class TooltipOverlayHost implements View {
 		// while the ones lifted by the build before stay in the overlay: both would carry one ID. Lift what it made in the place
 		// of the tooltip it replaces. When the content is that component, its new root took the overlay's place (and the
 		// lifted tooltips, which its boundary keeps as the caller's).
-		context.onPatched = function(patched) {
+		context.onPatched = patched -> {
 			var overlay = context.currentRoot(root);
 			var made:Array<RenderNode> = [];
-			patched.walk(function(node) {
+			patched.walk(node -> {
 				if (node.styleType == "tooltip" && node.parent != overlay) made.push(node);
 			});
 			for (tip in made) {

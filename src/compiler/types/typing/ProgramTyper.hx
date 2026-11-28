@@ -83,7 +83,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		this.session = bodyTyper.session;
 		this.externTyper = new ExternTyper(fn -> bodyTyper.argumentTypesOf(fn),
 			(type, span) -> bodyTyper.lowerType(type, span));
-		this.assembler = new TypedProgramAssembler(session, function(type) bodyTyper.registerAnonymousTypes(type));
+		this.assembler = new TypedProgramAssembler(session, type -> bodyTyper.registerAnonymousTypes(type));
 	}
 
 	/**

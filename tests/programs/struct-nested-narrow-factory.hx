@@ -21,7 +21,7 @@ class Main {
 	}
 
 	static function main():Int {
-		var value:NarrowRoot = invoke(new NarrowKey<NarrowRoot>(), function() {
+		var value:NarrowRoot = invoke(new NarrowKey<NarrowRoot>(), () -> {
 			var created = new NarrowRoot();
 			created.nested = new NarrowLeaf();
 			return created;

@@ -31,7 +31,7 @@ class NativeKitEventDecoderTests {
 		var zeroInt = 0;
 		// Request IDs are Int64; this also covers the core signed widening conversion.
 		var zero:haxe.Int64 = zeroInt, empty = haxe.io.Bytes.alloc(0);
-		var unknownRejected = throws(function() {
+		var unknownRejected = throws(() -> {
 			NativeKitTypes.NativeKitTypesEnumDecoders.decodeEventKind(0x7ffffffe);
 		});
 		var unknown = new EventSnapshot(EventKind.PluginEvent, handle(7), zero, Result.ErrorInvalidArgument, 3, 4,
@@ -191,7 +191,7 @@ class NativeKitEventDecoderTests {
 				case _: false;
 			};
 		}
-		var invalidButtonRejected = throws(function() {
+		var invalidButtonRejected = throws(() -> {
 			NativeKitTypes.NativeKitTypesEnumDecoders.decodePointerButton(8);
 		});
 		var hatPayload = haxe.io.Bytes.alloc(8);
@@ -329,34 +329,34 @@ class NativeKitEventDecoderTests {
 			&& audioTransitionEventsOk
 			&& audioStreamFailedOk
 			&& audioDeviceEventsOk
-			&& throws(function() {
+			&& throws(() -> {
 				EventBytes.requireSize(haxe.io.Bytes.alloc(3), 4);
 			})
-				&& throws(function() {
+				&& throws(() -> {
 			EventBytes.readU32(haxe.io.Bytes.alloc(3), 0);
 		})
-			&& throws(function() {
+			&& throws(() -> {
 			EventBytes.decodeClipboardFiles(unterminated, 1);
 		})
-			&& throws(function() {
+			&& throws(() -> {
 			EventBytes.decodeResourceList(badResource, 0);
 		})
-			&& throws(function() {
+			&& throws(() -> {
 			InputEventDecoder.decode(shortKey);
 		})
-			&& throws(function() {
+			&& throws(() -> {
 			InputEventDecoder.decode(shortEdit);
 		})
-			&& throws(function() {
+			&& throws(() -> {
 			InputEventDecoder.decode(invalidEditMetadataContext);
 		})
-			&& throws(function() {
+			&& throws(() -> {
 			InputEventDecoder.decode(unterminatedAccessibilityContext);
 		})
-			&& throws(function() {
+			&& throws(() -> {
 			WindowEventDecoder.decode(shortWindow);
 		})
-			&& throws(function() {
+			&& throws(() -> {
 			EventBytes.readUtf8Slice(invalidUtf8, 48, 2, 48);
 		});
 	}

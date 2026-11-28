@@ -23,12 +23,12 @@ class MenuInteractionTests {
 		var pointerDismissals = 0;
 		function pointerMenuView(selectFirstOnOpen:Bool):Menu
 			return new Menu("pointer-menu-smoke",
-				[new MenuItem("disabled-first", "Unavailable", null, false), new MenuItem("first", "First", function() {
+				[new MenuItem("disabled-first", "Unavailable", null, false), new MenuItem("first", "First", () -> {
 					pointerChoice = "first";
 				}), new MenuItem("disabled-middle", "Unavailable", null, false),
-					new MenuItem("last", "Last", function() {
+					new MenuItem("last", "Last", () -> {
 				pointerChoice = "last";
-			})], 16.0, 16.0, function() {
+			})], 16.0, 16.0, () -> {
 				pointerDismissals++;
 			}, selectFirstOnOpen:);
 		var pointerMenu = pointerMenuView(false);
@@ -59,7 +59,7 @@ class MenuInteractionTests {
 		context.key(UiEventKind.KeyDown, UiKey.Up);
 		if (menuFocusLabel() != "Last") throw "Up from an unselected menu must select the last enabled action";
 		var firstPointerItem:Null<RenderNode> = null;
-		pointerRoot.walk(function(node) {
+		pointerRoot.walk(node -> {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem
 				&& node.semantics.label == "First") firstPointerItem = node;
 		});
@@ -84,7 +84,7 @@ class MenuInteractionTests {
 		if (menuFocusLabel() != "Menu") throw "Moving from an item to the backdrop must clear pointer selection";
 		context.submit(returnFocusView, dialogFrame);
 		var emptyDismissals = 0;
-		var emptyMenuRoot = context.submit(new Menu("empty-menu-smoke", [], 16.0, 16.0, function() {
+		var emptyMenuRoot = context.submit(new Menu("empty-menu-smoke", [], 16.0, 16.0, () -> {
 			emptyDismissals++;
 		}), dialogFrame);
 		if (!emptyMenuRoot.id.equals(context.focus.focusedId)) throw "Empty menus must own keyboard focus";

@@ -17,7 +17,7 @@ function replacePoint(path:WritableKeyPath<PathObserved, PathObservedPoint>, roo
 		value:PathObservedPoint):Void path.set(root, value);
 function main():Int {
 	var model = new PathObserved(), last = 0, runs = 0;
-	var effect = new Effect(function() {
+	var effect = new Effect(() -> {
 		last = observePath(\PathObserved.count, model);
 		runs++;
 	});
@@ -34,7 +34,7 @@ function main():Int {
 	ReactiveRuntime.flushEffects();
 	if (last != 22 || runs != 3) return 6;
 	var pointRuns = 0;
-	var pointEffect = new Effect(function() {
+	var pointEffect = new Effect(() -> {
 		var p = (\PathObserved.point).get(model);
 		pointRuns += p.x + 1;
 	});

@@ -22,12 +22,12 @@ class Connector implements RpcConnector {
 
 function main():Int {
 	var now = 0.0;
-	var clock = function() return now;
+	var clock = () -> now;
 	var pair = MemoryTransport.pair(4096, 16);
 	var connector = new Connector(pair.client);
 	var options = new RpcPeerOptions("fixture/1", ["read", "events"], ["read"], 50, 1024, 4, 4096);
 	var ready = 0;
-	var client = new RpcClient(connector, clock, function() return 1.0, options, function(_, _, _) {
+	var client = new RpcClient(connector, clock, () -> 1.0, options, (_, _, _) -> {
 		ready++;
 	}, 10, 40, 30);
 	var server = RpcHandshake.server(pair.server, clock, options);
@@ -44,14 +44,14 @@ function main():Int {
 	if (hex != "8101940201A9666978747572652F3191A472656164")
 		return 2;
 	var method = new RpcMethod<String, String>(100, text -> Bytes.ofString(text),
-		function(bytes:Bytes) return Ok(bytes.toString()),
+		(bytes:Bytes) -> Ok(bytes.toString()),
 		text -> Bytes.ofString(text),
-		function(bytes:Bytes) return Ok(bytes.toString()));
+		(bytes:Bytes) -> Ok(bytes.toString()));
 	var service = server.connection;
 	var active = client.current();
 	if (service == null || active == null)
 		return 3;
-	service.register(method, function(value, context) {
+	service.register(method, (value, context) -> {
 		context.respond(value + "!");
 	});
 	var answer = "";
@@ -98,7 +98,7 @@ function main():Int {
 	// A refusal the server's policy gives reaches the client as the error it chose, and ends the client.
 	pair = MemoryTransport.pair(4096, 16);
 	connector.transport = pair.client;
-	var refusing = new RpcClient(connector, clock, function() return 1.0, options, function(_, _, _) {}, 10, 40, 30);
+	var refusing = new RpcClient(connector, clock, () -> 1.0, options, (_, _, _) -> {}, 10, 40, 30);
 	server = RpcHandshake.server(pair.server, clock, options,
 		(application, capabilities) -> Err(AuthorizationFailed("fixture is not allowed")));
 	for (index in 0...8) {

@@ -102,7 +102,7 @@ class Popup implements View {
 		this.y = y;
 		this.style = style == null ? new LayoutStyle() : style.copy();
 		hasDismissHandler = onDismiss != null;
-		this.onDismiss = onDismiss == null ? function() {}
+		this.onDismiss = onDismiss == null ? () -> {}
 			: onDismiss;
 		this.anchor = anchor;
 		this.label = label;
@@ -119,7 +119,7 @@ class Popup implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(key, function() {
+		return context.withScope(key, () -> {
 			var rootStyle = new LayoutStyle();
 			rootStyle.width = LayoutAxis.grow();
 			rootStyle.height = LayoutAxis.grow();
@@ -150,7 +150,7 @@ class Popup implements View {
 			var backdrop = context.createNode(backdropId, LayoutVisualKind.Box, backdropComputed.toLayoutStyle());
 			context.applyStyled(backdrop, backdropIdentity, backdropComputed);
 			if (dismissOnOutside && (hasDismissHandler || onOutsideClick != null)) backdrop.on(UiEventKind.Click,
-				function(event) {
+				event -> {
 					if (onOutsideClick == null || !onOutsideClick(event)) onDismiss();
 					event.stopPropagation();
 				});
@@ -188,7 +188,7 @@ class Popup implements View {
 				surface.hitTestSelf = false;
 				var background = context.theme.tokens.surface;
 				var border = context.theme.tokens.border;
-				surface.onPaint(function(canvas, geometry) {
+				surface.onPaint((canvas, geometry) -> {
 					var width = geometry.width;
 					var height = geometry.height;
 					if (width <= 2.0 || height <= 2.0) return;
@@ -208,7 +208,7 @@ class Popup implements View {
 				// A soft key shadow lifts the menu; a tight contact shadow at half
 				// strength defines its edge against similarly coloured content.
 				var contactShadow = Color.rgba(shadow.red, shadow.green, shadow.blue, shadow.alpha * 0.5);
-				shadowLayer.onPaint(function(canvas, geometry) {
+				shadowLayer.onPaint((canvas, geometry) -> {
 					var bounds = panel.resolved;
 					if (bounds == null) return;
 					var rect = new Rect(bounds.x - geometry.x, bounds.y - geometry.y, bounds.width, bounds.height);
@@ -219,7 +219,7 @@ class Popup implements View {
 				root.add(shadowLayer);
 			}
 			var content = context.withStyleParent(panelComputed,
-				function() return context.withScope(new Key("content"), function() return child.build(context)));
+				() -> context.withScope(new Key("content"), () -> child.build(context)));
 			// Below the anchor, above it when there is more room there, and kept inside the layer.
 			if (anchor != null) panel.layout.anchor = new LayoutAnchor(AnchorTarget.Area(anchor),
 				side: AnchorSide.Below,
@@ -227,7 +227,7 @@ class Popup implements View {
 				margin: Math.max(0.0, viewportMargin));
 			panel.add(content);
 			root.add(panel);
-			root.on(UiEventKind.KeyDown, function(event) {
+			root.on(UiEventKind.KeyDown, event -> {
 				if (event.key == UiKey.Escape && dismissOnEscape && hasDismissHandler) {
 					event.preventDefault();
 					onDismiss();

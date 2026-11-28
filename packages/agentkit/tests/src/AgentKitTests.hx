@@ -18,7 +18,7 @@ private class EchoTool extends AgentTool {
 
 /** Completes only when the test calls `finish`, to model host work that outlives a frame. */
 private class SlowTool extends AgentTool {
-	public var finish:ToolResult->Void = function(_) {};
+	public var finish:ToolResult->Void = _ -> {};
 
 	public function new()
 		super("slow", "Waits", new ToolSchema(), ReadOnly);
@@ -60,7 +60,7 @@ private class FakeTransport implements HttpTransport {
 		this.request = request;
 		this.sink = sink;
 		var owner = this;
-		return new FakeCancel(function() owner.cancelled = true);
+		return new FakeCancel(() -> owner.cancelled = true);
 	}
 }
 
@@ -146,13 +146,13 @@ class AgentKitTests {
 
 	static function record(agent:Agent):Array<AgentEvent> {
 		var events:Array<AgentEvent> = [];
-		agent.onEvent = function(event) events.push(event);
+		agent.onEvent = event -> events.push(event);
 		return events;
 	}
 
 	static function sse():Void {
 		var seen:Array<String> = [];
-		var parser = new SseParser(function(name, data) seen.push(name + "|" + data));
+		var parser = new SseParser((name, data) -> seen.push(name + "|" + data));
 		var payload =
 			Bytes.ofString(": comment\r\nevent: greet\r\ndata: héllo\r\ndata: world\r\n\r\ndata: bare\n\nevent: tail\ndata: unterminated");
 		// One byte at a time exercises splits inside lines, CRLF pairs and UTF-8 sequences.

@@ -23,5 +23,5 @@ class DefaultTextStyle implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot
-		return context.withTextStyle(style, function() return child.build(context));
+		return context.withTextStyle(style, () -> child.build(context));
 }

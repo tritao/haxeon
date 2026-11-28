@@ -172,7 +172,7 @@ class ShowcaseDesktop {
 				try {
 					fonts.addDefaultFonts();
 					explorer = new UiExplorer(fonts,
-						'${platformName()} · ${graphicsApiName(graphicsApi)}', function() {
+						'${platformName()} · ${graphicsApiName(graphicsApi)}', () -> {
 							if (frameState.graphicsMode)
 								return;
 							frameState.graphicsMode = true;
@@ -188,7 +188,7 @@ class ShowcaseDesktop {
 							}
 							graphics.setViewport(frameState.logicalWidth, frameState.logicalHeight);
 							frameState.graphics = graphics;
-						}, uiStaticFrame, Sys.getEnv("NKUI_SHOWCASE_IMAGE_PATH"), function() {
+						}, uiStaticFrame, Sys.getEnv("NKUI_SHOWCASE_IMAGE_PATH"), () -> {
 						if (chromeDemo != null && !chromeDemo.isCloseRequested())
 							return false;
 						if (chromeDemo != null) {
@@ -204,7 +204,7 @@ class ShowcaseDesktop {
 							chromeDemo = null;
 							return false;
 						}
-					}, function(light) {
+					}, light -> {
 						if (chromeDemo != null)
 							chromeDemo.setTheme(UiExplorer.makeTheme(light));
 					});
@@ -225,7 +225,7 @@ class ShowcaseDesktop {
 			}
 			frameState.graphics = graphics;
 			frameState.explorer = explorer;
-			var renderFrame = function(framebufferWidth:Int, framebufferHeight:Int) {
+			var renderFrame = (framebufferWidth:Int, framebufferHeight:Int) -> {
 				if (!frameState.ready || !frameState.running || framebufferWidth <= 0 || framebufferHeight <= 0)
 					return;
 				frameState.framebufferWidth = framebufferWidth;
@@ -254,7 +254,7 @@ class ShowcaseDesktop {
 					frameState.running = false;
 			};
 
-			eventSubscription = activePump.listen(function(value) {
+			eventSubscription = activePump.listen(value -> {
 				if (chromeDemo != null)
 					chromeDemo.handleEvent(value);
 				switch (value) {
@@ -286,7 +286,7 @@ class ShowcaseDesktop {
 								frameState.framebufferWidth, frameState.framebufferHeight,
 								frameState.scale);
 						if (frameSubscription == null)
-							frameSubscription = frameSurface.onFrame(function(width, height) {
+							frameSubscription = frameSurface.onFrame((width, height) -> {
 								try {
 									if (!uiWindowChromeTest)
 										renderFrame(width, height);
@@ -305,7 +305,7 @@ class ShowcaseDesktop {
 							try {
 								chromeDemo = WindowChromeDemo.open(activePump, graphicsApi, window,
 									explorer.currentTheme());
-								chromeDemo.enableDiagnosticRun(3, function() {
+								chromeDemo.enableDiagnosticRun(3, () -> {
 									if (chromeDemo == null)
 										return;
 									var failureMessage = chromeDemo.failureMessage();

@@ -17,15 +17,15 @@ internal class NativeKitStreamRequest implements Cancelable {
 		finished = exchange == null;
 		if (exchange == null)
 			return;
-		exchange.response.onComplete(function(outcome) switch outcome {
+		exchange.response.onComplete(outcome -> switch outcome {
 			case Success(Ok(response)): if (!finished) sink.headers(response.statusCode);
 			case _:
 		});
-		exchange.onData(function(bytes) {
+		exchange.onData(bytes -> {
 			if (!finished)
 				sink.chunk(bytes);
 		});
-		exchange.complete.onComplete(function(outcome) {
+		exchange.complete.onComplete(outcome -> {
 			if (finished)
 				return;
 			finished = true;

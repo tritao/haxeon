@@ -117,7 +117,7 @@ class DeclaredConformance {
 	 */
 	public static function requireMapRuntime(session:TypingSession, key:CompilerType, value:CompilerType,
 			span:SourceSpan):Void
-		session.monomorphs.whenKnown(TMap(key, value), function() {
+		session.monomorphs.whenKnown(TMap(key, value), () -> {
 			var knownKey = session.monomorphs.settled(key),
 				knownValue = session.monomorphs.settled(value);
 			// A generic body's map of its own type parameters (`Map<K, V>` in `f<K, V>`) is checked where the body is specialized

@@ -75,7 +75,7 @@ class Snackbar implements ScopeView {
 			actionStyle.padding = new Insets(12.0, 0.0, 12.0, 0.0);
 			actionStyle.childAlignY = LayoutAlignmentY.Center;
 			actionStyle.direction = LayoutDirection.LeftToRight;
-			var action = context.withScope(new Key("action"), function() {
+			var action = context.withScope(new Key("action"), () -> {
 				var button = NavUi.box(context, context.rootId("snackbar-action"), "snackbar-action", "action",
 					actionStyle, ["snackbar-action"]);
 				button.focusable = true;
@@ -85,7 +85,7 @@ class Snackbar implements ScopeView {
 				button.semantics = buttonSemantics;
 				if (onAction != null) {
 					var latest = context.latestOf(this);
-					button.onActivate(function(_:UiEvent) {
+					button.onActivate((_:UiEvent) -> {
 						var handler = latest().onAction;
 						if (handler != null) handler();
 					});

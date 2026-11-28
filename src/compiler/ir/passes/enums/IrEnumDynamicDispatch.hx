@@ -346,7 +346,7 @@ class IrEnumDynamicDispatch extends IrFunctionPass {
 		inline function registered():Bool
 			return reader.read(REGISTERED, "") == 1;
 		// Only the blocks with an instruction to replace are copied; a function without one comes back as it is.
-		return IrFunctionRewrite.instructions(fn, function(located) {
+		return IrFunctionRewrite.instructions(fn, located -> {
 			return switch located.value {
 				case Intrinsic(output, EnumDynamicBox(type), arguments):
 					[new Located(Call(output, IrSymbol.of(named(boxNames.get(key(type)))), arguments),

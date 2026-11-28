@@ -24,7 +24,7 @@ class Spacer implements View {
 		style.height = height == null ? LayoutAxis.grow() : height;
 	}
 
-	public function build(context:BuildContext):ViewRoot return context.withScope(key, function() {
+	public function build(context:BuildContext):ViewRoot return context.withScope(key, () -> {
 		return context.createNode(context.rootId("spacer"), LayoutVisualKind.Box, style);
 	});
 }

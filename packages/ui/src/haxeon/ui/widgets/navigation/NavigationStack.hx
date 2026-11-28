@@ -82,16 +82,16 @@ class NavigationStack implements ScopeView {
 
 	/** Starts the slide for a revision the first time the stack sees it, stopping one still running. */
 	function startTransition(context:BuildContext):Void {
-		var slide = context.lazyState(context.id("slide"), function() return new StackSlide()).value;
+		var slide = context.lazyState(context.id("slide"), () -> new StackSlide()).value;
 		if (slide.revision == controller.revision) return;
 		slide.revision = controller.revision;
 		if (slide.motion != null) slide.motion.stop();
 		slide.motion = null;
 		if (controller.transitionKind == 0) return;
 		var owner = controller, revision = controller.revision;
-		var motion = new AnimationController(context.animations, function(value:Float) {
+		var motion = new AnimationController(context.animations, (value:Float) -> {
 			if (owner.revision == revision) owner.transitionProgress = value;
-		}, function() {
+		}, () -> {
 			if (owner.revision == revision) owner.endTransition();
 		});
 		slide.motion = motion;
@@ -99,7 +99,7 @@ class NavigationStack implements ScopeView {
 	}
 
 	function layer(context:BuildContext, entry:NavigationEntry, offsetX:Float, sliding:Bool):RenderNode {
-		return context.withScope(new Key("entry:" + entry.id), function() {
+		return context.withScope(new Key("entry:" + entry.id), () -> {
 			var layerStyle = new LayoutStyle();
 			layerStyle.width = LayoutAxis.grow();
 			layerStyle.height = LayoutAxis.stretch();
@@ -113,8 +113,8 @@ class NavigationStack implements ScopeView {
 			var node = NavUi.box(context, context.rootId("navigation-entry"), "navigation-entry", entry.id, layerStyle,
 				["navigation-entry"]);
 			var content = context.withStyleParent(node.computedStyle,
-				function() return context.withScope(new Key("content"),
-				function() return entry.build().build(context)));
+				() -> context.withScope(new Key("content"),
+				() -> entry.build().build(context)));
 			node.add(content);
 			return node;
 		});

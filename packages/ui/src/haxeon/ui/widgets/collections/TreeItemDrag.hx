@@ -71,7 +71,7 @@ internal class TreeItemDrag implements haxeon.ui.animation.Animation implements 
 		this.tree = tree;
 		this.root = root;
 		revision = context.state(context.id("tree-drag-revision"), 0);
-		root.on(UiEventKind.PointerDown, function(event) {
+		root.on(UiEventKind.PointerDown, event -> {
 			if (event.button != 0 || source != null) return;
 			clear();
 			suppressClick = false;
@@ -84,7 +84,7 @@ internal class TreeItemDrag implements haxeon.ui.animation.Animation implements 
 			startY = event.y;
 			event.capturePointer(false);
 		});
-		root.on(UiEventKind.PointerMove, function(event) {
+		root.on(UiEventKind.PointerMove, event -> {
 			if (source == null || pointer != event.pointerId) return;
 			var dx = event.x - startX, dy = event.y - startY;
 			if (!dragging && dx * dx + dy * dy < 36) return;
@@ -103,7 +103,7 @@ internal class TreeItemDrag implements haxeon.ui.animation.Animation implements 
 			event.preventDefault();
 			repaint();
 		});
-		root.on(UiEventKind.PointerUp, function(event) {
+		root.on(UiEventKind.PointerUp, event -> {
 			if (event.button != 0 || source == null || pointer != event.pointerId) return;
 			var from = source, target = rowAt(event), moved = dragging;
 			clear();
@@ -116,13 +116,13 @@ internal class TreeItemDrag implements haxeon.ui.animation.Animation implements 
 				if (target != null && canDrop != null && drop != null && canDrop(from, target)) drop(from, target);
 			}
 		});
-		root.on(UiEventKind.PointerCancel, function(event) {
+		root.on(UiEventKind.PointerCancel, event -> {
 			if (pointer != event.pointerId) return;
 			clear();
 			event.releasePointer();
 			repaint();
 		});
-		root.on(UiEventKind.KeyDown, function(event) {
+		root.on(UiEventKind.KeyDown, event -> {
 			if (source != null && event.key == UiKey.Escape) {
 				clear();
 				suppressClick = true;
@@ -131,7 +131,7 @@ internal class TreeItemDrag implements haxeon.ui.animation.Animation implements 
 				repaint();
 			}
 		}, UiEventPhase.Capture);
-		root.on(UiEventKind.Click, function(event) {
+		root.on(UiEventKind.Click, event -> {
 			if (suppressClick) {
 				event.preventDefault();
 				event.stopImmediatePropagation();
@@ -139,7 +139,7 @@ internal class TreeItemDrag implements haxeon.ui.animation.Animation implements 
 		}, UiEventPhase.Capture);
 		for (key => row in rows) if (destination == key) {
 			var color = context.theme.tokens.accent;
-			row.onPaint(function(canvas, geometry) {
+			row.onPaint((canvas, geometry) -> {
 				canvas.drawRectBorder(new Rect(0, 0, geometry.width, geometry.height), 2, color);
 			}, "tree-drop-target:" + color.red + ":" + color.green + ":" + color.blue + ":" + color.alpha);
 		}

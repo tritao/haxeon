@@ -94,7 +94,7 @@ class AudioLabView implements View {
 		var children:Array<KeyedView> = [];
 		for (item in names) {
 			var navItem = item;
-			var button = new Button(navItem.label, navButtonStyle(), function() {
+			var button = new Button(navItem.label, navButtonStyle(), () -> {
 				screen = navItem.key;
 			}, "nav-" + navItem.key, null, ButtonVariant.Navigation, screen == navItem.key);
 			children.push(new KeyedView(navItem.key, button));
@@ -112,7 +112,7 @@ class AudioLabView implements View {
 		var presetButtons:Array<KeyedView> = [];
 		for (id in AudioLabPreset.ids()) {
 			var selected = id;
-			var button = new Button(AudioLabPreset.label(selected), compactButtonStyle(), function() {
+			var button = new Button(AudioLabPreset.label(selected), compactButtonStyle(), () -> {
 				lab.selectPreset(selected);
 			}, null, null, null, lab.preset == selected);
 			presetButtons.push(new KeyedView(AudioLabPreset.label(selected), button));
@@ -136,7 +136,7 @@ class AudioLabView implements View {
 			80.0,
 			18000.0,
 			10.0,
-			function(value) lab.setFilterCutoff(value),
+			value -> lab.setFilterCutoff(value),
 			sliderStyle());
 		var controlPanel = new Column("synth-controls",
 			[
@@ -154,7 +154,7 @@ class AudioLabView implements View {
 					0.0,
 					1.0,
 					0.01,
-					function(value) lab.setReverbWet(value),
+					value -> lab.setReverbWet(value),
 					sliderStyle()))),
 				new KeyedView("reverb-decay",
 					labeledControl("Reverb decay",
@@ -165,7 +165,7 @@ class AudioLabView implements View {
 					0.1,
 					10.0,
 					0.1,
-					function(value) lab.setReverbDecay(value),
+					value -> lab.setReverbDecay(value),
 					sliderStyle()))),
 				new KeyedView("compression-ratio",
 					labeledControl("Compression ratio",
@@ -176,7 +176,7 @@ class AudioLabView implements View {
 					1.0,
 					10.0,
 					0.1,
-					function(value) lab.setCompressionRatio(value),
+					value -> lab.setCompressionRatio(value),
 					sliderStyle()))),
 				new KeyedView("voices", label('voices ${lab.activeVoices}  •  events ${lab.eventCount}'))
 			],
@@ -262,7 +262,7 @@ class AudioLabView implements View {
 		var keys:Array<KeyedView> = [];
 		for (note in notes) {
 			var selectedNote = note;
-			var button = new Button(noteName(note), pianoStyle(), function() lab.noteOn(selectedNote), "piano-" + note);
+			var button = new Button(noteName(note), pianoStyle(), () -> lab.noteOn(selectedNote), "piano-" + note);
 			button.classes.push(isBlackKey(note) ? "black-key" : "white-key");
 			keys.push(new KeyedView("key-" + note, button));
 		}
@@ -279,7 +279,7 @@ class AudioLabView implements View {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.fixed(190.0);
-		return new CanvasView("oscilloscope", function(canvas:Canvas, geometry) {
+		return new CanvasView("oscilloscope", (canvas:Canvas, geometry) -> {
 			canvas.fillRoundedRect(new Rect(0.0, 0.0, geometry.width, geometry.height),
 				8.0,
 				Color.rgba(0.025, 0.035, 0.055, 1.0));
@@ -300,7 +300,7 @@ class AudioLabView implements View {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.fixed(30.0);
-		return new CanvasView("level-meter", function(canvas:Canvas, geometry) {
+		return new CanvasView("level-meter", (canvas:Canvas, geometry) -> {
 			canvas.fillRoundedRect(new Rect(0.0, 0.0, geometry.width, geometry.height),
 				5.0,
 				Color.rgba(0.025, 0.035, 0.055, 1.0));
@@ -332,7 +332,7 @@ class AudioLabView implements View {
 			for (channel in 0...4) {
 				var note = channel == 0 ? notes[row] : channel == 1 ? notes[(row + 4) % notes.length] : -1;
 				var trackerNote = note;
-				var cell = new Button(note < 0 ? "---" : noteName(note), trackerCellStyle(), function() {
+				var cell = new Button(note < 0 ? "---" : noteName(note), trackerCellStyle(), () -> {
 					if (trackerNote >= 0) lab.noteOn(trackerNote, 0.76);
 				}, "tracker-cell-" + row + "-" + channel, null, null, lab.trackerPlaying && row == lab.trackerStep);
 				cells.push(new KeyedView("channel-" + channel, cell));
@@ -357,7 +357,7 @@ class AudioLabView implements View {
 				new KeyedView("play",
 					new Button(lab.trackerPlaying ? "Stop" : "Play 16-step pattern",
 					fixedStyle(190.0, 36.0),
-					function() lab.toggleTracker(),
+					() -> lab.toggleTracker(),
 					"tracker-play")),
 				new KeyedView("tempo", label("120 BPM  •  16th-note clock  •  sample-accurate note events"))
 			],

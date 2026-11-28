@@ -224,7 +224,7 @@ class WasmGcModuleBuilder {
 			gcInterop.addRootRelocator(module);
 		var representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation,
 			gcRepresentation, gcInterop, gcRepresentation,
-			function(context) {
+			context -> {
 				var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag,
 					context.allocateLocal),
 					functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
@@ -596,7 +596,7 @@ class WasmGcModuleBuilder {
 	/** One shared function per Dynamic type test native, each testing a value against every type in the program. */
 	static function addGcTypeTest(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan,
 			representation:WasmGcRepresentation, name:String):Void {
-		var locals:Array<WasmLocal> = [], nextLocal = 2, allocateLocal:WasmValueType->Int = function(type) {
+		var locals:Array<WasmLocal> = [], nextLocal = 2, allocateLocal:WasmValueType->Int = type -> {
 			locals.push({type: type});
 			return nextLocal++;
 		};
@@ -633,7 +633,7 @@ class WasmGcModuleBuilder {
 					slots.push(-1);
 					continue;
 				}
-				var locals:Array<WasmLocal> = [], next = 2, allocate:WasmValueType->Int = function(type) {
+				var locals:Array<WasmLocal> = [], next = 2, allocate:WasmValueType->Int = type -> {
 					locals.push({type: type});
 					return next++;
 				};
@@ -699,7 +699,7 @@ class WasmGcModuleBuilder {
 			representation:WasmGcRepresentation,
 			context:WasmGcContext):Void {
 		if (context.enumStringTable != null) {
-			var nameLocals:Array<WasmLocal> = [], nextName = 1, allocateName:WasmValueType->Int = function(type) {
+			var nameLocals:Array<WasmLocal> = [], nextName = 1, allocateName:WasmValueType->Int = type -> {
 				nameLocals.push({type: type});
 				return nextName++;
 			};
@@ -718,7 +718,7 @@ class WasmGcModuleBuilder {
 		if ((context.enumStringDescriptors != null && context.enumStringDescriptors.hasPayload)) {
 			var concatLocals:Array<WasmLocal> = [],
 				concatNext = 2,
-				allocateConcat:WasmValueType->Int = function(type) {
+				allocateConcat:WasmValueType->Int = type -> {
 					concatLocals.push({type: type});
 					return concatNext++;
 				};
@@ -736,7 +736,7 @@ class WasmGcModuleBuilder {
 					Bytes
 				], Bytes), concatLocals, concatBody)));
 		}
-		var locals:Array<WasmLocal> = [], nextLocal = 1, allocateLocal:WasmValueType->Int = function(type) {
+		var locals:Array<WasmLocal> = [], nextLocal = 1, allocateLocal:WasmValueType->Int = type -> {
 			locals.push({type: type});
 			return nextLocal++;
 		};
@@ -813,7 +813,7 @@ class WasmGcModuleBuilder {
 				var functionType = plan.wasmFunctionType(native.arguments, native.result),
 					locals:Array<WasmLocal> = [],
 					nextLocal = native.arguments.length,
-					allocateLocal:WasmValueType->Int = function(type) {
+					allocateLocal:WasmValueType->Int = type -> {
 						var index = nextLocal++;
 						locals.push({type: type});
 						return index;

@@ -56,7 +56,7 @@ class Triangle {
 		surface.setFrameMode(SurfaceFrameMode.OnDemand);
 		scoped var loop = new AppLoop(runtime.events, surface, app, null);
 		var redraws = 0;
-		loop.frameSubscription = surface.onFrame(function(_, _) redraws++);
+		loop.frameSubscription = surface.onFrame((_, _) -> redraws++);
 		var source = new Handle(surface.nativeHandle().rawValue);
 		var token = haxe.Int64.ofInt(17);
 		loop.pending = token;
@@ -322,15 +322,15 @@ class Triangle {
 		var calls = 0;
 		var lastTime = 0.0;
 		var timing:haxeon.platform.SurfaceFrameTiming = null;
-		var first = surface.onFrameTick(function(_) {
+		var first = surface.onFrameTick(_ -> {
 			staleCalls++;
 		});
-		var second = surface.onFrameTick(function(frame) {
+		var second = surface.onFrameTick(frame -> {
 			if (frame.timeSeconds < lastTime || frame.width <= 0 || frame.height <= 0)
 				throw "Invalid frame callback payload";
 			lastTime = frame.timeSeconds;
 			timing = surface.captureFrameTiming(frame.timeSeconds);
-			renderer.withFrame(function() {});
+			renderer.withFrame(() -> {});
 			timing.markSubmitted();
 			calls++;
 		});
@@ -357,7 +357,7 @@ class Triangle {
 		pumpEvents(runtime, 0.1);
 		if (!second.isDisposed() || calls != idleCalls + 1)
 			throw "Disposed GPU frame subscription still received callbacks";
-		return surface.onFrameTick(function(_) {});
+		return surface.onFrameTick(_ -> {});
 	}
 
 	static function main():Int {
@@ -391,9 +391,9 @@ class Triangle {
 		var queuedFrame:Null<haxe.Int64> = null;
 		var queuedDone = false;
 		var queuedError:Null<NativeKitError> = null;
-		var closeSubscription = window.onClose(function() running = false);
-		var readySubscription = surface.onReady(function() surfaceReady = true);
-		var completeSubscription = surface.onFrameComplete(function(token, outcome) {
+		var closeSubscription = window.onClose(() -> running = false);
+		var readySubscription = surface.onReady(() -> surfaceReady = true);
+		var completeSubscription = surface.onFrameComplete((token, outcome) -> {
 			if (queuedFrame != null && token == queuedFrame) {
 				queuedDone = true;
 				switch outcome {
@@ -554,13 +554,13 @@ class Triangle {
 		renderer.abortFrame();
 		var originalError = "draw failed";
 		var frameError:Dynamic = null;
-		try renderer.withFrame(function() {
+		try renderer.withFrame(() -> {
 			throw originalError;
 		})
 			catch (error:Dynamic) frameError = error;
 		if (frameError != originalError)
 			throw "Frame scope did not preserve the draw error";
-		renderer.withFrame(function() {});
+		renderer.withFrame(() -> {});
 		var frameSubscription = verifyFrameCallbacks(runtime, surface, renderer);
 
 		var stalePipeline = pipeline.nativeHandle();
@@ -583,7 +583,7 @@ class Triangle {
 			throw "runtime shut down with a retained graphics image";
 		retainedImage.dispose();
 		var resizeCalls = 0;
-		var resizeSubscription = surface.onResize(function(_, _, _, _) resizeCalls++);
+		var resizeSubscription = surface.onResize((_, _, _, _) -> resizeCalls++);
 		var resize = PlatformEvent.SurfaceResize(new Handle(surface.nativeHandle().rawValue), 800, 600, 800, 600);
 		runtime.events.dispatch(resize);
 		surface.dispose();
@@ -592,7 +592,7 @@ class Triangle {
 			|| !resizeSubscription.isDisposed() || resizeCalls != 1)
 			throw "Surface disposal did not detach its subscriptions";
 		var keyCalls = 0;
-		var keySubscription = window.onKey(function(_, _, _, _) {
+		var keySubscription = window.onKey((_, _, _, _) -> {
 			keyCalls++;
 			return true;
 		});
@@ -613,11 +613,11 @@ class Triangle {
 
 		var recorded = 0;
 		var app:Null<TriangleLoopApp> = null;
-		Runtime.launch(function(active) {
+		Runtime.launch(active -> {
 			var loopWindow = active.createWindowNative(windowOptions);
 			var loopSurface = loopWindow.createSurface(GpuSurfaceOptions.forGpu(800, 600));
 			var launched = new TriangleLoopApp(loopSurface);
-			active.drive(loopSurface, new FrameRecorder(function(timing) {
+			active.drive(loopSurface, new FrameRecorder(timing -> {
 				if (timing.submittedSeconds == null || timing.submittedSeconds < timing.callbackSeconds)
 					throw "Frame recorder returned out-of-order timestamps";
 				recorded++;
@@ -650,7 +650,7 @@ private class TriangleLoopApp implements App {
 
 	public function new(surface:Surface) {
 		this.surface = surface;
-		surface.onFrameComplete(function(completed, outcome) {
+		surface.onFrameComplete((completed, outcome) -> {
 			if (completed == token && outcome.isOk())
 				completions++;
 		});

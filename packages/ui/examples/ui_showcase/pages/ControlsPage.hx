@@ -44,10 +44,10 @@ class ControlsPage {
 		items.push(explorer.keyed("controls-row",
 			new Row("controls-row", [explorer.keyed("buttons", explorer.panel("buttons-card", [explorer.keyed("heading",
 			explorer.heading("Buttons")),
-			explorer.keyed("primary", new Button("Primary action", ShowcaseKit.buttonStyle(), function() {
+			explorer.keyed("primary", new Button("Primary action", ShowcaseKit.buttonStyle(), () -> {
 				explorer.state.controls.progress = Math.min(1.0, explorer.state.controls.progress + 0.08);
 			}, "primary-action", true, ButtonVariant.Primary)),
-				explorer.keyed("secondary", explorer.button("Selected", "selected-action", function() {}, true)),
+				explorer.keyed("secondary", explorer.button("Selected", "selected-action", () -> {}, true)),
 				explorer.keyed("disabled", explorer.disabledButton("Disabled action")), explorer.keyed("icon-label",
 				explorer.caption("Icon-only · accessible name: Search")), explorer.keyed("icon-button",
 				iconButtonSample()), explorer.keyed("labeled-icon-label",
@@ -56,23 +56,23 @@ class ControlsPage {
 				explorer.caption("Tab to focus · Enter to activate"))])),
 				explorer.keyed("selection", explorer.panel("selection-card", [explorer.keyed("heading",
 				explorer.heading("Selection")), explorer.keyed("checkbox",
-				new Checkbox("show-labels", "Show labels", explorer.state.controls.checked, function(value) {
+				new Checkbox("show-labels", "Show labels", explorer.state.controls.checked, value -> {
 			explorer.state.controls.checked = value;
 		})), explorer.keyed("toggle",
-			new Toggle("control-enabled", "Live updates", explorer.state.controls.enabled, function(value) {
+			new Toggle("control-enabled", "Live updates", explorer.state.controls.enabled, value -> {
 			explorer.state.controls.enabled = value;
 		})), explorer.keyed("radio", new RadioGroup("density", [
 			new RadioOption("comfortable", "Comfortable", "comfortable"),
 			new RadioOption("compact", "Compact", "compact"),
 			new RadioOption("disabled", "Unavailable", "disabled", false)
-		], explorer.state.controls.radioValue, function(value) {
+		], explorer.state.controls.radioValue, value -> {
 			explorer.state.controls.radioValue = value;
 		})), explorer.keyed("select-label",
 			explorer.caption("Density · select one option")), explorer.keyed("select", new Select("density-select", [
 				new SelectOption("comfortable", "Comfortable", "comfortable"),
 				new SelectOption("compact", "Compact", "compact"),
 				new SelectOption("disabled", "Unavailable", "disabled", false)
-			], explorer.state.controls.selectValue, function(value) {
+			], explorer.state.controls.selectValue, value -> {
 			explorer.state.controls.selectValue = value;
 		})), explorer.keyed("combo-label",
 			explorer.caption("Search density · type to filter")),
@@ -80,7 +80,7 @@ class ControlsPage {
 				new SelectOption("comfortable", "Comfortable", "comfortable"),
 				new SelectOption("compact", "Compact", "compact"),
 				new SelectOption("disabled", "Unavailable", "disabled", false)
-			], explorer.state.controls.comboValue, function(value) {
+			], explorer.state.controls.comboValue, value -> {
 			explorer.state.controls.comboValue = value;
 		}))]))], explorer.rowStyle(14.0))));
 		items.push(explorer.keyed("controls-range", explorer.panel("range-card", [explorer.keyed("heading",
@@ -94,7 +94,7 @@ class ControlsPage {
 			explorer.keyed("indeterminate-label",
 			explorer.label("Indeterminate · waiting for a measurable result")), explorer.keyed("indeterminate",
 			indeterminateProgress()),
-			explorer.keyed("advance", explorer.button("Advance progress", "advance-progress", function() {
+			explorer.keyed("advance", explorer.button("Advance progress", "advance-progress", () -> {
 				explorer.state.controls.progress = explorer.state.controls.progress >= 1.0 ? 0.0 : Math.min(1.0,
 					explorer.state.controls.progress + 0.1);
 			}))])));
@@ -114,7 +114,7 @@ class ControlsPage {
 			explorer.caption(explorer.state.controls.spinnerRunning ? "Animating" : "Paused")),
 			explorer.keyed("toggle",
 			explorer.button(explorer.state.controls.spinnerRunning ? "Pause spinners" : "Resume spinners",
-			"toggle-spinners", function() {
+			"toggle-spinners", () -> {
 				explorer.state.controls.spinnerRunning = !explorer.state.controls.spinnerRunning;
 			}))], explorer.rowStyle(10.0)))])));
 	}
@@ -136,11 +136,11 @@ class ControlsPage {
 		buttonStyle.width = LayoutAxis.fixed(40.0);
 		buttonStyle.height = LayoutAxis.fixed(40.0);
 		buttonStyle.padding = new Insets(10.0, 10.0, 10.0, 10.0);
-		return new IconButton("search-action", IconName.Search, "Search", function() {}, buttonStyle);
+		return new IconButton("search-action", IconName.Search, "Search", () -> {}, buttonStyle);
 	}
 
 	static function labeledIconButton(explorer:UiExplorer):Button return ShowcaseKit.button(explorer,
-		"Search", "labeled-search-action", function() {}, false, true, IconName.Search);
+		"Search", "labeled-search-action", () -> {}, false, true, IconName.Search);
 
 	static function spinnerSample(explorer:UiExplorer, key:String, label:String, kind:SpinnerKind):Column {
 		var style = new LayoutStyle();

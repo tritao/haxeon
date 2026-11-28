@@ -164,19 +164,19 @@ class SearchPicker implements View {
 		// The field reads its selection provider again right after an edit, before the next build: the provider stops
 		// imposing the selection at once, or the first typed character is selected and replaced by the second ("builds"
 		// became "uilds").
-		var release = function() state.selectQuery = false;
+		var release = () -> state.selectQuery = false;
 		var end = query.length;
-		var input = new TextField("cv-input", query, function(value) {
+		var input = new TextField("cv-input", query, value -> {
 			release();
 			model.setQuery(value);
 		}, inputStyle, placeholder, new TextStyle(15), tokens.textPrimary, placeholder:,
-			onSubmit: function(_) {
+			onSubmit: _ -> {
 			model.navigate(UiKey.Enter, haxeon.ui.core.UiEvent.UiModifier.empty(), 1);
 			onChanged();
 		},
 			onSelectionChange: state.selectQuery ? _ -> release() : null,
 			selectionProvider: state.selectQuery ? () -> (state.selectQuery ? new TextSelection(0, end) : null) : null);
-		var focusedInput = new SearchPickerInput(input, function(ctx, node) {
+		var focusedInput = new SearchPickerInput(input, (ctx, node) -> {
 			if (state.focusPending) {
 				ctx.requestFocusAfterLayout(node.id);
 				state.focusPending = false;
@@ -200,14 +200,14 @@ class SearchPicker implements View {
 				new Text(emptyText, listStyle, tokens.textSecondary, TextStyleOverride.text(14))));
 		} else {
 			rows.push(new KeyedView("list",
-				new VirtualList("cv-state.scroll", model.count(), rowHeight, function(index) {
+				new VirtualList("cv-state.scroll", model.count(), rowHeight, index -> {
 					var isSelected = model.enabledAt(index) && index == model.selectedIndex();
 					return new SearchPickerRow(buildRow(context, index, isSelected, index == state.hovered,
 						state.tooltipDismissRevision), model.labelAt(index), isSelected, model.enabledAt(index),
-						function() {
+						() -> {
 							if (model.enabledAt(index)) model.activate(index);
 							onChanged();
-						}, function(value) {
+						}, value -> {
 						state.hovered = value ? index : -1;
 						onChanged();
 					});
@@ -227,18 +227,18 @@ class SearchPicker implements View {
 			onDismiss, label:, modal:, dimBackdrop:, layerZIndex:,
 			menuSurface:);
 		var modifier = new haxeon.ui.core.RootModifier();
-		modifier.on(UiEventKind.Scroll, function(_) {
+		modifier.on(UiEventKind.Scroll, _ -> {
 			state.tooltipDismissRevision++;
 			onChanged();
 		}, UiEventPhase.Capture);
 		var recheckAfterLayout = geometryChanged;
-		modifier.onResolved(function(_) {
+		modifier.onResolved(_ -> {
 			if (!recheckAfterLayout) return;
 			recheckAfterLayout = false;
 			state.previousSelection = -1;
 			onChanged();
 		});
-		var navigate = function(event:UiEvent) {
+		var navigate = (event:UiEvent) -> {
 			if (event.defaultPrevented) return;
 			switch event.key {
 				case UiKey.Up, UiKey.Down, UiKey.Enter, UiKey.Tab, UiKey.PageUp, UiKey.PageDown:
@@ -300,21 +300,21 @@ private class SearchPickerRow implements View {
 		modifier.enabled = enabled;
 		// The handlers run after the build, when the row's root, and so its ID, is known.
 		var rowId:Null<haxeon.ui.core.WidgetId> = null;
-		modifier.on(UiEventKind.Click, function(event) {
+		modifier.on(UiEventKind.Click, event -> {
 			if (event.button != 0) return;
 			activate();
 			event.stopPropagation();
 		});
-		modifier.on(UiEventKind.Activate, function(event) {
+		modifier.on(UiEventKind.Activate, event -> {
 			activate();
 			event.stopPropagation();
 		});
 		// Descendant hover transitions bubble too; only the row boundary changes
 		// whether its hover controls are visible.
-		modifier.on(UiEventKind.HoverEnter, function(event) {
+		modifier.on(UiEventKind.HoverEnter, event -> {
 			if (event.target.equals(rowId)) hover(true);
 		});
-		modifier.on(UiEventKind.HoverLeave, function(event) {
+		modifier.on(UiEventKind.HoverLeave, event -> {
 			if (event.target.equals(rowId)) hover(false);
 		});
 		var node = context.build(child, modifier);

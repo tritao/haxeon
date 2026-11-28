@@ -33,7 +33,7 @@ class CatalogSidebar {
 		searchStyle.background = explorer.state.lightTheme ? UiExplorer.color(0.91, 0.93, 0.97) : UiExplorer.color(0.09,
 			0.12,
 			0.18);
-		var search = new SearchField("catalog-search", explorer.state.searchText, function(value) {
+		var search = new SearchField("catalog-search", explorer.state.searchText, value -> {
 			explorer.state.searchText = value;
 		}, searchStyle, "Search…", label: "Search components");
 		children.push(explorer.keyed("search", search));
@@ -70,7 +70,7 @@ class CatalogSidebar {
 		style.height = LayoutAxis.fixed(36.0);
 		style.padding = new Insets(10.0, 8.0, 10.0, 8.0);
 		var navigationTitle = explorer.width < 760.0 ? page.compactTitle : page.title;
-		var item = new Button(navigationTitle, style, function() {
+		var item = new Button(navigationTitle, style, () -> {
 			explorer.openPage(page.id);
 		}, "nav-" + page.id, null, ButtonVariant.Navigation, explorer.state.selectedPage == page.id);
 		children.push(explorer.keyed("nav-" + page.id, item));

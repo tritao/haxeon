@@ -43,18 +43,18 @@ class CubeView implements View {
 	}
 
 	public function build(context:BuildContext):ViewRoot {
-		return context.withScope(new Key(key), function() {
+		return context.withScope(new Key(key), () -> {
 			var id = context.id("cube-view");
 			var painterState:State<CubeViewPainter> = context.resourceState(id,
-				function() return new CubeViewPainter(context.animations, rotation, speed),
-				function(value:CubeViewPainter) {
+				() -> new CubeViewPainter(context.animations, rotation, speed),
+				(value:CubeViewPainter) -> {
 					value.dispose();
 				});
 			var painter = painterState.value;
 			painter.configure(rotation, speed, animated);
 			var node = new RenderNode(id, LayoutVisualKind.Custom, style);
 			node.semantics = new Semantics(AccessibilityRole.Image, label);
-			node.onPaint(function(canvas, geometry) painter.paint(canvas, geometry));
+			node.onPaint((canvas, geometry) -> painter.paint(canvas, geometry));
 			return node;
 		});
 	}
