@@ -60,9 +60,15 @@ function linkMetadata(path:Path):Result<Metadata, FileError>
  * the same, so it keys what is cached by file. `NotFound` when nothing is there.
  */
 function canonical(path:Path):Result<Path, FileError> {
-	var found = FileNatives.canonical(path.toString());
+	var found = #if wasm FileNatives.canonical(path.toString()) #else nativeCanonical(path.toString()) #end;
 	return found == null ? Err(FileNatives.lastError()) : Ok(Path.of(found));
 }
+
+#if !wasm
+// Bound here rather than in FileNatives, which every program reading files through sys.FileSystem loads.
+@:hlNative("haxeon_runtime", "__fs_canonical")
+internal extern function nativeCanonical(path:String):Null<String>;
+#end
 
 /** The entries of the directory `path`, in no particular order, without `.` and `..`. */
 function list(path:Path):Result<Array<Entry>, FileError>
