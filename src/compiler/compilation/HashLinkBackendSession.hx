@@ -40,6 +40,9 @@ class HashLinkBackendSession implements BackendSession {
 	/** The module sections the last plain build wrote (`HlSectionWriter`). */
 	public var sections:Null<compiler.hl.HlSectionWriter.HlSectionCache> = null;
 
+	/** The function indices of the last build, by name, as linked: a build whose indices read the same gives these again. */
+	var functionIndices:Null<Map<String, Int>> = null;
+
 	/** The files the last module's debug locations are placed in (`HlCode.sources`): the module stays right while their texts do. */
 	var placedFiles:Map<String, Bool> = [];
 
@@ -67,6 +70,7 @@ class HashLinkBackendSession implements BackendSession {
 		var result = new HashLinkBackendSession(assembler);
 		result.loweredTables = loweredTables;
 		result.sections = sections;
+		result.functionIndices = functionIndices;
 		result.placedFiles = placedFiles;
 		result.placedAnchors = placedAnchors;
 		return result;
@@ -125,6 +129,40 @@ class HashLinkBackendSession implements BackendSession {
 	public function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String>
 		return BackendArtifacts.hashLink(previous.artifact).sections.equals(BackendArtifacts.hashLink(fresh.artifact)
 			.sections) ? null : "module sections differ";
+
+	/**
+	 * `indices` as `linked` numbers them, without the functions it drops: `kept`, the last build's, when it has exactly those
+	 * entries, else a new map. Nothing changes either once made.
+	 */
+	static function linkedIndices(indices:Map<String, Int>, linked:Array<Int>,
+			kept:Null<Map<String, Int>>):Map<String, Int> {
+		if (kept != null) {
+			var count = 0, same = true;
+			for (name => index in indices) {
+				var at = index < linked.length ? linked[index] : -1;
+				if (at < 0)
+					continue;
+				count++;
+				if (kept.get(name) != at) {
+					same = false;
+					break;
+				}
+			}
+			if (same) {
+				for (_ in kept.keys())
+					count--;
+				if (count == 0)
+					return kept;
+			}
+		}
+		var made:Map<String, Int> = [];
+		for (name => index in indices) {
+			var at = index < linked.length ? linked[index] : -1;
+			if (at >= 0)
+				made.set(name, at);
+		}
+		return made;
+	}
 
 	static final noTimings:BackendTimings = {
 		cachePreparationMs: 0.0,
@@ -265,12 +303,10 @@ class HashLinkBackendSession implements BackendSession {
 		}
 		var sectionsEncoded = written.encoded + " of " + written.sections + " (" + written.changed + " changed)",
 			sections = written.bytes,
-			functionIndices:Map<String, Int> = [];
-		for (name => index in assembly.functionIndices) {
-			var linked = index < written.linkedIndices.length ? written.linkedIndices[index] : -1;
-			if (linked >= 0)
-				functionIndices.set(name, linked);
-		}
+			functionIndices = linkedIndices(assembly.functionIndices, written.linkedIndices,
+				context.options.keepSession ? this.functionIndices : null);
+		if (context.options.keepSession)
+			this.functionIndices = functionIndices;
 		var allocationBeforePatch = AllocationMeter.sample();
 		// The assembler can also fall back to a fresh module on its own (a new runtime native moves every slot), and a patch is
 		// only meaningful against the layout the running module has.
@@ -286,7 +322,7 @@ class HashLinkBackendSession implements BackendSession {
 		return {
 			artifact: HashLinkBuild({
 				module: assembly.module,
-				functionIndices: CompilationContext.copyIndices(functionIndices),
+				functionIndices: functionIndices,
 				runtimeIdentity: HlRuntimeIdentity.encode(context.moduleId, assembly.revision,
 					functionIndices.exists(HlRuntimeIdentity.INITIALIZER)),
 				patchBytes: patchBytes,

@@ -196,11 +196,4 @@ class CompilationContext {
 			return false;
 		return true;
 	}
-
-	public static function copyIndices(source:Map<String, Int>):Map<String, Int> {
-		var result:Map<String, Int> = [];
-		for (name => index in source)
-			result.set(name, index);
-		return result;
-	}
 }
