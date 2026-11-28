@@ -200,7 +200,8 @@ private class RunningProgram {
 		log = logFile;
 		this.out = out != null ? out : logFile != null ? logFile : Sys.stdout();
 		err = logFile != null ? logFile : Sys.stderr();
-		deadline = options == null || options.timeout == null ? Math.POSITIVE_INFINITY : Sys.time() + options.timeout;
+		var timeout = options == null ? null : options.timeout;
+		deadline = timeout == null ? Math.POSITIVE_INFINITY : Sys.time() + timeout;
 		try {
 			process = ChildProcess.spawn(command, arguments == null ? [] : arguments,
 				options == null || options.cwd == null ? "" : options.cwd, keys, values);
