@@ -169,6 +169,9 @@ package (`lib/haxe-compat`), written as adapters over `std`: Haxe's `sys.FileSys
 on the `Err`, as Haxe does. Code ported from Haxe depends on it; new code and the packages do not. Its behaviour is
 Haxe's, so the divergences recorded in `stdlib/UPSTREAM.md` go with it.
 
+It ships in the SDK, beside the standard library, at the same version (decided 2026-11-28): ported code adds it without
+fetching anything, and the compiler, which builds against it until ADR 0006's gates hold, needs no registry to build.
+
 ## Migration
 
 The compiler's source must keep compiling with stock Haxe until the gates of
@@ -192,7 +195,6 @@ The order:
 
 ## Open questions
 
-- Whether the compatibility package ships in the SDK, or is fetched from the registry like any dependency.
 - The first-party packages (`haxeon.ui`, `haxeon.gpu`, `haxeon.audio`, ...) carry the brand too. They are packages, not
   the standard library, and this ADR leaves their names as they are.
 - `Dynamic` and reflection: what of `Reflect` and `Type` `std.reflect` keeps, beside the compatibility package.
