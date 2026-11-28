@@ -47,17 +47,17 @@ class DockWorkspace implements View {
 	/** The workspace's box. */
 	public final style:LayoutStyle;
 	/** Available content height when the workspace sits below application chrome. */
-	public var availableHeight:Null<Float> = null;
+	public final availableHeight:Null<Float>;
 	/** Available content width when the workspace sits beside application chrome. */
-	public var availableWidth:Null<Float> = null;
+	public final availableWidth:Null<Float>;
 	/** Optional fixed actions for a dock tab group, including single dock headers. */
-	public var headerActions:Null<Array<String>->String->Null<View>> = null;
+	public final headerActions:Null<Array<String>->String->Null<View>>;
 	/** Application-owned action state included in retained pane keys. */
-	public var headerActionsRevision:String = "";
+	public final headerActionsRevision:String;
 	/** Expand a matching group vertically without changing the persisted dock tree. */
-	public var expandedGroup:Null<Array<String>> = null;
+	public final expandedGroup:Null<Array<String>>;
 	/** Presentation-only suppression; preserves the model, split paths and saved layout. */
-	public var hiddenPanels:Array<String> = [];
+	public final hiddenPanels:Array<String>;
 	final panelContents:Map<String, DockPanelContent>;
 	/** Scratch for `fillPaneCacheKey`; read straight after it fills, before any other pane's key is built. */
 	final paneKeyHash:KeyHash = new KeyHash();
@@ -71,7 +71,13 @@ class DockWorkspace implements View {
 	public function new(key:String,
 			model:DockWorkspaceModel,
 			?panelContents:Array<DockPanelContent>,
-			?style:LayoutStyle) {
+			?style:LayoutStyle,
+			?availableHeight:Float,
+			?availableWidth:Float,
+			?headerActions:Array<String>->String->Null<View>,
+			headerActionsRevision:String = "",
+			?expandedGroup:Array<String>,
+			?hiddenPanels:Array<String>) {
 		if (key == null || key.length == 0 || model == null) throw "Dock workspaces require a stable key and model";
 		this.key = key;
 		this.model = model;
@@ -83,6 +89,12 @@ class DockWorkspace implements View {
 				|| this.panelContents.exists(content.panelId)) throw "Dock workspace panel content IDs must be unique";
 			this.panelContents.set(content.panelId, content);
 		}
+		this.availableHeight = availableHeight;
+		this.availableWidth = availableWidth;
+		this.headerActions = headerActions;
+		this.headerActionsRevision = headerActionsRevision;
+		this.expandedGroup = expandedGroup;
+		this.hiddenPanels = hiddenPanels == null ? [] : hiddenPanels.copy();
 	}
 
 	public function build(context:BuildContext):ViewRoot {

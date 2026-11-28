@@ -133,7 +133,17 @@ a synthesized `inputsEqual`.
 
 The rules the whole UI follows:
 
-- **Descriptions are immutable.** No `var` configuration set after construction; adjust a copy of the props instead.
+- **Descriptions are immutable.** Every input is a `final` field set by the constructor, the later ones by name; no
+  view writes one afterwards, itself included (the compiler rejects a final field written by its bare name outside the
+  constructor). A change takes effect when the caller describes the view again.
+- **A value a view owns is controlled or local.** Given its change callback (`onChange`, `onResize`), the caller's value
+  is authoritative on every build and the caller is told of each change; without it, the view keeps the value in its
+  own state, so a rebuilt description keeps what the user chose (Slider, Select, ComboBox, SearchField, SplitView,
+  Tabs). Handlers read and change a per-build local, so events between builds accumulate.
+- **Retained objects say so.** A few views are objects their owner keeps, with methods it calls: TreeView (`select`,
+  `scrollTo`), PropertyInspector (`setStyle`, `setLabelLayout`, section state) and BinaryControl's `checked`, which
+  activation writes on the mounted instance. They are the next step's work: descriptions as values replace them with
+  bindings and the view's own state.
 - **State:** local state in signals the component holds, shared models `Observable`, caller-owned values controlled
   (the caller passes the value and is told of changes).
 - **Every read is a dependency, interaction states included.** A component runs again exactly when something it read
@@ -188,9 +198,8 @@ considered and left out. The conversion changes no caller, since the constructor
    (done: `BuildContext.styled`, `resolveStyled`, `applyStyled`), where
    routing owns `RenderNode.states`.
 2. Haxeon: named arguments, then the memberwise initializer and `with` (done:
-   [NAMED_ARGUMENTS.md](../../../docs/design/NAMED_ARGUMENTS.md)). Then make every component an
-   immutable description with a named-argument constructor: TextField first (the one built and then configured), then
-   the rest in one pass.
+   [NAMED_ARGUMENTS.md](../../../docs/design/NAMED_ARGUMENTS.md)). Then every component an immutable description with a
+   named-argument constructor (done, 2026-11-28: no view class has a writable input left).
 3. The `willEditRetained` survey, then ADR 0002 stages 6 and 7.
 4. The `View`/`ScopeView` merge and the frame pipeline.
 5. Descriptions as values ([above](#beyond-the-end-state-descriptions-as-values)), which replaces generating parts of
