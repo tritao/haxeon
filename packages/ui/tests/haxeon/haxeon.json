@@ -1,0 +1,1 @@
+{"version":1,"package":{"name":"haxeon-ui-framework-tests"},"entry":"FrameworkSmoke","sourceRoots":[".","../../../platform/tests"],"scopeSourceRoots":false,"dependencies":{"haxeon-ui":{"path":"../.."}},"target":"host","outputDir":"build"}
