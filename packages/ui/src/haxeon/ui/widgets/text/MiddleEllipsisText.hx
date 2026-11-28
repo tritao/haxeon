@@ -43,7 +43,8 @@ class MiddleEllipsisText implements View {
 
 	function get_truncated():Bool {
 		var built = node;
-		return built != null && built.layout.shownText != null;
+		var resolved = built == null ? null : built.resolved;
+		return resolved != null && resolved.shownText != null;
 	}
 
 	public function build(context:BuildContext):ViewRoot return makeNode(context);

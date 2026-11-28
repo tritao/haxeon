@@ -62,6 +62,9 @@ class TreeView implements View {
 	/** Synchronize external state after retained selection/expansion loads, before rows materialize. */
 	public final onStateReady:Null<TreeView->Void>;
 
+	/** Whether `onStateReady` ran: once for this description, after its first build has loaded its state. */
+	var stateReadyCalled = false;
+
 	/** Called with an item's key when the user activates it, by Enter or a double click. */
 	public final onItemActivated:Null<String->Void>;
 	/** Enter or double-click on any row, branches included. Return true to consume the activation; false (or unset) keeps the default toggle/open. */
@@ -434,22 +437,16 @@ class TreeView implements View {
 		return controller.jumpTo(controller.offsetX, extentOffset(cast index));
 	}
 
-	/** Reveal a visible row with the smallest scroll change; leave an already visible row alone. */
-	public function scrollIntoView(nodeKey:String):Bool {
+	/**
+	 * Reveals a visible row with the smallest scroll change, leaving an already visible row alone, when layout next
+	 * settles the offset: against the viewport and content that layout then has, so a row an expansion just added counts.
+	 */
+	public function scrollIntoView(nodeKey:String):Void {
 		ensureTreeMetrics();
 		var index = indexOfKey(nodeKey);
 		if (index == null) throw "TreeView scroll key is not visible";
 		var start = extentOffset(cast index);
-		var end = start + (cachedUniform ? cachedEstimatedExtent : model.extentAt(nodeKey));
-		var height = controller.viewportHeight > 0 ? controller.viewportHeight : fallbackViewportHeight;
-		// Expansion can change content before ScrollView receives its next layout.
-		controller.updateMetrics(controller.viewportWidth,
-			height,
-			controller.contentWidth,
-			requiredExtentIndex().totalExtent);
-		var offset = controller.offsetY;
-		var next = start < offset ? start : end > offset + height ? end - height : offset;
-		return controller.jumpTo(controller.offsetX, next);
+		controller.revealRange(true, start, start + (cachedUniform ? cachedEstimatedExtent : model.extentAt(nodeKey)));
 	}
 
 	public function build(context:BuildContext):ViewRoot {
@@ -602,13 +599,15 @@ class TreeView implements View {
 					var stored = selectedKey == null ? "" : selectedKey;
 					if (selection.value != stored) selection.update(stored);
 				}
-				if (ready != null) {
+				if (ready != null && !stateReadyCalled) {
+					stateReadyCalled = true;
 					var selectedBefore = selectedKey,
 						expansionBefore = expansionRevision,
 						offsetBefore = controller.offsetY;
 					ready(this);
 					var changed = selectedKey != selectedBefore
-						|| expansionRevision != expansionBefore || controller.offsetY != offsetBefore;
+						|| expansionRevision != expansionBefore || controller.offsetY != offsetBefore
+						|| controller.revealPending;
 					if (changed) context.requestBuildFeedbackBeforeLayout();
 				}
 			});

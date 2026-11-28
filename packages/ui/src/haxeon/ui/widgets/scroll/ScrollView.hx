@@ -345,7 +345,7 @@ class ScrollView implements View {
 		trackStyle.radiusBottomLeft = trackStyle.radiusBottomRight = ScrollbarHitWidth * 0.5;
 		var track = context.createNode(context.rootId(name + "-scrollbar-track"), LayoutVisualKind.Box, trackStyle);
 		// Layout places the track and the thumb from the controller, once the viewport and its content are laid out.
-		track.layout.placer = new ScrollbarPlacer(controller, vertical, false);
+		track.layout.placer = new ScrollbarPlacer(controller, vertical, false, ScrollbarHitWidth, ScrollbarInset);
 		track.setStyleIdentity(new StyleIdentity("scrollbar-track", key.rawValue, key.rawValue, null, [
 			"scrollbar",
 			name
@@ -355,7 +355,7 @@ class ScrollView implements View {
 		thumbStyle.zIndex = 5;
 		var thumbId = context.id(name + "-scrollbar-thumb");
 		var thumb = context.createNode(thumbId, LayoutVisualKind.Box, thumbStyle);
-		thumb.layout.placer = new ScrollbarPlacer(controller, vertical, true);
+		thumb.layout.placer = new ScrollbarPlacer(controller, vertical, true, ScrollbarHitWidth, ScrollbarInset);
 		thumb.setStyleIdentity(new StyleIdentity("scrollbar-thumb", key.rawValue, key.rawValue, null, [
 			"scrollbar",
 			name
@@ -596,8 +596,7 @@ private class ContentScroll implements LayoutScroll {
 			contentWidth = Math.max(viewportWidth, intrinsic.width);
 			contentHeight = Math.max(viewportHeight, intrinsic.height);
 		}
-		@:privateAccess controller.updateMetrics(viewportWidth, viewportHeight, contentWidth, contentHeight);
-		@:privateAccess controller.settleReveal(content);
+		controller.settle(viewportWidth, viewportHeight, contentWidth, contentHeight, content);
 	}
 
 	public function scrollX():Float return controller.offsetX;
@@ -613,15 +612,19 @@ private class ScrollbarPlacer implements LayoutPlacer {
 	final controller:ScrollController;
 	final vertical:Bool;
 	final thumb:Bool;
+	/** How thick the bar is, and how far it keeps from the viewport's edges. */
+	final hitWidth:Float;
+	final inset:Float;
 
-	public function new(controller:ScrollController, vertical:Bool, thumb:Bool) {
+	public function new(controller:ScrollController, vertical:Bool, thumb:Bool, hitWidth:Float, inset:Float) {
 		this.controller = controller;
 		this.vertical = vertical;
 		this.thumb = thumb;
+		this.hitWidth = hitWidth;
+		this.inset = inset;
 	}
 
 	public function place(parentWidth:Float, parentHeight:Float, out:LayoutPlacement):Void {
-		var hitWidth = @:privateAccess ScrollView.ScrollbarHitWidth, inset = @:privateAccess ScrollView.ScrollbarInset;
 		var viewportExtent = vertical ? controller.viewportHeight : controller.viewportWidth;
 		var contentExtent = vertical ? controller.contentHeight : controller.contentWidth;
 		var maximum = vertical ? controller.maxScrollY : controller.maxScrollX;

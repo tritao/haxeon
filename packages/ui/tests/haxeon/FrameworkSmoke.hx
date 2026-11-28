@@ -2620,7 +2620,13 @@ class FrameworkSmoke {
 		context.submit(tree, new LayoutFrame(256.0, 120.0));
 		if (!treeStateReady || tree.selectedKey != "root:0:child:1" || treeSelection
 			!= "root:0:child:2") throw "TreeView state-ready synchronization must retain silent external selection";
-		if (tree.scrollIntoView("root:0:child:1")) throw "TreeView must not scroll a row that is already fully visible";
+		// Rows measured in this frame move the window's anchor once more; a row already in view then stays put.
+		context.submit(tree, new LayoutFrame(256.0, 120.0));
+		var offsetBeforeReveal = treeController.offsetY;
+		tree.scrollIntoView("root:0:child:1");
+		context.submit(tree, new LayoutFrame(256.0, 120.0));
+		if (treeController.offsetY != offsetBeforeReveal)
+			throw "TreeView must not scroll a row that is already fully visible";
 		tree = smokeTree();
 		context.submit(tree, new LayoutFrame(256.0, 120.0));
 		if (!tree.setExpanded("root:0", false) || treeExpansionKey != "root:0" || treeExpansionValue) return 171;
@@ -2859,7 +2865,7 @@ class FrameworkSmoke {
 			|| boundedMenuBounds.x < 7.9 || boundedMenuBounds.x + boundedMenuBounds.width > 792.1) return 1021;
 		var hasEllipsis = false, hasFullActionName = false;
 		boundedMenuRoot.walk(node -> {
-			var shown = node.layout.shownText;
+			var shown = node.resolved == null ? null : node.resolved.shownText;
 			if (shown != null && shown != longMenuLabel && StringTools.endsWith(shown, "…")) hasEllipsis = true;
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem
 				&& node.semantics.label == longMenuLabel) hasFullActionName = true;

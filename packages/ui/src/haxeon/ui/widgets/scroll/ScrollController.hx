@@ -98,6 +98,8 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 		revealVertical = vertical;
 		revealStart = start;
 		revealEnd = end;
+		// The owner asks for the layout that settles it.
+		notifyChanged();
 	}
 
 	/** Scrolls the content's node whose layout ID is `id` into view along an axis when layout next settles the offset. */
@@ -105,7 +107,13 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 		revealKind = 2;
 		revealVertical = vertical;
 		revealId = id;
+		notifyChanged();
 	}
+
+	/** Whether a reveal waits for layout to settle it. */
+	public var revealPending(get, never):Bool;
+
+	inline function get_revealPending():Bool return revealKind != 0;
 
 	var revealKind:Int = 0;
 	var revealVertical:Bool = false;
@@ -113,8 +121,17 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 	var revealEnd:Float = 0.0;
 	var revealId:Int = 0;
 
-	/** Applies a pending reveal, once layout has set the metrics; `content` finds a node's box in the content. */
+	/**
+	 * Settles the offset during layout, before the content is placed: takes the viewport's and the content's sizes,
+	 * clamps the offset to them, then applies a pending reveal; `content` finds a node's box in the content.
+	 */
 	@:allow(haxeon.ui.widgets.scroll)
+	function settle(viewportWidth:Float, viewportHeight:Float, contentWidth:Float, contentHeight:Float,
+			content:haxeon.ui.LayoutScroll.LayoutLocator):Void {
+		updateMetrics(viewportWidth, viewportHeight, contentWidth, contentHeight);
+		settleReveal(content);
+	}
+
 	function settleReveal(content:haxeon.ui.LayoutScroll.LayoutLocator):Void {
 		var kind = revealKind;
 		if (kind == 0) return;
@@ -266,8 +283,6 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 		if (viewportHeight > 0.0) this.viewportHeight = viewportHeight;
 	}
 
-	@:allow(haxeon.ui.widgets.scroll.ScrollView)
-	@:allow(haxeon.ui.widgets.collections.TreeView)
 	function updateMetrics(viewportWidth:Float, viewportHeight:Float,
 			contentWidth:Float, contentHeight:Float):Void {
 		if (!finiteNonNegative(viewportWidth) || !finiteNonNegative(viewportHeight) || !finiteNonNegative(contentWidth)

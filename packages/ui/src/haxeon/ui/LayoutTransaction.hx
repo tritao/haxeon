@@ -59,6 +59,9 @@ internal class LayoutTransaction {
 	var output:Null<Bytes>;
 	var outputLength:Int = 0;
 
+	/** The solver whose output `encodeInto` is encoding, while it collects the tree. */
+	var solver:Null<haxeon.ui.layout.LayoutSolver> = null;
+
 	public function new() {}
 
 	/** The nodes of the last encoded tree that carry intrinsic content, in tree order. */
@@ -89,7 +92,9 @@ internal class LayoutTransaction {
 		rootChanged = patch && submittedRoot != root.id;
 		encodeStamp = ++encodeCounter;
 		intrinsicNodes.resize(0);
+		solver = layout;
 		appendNode(root, -1);
+		solver = null;
 		tree.resize(treeCount);
 		treeIds.resize(treeCount);
 		treeStrings.resize(treeCount);
@@ -296,7 +301,8 @@ internal class LayoutTransaction {
 		else treeIds[treePosition] = node.id;
 		var previous = submittedIndex.get(node.id);
 		var added = previous < 0;
-		var shown = node.shownText;
+		var layout = solver;
+		var shown = layout == null ? null : layout.shownText(node.id);
 		var value = shown != null ? shown : node.text == null ? "" : node.text;
 		var text = value.length == 0 ? EmptyText : previous >= 0 && submittedStrings[previous] == value
 			? submittedStringBytes[previous] : Bytes.ofString(value);

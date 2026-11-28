@@ -170,8 +170,11 @@ class LayoutSolver {
 			}
 			var flags = (box.visible ? 1 : 0) | (box.ownBaseline ? 2 : 0);
 			var baseline = box.ownBaseline ? box.y + box.baseline : 0.0;
+			var text = box.text;
+			var shown = text == null ? null : text.shown;
 			var previous = previousItems.get(box.node.id);
-			var item = previous != null && previous.flags == flags && previous.x == box.x && previous.y == box.y
+			var item = previous != null && previous.shownText == shown && previous.flags == flags && previous.x == box.x
+				&& previous.y == box.y
 				&& previous.width == box.width && previous.height == box.height && previous.baseline == baseline
 				&& previous.clipBounds.x == box.clipX && previous.clipBounds.y == box.clipY
 				&& previous.clipBounds.width == box.clipWidth && previous.clipBounds.height == box.clipHeight
@@ -184,7 +187,7 @@ class LayoutSolver {
 				box.width, box.height, new Rect(box.clipX, box.clipY, box.clipWidth, box.clipHeight),
 				new Rect(left, top, right - left, bottom - top),
 				new Transform2D(box.wa, box.wb, box.wc, box.wd, box.wtx,
-				box.wty), baseline);
+				box.wty), baseline, shown);
 			nextItems.set(box.node.id, item);
 			var placed = previousPlaced.get(box.node.id);
 			if (placed == null || !placed.matches(box)) {
@@ -374,6 +377,12 @@ class LayoutSolver {
 		}
 	}
 
+	/** The text the node with ID `id` shows instead of its own, as last resolved; null when it shows all of it. */
+	public function shownText(id:Int):Null<String> {
+		var item = previousItems.get(id);
+		return item == null ? null : item.shownText;
+	}
+
 	/**
 	 * Writes the geometry of the node with ID `id` into its record at `record` of `output`, as the last solve placed it,
 	 * and returns whether it is hidden. A node the last solve did not see gets zero geometry.
@@ -503,6 +512,7 @@ class LayoutSolver {
 		box.textWidth = style.direction == LayoutDirection.TopToBottom ? inner : Math.min(size.unwrappedWidth, inner);
 		if (size.laidOutAt != box.textWidth) {
 			var started = Sys.time();
+			var before = size.shown;
 			var session = this.session;
 			size.shown = node.truncation != TextTruncation.None && session != null && node.text != null
 				&& size.unwrappedWidth > box.textWidth + 0.5 ? truncate(node, box.textWidth, session) : null;
@@ -519,10 +529,7 @@ class LayoutSolver {
 			}
 			size.laidOutAt = box.textWidth;
 			textSeconds += Sys.time() - started;
-		}
-		if (size.shown != node.shownText) {
-			@:privateAccess node.shownText = size.shown;
-			changedNodes.push(node.id);
+			if (size.shown != before) changedNodes.push(node.id);
 		}
 		box.textHeight = size.height;
 	}

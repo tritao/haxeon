@@ -756,9 +756,6 @@ class RenderNode {
 		paintRevision = previous.paintRevision;
 		geometryRevision = previous.geometryRevision;
 		compositeRevision = previous.compositeRevision;
-		// The cut layout chose for the same text stays until layout chooses again; a frame may reuse its layout.
-		if (layout.text == previous.layout.text && layout.truncation == previous.layout.truncation)
-			@:privateAccess layout.shownText = previous.layout.shownText;
 		invalidationFlags = UiDirtyFlag.None;
 		var contentChanged = false;
 		var geometryChanged = false;

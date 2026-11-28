@@ -19,9 +19,6 @@ class LayoutNode {
 	/** How a text node's text is cut when it is wider than the width layout gives it: not, at its end, or in its middle. */
 	public var truncation:TextTruncation;
 
-	/** The text layout shows instead of `text` when it truncates it; null when it shows all of it. */
-	public var shownText(default, null):Null<String>;
-
 	/** The color of that text. */
 	public var textColor:Color;
 	/**
@@ -81,7 +78,6 @@ class LayoutNode {
 		scroll = null;
 		placer = null;
 		truncation = TextTruncation.None;
-		shownText = null;
 		measureVersion = 0;
 		contentRevision = 0;
 		geometryRevision = 0;

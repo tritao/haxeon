@@ -30,8 +30,14 @@ class ResolvedLayoutItem {
 	/** Its first text baseline, from its top, when `hasBaseline`. */
 	public final baseline:Float;
 
+	/**
+	 * The text it shows instead of its node's, cut with an ellipsis to the width layout gave it (`LayoutNode.truncation`);
+	 * null when it shows all of it.
+	 */
+	public final shownText:Null<String>;
+
 	internal function new(id:Int, flags:Int, x:Float, y:Float, width:Float, height:Float,
-			clipBounds:Rect, contentBounds:Rect, transform:Transform2D, baseline:Float) {
+			clipBounds:Rect, contentBounds:Rect, transform:Transform2D, baseline:Float, ?shownText:String) {
 		this.id = id;
 		this.flags = flags;
 		this.x = x;
@@ -42,6 +48,7 @@ class ResolvedLayoutItem {
 		this.contentBounds = contentBounds;
 		this.transform = transform;
 		this.baseline = baseline;
+		this.shownText = shownText;
 	}
 
 	/** Whether it is drawn. */

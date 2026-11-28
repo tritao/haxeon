@@ -1255,6 +1255,7 @@ class UiContext implements Disposable {
 		// the generated equality of their structural classes.
 		return left == right || left.flags == right.flags && left.x == right.x && left.y == right.y && left.width
 			== right.width && left.height == right.height && left.baseline == right.baseline
+			&& left.shownText == right.shownText
 			&& haxeon.Equality.equals(left.clipBounds,
 			right.clipBounds) && haxeon.Equality.equals(left.contentBounds,
 			right.contentBounds) && haxeon.Equality.equals(left.transform,
