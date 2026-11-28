@@ -1,6 +1,7 @@
 package compiler.abi;
 
 import compiler.ir.model.Ir;
+import compiler.ir.model.IrDeclarationEquality;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrTypeIdentity;
 
@@ -54,22 +55,25 @@ class RuntimeAbi {
 		texts = [];
 		for (object in program.objects) {
 			names.push(object.name);
-			texts.push(kept == null ? objectText(object) : kept.text(object.name, object, objectText));
+			texts.push(kept == null ? objectText(object) : kept.text(RuntimeAbiTexts.OBJECT, object.name, object,
+				objectText, IrDeclarationEquality.sameObject));
 		}
 		var objects = table(names, texts, previous == null ? null : previous.objects);
 		names = [];
 		texts = [];
 		for (declaration in program.interfaces) {
 			names.push(declaration.name);
-			texts.push(kept == null ? interfaceText(declaration) : kept.text(declaration.name, declaration,
-				interfaceText));
+			texts.push(kept == null ? interfaceText(declaration) : kept.text(RuntimeAbiTexts.INTERFACE,
+				declaration.name,
+				declaration, interfaceText, IrDeclarationEquality.sameInterface));
 		}
 		var interfaces = table(names, texts, previous == null ? null : previous.interfaces);
 		names = [];
 		texts = [];
 		for (declaration in program.enums) {
 			names.push(declaration.name);
-			texts.push(kept == null ? enumText(declaration) : kept.text(declaration.name, declaration, enumText));
+			texts.push(kept == null ? enumText(declaration) : kept.text(RuntimeAbiTexts.ENUM, declaration.name,
+				declaration, enumText, IrDeclarationEquality.sameEnum));
 		}
 		var enums = table(names, texts, previous == null ? null : previous.enums);
 		var globals:Map<String, String> = [];
@@ -208,10 +212,14 @@ class RuntimeAbi {
 /**
  * The texts the runtime ABI describes each function and declaration by (`RuntimeAbi.describe`), as kinds of the session's database:
  * a function's while it is the same object (`IrFunctionValues`), a declaration's (an object, an interface, an enum) by the number
- * of its name while it is the same object as the one the text was made of: one kind for the three, as names of different
- * declarations differ, and one that did not would only have its text made again.
+ * of its name while it reads the same as the one the text was made of: one kind of the database for the three, each text tagged
+ * with what it describes, as one name can describe an interface in one build and a class in the next.
  */
 class RuntimeAbiTexts {
+	public static inline final OBJECT = 0;
+	public static inline final INTERFACE = 1;
+	public static inline final ENUM = 2;
+
 	final database:compiler.query.QueryDatabase;
 
 	public final functions:compiler.ir.reuse.IrFunctionValues<String>;
@@ -226,27 +234,38 @@ class RuntimeAbiTexts {
 			RuntimeAbiText.same));
 	}
 
-	/** The text of `declaration`, named `name`: the one kept when it was made of that object, else `make`'s, kept. */
-	public function text<T>(name:String, declaration:T, make:T->String):String {
+	/**
+	 * The text of `declaration`, a `kind` (`OBJECT`, `INTERFACE`, `ENUM`) named `name`: the one kept when it was made of a
+	 * declaration of that kind `same` finds equal, else `make`'s, kept. The stages make their declarations again every build, so
+	 * the parts decide; the kept text then names this build's object, which the next build most often gives again, and lets the
+	 * old one go.
+	 */
+	public function text<T>(kind:Int, name:String, declaration:T, make:T->String, same:(T, T) -> Bool):String {
 		var key = compiler.ir.model.IrSymbol.of(name).id, known = declarations.kept(key);
-		if (known != null && known.declaration == declaration) {
-			declarations.hold(database, declarations.slotOf(key));
+		if (known != null && known.kind == kind
+			&& (known.declaration == declaration || same(known.declaration, declaration))) {
+			var slot = declarations.slotOf(key);
+			if (known.declaration != declaration)
+				declarations.replace(slot, new RuntimeAbiText(kind, declaration, known.text));
+			declarations.hold(database, slot);
 			return known.text;
 		}
-		return declarations.put(database, key, new RuntimeAbiText(declaration, make(declaration))).text;
+		return declarations.put(database, key, new RuntimeAbiText(kind, declaration, make(declaration))).text;
 	}
 }
 
-/** A declaration's text in the runtime ABI, with the declaration it was made of. */
+/** A declaration's text in the runtime ABI, with what it describes (`RuntimeAbiTexts.OBJECT`, ...) and the declaration it was made of. */
 class RuntimeAbiText {
+	public final kind:Int;
 	public final declaration:Dynamic;
 	public final text:String;
 
-	public function new(declaration:Dynamic, text:String) {
+	public function new(kind:Int, declaration:Dynamic, text:String) {
+		this.kind = kind;
 		this.declaration = declaration;
 		this.text = text;
 	}
 
 	public static function same(left:RuntimeAbiText, right:RuntimeAbiText):Bool
-		return left.declaration == right.declaration && left.text == right.text;
+		return left.kind == right.kind && left.declaration == right.declaration && left.text == right.text;
 }
