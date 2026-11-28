@@ -90,6 +90,7 @@ class AnalysisTransaction {
 				elapsedMs: Sys.time() * 1000.0 - startedAt,
 				unboundLocals: typed.unboundLocals,
 				nonExceptionThrows: typed.nonExceptionThrows,
+				lambdaTrailingValues: typed.lambdaTrailingValues,
 				moduleNamespaceUses: namespaceUses
 			};
 		} catch (error:haxe.Exception) {

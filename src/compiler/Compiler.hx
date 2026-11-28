@@ -186,6 +186,9 @@ typedef AnalysisResult = {
 	/** The `throw`s of the bodies this analysis typed whose value is not statically a haxe.Exception (`TypedProgram.nonExceptionThrows`). */
 	final nonExceptionThrows:Array<compiler.types.TypedAst.NonExceptionThrow>;
 
+	/** The lambdas of the bodies this analysis typed whose block ends in an expression (`TypedProgram.lambdaTrailingValues`). */
+	final lambdaTrailingValues:Array<compiler.types.TypedAst.LambdaTrailingValue>;
+
 	/** The analyzed modules' variables and functions named through their module's name (AliasTable.ModuleNamespaceUse). */
 	final moduleNamespaceUses:Array<compiler.semantic.AliasTable.ModuleNamespaceUse>;
 }

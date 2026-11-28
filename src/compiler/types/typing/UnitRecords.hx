@@ -6,6 +6,7 @@ import compiler.types.Type.AnonymousField;
 typedef LintFactCounts = {
 	final unboundLocals:Int;
 	final nonExceptionThrows:Int;
+	final lambdaTrailingValues:Int;
 }
 
 /**
@@ -60,6 +61,9 @@ class UnitRecords {
 	/** The `throw`s of a value not statically a haxe.Exception, in typing order; kept, like `unboundLocals`, only for bodies that typed. */
 	public final nonExceptionThrows:Array<compiler.types.TypedAst.NonExceptionThrow> = [];
 
+	/** The lambdas whose block ends in an expression, in typing order; kept, like `unboundLocals`, only for bodies that typed. */
+	public final lambdaTrailingValues:Array<compiler.types.TypedAst.LambdaTrailingValue> = [];
+
 	public function new() {}
 
 	/** Each record by unit, its answers as a map: the shapes the build publishes. */
@@ -103,9 +107,13 @@ class UnitRecords {
 	static function answersByUnit(records:Map<String, UnitAnswers>):Map<String, Map<String, Bool>>
 		return [for (unit => record in records) unit => record.answers];
 
-	/** How many lint facts (`unboundLocals`, `nonExceptionThrows`) are recorded, to take back to with `truncateLintFacts`. */
+	/** How many lint facts (`unboundLocals`, `nonExceptionThrows`, `lambdaTrailingValues`) are recorded, for `truncateLintFacts`. */
 	public function lintFactCounts():LintFactCounts
-		return {unboundLocals: unboundLocals.length, nonExceptionThrows: nonExceptionThrows.length};
+		return {
+			unboundLocals: unboundLocals.length,
+			nonExceptionThrows: nonExceptionThrows.length,
+			lambdaTrailingValues: lambdaTrailingValues.length
+		};
 
 	/** Drops the lint facts recorded after `counts`. */
 	public function truncateLintFacts(counts:LintFactCounts):Void {
@@ -113,6 +121,9 @@ class UnitRecords {
 			unboundLocals.splice(counts.unboundLocals, unboundLocals.length - counts.unboundLocals);
 		if (nonExceptionThrows.length > counts.nonExceptionThrows)
 			nonExceptionThrows.splice(counts.nonExceptionThrows, nonExceptionThrows.length - counts.nonExceptionThrows);
+		if (lambdaTrailingValues.length > counts.lambdaTrailingValues)
+			lambdaTrailingValues.splice(counts.lambdaTrailingValues,
+				lambdaTrailingValues.length - counts.lambdaTrailingValues);
 	}
 
 	public function recordAnonymousUse(unit:String, name:String, fields:Array<AnonymousField>):Void {
@@ -138,6 +149,8 @@ class UnitRecords {
 			target.unboundLocals.push(local);
 		for (thrown in nonExceptionThrows)
 			target.nonExceptionThrows.push(thrown);
+		for (lambda in lambdaTrailingValues)
+			target.lambdaTrailingValues.push(lambda);
 		mergeQueries(keyPathUses, target.keyPathUses);
 	}
 

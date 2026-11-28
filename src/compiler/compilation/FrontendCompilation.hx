@@ -603,7 +603,8 @@ class FrontendCompilation {
 				build.lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true],
 				previousSemantic), context.options.reverseTypingOrder,
 				keptDeclarations(context, names, semanticAssembly.owners),
-				context.options.elaborateGenerics, semanticAssembly.entrySpan, context.options.nullSafety);
+				context.options.elaborateGenerics, semanticAssembly.entrySpan, context.options.nullSafety,
+				context.options.lambdaTrailingValues);
 			build.allocationAfterProgramTyping = AllocationMeter.sample();
 			build.typingDoneAt = now();
 			var typedNew = typedResult.program;

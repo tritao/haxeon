@@ -21,6 +21,28 @@ class AstPredicates {
 			default: value;
 		};
 
+	/**
+	 * Whether a block ends in an expression statement, through metadata and each branch of a final `try`: the statement whose
+	 * value an arrow function's block returns (`Parser.returnArrowValue`) and a `function` lambda's drops.
+	 */
+	public static function endsInExpression(statements:Array<AstStatement>):Bool {
+		if (statements.length == 0)
+			return false;
+		switch unannotatedStatement(statements[statements.length - 1]) {
+			case Expression(_, _):
+				return true;
+			case Try(body, catches, _):
+				if (endsInExpression(body))
+					return true;
+				for (clause in catches)
+					if (endsInExpression(clause.statements))
+						return true;
+				return false;
+			default:
+				return false;
+		}
+	}
+
 	public static function isNullExpression(value:Null<AstExpression>):Bool
 		return switch value == null ? null : unannotatedExpression(value) {
 			case null, NullLiteral(_): true;

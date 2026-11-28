@@ -663,6 +663,12 @@ typedef TypedProgram = {
 
 	/** The `throw`s of the bodies this compile typed whose value is not statically a haxe.Exception. */
 	final nonExceptionThrows:Array<NonExceptionThrow>;
+
+	/**
+	 * The lambdas of the bodies this compile typed whose block ends in an expression (`LambdaTrailingValue`), when
+	 * `CompileOptions.lambdaTrailingValues` asks for them; empty otherwise.
+	 */
+	final lambdaTrailingValues:Array<LambdaTrailingValue>;
 }
 
 /**
@@ -691,6 +697,19 @@ typedef NonExceptionThrow = {
 
 	/** The thrown value's static type, as a diagnostic writes it. */
 	final thrown:String;
+}
+
+/**
+ * A lambda whose block ends in an expression, typed once: an arrow's block returns that value, where a `function` lambda's drops
+ * it. The two forms agree when the lambda's type returns Void, which drops it either way, or when the value is itself Void.
+ * `haxeon lint --fix` writes a `function` lambda as an arrow on this evidence (FunctionLambdas), when every typing of it agrees.
+ */
+typedef LambdaTrailingValue = {
+	/** The lambda, from its `function` or its parameters. */
+	final span:SourceSpan;
+
+	/** Whether the arrow form means the same in this typing: its type returns Void, or the last expression is Void. */
+	final arrowAgrees:Bool;
 }
 
 /** A source-declared target function with no generated body. */

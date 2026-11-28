@@ -3,6 +3,7 @@ package compiler.types.typing;
 import compiler.core.Diagnostic;
 import compiler.types.DeclarationTypes.InferredSignature;
 import compiler.types.Type.CompilerType;
+import compiler.types.TypedAst.LambdaTrailingValue;
 import compiler.types.TypedAst.NonExceptionThrow;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.UnboundLocal;
@@ -26,6 +27,9 @@ class TypingFailure extends CompileError {
 	/** The non-exception throws of the bodies that typed (`TypedProgram.nonExceptionThrows`); none of a failed body's. */
 	public final nonExceptionThrows:Array<NonExceptionThrow>;
 
+	/** The lambdas ending in an expression of the bodies that typed (`TypedProgram.lambdaTrailingValues`); none of a failed body's. */
+	public final lambdaTrailingValues:Array<LambdaTrailingValue>;
+
 	/**
 	 * The types the table gave the unannotated fields that typed, by key (`DeclarationTypeTable.knownFieldTypes`), so the editor keeps
 	 * them next to the error.
@@ -36,7 +40,8 @@ class TypingFailure extends CompileError {
 	public final inferredSignatures:Map<String, InferredSignature>;
 
 	public function new(diagnostics:Array<Diagnostic>, typed:Array<TypedFunction>, unboundLocals:Array<UnboundLocal>,
-			nonExceptionThrows:Array<NonExceptionThrow>, inferredFieldTypes:Map<String, CompilerType>,
+			nonExceptionThrows:Array<NonExceptionThrow>, lambdaTrailingValues:Array<LambdaTrailingValue>,
+			inferredFieldTypes:Map<String, CompilerType>,
 			inferredSignatures:Map<String, InferredSignature>) {
 		super(diagnostics[0], diagnostics.slice(1));
 		this.typed = typed;
@@ -44,5 +49,6 @@ class TypingFailure extends CompileError {
 		this.inferredSignatures = inferredSignatures;
 		this.unboundLocals = unboundLocals;
 		this.nonExceptionThrows = nonExceptionThrows;
+		this.lambdaTrailingValues = lambdaTrailingValues;
 	}
 }

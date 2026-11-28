@@ -93,7 +93,8 @@ class TypedProgramAssembler {
 			anonymousUnits: anonymousUnits(),
 			natives: natives,
 			unboundLocals: session.programOutput.records.unboundLocals.copy(),
-			nonExceptionThrows: session.programOutput.records.nonExceptionThrows.copy()
+			nonExceptionThrows: session.programOutput.records.nonExceptionThrows.copy(),
+			lambdaTrailingValues: session.programOutput.records.lambdaTrailingValues.copy()
 		};
 	}
 

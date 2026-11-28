@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import compiler.formatter.ProjectFormat;
 import compiler.formatter.Formatter;
+import compiler.service.FunctionLambdas;
 import compiler.service.ImportOrder;
 import compiler.service.RedundantArgumentNames;
 import compiler.service.SourceEdits;
@@ -19,9 +20,12 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * `haxeon lint [--fix] [--only RULE] [--manifest FILE]... FILE...` reports unused imports (rule `unused-imports`) and runs of
- * imports out of order (rule `import-order`, see ImportOrder), and call arguments written `name: name`, which `name:` says (rule
- * `redundant-argument-name`, see RedundantArgumentNames); `--only` checks one rule. All three read syntax only. The opt-in rules
+ * `haxeon lint [--fix] [--only RULE] [--manifest FILE]... FILE...` reports unused imports (rule `unused-imports`), runs of
+ * imports out of order (rule `import-order`, see ImportOrder), call arguments written `name: name`, which `name:` says (rule
+ * `redundant-argument-name`, see RedundantArgumentNames), and lambdas written `function(...)` that an arrow can write (rule
+ * `function-lambda`, see FunctionLambdas); `--only` checks one rule. All four read syntax only, though `--fix` hands the lambdas
+ * whose syntax cannot show an arrow means the same to the typed tool, which converts those whose types show it does. A file turns a
+ * syntax rule off for itself with `// @lint:off RULE` (`rulesOff`). The opt-in rules
  * `unbound-local`, `module-namespace` and `throw-non-exception` (TypedLint) need the compiler's analysis, so each runs only when `--only` names it,
  * through `typedRules`, which runs it in a tool that links the compiler.
  *
@@ -45,7 +49,7 @@ class LintCommand {
 
 	/** The rules `--only` selects; the typed ones run only when it names them. */
 	static final RULES =
-		"unused-imports, import-order, redundant-argument-name, unbound-local, module-namespace, throw-non-exception";
+		"unused-imports, import-order, redundant-argument-name, function-lambda, unbound-local, module-namespace, throw-non-exception";
 
 	/**
 	 * Lints the files `arguments` names. `typedRules` runs a typed rule on the expanded files and returns its status: the
@@ -61,6 +65,7 @@ class LintCommand {
 			checkUnused = true,
 			checkOrder = true,
 			checkArguments = true,
+			checkLambdas = true,
 			typedRule:Null<String> = null,
 			pinWire:Null<String> = null;
 		while (index < arguments.length) {
@@ -78,16 +83,24 @@ class LintCommand {
 					case "unused-imports":
 						checkOrder = false;
 						checkArguments = false;
+						checkLambdas = false;
 					case "import-order":
 						checkUnused = false;
 						checkArguments = false;
+						checkLambdas = false;
 					case "redundant-argument-name":
 						checkUnused = false;
 						checkOrder = false;
+						checkLambdas = false;
+					case "function-lambda":
+						checkUnused = false;
+						checkOrder = false;
+						checkArguments = false;
 					case rule = "unbound-local" | "module-namespace" | "throw-non-exception":
 						checkUnused = false;
 						checkOrder = false;
 						checkArguments = false;
+						checkLambdas = false;
 						typedRule = rule;
 					case other: throw new InternalError('Unknown lint rule "$other" (known: $RULES)');
 				}
@@ -104,7 +117,8 @@ class LintCommand {
 		if (paths.length == 0)
 			throw new InternalError("haxeon lint requires at least one file");
 		if (pinWire != null) {
-			if (!fix || paths.length != 1 || !checkUnused || !checkOrder || !checkArguments || manifests.length != 0)
+			if (!fix || paths.length != 1 || !checkUnused || !checkOrder || !checkArguments || !checkLambdas
+				|| manifests.length != 0)
 				throw new InternalError("Usage: haxeon lint --fix --pin-wire TYPE FILE");
 			pinWireIds(SourceFiles.requireFile(paths[0]), pinWire);
 			return 0;
@@ -126,7 +140,7 @@ class LintCommand {
 		for (manifest in manifests)
 			for (root in command.manifestRoots(SourceFiles.requireFile(manifest), []))
 				addTo(command.sharedRoots, root);
-		var projects = new ProjectFormat(), found = 0;
+		var projects = new ProjectFormat(), found = 0, typedLambdaFiles:Array<String> = [];
 		for (path in SourceFiles.expand(paths)) {
 			var source = File.getContent(path), file = new SourceFile(path, source);
 			// Unused imports read the raw tokens: with directives blanked out, an import used only in an inactive branch would look
@@ -138,22 +152,29 @@ class LintCommand {
 			if (rootTokens == null)
 				continue;
 			var roots = command.rootsFor(path, rootTokens),
-				resolve = (importPath:String) -> command.resolve(roots, importPath);
-			var unused = checkUnused
+				resolve = (importPath:String) -> command.resolve(roots, importPath),
+				off = rulesOff(source);
+			var unused = checkUnused && !off.exists("unused-imports")
 				&& tokens != null ? UnusedImports.find(compiler.syntax.TokenTable.ofTokens(tokens), resolve) : [];
-			var unordered = orderTokens != null ? ImportOrder.find(source, orderTokens,
+			var unordered = orderTokens != null && !off.exists("import-order") ? ImportOrder.find(source, orderTokens,
 				resolve).filter(block -> block.sorted != null) : [];
-			var redundant = checkArguments
+			var redundant = checkArguments && !off.exists("redundant-argument-name")
 				&& tokens != null ? RedundantArgumentNames.find(compiler.syntax.TokenTable.ofTokens(tokens)) : [];
-			if (unused.length == 0 && unordered.length == 0 && redundant.length == 0)
+			var lambdas = checkLambdas && !off.exists("function-lambda")
+				? (try FunctionLambdas.find(path, source) catch (_:Dynamic)[]) : [];
+			if (unused.length == 0 && unordered.length == 0 && redundant.length == 0 && lambdas.length == 0)
 				continue;
-			found += unused.length + unordered.length + redundant.length;
+			found += unused.length + unordered.length + redundant.length + lambdas.length;
 			for (item in unused)
 				Sys.println('$path:${file.lineAt(item.start)}: unused import ${item.path}');
 			for (block in unordered)
 				Sys.println('$path:${file.lineAt(block.start)}: imports not in order');
 			for (item in redundant)
 				Sys.println('$path:${file.lineAt(item.start)}: argument "${item.name}: ${item.name}" is "${item.name}:"');
+			for (lambda in lambdas)
+				Sys.println('$path:${file.lineAt(lambda.start)}: lambda "function(...)" is written "(...) -> ..."'
+					+ (lambda.proven ? ""
+					: "; it ends in an expression an arrow would return, so --fix converts it where its types show that changes nothing"));
 			if (fix) {
 				var config = projects.forFile(path),
 					wasFormatted = Formatter.format(source, config) == source,
@@ -162,6 +183,11 @@ class LintCommand {
 					edits.replace(item.removeStart, item.removeEnd, "");
 				for (item in unused)
 					edits.removeStatement(item.start, item.end);
+				for (lambda in lambdas)
+					if (lambda.proven)
+						FunctionLambdas.convert(edits, lambda);
+				if (lambdas.filter(lambda -> !lambda.proven).length > 0)
+					typedLambdaFiles.push(path);
 				var edited = edits.apply();
 				// Sorted after the removal, which can join two runs or empty one.
 				if (orderTokens != null)
@@ -174,7 +200,33 @@ class LintCommand {
 				File.saveContent(path, edited);
 			}
 		}
-		return found > 0 && !fix ? 1 : 0;
+		// The lambdas only a type can show agree, once the edits above are written and the files read again.
+		var typedStatus = typedLambdaFiles.length > 0
+			&& typedRules != null ? typedRules("function-lambda", typedLambdaFiles) : 0;
+		return found > 0 && !fix ? 1 : typedStatus;
+	}
+
+	/**
+	 * The rules a file turns off for itself, each with a line `// @lint:off RULE`, which may go on to say why (`: ...`): a test
+	 * whose subject is the form a rule rewrites (a `function` lambda, say) keeps it. Only the syntax rules read it.
+	 */
+	static function rulesOff(source:String):Map<String, Bool> {
+		var off:Map<String, Bool> = [];
+		if (source.indexOf("@lint:off") < 0)
+			return off;
+		for (line in source.split("\n")) {
+			var text = StringTools.trim(line);
+			if (StringTools.startsWith(text, "//")) {
+				text = StringTools.trim(text.substr(2));
+				if (StringTools.startsWith(text, "@lint:off ")) {
+					var rule = StringTools.trim(text.substr("@lint:off ".length)), end = 0;
+					while (end < rule.length && rule.charAt(end) != " " && rule.charAt(end) != ":")
+						end++;
+					off.set(rule.substr(0, end), true);
+				}
+			}
+		}
+		return off;
 	}
 
 	static function pinWireIds(path:String, name:String):Void {

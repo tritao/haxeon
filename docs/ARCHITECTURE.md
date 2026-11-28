@@ -100,7 +100,7 @@ Entry points, in `src/`:
 | `EditorServiceMain.hx` | A JSON-lines language service for a Pragtical host process. |
 | `FfiImportMain.hx` | The C and C++ header importer, which writes HXI. |
 | `FfiAuditMain.hx` | The cross-target C ABI auditor. |
-| `LintMain.hx` | The lint rules that need the compiler's analysis (`haxeon lint --only unbound-local`, `module-namespace` or `throw-non-exception`, `tools.TypedLint`), through the language service. |
+| `LintMain.hx` | The lint rules that need the compiler's analysis (`haxeon lint --only unbound-local`, `module-namespace` or `throw-non-exception`, and the part of `function-lambda`'s fix only a lambda's type settles; `tools.TypedLint`), through the language service. |
 
 The project CLI (`tools.HaxeonCli`), the compiler CLI (`compiler.tools.HaxeonCompiler`) and the build workflow
 (`build.HaxeonBuild`) are started by main class, through `scripts/haxeon` and the tool cache

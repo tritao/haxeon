@@ -59,10 +59,30 @@ consecutive import lines; a blank line, a comment, a `#if` line, a `using` or an
 import sharing its line with other code ends it, so groups stay where they are. A
 later import of a name wins, so a run where two imports make the same short name
 visible (module imports count every type the module declares), or with a package
-wildcard, keeps its order and is not reported. `--only unused-imports` or
-`--only import-order` checks one rule.
+wildcard, keeps its order and is not reported.
 
-Those two rules read syntax only and run by default. The rule `unbound-local` needs
+It reports a call argument written `name: name`, which `name:` says (rule
+`redundant-argument-name`), and `--fix` shortens it. An object literal's
+`{name: name}` and an argument that passes anything else are left alone.
+
+It reports a lambda written `function(...)` that an arrow can write (rule
+`function-lambda`), so a lambda has one form, and `--fix` writes it as one:
+`function(x) return x + 1` becomes `x -> x + 1`. A lambda with a return type
+(`function(x):Int ...`) or a rest parameter keeps the `function` form, which is the
+only one that can say either, and a named local function is a declaration. An
+arrow's block returns the value of its last expression, where a `function` block
+drops it, so `--fix` converts a block that ends in an expression only where its
+types show that changes nothing: the lambda's type returns Void (a callback of
+`Int->Void`), or the expression is itself Void. It asks the typed tool below for
+that. One the types do not settle, such as `var f = function() { list.push(x); }`
+(`push` returns the new length), stays reported: give it a type, or write the
+arrow by hand.
+
+`--only RULE` checks one rule. A file turns a rule off for itself with a line
+`// @lint:off RULE`, which may say why after a colon: a test whose subject is the
+`function` form keeps it that way.
+
+These four rules read syntax only and run by default. The rule `unbound-local` needs
 types, so it is opt-in and runs only when `--only unbound-local` names it:
 
 ```bash

@@ -59,6 +59,13 @@ class ClosureTyper {
 		return resolved;
 	}
 
+	/** Whether the last statement of a typed body is an expression of type Void, whose value an arrow returning it is nothing. */
+	static function endsInVoid(statements:Array<compiler.types.TypedAst.TypedStatement>):Bool
+		return statements.length > 0 && switch statements[statements.length - 1] {
+			case TExpression(expression, _): compiler.types.Monomorphs.follow(expression.type).match(TVoid);
+			default: false;
+		};
+
 	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, identity:String, span:SourceSpan,
 			scope:Scope,
 			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool,
@@ -323,6 +330,12 @@ class ClosureTyper {
 		var typedBody = bodyTyper.typeStatements(body, typedBodyScope, expectedFunction == null
 			|| inferContextualResult ? null : expectedFunction.result),
 			inferredResult:CompilerType;
+		if (session.recordsLambdaTrailingValues && span.generatedReason == null
+			&& compiler.syntax.AstPredicates.endsInExpression(body))
+			session.output.records.lambdaTrailingValues.push({
+				span: span,
+				arrowAgrees: context.contextualVoidLambda || endsInVoid(typedBody)
+			});
 		if (expectedFunction != null && !inferContextualResult)
 			inferredResult = expectedFunction.result;
 		else {
@@ -345,7 +358,7 @@ class ClosureTyper {
 			case TVoid: false;
 			default: true;
 		}) && !ControlFlow.returnsOnEveryPath(typedBody,
-			function(type, cases) return bodyTyper.exhaustiveSwitch(type, cases)))
+			(type, cases) -> bodyTyper.exhaustiveSwitch(type, cases)))
 			fail(DiagnosticCode.FUNCTION_COMPLETION, 'Function $lambdaName does not return on every path', span);
 		var lambdaCells = copyMap(context.storage.cells),
 			lambdaCellTypes = copyMap(context.storage.types),

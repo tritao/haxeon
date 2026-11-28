@@ -326,6 +326,7 @@ class TestCatalog {
 		"LintProjectRootsMain",
 		"LintRedundantArgumentNameMain",
 		"LintFixNonAsciiMain",
+		"LintFunctionLambdaMain",
 		"LintUnboundLocalMain",
 		"LintModuleNamespaceMain",
 		"LintThrowNonExceptionMain",

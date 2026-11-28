@@ -360,6 +360,9 @@ class TypingSession {
 	 */
 	public final recoveredErrors:Array<Diagnostic> = [];
 
+	/** Whether to record `UnitRecords.lambdaTrailingValues`: `CompileOptions.lambdaTrailingValues`. */
+	public var recordsLambdaTrailingValues = false;
+
 	/**
 	 * Where typing stands, to come back to when what is typed next fails: between bodies (`recover`), or between the statements
 	 * of a body (`BodyTyper.typeStatements`).
@@ -451,7 +454,8 @@ class TypingSession {
 			return;
 		var table = types;
 		throw new TypingFailure(recoveredErrors.copy(), typed, programOutput.records.unboundLocals.copy(),
-			programOutput.records.nonExceptionThrows.copy(), table == null ? [] : table.knownFieldTypes(),
+			programOutput.records.nonExceptionThrows.copy(), programOutput.records.lambdaTrailingValues.copy(),
+			table == null ? [] : table.knownFieldTypes(),
 			table == null ? [] : table.typedSignatures());
 	}
 

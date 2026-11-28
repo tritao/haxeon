@@ -47,9 +47,11 @@ class Typer {
 			?retained:RetainedFromPrevious, reverseTypingOrder:Bool = false,
 			?kept:compiler.types.typing.ProgramTyper.KeptDeclarations,
 			elaborateGenerics:Bool = false,
-			?entrySpan:compiler.core.Source.SourceSpan, ?nullSafety:Array<compiler.NullSafetyRule>):MeasuredTypedProgram
+			?entrySpan:compiler.core.Source.SourceSpan, ?nullSafety:Array<compiler.NullSafetyRule>,
+			lambdaTrailingValues:Bool = false):MeasuredTypedProgram
 		return new ProgramTyper(new BodyTyper(externals, specializations, nativeAbiTarget),
-			reverseTypingOrder, elaborateGenerics, nullSafety).typeProgramMeasured(semantic, selected, requireMain,
+			reverseTypingOrder, elaborateGenerics, nullSafety, lambdaTrailingValues).typeProgramMeasured(semantic,
+			selected, requireMain,
 			entryPoint,
 			cachedMetadata, facts,
 			retained, kept, entrySpan);

@@ -19,6 +19,7 @@ typedef CompileOptionsInit = {
 	final ?phaseCollections:Bool;
 	final ?inlineAllocation:Bool;
 	final ?requireDocumentation:Bool;
+	final ?lambdaTrailingValues:Bool;
 	final ?nullSafety:Array<NullSafetyRule>;
 	final ?sourcePackages:Array<SourcePackage>;
 	final ?scriptModule:String;
@@ -110,6 +111,14 @@ class CompileOptions {
 	public final requireDocumentation:Bool;
 
 	/**
+	 * Record each lambda whose block ends in an expression, and whether an arrow would mean the same there
+	 * (`TypedProgram.lambdaTrailingValues`), for `haxeon lint --fix` (`tools.TypedLint`): `--lambda-trailing-values`. The typer
+	 * types a lambda once per call it is tried at, so a compile that asks for nothing records none. It changes what an analysis
+	 * gives, so `key` keeps it.
+	 */
+	public final lambdaTrailingValues:Bool;
+
+	/**
 	 * The null-safety rules of the compile (`--null-safety=MODE[:PATH[:shallow]]`): what Haxe's `--macro nullSafety(...)` states,
 	 * and what a project's `nullSafety` setting becomes. Empty by default, so only `@:nullSafety` metadata turns the checker on.
 	 * They change what a compile reports, so `key` keeps them.
@@ -142,23 +151,29 @@ class CompileOptions {
 		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
 		inlineAllocation = init != null && init.inlineAllocation == true;
 		requireDocumentation = init != null && init.requireDocumentation == true;
+		lambdaTrailingValues = init != null && init.lambdaTrailingValues == true;
 		nullSafety = init == null || init.nullSafety == null ? [] : init.nullSafety;
 		sourcePackages = init == null || init.sourcePackages == null ? [] : init.sourcePackages;
 	}
 
 	/** These options with `inlining` set, the others kept. */
 	public function withInlining(value:Bool):CompileOptions
-		return copy(value, nullSafety, sourcePackages);
+		return copy(value, nullSafety, sourcePackages, lambdaTrailingValues);
 
 	/** These options with the null-safety rules `rules`, the others kept: what a language server takes from the project. */
 	public function withNullSafety(rules:Array<NullSafetyRule>):CompileOptions
-		return copy(inlining, rules, sourcePackages);
+		return copy(inlining, rules, sourcePackages, lambdaTrailingValues);
 
 	/** These options with the packages `packages`, the others kept: what a language server takes from the project. */
 	public function withSourcePackages(packages:Array<SourcePackage>):CompileOptions
-		return copy(inlining, nullSafety, packages);
+		return copy(inlining, nullSafety, packages, lambdaTrailingValues);
 
-	function copy(inlining:Bool, nullSafety:Array<NullSafetyRule>, sourcePackages:Array<SourcePackage>):CompileOptions
+	/** These options with `lambdaTrailingValues` set, the others kept: what the typed lint's language service asks for. */
+	public function withLambdaTrailingValues(value:Bool):CompileOptions
+		return copy(inlining, nullSafety, sourcePackages, value);
+
+	function copy(inlining:Bool, nullSafety:Array<NullSafetyRule>, sourcePackages:Array<SourcePackage>,
+			lambdaTrailingValues:Bool):CompileOptions
 		return new CompileOptions({
 			inlining: inlining,
 			loadStoreForwarding: loadStoreForwarding,
@@ -174,6 +189,7 @@ class CompileOptions {
 			phaseCollections: phaseCollections,
 			inlineAllocation: inlineAllocation,
 			requireDocumentation: requireDocumentation,
+			lambdaTrailingValues: lambdaTrailingValues,
 			nullSafety: nullSafety,
 			sourcePackages: sourcePackages,
 			scriptModule: scriptModule
@@ -212,6 +228,8 @@ class CompileOptions {
 			flags.push(INLINE_ALLOCATION);
 		if (requireDocumentation)
 			flags.push(REQUIRE_DOCS);
+		if (lambdaTrailingValues)
+			flags.push(LAMBDA_TRAILING_VALUES);
 		if (scriptModule != null)
 			flags.push(SCRIPT_MODULE + scriptModule);
 		for (rule in nullSafety)
@@ -233,6 +251,9 @@ class CompileOptions {
 
 	/** Fails a check on an undocumented public declaration (`requireDocumentation`). */
 	public static inline final REQUIRE_DOCS = "--require-docs";
+
+	/** Records the lambdas whose block ends in an expression (`lambdaTrailingValues`). */
+	public static inline final LAMBDA_TRAILING_VALUES = "--lambda-trailing-values";
 
 	/** One null-safety rule (`nullSafety`). */
 	public static inline final NULL_SAFETY = "--null-safety=";
@@ -276,7 +297,7 @@ class CompileOptions {
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
-				INLINE_ALLOCATION, REQUIRE_DOCS: true;
+				INLINE_ALLOCATION, REQUIRE_DOCS, LAMBDA_TRAILING_VALUES: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, NULL_SAFETY)
 				|| StringTools.startsWith(argument, SOURCE_PACKAGE) || StringTools.startsWith(argument, PACKAGE_FRIEND)
 				|| StringTools.startsWith(argument, SCRIPT_MODULE);
@@ -300,6 +321,7 @@ class CompileOptions {
 				>= 0 ? false : null,
 			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0,
 			requireDocumentation: arguments.indexOf(REQUIRE_DOCS) >= 0,
+			lambdaTrailingValues: arguments.indexOf(LAMBDA_TRAILING_VALUES) >= 0,
 			nullSafety: nullSafetyFrom(arguments),
 			sourcePackages: sourcePackagesFrom(arguments),
 			scriptModule: scriptModuleFrom(arguments)

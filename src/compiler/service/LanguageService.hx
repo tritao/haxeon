@@ -247,6 +247,9 @@ class LanguageService {
 	 */
 	final stdlib:String;
 
+	/** Whether analyses record `TypedProgram.lambdaTrailingValues` (`CompileOptions.lambdaTrailingValues`), for the typed lint. */
+	public var recordsLambdaTrailingValues = false;
+
 	public function new(?identityState:haxe.io.Bytes, stdlib:String = "stdlib") {
 		this.stdlib = stdlib;
 		compiler = new Compiler(identityState, CompilerIntrinsics.configuration());
@@ -318,7 +321,8 @@ class LanguageService {
 		structuralIndex.clear();
 		compiler.configure(identity, scopeIdentity, defines);
 		compiler.options = compiler.options.withNullSafety(nullSafety == null ? [] : nullSafety)
-			.withSourcePackages(sourcePackages == null ? [] : sourcePackages);
+			.withSourcePackages(sourcePackages == null ? [] : sourcePackages)
+			.withLambdaTrailingValues(recordsLambdaTrailingValues);
 	}
 
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult

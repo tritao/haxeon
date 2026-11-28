@@ -238,13 +238,14 @@ class CliHelp {
 				},
 				{
 					name: "lint",
-					summary: "Report (or fix) unused imports and imports out of order",
+					summary: "Report (or fix) unused imports, imports out of order, redundant argument names and function lambdas",
 					details: [
 						"Usage: haxeon lint [--fix] [--only RULE] [--manifest FILE]... FILE...",
 						"",
-						"  --fix                        Remove unused imports and sort them",
-						"  --only RULE                  unused-imports, import-order; opt-in: unbound-local, module-namespace,",
-						"                               throw-non-exception",
+						"  --fix                        Remove unused imports and sort them, drop redundant argument names, and",
+						"                               write as arrows the function lambdas an arrow means the same as",
+						"  --only RULE                  unused-imports, import-order, redundant-argument-name, function-lambda;",
+						"                               opt-in: unbound-local, module-namespace, throw-non-exception",
 						"  --manifest FILE              A haxeon.toml or haxeon.json whose source roots resolve imports",
 						"  --fix --pin-wire TYPE FILE   Add permanent wire IDs to one declaration"
 					]

@@ -1,6 +1,7 @@
 /**
  * The lint rules that need the compiler's analysis, which the command line (`tools.HaxeonCli`) does not link the compiler for:
- * `haxeon lint --only RULE FILE...` runs this tool with the rule and the files (`tools.TypedLint`).
+ * `haxeon lint --only RULE FILE...` runs this tool with the rule and the files (`tools.TypedLint`), and `haxeon lint --fix` with
+ * `function-lambda` and the files whose lambdas only their types show an arrow writes the same.
  */
 class LintMain {
 	static function main():Void

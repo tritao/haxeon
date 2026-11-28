@@ -73,8 +73,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	final elaborateGenerics:Bool;
 
 	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false, elaborateGenerics:Bool = false,
-			?nullSafety:Array<compiler.NullSafetyRule>) {
+			?nullSafety:Array<compiler.NullSafetyRule>, lambdaTrailingValues:Bool = false) {
 		this.bodyTyper = bodyTyper;
+		bodyTyper.session.recordsLambdaTrailingValues = lambdaTrailingValues;
 		if (nullSafety != null)
 			bodyTyper.session.nullSafety.rules = nullSafety;
 		this.reverseTypingOrder = reverseTypingOrder;
