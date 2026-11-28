@@ -3,7 +3,7 @@ package std.process;
 #if wasm
 #error "std.process is not available on Wasm: a Wasm module cannot start processes"
 #end
-import haxe.io.Bytes;
+import std.bytes.Bytes;
 
 /** What a finished child wrote, and how it exited: `Command.output` and `Child.waitForOutput` answer it. */
 class ProcessOutput {

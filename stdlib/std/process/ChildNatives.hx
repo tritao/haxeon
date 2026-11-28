@@ -3,7 +3,7 @@ package std.process;
 #if wasm
 #error "std.process is not available on Wasm: a Wasm module cannot start processes or read its own environment"
 #end
-import haxe.io.Bytes;
+import std.bytes.Bytes;
 
 /** The runtime's child process (native/runtime/child_processes.c). */
 internal typedef ChildHandle = hl.Abstract<"realtime_child_process">;

@@ -243,7 +243,7 @@ private class RunningProgram {
 	function copy(stream:Null<std.process.ChildOutput>, target:Output):Int {
 		if (stream == null)
 			return 0;
-		return switch stream.read(buffer, 0, buffer.length, 0) {
+		return switch stream.readWithin(0, buffer, 0, buffer.length) {
 			case Ok(0): 0;
 			case Ok(read):
 				target.writeBytes(buffer, 0, read);

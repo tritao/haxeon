@@ -46,8 +46,10 @@ An `ExitStatus` is `Exited(code)` or, on POSIX, `Signaled(signal)`; `succeeded()
 A `Child` has its piped streams as `stdin` (a `ChildInput`), `stdout` and `stderr` (`ChildOutput`s), each null when the
 stream is inherited or discarded.
 
-- `stdout.read(buffer, offset, length, timeout)` answers how many bytes it read, 0 at the stream's end, or `TimedOut`;
-  a timeout of 0 reads only what is there. `readAll()` and `readText()` read to the end.
+- `stdout` and `stderr` are `Reader`s ([Streams](IO.md)): `read(buffer, offset, length)` answers how many bytes it
+  read, waiting as long as it takes, and 0 at the stream's end; `readAll()` and `readText()` read to the end.
+  `readWithin(timeout, buffer, offset, length)` gives up with `TimedOut` instead; a timeout of 0 reads only what is
+  there. `stdin` is a `Writer`.
 - `stdin.write(buffer)` gives the child every byte, waiting while the pipe is full; `InputClosed` when the child no
   longer reads. `close()` lets the child read its end.
 - `wait(timeout)` closes the child's input and waits for it to exit; `exitStatus()` asks without waiting.

@@ -100,16 +100,18 @@ confined as the root's other operations are.
 ```haxe
 import std.fs.FileHandle;
 
-function header(path:String):Result<haxe.io.Bytes, std.fs.FileError> {
+function header(path:String):Result<std.bytes.Bytes, std.fs.FileError> {
 	scoped var file = try FileHandle.open(path, Read);
-	var bytes = haxe.io.Bytes.alloc(16);
+	var bytes = std.bytes.Bytes.alloc(16);
 	var read = try file.read(bytes);
 	return Ok(bytes.sub(0, read));
 }
 ```
 
 - `read(buffer, offset, length)` answers how many bytes it read: fewer than asked is no failure, and 0 is the end of
-  the file. `write` writes every byte, or fails.
+  the file. `write` writes every byte, or fails. `reader()` and `writer()` are the file as a `Reader` and a `Writer`
+  ([Streams](IO.md)), for code that takes any source or sink; they move the handle's position as its own reads and
+  writes do.
 - `seek(offset, from)` moves from the `Start`, the `Current` position or the `End`, and answers the new position;
   `position()` and `size()` answer without moving. Positions and sizes are `Int64`.
 - `setLength(length)` cuts the file or pads it with zero bytes; `sync()` waits until what was written is on the disk.

@@ -3,11 +3,12 @@ package std.process;
 #if wasm
 #error "std.process is not available on Wasm: a Wasm module cannot start processes"
 #end
-import haxe.io.Bytes;
+import std.bytes.Bytes;
+import std.io.Writer;
 import std.process.ChildNatives;
 
-/** What this program writes to a child's standard input, through a pipe: its `stdin`. */
-class ChildInput {
+/** What this program writes to a child's standard input, through a pipe: its `stdin`, a `Writer`. */
+class ChildInput extends Writer<ProcessError> {
 	final child:Child;
 	var closed:Bool = false;
 
@@ -15,13 +16,10 @@ class ChildInput {
 		this.child = child;
 
 	/**
-	 * Writes `length` bytes of `buffer` from `offset` (by default all of it), waiting while the pipe is full, until the
-	 * child has been given every one of them. `InputClosed` when it no longer reads.
+	 * Writes the range, waiting while the pipe is full, until the child has been given every byte of it. `InputClosed` when
+	 * it no longer reads.
 	 */
-	public function write(buffer:Bytes, offset:Int = 0, length:Int = -1):Result<Void, ProcessError> {
-		var count = length < 0 ? buffer.length - offset : length;
-		if (buffer == null || offset < 0 || count < 0 || offset > buffer.length - count)
-			throw new haxe.Exception("std.process.ChildInput: the range is outside the buffer");
+	function writeRange(buffer:Bytes, offset:Int, count:Int):Result<Void, ProcessError> {
 		if (closed)
 			throw new haxe.Exception("std.process.ChildInput is closed");
 		var at = offset, end = offset + count;
@@ -36,10 +34,6 @@ class ChildInput {
 		}
 		return Ok();
 	}
-
-	/** Writes `text` as UTF-8. */
-	public function writeText(text:String):Result<Void, ProcessError>
-		return write(Bytes.ofString(text));
 
 	/** Closes the child's input, so it reads its end; closing it again does nothing. */
 	public function close():Void {

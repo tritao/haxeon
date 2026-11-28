@@ -3,8 +3,8 @@ package std.process;
 #if wasm
 #error "std.process is not available on Wasm: a Wasm module cannot start processes"
 #end
-import haxe.io.Bytes;
-import haxe.io.BytesBuffer;
+import std.bytes.Bytes;
+import std.bytes.BytesBuffer;
 import std.process.ChildNatives;
 
 /**

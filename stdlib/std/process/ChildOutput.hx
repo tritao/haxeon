@@ -3,12 +3,15 @@ package std.process;
 #if wasm
 #error "std.process is not available on Wasm: a Wasm module cannot start processes"
 #end
-import haxe.io.Bytes;
-import haxe.io.BytesBuffer;
+import std.bytes.Bytes;
+import std.io.Reader;
 import std.process.ChildNatives;
 
-/** What a child writes to its standard output or error, through a pipe: its `stdout` or `stderr`. */
-class ChildOutput {
+/**
+ * What a child writes to its standard output or error, through a pipe: its `stdout` or `stderr`, a `Reader` whose reads
+ * wait as long as it takes; `readWithin` gives up after a timeout.
+ */
+class ChildOutput extends Reader<ProcessError> {
 	final child:Child;
 	final error:Bool;
 
@@ -17,13 +20,16 @@ class ChildOutput {
 		this.error = error;
 	}
 
+	function readRange(buffer:Bytes, offset:Int, length:Int):Result<Int, ProcessError>
+		return readWithin(-1, buffer, offset, length);
+
 	/**
 	 * Reads up to `length` bytes into `buffer` from `offset` (by default to its end), waiting up to `timeoutSeconds`
 	 * (negative: without limit; 0: not at all) for some to come: how many it read, which may be fewer than asked, and 0
 	 * once the child has closed the stream. `TimedOut` when none came in time.
 	 */
-	public function read(buffer:Bytes, offset:Int = 0, length:Int = -1,
-			timeoutSeconds:Float = -1):Result<Int, ProcessError> {
+	public function readWithin(timeoutSeconds:Float, buffer:Bytes, offset:Int = 0,
+			length:Int = -1):Result<Int, ProcessError> {
 		var count = length < 0 ? buffer.length - offset : length;
 		if (buffer == null || offset < 0 || count < 0 || offset > buffer.length - count)
 			throw new haxe.Exception("std.process.ChildOutput: the range is outside the buffer");
@@ -33,8 +39,7 @@ class ChildOutput {
 		while (true) {
 			var handle = child.live();
 			var got = error ? ChildNatives.readStderr(handle, buffer, offset, count) : ChildNatives.readStdout(handle,
-				buffer,
-				offset, count);
+				buffer, offset, count);
 			if (got > 0)
 				return Ok(got);
 			if (got == -1)
@@ -51,23 +56,6 @@ class ChildOutput {
 			if (ready == 0)
 				return Err(TimedOut);
 		}
-	}
-
-	/** Reads until the child closes the stream, and answers all of it. */
-	public function readAll():Result<Bytes, ProcessError> {
-		var chunk = Bytes.alloc(16384), all = new BytesBuffer();
-		while (true) {
-			var got = try read(chunk);
-			if (got == 0)
-				return Ok(all.getBytes());
-			all.addBytes(chunk, 0, got);
-		}
-	}
-
-	/** Reads until the child closes the stream, and answers it as UTF-8 text. */
-	public function readText():Result<String, ProcessError> {
-		var bytes = try readAll();
-		return Ok(bytes.toString());
 	}
 
 	static inline function now():Float

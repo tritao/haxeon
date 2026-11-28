@@ -1,6 +1,6 @@
 package std.fs;
 
-import haxe.io.Bytes;
+import std.bytes.Bytes;
 import std.fs.EntryKind;
 import std.fs.FileError;
 #if wasm

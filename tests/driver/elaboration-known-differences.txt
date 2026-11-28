@@ -8,6 +8,7 @@ rpc-service-pinned	lambda name: a lambda's name hashes its types (item 4)
 rpc-wire-method	lambda name: a lambda's name hashes its types (item 4)
 rpc-wire-named-method	lambda name: a lambda's name hashes its types (item 4)
 rpc-service-result	enum construction: a generic enum constructed in the body at its own parameter keeps that parameter's specialization, where the specialized body's callee takes the argument's (item 5)
+std-io	enum construction: a generic enum constructed in the body at its own parameter keeps that parameter's specialization, where the specialized body's callee takes the argument's (std.io.Reader builds Result<Int, E>; item 5)
 comprehension-block-filter	iteration argument: a specialization's concrete iteration argument meets the body's own element type
 lambda-count	iteration argument: a specialization's concrete iteration argument meets the body's own element type
 std-process	iteration argument: a specialization's concrete iteration argument meets the body's own element type (Lambda.exists in std.process.Command)

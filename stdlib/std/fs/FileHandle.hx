@@ -1,11 +1,13 @@
 package std.fs;
 
 import haxe.Int64;
-import haxe.io.Bytes;
+import std.bytes.Bytes;
 import std.fs.FileError;
 import std.fs.FileNatives;
 import std.fs.FileNatives.RootHandle;
 import std.fs.FileNatives.WriteMode;
+import std.io.Reader;
+import std.io.Writer;
 #if wasm
 import runtime.MemoryFileSystem as Memory;
 #end
@@ -130,6 +132,14 @@ class FileHandle implements Disposable {
 	public function writeText(text:String):Result<Void, FileError>
 		return write(Bytes.ofString(text));
 
+	/** The file as a `Reader`, which reads from the position as `read` does and moves it. */
+	public function reader():Reader<FileError>
+		return new FileHandleReader(this);
+
+	/** The file as a `Writer`, which writes at the position as `write` does and moves it. */
+	public function writer():Writer<FileError>
+		return new FileHandleWriter(this);
+
 	/** Moves the position `offset` bytes from `from`, answering where it is now. */
 	public function seek(offset:Int64, from:SeekFrom = Start):Result<Int64, FileError> {
 		#if wasm
@@ -237,4 +247,26 @@ class FileHandle implements Disposable {
 		return held;
 	}
 	#end
+}
+
+/** A file's reads as a `Reader` (`FileHandle.reader`). */
+private class FileHandleReader extends Reader<FileError> {
+	final handle:FileHandle;
+
+	public function new(handle:FileHandle)
+		this.handle = handle;
+
+	function readRange(buffer:Bytes, offset:Int, length:Int):Result<Int, FileError>
+		return handle.read(buffer, offset, length);
+}
+
+/** A file's writes as a `Writer` (`FileHandle.writer`). */
+private class FileHandleWriter extends Writer<FileError> {
+	final handle:FileHandle;
+
+	public function new(handle:FileHandle)
+		this.handle = handle;
+
+	function writeRange(buffer:Bytes, offset:Int, length:Int):Result<Void, FileError>
+		return handle.write(buffer, offset, length);
 }
