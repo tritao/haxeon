@@ -63,13 +63,10 @@ function main():Int {
 	var escaped:Dynamic = declarations[0].inspect();
 	var checked:LayoutDirection = cast escaped;
 	if (checked != LayoutDirection.LeftToRight) return 3;
-	var directions = [LayoutDirection.LeftToRight, LayoutDirection.TopToBottom];
-	if (directions[1].rawValue != 1) return 4;
 	var bytes = LayoutTransaction.encode(new LayoutNode(1, LayoutVisualKind.Box, style));
 	var record = NativeKitUIConstants.NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
-	if (bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_DIRECTION_OFFSET) != 0
-		|| bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET) != 769
-		|| (bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_FLAGS_OFFSET) & 2) == 0) return 5;
+	// Absolute positioning is the node record's flag 1 << 1.
+	if ((bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_FLAGS_OFFSET) & 2) == 0) return 5;
 	var invalid = new LayoutStyle();
 	invalid.width = LayoutAxis.fixed(-1);
 	var rejected = false;

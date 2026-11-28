@@ -8,6 +8,7 @@ import haxeon.ui.LayoutContent;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutPlacer;
 import haxeon.ui.LayoutScroll;
+import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
