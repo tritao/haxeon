@@ -4,7 +4,9 @@ import compiler.service.LanguageService;
 
 class ParserRecoveryFuzzMain {
 	static inline final CASES = 72;
-	static inline final MAX_CASE_MS = 500.0;
+	// A mutation may take this many times the analysis of the valid source, so the bound follows the machine it runs on: a
+	// recovery that runs away still fails, while a slow or busy runner does not.
+	static inline final MAX_CASE_FACTOR = 200.0;
 
 	static function main():Void {
 		var source =
@@ -12,6 +14,14 @@ class ParserRecoveryFuzzMain {
 			service = new LanguageService();
 		service.update("Main.hx", source);
 		service.analyze("Main");
+		var baselineMs = Math.POSITIVE_INFINITY;
+		for (round in 0...5) {
+			var started = Sys.time();
+			service.update("Main.hx", source + "\n// " + round);
+			service.analyze("Main");
+			baselineMs = Math.min(baselineMs, (Sys.time() - started) * 1000.0);
+		}
+		var maxCaseMs = MAX_CASE_FACTOR * baselineMs;
 		var fragments = [";", ")", "}", ",", ".", ":", "=", "(", "[", "?"], totalMs = 0.0, maxMs = 0.0;
 		for (caseIndex in 0...CASES) {
 			var position = (caseIndex * 37 + 11) % source.length,
@@ -34,8 +44,8 @@ class ParserRecoveryFuzzMain {
 			totalMs += elapsed;
 			if (elapsed > maxMs)
 				maxMs = elapsed;
-			if (elapsed > MAX_CASE_MS)
-				throw 'recovery mutation $caseIndex exceeded ${MAX_CASE_MS}ms: ${elapsed}ms';
+			if (elapsed > maxCaseMs)
+				throw 'recovery mutation $caseIndex took ${elapsed}ms, over ${MAX_CASE_FACTOR} times the valid source\'s ${baselineMs}ms';
 		}
 		service.update("Main.hx", source);
 		service.analyze("Main");
@@ -44,7 +54,7 @@ class ParserRecoveryFuzzMain {
 		for (symbol in service.documentSymbols("Main.hx"))
 			if (symbol.stale)
 				throw "restored valid source retained stale symbols";
-		Sys.println('PASS: $CASES deterministic recovery mutations averaged ${totalMs / CASES}ms, max ${maxMs}ms');
+		Sys.println('PASS: $CASES deterministic recovery mutations averaged ${totalMs / CASES}ms, max ${maxMs}ms (valid source ${baselineMs}ms)');
 	}
 
 	static function assertQueries(service:LanguageService, source:String, caseIndex:Int):Void {
