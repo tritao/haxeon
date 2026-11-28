@@ -734,3 +734,4 @@ std-fs-watch	42
 std-process	42
 std-thread	42
 abstract-classes	42
+typedef-statics	42

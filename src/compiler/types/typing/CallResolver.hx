@@ -1930,6 +1930,7 @@ class CallResolver {
 
 	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		name = session.staticReference(name);
 		// A static method of a class or abstract by its qualified name (`C.m()`, or `m()` inside C); module functions have no info.
 		var calledMethod = session.methodInfoOf(name);
 		if (calledMethod != null)

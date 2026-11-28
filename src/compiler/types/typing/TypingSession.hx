@@ -65,6 +65,28 @@ class TypingSession {
 
 	public var methodsByOwner:Map<String, Map<String, SemanticMethodInfo>> = [];
 
+	/**
+	 * `name` with a typedef owner replaced by the class or abstract it names (`Alias.make` is `Real.make`), as Haxe reaches
+	 * a type's statics through a typedef of it, which statics take no type arguments from; a function the program declares
+	 * under `name` itself, as a module function beside the typedef, keeps the name.
+	 */
+	public function staticReference(name:String):String {
+		var dot = name.lastIndexOf(".");
+		if (dot <= 0 || signatures.exists(name) || externals.exists(name))
+			return name;
+		var alias = declarations.aliases.get(name.substr(0, dot));
+		if (alias == null)
+			return name;
+		var target = switch alias.type {
+			case NamedType(type) | AppliedType(type, _): type;
+			case _: null;
+		};
+		// An enum's constructors take its type arguments, which a typedef can fix: `enumQualifierType` reaches them with those.
+		if (target == null || declarations.enums.exists(target))
+			return name;
+		return staticReference(target + name.substr(dot));
+	}
+
 	/** What the program knows of method `name`, or null: a read of its signature. */
 	public function methodInfoOf(name:String):Null<SemanticMethodInfo> {
 		var recorder = reads();

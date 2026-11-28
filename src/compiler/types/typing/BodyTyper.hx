@@ -1993,6 +1993,7 @@ class BodyTyper implements BodyTyping {
 			var generic = called == null ? null : called.generic;
 			generic == null || rawGeneric ? value : callResolver.instantiateLocalValue(generic, value, expectedType);
 		} else {
+			name = session.staticReference(name);
 			var owner = context.lexicalOwner;
 			if (owner != null && name.indexOf(".") < 0) {
 				var ownStatic = findStaticFieldNullable(owner, name);
