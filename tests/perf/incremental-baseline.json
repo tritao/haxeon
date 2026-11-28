@@ -2,18 +2,17 @@
 	"about": "scripts/perf-guard.py, incremental part: the compile server built in release mode from the checkout, compiling a copy of the frozen input (self-compile-baseline.json's input_revision) through cold, no-op, body-edit, signature-edit and late body-edit builds. Measured on Linux x86-64; scripts/perf-guard.py --update writes the metrics that improved beyond their tolerance, --raise=METRIC=REASON one that is higher on purpose with its reason (raise_reason), in the commit that moves it. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
 	"metrics": {
 		"cold_allocated_bytes": {
-			"value": 3455150368,
+			"value": 3304956496,
 			"tolerance": 0.02,
-			"why": "A cold build in a session that keeps its state: deterministic for a given source tree; the slack absorbs ordinary code growth.",
-			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
+			"why": "A cold build in a session that keeps its state: deterministic for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"first_noop_allocated_bytes": {
-			"value": 115001896,
+			"value": 101365352,
 			"tolerance": 0.02,
 			"why": "The first rebuild after the cold build, with nothing changed: deterministic. It should cost what the next no-op costs; while it does more, a fix shows here as an improvement."
 		},
 		"noop_allocated_bytes": {
-			"value": 70209816,
+			"value": 56575592,
 			"tolerance": 0.02,
 			"why": "A no-op rebuild of a warm session: deterministic; it reads and compares the sources and reuses the module."
 		},
@@ -28,7 +27,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"body_edit_allocated_bytes": {
-			"value": 219152584,
+			"value": 168683736,
 			"tolerance": 0.02,
 			"why": "A body-only edit of the entry module: deterministic for a given source tree."
 		},
@@ -48,10 +47,9 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"signature_edit_allocated_bytes": {
-			"value": 1070630008,
+			"value": 973960520,
 			"tolerance": 0.03,
-			"why": "An optional argument added to InternalError's constructor, which most modules call: deterministic; the slack absorbs code growth.",
-			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
+			"why": "An optional argument added to InternalError's constructor, which most modules call: deterministic; the slack absorbs code growth."
 		},
 		"signature_edit_retyped_functions": {
 			"value": 1665,
@@ -66,7 +64,7 @@
 			"raise_reason": "the frozen input moved from b3a22d6bf to 4df7d3229, whose stdlib declares intrinsics as bodyless externs (the old input's stub bodies are E1021): the larger compiler of that revision, measured on it; on the old input the compiler change was within tolerance of every metric"
 		},
 		"late_body_edit_allocated_bytes": {
-			"value": 232966456,
+			"value": 177539712,
 			"tolerance": 0.02,
 			"why": "The body edit again after the signature edit: the session holds the rewrites of the constructor's callers, which an edit elsewhere must reuse. Deterministic for a given source tree."
 		},
@@ -87,12 +85,12 @@
 			"why": "Growth of the live data over the last two body edits, after the session has settled: steady to a fraction of a megabyte between runs. Keeping each build's compile result, whose IR mostly shares the session's, adds about eight megabytes a build, so the slack is a few megabytes."
 		},
 		"noop_instructions": {
-			"value": 629054667,
+			"value": 530747616,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of a no-op rebuild of a warm session, measured as body_edit_instructions is (the median of three): the floor every build in the server pays, reading and comparing the sources and reusing the module."
 		},
 		"body_edit_instructions": {
-			"value": 1874921775,
+			"value": 1693468083,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of the body edit, from perf, in a session of its own without the census and invalidation reports, from a server settled after the build before: what an edit costs before the user can run it. The median of three edits; compared only where perf is installed and allowed."
 		},

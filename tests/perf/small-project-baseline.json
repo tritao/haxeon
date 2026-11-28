@@ -30,7 +30,7 @@
 			"raise_reason": "Measured on the baseline's own commit 295885ed1 it is +3.2% over its recorded value on this machine now, with every other metric there within 0.6%: the rise is in what the empty-store build hashes outside the tracked tree, not in a commit; main is +0.6% over 295885ed1."
 		},
 		"aot_build_instructions": {
-			"value": 1524875986,
+			"value": 1462119613,
 			"tolerance": 0.03,
 			"why": "Instructions of every process the build starts with haxeon-aot, from perf: startup, which dominates a small project's build, and the compile. Compared only where perf is installed and allowed."
 		},
