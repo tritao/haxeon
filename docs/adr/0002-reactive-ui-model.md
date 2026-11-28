@@ -232,7 +232,16 @@ values changes, and updates the existing nodes. This record makes that idea the 
 5. **Interaction state is signals; style rules are derived values.** Hovered, pressed, focused and disabled are per-node
    signals. Stylesheet rules compile to derived values over them, so a pointer move recomputes only the properties whose
    rules read hover, on the two nodes involved. This replaces `InteractionStateSnapshot` and `hoverRebuilds`.
-6. **Feedback edits to independent nodes are placed locally, without another solve; incremental layout is an option.**
+6. **Floating nodes are placed after the flow, from declared anchors; incremental layout is an option.** *Revised
+   2026-11-28, superseding the local placement below:* an absolutely positioned node may declare an anchor (a rectangle
+   or another node, a preferred side, whether it flips, the margin it clamps to), and the backend places it after the flow
+   solve from the anchor's bounds and its own size, so a popup, tooltip or selection popup needs no geometry callback and
+   no feedback pass. Layout runs in two phases: the flow solve, then each floating subtree against its parent's solved
+   bounds (a float depends on its parent's geometry, never the reverse, and Clay already keeps floats out of their
+   parent's sizing). An edit that moves a float reruns placement only; one that changes a float's size or content
+   re-solves that subtree only; a full solve happens when flow inputs change. Verify mode compares the two phases with one
+   full solve, byte for byte. The text below records the earlier, narrower decision.
+   *Earlier: feedback edits to independent nodes are placed locally, without another solve.*
    A geometry callback may still edit layout inputs after the solve. When every edited node is *independent* (absolutely
    positioned or floating, fixed size, and its parent's size does not depend on it), the layout backend places those nodes
    and their independent descendants directly: parent origin plus position, fixed size, inherited clip. Otherwise it falls
@@ -1598,11 +1607,12 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `current-*-all-census.json` and `current-*-pilot-census.json`, and the six-configuration
    `*-resource-lifetime-parity.log` reproductions.
 
-6. **Local placement for independent feedback edits.** First exclude absolute overlays from content bounds. Then add the
-   backend's independence check and local placement, with full-solve fallback, and verify-mode comparison against a full
-   solve. Go: selection runs one Clay solve per frame with byte-identical geometry, and no scenario takes the fallback
-   where it did not need a second solve before. A layout engine of our own needs its own record, and only when
-   measurements show layout as the main remaining cost.
+6. **Anchored placement, then two-phase layout.** First anchored placement in the backend, with Popup, Tooltip and
+   SelectionPopup ported from their geometry callbacks (the placement math then lives once). Then the two phases: floating
+   subtrees solved after the flow, placement-only reruns for moved floats and subtree re-solves for resized ones, compared
+   with a full solve in verify mode. Measure the extra Clay calls on the selection and dock scenarios first; a full solve is
+   about 0.14 ms. Go: selection and overlay placement run one flow solve per frame with byte-identical geometry. A layout
+   engine of our own needs its own record, and only when measurements show layout as the main remaining cost.
 7. **Retained rendering and layers.** Per-node display-list segments and layer properties; delete `willEditRetained` and
    `RetainedAnimation`.
 
@@ -1625,13 +1635,13 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    per-node content, paint, geometry and composite revisions and layers through `beginLayer`, but the compositor compiles the
    display list into a render plan every frame, so a layer has no retained properties yet.
 
-   Order: stage 6 first, as it removes the extra solves of the commonest edits (scrollbar geometry, overlay placement)
-   without new rendering machinery; then stage 7's layer properties, which remove the scroll and fade edits and with them
+   Order: stage 6 first (revised above: anchored placement, then two-phase layout), as it removes the commonest edits
+   (overlay placement) and makes the rest cheap (scrollbar geometry) without new rendering machinery; then stage 7's layer properties, which remove the scroll and fade edits and with them
    `willEditRetained` and `RetainedAnimation`. Text that a placement reflows (tooltip width, ellipsis) keeps a solve.
 
-   Open for stage 6: content bounds include every child (`clay_layout_backend.cpp`). The decision excludes "absolute
-   overlays", but the scrollbar's parts are absolute without `overlay`, and a scroll view of absolutely placed items (a
-   diagram) needs them counted. The exclusion should be a property the scrollbar sets, not every absolute node.
+   Content bounds need no exclusion: a scroll view takes its extent from its content node (`translatedContent`), and the
+   scrollbar's parts are that node's siblings, so they never count as overflow. A scroll view of absolutely placed items
+   (a diagram) keeps counting them.
 
 ### Signals-only interim allocation measurement — 2026-11-01
 
