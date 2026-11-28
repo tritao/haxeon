@@ -1,43 +1,12 @@
 package sys.io;
 
+#if wasm
+#error "sys.io.Process is not available on Wasm: a Wasm module cannot start processes"
+#end
 import haxe.io.Bytes;
 import haxe.io.BytesBuffer;
 import haxe.io.Eof;
 
-#if wasm
-/** Haxe's Process: a Wasm module cannot start processes. */
-class Process {
-	/** The child's standard output, to read. */
-	public var stdout(default, null):haxe.io.Input;
-
-	/** The child's standard error, to read. */
-	public var stderr(default, null):haxe.io.Input;
-
-	/** The child's standard input, to write; close it to let the child read its end. */
-	public var stdin(default, null):haxe.io.Output;
-
-	/**
-	 * Starts `cmd`. Without `args` the command line goes to the shell; with them `cmd` runs directly with exactly those
-	 * arguments (on Windows they are quoted into the command line, as Haxe does).
-	 */
-	public function new(cmd:String, ?args:Array<String>, ?detached:Bool)
-		throw "Processes are not available on Wasm";
-
-	/** The child's process id. */
-	public function getPid():Int
-		throw "Processes are not available on Wasm";
-
-	/** The exit code; with `block` false, null while the child still runs. */
-	public function exitCode(block:Bool = true):Null<Int>
-		throw "Processes are not available on Wasm";
-
-	/** Releases the pipes and the process handle; the child keeps running. */
-	public function close():Void {}
-
-	/** Ends the child at once (SIGKILL, or TerminateProcess on Windows), without letting it clean up. */
-	public function kill():Void {}
-}
-#else
 import std.process.Child;
 import std.process.ChildInput;
 import std.process.ChildOutput;
@@ -177,4 +146,3 @@ class Process {
 	public function kill():Void
 		child.kill();
 }
-#end

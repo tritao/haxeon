@@ -1,5 +1,8 @@
 package haxeon;
 
+#if wasm
+#error "haxeon.Script is not available on Wasm: it runs programs, which a Wasm module cannot start"
+#end
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.io.Output;

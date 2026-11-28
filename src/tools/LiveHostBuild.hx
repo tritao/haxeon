@@ -87,7 +87,8 @@ class LiveHostBuild {
 				try {
 					var file = new SourceFile(path, File.getContent(path)),
 						program =
-							new Parser(new Lexer(new SourceFile(path, ConditionalCompilation.process(file, []).text))
+							new Parser(new Lexer(new SourceFile(path,
+							ConditionalCompilation.process(file, [], false).text))
 							.tokenize()).parseProgram();
 					// A module's own functions are static functions of the class named like it.
 					for (method in program.functions)

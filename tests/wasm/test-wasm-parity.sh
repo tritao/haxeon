@@ -141,7 +141,7 @@ for target in wasm32 wasm-gc; do
 done
 
 # Every program in the manifest runs on both targets and must exit as it does on HL, except
-# those listed in wasm-parity-skips.tsv with the reason they cannot yet.
+# those listed in wasm-parity-skips.tsv with the reason they cannot (yet, or by design).
 # Compile failures are reported with the other results; skipped programs still compile so the
 # suite notices when one starts passing.
 mkdir -p "$parity_output_dir/wasm-parity-logs"
@@ -539,7 +539,7 @@ const modes = new Map(table("wasm-parity-skips.tsv").map(([name, mode]) => [name
 const cases = gcCases.map(name => ({name, expected: 42}))
 	.concat(table("expected-exits.tsv").map(([name, expected]) => ({name, expected: Number(expected)})));
 for (const [name, mode] of modes)
-  if (!["skip", "gc-linear-memory"].includes(mode))
+  if (!["skip", "native-only", "gc-linear-memory"].includes(mode))
     throw new Error(`Unknown Wasm parity mode ${mode} for ${name}`);
 for (const name of modes.keys())
   if (!cases.some(entry => entry.name === name))
@@ -582,7 +582,9 @@ async function run(name, target) {
     const log = path.join(outputDir, "wasm-parity-logs", `${target}-${name}.log`);
     const text = fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "";
     const reason = text.split("\n").find(line => /Uncaught exception|: E\d{4}:/.test(line)) ?? "";
-    return {failure: `did not compile: ${reason.replace(/^.*(Uncaught exception |E\d{4}: )/, "").slice(0, 120)}`};
+    return {failure: `did not compile: ${reason.replace(/^.*(Uncaught exception |E\d{4}: )/, "").slice(0, 120)}`,
+      // An #error saying the module is not available on Wasm, which a native-only program must stop at.
+      unavailable: /: E0002: .* is not available on Wasm/.test(reason)};
   }
   const module = new WebAssembly.Module(fs.readFileSync(file));
   const imports = WebAssembly.Module.imports(module);
@@ -626,6 +628,14 @@ async function run(name, target) {
       results[target] = result;
     }
     const passing = results.wasm32.failure === undefined && results["wasm-gc"].failure === undefined;
+    if (mode === "native-only") {
+      skipped++;
+      for (const target of ["wasm32", "wasm-gc"])
+        if (!results[target].unavailable)
+          failures.push(`${name} (${target}): native-only, but compiling it for Wasm did not stop at its module's #error`
+            + (results[target].failure === undefined ? "" : ` (${results[target].failure})`));
+      continue;
+    }
     if (mode === "skip") {
       skipped++;
       if (passing)

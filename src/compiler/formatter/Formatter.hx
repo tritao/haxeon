@@ -37,7 +37,7 @@ class Formatter {
 		var file = new SourceFile(path == null ? "<format>" : path, source);
 		var result:String;
 		try {
-			var conditional = ConditionalCompilation.process(file, []);
+			var conditional = ConditionalCompilation.process(file, [], false);
 			requireBalanced(new Lexer(file, conditional.text).tokenize());
 			var tokens = TypeArguments.splitAssignments(new FormatScanner(file).scan()),
 				comments = CommentAttachmentTools.attach(tokens),

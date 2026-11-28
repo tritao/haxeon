@@ -83,7 +83,5 @@ function main():Int {
 		client.poll();
 	}
 	var got = answers.join(",");
-	return got == "found Ada,unknown Bob,saved,full,length 5" ? 42 : {Sys.println(got);
-	1;
-	};
+	return got == "found Ada,unknown Bob,saved,full,length 5" ? 42 : 1;
 }

@@ -1,5 +1,8 @@
 package std.process;
 
+#if wasm
+#error "std.process is not available on Wasm: a Wasm module cannot start processes"
+#end
 /** How a child ended. */
 enum ExitStatus {
 	/** It exited with `code`: 0 for success, by convention. On Windows every child ends this way. */

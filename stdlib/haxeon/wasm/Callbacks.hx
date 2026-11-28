@@ -1,5 +1,8 @@
 package haxeon.wasm;
 
+#if !wasm
+#error "haxeon.wasm is the Wasm host's: only a Wasm module has it"
+#end
 import haxe.io.Bytes;
 import haxeon.wasm.HaxeonHost;
 

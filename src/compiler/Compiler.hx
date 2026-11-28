@@ -8,6 +8,7 @@ import compiler.ir.model.Ir.IrProgram;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
 import compiler.ir.model.Ir.IrType;
+import compiler.syntax.ConditionalCompilation;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.semantic.GenericSpecializationRegistry;
@@ -45,7 +46,6 @@ import compiler.modules.ModuleSourceLoader;
 import compiler.semantic.SemanticWorkspace;
 import compiler.ffi.FfiRegistry;
 import compiler.ffi.FfiRegistry.FfiConfiguration;
-import compiler.core.StdlibNames;
 
 /** Public alias for a host-native declaration accepted by the compiler. */
 typedef NativeFunction = NativeDefinition;
@@ -481,11 +481,9 @@ class Compiler {
 	 * the host modules it imports (`CompilerSession.hostInterfaces`).
 	 */
 	public function loadStandardLibrary():Array<String> {
-		var wasm = BackendTargets.isWasm(backendTarget),
-			names = [
-				for (name in sourceLoader.standardModuleNames())
-					if (wasm ? !StdlibNames.isNativeOnly(name) : !StdlibNames.isWasmOnly(name)) name
-			];
+		// A module that is not available for this target says so with an `#error` (std.process on Wasm, the Wasm host's
+		// modules elsewhere); the standard library for the target is the rest.
+		var names = sourceLoader.standardModuleNames(source -> !ConditionalCompilation.stops(source, defines));
 		for (name in names)
 			sourceLoader.load(name, modules);
 		return names;

@@ -17,9 +17,33 @@ private typedef ConditionalFrame = {
 	var sawElse:Bool;
 }
 
+/** An active `#error`: the source says it cannot be compiled with these defines. */
+class ErrorDirective extends CompileError {}
+
 /** Source-offset-preserving evaluation of Haxe conditional directives. */
 class ConditionalCompilation {
-	public static function process(file:SourceFile, defines:Map<String, String>):ConditionalSource {
+	/**
+	 * Whether `file` stops itself with an active `#error` under `defines`: a module that says it is not available there.
+	 * A malformed directive is no answer; it is reported when the module is parsed.
+	 */
+	public static function stops(file:SourceFile, defines:Map<String, String>):Bool {
+		try {
+			process(file, defines);
+			return false;
+		} catch (_:ErrorDirective) {
+			return true;
+		} catch (_:CompileError) {
+			return false;
+		}
+	}
+
+	/**
+	 * `file`'s text with its inactive branches and directives blanked, offsets preserved, and the defines it tested. An
+	 * active `#error` stops it when `errorDirectives` (a compile); a tool reading the text, as the formatter does, passes
+	 * false and reads on.
+	 */
+	public static function process(file:SourceFile, defines:Map<String, String>,
+			errorDirectives = true):ConditionalSource {
 		if (file.text.indexOf("#") < 0)
 			return {text: file.text, defines: []};
 		var source = file.bytes,
@@ -125,7 +149,7 @@ class ConditionalCompilation {
 			} else {
 				var lineEnd = findLineEnd(source, nameEnd);
 				directiveEnd = lineEnd;
-				if (isActive(frames)) {
+				if (errorDirectives && isActive(frames)) {
 					var message = StringTools.trim(file.slice(nameEnd, lineEnd));
 					if (message.length >= 2
 						&& (message.charAt(0) == "\""
@@ -133,7 +157,9 @@ class ConditionalCompilation {
 						|| message.charAt(0) == "'"
 						&& message.charAt(message.length - 1) == "'"))
 						message = message.substring(1, message.length - 1);
-					fail(file, scan, message == "" ? "#error" : message);
+					throw new ErrorDirective(new Diagnostic(DiagnosticCode.SYNTAX_ERROR,
+						message == "" ? "#error" : message,
+						file.span(scan, scan)));
 				}
 			}
 			output.add(mask(source, scan, directiveEnd));

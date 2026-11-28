@@ -173,12 +173,16 @@ class ModuleSourceLoader {
 		ancestors.pop();
 	}
 
-	/** The name of each module the standard library roots hold, sorted, whether or not this build loads it. */
-	public function standardModuleNames():Array<String> {
+	/**
+	 * The name of each module the standard library roots hold whose source is `available`, sorted, whether or not this
+	 * build loads it.
+	 */
+	public function standardModuleNames(available:SourceFile->Bool):Array<String> {
 		var seen:Map<String, ModuleState> = [], names:Array<String> = [], loader = copy();
 		for (root in loader.roots)
 			if (root.isStandardLibrary && root.packagePrefix == null)
-				loader.visitDirectory(root.path, "", null, _ -> true, seen, state -> names.push(state.name), []);
+				loader.visitDirectory(root.path, "", null, _ -> true, seen, state -> if (available(state.source))
+					names.push(state.name), []);
 		names.sort(Reflect.compare);
 		return names;
 	}

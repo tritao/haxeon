@@ -1,5 +1,8 @@
 package std.process;
 
+#if wasm
+#error "std.process is not available on Wasm: a Wasm module cannot start processes"
+#end
 /**
  * Why a `std.process` operation failed: what its `Result` holds as its `Err`. The cases name the failures a caller
  * handles apart; anything else the system reports is `Io`, with the system's own code and message.

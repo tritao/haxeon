@@ -195,18 +195,7 @@ class StdlibNames {
 	/** The module the compiler rewrites with each compile's code identities. */
 	public static inline final CODE_IDENTITY_TABLE = "haxeon.build.CodeIdentityTable";
 
-	/** The package of the modules a Wasm host calls into. */
-	public static inline final WASM_HOST_PACKAGE = "haxeon.wasm.";
-
 	public static inline final WASM_HOST_ERROR = "haxeon.wasm.HostError";
-
-	/** Whether the standard library's module `name` is a Wasm host's, which only a Wasm module has. */
-	public static function isWasmOnly(name:String):Bool
-		return StringTools.startsWith(name, WASM_HOST_PACKAGE);
-
-	/** Whether the standard library's module `name` starts processes, which a Wasm module cannot: importing it for Wasm is an error. */
-	public static function isNativeOnly(name:String):Bool
-		return StringTools.startsWith(name, "std.process.") || name == "haxeon.Script";
 
 	/**
 	 * The functions the compiler expands at each call. The standard library declares each as an `extern` without a body or

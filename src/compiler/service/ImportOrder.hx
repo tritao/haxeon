@@ -37,7 +37,7 @@ class ImportOrder {
 	 */
 	public static function tokens(path:String, source:String):Array<Token> {
 		var file = new SourceFile(path, source);
-		return new Lexer(new SourceFile(path, ConditionalCompilation.process(file, []).text)).tokenize();
+		return new Lexer(new SourceFile(path, ConditionalCompilation.process(file, [], false).text)).tokenize();
 	}
 
 	/** The runs of `source` that are out of order; `tokens` come from `tokens(path, source)`. */

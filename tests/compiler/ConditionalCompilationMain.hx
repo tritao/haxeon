@@ -41,13 +41,23 @@ class ConditionalCompilationMain {
 		expectError("#unknown value", "Unknown conditional directive #unknown");
 		expectError("#if enabled\n#error \"selected branch failed\"\n#end", "selected branch failed",
 			["enabled" => "1"]);
+		// A module that stops itself with #error is unavailable under those defines; a malformed directive is not that.
+		var guarded = new SourceFile("Guarded.hx",
+			"#if wasm\n#error \"not on Wasm\"\n#end\nfunction main():Int return 42;");
+		if (!ConditionalCompilation.stops(guarded, ["wasm" => "1"]) || ConditionalCompilation.stops(guarded, []))
+			throw "an active #error did not say the module stops itself";
+		if (ConditionalCompilation.stops(new SourceFile("Unknown.hx", "#unknown value"), []))
+			throw "a malformed directive was taken for an #error";
+		// A tool reading the text (the formatter) reads past an active #error.
+		if (ConditionalCompilation.process(guarded, ["wasm" => "1"], false).text.indexOf("return 42") < 0)
+			throw "an #error stopped a read that skips them";
 		// A script's interpreter line, at the first byte only, as Haxe accepts it.
 		var script = new SourceFile("Script.hx", "#!/usr/bin/env haxeon\nfunction main():Int return 42;\n");
 		new Parser(new Lexer(script, ConditionalCompilation.process(script, []).text).tokenize()).parseProgram();
 		expectError("// first\n#!/usr/bin/env haxeon\nfunction main():Int return 42;",
 			"Unknown conditional directive #");
 		expectError("  #!/usr/bin/env haxeon\nfunction main():Int return 42;", "Unknown conditional directive #");
-		Sys.println("PASS: inline conditional compilation, #error, version conditions and a leading #! line");
+		Sys.println("PASS: inline conditional compilation, #error and the modules it stops, version conditions and a leading #! line");
 	}
 
 	static function expectError(source:String, message:String, ?defines:Map<String, String>):Void {

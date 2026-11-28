@@ -1,6 +1,7 @@
 # Manifest programs the Wasm parity suite does not require yet (tests/wasm/test-wasm-parity.sh).
 # Every other program in expected-exits.tsv must exit as it does on HL on both Wasm targets.
 # mode: skip = known not to work on Wasm yet (the suite fails once it passes on both targets).
+# mode: native-only = not available on Wasm by design: it must fail to compile there, with its module's #error.
 # mode: gc-linear-memory = supported C-native scratch memory; execution is still required.
 # name	mode	reason
 messagepack-interop	skip	Reads its vectors from fixture files through sys.io.File and Sys.args
@@ -19,8 +20,8 @@ sha256-string-digests	gc-linear-memory	C crypto uses validated linear scratch me
 gc-dump-paths	skip	Wasm has no collector: hl.Gc census and heap dump write no file
 stdlib-io-sockets	skip	sys.net sockets are HashLink-only; Wasm has no socket host
 stdlib-stat	skip	FileSystem.stat and Timer.stamp need the Sys and file natives, which are not implemented on Wasm
-stdlib-process	skip	sys.io.Process starts host processes, which Wasm cannot
-std-process	skip	std.process starts host processes, which Wasm cannot; importing it for Wasm is an error
+stdlib-process	native-only	sys.io.Process starts host processes, which a Wasm module cannot
+std-process	native-only	std.process starts host processes, which a Wasm module cannot
 gc-stats	skip	Wasm has no collector: hl.Gc.stats reports zeros
 nested-call-stack	skip	haxe.CallStack natives are not implemented on Wasm
 package-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm
