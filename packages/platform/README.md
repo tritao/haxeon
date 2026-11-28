@@ -156,6 +156,25 @@ the key for subsequent handlers on that source. Attach UI input before registeri
 application shortcuts so focused widgets can consume keys first.
 `runtime.events.listen` still observes every event, including consumed keys.
 
+## HTTP
+
+`HttpClient.create(events)` makes a client that answers through the event pump; it is `Err(Unsupported(...))` where
+the platform has none, and `create(events, true)` admits plain HTTP, as for a local server. `client.send(request)`
+returns an `HttpExchange`: `response` settles when the status and headers arrive and `complete` when the request
+ends, each a `Future<Result<HttpResponse, NativeKitError>>` whose failure is usually a `Network(NetworkError)`. A
+request with `streaming = true` gives its body to `onData` in pieces as it arrives instead of whole in `complete`.
+`cancel()` stops the request, which settles its futures `Cancelled`; disposing the client cancels what it has in
+flight.
+
+```haxe
+var request = new HttpRequest(HttpMethod.Get, "https://example.com/status");
+client.send(request).complete.onComplete(function(outcome) switch outcome {
+	case Success(Ok(response)): trace(response.statusCode);
+	case Success(Err(error)): trace(error.describe());
+	case _:
+});
+```
+
 ## Source layout and naming
 
 Managed runtime and window-system types live directly in `haxeon.platform`:
@@ -165,7 +184,8 @@ error types. Other public types are grouped by responsibility:
 - `async`: `Future`, `Promise`, `Outcome`, `Requests`, and `Task`.
 - `event`: `PlatformEvent`, `EventPump`, and `EventSubscription`.
 - `dialog`: dialog options and filters.
-- `http`: copied `HttpResponse` and `HttpHeader` values.
+- `http`: `HttpClient`, `HttpRequest`, `HttpExchange`, and the copied `HttpResponse`, `HttpHeader` and
+  `HttpProgress` values.
 - `input`: `TextInput`, `TextInputState`, and `TextEdit`.
 - `resource`: `Resource`, `ResourceAsset`, `ResourceCache`, and `ResourceCacheLoad`.
 - `interop`: `TransportInterop`, `TransportSendQueue`, and `VulkanExtensions`.

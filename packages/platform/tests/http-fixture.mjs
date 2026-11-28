@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 
+let served = 0;
 const server = createServer((request, response) => {
 	const chunks = [];
 	request.on("data", (chunk) => chunks.push(chunk));
@@ -13,7 +14,8 @@ const server = createServer((request, response) => {
 			"Content-Length": Buffer.byteLength(valid ? "ticket-ok" : "invalid request"),
 			"Connection": "close"
 		});
-		response.end(valid ? "ticket-ok" : "invalid request", () => server.close());
+		// The test sends the request buffered, then streaming.
+		response.end(valid ? "ticket-ok" : "invalid request", () => { if (++served === 2) server.close(); });
 	});
 });
 

@@ -62,7 +62,7 @@ internal class NativeEvent {
 	public function decode():Delivery {
 		if (kind == EventKind.HttpHeaders || kind == EventKind.HttpComplete || kind == EventKind.HttpDataAvailable
 			|| kind == EventKind.HttpProgress)
-			return Happened(HttpEventDecoder.decode(this));
+			return HttpEventDecoder.decode(this);
 		return decodeSnapshot(snapshot());
 	}
 

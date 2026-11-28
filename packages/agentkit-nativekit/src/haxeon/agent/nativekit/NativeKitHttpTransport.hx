@@ -5,115 +5,50 @@ import haxeon.agent.Cancelable;
 import haxeon.agent.HttpStreamRequest;
 import haxeon.agent.HttpStreamSink;
 import haxeon.agent.HttpTransport;
+import haxeon.platform.NativeKitException;
 import haxeon.platform.event.EventPump;
-import haxeon.platform.event.EventSubscription;
-import haxeon.platform.event.PlatformEvent;
-import nativekit.ffi.NativeKitNet;
-import nativekit.ffi.NativeKitNetTypes.HttpClientOptions;
+import haxeon.platform.http.HttpClient;
+import haxeon.platform.http.HttpRequest;
 import nativekit.ffi.NativeKitNetTypes.HttpMethod;
-import nativekit.ffi.NativeKitNetTypes.HttpRequestMode;
-import nativekit.ffi.NativeKitNetTypes.HttpRequestOptions;
-import nativekit.ffi.NativeKitNetTypes.NativeHttpHeader;
-import nativekit.ffi.NativeKitNetTypes.OwnedHttpClientHandle;
-import nativekit.ffi.NativeKitTypes.Result;
 
 /**
-	Streaming POST over NativeKit's HTTP client. Progress is driven by the host's
+	Streaming POST over the platform's HTTP client. Progress is driven by the host's
 	shared NativeKit event pump: nothing here blocks, polls or owns a thread.
 **/
 class NativeKitHttpTransport implements HttpTransport {
-	static inline var ReadChunk = 16384;
+	final client:HttpClient;
 
-	final owner:OwnedHttpClientHandle;
-	final subscription:EventSubscription;
-	final active:Map<String, NativeKitStreamRequest> = [];
-	final scratch:Bytes = Bytes.alloc(ReadChunk);
-	var disposed = false;
-
-	/** `allowHttp` admits plain HTTP so tests and local gateways can run without TLS. */
+	/**
+		`allowHttp` admits plain HTTP so tests and local gateways can run without TLS. Throws a
+		`NativeKitException` where the platform has no HTTP client.
+	**/
 	public function new(events:EventPump, allowHttp:Bool = false) {
-		if (events == null)
-			throw "Streaming HTTP transport requires the shared NativeKit event pump";
-		var options = new HttpClientOptions();
-		if (allowHttp)
-			options.set_flags(1); // NK_HTTP_CLIENT_ALLOW_HTTP
-		var created = NativeKitNet.nk_http_client_create(options);
-		if (created.status != Result.Ok)
-			throw "Could not create the NativeKit HTTP client";
-		owner = created.out_client;
-		subscription = events.listen(onEvent);
+		client = switch HttpClient.create(events, allowHttp) {
+			case Ok(created): created;
+			case Err(error): throw new NativeKitException(error, "NativeKitHttpTransport.new", 0);
+		};
 	}
 
 	/** Posts `request` and streams the response to `sink`; the result cancels the request. */
 	public function postStream(request:HttpStreamRequest, sink:HttpStreamSink):Cancelable {
-		var handle = new NativeKitStreamRequest(this, sink);
-		if (disposed) {
-			handle.finishWith("The HTTP transport is closed");
-			return handle;
+		if (client.isDisposed()) {
+			sink.fail("The HTTP transport is closed");
+			return new NativeKitStreamRequest(null, sink);
 		}
+		var outgoing = new HttpRequest(HttpMethod.Post, request.url);
+		for (field in request.headers)
+			outgoing.header(field.name, field.value);
+		outgoing.body = Bytes.ofString(request.body);
+		outgoing.streaming = true;
 		try {
-			var headers:Array<NativeHttpHeader> = [];
-			for (field in request.headers) {
-				var header = new NativeHttpHeader();
-				header.set_name_bytes(Bytes.ofString(field.name));
-				header.set_value_bytes(Bytes.ofString(field.value));
-				headers.push(header);
-			}
-			var options = new HttpRequestOptions();
-			options.set_method(HttpMethod.Post);
-			options.set_url(request.url);
-			options.set_headers(headers);
-			options.set_body_bytes(Bytes.ofString(request.body));
-			options.set_mode(HttpRequestMode.Streaming);
-			options.set_timeout_ms(0);
-			var started = NativeKitNet.nk_http_request(owner.borrow(), options);
-			if (started.status != Result.Ok) {
-				handle.finishWith("Could not start the HTTP request (" + started.status + ")");
-				return handle;
-			}
-			handle.begin(started.out_request, started.out_stream);
-			active.set(Std.string(started.out_request), handle);
+			return new NativeKitStreamRequest(client.send(outgoing), sink);
 		} catch (error:Dynamic) {
-			handle.finishWith("Could not start the HTTP request: " + Std.string(error));
-		}
-		return handle;
-	}
-
-	@:allow(haxeon.agent.nativekit.NativeKitStreamRequest)
-	function forget(handle:NativeKitStreamRequest):Void {
-		for (key => value in active)
-			if (value == handle) {
-				active.remove(key);
-				break;
-			}
-	}
-
-	function onEvent(value:PlatformEvent):Void {
-		switch value {
-			case HttpHeaders(_, id, result, response):
-				var handle = active.get(Std.string(id));
-				if (handle != null)
-					handle.headers(result, response.statusCode);
-			case HttpDataAvailable(_, id):
-				var handle = active.get(Std.string(id));
-				if (handle != null)
-					handle.drain(scratch);
-			case HttpComplete(_, id, result, _):
-				var handle = active.get(Std.string(id));
-				if (handle != null)
-					handle.complete(result, scratch);
-			default:
+			sink.fail("Could not start the HTTP request: " + Std.string(error));
+			return new NativeKitStreamRequest(null, sink);
 		}
 	}
 
-	/** Cancels the open requests and stops listening for events. */
-	public function dispose():Void {
-		if (disposed)
-			return;
-		disposed = true;
-		subscription.dispose();
-		for (handle in [for (value in active) value])
-			handle.cancel();
-		owner.close();
-	}
+	/** Cancels the open requests and closes the client. */
+	public function dispose():Void
+		client.dispose();
 }

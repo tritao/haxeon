@@ -1,88 +1,81 @@
 import haxe.io.Bytes;
 import haxeon.platform.event.EventPump;
-import nativekit.ffi.NativeKitNet;
-import nativekit.ffi.NativeKitNetTypes.HttpClientOptions;
+import haxeon.platform.http.HttpClient;
+import haxeon.platform.http.HttpExchange;
+import haxeon.platform.http.HttpRequest;
 import nativekit.ffi.NativeKitNetTypes.HttpMethod;
-import nativekit.ffi.NativeKitNetTypes.HttpRequestMode;
-import nativekit.ffi.NativeKitNetTypes.HttpRequestOptions;
-import nativekit.ffi.NativeKitNetTypes.NativeHttpHeader;
-import nativekit.ffi.NativeKitTypes.Result;
 
-/** Loopback contract test for copied NativeKit HTTP events and byte-span headers. */
+/**
+ * Loopback contract test for HttpClient: a buffered request's response and its copied headers, and a streaming one's
+ * body through onData, each answered through the event pump.
+ */
 class NativeKitHttpEventTests {
 	public static function run(events:EventPump):Bool {
 		var fixturePort = Std.parseInt(Sys.getEnv("NATIVEKIT_HTTP_FIXTURE_PORT"));
 		if (fixturePort == null || fixturePort <= 0)
 			return true; // The test runner omits the optional loopback fixture when Node is unavailable.
-
-		var subscription:Null<haxeon.platform.event.EventSubscription> = null;
+		var client = switch HttpClient.create(events, true) {
+			case Ok(created): created;
+			case Err(Unsupported(_)): return true;
+			case Err(error):
+				trace("HTTP client creation failed: " + error.describe());
+				return false;
+		};
 		var result = false;
-		var requestId:haxe.Int64 = haxe.Int64.ofInt(0);
 		try {
-			var clientOptions = new HttpClientOptions();
-			clientOptions.set_flags(1); // NK_HTTP_CLIENT_ALLOW_HTTP, restricted to the local fixture.
-			var clientResult = NativeKitNet.nk_http_client_create(clientOptions);
-			if (clientResult.status == Result.ErrorUnsupported)
-				return true;
-			if (clientResult.status != Result.Ok)
-				throw 'HTTP client creation failed: ${clientResult.status}';
-			var clientOwner = clientResult.out_client;
-			var client = clientOwner.borrow();
-
-			var sawHeaders = false, sawComplete = false, copiedValuesOk = false;
-			var observed:Array<String> = [];
-			subscription = events.listen(function(value) switch value {
-				case HttpHeaders(_, id, status, response):
-					observed.push('headers id=$id result=$status code=${response.statusCode}');
-					if (Std.string(id) == Std.string(requestId))
-						sawHeaders = status == Result.Ok && response.statusCode == 201 && response.body.length == 0;
-				case HttpComplete(_, id, status, response):
-					observed.push('complete id=$id result=$status code=${response.statusCode}');
-					if (Std.string(id) != Std.string(requestId)) return;
+			var request = new HttpRequest(HttpMethod.Post, 'http://127.0.0.1:$fixturePort/relay/ticket')
+				.header("Content-Type", "application/json");
+			request.body = Bytes.ofString('{"ticket":true}');
+			request.timeoutSeconds = 3;
+			request.maxResponseBytes = 4096;
+			var buffered = client.send(request);
+			var headersOk = false, completeOk = false;
+			buffered.response.onComplete(function(outcome) switch outcome {
+				case Success(Ok(response)): headersOk = response.statusCode == 201 && response.body.length == 0;
+				case _:
+			});
+			buffered.complete.onComplete(function(outcome) switch outcome {
+				case Success(Ok(response)):
 					var token = "", state = "";
 					for (header in response.headers) {
 						if (header.name.toLowerCase() == "x-relay-token") token = header.value;
 						if (header.name.toLowerCase() == "x-relay-state") state = header.value;
 					}
-					observed.push('copied headers=$token/$state body="${response.body.toString()}"');
-					copiedValuesOk = status == Result.Ok && response.statusCode == 201 && token == "alpha"
-						&& state == "beta"
+					completeOk = response.statusCode == 201 && token == "alpha" && state == "beta"
 						&& response.body.toString() == "ticket-ok";
-					sawComplete = true;
-				case _:
+				case other:
+					trace("buffered HTTP request ended " + Std.string(other));
 			});
+			await(events, buffered);
 
-			var headers = new NativeHttpHeader();
-			headers.set_name_bytes(Bytes.ofString("Content-Type"));
-			headers.set_value_bytes(Bytes.ofString("application/json"));
-			var requestOptions = new HttpRequestOptions();
-			requestOptions.set_method(HttpMethod.Post);
-			requestOptions.set_url('http://127.0.0.1:$fixturePort/relay/ticket');
-			requestOptions.set_headers([headers]);
-			requestOptions.set_body_bytes(Bytes.ofString('{"ticket":true}'));
-			requestOptions.set_mode(HttpRequestMode.Buffered);
-			requestOptions.set_timeout_ms(3000);
-			requestOptions.set_max_response_size(4096);
-			var requestResult = NativeKitNet.nk_http_request(client, requestOptions);
-			if (requestResult.status != Result.Ok)
-				throw 'HTTP request start failed: ${requestResult.status}';
-			requestId = requestResult.out_request;
-
-			for (_ in 0...400) {
-				events.wait(0.01);
-				while (events.poll()) {}
-				if (sawComplete) break;
-			}
-			result = sawHeaders && sawComplete && copiedValuesOk;
+			request.streaming = true;
+			var streamed = client.send(request);
+			var body = new StringBuf();
+			streamed.onData(function(piece) body.add(piece.toString()));
+			var streamOk = false;
+			streamed.complete.onComplete(function(outcome) switch outcome {
+				case Success(Ok(response)): streamOk = response.statusCode == 201 && body.toString() == "ticket-ok";
+				case other:
+					trace("streaming HTTP request ended " + Std.string(other));
+			});
+			await(events, streamed);
+			result = headersOk && completeOk && streamOk;
 			if (!result)
-				trace('NativeKit HTTP event smoke incomplete for request $requestId: ' + observed.join("; "));
-			var closeResult = clientOwner.close();
-			result = result && closeResult == Result.Ok;
+				trace('HttpClient smoke incomplete: headers $headersOk, complete $completeOk, stream $streamOk '
+					+ 'body "${body.toString()}"');
 		} catch (error:Dynamic) {
-			trace("NativeKit HTTP event smoke failed: " + Std.string(error));
+			trace("HttpClient smoke failed: " + Std.string(error));
 			result = false;
 		}
-		if (subscription != null) subscription.dispose();
+		client.dispose();
 		return result;
 	}
+
+	static function await(events:EventPump, exchange:HttpExchange):Void
+		for (_ in 0...400) {
+			events.wait(0.01);
+			while (events.poll()) {}
+			if (exchange.isComplete())
+				return;
+		}
 }

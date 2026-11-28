@@ -1,7 +1,6 @@
 package haxeon.platform.event;
 
 import haxeon.platform.NativeKitError;
-import haxeon.platform.http.HttpResponse;
 import haxeon.platform.input.TextEdit as PlatformTextEdit;
 import haxeon.platform.resource.Resource;
 import nativekit.ffi.NativeKitTypes.EventKind;
@@ -53,18 +52,7 @@ enum PlatformEvent {
 	/** A notification could not be shown. */
 	NotificationFailed(request:haxe.Int64, message:String);
 
-	/** An HTTP response's status and headers arrived. */
-	HttpHeaders(source:Handle, request:haxe.Int64, result:NativeResult, response:HttpResponse);
 
-	/** More of an HTTP response's body can be read. */
-	HttpDataAvailable(source:Handle, request:haxe.Int64);
-
-	/** An HTTP request's progress. */
-	HttpProgressEvent(source:Handle, request:haxe.Int64, downloaded:haxe.Int64,
-		downloadTotal:haxe.Int64, uploaded:haxe.Int64, uploadTotal:haxe.Int64);
-
-	/** An HTTP request finished. */
-	HttpComplete(source:Handle, request:haxe.Int64, result:NativeResult, response:HttpResponse);
 
 	/** A native event with no typed case. */
 	Raw(kind:EventKind, source:Handle, request:haxe.Int64, result:NativeResult,

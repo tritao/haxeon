@@ -3,6 +3,7 @@ package haxeon.platform.event;
 import haxeon.platform.BindingError;
 import haxeon.platform.Runtime;
 import haxeon.platform.async.Requests;
+import haxeon.platform.http.HttpExchange;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Event;
 import nativekit.ffi.NativeKitTypes.Handle;
@@ -12,6 +13,8 @@ class EventPump {
 	/** The asynchronous requests answered through this pump. */
 	public final requests:Requests;
 	final listeners:Array<PlatformEvent->Void> = [];
+	/** The HTTP requests in flight, by request id. */
+	final exchanges:Map<String, HttpExchange> = [];
 	final sourceListeners:Map<Int, Array<SourceRoute>> = [];
 	var disposed:Bool = false;
 
@@ -37,8 +40,24 @@ class EventPump {
 			case Answered(completion):
 				requests.complete(completion);
 				true;
+			case Exchanged(signal):
+				var exchange = exchanges.get(switch signal {
+					case Headers(id, _) | DataAvailable(id) | Progress(id, _) | Complete(id, _): Std.string(id);
+				});
+				if (exchange != null)
+					exchange.receive(signal);
+				true;
 		};
 	}
+
+	@:allow(haxeon.platform.http.HttpClient)
+	internal function trackExchange(exchange:HttpExchange):Void
+		exchanges.set(exchange.key(), exchange);
+
+	@:allow(haxeon.platform.http.HttpClient)
+	internal function forgetExchange(exchange:HttpExchange):Void
+		if (exchanges.get(exchange.key()) == exchange)
+			exchanges.remove(exchange.key());
 
 	/** Pumps native events and waits until input or the timeout expires. */
 	public function wait(timeoutSeconds:Float):Void {
@@ -92,6 +111,9 @@ class EventPump {
 		disposed = true;
 		listeners.resize(0);
 		sourceListeners.clear();
+		for (exchange in [for (exchange in exchanges) exchange])
+			exchange.abandon();
+		exchanges.clear();
 		requests.runtimeShutdown();
 	}
 

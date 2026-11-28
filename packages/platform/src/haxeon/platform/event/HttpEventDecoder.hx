@@ -1,37 +1,42 @@
 package haxeon.platform.event;
 
 import haxeon.platform.BindingError;
+import haxeon.platform.NativeKitError;
 import haxeon.platform.NativeKitStatus;
 import haxeon.platform.http.HttpHeader;
+import haxeon.platform.http.HttpProgress;
 import haxeon.platform.http.HttpResponse;
+import haxeon.platform.http.HttpSignal;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitNet;
-import nativekit.ffi.NativeKitNetTypes.HttpProgress;
+import nativekit.ffi.NativeKitNetTypes.HttpProgress as NativeHttpProgress;
 import nativekit.ffi.NativeKitNetTypes.NativeHttpHeader;
 import nativekit.ffi.NativeKitNetTypes.NativeHttpResponse;
 import nativekit.ffi.NativeKitTypes.EventKind;
-import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 
 /** Copies NativeKit HTTP event views into managed values before event release. */
 internal class HttpEventDecoder {
-	public static function decode(event:NativeEvent):Null<PlatformEvent> {
+	public static function decode(event:NativeEvent):Delivery {
 		return switch event.kind {
-			case EventKind.HttpHeaders:
-				HttpHeaders(event.source, event.request, event.result, response(event));
-			case EventKind.HttpComplete:
-				HttpComplete(event.source, event.request, event.result, response(event));
-			case EventKind.HttpDataAvailable:
-				HttpDataAvailable(event.source, event.request);
+			case EventKind.HttpHeaders: Exchanged(Headers(event.request, outcome(event)));
+			case EventKind.HttpComplete: Exchanged(Complete(event.request, outcome(event)));
+			case EventKind.HttpDataAvailable: Exchanged(DataAvailable(event.request));
 			case EventKind.HttpProgress:
 				var decoded = NativeKitNet.nk_http_event_progress(event.nativeEvent());
 				check(decoded.status, "nk_http_event_progress");
-				var progress:HttpProgress = decoded.out_progress;
-				HttpProgressEvent(event.source, event.request, progress.get_downloaded(),
-					progress.get_download_total(), progress.get_uploaded(), progress.get_upload_total());
+				var progress:NativeHttpProgress = decoded.out_progress;
+				Exchanged(Progress(event.request, new HttpProgress(progress.get_downloaded(),
+					progress.get_download_total(), progress.get_uploaded(), progress.get_upload_total())));
 			case _:
-				null;
+				throw BindingError.invalidData("HttpEventDecoder.decode", "Not an HTTP event");
 		};
 	}
+
+	/** The response an event carries, or why its request failed. */
+	static function outcome(event:NativeEvent):Result<HttpResponse, NativeKitError>
+		return event.result == NativeResult.Ok
+			? Ok(response(event)) : Err(NativeKitStatus.reported(event.result, null));
 
 	static function response(event:NativeEvent):HttpResponse {
 		var decoded = NativeKitNet.nk_http_event_response(event.nativeEvent());
@@ -55,7 +60,7 @@ internal class HttpEventDecoder {
 			view.get_content_length(), headers, view.get_body_bytes());
 	}
 
-	static function check(result:Result, operation:String):Void
-		if (result != Result.Ok)
+	static function check(result:NativeResult, operation:String):Void
+		if (result != NativeResult.Ok)
 			throw NativeKitStatus.failure(result, operation, NativeKit.nk_last_error());
 }
