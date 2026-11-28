@@ -940,6 +940,27 @@ static bool realtime_fs_fail( int error ) {
 	return false;
 }
 
+#if defined(__APPLE__)
+/* Whether a symbolic link is on `path` beneath `directory`, its last part included; no link is followed. */
+static bool realtime_fs_link_on_path( int directory, const char *path ) {
+	size_t length = strlen(path);
+	char *prefix = (char *)malloc(length + 1);
+	if( prefix == NULL ) return false;
+	memcpy(prefix,path,length + 1);
+	bool found = false;
+	for( size_t at = 1; at <= length && !found; at++ ) {
+		if( prefix[at] != '/' && prefix[at] != 0 ) continue;
+		char kept = prefix[at];
+		prefix[at] = 0;
+		struct stat info;
+		found = fstatat(directory,prefix,&info,AT_SYMLINK_NOFOLLOW) == 0 && S_ISLNK(info.st_mode);
+		prefix[at] = kept;
+	}
+	free(prefix);
+	return found;
+}
+#endif
+
 /* A failure resolving `path` beneath the directory `directory`: the kernel's refusal to leave it is EscapesRoot, its lack
    of the resolution Unsupported. macOS refuses with EACCES, which a permission also answers: the refusal is an escape when
    a symbolic link is on the path, since one that stayed beneath would have been followed. */
@@ -950,11 +971,7 @@ static bool realtime_fs_fail_beneath( int error, int directory, const char *path
 	if( error == ENOSYS || error == E2BIG ) return realtime_fs_refuse(REALTIME_FS_UNSUPPORTED);
 #elif defined(__APPLE__)
 	if( error == ENOTCAPABLE ) return realtime_fs_refuse(REALTIME_FS_ESCAPES_ROOT);
-#ifdef AT_SYMLINK_NOFOLLOW_ANY
-	struct stat info;
-	if( error == EACCES && fstatat(directory,path,&info,AT_SYMLINK_NOFOLLOW_ANY) < 0 && errno == ELOOP )
-		return realtime_fs_refuse(REALTIME_FS_ESCAPES_ROOT);
-#endif
+	if( error == EACCES && realtime_fs_link_on_path(directory,path) ) return realtime_fs_refuse(REALTIME_FS_ESCAPES_ROOT);
 #else
 	(void)directory; (void)path;
 #endif
