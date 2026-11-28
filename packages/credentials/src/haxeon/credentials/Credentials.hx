@@ -27,6 +27,20 @@ class Credentials {
 		return loaded.secret;
 	}
 
+	/**
+	 * `get`, but the OS never shows the user a prompt: an item it would ask for
+	 * (on macOS, a keychain item whose access list does not name this program, or
+	 * a locked keychain) raises `NativeKitError` with PERMISSION_DENIED instead.
+	 * Unsupported (an error) on Linux, whose Secret Service cannot be told not to ask.
+	 */
+	public static function getWithoutAsking(service:String, account:String):Null<Bytes> {
+		var loaded = NativeKitCredentials.nk_credentials_get_without_ui(service, account);
+		if (loaded.status == Result.ErrorNotFound)
+			return null;
+		check(loaded.status, "credentials.getWithoutAsking");
+		return loaded.secret;
+	}
+
 	/** Delete a secret. Missing items raise `NativeKitError` with NOT_FOUND. */
 	public static function delete(service:String, account:String):Void
 		check(NativeKitCredentials.nk_credentials_delete(service, account), "credentials.delete");
