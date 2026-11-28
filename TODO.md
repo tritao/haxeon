@@ -321,6 +321,16 @@ The Haxe code Haxeon rejects or runs differently is listed in
   fields instead of its name (`Point`): `TFunction` carries no argument names
   and a typedef resolves to its structure. Needs a decision on carrying
   display names in `CompilerType`.
+- **A callback declaring `Void` does not fix a type parameter.** Given
+  `function keep<T>(run:Void->T):T`, `keep(function() { n++; })` types, but
+  `keep(function():Void { n++; })` fails with E1003 ("Cannot infer the type
+  parameter "T" of a callback's result where it is passed to "keep""); Haxe
+  infers `T = Void` from the declared result. The parameter is filled from
+  the callback's result through the variable `CallResolver.openResult` makes,
+  and a declared return type apparently leaves that variable unfilled. Met in
+  `packages/ui/tests/haxeon/FrameworkSmoke.hx`, which passes such a callback
+  to `ReactiveRuntime.withTracking<T>` through a local typed `Void->Void`
+  instead.
 - **Function type syntax.** The parser rejects Haxe's `?Int->Int` (an
   optional argument in the old syntax) and a parenthesized result
   (`Int->(Int->Int)`).
