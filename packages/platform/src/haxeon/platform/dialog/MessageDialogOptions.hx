@@ -18,6 +18,12 @@ class MessageDialogOptions {
 	/** Which buttons it offers. */
 	public var buttons:MessageButtons = cast 0;
 
+	/** The affirmative (Yes) button's label, or null for the platform's. */
+	public var yesLabel:Null<String> = null;
+
+	/** A checkbox's label, such as "Don't ask again", or null for none; the answer says whether it was ticked. */
+	public var checkboxLabel:Null<String> = null;
+
 	/** A dialog saying `message`. */
 	public function new(message:String) {
 		this.message = message;
@@ -31,6 +37,8 @@ class MessageDialogOptions {
 		value.title = title;
 		value.kind = kind;
 		value.buttons = buttons;
+		value.yes_label = yesLabel;
+		value.checkbox_label = checkboxLabel;
 		return value;
 	}
 }

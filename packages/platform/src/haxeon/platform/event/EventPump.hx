@@ -1,6 +1,7 @@
 package haxeon.platform.event;
 
 import haxeon.platform.BindingError;
+import haxeon.platform.Notification;
 import haxeon.platform.Runtime;
 import haxeon.platform.async.Requests;
 import haxeon.platform.http.HttpExchange;
@@ -18,6 +19,8 @@ class EventPump {
 	final postedGuard = new sys.thread.Mutex();
 	/** The HTTP requests in flight, by request id. */
 	final exchanges:Map<String, HttpExchange> = [];
+	/** The notifications showing, by request id. */
+	final notifications:Map<String, Notification> = [];
 	final sourceListeners:Map<Int, Array<SourceRoute>> = [];
 	var disposed:Bool = false;
 
@@ -52,8 +55,24 @@ class EventPump {
 				if (exchange != null)
 					exchange.receive(signal);
 				true;
+			case Notified(signal):
+				var notification = notifications.get(switch signal {
+					case Delivered(id) | Activated(id, _) | Dismissed(id) | Failed(id, _): Std.string(id);
+				});
+				if (notification != null)
+					notification.receive(signal);
+				true;
 		};
 	}
+
+	@:allow(haxeon.platform.Notification)
+	internal function trackNotification(notification:Notification):Void
+		notifications.set(notification.key(), notification);
+
+	@:allow(haxeon.platform.Notification)
+	internal function forgetNotification(notification:Notification):Void
+		if (notifications.get(notification.key()) == notification)
+			notifications.remove(notification.key());
 
 	/**
 	 * From any thread: runs `action` on the thread that polls, at its next poll, waking a `wait` in progress. A file
@@ -140,6 +159,9 @@ class EventPump {
 		for (exchange in [for (exchange in exchanges) exchange])
 			exchange.abandon();
 		exchanges.clear();
+		for (notification in [for (notification in notifications) notification])
+			notification.abandon();
+		notifications.clear();
 		requests.runtimeShutdown();
 	}
 

@@ -3,6 +3,7 @@ package haxeon.platform.event;
 import haxeon.platform.NativeKitError;
 import haxeon.platform.NativeKitStatus;
 import haxeon.platform.async.Completion;
+import haxeon.platform.dialog.MessageAnswer;
 import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.MessageResult;
 import nativekit.ffi.NativeKitTypes.NativeKitTypesEnumDecoders;
@@ -21,9 +22,11 @@ internal class ServiceEventDecoder {
 				Answered(DialogMessage(c.request, Err(failure(c, null))));
 			else {
 				EventBytes.requireSize(c.data, c.data.length == 4 ? 4 : 8);
-				var button = NativeKitTypesEnumDecoders.decodeMessageResult(EventBytes.readU32(c.data, 0));
+				var button = NativeKitTypesEnumDecoders.decodeMessageResult(EventBytes.readU32(c.data, 0)),
+					checked = c.data.length >= 8 && EventBytes.readU32(c.data, 4) != 0;
 				// No button is a dialog the user dismissed.
-				Answered(DialogMessage(c.request, button == MessageResult.None ? Err(Cancelled) : Ok(button)));
+				Answered(DialogMessage(c.request,
+					button == MessageResult.None ? Err(Cancelled) : Ok(new MessageAnswer(button, checked))));
 			}
 		case EventKind.WebviewNavigated: Happened(WebViewNavigated(c.source, c.data.toString()));
 		case EventKind.WebviewMessage: Happened(WebViewMessage(c.source, c.data.toString()));
@@ -36,8 +39,11 @@ internal class ServiceEventDecoder {
 			NativeKitTypesEnumDecoders.decodeNavigationError(c.flags), c.data.toString()));
 		case EventKind.WebviewNavigationRequest: Happened(WebViewNavigationRequest(c.source, c.request,
 			c.data.toString()));
-		case EventKind.NotificationActivated: Happened(NotificationActivated(c.request, c.data.toString()));
-		case EventKind.NotificationFailed: Happened(NotificationFailed(c.request, c.data.toString()));
+		case EventKind.NotificationDelivered: Notified(Delivered(c.request));
+		case EventKind.NotificationActivated: Notified(Activated(c.request, c.data.toString()));
+		case EventKind.NotificationDismissed: Notified(Dismissed(c.request));
+		// A failure's payload is the platform's message.
+		case EventKind.NotificationFailed: Notified(Failed(c.request, failure(c, c.data.toString())));
 		case EventKind.TaskProgress: Answered(TaskProgress(c.source, c.data));
 		case EventKind.TaskComplete: Answered(TaskComplete(c.source, c.data));
 		case EventKind.TaskFailed: Answered(TaskFailed(c.source, failure(c, null), c.data));

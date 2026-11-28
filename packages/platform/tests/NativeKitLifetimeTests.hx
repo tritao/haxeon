@@ -189,6 +189,11 @@ class NativeKitLifetimeTests {
 		dialog.filters = [new FileDialogFilter("Images", "*.png;*.jpg")];
 		if (dialog.nativeValue().get_struct_size() != NativeFileDialogOptions.byteSize()) return false;
 		if (new MessageDialogOptions("hello").nativeValue().get_message() != "hello") return false;
+		var asking = new MessageDialogOptions("Delete it?");
+		asking.checkboxLabel = "Don't ask again";
+		asking.yesLabel = "Delete";
+		var asked = asking.nativeValue();
+		if (asked.get_checkbox_label() != "Don't ask again" || asked.get_yes_label() != "Delete") return false;
 
 		// Retain a tracked future until runtime shutdown; it must settle and detach.
 		var pending = requests.trackTask(task, function(bytes) return bytes.length);

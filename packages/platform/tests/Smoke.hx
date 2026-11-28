@@ -153,13 +153,13 @@ class Smoke {
 		share.set_resources([resource("file:///tmp/nativekit.txt", "text/plain", "nativekit.txt")]);
 		if (share.get_resource_count() != 1 || share.get_flags() != 0)
 			return 13;
-		var notification = new NotificationOptions();
-		notification.set_title("NativeKit smoke");
-		notification.set_body(null);
-		notification.set_icon(null);
-		notification.set_timeout_ms(0);
-		notification.set_flags(NotificationFlags.Silent);
-		if (notification.get_flags() != NotificationFlags.Silent)
+		var notification = new haxeon.platform.NotificationOptions("NativeKit smoke");
+		notification.silent = true;
+		notification.timeoutSeconds = 1.5;
+		var nativeNotification = notification.nativeValue();
+		if (nativeNotification.get_flags() != NotificationFlags.Silent
+			|| nativeNotification.get_title() != "NativeKit smoke"
+			|| nativeNotification.get_body() != null || nativeNotification.get_timeout_ms() != 1500)
 			return 18;
 		if (windowOptions.get_title() != "NativeKit smoke")
 			return 9;

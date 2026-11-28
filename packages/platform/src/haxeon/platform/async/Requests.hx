@@ -9,6 +9,7 @@ import haxeon.platform.WebView;
 import haxeon.platform.Window;
 import haxeon.platform.async.Task;
 import haxeon.platform.dialog.FileDialogOptions;
+import haxeon.platform.dialog.MessageAnswer;
 import haxeon.platform.dialog.MessageDialogOptions;
 import haxeon.platform.async.Completion;
 import haxeon.platform.event.Delivery;
@@ -106,16 +107,16 @@ class Requests {
 		});
 	}
 
-	/** Shows a message dialog and resolves with the button chosen. */
+	/** Shows a message dialog and resolves with the button chosen, and its checkbox's state. */
 	public function messageDialog(parent:Window,
-			options:MessageDialogOptions):Future<Result<MessageResult, NativeKitError>> {
+			options:MessageDialogOptions):Future<Result<MessageAnswer, NativeKitError>> {
 		ensureLive();
 		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.messageDialog",
 			"Parent and options cannot be null");
 		var request = NativeKit.nk_dialog_message_checked(new Handle(parent.nativeHandle().rawValue),
 			options.nativeValue());
 		return registerRequest(request, function(value, cancellationRequested) switch value {
-			case Answered(DialogMessage(_, button)): cancellationRequested ? Outcome.Cancelled : settled(button);
+			case Answered(DialogMessage(_, answer)): cancellationRequested ? Outcome.Cancelled : settled(answer);
 			case _: wrongEvent("message dialog");
 		}, function() NativeKit.nk_dialog_cancel_checked(request));
 	}
@@ -266,8 +267,6 @@ class Requests {
 	static function eventKey(value:PlatformEvent):Null<String> {
 		var key:Null<String> = switch value {
 			case WebViewNavigationRequest(_, id, _): Std.string(id);
-			case NotificationActivated(id, _): Std.string(id);
-			case NotificationFailed(id, _): Std.string(id);
 			case ResourceAssetReady(_, id): Std.string(id);
 			case ResourceAssetLoadFailed(_, id, _): Std.string(id);
 			// An answer with no typed case.

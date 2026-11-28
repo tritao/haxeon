@@ -1,3 +1,4 @@
+import haxeon.platform.NotificationSignal;
 import haxeon.platform.async.Completion;
 import haxeon.platform.event.EventBytes;
 import haxeon.platform.event.EventSnapshot;
@@ -62,7 +63,7 @@ class NativeKitEventDecoderTests {
 		var messageContext = new EventSnapshot(EventKind.DialogMessageComplete, handle(0), zero, Result.Ok, 4, 0,
 			messagePayload);
 		var messageOk = switch NativeEvent.decodeSnapshot(messageContext) {
-			case Answered(DialogMessage(_, Ok(button))): button == MessageResult.Yes;
+			case Answered(DialogMessage(_, Ok(answer))): answer.button == MessageResult.Yes && !answer.checkboxChecked;
 			case _: false;
 		};
 		var checkedPayload = haxe.io.Bytes.alloc(8);
@@ -71,7 +72,7 @@ class NativeKitEventDecoderTests {
 		var checkedContext = new EventSnapshot(EventKind.DialogMessageComplete, handle(0), zero, Result.Ok, 4, 0,
 			checkedPayload);
 		messageOk = messageOk && switch NativeEvent.decodeSnapshot(checkedContext) {
-			case Answered(DialogMessage(_, Ok(button))): button == MessageResult.Yes;
+			case Answered(DialogMessage(_, Ok(answer))): answer.button == MessageResult.Yes && answer.checkboxChecked;
 			case _: false;
 		};
 		// No button is a dialog the user dismissed.
@@ -214,6 +215,30 @@ class NativeKitEventDecoderTests {
 		putU32(taskPayload, 0, 0x1234);
 		var taskContext = new EventSnapshot(EventKind.TaskComplete, handle(21), zero, Result.Ok,
 			0, 1, taskPayload);
+		// A notification's events go to it alone, by request id: an activation with its action, a failure with its message.
+		var noted = haxe.Int64.ofInt(31);
+		var notificationsOk = switch [
+			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.NotificationDelivered, handle(0), noted, Result.Ok,
+				0, 0,
+				empty)),
+			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.NotificationActivated, handle(0), noted, Result.Ok,
+				0, 0,
+				haxe.io.Bytes.ofString("reply"))),
+			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.NotificationDismissed, handle(0), noted, Result.Ok,
+				0, 0,
+				empty)),
+			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.NotificationFailed, handle(0), noted,
+				Result.ErrorUnknown,
+				0, 0, haxe.io.Bytes.ofString("no server")))
+		] {
+			case [
+				Notified(Delivered(_)),
+				Notified(Activated(_, "reply")),
+				Notified(Dismissed(_)),
+				Notified(Failed(_, Failed(_, "no server")))
+			]: true;
+			case _: false;
+		};
 		var taskOk = switch NativeEvent.decodeSnapshot(taskContext) {
 			case Answered(TaskComplete(source, data)): source.rawValue == 21 && data == taskPayload;
 			case _: false;
@@ -297,7 +322,7 @@ class NativeKitEventDecoderTests {
 		if (!resourceCacheEventsOk) throw "resource cache event decoding failed";
 		return decodedResourceIsReusable() && unknownRejected && rawOk && nonMatch && editOk && extraButtonsOk
 			&& invalidButtonRejected && typedKeyOk && typedHatOk && typedNavigationOk && accessibilityOk
-			&& newerAccessibilityOk && taskOk
+			&& newerAccessibilityOk && taskOk && notificationsOk
 			&& audioOk
 			&& audioReadyOk && audioFailedOk
 			&& audioClipReadyOk && audioClipFailedOk

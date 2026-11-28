@@ -46,12 +46,6 @@ enum PlatformEvent {
 	/** A web view's page wants to load `url`; the host allows or blocks it. */
 	WebViewNavigationRequest(source:Handle, request:haxe.Int64, url:String);
 
-	/** The user activated a notification, or one of its actions. */
-	NotificationActivated(request:haxe.Int64, action:String);
-
-	/** A notification could not be shown. */
-	NotificationFailed(request:haxe.Int64, message:String);
-
 
 
 	/** A native event with no typed case. */

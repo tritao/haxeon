@@ -49,8 +49,8 @@ var window = runtime.createWindow(options);
 var dialog = new MessageDialogOptions("Continue?");
 runtime.events.requests.messageDialog(window, dialog).onComplete(function(outcome) {
     switch outcome {
-        case Success(Ok(button)): trace(button);
-        case Success(Err(error)): trace(error.message);
+        case Success(Ok(answer)): trace(answer.button);
+        case Success(Err(error)): trace(error.describe());
         case Cancelled: trace("Cancelled");
         case Stopped: trace("Observation stopped");
     }
@@ -155,6 +155,17 @@ Key handlers run in registration order. A handler that returns `true` consumes
 the key for subsequent handlers on that source. Attach UI input before registering
 application shortcuts so focused widgets can consume keys first.
 `runtime.events.listen` still observes every event, including consumed keys.
+
+## Notifications
+
+`Notification.show(runtime.events, options)` shows a desktop notification of `NotificationOptions` (a title, and
+optionally a body, an icon, a timeout and `silent`); it is `Err(Unsupported(...))` where the platform has none. Its
+`shown` future settles once the platform showed it, or with why not. `onActivated(action)` reports the user
+activating it, with the action they chose, `onDismissed` its dismissal, and `close()` removes it; activation and
+dismissal end it.
+
+A message dialog can carry a checkbox (`MessageDialogOptions.checkboxLabel`) and its own label for the affirmative
+button (`yesLabel`); `messageDialog` answers a `MessageAnswer` with the button and whether the box was ticked.
 
 ## HTTP
 

@@ -3541,7 +3541,7 @@ interface NativeKit @target("portable") @library("nativekit") {
 	 */
 	extern fn nk_notification_show(
 		options: ptr<const<nk_notification_options>>,
-		out_request: ptr<nk_request_id>
+		out_request: ptr<nk_request_id> @out
 	) -> nk_result;
 	/**
 	 * On NK_OK, returns the current action state of one pointer button.
