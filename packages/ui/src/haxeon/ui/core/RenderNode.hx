@@ -343,6 +343,7 @@ class RenderNode {
 		prior.states = states;
 		if (!shareLayout) {
 			prior.layout.text = layout.text;
+			prior.layout.truncation = layout.truncation;
 			prior.layout.textColor = layout.textColor;
 			prior.layout.measureVersion = layout.measureVersion;
 			prior.layout.intrinsicContent = layout.intrinsicContent;
@@ -755,6 +756,9 @@ class RenderNode {
 		paintRevision = previous.paintRevision;
 		geometryRevision = previous.geometryRevision;
 		compositeRevision = previous.compositeRevision;
+		// The cut layout chose for the same text stays until layout chooses again; a frame may reuse its layout.
+		if (layout.text == previous.layout.text && layout.truncation == previous.layout.truncation)
+			@:privateAccess layout.shownText = previous.layout.shownText;
 		invalidationFlags = UiDirtyFlag.None;
 		var contentChanged = false;
 		var geometryChanged = false;
@@ -779,6 +783,7 @@ class RenderNode {
 		// Text and external intrinsic content are not represented by computed
 		// style, so classify them explicitly as both content and geometry.
 		if (layout.visualKind != previous.layout.visualKind || layout.text != previous.layout.text
+			|| layout.truncation != previous.layout.truncation
 			|| layout.measureVersion
 			!= previous.layout.measureVersion || layout.intrinsicContent != previous.layout.intrinsicContent) {
 			contentChanged = true;

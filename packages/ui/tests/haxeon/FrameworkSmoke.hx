@@ -2866,8 +2866,8 @@ class FrameworkSmoke {
 			|| boundedMenuBounds.x < 7.9 || boundedMenuBounds.x + boundedMenuBounds.width > 792.1) return 1021;
 		var hasEllipsis = false, hasFullActionName = false;
 		boundedMenuRoot.walk(function(node) {
-			if (node.layout.text != null && node.layout.text != longMenuLabel && StringTools.endsWith(node.layout.text,
-				"…")) hasEllipsis = true;
+			var shown = node.layout.shownText;
+			if (shown != null && shown != longMenuLabel && StringTools.endsWith(shown, "…")) hasEllipsis = true;
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem
 				&& node.semantics.label == longMenuLabel) hasFullActionName = true;
 		});

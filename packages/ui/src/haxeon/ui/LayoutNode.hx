@@ -16,6 +16,12 @@ class LayoutNode {
 	/** The text a text node shows. */
 	public var text:String;
 
+	/** How a text node's text is cut when it is wider than the width layout gives it: not, at its end, or in its middle. */
+	public var truncation:TextTruncation;
+
+	/** The text layout shows instead of `text` when it truncates it; null when it shows all of it. */
+	public var shownText(default, null):Null<String>;
+
 	/** The color of that text. */
 	public var textColor:Color;
 	/**
@@ -74,6 +80,8 @@ class LayoutNode {
 		anchor = null;
 		scroll = null;
 		placer = null;
+		truncation = TextTruncation.None;
+		shownText = null;
 		measureVersion = 0;
 		contentRevision = 0;
 		geometryRevision = 0;
@@ -183,3 +191,15 @@ private class LayoutTextStyles {
 
 /** Rendering/layout representation, independent from semantic role. */
 typedef LayoutVisualKind = NativeKitUI.UiLayoutVisualKind;
+
+/** How layout cuts text wider than its width, with an ellipsis standing for what it leaves out. */
+enum TextTruncation {
+	/** All of it, overflowing. */
+	None;
+
+	/** Its start, then the ellipsis. */
+	End;
+
+	/** Its start and its end around the ellipsis. */
+	Middle;
+}

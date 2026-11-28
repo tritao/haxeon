@@ -1,23 +1,22 @@
 package haxeon.ui.widgets.text;
-import haxeon.ui.core.ViewRoot;
 
-import haxeon.editor.TextDocument;
-import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.ResolvedLayoutItem;
-import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.View;
-import haxeon.ui.theme.TextRole;
+import haxeon.ui.core.ViewRoot;
 
-/** Fits a single-line label with an ellipsis, preserving both ends by default or only the prefix. */
+/**
+ * Fits a single-line label with an ellipsis, preserving both ends by default or only the prefix. Layout cuts the text at
+ * the width it gives the label (`LayoutNode.truncation`); its accessible label stays the whole text.
+ */
 class MiddleEllipsisText implements View {
-	/** Identifies the label among its siblings, so its last fit is reused. */
+	/** Identifies the label among its siblings. */
 	public final key:String;
 
 	/** The full text. */
@@ -29,8 +28,10 @@ class MiddleEllipsisText implements View {
 	/** Changes to the inherited text style. */
 	public final textStyle:Null<TextStyleOverride>;
 
-	/** Whether the last build had to shorten the text. */
-	public var truncated(default, null):Bool = false;
+	/** Whether the last layout had to shorten the text. */
+	public var truncated(get, never):Bool;
+
+	var node:Null<RenderNode> = null;
 
 	/** A single line showing `value`, shortened with an ellipsis when it does not fit. */
 	public function new(key:String, value:String, middle:Bool = true, ?textStyle:TextStyleOverride) {
@@ -38,6 +39,11 @@ class MiddleEllipsisText implements View {
 		this.value = value;
 		this.middle = middle;
 		this.textStyle = textStyle;
+	}
+
+	function get_truncated():Bool {
+		var built = node;
+		return built != null && built.layout.shownText != null;
 	}
 
 	public function build(context:BuildContext):ViewRoot return makeNode(context);
@@ -49,109 +55,11 @@ class MiddleEllipsisText implements View {
 			style.width = LayoutAxis.grow();
 			style.clipHorizontal = true;
 			var labelOverride = TextStyleOverride.combine(textStyle, TextStyleOverride.paragraph(TextWrap.None));
-			// Shaping a layout to measure is the expensive part, so remember the answer while its inputs stay the same.
-			var memo:EllipsisMemo = context.resourceState(context.id("ellipsis-memo"),
-				function() return new EllipsisMemo(), function(_) {}).value;
-			var shown = memo.value == value ? memo.result : value;
-			var text = new Text(shown, style, null, labelOverride);
-			var node = text.makeNode(context);
-			if (node.semantics != null) node.semantics.label = value;
-			var resolved = context.resolveTextRole(TextRole.Body, labelOverride);
-			node.onResolved(function(geometry) {
-				if (context.fonts == null) return;
-				var available = memo.availableWidth(geometry);
-				var next:String;
-				if (memo.matches(value, available, resolved.textStyle, resolved.paragraphStyle))
-					next = memo.result;
-				else {
-					var paragraph = new ParagraphStyle(TextWrap.None, resolved.paragraphStyle.alignment,
-						resolved.paragraphStyle.lineHeight, resolved.paragraphStyle.direction,
-						resolved.paragraphStyle.tabWidth);
-					var layout = TextLayout.create(context.fonts, value, 100000.0,
-						resolved.textStyle, paragraph);
-					next = value;
-					if (layout.measure().width > available) {
-						// The marker must satisfy the same bound as every candidate. If it
-						// cannot fit, return no paintable text rather than a clipped marker.
-						layout.setText("…");
-						if (layout.measure().width > available) next = "";
-						else {
-							var document = new TextDocument(value);
-							var low = 0, high = document.codepointCount;
-							while (low < high) {
-								var count = (low + high + 1) >> 1;
-								var prefix = middle ? (count + 1) >> 1 : count;
-								var candidate = document.sliceCodepoints(0,
-									prefix) + "…" + document.sliceCodepoints(document.codepointCount - (count - prefix),
-									document.codepointCount);
-								layout.setText(candidate);
-								if (layout.measure().width <= available) low = count;
-								else high = count - 1;
-							}
-							var prefix = middle ? (low + 1) >> 1 : low;
-							next = document.sliceCodepoints(0,
-								prefix) + "…" + document.sliceCodepoints(document.codepointCount - (low - prefix),
-								document.codepointCount);
-						}
-					}
-					layout.dispose();
-					memo.store(value, available, resolved.textStyle, resolved.paragraphStyle, next);
-				}
-				truncated = next != value;
-				// Settle the current frame, including a retained label resized in place.
-				if (node.layout.text != next) {
-					context.willEditRetained(node);
-					node.layout.text = next;
-					context.requestLayoutFeedback();
-				}
-			});
-			return node;
+			var built = new Text(value, style, null, labelOverride).makeNode(context);
+			built.layout.truncation = middle ? TextTruncation.Middle : TextTruncation.End;
+			if (built.semantics != null) built.semantics.label = value;
+			node = built;
+			return built;
 		});
-	}
-}
-
-/** The last truncation and the inputs that decided it; the result only changes when one of them does. */
-private class EllipsisMemo {
-	var geometry:Null<ResolvedLayoutItem> = null;
-	var geometryWidth:Float = 0.0;
-	public var value:Null<String> = null;
-	var available:Float = -1.0;
-	var font:Null<FontFamily> = null;
-	var fontSize:Float = 0.0;
-	var letterSpacing:Float = 0.0;
-	// `value == null` already marks an empty memo; these values need no nullable representation.
-	var alignment:TextAlignment = TextAlignment.Start;
-	var lineHeight:Null<Float> = null;
-	var direction:TextDirection = TextDirection.Auto;
-	var tabWidth:Int = 0;
-	public var result:String = "";
-
-	public function new() {}
-
-	public function availableWidth(next:ResolvedLayoutItem):Float {
-		// Resolved items are immutable and reused while their encoded geometry is unchanged.
-		if (geometry != next) {
-			geometry = next;
-			geometryWidth = Math.max(0.0, next.clippedViewportBounds().width);
-		}
-		return geometryWidth;
-	}
-
-	public function matches(value:String, available:Float, text:TextStyle, paragraph:ParagraphStyle):Bool
-		return this.value != null && this.value == value && this.available == available && font == text.font
-			&& fontSize == text.fontSize && letterSpacing == text.letterSpacing && alignment == paragraph.alignment
-			&& lineHeight == paragraph.lineHeight && direction == paragraph.direction && tabWidth == paragraph.tabWidth;
-
-	public function store(value:String, available:Float, text:TextStyle, paragraph:ParagraphStyle, result:String):Void {
-		this.value = value;
-		this.available = available;
-		font = text.font;
-		fontSize = text.fontSize;
-		letterSpacing = text.letterSpacing;
-		alignment = paragraph.alignment;
-		lineHeight = paragraph.lineHeight;
-		direction = paragraph.direction;
-		tabWidth = paragraph.tabWidth;
-		this.result = result;
 	}
 }

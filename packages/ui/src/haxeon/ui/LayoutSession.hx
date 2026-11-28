@@ -98,6 +98,7 @@ class LayoutSession implements Disposable {
 	internal function publish(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges, forceFull:Bool = false):Void {
 		ensureLive();
 		var encodeStarted = measureCost ? Sys.time() : 0.0;
+		solver.takeChangedText(forceFull ? null : changes);
 		var transactionBytes:Bytes = transaction.encodeInto(root, forceFull ? null : changes);
 		collectRenderableContents();
 		var geometryLength = solver.nodes * NativeKitUIConstants.NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;

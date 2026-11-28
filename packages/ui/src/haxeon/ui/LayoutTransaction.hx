@@ -401,7 +401,8 @@ internal class LayoutTransaction {
 		else treeIds[treePosition] = node.id;
 		var previous = submittedIndex.get(node.id);
 		var added = previous < 0;
-		var value = node.text == null ? "" : node.text;
+		var shown = node.shownText;
+		var value = shown != null ? shown : node.text == null ? "" : node.text;
 		var text = value.length == 0 ? EmptyText : previous >= 0 && submittedStrings[previous] == value
 			? submittedStringBytes[previous] : Bytes.ofString(value);
 		if (treePosition == treeStrings.length) {

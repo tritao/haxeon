@@ -277,8 +277,10 @@ class LayoutSolver {
 		if (size.text != node.text || size.fontSize != textStyle.fontSize || size.font != textStyle.font
 			|| size.letterSpacing != textStyle.letterSpacing || size.lineHeight != paragraph.lineHeight
 			|| size.wrap != paragraph.wrap || size.alignment != paragraph.alignment
-			|| size.direction != paragraph.direction || size.tabWidth != paragraph.tabWidth) {
+			|| size.direction != paragraph.direction || size.tabWidth != paragraph.tabWidth
+			|| size.truncation != node.truncation) {
 			size.text = node.text;
+			size.truncation = node.truncation;
 			size.fontSize = textStyle.fontSize;
 			size.font = textStyle.font;
 			size.letterSpacing = textStyle.letterSpacing;
@@ -323,12 +325,15 @@ class LayoutSolver {
 		if (size.laidOutAt != box.textWidth) {
 			var started = Sys.time();
 			var session = this.session;
+			size.shown = node.truncation != TextTruncation.None && session != null && node.text != null
+				&& size.unwrappedWidth > box.textWidth + 0.5 ? truncate(node, box.textWidth, session) : null;
 			if (session == null || box.textWidth <= 0.0) {
 				size.height = size.lineHeight == null ? 0.0 : size.lineHeight;
 				size.hasBaseline = false;
 				size.baseline = 0.0;
 			} else {
-				session.measureText(node.text, box.textWidth, node.peekTextStyle(), node.peekParagraphStyle(), measure);
+				session.measureText(size.shown != null ? size.shown : node.text, box.textWidth, node.peekTextStyle(),
+					node.peekParagraphStyle(), measure);
 				size.height = measure.height;
 				size.hasBaseline = measure.hasBaseline;
 				size.baseline = measure.baseline;
@@ -336,7 +341,50 @@ class LayoutSolver {
 			size.laidOutAt = box.textWidth;
 			textSeconds += Sys.time() - started;
 		}
+		if (size.shown != node.shownText) {
+			@:privateAccess node.shownText = size.shown;
+			changedText.push(node.id);
+		}
 		box.textHeight = size.height;
+	}
+
+	/**
+	 * The longest cut of `node`'s text, with an ellipsis where it is cut, no wider than `width` unwrapped: its start, or
+	 * its start and end around the middle. Empty when not even the ellipsis fits.
+	 */
+	function truncate(node:LayoutNode, width:Float, session:LayoutSession):String {
+		var textStyle = node.peekTextStyle(), paragraph = node.peekParagraphStyle();
+		inline function fits(candidate:String):Bool {
+			session.measureText(candidate, 0.0, textStyle, paragraph, measure);
+			return measure.width <= width;
+		}
+		if (!fits(Ellipsis)) return "";
+		var middle = node.truncation == TextTruncation.Middle;
+		var document = new haxeon.editor.TextDocument(node.text);
+		var total = document.codepointCount;
+		inline function cut(count:Int):String {
+			var prefix = middle ? (count + 1) >> 1 : count;
+			return document.sliceCodepoints(0, prefix) + Ellipsis + document.sliceCodepoints(total - (count - prefix),
+				total);
+		}
+		var low = 0, high = total;
+		while (low < high) {
+			var count = (low + high + 1) >> 1;
+			if (fits(cut(count))) low = count;
+			else high = count - 1;
+		}
+		return cut(low);
+	}
+
+	static inline final Ellipsis:String = "…";
+
+	/** Text nodes whose shown text the solves since the last `takeChangedText` changed, which NativeKit must hear of. */
+	final changedText:Array<Int> = [];
+
+	/** Moves the IDs of the text nodes whose shown text changed into `changes`. */
+	internal function takeChangedText(changes:Null<LayoutChanges>):Void {
+		if (changes != null) for (id in changedText) changes.inputs.set(id, 0);
+		changedText.resize(0);
 	}
 
 	// Custom content
@@ -1244,6 +1292,9 @@ private class TextSize {
 	public var alignment:Null<TextAlignment> = null;
 	public var direction:Null<TextDirection> = null;
 	public var tabWidth:Int = 0;
+	public var truncation:TextTruncation = TextTruncation.None;
+	/** The cut text layout shows at the width it was last laid out at, or null for all of it. */
+	public var shown:Null<String> = null;
 	public var measured:Bool = false;
 	public var unwrappedWidth:Float = 0.0;
 	public var unwrappedHeight:Float = 0.0;
