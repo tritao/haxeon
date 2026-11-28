@@ -12,7 +12,7 @@ class Box<T> {
 		return value;
 }
 
-enum Maybe < T:Equatable > implements Equatable {
+enum Maybe<T:Equatable> implements Equatable {
 	Some(value:T);
 	None;
 }

@@ -29,7 +29,7 @@ class AllocationClosure {
 	public static function extract(value:AllocationValue):Int return value.number;
 }
 
-class AllocationMeter < T:AllocationMeasured > {
+class AllocationMeter<T:AllocationMeasured> {
 	public var value:T;
 	public function new(value:T) this.value = value;
 	public function measure():Int return value.measure();

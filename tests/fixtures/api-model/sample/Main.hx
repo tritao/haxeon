@@ -44,7 +44,7 @@ class Special extends Base {
 	@see Reader
 **/
 @:dox(hide)
-class Item < T:sample.Base > implements Reader<T> {
+class Item<T:sample.Base> implements Reader<T> {
 	/** The stored value. */
 	public var value(get, never):T;
 

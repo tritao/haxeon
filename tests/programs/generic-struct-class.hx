@@ -68,7 +68,7 @@ class Pair<A, B> {
 	}
 }
 
-class Meter < T:MeasuredOwnerValue > {
+class Meter<T:MeasuredOwnerValue> {
 	public var value:T;
 	public function new(value:T) this.value = value;
 	public function measure():Int return value.measure();

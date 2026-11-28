@@ -306,10 +306,34 @@ class TokenRoles {
 			return false;
 		var callee = open - 1;
 		return switch kind(callee) {
-			case TokenKind.RightParen | TokenKind.RightBracket: true;
+			// `)` ends a callee (`f(a)(b: 1)`), but not a control header: `for (i in 0...3)(i:Float)` is a body.
+			case TokenKind.RightParen: !closesControlHeader(callee);
+			case TokenKind.RightBracket: true;
 			case TokenKind.Identifier: !inEnumBody(callee);
 			default: closesTypeArguments(callee);
 		};
+	}
+
+	/** Whether the `)` at `close` ends the header of `for`, `if`, `while`, `switch` or `catch`. */
+	function closesControlHeader(close:Int):Bool {
+		var depth = 0, cursor = close;
+		while (cursor >= 0) {
+			switch kind(cursor) {
+				case TokenKind.RightParen:
+					depth++;
+				case TokenKind.LeftParen:
+					depth--;
+					if (depth == 0)
+						return cursor > 0 && switch kind(cursor - 1) {
+							case TokenKind.For | TokenKind.If | TokenKind.While | TokenKind.Switch
+								| TokenKind.Catch: true;
+							default: false;
+						};
+				default:
+			}
+			cursor--;
+		}
+		return false;
 	}
 
 	/** Whether `step` is directly inside an enum's body, where `Name(` declares a constructor. */

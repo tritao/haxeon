@@ -42,8 +42,20 @@ class TypeArguments {
 
 	static function scan(tokens:Array<FormatToken>, syntax:Array<Int>, start:Int, opens:Map<Int, Int>,
 			closes:Map<Int, Int>, splits:Array<Int>):Void {
-		var declaration = start >= 2 && kindAt(tokens, syntax, start - 2) == TokenKind.Function;
-		var open:Array<Int> = [], hasContent:Array<Bool> = [], found:Array<{open:Int, close:Int}> = [], groups = 0;
+		// The parameters a declaration's name opens, where `:` constrains: `function f<T:Int>`, `class Box<T:(A, B)>`.
+		var declaration = start >= 2 && switch kindAt(tokens, syntax, start - 2) {
+			case TokenKind.Function | TokenKind.Class | TokenKind.Struct | TokenKind.Interface | TokenKind.Typedef
+				| TokenKind.Enum:
+				true;
+			case TokenKind.Identifier: tokens[syntax[start - 2]].text == "abstract";
+			default: false;
+		};
+		var open:Array<Int> = [],
+			hasContent:Array<Bool> = [],
+			found:Array<{open:Int, close:Int}> = [],
+			groups = 0,
+			// The depth of an open constraint group in a declaration's parameters (`<T:(Readable, Writable)>`), or -1.
+			constraintGroup = -1;
 		for (position in start...syntax.length) {
 			var kind = kindAt(tokens, syntax, position);
 			switch kind {
@@ -85,16 +97,21 @@ class TypeArguments {
 					if (groups == 0)
 						return;
 				case TokenKind.LeftParen, TokenKind.LeftBrace:
+					if (kind == TokenKind.LeftParen && declaration && open.length == 1 && constraintGroup < 0
+						&& kindAt(tokens, syntax, position - 1) == TokenKind.Colon)
+						constraintGroup = groups;
 					groups++;
 				case TokenKind.RightParen, TokenKind.RightBrace:
 					if (groups == 0)
 						return;
+					groups--;
 					// A parenthesis among type arguments is a function type's, as the parser reads a call's
-					// (`Parser.typeArgumentsAhead`): `f(a < (b), c > (d))` compares.
-					if (kind == TokenKind.RightParen
+					// (`Parser.typeArgumentsAhead`): `f(a < (b), c > (d))` compares. A declaration's constraint group is not.
+					if (kind == TokenKind.RightParen && groups == constraintGroup)
+						constraintGroup = -1;
+					else if (kind == TokenKind.RightParen
 						&& (position + 1 >= syntax.length || kindAt(tokens, syntax, position + 1) != TokenKind.Arrow))
 						return;
-					groups--;
 				case TokenKind.Var, TokenKind.Final, TokenKind.Semicolon:
 					// Field declarations of a structure type: `{var x:Float; var y:Float;}`.
 					if (groups == 0)

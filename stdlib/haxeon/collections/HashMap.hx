@@ -8,7 +8,7 @@ import haxeon.Hashing;
  * kept dense, in the order they were added except that removing one moves the last into its place, with open-addressed
  * buckets over them.
  */
-class HashMap < K:Hashable, V > {
+class HashMap<K:Hashable, V> {
 	var keySlots:Null<Array<K>>;
 	var valueSlots:Null<Array<V>>;
 	var hashes:Null<Array<Int>>;

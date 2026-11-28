@@ -1,4 +1,4 @@
-enum Value < T:Equatable > implements Equatable {
+enum Value<T:Equatable> implements Equatable {
 	Item(value:T);
 }
 

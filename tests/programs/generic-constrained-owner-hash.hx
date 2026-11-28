@@ -11,7 +11,7 @@ struct Value {
 	public var x:Int;
 	public function new(x:Int) this.x = x;
 }
-class Dense < K:Hashable, V > {
+class Dense<K:Hashable, V> {
 	public var keys:Array<K>;
 	public var values:Array<V>;
 	public function new() {
@@ -26,7 +26,7 @@ class Dense < K:Hashable, V > {
 	public function hash():Int return Hashing.hash(keys[0]);
 	public function value():V return values[0];
 }
-class Derived < K:Hashable, V > extends Dense<K, V> {
+class Derived<K:Hashable, V> extends Dense<K, V> {
 	public function new() super();
 }
 function main():Int {

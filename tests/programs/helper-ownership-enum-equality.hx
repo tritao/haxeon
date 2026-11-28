@@ -5,7 +5,7 @@ enum Color implements Equatable {
 	Green;
 	Mixed(amount:Int);
 }
-class Compare < T:Equatable > {
+class Compare<T:Equatable> {
 	public function new() {}
 
 	public function same(left:T, right:T):Bool

@@ -19,7 +19,7 @@ struct LookupValue {
 	}
 }
 
-class ValueLookup < K:Hashable, V > {
+class ValueLookup<K:Hashable, V> {
 	final keys:Array<K>;
 	final values:Array<V>;
 	final hashes:Array<Int>;

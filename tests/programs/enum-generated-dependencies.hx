@@ -5,7 +5,7 @@ struct Key implements Hashable {
 	public function new(value:Int) this.value = value;
 }
 
-class LateBox < T:Hashable > {
+class LateBox<T:Hashable> {
 	var value:T;
 	public function new(value:T) this.value = value;
 	public function hash():Int return Hashing.hash(value);

@@ -15,7 +15,7 @@ enum Never implements Equatable {
 	public function equals(other:Never):Bool return false;
 }
 
-enum GenericValue < T:Equatable > implements Equatable {
+enum GenericValue<T:Equatable> implements Equatable {
 	Item(value:T);
 	Empty;
 }

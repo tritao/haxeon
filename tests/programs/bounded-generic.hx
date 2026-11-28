@@ -13,7 +13,7 @@ class Value implements Readable implements Writable {
 	public function write():Int
 		return 0;
 }
-class Holder < T:(Readable, Writable) > {
+class Holder<T:(Readable, Writable)> {
 	public function new() {}
 }
 
