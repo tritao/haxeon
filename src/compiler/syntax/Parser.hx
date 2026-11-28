@@ -2088,6 +2088,12 @@ class Parser {
 	function parseAnonymousFunctionBody():Array<AstStatement> {
 		if (check(TokenKind.LeftBrace))
 			return parseStatementOrBlock();
+		// As for an arrow function, a loop or an `if` without an `else` is a body with no value, which Haxe types
+		// Void: `function(x) if (x > 0) f(x)`.
+		if (check(TokenKind.For) || check(TokenKind.While) || check(TokenKind.Do))
+			return [parseStatement()];
+		if (check(TokenKind.If) && !ifHasElseAhead())
+			return [parseVoidIf()];
 		var start = spanOf(current());
 		match(TokenKind.Return);
 		var value = parseExpression();

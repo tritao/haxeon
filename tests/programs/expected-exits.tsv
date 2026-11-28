@@ -23,6 +23,7 @@ function-value	42
 function-wrapper	42
 lambda	42
 expression-lambda	42
+function-statement-body	42
 single-argument-lambda	43
 contextual-callbacks	42
 generic-contextual-callback	42
