@@ -11,7 +11,8 @@ import compiler.types.TypedAst.TypedProgram;
 /**
  * What the IR generator and the IR passes know about the whole typed program, derived from it once per build: enum layouts, which
  * classes are value classes, class bases, generic owners, equatable and observable hierarchies and interface contracts. Immutable
- * once built; `inputState` renders all of it as one comparable text.
+ * once built; `difference` compares two by their parts, and `inputState` renders all of it as one text, which `--check-reuse` holds
+ * the comparison to.
  */
 class ProgramFacts {
 	public var enumConstructorCounts:Map<String, Int> = [];
@@ -114,6 +115,121 @@ class ProgramFacts {
 			key -> Std.string(typedInterfaceContracts.get(key)));
 		out.add("target{" + profile.key() + "}");
 		return out.toString();
+	}
+
+	/**
+	 * The first part of `inputState` that reads otherwise in `other`, by its label, or null when every part reads the same: the
+	 * pipeline's root compares the facts so, without rendering them, and `--check-reuse` holds the answer to the texts.
+	 */
+	public function difference(other:ProgramFacts):Null<String> {
+		if (other == this)
+			return null;
+		if (!sameCounts(enumConstructorCounts, other.enumConstructorCounts))
+			return "enumConstructorCounts";
+		if (!sameFlags(enumEquatableTypes, other.enumEquatableTypes))
+			return "enumEquatableTypes";
+		if (!sameFlags(enumPayloadTypes, other.enumPayloadTypes))
+			return "enumPayloadTypes";
+		if (!sameVoidPayloads(enumVoidPayloads, other.enumVoidPayloads))
+			return "enumVoidPayloads";
+		if (!sameFlags(valueClasses, other.valueClasses))
+			return "valueClasses";
+		if (!sameTexts(classBases, other.classBases))
+			return "classBases";
+		if (!sameTexts(genericOwnerAliases, other.genericOwnerAliases))
+			return "genericOwnerAliases";
+		if (!sameFlags(genericClasses, other.genericClasses))
+			return "genericClasses";
+		if (!sameTexts(genericOwnerOrigins, other.genericOwnerOrigins))
+			return "genericOwnerOrigins";
+		if (!sameFlags(equatableTypes, other.equatableTypes))
+			return "equatableTypes";
+		if (!sameFlags(observableClasses, other.observableClasses))
+			return "observableClasses";
+		if (!sameTexts(observableStateOwners, other.observableStateOwners))
+			return "observableStateOwners";
+		if (!sameFieldBits(observableFieldBits, other.observableFieldBits))
+			return "observableFieldBits";
+		if (!sameContracts(typedInterfaceContracts, other.typedInterfaceContracts))
+			return "typedInterfaceContracts";
+		return null;
+	}
+
+	static function sameCounts(a:Map<String, Int>, b:Map<String, Int>):Bool {
+		if (a == b)
+			return true;
+		var count = 0;
+		for (key => value in a) {
+			if (b.get(key) != value)
+				return false;
+			count++;
+		}
+		return sizeOf(b) == count;
+	}
+
+	static function sameFlags(a:Map<String, Bool>, b:Map<String, Bool>):Bool {
+		if (a == b)
+			return true;
+		var count = 0;
+		for (key => value in a) {
+			if (b.get(key) != value)
+				return false;
+			count++;
+		}
+		return sizeOf(b) == count;
+	}
+
+	static function sameTexts(a:Map<String, String>, b:Map<String, String>):Bool {
+		if (a == b)
+			return true;
+		var count = 0;
+		for (key => value in a) {
+			if (b.get(key) != value)
+				return false;
+			count++;
+		}
+		return sizeOf(b) == count;
+	}
+
+	static function sameVoidPayloads(a:Map<String, Array<Array<Bool>>>, b:Map<String, Array<Array<Bool>>>):Bool {
+		var count = 0;
+		for (key => value in a) {
+			var other = b.get(key);
+			if (other == null || voidPayloadsText(value) != voidPayloadsText(other))
+				return false;
+			count++;
+		}
+		return sizeOf(b) == count;
+	}
+
+	static function sameFieldBits(a:Map<String, Map<String, Int>>, b:Map<String, Map<String, Int>>):Bool {
+		var count = 0;
+		for (key => value in a) {
+			var other = b.get(key);
+			if (other == null || !sameCounts(value, other))
+				return false;
+			count++;
+		}
+		return sizeOf(b) == count;
+	}
+
+	/** A contract is the typed program's, the same object while its module is kept; one made again compares as it renders. */
+	static function sameContracts(a:Map<String, TypedInterface>, b:Map<String, TypedInterface>):Bool {
+		var count = 0;
+		for (key => value in a) {
+			var other = b.get(key);
+			if (other == null || other != value && Std.string(other) != Std.string(value))
+				return false;
+			count++;
+		}
+		return sizeOf(b) == count;
+	}
+
+	static function sizeOf<T>(map:Map<String, T>):Int {
+		var count = 0;
+		for (_ in map)
+			count++;
+		return count;
 	}
 
 	/** Supply enum layout information needed by compiler-generated key adapters. */

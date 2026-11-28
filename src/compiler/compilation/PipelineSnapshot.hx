@@ -1,10 +1,14 @@
 package compiler.compilation;
 
 import compiler.compilation.BackendSession.BackendAssemblyResult;
+import compiler.core.InternalError;
 import compiler.ir.codec.CanonicalIrCodec;
 import compiler.ir.codec.IrFunctionStateEquality;
 import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.IrDeclarationEquality;
 import compiler.ir.model.IrFunction;
+import compiler.ir.pipeline.ProgramFacts;
+import compiler.ir.pipeline.TargetProfile;
 import haxe.io.Bytes;
 
 /**
@@ -18,8 +22,11 @@ typedef PipelineInputs = {
 	/** The static initializer functions generated for this build. */
 	final initializers:Array<IrFunction>;
 
-	/** The canonical encoding of the program tables: natives, C natives, objects, interfaces, enums and static fields. */
-	final tables:Bytes;
+	/** The program tables, in a program of their own: natives, C natives, objects, interfaces, enums, static fields and the entry. */
+	final tables:IrProgram;
+
+	/** What the IR generator knows about the whole typed program, which the passes read through it. */
+	final facts:ProgramFacts;
 
 	/** Everything else the passes read, as one comparable text. */
 	final environment:String;
@@ -29,6 +36,11 @@ typedef PipelineInputs = {
  * What one plain build produced from its `PipelineInputs`: the final IR and, once assembled, the backend result and the
  * environment it was assembled in. A build whose inputs are equal gets the same final IR and the same module, and runs no
  * pass and no lowering.
+ *
+ * It is the pipeline's root query, kept by the state the build made rather than as a memo of the session's database: its reads are
+ * its inputs, each compared by its parts with the one it was made from (an object the program kept is the same object), so a
+ * build that returns to an earlier state after a rejected one finds the earlier state's root. The database's revisions cannot
+ * say that, as the inputs the rejected build gave are not taken back.
  */
 class PipelineSnapshot {
 	public final inputs:PipelineInputs;
@@ -53,13 +65,59 @@ class PipelineSnapshot {
 	public static function inputsDifference(previous:PipelineInputs, next:PipelineInputs):Null<String> {
 		if (previous.environment != next.environment)
 			return "environment: " + firstDifference(previous.environment, next.environment);
-		if (previous.tables.compare(next.tables) != 0)
-			return "program tables";
+		var tables = tablesDifference(previous.tables, next.tables);
+		if (tables != null)
+			return 'program tables: $tables';
+		var facts = previous.facts.difference(next.facts);
+		if (facts != null)
+			return 'generator facts: $facts';
 		var function_ = differingFunction(previous.functions, next.functions);
 		if (function_ != null)
 			return 'function $function_';
 		var initializer = differingFunction(previous.initializers, next.initializers);
 		return initializer == null ? null : 'initializer $initializer';
+	}
+
+	/**
+	 * `--check-reuse` of the comparison by parts: inputs it found equal must have the same canonical encoding of their tables and the
+	 * same text of their facts, which read every part. Throws otherwise.
+	 */
+	public static function checkEqualInputs(previous:PipelineInputs, next:PipelineInputs, profile:TargetProfile):Void {
+		if (CanonicalIrCodec.encodeTables(previous.tables).compare(CanonicalIrCodec.encodeTables(next.tables)) != 0)
+			throw new InternalError("--check-reuse: program tables compared equal by their parts encode otherwise");
+		var before = previous.facts.inputState(profile), after = next.facts.inputState(profile);
+		if (before != after)
+			throw new InternalError("--check-reuse: generator facts compared equal by their parts render otherwise ("
+				+ firstDifference(before, after) + ")");
+	}
+
+	/** The first table entry that differs between two programs' tables, by its kind and name, or null when they read the same. */
+	static function tablesDifference(previous:IrProgram, next:IrProgram):Null<String> {
+		if (previous.entryPoint != next.entryPoint)
+			return "entry";
+		return entriesDifference("native", previous.natives, next.natives, IrDeclarationEquality.sameNative,
+			native -> native.name)
+			?? entriesDifference("C native", previous.cNatives, next.cNatives, IrDeclarationEquality.sameCNative,
+			native -> native.name)
+			?? entriesDifference("object", previous.objects, next.objects, IrDeclarationEquality.sameObject,
+			object -> object.name)
+			?? entriesDifference("interface", previous.interfaces, next.interfaces, IrDeclarationEquality.sameInterface,
+			interfaceDecl -> interfaceDecl.name)
+			?? entriesDifference("enum", previous.enums, next.enums, IrDeclarationEquality.sameEnum,
+			enumDecl -> enumDecl.name)
+			?? entriesDifference("static field", previous.staticFields, next.staticFields,
+			IrDeclarationEquality.sameStaticField, field -> field.name);
+	}
+
+	/** The first entry of `next` that differs from `previous`'s at its place, as `label` and its name, or null when none does. */
+	static function entriesDifference<T>(label:String, previous:Array<T>, next:Array<T>, same:(T, T) -> Bool,
+			name:T->String):Null<String> {
+		if (previous.length != next.length)
+			return '$label count ${previous.length} -> ${next.length}';
+		for (index in 0...next.length)
+			if (!same(previous[index], next[index]))
+				return '$label ${name(next[index])}';
+		return null;
 	}
 
 	/** What differs between two final programs, or null when they are equal: the first function that differs, or the tables. */

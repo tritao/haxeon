@@ -1742,6 +1742,8 @@ class FrontendCompilation {
 			inlinerChanged:Array<String>;
 		if (checkingReuse && inputs != null && context.state.compiledOnce && !context.livePatching)
 			checkFrontendReuse(build, inputs);
+		if (checkingReuse && reusedPipeline != null && inputs != null)
+			PipelineSnapshot.checkEqualInputs(reusedPipeline.inputs, inputs, generator.profile);
 		build.reuseMiss = reuseMiss;
 		build.matchesPrevious = matchesPrevious;
 		build.checkingReuse = checkingReuse;
@@ -1922,11 +1924,13 @@ class FrontendCompilation {
 				for (object in build.objects)
 					if (!made.exists(object.name)) IrProgramAssembler.anonymousStringName(object.name) => true
 			],
-			difference = PipelineSnapshot.inputsDifference(inputsOf(freshBuild),
-				inputsOf(build, [for (object in build.objects) if (made.exists(object.name)) object],
-				[for (fn in build.cached) if (!unusedPrinters.exists(fn.name)) fn]));
+			freshInputs = inputsOf(freshBuild),
+			keptInputs = inputsOf(build, [for (object in build.objects) if (made.exists(object.name)) object],
+				[for (fn in build.cached) if (!unusedPrinters.exists(fn.name)) fn]),
+			difference = PipelineSnapshot.inputsDifference(freshInputs, keptInputs);
 		if (difference != null)
 			throw new InternalError('--check-reuse: what the frontend kept from earlier builds differs from a fresh frontend run ($difference)');
+		PipelineSnapshot.checkEqualInputs(freshInputs, keptInputs, build.generator.profile);
 	}
 
 	/**
@@ -1965,13 +1969,14 @@ class FrontendCompilation {
 			staticFields:Array<compiler.ir.model.Ir.IrStaticField>,
 			entryPoint:Null<String>, reflectable:Null<Array<String>>):PipelineInputs {
 		var objectNames:Map<String, Bool> = [for (object in objects) object.name => true];
+		// Copies: the passes add to the arrays they are given, and the root compares a next build's tables with these.
 		var tables = new IrProgram(entryPoint == null ? "" : entryPoint);
-		tables.natives = natives;
-		tables.cNatives = cNatives;
-		tables.objects = objects;
-		tables.interfaces = interfaces;
-		tables.enums = enums;
-		tables.staticFields = staticFields;
+		tables.natives = natives.copy();
+		tables.cNatives = cNatives.copy();
+		tables.objects = objects.copy();
+		tables.interfaces = interfaces.copy();
+		tables.enums = enums.copy();
+		tables.staticFields = staticFields.copy();
 		var environment = [
 			"defines:" + context.definesKey(),
 			"target:" + Std.string(context.valueArrayTarget()),
@@ -1987,12 +1992,13 @@ class FrontendCompilation {
 				+ (reflectable == null
 				? "-" : [for (name in reflectable) if (objectNames.exists(name)) name].join(";")),
 			"entry:" + entryPoint,
-			"generator:" + generator.facts.inputState(generator.profile)
+			"profile:" + generator.profile.key()
 		].join("\n");
 		return {
 			functions: functions,
 			initializers: initializers,
-			tables: compiler.ir.codec.CanonicalIrCodec.encodeTables(tables),
+			tables: tables,
+			facts: generator.facts,
 			environment: environment
 		};
 	}

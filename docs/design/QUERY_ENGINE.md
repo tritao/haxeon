@@ -267,7 +267,7 @@ Everything below keeps results across builds outside the engine. Lines are the f
 | `IrSourceRehash`, `irSources` | 130 | function → file hashes its locations name | frontend | gone with relative positions (the hash is added at encode), else a derived query |
 | ~~`IrVerifyMemo`~~ | 190 | function name → function and answer facts | `IrVerifier` | computed query per function; done (slice 6: a stage of the driver, `IrVerifyStage`) |
 | `IrInlineCache` and the inliner's memo plumbing | ~170, ~100 | name → original body, instrumented form, published form, object facts, positional prints; maps replaced per run | `IrInliner`, `Compiler` (published) | inlined form per function; done (slice 5: a kind of forms, the components a step, the original bodies gone); `published`, the instrumented forms and the positional prints stay, live state |
-| `PipelineSnapshot` | 157 | tables' encoding, functions' identity, environment text; last plain build | `CompilationPipeline`, backends | the root query (final IR, module) verifies; deleted with its check; not done in slice 7: its reads would be the frontend's tables and program facts as memos, which typer piece 4 makes ("Slice 7 as built") |
+| `PipelineSnapshot` | 157 | tables' encoding, functions' identity, environment text; last plain build | `CompilationPipeline`, backends | the root query (final IR, module); done (slice 7): the tables and program facts compared by their parts, not encoded, the encodings kept as `--check-reuse`'s check; stays a value of the state, which a rollback returns to ("Slice 7 as built") |
 | ~~`HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts~~ | 83, 45, 162 | name and lowering environment; the build's entries; facts never swept | `HlLower` | computed query per function: relocatable code, reading object facts as engine reads; done (slice 7: `HlFunctionQueries.lowered`) |
 | Link and replay: `HlRequestKeys`, `HlRequestAnswers`, `HlSymbolRequest`, `HlLink`, `HlLinkRecord`/`HlKeptTables`, parts of `HlSymbolTable` and `HlLower` | 196, 66, 102, 120, 251, ~150, ~290 | request numbers (grow only); last build's tables with each position's first requests | `HlLower` | module sections ([MODULE_SECTIONS.md](MODULE_SECTIONS.md)) |
 | `HlDebugMetadataCache`, `HlWriterCache` | — | — | — | deleted with the dense build path (MODULE_SECTIONS.md, slice 4d); the section memo (`HlSectionCache`) keeps the validation marks (`HlValidationMarks`) |
@@ -338,7 +338,7 @@ change (they run for Wasm too). Savings are estimates from the profile above (bo
 | 4 | Stages after the encode point, then the fixpoints (candidacy reads, ADR 0003 decision 4); two parts built (below) | −400 / +250; built −401 / +508 and −53 / +257 | their whole-program rereads | 0.2 / 1.2 / 0.2; built 0.11 / 0 / not measured and 0.02 / 0.39 / not measured | 3 |
 | 5 | Inliner; **done** (below) | −300 / +150; built −739 / +545 | `IrInlineCache` except `published`, inliner memo | 0.05 / 1.2 / rest after A; built 0.06 / 0.06 / not measured | 4 |
 | 6 | Verification and final-IR summaries; **done** (below) | −450 / +100; built −754 / +861 | `IrVerifyMemo`, `IrFunctionMemo`, `HlFunctionSummaries`, `IrFieldStoreMemo`, `IrSharedCallsMemo`, plain-build reach record | 0.1 / 0.3 / 0.05; built 0.04 / 0.06 / not measured | 5 |
-| 7 | Lowering, debug metadata and encoding as queries; root query; **done** in part (below): lowering and Wasm module reuse, the root query waits for typer piece 4 | −850 / +300; built −519 / +373 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts, `HlDebugMetadataCache`, `HlWriterCache` encodings, `PipelineSnapshot`, Wasm module reuse | small; no-op must stay at 0.29 s; built 0 / 0 / not measured, no-op 0, body edit allocation −1.5% | B, 6 |
+| 7 | Lowering, debug metadata and encoding as queries; root query; **done** (below): lowering, Wasm module reuse, then the root query after typer piece 4 | −850 / +300; built −519 / +373 | `HlLoweredCache`, `HlLoweredFunction`, `HlLoweringView` facts, `HlDebugMetadataCache`, `HlWriterCache` encodings, `PipelineSnapshot`, Wasm module reuse | small; no-op must stay at 0.29 s; built 0 / 0 / not measured, no-op 0, body edit allocation −1.5% | B, 6 |
 
 B touches only `hl/` and can land beside 1–3. The largest part of the signature edit, typing and IR generation (6.8G), is
 step 3c's and the frontend's, not this plan's. Estimated together: the body edit from 2.44G to about 1.9G, the signature
@@ -1114,7 +1114,8 @@ final IR and their holder (about 160), and the runtime ABI's kept texts (about 8
 
 What a plain build's lowering made of each function is a kind of the session's database, and the facts lowering reads are facts of
 the database like the stages'. Of the plan's list, the debug metadata cache and the writer's encodings were gone already, with the
-dense build path (MODULE_SECTIONS.md, slice 4d); the root query is not built (below).
+dense build path (MODULE_SECTIONS.md, slice 4d). The root query, built after typer piece 4, compares the pipeline's inputs by their
+parts (below).
 
 - **Lowered functions.** `HlFunctionQueries.lowered` is a `ComputedQueryKind<HlLoweredFunction>` keyed by the number of the
   function's name: the function's code with the requests it made and the answers they got. A memo holds while the function is
@@ -1140,13 +1141,6 @@ dense build path (MODULE_SECTIONS.md, slice 4d); the root query is not built (be
 
 Not done, with the reasons:
 
-- **The root query.** `PipelineSnapshot` decides from the pipeline's inputs whether a plain build reuses the last final IR and
-  module, the no-op among them. Making those inputs costs every build 28 to 35 ms of the compile server's main thread (wall, VM,
-  measured around `FrontendCompilation.inputsOf`): the canonical encoding of the program's tables, 17 to 50 ms, and a 224 KB text
-  of the generator's program facts (`ProgramFacts.inputState`), 3 to 20 ms; comparing them costs under 1 ms. As a query, the
-  snapshot's reads would be the frontend's tables (objects, interfaces, enums, static fields, natives) and program facts as memos
-  with cutoff, which they are not yet: making them results is typer piece 4 ([TYPER_STATE.md](TYPER_STATE.md)), under way
-  elsewhere. The root query comes after it, and with it the cost above off the no-op.
 - **The section memo stays as it is** (`HlSectionCache`): it is one result per section already, kept while what its encoding read
   reads the same and checked by `--check-reuse`; as a kind its reads would be the same comparisons, not engine reads.
 - **The lowered functions are not visited by changed fact.** Every held function is verified (`current`, its facts read inline once
@@ -1162,6 +1156,46 @@ byte-identical, warm builds equal fresh ones with and without `--check-reuse`, t
 
 Lines in `src/`: 519 deleted and 373 added, against the estimated −850 / +300: the estimate counted the debug metadata and writer
 caches, which slice 4d deleted, and `PipelineSnapshot`, which stays.
+
+#### The root query
+
+`PipelineSnapshot` decides from the pipeline's inputs whether a plain build reuses the last final IR and module, the no-op among
+them. It made those inputs comparable by encoding them: the canonical encoding of the program's tables (1.2 MB on the compiler's
+own sources, 18 ms of every build) and a text of the generator's program facts (`ProgramFacts.inputState`, 165,000 characters,
+4 to 5 ms), 24 ms of the compile server's main thread in all (wall, VM, measured around `FrontendCompilation.inputsOf`), while
+comparing them cost under 0.3 ms. Now the inputs are the values themselves and are compared by their parts:
+
+- **Tables.** The snapshot keeps copies of the arrays the build gave the pipeline (the passes add to the arrays they are given) and
+  compares each entry with the one at its place (`IrDeclarationEquality`, which now also compares natives, C natives and static
+  fields, and an enum's recursion as the encoding writes it). The objects are the program's, kept by name with cutoff
+  (`SessionState.irObjects`), so the 3,164 objects of a no-op are the same objects and compare by identity; the other tables are a
+  few hundred entries, made again each build.
+- **Program facts.** `ProgramFacts.difference` compares two builds' facts map by map without rendering them; an interface contract
+  is the typed program's object while its module is kept, and one made again compares as it renders.
+- **Check mode.** `--check-reuse` holds the comparison to the encodings: inputs it found equal must encode and render the same
+  (`PipelineSnapshot.checkEqualInputs`), for the reused build and for the frontend run afresh, so a part the encoding writes and the
+  comparison misses is found. A miss now names the entry that differs (`program tables: object Foo`, `generator facts: classBases`).
+
+The root is a value of the state the build made (`SessionState.pipelineSnapshot`), not a memo of the session's database. A build
+that fails after the pipeline ran must leave the session as it was, and the next build of the earlier sources reuses the earlier
+module (`WasmBackendSessionMain`): the snapshot follows the state back, and is compared by content with what the earlier build
+read. As a memo, its reads would be inputs the failed build had already put again, changed after the root was verified, which no
+rollback takes back: the next build would miss. Making the tables memos of their own buys nothing here either: the objects are
+already, and comparing the rest costs what cutting them off would.
+
+Not done: the tables are still made every build (`IrProgramAssembler.interfacesFrom`, `enumsFrom`, `staticFieldsFrom`, the natives)
+before they are compared, and `objectsFrom` still runs (piece 4, "Not built").
+
+Measured on the compiler's own sources (perf-guard `--only=incremental`, origin/main and this change built in two worktrees and run
+back to back on one machine, three pairs): the no-op rebuild 0.717G to 0.733G → 0.629G instructions (−13%), the body edit 1.964G to
+1.979G → 1.875G (−4.8%: a build that misses made the same inputs), the signature edit 19.61G to 19.65G → 19.54G (−0.4%); allocation
+of the no-op 81.6 → 70.2 MB, of the first no-op 126.4 → 115.0 MB, of the body edit 230.5 → 219.2 MB, of the late body edit 244.3 →
+233.0 MB; the server's live data 889.2 → 888.7 MB in two pairs (one run of this change measured 903.2 MB, its census 13 MB higher
+from the first no-op on, which the other two did not repeat). The cold self-compile keeps no session and makes no inputs: within
+0.2%, byte-identical. The small project's builds and checks and the live sessions are unchanged (within 0.8%, all lower or equal).
+
+Lines in `src/`: 20 deleted and 250 added: the comparisons by parts (`ProgramFacts.difference` about 110 lines, the table entries
+about 100) and the check that holds them to the encodings.
 
 ## Prior art
 
