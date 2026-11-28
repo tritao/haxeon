@@ -931,14 +931,23 @@ static bool realtime_fs_fail( int error ) {
 	return false;
 }
 
-/* A failure resolving a path beneath a root: the kernel's refusal to leave it is EscapesRoot, its lack of the
-   resolution Unsupported. */
-static bool realtime_fs_fail_beneath( int error ) {
+/* A failure resolving `path` beneath the directory `directory`: the kernel's refusal to leave it is EscapesRoot, its lack
+   of the resolution Unsupported. macOS refuses with EACCES, which a permission also answers: the refusal is an escape when
+   a symbolic link is on the path, since one that stayed beneath would have been followed. */
+static bool realtime_fs_fail_beneath( int error, int directory, const char *path ) {
 #if defined(REALTIME_FS_OPENAT2)
+	(void)directory; (void)path;
 	if( error == EXDEV ) return realtime_fs_refuse(REALTIME_FS_ESCAPES_ROOT);
 	if( error == ENOSYS || error == E2BIG ) return realtime_fs_refuse(REALTIME_FS_UNSUPPORTED);
 #elif defined(__APPLE__)
 	if( error == ENOTCAPABLE ) return realtime_fs_refuse(REALTIME_FS_ESCAPES_ROOT);
+#ifdef AT_SYMLINK_NOFOLLOW_ANY
+	struct stat info;
+	if( error == EACCES && fstatat(directory,path,&info,AT_SYMLINK_NOFOLLOW_ANY) < 0 && errno == ELOOP )
+		return realtime_fs_refuse(REALTIME_FS_ESCAPES_ROOT);
+#endif
+#else
+	(void)directory; (void)path;
 #endif
 	return realtime_fs_fail(error);
 }
@@ -977,7 +986,7 @@ static int realtime_fs_open( realtime_fs_directory *root, const char *path, int 
 		return -1;
 	}
 	int fd = realtime_fs_open_beneath(root->fd,path,flags,mode);
-	if( fd < 0 ) realtime_fs_fail_beneath(errno);
+	if( fd < 0 ) realtime_fs_fail_beneath(errno,root->fd,path);
 	return fd;
 }
 
@@ -1013,9 +1022,12 @@ static bool realtime_fs_place_of( realtime_fs_directory *root, const char *path,
 	memcpy(parent,path,length);
 	parent[length] = 0;
 	int fd = realtime_fs_open_beneath(root->fd,parent,O_RDONLY | O_DIRECTORY | O_CLOEXEC,0);
-	int error = errno;
+	if( fd < 0 ) {
+		bool failed = realtime_fs_fail_beneath(errno,root->fd,parent);
+		free(parent);
+		return failed;
+	}
 	free(parent);
-	if( fd < 0 ) return realtime_fs_fail_beneath(error);
 	place->directory = fd;
 	place->name = slash + 1;
 	place->owned = true;
@@ -1303,11 +1315,12 @@ static bool realtime_fs_root_open( realtime_fs_directory *out, const char *path 
 	}
 	close(probe);
 #elif defined(__APPLE__) && defined(O_RESOLVE_BENEATH)
-	/* An older kernel may ignore the flag it does not know: require it to refuse an escape. */
+	/* An older kernel may ignore the flag it does not know: require it to refuse an escape, with EACCES as macOS 15 does or
+	   ENOTCAPABLE. */
 	int escaped = openat(fd,"..",O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_RESOLVE_BENEATH);
 	int error = errno;
 	if( escaped >= 0 ) close(escaped);
-	if( escaped >= 0 || error != ENOTCAPABLE ) {
+	if( escaped >= 0 || (error != ENOTCAPABLE && error != EACCES) ) {
 		close(fd);
 		return realtime_fs_refuse(REALTIME_FS_UNSUPPORTED);
 	}
