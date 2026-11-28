@@ -10,7 +10,7 @@ class SemanticModelMain {
 			"package demo; typedef Count = Missing; class Counter {} function make():Count return 1;");
 		var tokens = new Lexer(source).tokenizeTable(),
 			program = new Parser(tokens).parseProgram();
-		var model = new SemanticModel(program, source, 7, tokens);
+		var model = new SemanticModel(program, source, "Types", 7, tokens);
 
 		expect(model.revision == 7, "semantic model should retain its source revision");
 		expect(model.program == program, "semantic model should retain its parsed program");
@@ -28,7 +28,7 @@ class SemanticModelMain {
 		var emptySource = new SourceFile("Empty.hx", "package demo;");
 		var emptyTokens = new Lexer(emptySource).tokenizeTable(),
 			emptyProgram = new Parser(emptyTokens).parseProgram();
-		new SemanticModel(emptyProgram, emptySource, 1, emptyTokens);
+		new SemanticModel(emptyProgram, emptySource, "Empty", 1, emptyTokens);
 
 		Sys.println("PASS: revision-bound semantic model");
 	}

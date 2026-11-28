@@ -3,7 +3,6 @@ package compiler.semantic;
 import compiler.core.InternalError;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Source.SourceSpan;
-import compiler.modules.ModulePath;
 import compiler.syntax.Token;
 import compiler.syntax.TokenTable;
 import compiler.syntax.Token.TokenKind;
@@ -73,7 +72,8 @@ class SemanticIndex {
 
 	final bindings:Array<PositionBinding> = [];
 	final references:Map<String, Array<SourceSpan>> = [];
-	final referenceKeys:Map<String, Map<String, Bool>> = [];
+	/** Each symbol's references by start offset, to bind a span once: no key built from the file's path. */
+	final referenceStarts:Map<String, Map<Int, Array<SourceSpan>>> = [];
 	final signatures:Map<String, SemanticSignatureInfo> = [];
 	final callEdges:Array<SemanticCallEdge> = [];
 	final completionLocals:Array<SemanticCompletionLocal> = [];
@@ -98,13 +98,14 @@ class SemanticIndex {
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
 	final tokens:TokenTable;
+	/** The module's name, which a program has once: the prefix of the ids of its symbols. */
 	final module:String;
 	var cancellation:Null<CancellationToken>;
 	var currentCaller:Null<SemanticSymbolId>;
 	var checkpointCount:Int = 0;
 
-	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:TokenTable) {
-		module = ModulePath.fromFile(path);
+	public function new(module:String, revision:Int, declarations:DeclarationIndex, tokens:TokenTable) {
+		this.module = module;
 		this.revision = revision;
 		this.tokens = tokens;
 		var keys = [for (key in declarations.symbols.keys()) key];
@@ -1124,15 +1125,19 @@ class SemanticIndex {
 	function bind(id:SemanticSymbolId, span:SourceSpan):Void {
 		checkpoint();
 		var locations = references.get(id);
-		var keys = referenceKeys.get(id);
+		var byStart = referenceStarts.get(id);
 		if (locations == null) {
 			references.set(id, locations = []);
-			referenceKeys.set(id, keys = []);
+			referenceStarts.set(id, byStart = []);
 		}
-		var key = span.file.path + ":" + span.start + ":" + span.end;
-		if (keys.exists(key))
-			return;
-		keys.set(key, true);
+		var known = byStart.get(span.start);
+		if (known == null)
+			byStart.set(span.start, known = []);
+		else
+			for (other in known)
+				if (other.end == span.end && other.file.path == span.file.path)
+					return;
+		known.push(span);
 		bindings.push({span: span, symbol: id});
 		locations.push(span);
 	}

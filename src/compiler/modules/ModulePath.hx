@@ -15,20 +15,14 @@ class ModulePath {
 		if (end - start >= 3 && path.charCodeAt(end - 3) == 46 && path.charCodeAt(end - 2) == 104
 			&& path.charCodeAt(end - 1) == 120)
 			end -= 3;
-		var result = "", segment = "";
-		for (cursor in start...end) {
-			var code = path.charCodeAt(cursor);
-			if (isSeparator(code)) {
-				if (segment.length > 0) {
-					result += (result.length == 0 ? "" : ".") + segment;
-					segment = "";
-				}
-			} else
-				segment += String.fromCharCode(code);
-		}
-		if (segment.length > 0)
-			result += (result.length == 0 ? "" : ".") + segment;
-		return result;
+		var segments:Array<String> = [], segmentStart = start;
+		for (cursor in start...end + 1)
+			if (cursor == end || isSeparator(path.charCodeAt(cursor))) {
+				if (cursor > segmentStart)
+					segments.push(path.substring(segmentStart, cursor));
+				segmentStart = cursor + 1;
+			}
+		return segments.join(".");
 	}
 
 	static function isSeparator(code:Int):Bool

@@ -13,11 +13,12 @@ class SemanticModel {
 	public final declarations:DeclarationIndex;
 	public final index:SemanticIndex;
 
-	public function new(program:AstProgram, source:SourceFile, revision:Int, ?tokens:TokenTable) {
+	/** `module`: the module's name (`ModuleState.name`), which names its symbols. */
+	public function new(program:AstProgram, source:SourceFile, module:String, revision:Int, ?tokens:TokenTable) {
 		this.revision = revision;
 		this.program = program;
 		this.declarations = DeclarationIndex.forModule(program, source);
-		this.index = new SemanticIndex(source.path, revision, declarations,
+		this.index = new SemanticIndex(module, revision, declarations,
 			tokens == null ? new Lexer(source).tokenizeTable() : tokens);
 	}
 }

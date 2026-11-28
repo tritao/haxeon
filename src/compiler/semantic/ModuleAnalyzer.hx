@@ -146,7 +146,7 @@ class ModuleAnalyzer {
 			structuralChanged:Map<String, Bool>):Void {
 		if (state.ast != null) {
 			if (buildSemanticModels && state.semanticModel == null)
-				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.name,
 					state.revision, state.keptTokens());
 			return;
 		}
@@ -162,7 +162,7 @@ class ModuleAnalyzer {
 				checkStandardTypeNames(state.name, state.parsedAst());
 			indexDeclarations(state.name, state.parsedAst());
 			if (buildSemanticModels)
-				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.name,
 					state.revision, state.tokens);
 			state.parseVersion++;
 		} catch (error:CompileError) {
