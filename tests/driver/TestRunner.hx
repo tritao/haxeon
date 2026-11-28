@@ -27,9 +27,6 @@ private typedef ProgramRun = {
 	var test:ProgramCase;
 	var plain:Bool;
 
-	/** A plain build without the early prune (`--no-early-prune`, `IrEntryPrune`): a migration reference, removed with the switch, so each program runs pruned (the default) and unpruned. */
-	var unpruned:Bool;
-
 	/** Built, edited three times and rebuilt in one compile server session, each rebuild compared with a fresh build (`warmEdit`). */
 	var warm:Bool;
 }
@@ -161,8 +158,6 @@ class TestRunner {
 				arguments.push("--verify-ir");
 			}
 		}
-		if (run.unpruned)
-			arguments.push("--no-early-prune");
 		if (checkReuse)
 			arguments.push("--check-reuse");
 		arguments.push(source);
@@ -390,17 +385,14 @@ class TestRunner {
 
 	static function runName(run:ProgramRun):String
 		return run.test.name
-			+ (run.warm ? (run.plain ? " (warm edit rebuilds" : " (live warm edit rebuilds") : run.plain
-			? " (plain build" : "")
-			+ (run.unpruned ? ", no early prune" : "")
-			+ (run.warm || run.plain ? ")" : "");
+			+ (run.warm ? (run.plain ? " (warm edit rebuilds)" : " (live warm edit rebuilds)") : run.plain
+			? " (plain build)" : "");
 
 	static function runOutput(root:String, run:ProgramRun):String
 		return Path.join([
 			root,
 			"out",
-			run.test.name + (run.warm ? (run.plain ? ".warm" : ".live.warm") : run.plain ? ".plain" : "")
-				+ (run.unpruned ? ".unpruned" : "") + ".hl"
+			run.test.name + (run.warm ? (run.plain ? ".warm" : ".live.warm") : run.plain ? ".plain" : "") + ".hl"
 		]);
 
 	/**
@@ -575,19 +567,11 @@ class TestRunner {
 			{
 				test: test,
 				plain: false,
-				unpruned: false,
 				warm: false
 			},
 			{
 				test: test,
 				plain: true,
-				unpruned: false,
-				warm: false
-			},
-			{
-				test: test,
-				plain: true,
-				unpruned: true,
 				warm: false
 			}
 		];
@@ -595,26 +579,18 @@ class TestRunner {
 			runs.push({
 				test: test,
 				plain: false,
-				unpruned: false,
 				warm: true
 			});
 			runs.push({
 				test: test,
 				plain: true,
-				unpruned: false,
-				warm: true
-			});
-			runs.push({
-				test: test,
-				plain: true,
-				unpruned: true,
 				warm: true
 			});
 		}
 		return runs;
 	}
 
-	/** Every program is built and run three times, live, plain (pruned early, the default) and plain without the early prune, so a difference between the modes fails a case. */
+	/** Every program is built and run live and plain, so a difference between the modes fails a case. */
 	public function runPrograms(tests:Array<ProgramCase>, jobs:Int):Int {
 		if (tests.length == 0)
 			return 0;

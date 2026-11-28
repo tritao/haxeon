@@ -392,9 +392,8 @@ the module, copied to the `--hl` path. A compilation's cache is removed after 30
 ### Direct compiler options
 
 A compile states its passes and self-checks as flags, never through the environment, so one compile server serves any
-mix of them: `--no-inline`, `--no-load-store-forwarding`, `--no-strength-reduction`, `--no-early-prune` (a migration
-reference for the reachability walk), `--check-reuse` (compare everything a compile reuses with a fresh build; slow, for
-the test suites), `--no-verify-ir` and `--verify-ir`, and `--wasm-legacy-exceptions`. The IR verifiers check each
+mix of them: `--no-inline`, `--no-load-store-forwarding`, `--no-strength-reduction`, `--check-reuse` (compare
+everything a compile reuses with a fresh build; slow, for the test suites), `--no-verify-ir` and `--verify-ir`, and `--wasm-legacy-exceptions`. The IR verifiers check each
 function's CFG and the final HashLink IR before lowering; a release build (`--build-mode=release`) skips them unless
 `--verify-ir` is given, and the test driver always gives it.
 

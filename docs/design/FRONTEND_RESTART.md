@@ -11,7 +11,7 @@ Blocker 1 is a predicate: `Std` calls compiler intrinsics, and `DynamicOps` and 
 where the intrinsics are registered (a harness that adds a stdlib root without `CompilerIntrinsics.register` has none of them).
 Blocker 2 is the leak named below, closed in every build: whether the program reflects over object layouts is read from the
 natives reached code calls (`IrObjectReflection.usedByProgram`, which `IrEnumDynamicDispatch` now reads too). Wasm runs the walk
-from the entry without pruning for that answer, as `--no-early-prune` does on HashLink. A live HashLink build prunes as a one-shot
+from the entry without pruning for that answer. A live HashLink build prunes as a one-shot
 build does ([LIVE_PRUNING.md](LIVE_PRUNING.md)), so programs that count allocations check it in live builds too.
 
 What follows is the note as written before the change. Measured on 2026-11-12 with haxeon 7b97c092e on the Materia app of outer e9173b977 (the baseline recorded in

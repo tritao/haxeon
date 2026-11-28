@@ -47,9 +47,11 @@ class GeneratedEqualityProvenanceMain {
 					var warmResult = c.compile("Main");
 					if (valueType.indexOf("height") >= 0) {
 						var generatedOps = 0;
-						// A build without the early prune keeps the generated helpers nothing calls, which this check needs to see.
+						// The nullable field helpers are generated and never called, so a HashLink build prunes them; a Wasm build keeps
+						// what nothing reaches, so its IR still shows them.
 						var inspected = create(edited);
-						inspected.options = new compiler.CompileOptions({earlyPrune: false});
+						inspected.configure("generated-equality-wasm32", "generated-equality-wasm32",
+							["target=wasm32"]);
 						for (fn in inspected.compile("Main").ir.functions)
 							for (block in fn.blocks)
 								for (located in block.instructions)

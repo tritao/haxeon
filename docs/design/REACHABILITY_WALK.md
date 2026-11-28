@@ -79,7 +79,7 @@ in enum/value conversion selection before their representations change.
 change must not move the module's layout. This matches the backends today. The walk and the invariant still run on live builds in check
 mode (so a missed edge is caught there too) and the prune is skipped; revisit after measuring. Measured and decided:
 live builds prune, since module sections slice 4c ([LIVE_PRUNING.md](LIVE_PRUNING.md)), with the same walk; their layout keeps
-every declared method as a stub. The driver runs every program case live, plain and plain unpruned.
+every declared method as a stub. The driver runs every program case live and plain.
 
 ## Prerequisite of the prune: dynamic sites are typed, not named
 
@@ -111,7 +111,7 @@ test failure. Cost: one set lookup per call edge, check mode only.
    not need the prune and catches a missing producer early. Its timing is coordinated with a1's producer commit through dev-71.
 2. **Decision gate.** Record the kept functions, objects and providers of the conservative and the new walk for self-hosting and the app in
    this note. If both keep less than about 5% fewer functions than the conservative walk, stop after step 2 and do not do the prune.
-3. **Pruned and unpruned equal** (decision 6): the driver runs both on every program case, plain and live.
+3. **Pruned and unpruned equal** (decision 6): the driver ran both on every program case until the unpruned path was removed (step 3a, "Removal").
 4. **Warm equals cold with the prune on.** In step 3 the warm-edit sweep and `--check-reuse` run with the prune on, not just in step
    1. An edit that changes the reachable set must give the same bytes as a cold build. The walk's result must be a function of the
    program graph, so cached results stay valid; this is confirmed by those runs.
@@ -150,7 +150,7 @@ What the numbers say about the walk itself:
 - No `$` function without a kind in any of the three (kindless helpers: 0), so the prerequisite "no target-only helper without a kind" holds on these.
 - Not measured: the effect of the prune on pass time, which is step 3's evidence (`perf-guard.py` before and after).
 
-## Step 3a, first cut (on by default for plain HashLink builds; `--no-early-prune` turns it off)
+## Step 3a, first cut (every HashLink build)
 
 `IrEntryPrune` prunes a plain HashLink build inside `IrProgramAssembler.assemble`, **after generic owner erasure** and before every later
 pass (value interface boxes, typed interface calls, checked casts, enum lowering, optional flows, reflection and, after `assemble`, the passes
@@ -185,9 +185,8 @@ and the erasure's own devirtualization silently did not happen. Erased-owner nam
 
 ### Removal and 3b items of step 3a
 
-- **Removal.** ``--no-early-prune``, `Main --no-early-prune` and the driver's unpruned reference run are a migration reference, not a product option, and
-  there is no user-facing fallback. Delete the switch, the flag and the unpruned run (and the gate's coverage field for it) when 3b lands, or after
-  the pruned path has been the default through two pushes, whichever comes first.
+- **Removal.** Done: `--no-early-prune`, its `CompileOptions` switch, the driver's unpruned reference run and the gate's coverage
+  field for it are gone. The prune has no off switch; a build that needs to see an unreached function compiles a program that reaches it.
 - **3b: a closure field's ABI from its type.** The scalar-argument pass chooses the ABI of a closure field (the `$get` / `$set` fields of key-path classes)
   from which closures exist, so an unreachable key path's field ABI changes with the prune (`key-path-semantics`). It is benign (deterministic,
   and no reachable code reads the field), but the field's ABI should follow from the field's type, not from the presence of functions.

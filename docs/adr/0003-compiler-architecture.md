@@ -354,7 +354,8 @@ Decision:
    registered by the compiler itself.
 6. **Tests.**
    - Program cases build and run both live and plain.
-   - A standing test runs programs pruned and unpruned and requires equal behavior.
+   - A standing test ran programs pruned and unpruned and required equal behavior, until the unpruned path was removed
+     ([REACHABILITY_WALK.md](../design/REACHABILITY_WALK.md), step 3a, "Removal").
 
 Migration, each step separately gated:
 

@@ -14,7 +14,7 @@ class Main {
 	static function compileRequest(arguments:Array<String>):Void {
 		// `--plain` builds as `haxeon build` does: not for live patching, so what nothing reaches is not in the module.
 		var plain = arguments.indexOf("--plain") >= 0;
-		// The passes and self-checks (`--no-inline`, `--no-early-prune`, `--check-reuse`, ...) are this request's alone.
+		// The passes and self-checks (`--no-inline`, `--check-reuse`, ...) are this request's alone.
 		var options = CompileOptions.fromArguments(arguments);
 		arguments = [
 			for (argument in arguments)

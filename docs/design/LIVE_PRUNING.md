@@ -176,7 +176,7 @@ ci-tier hot-reload suite and perf-guard's live part (first build, edits and serv
 | 1 | Host entry points in the live request's `exports`; live builds run the prune walk without pruning and report its counts. Folded into 3: the exports landed with it | +80 | the driver's live runs report the reach; a host started with a pruned module starts | — |
 | 2 | The reach set as an engine summary over per-function contributions, for plain builds; `IrWalkRecord` of the prune walk goes | −200 / +300 | `--check-reuse` recomputes contributions and the walk | engine slice 3 (or beside it) |
 | 3 | Live prune on sections: layouts from declarations, the growing published set, `firstReached` carried, planner causes narrowed, live `--check-reuse`. Landed ("As built in slice 3") | −150 / +450 compiler, +60 fork | the new live edits; the patch mains; an Android watch run | 1, 2, MODULE_SECTIONS slice 4 |
-| 4 | Remove the unpruned live path: the live builds' skip of the prune, the driver's unpruned live run, `--no-early-prune` | −150 | — | 3, two pushes |
+| 4 | Remove the unpruned path: the driver's unpruned runs, `--no-early-prune` and its `CompileOptions` switch. Landed | −150 | — | 3, two pushes |
 | 5 | IR generation on demand from the walk (REACHABILITY_WALK.md 3b) | not estimated | live data of unreached modules | 3 |
 
 Slice 3 is one change with slice 4 of module sections, as decided: a dense interim would need the debug-file, native and
@@ -198,7 +198,7 @@ Decided by the user on 2026-11-26:
 Landed as module sections slice 4c ([MODULE_SECTIONS.md](MODULE_SECTIONS.md), "As built in slice 4c").
 
 - **The prune.** A live HashLink build prunes at the 3a point with the one-shot build's walk and roots
-  (`FrontendCompilation.runIrPipeline`), and `--no-early-prune` turns it off for both. The live host's entry points are
+  (`FrontendCompilation.runIrPipeline`); it has no off switch since slice 4. The live host's entry points are
   exports: `CompilerProvider` passes `--export=<entry>.<point>` for every name of `LiveEntryPoints.ALL` on a live build, which
   `CompilerArguments` takes with `--live` as with a Wasm target; a name the entry class does not declare roots nothing.
 - **Layouts from declarations.** With `declaredMethods` (`IrPipelineContext`, a live layout) the prune keeps every method of

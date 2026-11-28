@@ -8,7 +8,6 @@ typedef CompileOptionsInit = {
 	final ?inlining:Bool;
 	final ?loadStoreForwarding:Bool;
 	final ?strengthReduction:Bool;
-	final ?earlyPrune:Bool;
 	final ?checkReuse:Bool;
 	final ?wasmLegacyExceptions:Bool;
 	final ?reverseTypingOrder:Bool;
@@ -39,12 +38,6 @@ class CompileOptions {
 
 	/** Replace costly arithmetic by cheaper equivalent operations (`IrStrengthReduction`). */
 	public final strengthReduction:Bool;
-
-	/**
-	 * Prune what the entry cannot reach before the passes run (`IrEntryPrune`). Off only to compare against the unpruned
-	 * pipeline: it is a migration reference, not a product option (docs/design/REACHABILITY_WALK.md, "Removal").
-	 */
-	public final earlyPrune:Bool;
 
 	/**
 	 * Check every reuse (cached IR and lowerings, links, modules, memoized inlining and verification, the early prune) against
@@ -138,7 +131,6 @@ class CompileOptions {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
 		strengthReduction = init == null || init.strengthReduction != false;
-		earlyPrune = init == null || init.earlyPrune != false;
 		checkReuse = init != null && init.checkReuse == true;
 		wasmLegacyExceptions = init != null && init.wasmLegacyExceptions == true;
 		reverseTypingOrder = init != null && init.reverseTypingOrder == true;
@@ -171,7 +163,6 @@ class CompileOptions {
 			inlining: inlining,
 			loadStoreForwarding: loadStoreForwarding,
 			strengthReduction: strengthReduction,
-			earlyPrune: earlyPrune,
 			checkReuse: checkReuse,
 			wasmLegacyExceptions: wasmLegacyExceptions,
 			reverseTypingOrder: reverseTypingOrder,
@@ -197,8 +188,6 @@ class CompileOptions {
 			flags.push("--no-load-store-forwarding");
 		if (!strengthReduction)
 			flags.push("--no-strength-reduction");
-		if (!earlyPrune)
-			flags.push("--no-early-prune");
 		if (checkReuse)
 			flags.push("--check-reuse");
 		if (wasmLegacyExceptions)
@@ -283,7 +272,7 @@ class CompileOptions {
 	/** Whether `argument` is one of the flags `arguments` writes. */
 	public static function isFlag(argument:String):Bool
 		return switch argument {
-			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction", "--no-early-prune",
+			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction",
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
@@ -299,7 +288,6 @@ class CompileOptions {
 			inlining: arguments.indexOf("--no-inline") < 0,
 			loadStoreForwarding: arguments.indexOf("--no-load-store-forwarding") < 0,
 			strengthReduction: arguments.indexOf("--no-strength-reduction") < 0,
-			earlyPrune: arguments.indexOf("--no-early-prune") < 0,
 			checkReuse: arguments.indexOf("--check-reuse") >= 0,
 			wasmLegacyExceptions: arguments.indexOf("--wasm-legacy-exceptions") >= 0,
 			reverseTypingOrder: arguments.indexOf("--reverse-typing-order") >= 0,

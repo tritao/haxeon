@@ -1759,7 +1759,7 @@ class FrontendCompilation {
 				build.initializers, entryPoint, irCNatives, build.reflectable,
 				context.state.inlineCache, context.valueArrayTarget(),
 				context.exportedFunctions(), context.isWasmTarget() || !context.livePatching,
-				!context.isWasmTarget() && context.options.earlyPrune, context.livePatching && !context.isWasmTarget(),
+				!context.isWasmTarget(), context.livePatching && !context.isWasmTarget(),
 				[for (object in objects) {
 					if (object.isValue && object.nativeLayout != null) {
 						var canonical = canonicalObjects.get(object.name);

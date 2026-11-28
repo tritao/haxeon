@@ -379,14 +379,12 @@ class SuiteRunner {
 
 	/** Counts the program cases a driver log shows passing, by build kind. */
 	static function coverage(log:String):String {
-		var live = 0, plain = 0, warm = 0, pruned = 0, prunedWarm = 0;
+		var live = 0, plain = 0, warm = 0, liveWarm = 0;
 		for (line in File.getContent(log).split("\n")) {
 			if (!StringTools.startsWith(line, "PASS: ") || line.indexOf(" source compiled and executed") < 0)
 				continue;
-			if (line.indexOf("(warm edit rebuilds, no early prune) source compiled") >= 0)
-				prunedWarm++;
-			else if (line.indexOf("(plain build, no early prune) source compiled") >= 0)
-				pruned++;
+			if (line.indexOf("(live warm edit rebuilds) source compiled") >= 0)
+				liveWarm++;
 			else if (line.indexOf("(warm edit rebuilds) source compiled") >= 0)
 				warm++;
 			else if (line.indexOf("(plain build) source compiled") >= 0)
@@ -394,8 +392,8 @@ class SuiteRunner {
 			else
 				live++;
 		}
-		return 'programs: $live live, $plain plain, $pruned plain+no-early-prune, warm-edit: ${warm > 0 ? 'yes ($warm)' : "no"}, '
-			+ 'warm-edit+no-early-prune: ${prunedWarm > 0 ? 'yes ($prunedWarm)' : "no"}';
+		return 'programs: $live live, $plain plain, warm-edit: ${warm > 0 ? 'yes ($warm)' : "no"}, '
+			+ 'live warm-edit: ${liveWarm > 0 ? 'yes ($liveWarm)' : "no"}';
 	}
 
 	function record(line:String):Void {
