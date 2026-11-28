@@ -8,6 +8,7 @@ import build.TargetLayout;
 import compiler.core.FileVersion;
 import compiler.core.InternalError;
 import compiler.core.TextDigest;
+import compiler.modules.ModulePath;
 import compiler.service.LanguageService;
 import compiler.tools.SourceManifestLoader;
 import haxe.Json;
@@ -110,6 +111,12 @@ class ProjectWorkspace {
 	final unconfiguredSourceRoots:Array<String> = [];
 	final workspaceRootPaths:Array<String> = [];
 	final documentConfigurations:Map<String, Bool> = [];
+	/**
+		Roots of documents outside every source root (a package's tests beside its `src`), each the directory its package
+		declaration implies, so its neighbours resolve as they do when the file is compiled on its own. By root, the configuration
+		file nearest the documents, which configures them. Only a project's own files get one: the root is inside its directory.
+	**/
+	final documentRoots:Map<String, String> = [];
 	final detachedConfigurations:Map<String, HaxeProjectConfiguration> = [];
 	var preferredConfigurationId:Null<String>;
 
@@ -240,6 +247,14 @@ class ProjectWorkspace {
 		});
 		if (matches.length > 0)
 			return matches[0];
+		var documentRoot:Null<String> = null;
+		for (root in documentRoots.keys())
+			if (contains(root, normalized) && (documentRoot == null || root.length > documentRoot.length))
+				documentRoot = root;
+		if (documentRoot != null)
+			for (configuration in configurations)
+				if (configuration.file == documentRoots.get(documentRoot))
+					return configuration;
 		for (root in unconfiguredSourceRoots)
 			if (normalized == root
 				|| StringTools.startsWith(normalized, (StringTools.endsWith(root, "/") ? root : root + "/")))
@@ -284,14 +299,22 @@ class ProjectWorkspace {
 			for (classPath in configuration.classPaths)
 				if (sourceRoots.indexOf(classPath) < 0)
 					sourceRoots.push(classPath);
+		for (root in documentRoots.keys())
+			if (sourceRoots.indexOf(root) < 0)
+				sourceRoots.push(root);
 		sourceRoots.sort(Reflect.compare);
 		for (root in sourceRoots)
 			loadSources(root, service, isOpen);
 	}
 
 	/** Discover project ownership from source location, independently of Explorer roots. */
-	public function includeDocument(path:String, service:LanguageService, isOpen:String->Bool):Void {
-		for (file in nearestConfigurations(Path.directory(normalize(path)))) {
+	/**
+	 * Loads the configuration nearest the document at `path`, whose text is `source`, and, when the document is in that project's
+	 * directory but no source root holds it, the root its package declaration implies (`documentRoots`).
+	 */
+	public function includeDocument(path:String, source:String, service:LanguageService, isOpen:String->Bool):Void {
+		var nearest = nearestConfigurations(Path.directory(normalize(path)));
+		for (file in nearest) {
 			var known = false;
 			for (configuration in configurations)
 				if (configuration.file == file)
@@ -302,16 +325,30 @@ class ProjectWorkspace {
 				var configuration = parseConfiguration(file);
 				documentConfigurations.set(file, true);
 				configurations.push(configuration);
-				for (root in configuration.classPaths)
-					if (sourceRoots.indexOf(root) < 0)
-						sourceRoots.push(root);
-				sourceRoots.sort(Reflect.compare);
-				for (root in configuration.classPaths)
-					loadSources(root, service, isOpen);
+				addSourceRoots(configuration.classPaths, service, isOpen);
 			} catch (failure:Dynamic) {
 				errors.push('$file: ${Std.string(failure)}');
 			}
 		}
+		// A file no project configures keeps its own path, as the editor always named it: its directory may be anything.
+		var normalized = normalize(path);
+		if (nearest.length == 0 || preferredSourceRoot(normalized) != null)
+			return;
+		var root = ModulePath.packageRoot(Path.directory(normalized), ModulePath.declaredPackage(source));
+		if (root == null || !contains(Path.directory(nearest[0]), root) || !FileSystem.isDirectory(root))
+			return;
+		documentRoots.set(root, nearest[0]);
+		addSourceRoots([root], service, isOpen);
+	}
+
+	/** Adds `roots` as source roots and loads their sources, once all are known: a file goes to the deepest root holding it. */
+	function addSourceRoots(roots:ReadOnlyArray<String>, service:LanguageService, isOpen:String->Bool):Void {
+		for (root in roots)
+			if (sourceRoots.indexOf(root) < 0)
+				sourceRoots.push(root);
+		sourceRoots.sort(Reflect.compare);
+		for (root in roots)
+			loadSources(root, service, isOpen);
 	}
 
 	/** Nearest directory with configuration wins; overlapping folders share its files. */
@@ -660,6 +697,9 @@ class ProjectWorkspace {
 
 	static function resolve(base:String, path:String):String
 		return normalize(Path.isAbsolute(path) ? path : Path.join([base, path]));
+
+	static function contains(root:String, path:String):Bool
+		return path == root || StringTools.startsWith(path, StringTools.endsWith(root, "/") ? root : root + "/");
 
 	static function relativePath(root:String, path:String):String {
 		var prefix = StringTools.endsWith(root, "/") ? root : root + "/";

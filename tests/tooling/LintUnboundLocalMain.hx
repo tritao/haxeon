@@ -8,7 +8,8 @@ import tools.TypedLint;
 /**
  * `haxeon lint --only unbound-local` names each local whose type nothing fixes, which settles to Dynamic, typing the file's project
  * through the language service. The rule is opt-in: a plain `haxeon lint` neither runs it nor needs types. A local fixed later is
- * not named, nor is a local of a body that fails to type, while the bodies that type are still reported.
+ * not named, nor is a local of a body that fails to type, while the bodies that type are still reported. A project's file outside
+ * its source roots resolves the modules beside it.
  */
 class LintUnboundLocalMain {
 	static function main():Void {
@@ -95,6 +96,25 @@ class LintUnboundLocalMain {
 			['$brokenPath:4: local "stillReported" is Dynamic: nothing fixes the type of local "stillReported"']);
 		if (!report.failed)
 			throw "Broken.hx does not type, but the rule did not say so";
+
+		// A project's file outside its source roots (a test beside src) is typed with the root its package implies, so the
+		// modules beside it resolve.
+		FileSystem.createDirectory(Path.join([base, "app/tests"]));
+		write(base, "app/tests/AppTest.hx", [
+			'function main() {',
+			'	var loose;',
+			'	trace(TestHelper.value());',
+			'}',
+			''
+		].join("\n"));
+		write(base, "app/tests/TestHelper.hx",
+			'class TestHelper {\n\tpublic static function value():Int\n\t\treturn 1;\n}\n');
+		var testPath = Path.join([base, "app/tests/AppTest.hx"]);
+		report = TypedLint.find("unbound-local", [testPath], "/");
+		expect("AppTest.hx", report.lines,
+			['$testPath:2: local "loose" is Dynamic: nothing fixes the type of local "loose"']);
+		if (report.failed)
+			throw "AppTest.hx types with the module beside it, but the rule says it failed";
 
 		// The option: off by default, run through the typed-rule tool only when `--only unbound-local` names it.
 		var ran:Null<Array<String>> = null;

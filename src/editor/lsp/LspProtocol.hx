@@ -396,7 +396,7 @@ class LspProtocol {
 		if (document == null)
 			return [];
 		if (opening)
-			project.includeDocument(document.path, service, path -> documents.forPath(path) != null);
+			project.includeDocument(document.path, document.source, service, path -> documents.forPath(path) != null);
 		var generation = ++analysisGeneration;
 		var path = activateConfiguration(document.path);
 		service.update(path, document.source, document.path);

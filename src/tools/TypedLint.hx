@@ -172,7 +172,7 @@ class TypedLint {
 
 	/** Types the program of the file at `path` unless an earlier analysis did; false when it does not type. */
 	function analyze(path:String):Bool {
-		workspace.includeDocument(path, service, _ -> false);
+		workspace.includeDocument(path, File.getContent(path), service, _ -> false);
 		var compilerPath = workspace.refresh(path, service, false),
 			configuration = workspace.configurationFor(path),
 			scope = configuration == null ? "default" : configuration.id,
