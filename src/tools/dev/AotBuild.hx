@@ -13,8 +13,12 @@ import sys.io.File;
  * `haxeon dev aot [--toolchain=NAME] [--no-publish]`: builds the CLI and the compiler ahead of time, one executable
  * (`build.AotCompiler`), from this checkout and publishes it beside the VM with its stamp, which is what a release ships for its
  * platform. `--no-publish` leaves it in `out/aot`, so the haxeon command and the CLI keep running the compiler on the VM while a
- * test compiles with the executable. The checkout's compiler, built to bytecode with the pinned Haxe, compiles
- * `tools.CompilerExecutable` to C in release mode as every tool artifact (`HaxeonBuild.TOOL_BUILD_MODE`), and `cmake/aot` builds the C with the SDK's CMake package (`haxeon_add_c_executable`).
+ * test compiles with the executable. The executable built before (in `out/aot`, else the one published), current or not,
+ * compiles `tools.CompilerExecutable` to C in release mode as every tool artifact (`HaxeonBuild.TOOL_BUILD_MODE`): it starts
+ * at once and runs about twice as fast as the bytecode, and needs no bytecode build of the edited sources first. When there
+ * is none, or it rejects the new sources (they use what it does not have yet), the checkout's compiler built to bytecode with
+ * the pinned Haxe compiles them instead. A compiler built by its previous version is what self-hosting is; the self-compile
+ * check keeps the two agreeing. `cmake/aot` builds the C with the SDK's CMake package (`haxeon_add_c_executable`).
  * `--toolchain` is the C compiler CMake builds with (`CMAKE_C_COMPILER`: `gcc`, `clang`, `clang-cl`, `cl`, or a path); without
  * it CMake chooses, except that an SDK built with MSVC is built with clang-cl, as the Windows release is. The C sources and
  * CMake's build stay in `out/aot`, so a rebuild after an edit compiles only the C files that changed, and a rebuild with the
@@ -34,12 +38,7 @@ class AotBuild {
 		var nativeStatus = build.HaxeonBuild.buildNative(new build.BuildEnvironment(home, Path.join([home, "out"])));
 		if (nativeStatus != 0)
 			return nativeStatus;
-		var compiler = new ToolArtifacts(home).resolve({
-			main: "compiler.tools.HaxeonCompiler",
-			classPaths: [],
-			defines: []
-		}),
-			sdk = build.HaxeonSdk.ofCheckout(home),
+		var sdk = build.HaxeonSdk.ofCheckout(home),
 			directory = Path.join([home, "out", "aot"]),
 			output = Path.join([directory, AotCompiler.NAME]),
 			suffix = Sys.systemName() == "Windows" ? ".exe" : "",
@@ -54,7 +53,6 @@ class AotBuild {
 		var digest = AotCompiler.sourcesDigest(sdk, compilerSource),
 			generated = AotCompiler.stampOf('$output.c'),
 			arguments = [
-				compiler,
 				'--build-mode=${build.HaxeonBuild.TOOL_BUILD_MODE}',
 				"--entry=tools.CompilerExecutable",
 				'--sources-file=$sourcesFile',
@@ -65,10 +63,25 @@ class AotBuild {
 		if (!FileSystem.exists(generated) || StringTools.trim(File.getContent(generated)) != digest) {
 			if (FileSystem.exists(generated))
 				FileSystem.deleteFile(generated);
-			status = ProcessRunner.run(HashLinkPath.executable(sdk), arguments, home,
-				CompilerClient.runtimeLibraryEnvironment(sdk));
-			if (status != 0)
-				return status;
+			var environment = CompilerClient.runtimeLibraryEnvironment(sdk), previous:Null<String> = null;
+			for (candidate in [output + suffix, AotCompiler.executable(sdk)])
+				if (previous == null && FileSystem.exists(candidate))
+					previous = candidate;
+			status = previous == null ? -1 : ProcessRunner.run(previous, arguments, home, environment);
+			if (status != 0) {
+				if (previous != null)
+					Sys.stderr()
+						.writeString('note: $previous did not compile these sources; compiling them with the bytecode compiler\n');
+				var compiler = new ToolArtifacts(home).resolve({
+					main: "compiler.tools.HaxeonCompiler",
+					classPaths: [],
+					defines: []
+				});
+				status = ProcessRunner.run(HashLinkPath.executable(sdk), [compiler].concat(arguments), home,
+					environment);
+				if (status != 0)
+					return status;
+			}
 		}
 		if (toolchain == null && msvcSdk(sdk))
 			toolchain = "clang-cl";

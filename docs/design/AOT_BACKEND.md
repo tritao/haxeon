@@ -392,12 +392,15 @@ A release ships the executable and its stamp for each platform in the VM's direc
 the programs `AotCompiler.shipped` names, with the live development host), which `AotCompiler.program` runs on the VM when there
 is no current executable, as the launcher then runs the CLI's bytecode
 (`haxeon-cli.hl`): a release has no pinned Haxe to build them from its sources, and the Windows release does not build the
-executable yet. The executable is made by `haxeon dev aot [--toolchain=NAME]` (`tools.dev.AotBuild`): the native build (for the hlc SDK), the checkout's compiler
-built to bytecode, `--target=hlc` of `tools.CompilerExecutable` in release mode (`HaxeonBuild.TOOL_BUILD_MODE`), the C built
+executable yet. The executable is made by `haxeon dev aot [--toolchain=NAME]` (`tools.dev.AotBuild`): the native build (for the hlc SDK), `--target=hlc` of
+`tools.CompilerExecutable` in release mode (`HaxeonBuild.TOOL_BUILD_MODE`) by the executable published before, current or
+not, and by the checkout's compiler built to bytecode only when there is none or it rejects the new sources, the C built
 through `cmake/aot` with the C compiler given (`CMAKE_C_COMPILER`), else CMake's, or clang-cl for an SDK built with MSVC, then
 the executable (and its PDB with MSVC) published by rename (`cmake/haxeon-replace.cmake`, so a running worker, or the running
 CLI, keeps its file) and the stamp written last. The C sources and CMake's build stay in `out/aot`, so a rebuild
-compiles only the C files that changed. The hlc build links libhl statically, so the executable needs nothing beside it; the stack
+compiles only the C files that changed. The previous executable starts at once and needs no bytecode build of the edited
+sources, so a rebuild after a one-line edit takes about 35 s instead of about 70 s; it emits the same C as the bytecode
+compiler (checked file by file), as a self-hosting compiler's previous version does. The hlc build links libhl statically, so the executable needs nothing beside it; the stack
 traces read its own DWARF (`-g1`), which is most of its size. On Linux the CLI with the executable builds a one-file project cold
 (CLI start, compile server start, compile) in 1.2 s against 2.3 s with the bytecode worker, and a language server session starts
 in 0.6 s against 2.1 s. With the CLI in it too, `haxeon --version` takes 0.13 s against 1.3 s, and the cold build of the
