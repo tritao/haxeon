@@ -239,9 +239,9 @@ class LayoutSessionSmoke {
 		}
 		var target = AnchorTarget.Node(301);
 		expect("below", new LayoutAnchor(target, side: AnchorSide.Below, gap: 4.0), 50.0, 74.0);
-		// Above has 36 of room for 80 and below more, so it flips; without flip it is clamped into the viewport instead.
+		// Above has 36 of room for 80 and below more, so it flips; without flip it stays above, past the viewport's edge.
 		expect("above, flipped", new LayoutAnchor(target, side: AnchorSide.Above, gap: 4.0, flip: true), 50.0, 74.0);
-		expect("above, clamped", new LayoutAnchor(target, side: AnchorSide.Above, gap: 4.0), 50.0, 0.0);
+		expect("above, on its side", new LayoutAnchor(target, side: AnchorSide.Above, gap: 4.0), 50.0, -44.0);
 		// Near the corner: flipped above, and kept 8 inside the right edge.
 		expect("at a rectangle", new LayoutAnchor(AnchorTarget.Area(new Rect(350.0, 280.0, 10.0, 10.0)),
 			side: AnchorSide.Below, flip: true, margin: 8.0), 272.0, 200.0);

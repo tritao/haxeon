@@ -1624,8 +1624,8 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    | Scroll animation | `ScrollController` (`RetainedAnimation`) | the offset above | stage 7: a frame-clock signal bound to it |
    | Scrollbar fade and hover | `ScrollView` via `ScrollbarVisibilityController` | track, thumb, visual: colour, width | stage 7: layer opacity; width as a paint-only change |
    | Scrollbar geometry | `ScrollView` after layout | track and thumb position and size | stage 6: independent placement |
-   | Popup placement | `Popup` after layout | panel position | stage 6: independent placement |
-   | Tooltip placement | `Tooltip` after layout (twice) | position, label's maximum width | stage 6 for position; the width reflows text, so a solve |
+   | Popup placement | `Popup` after layout | panel position | done (2026-11-28): a `LayoutAnchor` |
+   | Tooltip placement | `Tooltip` after layout (twice) | position, label's maximum width | done (2026-11-28): a `LayoutAnchor`; the width limit, known from the viewport or rail, is set at build |
    | Middle ellipsis | `MiddleEllipsisText` after layout | the label's text | a solve: the text is measured content |
    | Spinner step | `SpinnerClock` (`RetainedAnimation`) | custom paint | stage 7: paint-dirty only, no layout |
    | Kept body's modifier | `BuildContext` when a body is kept | the kept root's caller additions | the frame pipeline's settle-structure stage |

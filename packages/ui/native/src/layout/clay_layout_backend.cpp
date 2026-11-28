@@ -1034,9 +1034,14 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, float width, float 
             }
             x += node.style.position_x;
             y += node.style.position_y;
-            // Kept inside the region; a node larger than it keeps its start edge inside.
-            x = std::max(left, std::min(x, right - w));
-            y = std::max(top, std::min(y, bottom - h));
+            // Kept inside the region; a node larger than it keeps its start edge inside. A node that does not flip stays on
+            // its side, so the region holds it on the cross axis only.
+            const bool clamp_x = anchor.side == LayoutAnchorSide::Overlap || vertical || anchor.flip;
+            const bool clamp_y = anchor.side == LayoutAnchorSide::Overlap || !vertical || anchor.flip;
+            if (clamp_x)
+                x = std::max(left, std::min(x, right - w));
+            if (clamp_y)
+                y = std::max(top, std::min(y, bottom - h));
             float dx = x - current.x, dy = y - current.y;
             if (node.parent >= 0) {
                 LayoutTransform inverse{};

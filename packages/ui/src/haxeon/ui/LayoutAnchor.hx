@@ -34,7 +34,10 @@ struct LayoutAnchor implements Equatable {
 	/** Whether the node aligns the opposite edges on the cross axis when it would overflow the region there. */
 	public final flipCross:Bool = false;
 
-	/** The region the node is kept inside. */
+	/**
+	 * The region the node is kept inside: on both axes when it overlaps its anchor or may flip; else on the cross axis
+	 * only, so it stays on its side even past the region's edge.
+	 */
 	public final within:AnchorBounds = AnchorBounds.Viewport;
 
 	/** How far inside the region the node is kept. */

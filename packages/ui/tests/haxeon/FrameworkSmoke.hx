@@ -2789,7 +2789,8 @@ class FrameworkSmoke {
 		if (context.focus.focusedId == null
 			|| menuRoot.children[0].layout.style.background.alpha != 0.0 || Math.abs(menuGeometry.x - Math.max(8.0,
 			Math.min(32.0, dialogFrame.width - menuGeometry.width - 8.0))) > 0.1 || menuGeometry.y != 24.0
-			|| menuRoot.children[2].layout.style.radiusTopLeft != 0.0) return 74;
+			|| menuRoot.children[2].layout.style.radiusTopLeft != 0.0)
+			throw 'Menu at ${menuGeometry.x}, ${menuGeometry.y} (${menuGeometry.width} wide) in a ${dialogFrame.width} frame (check 74)';
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
 		var disabledMenuPresent = false;
 		menuRoot.walk(function(node) {

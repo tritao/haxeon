@@ -28,7 +28,8 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	 */
 	const NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_NODE_OFFSET = 312;
 	/**
-	 * The region the node is kept inside (nkui_layout_anchor_bounds).
+	 * The region the node is kept inside (nkui_layout_anchor_bounds): on both axes when it overlaps its anchor or may flip,
+	 * else on the cross axis only, so it stays on its side.
 	 */
 	const NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_OFFSET = 308;
 	/**

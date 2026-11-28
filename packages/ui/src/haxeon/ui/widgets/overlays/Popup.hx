@@ -6,6 +6,10 @@ import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutAnchor.AnchorSide;
+import haxeon.ui.LayoutAnchor.AnchorBounds;
+import haxeon.ui.LayoutAnchor.AnchorTarget;
+import haxeon.ui.LayoutAnchor;
 import haxeon.ui.Rect;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
@@ -30,8 +34,11 @@ class Popup implements View {
 
 	/** The popup's box. */
 	public final style:LayoutStyle;
-	/** Optional live anchor in logical screen coordinates; placement uses measured panel size. */
-	public final anchorRectProvider:Null<Void->Null<Rect>>;
+	/**
+	 * The rectangle the popup opens at, in viewport coordinates, such as a pointer position; the layout places it below,
+	 * or above when there is more room there, from its measured size (`LayoutAnchor`).
+	 */
+	public final anchor:Null<Rect>;
 
 	/** The popup's accessible name. */
 	public final label:Null<String>;
@@ -75,7 +82,7 @@ class Popup implements View {
 	 */
 	public function new(key:String,
 			child:View, x:Float = 0.0, y:Float = 0.0, ?style:LayoutStyle, ?onDismiss:Void->Void,
-			?anchorRectProvider:Void->Null<Rect>,
+			?anchor:Rect,
 			?label:String,
 			modal:Bool = true,
 			dimBackdrop:Bool = true,
@@ -97,7 +104,7 @@ class Popup implements View {
 		hasDismissHandler = onDismiss != null;
 		this.onDismiss = onDismiss == null ? function() {}
 			: onDismiss;
-		this.anchorRectProvider = anchorRectProvider;
+		this.anchor = anchor;
 		this.label = label;
 		this.modal = modal;
 		this.dimBackdrop = dimBackdrop;
@@ -151,8 +158,9 @@ class Popup implements View {
 
 			var panelStyle = style.copy();
 			panelStyle.positioning = LayoutPositioning.Absolute;
-			panelStyle.positionX = x;
-			panelStyle.positionY = y;
+			// An anchored panel is placed by the layout; its position would offset it from there.
+			panelStyle.positionX = anchor == null ? x : 0.0;
+			panelStyle.positionY = anchor == null ? y : 0.0;
 			panelStyle.zIndex = layerZIndex + 1;
 			var panelId = context.id("popup-content");
 			var panelIdentity = new StyleIdentity("popup-content", key.rawValue, key.rawValue, null, ["popup"]);
@@ -212,30 +220,11 @@ class Popup implements View {
 			}
 			var content = context.withStyleParent(panelComputed,
 				function() return context.withScope(new Key("content"), function() return child.build(context)));
-			if (anchorRectProvider != null) panel.onResolved(function(geometry) {
-				var bounds = root.resolved;
-				var provider = anchorRectProvider;
-				if (provider == null) return;
-				var anchor = provider();
-				if (bounds == null || anchor == null) return;
-				var left = anchor.x - bounds.x;
-				var top = anchor.y + anchor.height - bounds.y;
-				if (flipHorizontally && left + geometry.width > bounds.width) {
-					var flipped = anchor.x + anchor.width - bounds.x - geometry.width;
-					if (flipped >= 0.0) left = flipped;
-				}
-				if (top + geometry.height > bounds.height) top = anchor.y - bounds.y - geometry.height;
-				var margin = Math.max(0.0, viewportMargin);
-				left = Math.max(margin, Math.min(left, bounds.width - geometry.width - margin));
-				top = Math.max(margin, Math.min(top, bounds.height - geometry.height - margin));
-				if (Math.abs(panel.layout.style.positionX - left) > 0.01
-					|| Math.abs(panel.layout.style.positionY - top) > 0.01) {
-					context.willEditRetained(panel);
-					panel.layout.style.positionX = left;
-					panel.layout.style.positionY = top;
-					context.requestLayoutFeedback();
-				}
-			});
+			// Below the anchor, above it when there is more room there, and kept inside the layer.
+			if (anchor != null) panel.layout.anchor = new LayoutAnchor(AnchorTarget.Area(anchor),
+				side: AnchorSide.Below,
+				flip: true, flipCross: flipHorizontally, within: AnchorBounds.Node(root.id.value),
+				margin: Math.max(0.0, viewportMargin));
 			panel.add(content);
 			root.add(panel);
 			root.on(UiEventKind.KeyDown, function(event) {

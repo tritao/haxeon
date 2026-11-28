@@ -80,8 +80,6 @@ class SearchPickerTests {
 		check(!visible && scheduler.revision == revision && scheduler.activeCount == 0,
 			"Cancelling a waiting tooltip scheduled an unrelated rebuild");
 		delay.dispose();
-		var placement = haxeon.ui.widgets.overlays.Tooltip.place(390, 40, 0, 400);
-		check(390 + placement.x + placement.width + 20 <= 394, "Shared tooltip escaped its bounds");
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();
 		fonts.addDefaultFonts();

@@ -238,7 +238,10 @@ enum {
     NKUI_LAYOUT_NODE_ANCHOR_BOX_ALIGN_OFFSET = 300,
     /** nkui_layout_anchor_flags. */
     NKUI_LAYOUT_NODE_ANCHOR_FLAGS_OFFSET = 304,
-    /** The region the node is kept inside (nkui_layout_anchor_bounds). */
+    /**
+     * The region the node is kept inside (nkui_layout_anchor_bounds): on both axes when it overlaps its anchor or may flip,
+     * else on the cross axis only, so it stays on its side.
+     */
     NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_OFFSET = 308,
     /** The bounds node's ID, for NKUI_LAYOUT_ANCHOR_BOUNDS_NODE; it must come before the anchored node in tree order. */
     NKUI_LAYOUT_NODE_ANCHOR_BOUNDS_NODE_OFFSET = 312,

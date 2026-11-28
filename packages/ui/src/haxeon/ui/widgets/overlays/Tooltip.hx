@@ -6,6 +6,10 @@ import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutAnchor.AnchorSide;
+import haxeon.ui.LayoutAnchor.AnchorBounds;
+import haxeon.ui.LayoutAnchor.AnchorTarget;
+import haxeon.ui.LayoutAnchor;
 import haxeon.ui.Rect;
 import haxeon.ui.animation.Animation;
 import haxeon.ui.animation.AnimationScheduler;
@@ -179,68 +183,14 @@ class Tooltip implements View {
 			var anchorNode = root.children[0];
 			var tooltipNode = root.children[1];
 			tooltipNode.layout.style.visible = visible;
-			tooltipNode.onResolved(function(_) {
-				// Resolved callbacks run on every frame; a hidden tooltip needs no placement, and showing it rebuilds.
-				if (!tooltipNode.layout.style.visible) return;
-				if (root.resolved == null
-					|| anchorNode.resolved == null || tooltipNode.parent == null
-					|| tooltipNode.parent.resolved == null) return;
-				var anchorBounds = root.globalBounds();
-				var parentBounds = tooltipNode.parent.globalBounds();
-				var bounds = tooltipNode.globalBounds();
-				var edge = 6.0;
-				var maxWidth = Math.max(1, context.viewportWidth - 2 * edge);
-				var nextX = Math.max(edge,
-					Math.min(anchorBounds.x + x, context.viewportWidth - edge - bounds.width)) - parentBounds.x;
-				var nextY = Math.max(edge,
-					Math.min(anchorBounds.y + y, context.viewportHeight - edge - bounds.height)) - parentBounds.y;
-				if (tooltipNode.layout.style.positionX != nextX
-					|| tooltipNode.layout.style.positionY != nextY || tooltipNode.layout.style.width.max != maxWidth) {
-					context.willEditRetained(tooltipNode);
-					tooltipNode.layout.style.positionX = nextX;
-					tooltipNode.layout.style.positionY = nextY;
-					tooltipNode.layout.style.width = LayoutAxis.fit(0, maxWidth);
-					context.requestLayoutFeedback();
-				}
-			});
+			// At its offset from the anchor, kept inside the viewport and no wider than it allows.
+			tooltipNode.layout.style.width = LayoutAxis.fit(0, Math.max(1, context.viewportWidth - 2 * EDGE));
+			tooltipNode.layout.anchor = new LayoutAnchor(AnchorTarget.Node(root.id.value), margin: EDGE);
 			tooltipNode.hitTestBehavior = HitTestBehavior.None;
 			root.hitTestSelf = false;
 			return root;
 		});
 	}
-	/** Content width excludes the tooltip's own padding. */
-	public static function place(anchorX:Float,
-			anchorHeight:Float,
-			railX:Float,
-			railWidth:Float,
-			preferredOffset:Float = 0,
-			?boxWidth:Float):{
-				x:Float,
-				y:Float,
-				width:Float
-			} {
-		var width = Math.max(1, Math.min(300, railWidth - 2 * (EDGE + PADDING)));
-		var actualWidth = boxWidth == null ? width + 2 * PADDING : boxWidth;
-		var x = Math.max(railX + EDGE - anchorX,
-			Math.min(preferredOffset, railX + railWidth - EDGE - anchorX - actualWidth));
-		return {x: x, y: anchorHeight + 4, width: width};
-	}
-	/** Returns anchor-relative coordinates, preferring right and keeping the box in the viewport. */
-	public static function placeRight(anchor:Rect, width:Float, height:Float, viewport:Rect):{
-		x:Float,
-		y:Float,
-		width:Float
-	} {
-		var limit = Math.max(1, Math.min(300, viewport.width - 2 * (EDGE + PADDING)));
-		var boxWidth = Math.min(width, limit + 2 * PADDING);
-		var x = anchor.x + anchor.width + 8;
-		if (x + boxWidth > viewport.x + viewport.width - EDGE) x = anchor.x - boxWidth - 8;
-		x = Math.max(viewport.x + EDGE, Math.min(x, viewport.x + viewport.width - EDGE - boxWidth));
-		var y = Math.max(viewport.y + EDGE,
-			Math.min(anchor.y + (anchor.height - height) / 2, viewport.y + viewport.height - EDGE - height));
-		return {x: x - anchor.x, y: y - anchor.y, width: limit};
-	}
-
 	function buildPositioned(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var state = context.resourceState(context.id("visible"), function() return false, function(_) {});
@@ -290,7 +240,6 @@ class Tooltip implements View {
 			var tipStyle = new LayoutStyle();
 			tipStyle.positioning = LayoutPositioning.Absolute;
 			tipStyle.overlay = true;
-			tipStyle.positionY = 44;
 			tipStyle.clipToParent = false;
 			tipStyle.visible = focused.value || (hoverGroup == null ? state.value : groupVisible);
 			tipStyle.padding = new Insets(PADDING, 7, PADDING, 7);
@@ -299,64 +248,26 @@ class Tooltip implements View {
 			var computed = context.resolveStyled(tipId, identity, tipStyle);
 			var tip = context.createNode(tipId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			context.applyStyled(tip, identity, computed);
-			// A hidden tooltip builds no content: showing it rebuilds, and the layout feedback below positions it that frame.
-			// The tooltip owns the box around its content, whose width placement limits; the content's own root is the
-			// content view's.
-			var label:Null<RenderNode> = null;
+			// A hidden tooltip builds no content: showing it rebuilds. The tooltip owns the box around its content, at most 300
+			// wide and as the rail allows; the content's own root is the content view's.
+			var rail = boundsProvider == null ? null : boundsProvider();
+			var railWidth = rail == null ? context.viewportWidth : rail.width;
 			if (tipStyle.visible) {
-				var box = context.createNode(context.rootId("tooltip-content"), LayoutVisualKind.Box,
-					new LayoutStyle());
+				var boxStyle = new LayoutStyle();
+				boxStyle.width = LayoutAxis.fit(0, Math.max(1, Math.min(300, railWidth - 2 * (EDGE + PADDING))));
+				var box = context.createNode(context.rootId("tooltip-content"), LayoutVisualKind.Box, boxStyle);
 				box.hitTestSelf = false;
 				box.add(context.withStyleParent(computed,
 					function() return context.withScope(new Key("content"), function() return content.build(context))));
 				tip.add(box);
-				label = box;
 			}
-			// The tooltip resolves after its anchor sibling; the parent callback
-			// runs before either child has geometry on a freshly built tree.
-			tip.onResolved(function(_) {
-				// Resolved callbacks run on every frame; a hidden tooltip needs no placement, and showing it rebuilds.
-				if (!tip.layout.style.visible) return;
-				if (root.resolved == null || header.resolved == null) return;
-				var rail = boundsProvider == null ? new haxeon.ui.Rect(0,
-					0, context.viewportWidth, context.viewportHeight) : boundsProvider();
-				var anchorBounds = root.globalBounds();
-				var tipBounds = tip.resolved == null ? null : tip.globalBounds();
-				var placement = place(anchorBounds.x,
-					header.globalBounds().height,
-					rail.x,
-					rail.width,
-					startAtAnchorMiddle ? anchorBounds.width / 2 : 0,
-					tipBounds == null ? null : tipBounds.width);
-				if (this.placement == Above && tipBounds != null) placement.y = -tipBounds.height - 4;
-				if (this.placement == Right) {
-					var side = placeRight(anchorBounds,
-						tipBounds == null ? 0 : tipBounds.width,
-						tipBounds == null ? 0 : tipBounds.height,
-						rail);
-					placement.x = side.x;
-					placement.y = side.y;
-					placement.width = side.width;
-				}
-
-				// A window overlay host may have lifted the surface out of the tab.
-				if (tip.parent != root && tip.parent != null && tip.parent.resolved != null) {
-					var parentBounds = tip.parent.globalBounds();
-					placement.x += anchorBounds.x - parentBounds.x;
-					placement.y += anchorBounds.y - parentBounds.y;
-				}
-				var shownLabel = label;
-				var labelWidth = shownLabel == null ? placement.width : shownLabel.layout.style.width.max;
-				if (tip.layout.style.positionX != placement.x
-					|| tip.layout.style.positionY != placement.y || labelWidth != placement.width) {
-					context.willEditRetained(tip);
-					if (shownLabel != null) context.willEditRetained(shownLabel);
-					tip.layout.style.positionX = placement.x;
-					tip.layout.style.positionY = placement.y;
-					if (shownLabel != null) shownLabel.layout.style.width = LayoutAxis.fit(0, placement.width);
-					context.requestLayoutFeedback();
-				}
-			});
+			// Below its header (from the header's middle with startAtAnchorMiddle), above it, or beside it centred and on
+			// the other side when it does not fit; kept inside the rail.
+			var beside = placement == Right;
+			tip.layout.anchor = new LayoutAnchor(AnchorTarget.Node(header.id.value),
+				side: beside ? AnchorSide.After : placement == Above ? AnchorSide.Above : AnchorSide.Below,
+				gap: beside ? 8.0 : 4.0, align: beside || startAtAnchorMiddle ? 0.5 : 0.0, boxAlign: beside ? 0.5 : 0.0,
+				flip: beside, within: rail == null ? AnchorBounds.Viewport : AnchorBounds.Area(rail), margin: EDGE);
 			// The overlay must never extend the tab's hover area into the editor.
 			tip.hitTestBehavior = HitTestBehavior.None;
 			root.add(tip);
