@@ -366,6 +366,30 @@ The Haxe code Haxeon rejects or runs differently is listed in
   valid Haxe today), lowering to `new` plus ordinary assignments, and where
   Haxeon-only syntax is allowed (apps and Haxeon-only packages, not packages
   meant to build with stock Haxe).
+- **A class, interface or `Dynamic` value where a structure is expected.**
+  `var o:{} = new Thing();`, `var p:{x:Int} = thing;` and
+  `var m:{function f():Int;} = thing;` are `E1002`; Haxe accepts all three,
+  and a write through `p` reaches the object. A structure is lowered as a
+  class of its own, so a rule in `TypeRelations.isAssignable` alone would read
+  another class's field slots (on Wasm GC the cast traps), and copying into a
+  record (tried in `c618c16d8`, reverted) breaks identity and loses writes.
+  It is slice 4 of [STRUCTURE_VALUES.md](docs/design/STRUCTURE_VALUES.md),
+  after slices 2a (an IR structure type, `dyn` on HashLink) and 2b (per-field
+  dispatch). Haxe's rules there, checked with `--interp`: a method fits
+  `{function f():Int;}` but not `{f:()->Int}`; `final y` fits
+  `{final y:Int;}` but not `{y:Int}`; a `(get,never)` property fits only a
+  structure field with the same access; a var fits `{var x(default,null):Int;}`;
+  private and missing fields, enums and abstracts are rejected; `Dynamic` to a
+  structure is an alias, not a copy.
+- **A function returning a value where `Int->Void` is expected.** Haxe
+  accepts it and drops the result; Haxeon rejects it. Decide whether that
+  stays with `Void` as the unit type ([ERROR_MODEL.md](docs/design/ERROR_MODEL.md))
+  or follows Haxe.
+- **`new` through a typedef, edge cases.** `typedef Q<T> = Box<Array<T>>`
+  then `new Q(5)` types as `Box<Int>`, where Haxe rejects it: the typedef's
+  own parameters are not inferred through its target. And `new` through a
+  typedef of an interface or a structure reports `E1007` "Unknown class",
+  where Haxe says the type has no constructor or cannot be constructed.
 - **Lone surrogates.** Printing a String with a lone high surrogate swallows
   the next code unit (the newline of `Sys.println`): the UTF-16 to UTF-8
   conversion takes it as the pair's low half.
