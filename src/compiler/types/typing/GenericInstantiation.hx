@@ -283,13 +283,8 @@ class GenericInstantiation {
 	function elaboratedBody(name:String, fn:AstFunction, owner:Null<String>, isStatic:Bool, receiver:Null<CompilerType>,
 			substitutions:Map<String, CompilerType>):compiler.types.TypedAst.TypedFunction {
 		var key = owner == null ? fn.name : owner + "." + fn.name,
-			own:Map<String, CompilerType> = [],
-			ownerParameters = ownerTypeParameters(owner);
-		for (parameter in ownerParameters)
-			own.set(parameter, TTypeParameter(requiredString(owner), parameter));
-		for (parameter in functionTypeParameters(fn))
-			if (!own.exists(parameter))
-				own.set(parameter, TTypeParameter(key, parameter));
+			ownerParameters = ownerTypeParameters(owner),
+			own = BodyTyper.ownSubstitutions(owner ?? key, ownerParameters, key, fn);
 		// The other substitutions are the specialization's own (an iteration argument's protocol type): the same in both typings.
 		for (name => type in substitutions)
 			if (!own.exists(name) && ownerParameters.indexOf(name) < 0 && functionTypeParameters(fn).indexOf(name) < 0)

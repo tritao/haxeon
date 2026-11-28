@@ -15,15 +15,6 @@ std-process	iteration argument: a specialization's concrete iteration argument m
 stdlib-process	iteration argument: a specialization's concrete iteration argument meets the body's own element type (Lambda.exists in std.process.Command)
 structural-iteration	iteration argument: a specialization's concrete iteration argument meets the body's own element type
 test-shards	iteration argument: a specialization's concrete iteration argument meets the body's own element type
-reactive-owner-thread	function argument: a function over the body's own parameter, passed where an erased generic class takes one, keeps the specialization's function type (std.thread.Thread.spawn)
-reactive-source-threads	function argument: a function over the body's own parameter, passed where an erased generic class takes one, keeps the specialization's function type (std.thread.Thread.spawn)
-reactive-thread-isolation	function argument: a function over the body's own parameter, passed where an erased generic class takes one, keeps the specialization's function type (std.thread.Thread.spawn)
-std-thread	function argument: a function over the body's own parameter, passed where an erased generic class takes one, keeps the specialization's function type (std.thread.Thread.spawn)
-thread-gc-stress	function argument: a function over the body's own parameter, passed where an erased generic class takes one, keeps the specialization's function type (std.thread.Thread.spawn)
-thread-lock	function argument: a function over the body's own parameter, passed where an erased generic class takes one, keeps the specialization's function type (std.thread.Thread.spawn)
-thread-mutex	function argument: a function over the body's own parameter, passed where an erased generic class takes one, keeps the specialization's function type (std.thread.Thread.spawn)
-thread-stand-ins	function argument: a function over the body's own parameter, passed where an erased generic class takes one, keeps the specialization's function type (std.thread.Thread.spawn)
-thread-tls	function argument: a function over the body's own parameter, passed where an erased generic class takes one, keeps the specialization's function type (std.thread.Thread.spawn)
 key-path-semantics	key path argument: a specialization's constant key path meets the body's own parameter
 key-paths	key path argument: a specialization's constant key path meets the body's own parameter
 bounded-generic	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)

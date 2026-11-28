@@ -108,6 +108,18 @@ class BodyTyper implements BodyTyping {
 		return result;
 	}
 
+	/**
+	 * Each of `ownerParameters` (of `owner`) and of `fn`'s own type parameters (of `key`) as itself, the way a declaration's
+	 * signature is resolved: a function's type parameter shadows its owner's of the same name, as in Haxe.
+	 */
+	public static function ownSubstitutions(owner:String, ownerParameters:Array<String>, key:String,
+			fn:AstFunction):Map<String, CompilerType> {
+		var substitutions = declarationTypeSubstitutions(owner, ownerParameters);
+		for (parameter in functionTypeParameters(fn))
+			substitutions.set(parameter, TTypeParameter(key, parameter));
+		return substitutions;
+	}
+
 	/** Delegates to the free-standing analysis so the same inference can also run, on plain
 	 * canonical signatures, before typing to detect a purity/no-return answer that drifted.
 	 */

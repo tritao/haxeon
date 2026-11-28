@@ -1578,7 +1578,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					kept: true
 				};
 			return signatureOnly(key,
-				() -> bodyTyper.typeFunction(fn, null, false, ownSubstitutions(key, [], key, fn), null,
+				() -> bodyTyper.typeFunction(fn, null, false, BodyTyper.ownSubstitutions(key, [], key, fn), null,
 				null, null, null, inference));
 		}
 		var owner = info.owner, classDecl = session.classDecls.get(owner);
@@ -1590,7 +1590,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					kept: true
 				};
 			return signatureOnly(key, () -> bodyTyper.typeFunction(fn, owner, fn.isStatic,
-				ownSubstitutions(owner, classDecl.typeParameters, key, fn), null, null, null, null, inference));
+				BodyTyper.ownSubstitutions(owner, classDecl.typeParameters, key, fn), null, null, null, null,
+				inference));
 		}
 		var abstractDecl = session.declarations.abstracts.get(owner);
 		if (abstractDecl == null)
@@ -1619,7 +1620,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			?inference:DeclarationTypeTable.FunctionInference):TypedFunction {
 		// The signature table's abstract method has the abstract's type parameters among its own.
 		var owner = abstractDecl.name,
-			substitutions = ownSubstitutions(owner, [], key, fn),
+			substitutions = BodyTyper.ownSubstitutions(owner, [], key, fn),
 			receiver = fn.isStatic || fn.name == "new" ? null : TAbstract(owner, [
 				for (parameter in abstractDecl.typeParameters)
 					BodyTyper.requiredMapValue(substitutions, parameter)
@@ -1669,7 +1670,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			return;
 		}
 		checkBody(key, () -> bodyTyper.typeFunction(fn, owner, owner != null && fn.isStatic,
-			ownSubstitutions(owner == null ? key : owner, ownerParameters, key, fn)));
+			BodyTyper.ownSubstitutions(owner == null ? key : owner, ownerParameters, key, fn)));
 	}
 
 	/**
@@ -1723,16 +1724,6 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		if (!wasTyped)
 			typedUnits.remove(key);
 		return {typed: typed, kept: false};
-	}
-
-	/** Each of `ownerParameters` and of `fn`'s own type parameters as itself, the way a declaration's signature is resolved. */
-	static function ownSubstitutions(owner:String, ownerParameters:Array<String>, key:String,
-			fn:AstFunction):Map<String, CompilerType> {
-		var substitutions = BodyTyper.declarationTypeSubstitutions(owner, ownerParameters);
-		for (parameter in BodyTyper.functionTypeParameters(fn))
-			if (!substitutions.exists(parameter))
-				substitutions.set(parameter, TTypeParameter(key, parameter));
-		return substitutions;
 	}
 
 	function typeModuleFunctions(functions:Array<AstFunction>, selected:Null<Map<String, Bool>>,
@@ -2028,7 +2019,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var key = owner + "." + method.name,
 			owners = BodyTyper.isGeneric(method) ? [owner, key] : [owner];
 		return bodyTyper.typeFunction(method, owner, method.isStatic,
-			ownSubstitutions(owner, ownerParameters, key, method),
+			BodyTyper.ownSubstitutions(owner, ownerParameters, key, method),
 			specialization == null ? null : specialization.name + "." + method.name, null,
 			specialization == null ? null : specialization.name,
 			specialization == null ? null : specialization.typeArguments, null,
