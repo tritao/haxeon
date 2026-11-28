@@ -14,13 +14,7 @@ class ParserRecoveryFuzzMain {
 			service = new LanguageService();
 		service.update("Main.hx", source);
 		service.analyze("Main");
-		var baselineMs = Math.POSITIVE_INFINITY;
-		for (round in 0...5) {
-			var started = Sys.time();
-			service.update("Main.hx", source + "\n// " + round);
-			service.analyze("Main");
-			baselineMs = Math.min(baselineMs, (Sys.time() - started) * 1000.0);
-		}
+		var baselineMs = bestAnalysisMs(service, source);
 		var maxCaseMs = MAX_CASE_FACTOR * baselineMs;
 		var fragments = [";", ")", "}", ",", ".", ":", "=", "(", "[", "?"], totalMs = 0.0, maxMs = 0.0;
 		for (caseIndex in 0...CASES) {
@@ -33,14 +27,14 @@ class ParserRecoveryFuzzMain {
 						position) + fragments[caseIndex % fragments.length] + source.substring(position);
 					default: source.substring(0,
 						position) + fragments[caseIndex % fragments.length] + source.substring(end);
-				},
-					started = Sys.time();
+				};
+			// The best of a few analyses: one run can take a collection or a scheduler pause, which says nothing about recovery.
+			var elapsed = bestAnalysisMs(service, mutated);
 			service.update("Main.hx", mutated);
 			try
 				service.analyze("Main")
 			catch (_:CompileError) {}
 			assertQueries(service, mutated, caseIndex);
-			var elapsed = (Sys.time() - started) * 1000.0;
 			totalMs += elapsed;
 			if (elapsed > maxMs)
 				maxMs = elapsed;
@@ -55,6 +49,20 @@ class ParserRecoveryFuzzMain {
 			if (symbol.stale)
 				throw "restored valid source retained stale symbols";
 		Sys.println('PASS: $CASES deterministic recovery mutations averaged ${totalMs / CASES}ms, max ${maxMs}ms (valid source ${baselineMs}ms)');
+	}
+
+	/** The shortest of a few analyses of `source`, each with a different trailing comment so none is a no-op. */
+	static function bestAnalysisMs(service:LanguageService, source:String):Float {
+		var best = Math.POSITIVE_INFINITY;
+		for (round in 0...5) {
+			var started = Sys.time();
+			service.update("Main.hx", source + "\n// " + round);
+			try
+				service.analyze("Main")
+			catch (_:CompileError) {}
+			best = Math.min(best, (Sys.time() - started) * 1000.0);
+		}
+		return best;
 	}
 
 	static function assertQueries(service:LanguageService, source:String, caseIndex:Int):Void {
