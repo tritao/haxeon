@@ -389,3 +389,16 @@ HL_PRIM bool HL_NAME(__fs_stream_close)( realtime_fs_handle *handle ) {
 	return realtime_fs_stream_close(&handle->stream);
 }
 DEFINE_PRIM(_BOOL,__fs_stream_close,_ABSTRACT(realtime_fs_handle));
+
+/* Makes `path` the process's working directory. */
+HL_PRIM bool HL_NAME(__fs_set_working_directory)( vstring *path ) {
+	REALTIME_FS_PATH(native,path);
+#ifdef HL_WIN
+	bool done = SetCurrentDirectoryW(native) ? realtime_fs_succeed() : realtime_fs_fail(GetLastError());
+#else
+	bool done = chdir(native) == 0 ? realtime_fs_succeed() : realtime_fs_fail(errno);
+#endif
+	REALTIME_FS_PATH_END(native);
+	return done;
+}
+DEFINE_PRIM(_BOOL,__fs_set_working_directory,_STRING);

@@ -61,7 +61,6 @@ HL_PRIM int HL_NAME(__value_array_insert_empty)(varray *array, int position);
 #include "runtime/int64.c"
 #include "runtime/fs.c"
 #include "runtime/system.c"
-#include "runtime/processes.c"
 #include "runtime/child_processes.c"
 #include "runtime/host_state.c"
 #include "runtime/native_call.c"

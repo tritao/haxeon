@@ -4,8 +4,9 @@ import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.io.Output;
 import haxe.io.Path;
+import std.process.Child;
+import std.process.Command;
 import sys.FileSystem;
-import sys.io.ChildProcess;
 import sys.io.File;
 
 /** How `Script.run` starts a program. */
@@ -179,7 +180,7 @@ class Script {
  * or through to the script's own.
  */
 private class RunningProgram {
-	final process:ChildProcess;
+	final process:Child;
 	final log:Null<Output>;
 	final out:Output;
 	final err:Output;
@@ -190,59 +191,75 @@ private class RunningProgram {
 	var timedOut = false;
 
 	public function new(command:String, arguments:Null<Array<String>>, options:Null<ScriptRunOptions>, ?out:Output) {
-		var keys:Array<String> = [], values:Array<String> = [];
+		// Its own group, so stopping it at its deadline stops what it started too; no input, so it never waits for any.
+		var launch = new Command(command).args(arguments == null ? [] : arguments).stdin(Discard).stdout(Pipe)
+			.stderr(Pipe).group();
+		if (options != null && options.cwd != null)
+			launch.directory(options.cwd);
 		if (options != null && options.env != null)
-			for (key => value in options.env) {
-				keys.push(key);
-				values.push(value);
-			}
+			for (key => value in options.env)
+				launch.env(key, value);
 		var logFile = options == null || options.log == null ? null : File.write(options.log, true);
 		log = logFile;
 		this.out = out != null ? out : logFile != null ? logFile : Sys.stdout();
 		err = logFile != null ? logFile : Sys.stderr();
 		var timeout = options == null ? null : options.timeout;
 		deadline = timeout == null ? Math.POSITIVE_INFINITY : Sys.time() + timeout;
-		try {
-			process = ChildProcess.spawn(command, arguments == null ? [] : arguments,
-				options == null || options.cwd == null ? "" : options.cwd, keys, values);
-		} catch (error:Dynamic) {
-			if (logFile != null)
-				logFile.close();
-			throw error;
-		}
+		process = switch launch.spawn() {
+			case Ok(started): started;
+			case Err(error):
+				if (logFile != null)
+					logFile.close();
+				throw '$launch could not be started: ${error.describe()}';
+		};
 	}
 
 	/** Copies what the pipes have ready; whether anything moved. False once both are drained. */
 	public function step():Bool {
 		if (!timedOut && Sys.time() >= deadline) {
 			timedOut = true;
-			process.cancel();
+			process.terminate();
 		}
 		var moved = false;
-		if (outOpen) {
-			var read = process.readStdout(buffer, 0, buffer.length);
-			if (read > 0) {
-				out.writeBytes(buffer, 0, read);
-				out.flush();
-				moved = true;
-			} else if (read == -1)
-				outOpen = false;
-		}
-		if (errOpen) {
-			var read = process.readStderr(buffer, 0, buffer.length);
-			if (read > 0) {
-				err.writeBytes(buffer, 0, read);
-				err.flush();
-				moved = true;
-			} else if (read == -1)
-				errOpen = false;
-		}
+		if (outOpen)
+			switch copy(process.stdout, out) {
+				case 0: outOpen = false;
+				case -1:
+				case _: moved = true;
+			}
+		if (errOpen)
+			switch copy(process.stderr, err) {
+				case 0: errOpen = false;
+				case -1:
+				case _: moved = true;
+			}
 		return moved;
+	}
+
+	/** Copies what `stream` has ready to `target`: how many bytes, 0 at its end, -1 when none were ready. */
+	function copy(stream:Null<std.process.ChildOutput>, target:Output):Int {
+		if (stream == null)
+			return 0;
+		return switch stream.read(buffer, 0, buffer.length, 0) {
+			case Ok(0): 0;
+			case Ok(read):
+				target.writeBytes(buffer, 0, read);
+				target.flush();
+				read;
+			case Err(TimedOut): -1;
+			case Err(error): throw 'reading a program\'s output failed: ${error.describe()}';
+		}
 	}
 
 	/** The exit status once both pipes are drained and the program has exited, else -1; 124 when it was stopped at its deadline. */
 	public function exitStatus():Int {
-		var status = outOpen || errOpen ? -1 : process.pollExit();
+		if (outOpen || errOpen)
+			return -1;
+		var status = switch process.exitStatus() {
+			case null: -1;
+			case Exited(code): code;
+			case Signaled(signal): 128 + signal;
+		};
 		return status >= 0 && timedOut ? 124 : status;
 	}
 

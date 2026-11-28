@@ -6,8 +6,9 @@
  */
 import haxe.io.Path;
 import haxeon.Script;
+import std.process.Child;
+import std.process.Command;
 import sys.FileSystem;
-import sys.io.ChildProcess;
 import sys.io.File;
 
 private typedef Block = {
@@ -286,9 +287,13 @@ function liveEditing(root:String, example:String, project:String):Void {
 	var events = Path.join([project, "build", "host", "main.hl.watch-events.jsonl"]),
 		log = Path.join([project, "live.log"]),
 		headless = hasXvfb() ? ["xvfb-run", "-a"] : [];
-	// The watch's output goes to a file, so nothing has to drain its pipes; closing the process ends its process group.
-	var watch = ChildProcess.spawn("sh", ["-c", 'exec "$$@" > "$log" 2>&1', "sh"].concat(headless)
-		.concat([Script.haxeon(), "run", "--watch"]), project);
+	// The watch writes to a file, so it has no pipes; in a group of its own, so closing it ends the app and xvfb-run too.
+	var watch = switch new Command("sh").args(["-c", 'exec "$$@" > "$log" 2>&1', "sh"].concat(headless)
+		.concat([Script.haxeon(), "run", "--watch"])).directory(project).stdin(Discard).group().spawn() {
+			case Ok(child): child;
+			case Err(error): Script.fail('FAIL: the watch could not be started: ${error.describe()}');
+				throw "unreachable";
+		};
 	var steps = [for (name in FileSystem.readDirectory(Path.join([example, "steps"]))) name];
 	steps.sort(Reflect.compare);
 	waitFor(watch, log, () -> content(log).indexOf("haxeon: running") >= 0, 900, "the app to start");
@@ -349,11 +354,11 @@ function liveEditing(root:String, example:String, project:String):Void {
  * Waits up to `seconds` for `done`, while the watch runs; false on time out when `mayTimeOut`, else the test fails, as it does
  * when the watch exits.
  */
-function waitFor(watch:ChildProcess, log:String, done:() -> Bool, seconds:Float, what:String,
+function waitFor(watch:Child, log:String, done:() -> Bool, seconds:Float, what:String,
 		mayTimeOut:Bool = false):Bool {
 	var deadline = Sys.time() + seconds;
 	while (!done()) {
-		if (watch.pollExit() >= 0)
+		if (watch.exitStatus() != null)
 			stop(watch, 'FAIL: the watch exited while waiting for $what; its log:\n${content(log)}');
 		if (Sys.time() > deadline) {
 			if (mayTimeOut)
@@ -366,7 +371,7 @@ function waitFor(watch:ChildProcess, log:String, done:() -> Bool, seconds:Float,
 }
 
 /** Ends the watch, its app and its xvfb-run, and with `failure` the test. */
-function stop(watch:ChildProcess, failure:Null<String>):Void {
+function stop(watch:Child, failure:Null<String>):Void {
 	watch.close();
 	if (failure != null)
 		Script.fail(failure);

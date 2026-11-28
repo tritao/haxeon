@@ -70,6 +70,31 @@ function canonical(path:Path):Result<Path, FileError> {
 internal extern function nativeCanonical(path:String):Null<String>;
 #end
 
+/** The working directory: what a relative path is resolved against, and where a child process starts by default. */
+function workingDirectory():Path
+	return Path.of(#if wasm FileNatives.workingDirectory() #else nativeWorkingDirectory() #end);
+
+/**
+ * Makes the directory `path` the working directory, for every thread of the process. `NotFound`, `NotADirectory`, or
+ * `PermissionDenied` when it cannot be entered.
+ */
+function setWorkingDirectory(path:Path):Result<Void, FileError> {
+	#if wasm
+	var entered = FileNatives.setWorkingDirectory(path.toString());
+	#else
+	var entered = nativeSetWorkingDirectory(path.toString());
+	#end
+	return entered ? Ok() : Err(FileNatives.lastError());
+}
+
+#if !wasm
+@:hlNative("haxeon_runtime", "__sys_get_cwd")
+internal extern function nativeWorkingDirectory():String;
+
+@:hlNative("haxeon_runtime", "__fs_set_working_directory")
+internal extern function nativeSetWorkingDirectory(path:String):Bool;
+#end
+
 /** The entries of the directory `path`, in no particular order, without `.` and `..`. */
 function list(path:Path):Result<Array<Entry>, FileError>
 	return Operations.list(null, path);

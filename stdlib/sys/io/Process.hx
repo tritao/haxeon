@@ -38,45 +38,18 @@ class Process {
 	public function kill():Void {}
 }
 #else
-private typedef ProcessHandle = hl.Abstract<"hl_process">;
-
-@:hlNative("haxeon_runtime", "__process_open")
-internal extern function processOpen(command:String, arguments:Null<Array<String>>, detached:Bool):ProcessHandle;
-
-@:hlNative("haxeon_runtime", "__process_stdout_read")
-internal extern function processStdoutRead(process:ProcessHandle, bytes:Bytes, pos:Int, len:Int):Int;
-
-@:hlNative("haxeon_runtime", "__process_stderr_read")
-internal extern function processStderrRead(process:ProcessHandle, bytes:Bytes, pos:Int, len:Int):Int;
-
-@:hlNative("haxeon_runtime", "__process_stdin_write")
-internal extern function processStdinWrite(process:ProcessHandle, bytes:Bytes, pos:Int, len:Int):Int;
-
-@:hlNative("haxeon_runtime", "__process_stdin_close")
-internal extern function processStdinClose(process:ProcessHandle):Bool;
-
-@:hlNative("haxeon_runtime", "__process_exit")
-internal extern function processExit(process:ProcessHandle, block:Bool):Int;
-
-@:hlNative("haxeon_runtime", "__process_pid")
-internal extern function processPid(process:ProcessHandle):Int;
-
-@:hlNative("haxeon_runtime", "__process_close")
-internal extern function processClose(process:ProcessHandle):Void;
-
-@:hlNative("haxeon_runtime", "__process_kill")
-internal extern function processKill(process:ProcessHandle):Void;
+import std.process.Child;
+import std.process.ChildInput;
+import std.process.ChildOutput;
+import std.process.Command;
 
 /** What the child writes to its standard output or error; the end of the input once it closes the stream. */
 private class ProcessOutput extends haxe.io.Input {
-	final process:ProcessHandle;
-	final error:Bool;
+	final stream:ChildOutput;
 	final single = Bytes.alloc(1);
 
-	public function new(process:ProcessHandle, error:Bool) {
-		this.process = process;
-		this.error = error;
-	}
+	public function new(stream:ChildOutput)
+		this.stream = stream;
 
 	override public function readByte():Int {
 		readBytes(single, 0, 1);
@@ -89,7 +62,7 @@ private class ProcessOutput extends haxe.io.Input {
 		if (len == 0)
 			return 0;
 		var count = readChunk(s, pos, len);
-		if (count < 0)
+		if (count == 0)
 			throw new Eof();
 		return count;
 	}
@@ -103,25 +76,26 @@ private class ProcessOutput extends haxe.io.Input {
 			throw haxe.io.Error.Blocked;
 		while (true) {
 			var count = readChunk(buffer, 0, size);
-			if (count < 0)
-				return total.getBytes();
 			if (count == 0)
-				throw haxe.io.Error.Blocked;
+				return total.getBytes();
 			total.addBytes(buffer, 0, count);
 		}
 	}
 
-	inline function readChunk(bytes:Bytes, pos:Int, len:Int):Int
-		return error ? processStderrRead(process, bytes, pos, len) : processStdoutRead(process, bytes, pos, len);
+	function readChunk(bytes:Bytes, pos:Int, len:Int):Int
+		return switch stream.read(bytes, pos, len) {
+			case Ok(count): count;
+			case Err(error): throw haxe.io.Error.Custom(error.describe());
+		}
 }
 
 /** What the program writes to the child's standard input. */
 private class ProcessInput extends haxe.io.Output {
-	final process:ProcessHandle;
+	final stream:ChildInput;
 	final single = Bytes.alloc(1);
 
-	public function new(process:ProcessHandle)
-		this.process = process;
+	public function new(stream:ChildInput)
+		this.stream = stream;
 
 	override public function writeByte(c:Int):Void {
 		single.set(0, c);
@@ -131,27 +105,24 @@ private class ProcessInput extends haxe.io.Output {
 	override public function writeBytes(s:Bytes, pos:Int, len:Int):Int {
 		if (pos < 0 || len < 0 || pos + len > s.length)
 			throw haxe.io.Error.OutsideBounds;
-		var count = processStdinWrite(process, s, pos, len);
-		if (count < 0)
-			throw new Eof();
-		return count;
+		return switch stream.write(s, pos, len) {
+			case Ok(_): len;
+			case Err(InputClosed): throw new Eof();
+			case Err(error): throw haxe.io.Error.Custom(error.describe());
+		}
 	}
 
 	/** Closes the child's standard input, so it sees the end of its input. */
 	override public function close():Void
-		if (!processStdinClose(process))
-			throw "Could not close the process input";
+		stream.close();
 }
 
-/** A child process, as Haxe's sys.io.Process; `ChildProcess.spawn` adds an environment, a directory and nonblocking pipes. */
+/**
+ * A child process, as Haxe's sys.io.Process, over `std.process`, which new code uses directly: a `Command` sets up its
+ * environment, directory and streams, and its failures are values.
+ */
 class Process {
-	/** The minimum Int, which the runtime returns for an exit code while the child still runs. */
-	static inline final RUNNING = -2147483648;
-
-	final handle:ProcessHandle;
-
-	/** The exit code, once read: waiting for a child reaps it, so it can be asked for only once. */
-	var exited:Null<Int> = null;
+	final child:Child;
 
 	/** The child's standard output, to read. */
 	public var stdout(default, null):haxe.io.Input;
@@ -163,43 +134,47 @@ class Process {
 	public var stdin(default, null):haxe.io.Output;
 
 	/**
-	 * Starts `cmd`. Without `args` the command line goes to the shell; with them `cmd` runs directly with exactly those
-	 * arguments (on Windows they are quoted into the command line, as Haxe does).
+	 * Starts `cmd`. Without `args` the command line goes to the system's shell (`Command.shell`); with them `cmd` runs
+	 * directly with exactly those arguments. Throws when the program cannot be started.
 	 */
 	public function new(cmd:String, ?args:Array<String>, ?detached:Bool) {
-		var command = cmd, arguments = args;
-		if (arguments != null && Sys.systemName() == "Windows") {
-			command = [for (part in [cmd].concat(arguments)) haxe.SysTools.quoteWinArg(part, true)].join(" ");
-			arguments = null;
-		}
-		handle = processOpen(command, arguments, detached == true);
-		stdout = new ProcessOutput(handle, false);
-		stderr = new ProcessOutput(handle, true);
-		stdin = new ProcessInput(handle);
+		var command = args == null ? Command.shell(cmd) : new Command(cmd).args(args);
+		command.stdin(Pipe).stdout(Pipe).stderr(Pipe).detached(detached == true);
+		child = switch command.spawn() {
+			case Ok(started): started;
+			case Err(error): throw 'Process creation failure : $cmd: ${error.describe()}';
+		};
+		var output = child.stdout, error = child.stderr, input = child.stdin;
+		if (output == null || error == null || input == null)
+			throw "Process creation failure : the streams were not piped";
+		stdout = new ProcessOutput(output);
+		stderr = new ProcessOutput(error);
+		stdin = new ProcessInput(input);
 	}
 
 	/** The child's process id. */
 	public function getPid():Int
-		return processPid(handle);
+		return child.pid;
 
-	/** The exit code; with `block` false, null while the child still runs. */
+	/** The exit code (128 plus the signal for a child a signal ended); with `block` false, null while it still runs. */
 	public function exitCode(block:Bool = true):Null<Int> {
-		var known = exited;
-		if (known != null)
-			return known;
-		var code = processExit(handle, block);
-		if (code == RUNNING)
-			return null;
-		exited = code;
-		return code;
+		var status = block ? switch child.wait() {
+			case Ok(exited): exited;
+			case Err(error): throw "Process wait failure : " + error.describe();
+		} : child.exitStatus();
+		return switch status {
+			case null: null;
+			case Exited(code): code;
+			case Signaled(signal): 128 + signal;
+		}
 	}
 
-	/** Releases the pipes and the process handle; the child keeps running. */
+	/** Releases the pipes and the process handle, ending the child if it still runs (unless it was started detached). */
 	public function close():Void
-		processClose(handle);
+		child.close();
 
 	/** Ends the child at once (SIGKILL, or TerminateProcess on Windows), without letting it clean up. */
 	public function kill():Void
-		processKill(handle);
+		child.kill();
 }
 #end

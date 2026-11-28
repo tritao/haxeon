@@ -151,7 +151,12 @@ function follow(directory:String):Result<Void, std.fs.FileError> {
 - A watcher is used from one thread at a time, but `wake`: an app with an event loop waits on a thread of its own, as
   the platform package's `FileWatch` does. Close it when no wait is in progress.
 
+## The working directory
+
+`Files.workingDirectory()` is the directory relative paths resolve against, and where a child process starts unless its
+command names another. `Files.setWorkingDirectory(path)` changes it for every thread of the process, failing with
+`NotFound`, `NotADirectory` or `PermissionDenied`.
+
 ## Not yet
 
-- The working directory: `Sys` still provides it.
 - Forms returning `Future<Result<T, FileError>>`, for code on a UI thread.

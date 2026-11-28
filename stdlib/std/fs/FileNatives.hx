@@ -238,6 +238,18 @@ internal function kind(root:Null<RootHandle>, path:String, follow:Bool):Int {
 internal function absolute(path:String):Null<String>
 	return Memory.normalize(path);
 
+internal function workingDirectory():String
+	return Memory.getCwd();
+
+internal function setWorkingDirectory(path:String):Bool {
+	var full = Memory.normalize(path);
+	if (!Memory.exists(full))
+		return fail(NotFound, false);
+	if (!Memory.isDirectory(full))
+		return fail(NotADirectory, false);
+	return Memory.setCwd(full) ? true : fail(PermissionDenied, false);
+}
+
 internal function canonical(path:String):Null<String> {
 	var full = Memory.normalize(path);
 	return Memory.exists(full) ? full : fail(NotFound, null);

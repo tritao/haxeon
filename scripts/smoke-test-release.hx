@@ -23,8 +23,11 @@ import haxe.io.BytesOutput;
 import haxe.io.Output;
 import haxe.io.Path;
 import haxeon.Script;
+import std.process.Child;
+import std.process.ChildOutput;
+import std.process.Command;
+import std.process.ExitStatus;
 import sys.FileSystem;
-import sys.io.ChildProcess;
 import sys.io.File;
 
 /** The platform as the app template names its runners (`AppRunner.hostPlatform`). */
@@ -397,7 +400,7 @@ function isolate(home:String):Void {
 
 /** A program started in the background whose output goes to a log, as a shell's `command > log 2>&1 &` does. */
 class Watch {
-	final process:ChildProcess;
+	final process:Child;
 	final output:Output;
 	final log:String;
 	final buffer = Bytes.alloc(65536);
@@ -406,20 +409,17 @@ class Watch {
 		this.log = log;
 		output = File.write(log, true);
 		// Its own process group, so stopping it ends the CLI, the app it launched and any xvfb-run alike.
-		process = ChildProcess.spawn(command, arguments, cwd);
+		process = start(command, arguments, cwd);
 	}
 
 	/** Copies what the program printed so far into its log. */
 	function drain():Void {
-		var count = process.readStdout(buffer, 0, buffer.length);
-		while (count > 0) {
-			output.writeBytes(buffer, 0, count);
-			count = process.readStdout(buffer, 0, buffer.length);
-		}
-		count = process.readStderr(buffer, 0, buffer.length);
-		while (count > 0) {
-			output.writeBytes(buffer, 0, count);
-			count = process.readStderr(buffer, 0, buffer.length);
+		for (stream in [process.stdout, process.stderr]) {
+			var count = ready(stream, buffer);
+			while (count > 0) {
+				output.writeBytes(buffer, 0, count);
+				count = ready(stream, buffer);
+			}
 		}
 		output.flush();
 	}
@@ -436,7 +436,7 @@ class Watch {
 			drain();
 			if (done())
 				return true;
-			if (process.pollExit() >= 0)
+			if (process.exitStatus() != null)
 				fail("the watch exited before what the test waited for");
 			if (Sys.time() > deadline)
 				return false;
@@ -449,12 +449,12 @@ class Watch {
 		var deadline = Sys.time() + seconds;
 		while (true) {
 			drain();
-			var status = process.pollExit();
-			if (status >= 0) {
+			var status = process.exitStatus();
+			if (status != null) {
 				drain();
 				output.close();
 				process.close();
-				return status;
+				return code(status);
 			}
 			if (Sys.time() > deadline)
 				fail('the watch did not exit in $seconds s');
@@ -487,7 +487,7 @@ typedef Finished = {status:Int, out:String, err:String};
  * fails with its command line instead of holding the job until it times out.
  */
 function execute(command:String, arguments:Array<String>, cwd:String, echo:Bool = false):Finished {
-	var process = ChildProcess.spawn(command, arguments, cwd),
+	var process = start(command, arguments, cwd),
 		out = new BytesOutput(),
 		err = new BytesOutput(),
 		buffer = Bytes.alloc(65536),
@@ -503,8 +503,7 @@ function execute(command:String, arguments:Array<String>, cwd:String, echo:Bool 
 		for (index in 0...2) {
 			if (!open[index])
 				continue;
-			var count = index == 0 ? process.readStdout(buffer, 0, buffer.length) : process.readStderr(buffer, 0,
-				buffer.length);
+			var count = ready(index == 0 ? process.stdout : process.stderr, buffer);
 			if (count > 0) {
 				(index == 0 ? out : err).writeBytes(buffer, 0, count);
 				if (echo)
@@ -518,16 +517,50 @@ function execute(command:String, arguments:Array<String>, cwd:String, echo:Bool 
 		if (!moved && (open[0] || open[1]))
 			Sys.sleep(0.002);
 	}
-	var status = process.pollExit();
-	while (status < 0) {
+	var status = process.exitStatus();
+	while (status == null) {
 		if (Sys.time() > deadline)
 			stopped();
 		Sys.sleep(0.002);
-		status = process.pollExit();
+		status = process.exitStatus();
 	}
 	process.close();
-	return {status: status, out: trimEnd(out.getBytes().toString()), err: err.getBytes().toString()};
+	return {status: code(status), out: trimEnd(out.getBytes().toString()), err: err.getBytes().toString()};
 }
+
+/**
+ * Starts `command` in `cwd` with no shell, its output and error piped and no input. In a process group of its own, so
+ * closing it ends what it started too (the CLI, the app it launched, an xvfb-run).
+ */
+function start(command:String, arguments:Array<String>, cwd:String):Child
+	return switch new Command(command).args(arguments).directory(cwd).stdin(Discard).stdout(Pipe).stderr(Pipe).group()
+		.spawn() {
+			case Ok(child): child;
+			case Err(error):
+				smokeFail('${[command].concat(arguments).join(" ")} could not be started: ${error.describe()}');
+				throw "unreachable";
+		}
+
+/** What `stream` has ready, read into `buffer` without waiting: how many bytes, -1 at its end, 0 when none are ready. */
+function ready(stream:Null<ChildOutput>, buffer:Bytes):Int {
+	if (stream == null)
+		return -1;
+	return switch stream.read(buffer, 0, buffer.length, 0) {
+		case Ok(0): -1;
+		case Ok(count): count;
+		case Err(TimedOut): 0;
+		case Err(error):
+			smokeFail('reading a program\'s output failed: ${error.describe()}');
+			-1;
+	}
+}
+
+/** An exit status as a shell reports it: the code, or 128 plus the signal. */
+function code(status:ExitStatus):Int
+	return switch status {
+		case Exited(code): code;
+		case Signaled(signal): 128 + signal;
+	}
 
 /** Runs `command` with its output passing through, and fails with `what` unless it exits 0. */
 function must(what:String, command:String, arguments:Array<String>, cwd:String):Void
