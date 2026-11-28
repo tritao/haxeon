@@ -314,7 +314,7 @@ class UiContext implements Disposable {
 	public function submit(view:View, frame:LayoutFrame):RenderNode {
 		var build = () -> view;
 		var focusBefore = focus.focusedId;
-		var result = submitInternal(frame, null, build);
+		var result = submitInternal(frame, null, build, true, 0);
 		// Focus moved during this frame: the nodes take on their focused state in the next one, so this frame's tree is
 		// not yet what a rebuild would give. The check waits for the following frame.
 		if (focus.focusedId != focusBefore)
@@ -329,7 +329,7 @@ class UiContext implements Disposable {
 	public function submitCached(build:Void->View, frame:LayoutFrame, cacheKey:String):RenderNode {
 		if (build == null) throw "Cached UI submissions require a build callback";
 		if (cacheKey == null || cacheKey.length == 0) throw "Cached UI submissions require a non-empty cache key";
-		var result = submitInternal(frame, cacheKey, build);
+		var result = submitInternal(frame, cacheKey, build, true, 0);
 		return maybeVerifyRetention(build, frame, result);
 	}
 
@@ -386,7 +386,7 @@ class UiContext implements Disposable {
 		verifying = true;
 		buildContext.bypassRetention = true;
 		try {
-			submitInternal(frame, null, build, false);
+			submitInternal(frame, null, build, false, 0);
 		} catch (error:Dynamic) {
 			buildContext.bypassRetention = false;
 			verifying = false;
@@ -495,11 +495,12 @@ class UiContext implements Disposable {
 		nextTopology.append(node);
 	}
 
+	// Every argument is given: on wasm32 a Bool or Int passed to a parameter with a default is boxed.
 	function submitInternal(frame:LayoutFrame,
 			cacheKey:Null<String>,
 			build:Void->View,
-			reconcileNewFocus:Bool = true,
-			buildFeedbackPass:Int = 0):RenderNode {
+			reconcileNewFocus:Bool,
+			buildFeedbackPass:Int):RenderNode {
 		try return submitFrame(frame, cacheKey, build, reconcileNewFocus, buildFeedbackPass) catch (error:Dynamic) {
 			buildContext.retryTextBindings();
 			throw error;
@@ -509,8 +510,8 @@ class UiContext implements Disposable {
 	function submitFrame(frame:LayoutFrame,
 			cacheKey:Null<String>,
 			build:Void->View,
-			reconcileNewFocus:Bool = true,
-			buildFeedbackPass:Int = 0):RenderNode {
+			reconcileNewFocus:Bool,
+			buildFeedbackPass:Int):RenderNode {
 		var submitStartedAt = Sys.time();
 		diagnosticStage = 1;
 		ensureLive();
