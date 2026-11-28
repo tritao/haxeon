@@ -66,8 +66,8 @@ function main():Void {
  var decodedBytes:Envelope = MessagePack.decode<Envelope>(bytes).unwrap();
  Sys.println(JsonWire.encode(decodedJson));
  Sys.println(MessagePack.encode(decodedBytes).toHex());
- Sys.println(method.encodeRequest(method.decodeRequest(method.encodeRequest(wrapped))).toHex());
- Sys.println(method.encodeResponse(method.decodeResponse(method.encodeResponse(task))).toHex());
+ Sys.println(method.encodeRequest(method.decodeRequest(method.encodeRequest(wrapped)).unwrap()).toHex());
+ Sys.println(method.encodeResponse(method.decodeResponse(method.encodeResponse(task)).unwrap()).toHex());
 }
 HX
 

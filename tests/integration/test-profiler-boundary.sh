@@ -76,8 +76,9 @@ events = events["traceEvents"] if isinstance(events, dict) else events
 counts = collections.Counter(e["name"] for e in events if e.get("ph") == "B" and e["name"].startswith("libc!"))
 sleeps = sum(counts[name] for name in ("libc!nanosleep", "libc!clock_nanosleep", "libc!usleep"))
 assert sleeps >= 10, ("sleeps", counts)
-# The file is opened and closed once to write it and five times to read it back.
-assert counts["libc!fopen"] == 6 and counts["libc!fclose"] == 6, counts
+# The file is opened once to write it and five times to read it back (std.fs opens with open, or openat).
+opens = sum(counts[name] for name in ("libc!open", "libc!open64", "libc!openat", "libc!openat64"))
+assert opens == 6, ("opens", counts)
 # Each boundary call nests under the Haxe call that made it.
 ancestors, stacks = collections.defaultdict(set), collections.defaultdict(list)
 for e in events:
@@ -90,7 +91,8 @@ for e in events:
         stacks[e["tid"]].pop()
 sleep_names = [name for name in ("libc!nanosleep", "libc!clock_nanosleep", "libc!usleep") if counts[name]]
 assert any("Main.pause" in ancestors[name] for name in sleep_names), ancestors
-assert "Main.readBack" in ancestors["libc!fopen"] and "Main.main" in ancestors["libc!fopen"], ancestors
+open_names = [name for name in ("libc!open", "libc!open64", "libc!openat", "libc!openat64") if counts[name]]
+assert any("Main.readBack" in ancestors[name] and "Main.main" in ancestors[name] for name in open_names), ancestors
 PY
 
 # With "imports": "none", nothing is hooked: the same run has no boundary slices.
