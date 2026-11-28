@@ -37,6 +37,9 @@ class CompilerSession {
 	 */
 	var sourceReads:Map<String, {version:Bytes, text:String, settled:Bool}> = [];
 
+	/** Where the manifest's files were placed (`SourceManifestLoader.load`), for the same roots: the configuration names them. */
+	var sourcePlaces:Map<String, SourceManifestLoader.SourcePlace> = [];
+
 	/**
 	 * The build of the compiler its live history is keyed by: the running program's fingerprint
 	 * (`CodeIdentityTable.compilerVersion`) unless one is given.
@@ -63,6 +66,7 @@ class CompilerSession {
 		encodedModule = null;
 		functionMap = new IndexText();
 		sourceReads = [];
+		sourcePlaces = [];
 	}
 
 	/**
@@ -151,6 +155,7 @@ class CompilerSession {
 				roots: request.roots,
 				stdlib: request.stdlib,
 				packageRoots: request.packageRoots,
+				dependencyRoots: request.dependencyRoots,
 				paths: request.paths,
 				interfaces: interfaces,
 				projections: projections
@@ -232,7 +237,7 @@ class CompilerSession {
 			}
 		}
 		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots, readChanged,
-			request.dependencyRoots);
+			request.dependencyRoots, sourcePlaces);
 		// Wasm guests always carry the stdlib modules their host calls into.
 		for (name in hostModules(request))
 			compiler.addHostModule(name);

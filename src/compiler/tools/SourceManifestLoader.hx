@@ -2,6 +2,7 @@ package compiler.tools;
 
 import compiler.Compiler;
 import compiler.core.InternalError;
+import compiler.modules.ModulePath;
 import compiler.tools.CompilerRequest.PackageSourceRoot;
 import sys.FileSystem;
 import sys.io.File;
@@ -12,29 +13,55 @@ private typedef ResolvedRoot = {
 	final packagePrefix:Null<String>;
 }
 
+/** Where the loader puts a file of the manifest: its module, its path as the module sees it, its physical path, and whether it is package code. */
+typedef SourcePlace = {
+	final module:String;
+	final path:String;
+	final physical:String;
+	final packageCode:Bool;
+}
+
 /** Loads a deterministic explicit source manifest into a compiler instance. */
 class SourceManifestLoader {
-	/** `dependencyRoots`: the roots whose files are a dependency's, package code (`ModuleState.packageCode`). */
+	/**
+	 * `dependencyRoots`: the roots whose files are a dependency's, package code (`ModuleState.packageCode`). `places`, a session's,
+	 * keeps where each file went for the next load of the same roots, which then places only the files new to it.
+	 */
 	public static function load(compiler:Compiler, roots:Array<String>, paths:Array<String>,
 			?packageRoots:Array<PackageSourceRoot>,
-			?readSource:String->Null<String>, ?dependencyRoots:Array<String>):Void {
+			?readSource:String->Null<String>, ?dependencyRoots:Array<String>, ?places:Map<String, SourcePlace>):Void {
 		var ordered = paths.copy(),
 			resolvedPackages = resolve(packageRoots == null ? [] : [for (root in packageRoots) root.path],
 				packageRoots == null ? [] : [for (root in packageRoots) root.packageName]),
 			resolvedRoots = resolve(roots),
-			dependencies = resolve(dependencyRoots == null ? [] : dependencyRoots);
+			dependencies = resolve(dependencyRoots == null ? [] : dependencyRoots),
+			current = "";
 		ordered.sort(Reflect.compare);
-		for (path in ordered)
-			try {
+		// One handler for the whole manifest: entering a try costs an allocation.
+		try {
+			for (path in ordered) {
+				current = path;
 				var source = readSource == null ? File.getContent(path) : readSource(path);
-				if (source != null) {
-					var physical = canonicalPath(path);
-					compiler.update(locate(path, physical, resolvedRoots, resolvedPackages), source, null, physical,
-						within(physical, dependencies));
+				if (source == null)
+					continue;
+				var place = places == null ? null : places.get(path);
+				if (place == null) {
+					var physical = canonicalPath(path),
+						located = locate(path, physical, resolvedRoots, resolvedPackages);
+					place = {
+						module: ModulePath.fromFile(located),
+						path: located,
+						physical: physical,
+						packageCode: within(physical, dependencies)
+					};
+					if (places != null)
+						places.set(path, place);
 				}
-			} catch (error:Dynamic) {
-				throw new InternalError("Could not load compiler source " + path + ": " + Std.string(error));
+				compiler.update(place.path, source, place.module, place.physical, place.packageCode);
 			}
+		} catch (error:Dynamic) {
+			throw new InternalError("Could not load compiler source " + current + ": " + Std.string(error));
+		}
 	}
 
 	/**
