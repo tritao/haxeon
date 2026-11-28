@@ -20,7 +20,8 @@ class NativeKitFileWatchTests {
 					return true;
 				case Err(error): throw "FileWatch.create: " + error.describe();
 			};
-			watch.exclude(root + "/build");
+			if (!watch.exclude(root + "/build").isOk())
+				throw "a subtree could not be excluded";
 			if (!watch.add(root, true).isOk() || !watch.add(root + "/gone", false).isOk())
 				throw "a directory could not be watched";
 			if (!watch.add(root + "/missing", false).match(Err(NotFound)))

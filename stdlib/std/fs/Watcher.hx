@@ -96,10 +96,11 @@ class Watcher implements Disposable {
 	}
 
 	/** Leaves `path` and everything under it out of the recursive registrations, those made before and after. */
-	public function exclude(path:Path):Void {
-		#if !wasm
-		if (!nativeExclude(live(), path.toString()))
-			throw new haxe.Exception('std.fs.Watcher could not exclude "$path"');
+	public function exclude(path:Path):Result<Void, FileError> {
+		#if wasm
+		return Err(Unsupported);
+		#else
+		return nativeExclude(live(), path.toString()) ? Ok() : Err(Io(0, "the subtree could not be left out"));
 		#end
 	}
 

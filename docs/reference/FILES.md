@@ -107,7 +107,7 @@ function follow(directory:String):Result<Void, std.fs.FileError> {
 | --- | --- | --- |
 | `add(path, recursive)` | watches a directory, with every directory under it when `recursive`, those created later included | `NotFound`, `NotADirectory`, `PermissionDenied`, `Io` (the system's limit) |
 | `remove(path)` | stops watching a directory added before, and what it watched under it | `NotFound` |
-| `exclude(path)` | leaves a subtree out of the recursive registrations | |
+| `exclude(path)` | leaves a subtree out of the recursive registrations | `Io` (no memory) |
 | `wait(seconds)` | the changes since the last wait, in order: `Changed(path, kind)` (`Added`, `Removed`, `Modified`), and `Rescan` when some were lost | |
 | `wake()` | from any thread, makes a wait in progress return now | |
 

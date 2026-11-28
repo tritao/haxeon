@@ -13,9 +13,9 @@ import sys.thread.Thread;
 	for an app with an event loop. A registration is complete when `add` returns. Paths are reported under the spelling
 	a directory was added with; compare them with `pathKey`.
 
-	When changes were lost the watch registers its directories again (picking up any created meanwhile), then reports
-	`Rescan`; a registered directory that is gone, whether it was removed or could not be registered again, is reported
-	`Lost` and forgotten.
+	When changes were lost the watching thread registers its directories again (picking up any created meanwhile), and
+	the watch then reports `Rescan`; a registered directory that is gone, whether it was removed or could not be
+	registered again, is reported `Lost` and forgotten. The app thread never waits for that walk.
 **/
 class FileWatch implements Disposable {
 	final events:EventPump;
@@ -27,6 +27,8 @@ class FileWatch implements Disposable {
 	final stopped = new Lock();
 	/** Registrations by path key, kept on the app thread. */
 	final registrations:Map<String, FileWatchRegistration> = [];
+	/** The same registrations, kept on the watching thread to renew them without asking the app thread. */
+	final watched:Map<String, FileWatchRegistration> = [];
 	final excluded:Array<String> = [];
 	var disposed:Bool = false;
 
@@ -73,13 +75,15 @@ class FileWatch implements Disposable {
 	}
 
 	/** Leaves `path` and everything under it out of recursive registrations, including directories created there later. */
-	public function exclude(path:String):Void {
+	public function exclude(path:String):Result<Void, FileError> {
 		ensureLive();
 		for (existing in excluded)
 			if (contains(pathKey(existing), pathKey(path)))
-				return;
-		_ = ask(Exclude(path, new FileWatchReply()));
-		excluded.push(path);
+				return Ok();
+		var excluding = ask(Exclude(path, new FileWatchReply()));
+		if (excluding.isOk())
+			excluded.push(path);
+		return excluding;
 	}
 
 	/** The registered directories. */
@@ -139,7 +143,10 @@ class FileWatch implements Disposable {
 		watcher.wake();
 	}
 
-	/** The watching thread: waits for changes, carries out what the app thread asked, and posts what changed to it. */
+	/**
+	 * The watching thread: waits for changes, carries out what the app thread asked, renews its registrations when
+	 * changes were lost, and posts what happened to the app thread.
+	 */
 	function watch():Void {
 		var stopping = false;
 		while (!stopping) {
@@ -151,28 +158,57 @@ class FileWatch implements Disposable {
 				switch command {
 					case Add(path, recursive, reply):
 						reply.result = watcher.add(path, recursive);
+						if (reply.result.isOk())
+							watched.set(pathKey(path), new FileWatchRegistration(path, recursive));
 						reply.done.release();
 					case Remove(path, reply):
 						reply.result = watcher.remove(path);
+						var key = pathKey(path);
+						for (other in [for (other in watched.keys()) other])
+							if (contains(key, other))
+								watched.remove(other);
 						reply.done.release();
 					case Exclude(path, reply):
-						watcher.exclude(path);
+						reply.result = watcher.exclude(path);
 						reply.done.release();
 					case Stop:
 						stopping = true;
 				}
-			if (!stopping && changes.length > 0)
-				events.post(() -> deliver(changes));
+			if (stopping || changes.length == 0)
+				continue;
+			var lostChanges = Lambda.exists(changes, change -> change.match(Rescan)),
+				gone:Array<String> = [],
+				failure:Null<FileError> = null;
+			if (lostChanges)
+				failure = renew(gone);
+			events.post(() -> deliver(changes, gone, failure));
 		}
 		watcher.close();
 		stopped.release();
 	}
 
-	/** On the app thread: reports `changes`, forgets the registrations that went, and registers again after a loss. */
-	function deliver(changes:Array<WatchEvent>):Void {
+	/**
+	 * On the watching thread: registers every directory again, picking up what was created while changes were lost.
+	 * Adds to `gone` the paths no longer there; answers the failure that stops the watch, or null.
+	 */
+	function renew(gone:Array<String>):Null<FileError> {
+		for (key => registration in [for (key => registration in watched) key => registration])
+			switch watcher.add(registration.path, registration.recursive) {
+				case Ok(_):
+				case Err(NotFound | NotADirectory):
+					watched.remove(key);
+					gone.push(registration.path);
+				case Err(error):
+					return error;
+			}
+		return null;
+	}
+
+	/** On the app thread: reports `changes` and what the watching thread found gone, forgetting those registrations. */
+	function deliver(changes:Array<WatchEvent>, gone:Array<String>, failure:Null<FileError>):Void {
 		if (disposed)
 			return;
-		var lost = false;
+		var lostChanges = false;
 		for (change in changes)
 			switch change {
 				case Changed(path, kind):
@@ -181,27 +217,15 @@ class FileWatch implements Disposable {
 					if (kind == Removed)
 						lose(pathKey(at));
 				case Rescan:
-					lost = true;
+					lostChanges = true;
 			}
-		if (lost && !disposed)
-			renew();
-	}
-
-	/** Registers every directory again, picking up what was created while changes were lost, then reports `Rescan`. */
-	function renew():Void {
-		for (registration in [for (registration in registrations) registration]) {
-			if (disposed)
-				return;
-			switch ask(Add(registration.path, registration.recursive, new FileWatchReply())) {
-				case Ok(_):
-				case Err(NotFound | NotADirectory): lose(pathKey(registration.path));
-				case Err(error):
-					dispose();
-					listener(Failed(error));
-					return;
-			}
-		}
-		listener(Rescan);
+		for (path in gone)
+			lose(pathKey(path));
+		if (failure != null) {
+			dispose();
+			listener(Failed(failure));
+		} else if (lostChanges)
+			listener(Rescan);
 	}
 
 	function lose(key:String):Void {

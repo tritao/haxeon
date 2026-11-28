@@ -54,7 +54,8 @@ function main():Int {
 	if (failure(watcher.add('$base/missing', true)) != "not found"
 		|| failure(watcher.add('$base/file.txt')) != "not a directory")
 		return 2;
-	watcher.exclude('$base/skip');
+	if (failure(watcher.exclude('$base/skip')) != "ok")
+		return 11;
 	if (failure(watcher.add(base, true)) != "ok" || failure(watcher.add(base, true)) != "ok")
 		return 3;
 	var seen:Array<WatchEvent> = [];
