@@ -283,3 +283,109 @@ HL_PRIM bool HL_NAME(__fs_rename)( realtime_fs_root *root, vstring *path, vstrin
 	return moved;
 }
 DEFINE_PRIM(_BOOL,__fs_rename,_ABSTRACT(realtime_fs_root) _STRING _STRING);
+
+/* An open file as std.fs.FileHandle holds it: closed when it is, or when it is collected. */
+typedef struct {
+	void (*finalize)( void * );
+	realtime_fs_stream stream;
+	bool open;
+} realtime_fs_handle;
+
+static void realtime_fs_handle_finalize( void *value ) {
+	realtime_fs_handle *handle = (realtime_fs_handle *)value;
+	if( handle->open ) realtime_fs_stream_close(&handle->stream);
+	handle->open = false;
+}
+
+/* Opens the file `path` as `mode` says (std.fs.OpenMode's index), or null. */
+HL_PRIM realtime_fs_handle *HL_NAME(__fs_stream_open)( realtime_fs_root *root, vstring *path, int mode ) {
+	realtime_fs_handle *handle = (realtime_fs_handle *)hl_gc_alloc_finalizer(sizeof(realtime_fs_handle));
+	handle->finalize = realtime_fs_handle_finalize;
+	handle->open = false;
+	REALTIME_FS_PATH(native,path);
+	bool opened = realtime_fs_stream_open(realtime_fs_resolver(root),native,mode,&handle->stream);
+	REALTIME_FS_PATH_END(native);
+	if( !opened ) return NULL;
+	handle->open = true;
+	return handle;
+}
+DEFINE_PRIM(_ABSTRACT(realtime_fs_handle),__fs_stream_open,_ABSTRACT(realtime_fs_root) _STRING _I32);
+
+static bool realtime_fs_handle_live( realtime_fs_handle *handle ) {
+	if( handle == NULL || !handle->open ) hl_error("std.fs.FileHandle is closed");
+	return true;
+}
+
+/* Reads up to `length` bytes into `buffer` at `offset`: how many, 0 at the end, -1 on failure. */
+HL_PRIM int HL_NAME(__fs_stream_read)( realtime_fs_handle *handle, realtime_bytes *buffer, int offset, int length ) {
+	realtime_fs_handle_live(handle);
+	if( offset < 0 || length < 0 || offset > buffer->length - length ) hl_error("read outside the buffer");
+	if( length == 0 ) return 0;
+	hl_blocking(true);
+	int read = realtime_fs_stream_read(&handle->stream,buffer->data + offset,length);
+	hl_blocking(false);
+	return read;
+}
+DEFINE_PRIM(_I32,__fs_stream_read,_ABSTRACT(realtime_fs_handle) _ABSTRACT(realtime_bytes) _I32 _I32);
+
+/* Writes `length` bytes of `buffer` from `offset`, all of them, or answers false. */
+HL_PRIM bool HL_NAME(__fs_stream_write)( realtime_fs_handle *handle, realtime_bytes *buffer, int offset, int length ) {
+	realtime_fs_handle_live(handle);
+	if( offset < 0 || length < 0 || offset > buffer->length - length ) hl_error("write outside the buffer");
+	hl_blocking(true);
+	bool written = realtime_fs_stream_write(&handle->stream,buffer->data + offset,length);
+	hl_blocking(false);
+	return written;
+}
+DEFINE_PRIM(_BOOL,__fs_stream_write,_ABSTRACT(realtime_fs_handle) _ABSTRACT(realtime_bytes) _I32 _I32);
+
+/* Moves by the Int64 at 0 of `place` from `origin` (0 start, 1 here, 2 end), writing the new position there. */
+HL_PRIM bool HL_NAME(__fs_stream_seek)( realtime_fs_handle *handle, realtime_bytes *place, int origin ) {
+	realtime_fs_handle_live(handle);
+	if( place == NULL || place->length < 8 ) hl_error("seek buffer is too small");
+	int64_t offset, position = 0;
+	memcpy(&offset,place->data,8);
+	if( !realtime_fs_stream_seek(&handle->stream,offset,origin,&position) ) return false;
+	memcpy(place->data,&position,8);
+	return true;
+}
+DEFINE_PRIM(_BOOL,__fs_stream_seek,_ABSTRACT(realtime_fs_handle) _ABSTRACT(realtime_bytes) _I32);
+
+/* Writes the file's size, an Int64, at 0 of `out`. */
+HL_PRIM bool HL_NAME(__fs_stream_size)( realtime_fs_handle *handle, realtime_bytes *out ) {
+	realtime_fs_handle_live(handle);
+	if( out == NULL || out->length < 8 ) hl_error("size buffer is too small");
+	int64_t size = 0;
+	if( !realtime_fs_stream_size(&handle->stream,&size) ) return false;
+	memcpy(out->data,&size,8);
+	return true;
+}
+DEFINE_PRIM(_BOOL,__fs_stream_size,_ABSTRACT(realtime_fs_handle) _ABSTRACT(realtime_bytes));
+
+/* Makes the file as long as the Int64 at 0 of `length`, cutting it or padding it with zeros. */
+HL_PRIM bool HL_NAME(__fs_stream_set_length)( realtime_fs_handle *handle, realtime_bytes *length ) {
+	realtime_fs_handle_live(handle);
+	if( length == NULL || length->length < 8 ) hl_error("length buffer is too small");
+	int64_t value;
+	memcpy(&value,length->data,8);
+	return realtime_fs_stream_set_length(&handle->stream,value);
+}
+DEFINE_PRIM(_BOOL,__fs_stream_set_length,_ABSTRACT(realtime_fs_handle) _ABSTRACT(realtime_bytes));
+
+/* Waits until what was written is on the disk. */
+HL_PRIM bool HL_NAME(__fs_stream_sync)( realtime_fs_handle *handle ) {
+	realtime_fs_handle_live(handle);
+	hl_blocking(true);
+	bool synced = realtime_fs_stream_sync(&handle->stream);
+	hl_blocking(false);
+	return synced;
+}
+DEFINE_PRIM(_BOOL,__fs_stream_sync,_ABSTRACT(realtime_fs_handle));
+
+/* Closes the file; false when the system reported a failure doing so (a write it could not finish). */
+HL_PRIM bool HL_NAME(__fs_stream_close)( realtime_fs_handle *handle ) {
+	if( handle == NULL || !handle->open ) return true;
+	handle->open = false;
+	return realtime_fs_stream_close(&handle->stream);
+}
+DEFINE_PRIM(_BOOL,__fs_stream_close,_ABSTRACT(realtime_fs_handle));

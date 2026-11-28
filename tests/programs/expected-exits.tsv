@@ -726,6 +726,7 @@ switch-large-table	42
 call-type-arguments	42
 named-arguments	42
 std-fs	42
+std-fs-handle	42
 std-fs-root	42
 typedef-class-constructor	42
 is-of-type-unnamed-interface	42

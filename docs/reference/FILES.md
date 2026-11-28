@@ -83,6 +83,40 @@ function serve(workspace:String, request:String):Result<String, std.fs.FileError
 - A root holds its directory open until `close`, which a `scoped` binding calls at the end of its scope. Using it
   after that throws.
 
+## Open files
+
+A `FileHandle` reads and writes a file a part at a time, from a position that each read and write moves.
+`FileHandle.open(path, mode)` opens one by path as `Files` does; `root.openFile(path, mode)` opens one beneath a root,
+confined as the root's other operations are.
+
+| Mode | Opens | Fails with |
+| --- | --- | --- |
+| `Read` | a file that is there, to read it | `NotFound`, `IsADirectory` |
+| `Write` | a file to write from its start: created when missing, emptied when there | `IsADirectory`, `NotFound` (no parent) |
+| `Append` | a file to add to: created when missing, and every write goes to its end | as `Write` |
+| `ReadWrite` | a file that is there, to read and write it, keeping what it holds | as `Read` |
+| `CreateNew` | a new file, to write it; what is there is left as it was | `AlreadyExists` |
+
+```haxe
+import std.fs.FileHandle;
+
+function header(path:String):Result<haxe.io.Bytes, std.fs.FileError> {
+	scoped var file = try FileHandle.open(path, Read);
+	var bytes = haxe.io.Bytes.alloc(16);
+	var read = try file.read(bytes);
+	return Ok(bytes.sub(0, read));
+}
+```
+
+- `read(buffer, offset, length)` answers how many bytes it read: fewer than asked is no failure, and 0 is the end of
+  the file. `write` writes every byte, or fails.
+- `seek(offset, from)` moves from the `Start`, the `Current` position or the `End`, and answers the new position;
+  `position()` and `size()` answer without moving. Positions and sizes are `Int64`.
+- `setLength(length)` cuts the file or pads it with zero bytes; `sync()` waits until what was written is on the disk.
+- `close()` answers a failure the system reports as it closes. A `scoped` binding closes the handle at the end of its
+  scope, and the collector closes one that was dropped; using a closed handle throws.
+- On Wasm a handle reads and writes a file of the in-memory filesystem; positions are limited to 2 GB there.
+
 ## Watching directories
 
 A `Watcher` reports what changes under the directories it watches: inotify on Linux, ReadDirectoryChangesW on Windows,
@@ -119,5 +153,5 @@ function follow(directory:String):Result<Void, std.fs.FileError> {
 
 ## Not yet
 
-- Open files (streams, seeking) and the working directory: `sys.io.File` and `Sys` still provide them.
+- The working directory: `Sys` still provides it.
 - Forms returning `Future<Result<T, FileError>>`, for code on a UI thread.

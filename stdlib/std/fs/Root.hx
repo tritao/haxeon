@@ -122,6 +122,10 @@ class Root implements Disposable {
 	public function copy(path:Path, target:Path):Result<Void, FileError>
 		return Operations.copy(live(), path, target);
 
+	/** Opens the file `path` beneath the root as `mode` says, to read and write it a part at a time. */
+	public function openFile(path:Path, mode:OpenMode):Result<FileHandle, FileError>
+		return FileHandle.openIn(live(), path, mode);
+
 	function live():RootHandle {
 		var held = handle;
 		if (held == null)

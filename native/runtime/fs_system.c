@@ -617,14 +617,16 @@ static bool realtime_fs_read( realtime_fs_directory *root, const wchar_t *path, 
 	return handle != INVALID_HANDLE_VALUE && realtime_fs_read_handle(handle,data,length);
 }
 
-static bool realtime_fs_write( realtime_fs_directory *root, const wchar_t *path, const unsigned char *data, int length,
-	int mode ) {
+/* Opens the file `path` to write it as `mode` says (replacing what it holds, appending, or only creating it), with
+   `extra` access beside writing (GENERIC_READ for a stream that reads too); INVALID_HANDLE_VALUE after recording why. A
+   link is written through, to what it points to, which for a root must be beneath it too. */
+static HANDLE realtime_fs_open_written( realtime_fs_directory *root, const wchar_t *path, int mode, ACCESS_MASK extra ) {
 	realtime_fs_place place;
 	if( !realtime_fs_place_of(root,path,&place,ERROR_ACCESS_DENIED) ) {
 		if( realtime_fs_is_self(path) ) realtime_fs_refuse(REALTIME_FS_IS_A_DIRECTORY);
-		return false;
+		return INVALID_HANDLE_VALUE;
 	}
-	ACCESS_MASK access = (mode == REALTIME_FS_APPEND ? FILE_APPEND_DATA : GENERIC_WRITE) | FILE_READ_ATTRIBUTES;
+	ACCESS_MASK access = (mode == REALTIME_FS_APPEND ? FILE_APPEND_DATA : GENERIC_WRITE) | FILE_READ_ATTRIBUTES | extra;
 	HANDLE handle = INVALID_HANDLE_VALUE;
 	bool opened = false;
 	for( int attempt = 0; attempt < 4 && !opened; attempt++ ) {
@@ -673,8 +675,15 @@ static bool realtime_fs_write( realtime_fs_directory *root, const wchar_t *path,
 	realtime_fs_place_release(&place);
 	if( !opened ) {
 		if( handle != INVALID_HANDLE_VALUE ) CloseHandle(handle);
-		return false;
+		return INVALID_HANDLE_VALUE;
 	}
+	return handle;
+}
+
+static bool realtime_fs_write( realtime_fs_directory *root, const wchar_t *path, const unsigned char *data, int length,
+	int mode ) {
+	HANDLE handle = realtime_fs_open_written(root,path,mode,0);
+	if( handle == INVALID_HANDLE_VALUE ) return false;
 	bool written = realtime_fs_write_handle(handle,data,length);
 	if( !CloseHandle(handle) && written ) return realtime_fs_fail(GetLastError());
 	return written && realtime_fs_succeed();
@@ -1438,3 +1447,173 @@ static bool realtime_fs_stat( const realtime_fs_char *path, int values[11] ) {
 	values[10] = (int)info.st_mode;
 	return realtime_fs_succeed();
 }
+
+/* An open file (std.fs.FileHandle): opened by mode, then read, written and moved through until it is closed. */
+enum { REALTIME_FS_STREAM_READ, REALTIME_FS_STREAM_WRITE, REALTIME_FS_STREAM_APPEND, REALTIME_FS_STREAM_READ_WRITE,
+	REALTIME_FS_STREAM_CREATE_NEW };
+
+#ifdef _WIN32
+typedef struct {
+	HANDLE handle;
+} realtime_fs_stream;
+
+/* Opens the file `path` as `mode` says into `stream`, or answers false after recording why. */
+static bool realtime_fs_stream_open( realtime_fs_directory *root, const wchar_t *path, int mode, realtime_fs_stream *stream ) {
+	HANDLE handle;
+	if( mode == REALTIME_FS_STREAM_READ || mode == REALTIME_FS_STREAM_READ_WRITE ) {
+		handle = realtime_fs_open(root,path,GENERIC_READ | (mode == REALTIME_FS_STREAM_READ_WRITE ? GENERIC_WRITE : 0),0);
+		if( handle == INVALID_HANDLE_VALUE ) return false;
+		FILE_ATTRIBUTE_TAG_INFO tag;
+		if( !realtime_fs_attributes_of(handle,&tag) ) {
+			CloseHandle(handle);
+			return false;
+		}
+		if( tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY ) {
+			CloseHandle(handle);
+			return realtime_fs_refuse(REALTIME_FS_IS_A_DIRECTORY);
+		}
+	} else {
+		int written = mode == REALTIME_FS_STREAM_APPEND ? REALTIME_FS_APPEND
+			: mode == REALTIME_FS_STREAM_CREATE_NEW ? REALTIME_FS_CREATE : REALTIME_FS_REPLACE;
+		handle = realtime_fs_open_written(root,path,written,0);
+		if( handle == INVALID_HANDLE_VALUE ) return false;
+	}
+	stream->handle = handle;
+	return realtime_fs_succeed();
+}
+
+/* Reads up to `length` bytes into `data`: how many it read, 0 at the end, -1 after recording why. */
+static int realtime_fs_stream_read( realtime_fs_stream *stream, unsigned char *data, int length ) {
+	DWORD read = 0;
+	if( !ReadFile(stream->handle,data,(DWORD)length,&read,NULL) ) {
+		DWORD error = GetLastError();
+		if( error == ERROR_HANDLE_EOF || error == ERROR_BROKEN_PIPE ) {
+			realtime_fs_succeed();
+			return 0;
+		}
+		realtime_fs_fail(error);
+		return -1;
+	}
+	realtime_fs_succeed();
+	return (int)read;
+}
+
+static bool realtime_fs_stream_write( realtime_fs_stream *stream, const unsigned char *data, int length ) {
+	return realtime_fs_write_handle(stream->handle,data,length) && realtime_fs_succeed();
+}
+
+/* Moves to `offset` from the start (0), the current position (1) or the end (2), answering the new position. */
+static bool realtime_fs_stream_seek( realtime_fs_stream *stream, int64_t offset, int origin, int64_t *position ) {
+	LARGE_INTEGER distance, moved;
+	distance.QuadPart = offset;
+	DWORD method = origin == 0 ? FILE_BEGIN : origin == 1 ? FILE_CURRENT : FILE_END;
+	if( !SetFilePointerEx(stream->handle,distance,&moved,method) ) return realtime_fs_fail(GetLastError());
+	*position = moved.QuadPart;
+	return realtime_fs_succeed();
+}
+
+static bool realtime_fs_stream_size( realtime_fs_stream *stream, int64_t *size ) {
+	LARGE_INTEGER value;
+	if( !GetFileSizeEx(stream->handle,&value) ) return realtime_fs_fail(GetLastError());
+	*size = value.QuadPart;
+	return realtime_fs_succeed();
+}
+
+static bool realtime_fs_stream_set_length( realtime_fs_stream *stream, int64_t length ) {
+	FILE_END_OF_FILE_INFO end;
+	end.EndOfFile.QuadPart = length;
+	if( !SetFileInformationByHandle(stream->handle,FileEndOfFileInfo,&end,sizeof(end)) )
+		return realtime_fs_fail(GetLastError());
+	return realtime_fs_succeed();
+}
+
+static bool realtime_fs_stream_sync( realtime_fs_stream *stream ) {
+	if( !FlushFileBuffers(stream->handle) ) return realtime_fs_fail(GetLastError());
+	return realtime_fs_succeed();
+}
+
+static bool realtime_fs_stream_close( realtime_fs_stream *stream ) {
+	HANDLE handle = stream->handle;
+	stream->handle = INVALID_HANDLE_VALUE;
+	if( handle != INVALID_HANDLE_VALUE && !CloseHandle(handle) ) return realtime_fs_fail(GetLastError());
+	return realtime_fs_succeed();
+}
+
+#else
+typedef struct {
+	int fd;
+} realtime_fs_stream;
+
+static bool realtime_fs_stream_open( realtime_fs_directory *root, const char *path, int mode, realtime_fs_stream *stream ) {
+	int flags = O_CLOEXEC | O_NOCTTY | (mode == REALTIME_FS_STREAM_READ ? O_RDONLY
+		: mode == REALTIME_FS_STREAM_READ_WRITE ? O_RDWR
+		: mode == REALTIME_FS_STREAM_APPEND ? O_WRONLY | O_CREAT | O_APPEND
+		: mode == REALTIME_FS_STREAM_CREATE_NEW ? O_WRONLY | O_CREAT | O_EXCL
+		: O_WRONLY | O_CREAT | O_TRUNC);
+	int fd = realtime_fs_open(root,path,flags,0666);
+	if( fd < 0 ) return false;
+	/* A directory opens for reading; as a file it is the wrong kind. */
+	struct stat info;
+	if( fstat(fd,&info) != 0 ) {
+		int error = errno;
+		close(fd);
+		return realtime_fs_fail(error);
+	}
+	if( S_ISDIR(info.st_mode) ) {
+		close(fd);
+		return realtime_fs_refuse(REALTIME_FS_IS_A_DIRECTORY);
+	}
+	stream->fd = fd;
+	return realtime_fs_succeed();
+}
+
+static int realtime_fs_stream_read( realtime_fs_stream *stream, unsigned char *data, int length ) {
+	for(;;) {
+		ssize_t read_bytes = read(stream->fd,data,(size_t)length);
+		if( read_bytes >= 0 ) {
+			realtime_fs_succeed();
+			return (int)read_bytes;
+		}
+		if( errno != EINTR ) {
+			realtime_fs_fail(errno);
+			return -1;
+		}
+	}
+}
+
+static bool realtime_fs_stream_write( realtime_fs_stream *stream, const unsigned char *data, int length ) {
+	int error = realtime_fs_write_descriptor(stream->fd,data,length);
+	return error == 0 ? realtime_fs_succeed() : realtime_fs_fail(error);
+}
+
+static bool realtime_fs_stream_seek( realtime_fs_stream *stream, int64_t offset, int origin, int64_t *position ) {
+	off_t moved = lseek(stream->fd,(off_t)offset,origin == 0 ? SEEK_SET : origin == 1 ? SEEK_CUR : SEEK_END);
+	if( moved < 0 ) return realtime_fs_fail(errno);
+	*position = (int64_t)moved;
+	return realtime_fs_succeed();
+}
+
+static bool realtime_fs_stream_size( realtime_fs_stream *stream, int64_t *size ) {
+	struct stat info;
+	if( fstat(stream->fd,&info) != 0 ) return realtime_fs_fail(errno);
+	*size = (int64_t)info.st_size;
+	return realtime_fs_succeed();
+}
+
+static bool realtime_fs_stream_set_length( realtime_fs_stream *stream, int64_t length ) {
+	if( ftruncate(stream->fd,(off_t)length) != 0 ) return realtime_fs_fail(errno);
+	return realtime_fs_succeed();
+}
+
+static bool realtime_fs_stream_sync( realtime_fs_stream *stream ) {
+	if( fsync(stream->fd) != 0 ) return realtime_fs_fail(errno);
+	return realtime_fs_succeed();
+}
+
+static bool realtime_fs_stream_close( realtime_fs_stream *stream ) {
+	int fd = stream->fd;
+	stream->fd = -1;
+	if( fd >= 0 && close(fd) != 0 ) return realtime_fs_fail(errno);
+	return realtime_fs_succeed();
+}
+#endif

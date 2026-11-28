@@ -68,6 +68,12 @@ haxeon_compile_async \
 	--target=wasm-gc --output="$out_dir/wasm-gc-cli-std-fs-root.wasm" --entry=std-fs-root \
 	--root=tests/programs tests/programs/std-fs-root.hx
 haxeon_compile_async \
+	--target=wasm32 --output="$out_dir/wasm-cli-std-fs-handle.wasm" --entry=std-fs-handle \
+	--root=tests/programs tests/programs/std-fs-handle.hx
+haxeon_compile_async \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-std-fs-handle.wasm" --entry=std-fs-handle \
+	--root=tests/programs tests/programs/std-fs-handle.hx
+haxeon_compile_async \
 	--target=wasm32 --output="$out_dir/wasm-cli-std-fs-watch.wasm" --entry=std-fs-watch \
 	--root=tests/programs tests/programs/std-fs-watch.hx
 haxeon_compile_async \
@@ -275,6 +281,8 @@ const cases = [
 	["wasm-gc-cli-std-fs.wasm", 42],
 	["wasm-cli-std-fs-root.wasm", 42],
 	["wasm-gc-cli-std-fs-root.wasm", 42],
+	["wasm-cli-std-fs-handle.wasm", 42],
+	["wasm-gc-cli-std-fs-handle.wasm", 42],
 	["wasm-cli-std-fs-watch.wasm", 42],
 	["wasm-gc-cli-std-fs-watch.wasm", 42],
 	["wasm-cli-wire-generic-enum.wasm", 42],
