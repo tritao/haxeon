@@ -237,7 +237,9 @@ their common base.
 
 ## File watching
 
-`FileWatch.create(runtime.events, listener)` watches registered directories through the shared event pump.
-`FileWatchEvent` reports readiness, changes, overflow, lost registrations, and failures; `FileWatchChange`
-contains the affected paths and change kind. Wait for `ready` before relying on complete recursive coverage,
-and dispose the watch before its runtime.
+`FileWatch.create(runtime.events, listener)` watches directories with `std.fs.Watcher` on a thread of its own and
+delivers what changed on the event pump's thread; it is `Err(Unsupported)` where the system cannot watch. `add(path,
+recursive)` returns once the directory is watched (`NotFound`, `NotADirectory` or `PermissionDenied` when it cannot be).
+`FileWatchEvent` reports `Changed(path, kind)` (`Added`, `Removed` or `Modified`), `Rescan` after changes were lost
+and the registrations renewed, `Lost(path)` for a registered directory that is gone, and `Failed(error)` when one
+could not be registered again. Dispose the watch before its runtime.

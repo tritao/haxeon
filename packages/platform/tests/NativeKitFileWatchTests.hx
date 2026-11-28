@@ -1,30 +1,30 @@
 import haxeon.platform.FileWatch;
 import haxeon.platform.FileWatchEvent;
 import haxeon.platform.event.EventPump;
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import sys.FileSystem;
 import sys.io.File;
 
-/** FileWatch on the real backend: readiness, deep changes, exclusions, lost registrations and removal. */
+/** FileWatch on the system's watcher: deep changes delivered on the pump, exclusions, a lost registration and removal. */
 class NativeKitFileWatchTests {
 	public static function run(events:EventPump):Bool {
-		var capabilities:Capabilities = NativeKit.nk_get_capabilities();
-		if (!capabilities.contains(Capabilities.fileWatch()))
-			return true;
 		var root = temporaryRoot();
 		var watch:Null<FileWatch> = null;
 		try {
 			for (directory in ["a", "a/b", "build", "build/inner", "gone"])
 				FileSystem.createDirectory(root + "/" + directory);
 			var received:Array<FileWatchEvent> = [];
-			watch = FileWatch.create(events, event -> received.push(event));
+			watch = switch FileWatch.create(events, event -> received.push(event)) {
+				case Ok(created): created;
+				case Err(Unsupported):
+					deleteTree(root);
+					return true;
+				case Err(error): throw "FileWatch.create: " + error.describe();
+			};
 			watch.exclude(root + "/build");
-			watch.add(root, true);
-			watch.add(root + "/gone", false);
-			await(events, () -> watch.ready, "the recursive registration never became ready");
-			if (!any(received, event -> event.match(Ready)))
-				throw "no Ready event when the watch became ready";
+			if (!watch.add(root, true).isOk() || !watch.add(root + "/gone", false).isOk())
+				throw "a directory could not be watched";
+			if (!watch.add(root + "/missing", false).match(Err(NotFound)))
+				throw "a missing directory was not NotFound";
 
 			File.saveContent(root + "/build/inner/hidden.txt", "hidden");
 			File.saveContent(root + "/a/b/deep.txt", "deep");
@@ -43,7 +43,7 @@ class NativeKitFileWatchTests {
 				throw "a lost registration was kept: " + watch.directories();
 
 			watch.remove(root);
-			if (watch.directories().length != 0 || !watch.ready)
+			if (watch.directories().length != 0)
 				throw "removing the root left registrations";
 			watch.dispose();
 			watch.dispose();
@@ -70,7 +70,7 @@ class NativeKitFileWatchTests {
 	static function changed(received:Array<FileWatchEvent>, path:String):Bool {
 		var key = FileWatch.pathKey(path);
 		return any(received, event -> switch event {
-			case Changed(change): FileWatch.pathKey(change.path) == key;
+			case Changed(at, _): FileWatch.pathKey(at) == key;
 			case _: false;
 		});
 	}
@@ -80,8 +80,8 @@ class NativeKitFileWatchTests {
 		while (!done()) {
 			if (Sys.time() > deadline)
 				throw message;
-			events.poll();
-			Sys.sleep(0.005);
+			events.wait(0.05);
+			while (events.poll()) {}
 		}
 	}
 

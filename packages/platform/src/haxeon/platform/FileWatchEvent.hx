@@ -1,15 +1,22 @@
 package haxeon.platform;
 
-/** What a file watch reports. */
+import std.fs.ChangeKind;
+import std.fs.FileError;
+
+/** What a file watch reports, on the event pump's thread. */
 enum FileWatchEvent {
-	/** A file or directory changed. */
-	Changed(change:FileWatchChange);
-	/** Changes were missed: everything watched needs a rescan. */
-	Overflow;
-	/** Every registration is now watched (`ready` became true); changes are reported from here on. */
-	Ready;
+	/** The entry at `path` was `kind`; compare paths with `FileWatch.pathKey`. */
+	Changed(path:String, kind:ChangeKind);
+
+	/**
+	 * Changes were lost. The registrations were renewed, so what is reported from here on is complete again; what
+	 * happened before needs comparing with the tree.
+	 */
+	Rescan;
+
 	/** A registered directory no longer exists, so it is no longer watched. */
 	Lost(path:String);
+
 	/** The watch could not register a directory again and has disposed itself; changes are no longer reported. */
-	Failed(error:NativeKitError);
+	Failed(error:FileError);
 }

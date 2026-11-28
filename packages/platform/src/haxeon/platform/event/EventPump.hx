@@ -13,6 +13,9 @@ class EventPump {
 	/** The asynchronous requests answered through this pump. */
 	public final requests:Requests;
 	final listeners:Array<PlatformEvent->Void> = [];
+	/** What other threads asked to run on the polling one (`post`), under `postedGuard`. */
+	final posted:Array<Void->Void> = [];
+	final postedGuard = new sys.thread.Mutex();
 	/** The HTTP requests in flight, by request id. */
 	final exchanges:Map<String, HttpExchange> = [];
 	final sourceListeners:Map<Int, Array<SourceRoute>> = [];
@@ -31,6 +34,8 @@ class EventPump {
 	 */
 	public function poll():Bool {
 		ensureLive();
+		if (runPosted())
+			return true;
 		var polled = NativeKit.nk_poll_event_checked(new Event());
 		return switch new NativeEvent(polled).take() {
 			case Nothing: false;
@@ -48,6 +53,27 @@ class EventPump {
 					exchange.receive(signal);
 				true;
 		};
+	}
+
+	/**
+	 * From any thread: runs `action` on the thread that polls, at its next poll, waking a `wait` in progress. A file
+	 * watch delivers its changes this way.
+	 */
+	internal function post(action:Void->Void):Void {
+		postedGuard.acquire();
+		posted.push(action);
+		postedGuard.release();
+		NativeKit.nk_wake_events();
+	}
+
+	/** Runs what was posted; whether there was anything. */
+	function runPosted():Bool {
+		postedGuard.acquire();
+		var actions = posted.splice(0, posted.length);
+		postedGuard.release();
+		for (action in actions)
+			action();
+		return actions.length > 0;
 	}
 
 	@:allow(haxeon.platform.http.HttpClient)

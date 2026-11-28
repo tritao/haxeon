@@ -1,69 +1,63 @@
 package haxeon.platform;
 
-import haxe.io.Bytes;
 import haxeon.platform.event.EventPump;
-import haxeon.platform.event.EventSubscription;
-import haxeon.platform.event.PlatformEvent;
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
+import std.fs.FileError;
+import std.fs.WatchEvent;
+import std.fs.Watcher;
+import sys.thread.Lock;
+import sys.thread.Mutex;
+import sys.thread.Thread;
 
 /**
-	A NativeKit file watch: directories registered recursively or not, subtrees left out, and typed events.
+	Directories watched on a thread of their own, their changes delivered on the event pump's thread: `std.fs.Watcher`
+	for an app with an event loop. A registration is complete when `add` returns. Paths are reported under the spelling
+	a directory was added with; compare them with `pathKey`.
 
-	A recursive registration returns once its directory is watched; the directories under it may be registered
-	afterwards, and `ready` is false until they all are. A caller that relies on events for correctness treats the
-	watch as complete only while `ready` holds, and rescans (or polls) otherwise.
-
-	Registrations survive what invalidates them natively: after an overflow, or a removal or move at or above one,
-	the watch registers them again (not ready until that completes) and reports `Lost` for one that is gone.
+	When changes were lost the watch registers its directories again (picking up any created meanwhile), then reports
+	`Rescan`; a registered directory that is gone, whether it was removed or could not be registered again, is reported
+	`Lost` and forgotten.
 **/
 class FileWatch implements Disposable {
-	static inline final CHANGE_HEADER_BYTES = 28;
-
-	final owned:OwnedFileWatch;
-	final handle:Int;
+	final events:EventPump;
 	final listener:FileWatchEvent->Void;
-	final subscription:EventSubscription;
-	/** Registrations by path key. */
+	final watcher:Watcher;
+	/** What the app thread asks the watching thread, under `guard`. */
+	final commands:Array<FileWatchCommand> = [];
+	final guard = new Mutex();
+	final stopped = new Lock();
+	/** Registrations by path key, kept on the app thread. */
 	final registrations:Map<String, FileWatchRegistration> = [];
-	/** Registrations still waiting for READY, by path key. */
-	final pending:Map<String, Bool> = [];
 	final excluded:Array<String> = [];
 	var disposed:Bool = false;
 
-	/** Whether every registration is being watched. */
-	public var ready(get, never):Bool;
-
-	/** Throws a `NativeKitException` when the platform cannot watch files. */
-	public static function create(events:EventPump, listener:FileWatchEvent->Void):FileWatch {
-		if (listener == null)
-			throw BindingError.invalidArgument("FileWatch.create", "File watch listeners cannot be null");
-		var options = new FileWatchOptions();
-		options.struct_size = FileWatchOptions.byteSize();
-		return new FileWatch(NativeKit.nk_file_watch_create_checked(options), events, listener);
+	/** A watch delivering its events to `listener` through `events`; `Unsupported` where the system cannot watch. */
+	public static function create(events:EventPump, listener:FileWatchEvent->Void):Result<FileWatch, FileError> {
+		if (events == null || listener == null)
+			throw BindingError.invalidArgument("FileWatch.create", "A file watch needs an event pump and a listener");
+		var watch = new FileWatch(events, listener, try Watcher.open());
+		Thread.create(watch.watch);
+		return Ok(watch);
 	}
 
-	function new(owned:OwnedFileWatch, events:EventPump, listener:FileWatchEvent->Void) {
-		this.owned = owned;
+	function new(events:EventPump, listener:FileWatchEvent->Void, watcher:Watcher) {
+		this.events = events;
 		this.listener = listener;
-		handle = owned.borrow().rawValue;
-		subscription = events.listen(onEvent);
+		this.watcher = watcher;
 	}
 
-	function get_ready():Bool
-		return !disposed && !pending.keys().hasNext();
-
-	/** Watches the absolute directory `path`, and everything under it when `recursive`; returns false when it already
-		was. A relative `path` is a `BindingError`; one that cannot be watched throws a `NativeKitException` (`NotFound`
-		when there is no directory there, `PermissionDenied` when it cannot be read). */
-	public function add(path:String, recursive:Bool):Bool {
+	/**
+		Watches the directory `path`, and everything under it when `recursive`, from when it returns. Adding a
+		directory again is no failure; `NotFound`, `NotADirectory` or `PermissionDenied` when it cannot be watched.
+	**/
+	public function add(path:String, recursive:Bool):Result<Void, FileError> {
 		ensureLive();
 		var key = pathKey(path), registration = registrations.get(key);
 		if (registration != null && (registration.recursive || !recursive))
-			return false;
-		NativeKitStatus.check(register(path, recursive), "FileWatch.add", NativeKit.nk_last_error());
-		registrations.set(key, new FileWatchRegistration(path, recursive));
-		return true;
+			return Ok();
+		var added = ask(Add(path, recursive, new FileWatchReply()));
+		if (added.isOk())
+			registrations.set(key, new FileWatchRegistration(path, recursive));
+		return added;
 	}
 
 	/** Stops watching `path` and everything registered under it. */
@@ -72,24 +66,19 @@ class FileWatch implements Disposable {
 		var key = pathKey(path);
 		if (!registrations.exists(key))
 			return;
-		var wasReady = ready;
-		NativeKit.nk_file_watch_remove_directory_checked(owned.borrow(), path);
+		_ = ask(Remove(path, new FileWatchReply()));
 		for (other in [for (other in registrations.keys()) other])
-			if (contains(key, other)) {
+			if (contains(key, other))
 				registrations.remove(other);
-				pending.remove(other);
-			}
-		if (!wasReady && ready)
-			listener(Ready);
 	}
 
 	/** Leaves `path` and everything under it out of recursive registrations, including directories created there later. */
 	public function exclude(path:String):Void {
 		ensureLive();
 		for (existing in excluded)
-			if (contains(existing, path))
+			if (contains(pathKey(existing), pathKey(path)))
 				return;
-		NativeKit.nk_file_watch_exclude_directory_checked(owned.borrow(), path);
+		_ = ask(Exclude(path, new FileWatchReply()));
 		excluded.push(path);
 	}
 
@@ -105,15 +94,14 @@ class FileWatch implements Disposable {
 	public function isDisposed():Bool
 		return disposed;
 
-	/** Stops the backend and its events; safe to call more than once. */
+	/** Stops watching, and waits for the watching thread to let go; safe to call more than once. */
 	public function dispose():Void {
 		if (disposed)
 			return;
 		disposed = true;
-		subscription.dispose();
+		send(Stop);
+		stopped.wait();
 		registrations.clear();
-		pending.clear();
-		owned.close();
 	}
 
 	/** A path in the form events and registrations are compared in: forward slashes, no trailing one, and folded case
@@ -133,90 +121,95 @@ class FileWatch implements Disposable {
 		return parentKey == childKey
 			|| StringTools.startsWith(childKey, StringTools.endsWith(parentKey, "/") ? parentKey : parentKey + "/");
 
-	function register(path:String, recursive:Bool):Result {
-		var status = NativeKit.nk_file_watch_add_directory(owned.borrow(), path, recursive);
-		if (status == Result.Ok)
-			pending.set(pathKey(path), true);
-		return status;
+	/** Has the watching thread carry out `command`, and answers what it did. */
+	function ask(command:FileWatchCommand):Result<Void, FileError> {
+		var reply = switch command {
+			case Add(_, _, reply) | Remove(_, reply) | Exclude(_, reply): reply;
+			case Stop: throw BindingError.invalidState("FileWatch.ask", "Stopping is not a question");
+		};
+		send(command);
+		reply.done.wait();
+		return reply.result;
 	}
 
-	function onEvent(event:PlatformEvent):Void {
-		switch event {
-			case Raw(kind, source, _, _, _, _, data) if (!disposed && source.rawValue == handle):
-				if (kind == EventKind.FileWatchReady) {
-					var path = pathIn(data, false);
-					if (path != null && pending.remove(pathKey(path)) && ready)
-						listener(Ready);
-				} else if (kind == EventKind.FileWatchOverflow) {
-					// Registered again first, so a listener sees whether the watch is still ready.
-					if (rearm(null))
-						listener(Overflow);
-				} else if (kind == EventKind.FileChanged) {
-					var change = decode(data);
-					if (change == null)
-						return;
-					// A registration follows its subtree; only a removal, move or rescan at or above it invalidates it.
-					var invalidating = change.rescan || ((change.change == FileChangeType.Removed
-						|| change.change == FileChangeType.Moved) && change.item != FileItemKind.File);
-					if (!invalidating || rearm(change.change == FileChangeType.Moved
-						&& change.oldPath != null ? change.oldPath : change.path))
-						listener(Changed(change));
+	function send(command:FileWatchCommand):Void {
+		guard.acquire();
+		commands.push(command);
+		guard.release();
+		watcher.wake();
+	}
+
+	/** The watching thread: waits for changes, carries out what the app thread asked, and posts what changed to it. */
+	function watch():Void {
+		var stopping = false;
+		while (!stopping) {
+			var changes = watcher.wait(-1);
+			guard.acquire();
+			var asked = commands.splice(0, commands.length);
+			guard.release();
+			for (command in asked)
+				switch command {
+					case Add(path, recursive, reply):
+						reply.result = watcher.add(path, recursive);
+						reply.done.release();
+					case Remove(path, reply):
+						reply.result = watcher.remove(path);
+						reply.done.release();
+					case Exclude(path, reply):
+						watcher.exclude(path);
+						reply.done.release();
+					case Stop:
+						stopping = true;
 				}
-			case _:
+			if (!stopping && changes.length > 0)
+				events.post(() -> deliver(changes));
 		}
+		watcher.close();
+		stopped.release();
 	}
 
-	/** Registers again what an event under `scope` (everything when null) may have invalidated. Returns false when the
-		watch failed and disposed itself. */
-	function rearm(scope:Null<String>):Bool {
-		var scopeKey = scope == null ? null : pathKey(scope);
-		for (key in [for (key in registrations.keys()) key]) {
-			if (disposed)
-				return false;
-			if (scopeKey != null && !contains(scopeKey, key))
-				continue;
-			var registration = registrations.get(key);
-			if (registration == null)
-				continue;
-			var status = register(registration.path, registration.recursive);
-			if (status == Result.Ok)
-				continue;
-			if (status != Result.ErrorNotFound) {
-				var error = NativeKitStatus.error(status, "FileWatch.add", NativeKit.nk_last_error());
-				dispose();
-				listener(Failed(error));
-				return false;
+	/** On the app thread: reports `changes`, forgets the registrations that went, and registers again after a loss. */
+	function deliver(changes:Array<WatchEvent>):Void {
+		if (disposed)
+			return;
+		var lost = false;
+		for (change in changes)
+			switch change {
+				case Changed(path, kind):
+					var at = path.toString();
+					listener(Changed(at, kind));
+					if (kind == Removed)
+						lose(pathKey(at));
+				case Rescan:
+					lost = true;
 			}
-			var wasReady = ready;
-			registrations.remove(key);
-			pending.remove(key);
-			listener(Lost(registration.path));
-			if (!wasReady && ready)
-				listener(Ready);
+		if (lost && !disposed)
+			renew();
+	}
+
+	/** Registers every directory again, picking up what was created while changes were lost, then reports `Rescan`. */
+	function renew():Void {
+		for (registration in [for (registration in registrations) registration]) {
+			if (disposed)
+				return;
+			switch ask(Add(registration.path, registration.recursive, new FileWatchReply())) {
+				case Ok(_):
+				case Err(NotFound | NotADirectory): lose(pathKey(registration.path));
+				case Err(error):
+					dispose();
+					listener(Failed(error));
+					return;
+			}
 		}
-		return !disposed;
+		listener(Rescan);
 	}
 
-	static function decode(data:Bytes):Null<FileWatchChange> {
-		if (data == null || data.length < CHANGE_HEADER_BYTES)
-			return null;
-		var header:FileChangedEvent = data;
-		var path = pathIn(data, false);
-		if (path == null)
-			return null;
-		return new FileWatchChange(header.change_type, header.item_kind, path, pathIn(data, true),
-			!(header.flags & FileEventFlags.RescanRequired).isEmpty());
-	}
-
-	static function pathIn(data:Bytes, old:Bool):Null<String> {
-		if (data == null || data.length < CHANGE_HEADER_BYTES)
-			return null;
-		var header:FileChangedEvent = data;
-		var offset = old ? header.old_path_offset : header.path_offset;
-		var length = old ? header.old_path_length : header.path_length;
-		if (offset < CHANGE_HEADER_BYTES || length < 0 || offset + length > data.length)
-			return null;
-		return data.getString(offset, length);
+	function lose(key:String):Void {
+		var registration = registrations.get(key);
+		if (registration == null)
+			return;
+		registrations.remove(key);
+		listener(Lost(registration.path));
 	}
 
 	function ensureLive():Void {
@@ -233,4 +226,19 @@ private class FileWatchRegistration {
 		this.path = path;
 		this.recursive = recursive;
 	}
+}
+
+/** What the app thread asks the watching thread, which answers through `reply`. */
+private enum FileWatchCommand {
+	Add(path:String, recursive:Bool, reply:FileWatchReply);
+	Remove(path:String, reply:FileWatchReply);
+	Exclude(path:String, reply:FileWatchReply);
+	Stop;
+}
+
+private class FileWatchReply {
+	public var result:Result<Void, FileError> = Ok();
+	public final done = new Lock();
+
+	public function new() {}
 }
