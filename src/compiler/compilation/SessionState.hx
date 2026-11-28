@@ -177,11 +177,19 @@ class SessionState {
 	 */
 	public var ownerSpecializations(default, null):ComputedQueryKind<OwnerSpecialization>;
 
+
 	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
 	 * reuses both.
 	 */
 	public var pipelineSnapshot:Null<PipelineSnapshot> = null;
+
+	/**
+	 * What each declaration's types gave the program's registries in the last build that typed (`ProgramTypeUses`), by the
+	 * declaration's name: the next build keeps the uses of a declaration that is the object they were made of. A value of the state
+	 * the build made, replaced by each such build, so a build that is not taken leaves the one before it.
+	 */
+	public var programTypeUses:Map<String, compiler.types.typing.ProgramTypeUses> = [];
 
 	/**
 	 * The backend of this session (`BackendSession`): what turns the final IR into the artifact, with the state it keeps between
@@ -218,6 +226,7 @@ class SessionState {
 		inlineCache = new IrInlineCache();
 		stageMemos.clear();
 		pipelineSnapshot = null;
+		programTypeUses = [];
 		reachabilityCache = [];
 	}
 
@@ -295,6 +304,7 @@ class SessionState {
 			state.declarationTypeDigests = [];
 			state.inferredSignatures = [];
 			state.keyPathUses = [];
+			state.structures = null;
 			state.resolutionReads = [];
 		}
 	}
@@ -382,6 +392,7 @@ class SessionState {
 		result.rehydrationBaseline = rehydrationBaseline;
 		result.inlineCache = inlineCache.copy();
 		result.pipelineSnapshot = pipelineSnapshot;
+		result.programTypeUses = programTypeUses;
 		result.reachabilityCache = reachabilityCache.copy();
 		result.moduleSetChanges = moduleSetChanges.copy();
 		result.declarationOwners = declarationOwners.copy();

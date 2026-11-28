@@ -463,42 +463,6 @@ class TypeRepresentation {
 		if (owner != null) ownerAliases.set(SemanticSignature.type(TMap(key, value)), owner.name);
 	}
 
-	/** Discover owners inside signatures and storage types, including recursive anonymous types. */
-	public function discoverGenericOwners(type:CompilerType, ?origin:String):Void
-		discoverOwners(type, [], origin);
-
-	function discoverOwners(type:CompilerType, explored:Array<Array<compiler.types.Type.AnonymousField>>,
-			origin:Null<String>):Void {
-		switch type {
-			case TInstance(_, _, arguments):
-				genericOwner(type);
-				for (argument in arguments) discoverOwners(argument, explored, origin);
-			case TAbstract(_, arguments, representation):
-				for (argument in arguments) discoverOwners(argument, explored, origin);
-				discoverOwners(representation, explored, origin);
-			case TNullable(inner), TArray(inner), TIterator(inner): discoverOwners(inner, explored, origin);
-			case TMap(key, value):
-				var owner = session.mapOwner(key, value);
-				if (owner != null) {
-					if (origin != null) session.runtimeDependencyTracker.record(origin, owner);
-					specializedMapOwner(owner, key, value);
-				}
-				discoverOwners(key, explored, origin);
-				discoverOwners(value, explored, origin);
-			case TKeyPath(root, value, _): discoverOwners(root, explored, origin);
-				discoverOwners(value, explored, origin);
-			case TFunction(arguments, result, _):
-				for (argument in arguments) discoverOwners(argument, explored, origin);
-				discoverOwners(result, explored, origin);
-			case TAnonymous(_, fields):
-				if (explored.indexOf(fields) < 0) {
-					explored.push(fields);
-					for (field in fields) discoverOwners(field.type, explored, origin);
-				}
-			default:
-		}
-	}
-
 	public function containsTypeParameter(type:CompilerType,
 			explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool
 		return switch type {

@@ -347,7 +347,7 @@ class TypingSession {
 	 */
 	public function keepOwnerSpecialization(output:TypingOutput, aliases:Map<String, String>):Void {
 		mergeUnits([output]);
-		output.records.forEachAnonymousType((name, fields) -> anonymousTypeRegistry.discover(TAnonymous(name, fields)));
+		output.records.forEachAnonymousType((name, fields) -> ProgramTypeUses.addStructure(this, name, fields));
 		representation.restoreGenericOwnerAliases(aliases, [
 			for (index in 0...output.ownerCount())
 				output.owner(index).name => true
@@ -476,8 +476,8 @@ class TypingSession {
 	public function mergeUnits(units:Array<TypingOutput>):Void {
 		for (unit in units)
 			unit.mergeInto(programOutput, sharedOutputs, mergedUnits, null);
-		for (type in programOutput.takePendingAnonymousTypes())
-			anonymousTypeRegistry.discover(type);
+		for (uses in programOutput.takePendingStructures())
+			uses.registerStructures(this);
 	}
 
 	final anonymousTypeRegistry:AnonymousTypeRegistry;

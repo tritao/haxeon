@@ -229,9 +229,12 @@ everything, as before. The tier decides what is kept, never what is built.
 - **Policy.** Both are dropped after the build that made them, with no bound: no edit got slower, so no LRU bound was added.
 - **What is left**, released one part at a time as above (the syntax trees of package code, after the token change; the rest
   over the whole program):
-  - *Syntax trees* 10.2 MB, of which the function bodies 5.6. Every build reads each module's declarations from its tree
-    (`SemanticAssembly`: aliases, enums, static inline fields, discovery metadata; `StaticExtensionTable`; the initialization
-    order), so the tree itself stays until those read a per-module summary instead (the typer-state pieces, TYPER_STATE.md).
+  - *Syntax trees* 10.2 MB, of which the function bodies 5.6. With the typer-state pieces 1, 2 and 5 built (TYPER_STATE.md), no
+    typer state reads a tree; the frontend still does, every build: the module graph parses again any module of the reused
+    reachability whose tree is gone (`FrontendCompilation`, `parseReached`), and the names every module sees are kept by the parse
+    object they were made from (`ModuleNames.madeFrom`); and when they are remade, the static-extension table, the initialization
+    order, a module's resolution after a module came or went, and every module's canonicalization after the alias universe moves.
+    The first two need a module's summary that outlives its tree before the tree can go.
     The bodies are read only to make the canonical declarations again, which a change of the names every module resolves
     against (a type added anywhere) does for every module: dropping them means parsing every package file again on such an
     edit, a latency cost on an edit of the app's own code, for 1.6% of the session. Not built; it pairs with making the

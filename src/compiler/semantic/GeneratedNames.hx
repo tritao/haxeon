@@ -31,6 +31,10 @@ class GeneratedNames {
 	public static inline function isSpecialization(name:String):Bool
 		return StringTools.startsWith(name, SPECIALIZATION_PREFIX);
 
+	/** Whether `name` names a specialization of a generic owner or one of its members (a method, a field's initializer). */
+	public static inline function inOwnerSpecialization(name:String):Bool
+		return StringTools.startsWith(name, OWNER_SPECIALIZATION_PREFIX);
+
 	/** Whether `name` names a specialization of a generic owner (`$generic:$owner:Owner[...]<...>`), not one of its members. */
 	public static inline function isOwnerSpecialization(name:String):Bool
 		return StringTools.startsWith(name, OWNER_SPECIALIZATION_PREFIX) && StringTools.endsWith(name, ">");

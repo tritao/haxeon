@@ -44,6 +44,8 @@ class ModuleFunctionEdges {
 	var helperChanges:Null<Map<String, Bool>> = null;
 	var retained:Null<Map<String, RetentionEntry>> = null;
 	var retainedChanges:Null<Map<String, Bool>> = null;
+	var made:Null<Map<String, Bool>> = null;
+	var madeChanges:Null<Map<String, Bool>> = null;
 
 	public function new() {}
 
@@ -53,6 +55,8 @@ class ModuleFunctionEdges {
 		result.helperChanges = copied(helperChanges);
 		result.retained = copied(retained);
 		result.retainedChanges = copied(retainedChanges);
+		result.made = made == noHelpers ? noHelpers : copied(made);
+		result.madeChanges = copied(madeChanges);
 		return result;
 	}
 
@@ -68,6 +72,8 @@ class ModuleFunctionEdges {
 			edges.helperChanges = marked(edges.helperChanges, name);
 		if (edges.retained != null)
 			edges.retainedChanges = marked(edges.retainedChanges, name);
+		if (edges.made != null)
+			edges.madeChanges = marked(edges.madeChanges, name);
 	}
 
 	static function marked(changes:Null<Map<String, Bool>>, name:String):Map<String, Bool> {
@@ -167,6 +173,47 @@ class ModuleFunctionEdges {
 				update(part, name, retentionEntry(state, name));
 		}
 		return part;
+	}
+
+	/**
+	 * The generated helpers the module holds (`FunctionOriginKind.Helper`), brought up to date with its functions: those a build may
+	 * keep as the last one made them (`FrontendCompilation.retainedFromPrevious`).
+	 */
+	public static function madeHelpers(state:ModuleState):Map<String, Bool> {
+		var edges = edgesOf(state), part = edges.made;
+		if (part == null) {
+			part = [];
+			for (name => fn in state.typedFunctions)
+				if (fn.originKind == FunctionOriginKind.Helper)
+					part.set(name, true);
+			part = part.keys().hasNext() ? part : noHelpers;
+			edges.made = part;
+			return part;
+		}
+		var changes = edges.madeChanges;
+		if (changes != null) {
+			edges.madeChanges = null;
+			for (name in changes.keys()) {
+				var helper = madeHelper(state, name);
+				if (part == noHelpers) {
+					if (helper == null)
+						continue;
+					part = [];
+					edges.made = part;
+				}
+				update(part, name, helper);
+			}
+		}
+		return part;
+	}
+
+	/** The part of a module without generated helpers, which most modules are: shared, never written. */
+	@:processWide("an empty list, only ever read")
+	static final noHelpers:Map<String, Bool> = [];
+
+	static function madeHelper(state:ModuleState, name:String):Null<Bool> {
+		var fn = state.typedFunctions.get(name);
+		return fn != null && fn.originKind == FunctionOriginKind.Helper ? true : null;
 	}
 
 	static function update<T>(part:Map<String, T>, name:String, value:Null<T>):Void
@@ -325,6 +372,13 @@ class ModuleFunctionEdges {
 			for (fnName in retained.keys())
 				if (!state.irFunctions.exists(fnName))
 					throw new InternalError('module "$name" keeps a retention entry of "$fnName", which it does not hold');
+			var made = madeHelpers(state);
+			for (fnName in state.typedFunctions.keys())
+				if (madeHelper(state, fnName) != made.get(fnName))
+					throw new InternalError('module "$name" keeps another list of its generated helpers than its functions give');
+			for (fnName in made.keys())
+				if (!state.typedFunctions.exists(fnName))
+					throw new InternalError('module "$name" lists generated helper "$fnName", which it does not hold');
 		}
 
 	static function sameHelper(left:Null<HelperEdge>, right:Null<HelperEdge>):Bool

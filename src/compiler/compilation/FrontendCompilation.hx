@@ -156,6 +156,9 @@ private class FrontendBuild {
 	public var keyPathUses:Map<String, Map<String, Bool>>;
 	public var typedUnits:Map<String, Bool>;
 
+	/** The structures each unit met in this build's typing, which its module keeps (`publishStructures`). */
+	public var anonymousUnits:Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> = [];
+
 	/** The signatures of the unannotated functions this build typed, by key, which `publishInferredSignatures` keeps. */
 	public var inferredSignatures:Map<String, compiler.types.DeclarationTypes.InferredSignature> = [];
 
@@ -362,6 +365,11 @@ class FrontendCompilation {
 		if (context.options.checkReuse) {
 			checkHelperCalls(build.context.state.modules, build.names);
 			ModuleFunctionEdges.check(build.context.state, build.names);
+			for (name in build.names) {
+				var state = build.context.state.modules.get(name);
+				if (state != null)
+					ModuleStructures.check(state, build.semanticAssembly.owners);
+			}
 		}
 		finishTyping(build);
 		if (!lowerToIr)
@@ -589,7 +597,8 @@ class FrontendCompilation {
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			semantic.staticExtensions = semanticAssembly.staticExtensions;
 			// What each unit typed now reads is recorded while it is typed, and published with it (`publishUnitReads`).
-			var reads = new compiler.semantic.DeclarationReads(context.state.declarationFacts);
+			var reads = new compiler.semantic.DeclarationReads(context.state.declarationFacts),
+				typeUses:Map<String, compiler.types.typing.ProgramTypeUses> = [];
 			build.reads = reads;
 			semantic.declarations.bindReads(reads);
 			semantic.declarations.bindSourcePackages(new compiler.SourcePackages(context.options.sourcePackages));
@@ -602,7 +611,7 @@ class FrontendCompilation {
 				retainedFromPrevious(context, names, selected, semanticAssembly.invalidated, semanticAssembly.owners,
 				build.lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true],
 				previousSemantic), context.options.reverseTypingOrder,
-				keptDeclarations(context, names, semanticAssembly.owners),
+				keptDeclarations(context, names, semanticAssembly.owners, typeUses),
 				context.options.elaborateGenerics, semanticAssembly.entrySpan, context.options.nullSafety,
 				context.options.lambdaTrailingValues);
 			build.allocationAfterProgramTyping = AllocationMeter.sample();
@@ -617,6 +626,9 @@ class FrontendCompilation {
 			build.runtimeDependencies = runtimeDependencies;
 			build.keyPathUses = typedResult.keyPathUses;
 			build.typedUnits = typedResult.typedUnits;
+			build.anonymousUnits = typedResult.anonymousUnits;
+			if (context.options.keepSession)
+				context.state.programTypeUses = typeUses;
 			if (context.options.keepSession)
 				for (specialization in typedResult.ownerSpecializations)
 					context.state.ownerSpecializations.put(context.state.queries,
@@ -1038,6 +1050,7 @@ class FrontendCompilation {
 				state.pendingIrFunctions.set(fn.name, true);
 		}
 		publishUnitReads(build);
+		publishStructures(build);
 		publishDeclarationTypeDigests(build);
 		publishInferredSignatures(build);
 		build.allocationAfterFunctions = AllocationMeter.sample();
@@ -1079,6 +1092,78 @@ class FrontendCompilation {
 				new compiler.semantic.DeclarationFacts.UnitReads(facts.revision, read, module, specializations,
 				reads.standalone.exists(unit)));
 		}
+	}
+
+	/**
+	 * Keeps with each unit's module the structures it met in this build (`ModuleStructures`): a unit typed again gives its own, and
+	 * one this build only registered (a kept function's signature) adds to what it had. A module is written only when what it keeps
+	 * changes.
+	 */
+	static function publishStructures(build:FrontendBuild):Void {
+		var context = build.context, met = build.anonymousUnits;
+		// Nothing reads them past this: the modules keep what a later build lists.
+		build.anonymousUnits = [];
+		if (!context.options.keepSession)
+			return;
+		var owners = build.semanticAssembly.owners, typed = build.typedUnits;
+		function publish(unit:String, types:Null<Array<compiler.types.TypedAst.TypedAnonymous>>):Void {
+			// A generic owner's specialization keeps the structures of its members, and of what was made for them (their lambdas,
+			// their helpers), itself (`SessionState.ownerSpecializations`), and goes with them when no code asks for it any more.
+			var made = unit, fn = build.typedByName.get(unit);
+			while (true) {
+				if (compiler.semantic.GeneratedNames.inOwnerSpecialization(made))
+					return;
+				var origin = fn == null ? null : fn.origin;
+				if (origin == null)
+					break;
+				made = origin;
+				fn = build.typedByName.get(origin);
+			}
+			var module = unitModule(unit, owners, build.typedByName),
+				state = module == null ? null : context.state.modules.get(module);
+			if (module == null || state == null)
+				return;
+			var kept = state.structures == null ? null : state.structures.get(unit);
+			if (!typed.exists(unit) && kept != null && types != null)
+				types = unionByName(kept, types);
+			if (sameStructures(kept, types))
+				return;
+			ModuleStructures.set(context.state.writableState(module, build.rollbackModules), unit, types);
+		}
+		for (unit => types in met)
+			publish(unit, types);
+		for (unit in typed.keys())
+			if (!met.exists(unit))
+				publish(unit, null);
+	}
+
+	/** The structures of `left` and `right`, each ordered by name, as one list ordered by name. */
+	static function unionByName(left:Array<compiler.types.TypedAst.TypedAnonymous>,
+			right:Array<compiler.types.TypedAst.TypedAnonymous>):Array<compiler.types.TypedAst.TypedAnonymous> {
+		var result:Array<compiler.types.TypedAst.TypedAnonymous> = [], at = 0, from = 0;
+		while (at < left.length || from < right.length) {
+			var compared = at >= left.length ? 1 : from >= right.length ? -1 : Reflect.compare(left[at].name,
+				right[from].name);
+			if (compared <= 0) {
+				result.push(left[at++]);
+				if (compared == 0)
+					from++;
+			} else
+				result.push(right[from++]);
+		}
+		return result.length == left.length ? left : result;
+	}
+
+	static function sameStructures(left:Null<Array<compiler.types.TypedAst.TypedAnonymous>>,
+			right:Null<Array<compiler.types.TypedAst.TypedAnonymous>>):Bool {
+		if (left == right)
+			return true;
+		if (left == null || right == null || left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index].name != right[index].name)
+				return false;
+		return true;
 	}
 
 	/**
@@ -1176,8 +1261,9 @@ class FrontendCompilation {
 	 * of the unannotated functions earlier builds typed (`ModuleState.inferredSignatures`), read from the module that owns each, which
 	 * the typer gives the functions it does not type again.
 	 */
-	static function keptDeclarations(context:CompilationContext, names:Array<String>,
-			owners:Map<String, String>):compiler.types.typing.ProgramTyper.KeptDeclarations {
+	static function keptDeclarations(context:CompilationContext, names:Array<String>, owners:Map<String, String>,
+			typeUses:Map<String, compiler.types.typing.ProgramTypeUses>):compiler.types.typing.ProgramTyper
+		.KeptDeclarations {
 		var state = context.state, kind = state.declarationKeys, moduleKeys = [];
 		for (name in names) {
 			var module = state.modules.get(name);
@@ -1197,7 +1283,14 @@ class FrontendCompilation {
 			var owner = owners.get(key), module = owner == null ? null : modules.get(owner);
 			return module == null ? null : module.inferredSignatures.get(key);
 		}
-		return {moduleKeys: moduleKeys, signature: signature, check: context.options.checkReuse};
+		var previous = state.programTypeUses, keepsSession = context.options.keepSession;
+		return {
+			moduleKeys: moduleKeys,
+			signature: signature,
+			check: context.options.checkReuse,
+			typeUses: keepsSession ? name -> previous.get(name) : null,
+			keepTypeUses: keepsSession ? (name, uses) -> typeUses.set(name, uses) : null
+		};
 	}
 
 	/**
@@ -2035,6 +2128,7 @@ class FrontendCompilation {
 			if (record != null && record.module == state.name)
 				facts.removeUnit(unit);
 			state.keyPathUses.remove(cached);
+			ModuleStructures.set(state, cached, null);
 			state.pendingIrFunctions.remove(cached);
 			state.irFunctions.remove(cached);
 			state.irSourceRevisions.remove(cached);
@@ -2119,28 +2213,41 @@ class FrontendCompilation {
 			previous = context.state.lastTypedProgram;
 		if (previous == null)
 			return null;
-		// As pruning keeps them (`pruneModule`): not typed again, and neither the function nor its origin invalidated. A
-		// specialization is a unit of its own, kept while what it read is current, however its generic function was invalidated.
-		var units:Map<String, Bool> = [],
-			helpers:Map<String, compiler.types.TypedAst.TypedFunction> = [],
+		// As pruning keeps them (`pruneModule`): not typed again, and neither the helper nor its origin invalidated.
+		var helpers:Map<String, compiler.types.TypedAst.TypedFunction> = [],
 			facts = context.state.declarationFacts;
 		for (module in modules) {
 			var state = context.state.modules.get(module);
 			if (state != null)
-				for (name => fn in state.typedFunctions)
-					if (!selected.exists(name) && !invalidated.exists(name)
-						&& (fn.origin == null
-						|| fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
-						|| !invalidated.exists(fn.origin))) {
-						units.set(name, true);
-						if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Helper) {
-							var record =
-								facts.unitRecord(facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit,
-								name));
-							if (record != null && record.standalone)
-								helpers.set(name, fn);
-						}
+				for (name in ModuleFunctionEdges.madeHelpers(state).keys()) {
+					var fn = state.typedFunctions.get(name);
+					if (fn != null && !selected.exists(name) && !invalidated.exists(name)
+						&& (fn.origin == null || !invalidated.exists(fn.origin))) {
+						var record = facts.unitRecord(facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit,
+							name));
+						if (record != null && record.standalone)
+							helpers.set(name, fn);
 					}
+				}
+		}
+		// The modules where something is typed again lists its units' structures one by one; the others list them whole.
+		var touched:Map<String, Bool> = [];
+		for (names in [selected, invalidated])
+			for (name in names.keys()) {
+				var module = owners.get(name) ?? initializerModule(name, owners);
+				if (module != null)
+					touched.set(module, true);
+			}
+		function structures(typed:Map<String, Bool>):Array<Array<compiler.types.TypedAst.TypedAnonymous>> {
+			var result:Array<Array<compiler.types.TypedAst.TypedAnonymous>> = [];
+			for (module in modules) {
+				var state = context.state.modules.get(module);
+				if (state != null && state.structures != null)
+					for (types in ModuleStructures.kept(state, typed, touched.exists(module), owners, selected,
+						invalidated))
+						result.push(types);
+			}
+			return result;
 		}
 		// A generic owner specialization is a unit like a helper: the last build's is kept while nothing it read changed since.
 		var specializations:Map<String, compiler.types.typing.RetainedFromPrevious.OwnerSpecialization> = [],
@@ -2172,7 +2279,7 @@ class FrontendCompilation {
 				program: previous,
 				classes: result,
 				enums: retainedEnums,
-				units: units,
+				structures: structures,
 				helpers: helpers,
 				specializations: specializations
 			};
@@ -2182,7 +2289,7 @@ class FrontendCompilation {
 				program: previous,
 				classes: known,
 				enums: knownEnums,
-				units: units,
+				structures: structures,
 				helpers: helpers,
 				specializations: specializations
 			};
@@ -2312,7 +2419,7 @@ class FrontendCompilation {
 			program: previous,
 			classes: result,
 			enums: retainedEnums,
-			units: units,
+			structures: structures,
 			helpers: helpers,
 			specializations: specializations
 		};

@@ -100,6 +100,9 @@ class ModuleState {
 	/** The key path literals each typed function uses; a literal's helpers stay only while one is used. */
 	public var keyPathUses:Map<String, Map<String, Bool>> = [];
 
+	/** The structures each unit the module holds met (`ModuleStructures`), or null for none. */
+	public var structures:Null<compiler.compilation.ModuleStructures> = null;
+
 	/** Typed functions changed by analysis and awaiting build-time IR lowering. */
 	public var pendingIrFunctions:Map<String, Bool> = [];
 
@@ -221,6 +224,7 @@ class ModuleState {
 		result.typedFunctions = copyMap(typedFunctions);
 		result.typedSourceRevisions = copyMap(typedSourceRevisions);
 		result.keyPathUses = copyNestedMap(keyPathUses);
+		result.structures = structures == null ? null : structures.copy();
 		result.pendingIrFunctions = copyMap(pendingIrFunctions);
 		result.irFunctions = copyMap(irFunctions);
 		result.irSourceRevisions = copyMap(irSourceRevisions);

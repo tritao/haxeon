@@ -54,6 +54,14 @@ typedef KeptDeclarations = {
 
 	/** `--check-reuse`: what is kept is compared with what this build makes afresh. */
 	final check:Bool;
+
+	/**
+	 * The uses an earlier build made of a declaration's types (`ProgramTypeUses`), by the declaration's name, and where this build
+	 * keeps the ones it registers; null in a compile that keeps no session.
+	 */
+	final typeUses:Null<String->Null<ProgramTypeUses>>;
+
+	final keepTypeUses:Null<(String, ProgramTypeUses) -> Void>;
 }
 
 /** Coordinates the program-level typing phases and their lifecycle transitions. */
@@ -84,7 +92,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		this.session = bodyTyper.session;
 		this.externTyper = new ExternTyper(fn -> bodyTyper.argumentTypesOf(fn),
 			(type, span) -> bodyTyper.lowerType(type, span));
-		this.assembler = new TypedProgramAssembler(session, type -> bodyTyper.registerAnonymousTypes(type));
+		this.assembler = new TypedProgramAssembler(session);
 	}
 
 	/**
@@ -123,6 +131,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		selectedBodies = selected;
 		session.keptHelpers = retained == null ? null : retained.helpers;
+		assembler.bindKeptUses(kept == null ? null : kept.typeUses, kept == null ? null : kept.keepTypeUses,
+			kept != null && kept.check);
 		session.bindSemantic(semantic, bodyTyper.defaultValueType, this, kept == null ? null : kept.moduleKeys,
 			kept != null && kept.check);
 		if (kept != null && selected != null)
@@ -588,8 +598,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		copyNames.sort(Reflect.compare);
 		for (name in copyNames)
 			typedFunctions.push(dynamicStructures.get(name));
-		keepAnonymousUnits(cachedMetadata != null ? cachedMetadata : retained != null ? retained.program : null,
-			program.classes, retained == null ? null : retained.units);
+		if (retained != null)
+			keepStructures(retained);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		var generatedDoneAt = Sys.time() * 1000.0;
@@ -610,6 +620,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
 			typedUnits: session.programOutput.records.typedUnits,
+			anonymousUnits: session.programOutput.records.orderedAnonymousUnits(),
 			ownerSpecializations: ownerSpecializations,
 			inferredSignatures: inferredSignatures,
 			keyPathUses: session.programOutput.records.keyPathUsesByUnit(),
@@ -642,40 +653,20 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	}
 
 	/**
+	 * The units this build did not type keep the anonymous types they registered when they were typed, while they stay: the program
+	 * lists them, and so does a fresh build, which types every unit.
+	 */
+	function keepStructures(retained:RetainedFromPrevious):Void {
+		for (types in retained.structures(session.programOutput.records.typedUnits))
+			for (entry in types)
+				ProgramTypeUses.addStructure(session, entry.name, entry.fields);
+	}
+
+	/**
 		Ask again for the enum and class specializations of the previous program and return its other retained generated
 		classes. A class no source declares (a key path cache) keeps only the static fields retained code reads, so a cache
 		does not collect fields for paths nothing uses any more.
 	**/
-	/**
-	 * A unit this build did not type keeps the anonymous types it registered when it was typed, as long as it still exists: the
-	 * program lists them, and so does a fresh build, which types every unit. A field's initializer is the unit `Class.__init.x`
-	 * (`InitializerUnit`); a generated function (a specialization, a lambda) exists while the build keeps it (`kept`).
-	 */
-	function keepAnonymousUnits(previous:Null<TypedProgram>, classes:Array<AstClass>,
-			kept:Null<Map<String, Bool>>):Void {
-		if (previous == null)
-			return;
-		var fields:Map<String, Bool> = [], registry = new AnonymousTypeRegistry(session);
-		for (classDecl in classes)
-			for (field in classDecl.fields)
-				if (field.initializer != null)
-					fields.set(classDecl.name + "." + field.name, true);
-		for (unit => types in previous.anonymousUnits) {
-			if (session.programOutput.records.typedUnits.exists(unit)
-				|| session.programOutput.records.hasAnonymousUnit(unit))
-				continue;
-			var initialized = InitializerUnit.field(unit),
-				exists = session.signatures.exists(unit) || initialized != null && fields.exists(initialized)
-					|| kept != null && kept.exists(unit);
-			if (!exists)
-				continue;
-			// Outside any body, registering a type only discovers it for the program (`AnonymousTypeRegistry.register`).
-			for (entry in types)
-				registry.discover(TAnonymous(entry.name, entry.fields));
-			session.programOutput.records.keepAnonymousUnit(unit, types);
-		}
-	}
-
 	function takeFromPrevious(retained:RetainedFromPrevious):Array<TypedClass> {
 		var previous = retained.program, carried:Array<TypedClass> = [];
 		session.enumRepresentations.restore(previous.enums, retained.enums);

@@ -1,6 +1,6 @@
 # The typer's per-build state as results
 
-Status: accepted (pieces 1, 2 and 5 first; piece 4 with engine slices 6 and 7); pieces 1, 3 and 5 are built, and of piece 4 the prune's and retention's edges ("As built", below); piece 2 is not yet, nor piece 4's object tables. Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
+Status: accepted (pieces 1, 2 and 5 first; piece 4 with engine slices 6 and 7); pieces 1, 2, 3 and 5 are built, and of piece 4 the prune's and retention's edges ("As built", below); piece 4's object tables are not yet. Step 3e of [QUERY_ENGINE.md](QUERY_ENGINE.md)'s plan, beside 3c and 3d.
 
 ## Why
 
@@ -224,7 +224,7 @@ Not built, with the reasons:
   function its owner, which a build needs each time, and its decisions read build-wide sets (what was typed, invalidated, still
   called), so skipping a module needs those as recorded reads first. `reachedSpecializations` and retention's scan of the unit
   records (about 3 ms each) and retention's `units` (about 7 ms, every kept function by name, which `keepAnonymousUnits` reads)
-  are also whole-program; the last goes with piece 2.
+  are also whole-program; `units` went with piece 2 (below).
 
 Lines in `src/`: 194 deleted and 499 added (`ModuleFunctionEdges` 347 of them, with its check).
 
@@ -238,14 +238,76 @@ edges again whenever one of its functions changed, which made the signature edit
 mentions in the build that changed it; one that kept every function naming any `$` name held 5,600 entries instead of 1,600 and
 grew live data by 0.9 MB.
 
-### Piece 2: not built yet
+### Piece 2: program types by unit
 
-Measured on the same session after pieces 1 and 5 (`generated` about 24 ms on a no-op): `keepAnonymousUnits` 10–12 ms (every
-unit of the previous program's `anonymousUnits` looked up and its types discovered again), the two `registerProgramTypes` calls
-14 ms over the classes, interfaces, enums and natives (all of them, kept or not; the functions are only the build's own, about 100,
-0.7 ms), of which registering anonymous types 6 ms, generic owners 4 ms and enum representations 1.5 ms; the generators and the
-drain of generic owners about 10 ms, part of which is piece 3's 26 specializations. Replaying a kept unit's recorded discoveries
-into a new `TypingSession` would cost about what walking its types costs now, so the piece needs the registries
-(`TypingSession.anonymousTypes`, `EnumRepresentations`, the generic-owner requests) to outlive the session as summaries over
-the units' contributions, with their order (the program lists enum representations and owners in discovery order) a result of
-the summary rather than of the walk.
+Before it, `generated` on a no-op of the compiler's own sources was about 36 ms of a 166 ms compile (VM, wall): `keepAnonymousUnits`
+10 ms (3,295 units of the previous program's `anonymousUnits`, 12,158 entries, for 519 structures), the two
+`registerProgramTypes` calls over every class, interface, enum and native 13 ms, and the signatures of the build's 1,036 functions
+(733 of them the kept specializations' methods) 4.5 ms; retention's `units` 6 to 7 ms besides. Two contributions replace them,
+each kept where its unit is:
+
+- **Program types as uses** (`ProgramTypeUses`): the one walk of types for the three registries. It collects what types give them
+  (the structures and key path descriptors, the enum specializations, and the class instances with arguments and the maps that
+  may need a generic owner, each in walk order), and the registries register from what it collected: a body's types at once
+  (`AnonymousTypeRegistry.register`, `EnumRuntimeRepresentations.discover`), a declaration's (a class's fields, an interface's
+  methods, an enum's cases, the natives' signatures, a function's signature) by the program typer. The walks the registries had
+  (`AnonymousTypeRegistry.discover` and `recordUses`, `EnumRuntimeRepresentations.discover`'s, `discoverGenericOwners`) are gone;
+  stopping at what is registered already is a property of registering (`addStructure`), not of walking. A structure or enum that
+  still holds a type variable is a waiting entry of the uses, registered by the same path once typing settles it
+  (`MonomorphFrames.whenKnown`). The walk makes the uses only when it meets something to register, so the types that reach
+  nothing, most of them, cost no allocation: a first version that made them for every type allocated 89 MB more in a cold build
+  (enum discovery runs on every expression's type). Whether an instance needs an owner, or a map which one, reads the program's
+  declarations, so that is decided when the uses are registered.
+- **A declaration's uses kept.** The uses a build registered for its declarations are a value of the state it made
+  (`SessionState.programTypeUses`, by declaration name, replaced by each build that types, as the pipeline snapshot is), and the
+  next build keeps a declaration's while it is the object they were made of (a class's fields array, a function), so a kept
+  declaration registers what its types name, in the order the walk met it, and walks nothing: enum specializations and owners are
+  listed in the same order as before. Only uses that register something and that typing has settled (no type variable or open
+  structure in the types) are kept; the natives are one declaration (their array is the program's while no declaration changes,
+  and they have no origin); and of the functions, only a generated class's methods, the one function registered again as the same
+  object (a kept specialization). Keeping every function's uses added 1.8 MB of live data; a version that kept them in a kind of
+  the database by symbol, whose columns run to the largest symbol id, with one entry per native, cost the UI app's server 0.4 MB.
+- **A unit's structures** (`ModuleStructures`, `ModuleState.structures`): what each unit met while it was typed or registered
+  (`UnitRecords`), published with the unit's module as the key path uses are (`publishStructures`): a unit typed again gives its
+  own, one only registered adds to what it had, and a module is written only when what it keeps changes; a function the prune
+  removes takes its record with it. A generic owner's specialization keeps the structures of its members, and of what was made for
+  them (their lambdas, their helpers), itself: a kept one merges its output again and registers its methods' kept uses, so its
+  units have no record in a module, where they would outlive it until the prune (an edit of the structure an owner is specialized
+  for left the old specialization's lambdas listing the old structure). The program lists the structures of the units the build keeps (`RetainedFromPrevious.structures`):
+  each module's whole list, made once and kept until a record changes or the module is canonicalized again, unless one of its units
+  is typed again or one of its functions is selected or invalidated, when its units are read one by one with the rule
+  `keepAnonymousUnits` had (declared, a field's initializer, or a held function the build keeps). A module has a few units with a
+  record, so they are two arrays, not a map. `TypedProgram.anonymousUnits`, `keepAnonymousUnits` and the unit records' kept half
+  are gone; the build lets go of its own records once its modules have them.
+
+Retention's `units` went with it: the generated helpers a build may keep are listed per module (`ModuleFunctionEdges.madeHelpers`,
+marked as the other parts are, one shared empty list for the modules without any), so retention reads the helpers instead of every
+function. One rule changed: a unit only registered in a build (a kept function's signature) used to replace what it had met; it now
+adds to it, as a fresh build, which types it, would list both.
+
+`--check-reuse` makes every kept declaration's uses again by the same walk and compares them (`TypedProgramAssembler.keptOrMade`),
+and every module's kept list of structures with the one its records give (`ModuleStructures.check`). The warm-edit catalogue gained
+two edits for this piece: the only field naming a generic enum or an `@:generic` class at a type removed. Two more, a body's only
+structure removed and a static initializer that was the only structure of its shape removed, failed in live mode on origin/main
+too: the session's objects never lost a structure the program no longer had, so its printer stayed in a live program. That fix
+is a commit of its own, before this piece ("Drop the object and printer of a structure the program no longer has"); the catalogue
+has no known failure.
+
+Not done: the alias registration of the setup phase still walks every alias each build, and retention's scan of unit records
+(about 2 ms) is unchanged. The session's objects keep those a dropped function made (a specialization the program no longer asks
+for leaves its closures' storage), which a plain build's reachability drops and the plain reuse check leaves out by comparing only
+the objects a fresh build makes (`checkFrontendReuse`); removing them by the function that made them would let that check compare
+the objects whole. Package syntax trees cannot be released yet: piece 2's state is typed, and what reads the trees every
+build is the frontend (SERVER_MEMORY.md, step 4).
+
+Lines in `src/`: 299 deleted and 887 added (`ProgramTypeUses` 290, the walk with its registering and check, which replaces the
+registries' walks; `ModuleStructures` 190; the program typer's loops over kept uses about 120, a third of it doc comments).
+
+Measured (perf-guard, origin/main at eb417c4fa and this change built in two worktrees and run back to back on one machine): no-op
+0.670G → 0.557G main-thread instructions (−16.8%), body edit 1.913G → 1.803G (−5.7%), signature edit 19.596G → 19.523G (−0.4%);
+allocation of the no-op 72.5 → 63.0 MB, of the first no-op 117.4 → 108.4 MB, of the body edit 221.4 → 211.9 MB, of the signature
+edit 1,067.2 → 1,059.3 MB; the session's live data 889.09 MB both. The UI app's live session 300.00 → 300.10 MB (one step of the
+census's rounding, in every pair), the small project's 7.65 MB both, its builds and checks within 0.1% on the VM and lower ahead of
+time. The cold self-compile is byte-identical, 62.82G → 62.66G instructions (−0.25%), allocation 2,901.7 → 2,887.5 MB, its live
+data at the phase boundaries the same; the build lets go of its records once published (holding them to the end had added 3 MB).
+

@@ -653,9 +653,6 @@ typedef TypedProgram = {
 	final closurePlan:TypedClosurePlan;
 	final anonymousTypes:Array<TypedAnonymous>;
 
-	/** The anonymous types each unit (a function, or a class's field initializers) registered, kept for units a later build does not type again. */
-	final anonymousUnits:Map<String, Array<TypedAnonymous>>;
-
 	final natives:Array<TypedNative>;
 
 	/** The locals of the bodies this compile typed whose type nothing fixed, so it settled to Dynamic, as in Haxe. */

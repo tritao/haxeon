@@ -87,6 +87,7 @@ class CompilerMemoryCensus {
 				release: () -> for (state in compiler.modules) {
 					state.typedFunctions = [];
 					state.keyPathUses = [];
+					state.structures = null;
 					state.functionEdges = null;
 				}
 			},

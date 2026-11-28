@@ -704,6 +704,29 @@ class WarmEditCatalogueMain {
 					"Main.hx" => "class Main { static function main():Int return Config.limit; }"
 				],
 				edit: ["Config.hx" => "class Config { public static var limit = 3; }"]
+			},
+			{
+				kind: "remove the only field whose type names a generic enum at a type",
+				files: [
+					"Slot.hx" => "enum Slot<T> { Full(value:T); Empty; }",
+					"Box.hx"
+						=> "class Box { public var count:Int = 1; public var label:Slot<String> = Empty; public function new() {} }",
+					"Main.hx"
+						=> "class Main { static function main():Int { var s:Slot<Int> = Full(2); return new Box().count + switch s { case Full(v): v; case Empty: 0; }; } }"
+				],
+				edit: ["Box.hx" => "class Box { public var count:Int = 1; public function new() {} }"]
+			},
+			{
+				kind: "remove the only field whose type names an @:generic class at a type",
+				files: [
+					"Stack.hx" => stack,
+					"StackUser.hx" => stackUser,
+					"Holder.hx"
+						=> "class Holder { public var count:Int = 1; public var names:Stack<String> = new Stack<String>(); public function new() {} }",
+					"Main.hx"
+						=> "class Main { static function main():Int return StackUser.count() + new Holder().count; }"
+				],
+				edit: ["Holder.hx" => "class Holder { public var count:Int = 1; public function new() {} }"]
 			}
 		];
 	}

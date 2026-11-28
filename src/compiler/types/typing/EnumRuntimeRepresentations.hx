@@ -21,40 +21,11 @@ class EnumRuntimeRepresentations {
 
 	public function count():Int return session.programOutput.enumCount();
 
-	public function discover(type:CompilerType, ?seen:Array<Array<compiler.types.Type.AnonymousField>>):Void {
-		switch type {
-			case TInstance(NominalKind.Enum, _, arguments):
-				// An argument a type variable or an open literal structure still holds open is known when the body is typed (`Some(null)`,
-				// `None`, `Some({a: 1})`).
-				if (arguments.length > 0
-					&& (compiler.types.Monomorphs.containsUnbound(type) || session.monomorphs.mentionsOpen(type)))
-					session.monomorphs.whenKnown(type, () -> discover(session.monomorphs.settled(type)));
-				else if (arguments.length > 0) {
-					// A new local, not `type` again: a closure above captures `type`, and writing it would keep it in a cell on
-					// every call.
-					var resolved = compiler.types.Monomorphs.resolve(type);
-					if (!session.representation.containsTypeParameter(resolved, []))
-						session.output.discoverEnum(EnumRuntimeType.name(resolved), resolved);
-				}
-			// Arguments contribute to identity, not necessarily storage. The instantiated
-			// payloads are discovered when this declaration is drained below.
-			case TInstance(_, _, _):
-			case TAbstract(_, _, representation): discover(representation, seen);
-			case TNullable(element), TArray(element), TIterator(element): discover(element, seen);
-			case TMap(key, value), TKeyPath(key, value, _): discover(key, seen);
-				discover(value, seen);
-			case TFunction(arguments, result, _):
-				for (argument in arguments) discover(argument, seen);
-				discover(result, seen);
-			case TAnonymous(_, fields):
-				if (seen == null) seen = [];
-				if (seen.indexOf(fields) < 0) {
-					seen.push(fields);
-					for (field in fields) discover(field.type, seen);
-					seen.pop();
-				}
-			default:
-		}
+	/** Asks for the enum specializations `type` reaches (`ProgramTypeUses`). */
+	public function discover(type:CompilerType):Void {
+		var uses = ProgramTypeUses.enumsOf(session, type);
+		if (uses != null)
+			uses.registerEnums(session);
 	}
 
 	/** Ask again for the retained specializations of `enums`, so unchanged incremental callers keep their names. */

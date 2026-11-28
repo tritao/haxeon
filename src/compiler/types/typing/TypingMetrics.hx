@@ -42,6 +42,12 @@ typedef MeasuredTypedProgram = {
 	/** The units this typing typed: function bodies, and field initializers (`Class.__init.x`). */
 	final typedUnits:Map<String, Bool>;
 
+	/**
+	 * The anonymous types each unit this typing typed or registered met, by unit, each unit's ordered by name: what its module keeps
+	 * for the builds that do not type it again (`ModuleState.structures`).
+	 */
+	final anonymousUnits:Map<String, Array<compiler.types.TypedAst.TypedAnonymous>>;
+
 	/** The generic owner specializations of the program, typed or kept, that a next build may keep (`SessionState.ownerSpecializations`). */
 	final ownerSpecializations:Array<RetainedFromPrevious.OwnerSpecialization>;
 

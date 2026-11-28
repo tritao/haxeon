@@ -27,15 +27,15 @@ typedef RetainedFromPrevious = {
 	final enums:Map<String, Bool>;
 
 	/**
-	 * The functions of the previous program this build keeps without typing them again, generated ones (specializations,
-	 * lambdas, adapters) included: whose origin is not invalidated. Their units keep the anonymous types they registered
-	 * (`ProgramTyper.keepAnonymousUnits`).
+	 * The anonymous types the units this build keeps registered when they were typed, given the units it typed: the program lists
+	 * them, as a fresh build, which types every unit, does (`compiler.compilation.ModuleStructures`).
 	 */
-	final units:Map<String, Bool>;
+	final structures:(typed:Map<String, Bool>) -> Array<Array<compiler.types.TypedAst.TypedAnonymous>>;
 
 	/**
-	 * The generated helpers among `units`, by name: one the build asks for again from the same origin is the last build's
-	 * (`TypingSession.keptHelper`), as a unit that read nothing that changed.
+	 * The generated helpers the build keeps without typing them again, by name: not selected or invalidated, nor made for an origin
+	 * that is. One the build asks for again from the same origin is the last build's (`TypingSession.keptHelper`), as a unit that read
+	 * nothing that changed.
 	 */
 	final helpers:Map<String, compiler.types.TypedAst.TypedFunction>;
 

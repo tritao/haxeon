@@ -71,21 +71,27 @@ class GenericOwnerPolicyMain {
 		var recursive = first.representation.genericOwner(instance("Recursive", [firstValue]));
 		if (recursive == null) throw "recursive owner containing a value was not specialized";
 		var beforeNested = first.representation.genericOwnerRequestCount();
-		first.representation.discoverGenericOwners(instance("Recursive", [TArray(firstValue)]));
+		registerTypes(first, instance("Recursive", [TArray(firstValue)]));
 		if (first.representation.genericOwnerRequestCount() != beforeNested)
 			throw "recursive reference containers caused unbounded owner specialization";
 		var second = session(semantic, new GenericSpecializationRegistry(names.exportState()));
 		var reloaded = second.representation.genericOwner(instance("Box", [firstValue, reference]));
 		if (reloaded == null || reloaded.name != box.name || second.representation.genericOwnerRequestCount() != 1)
 			throw "owner identity or discovery changed across typing sessions";
-		second.representation.discoverGenericOwners(TFunction([TArray(instance("Nested", [firstValue, reference]))],
-			TVoid, []));
+		registerTypes(second, TFunction([TArray(instance("Nested", [firstValue, reference]))], TVoid, []));
 		if (second.representation.genericOwnerRequestCount() != 2
 			|| second.representation.genericOwnerRequest(1).origin != "Nested")
 			throw "signature type discovery missed a nested generic owner";
 		if (first.representation.genericOwner(instance("Box", [firstValue, TTypeParameter("fn", "T")])) != null)
 			throw "an open generic owner was registered as a concrete layout";
 		Sys.println("PASS: generic value owners have deterministic layout-aware identities");
+	}
+
+	/** Registers what `type` reaches, as a declaration's types are registered (`ProgramTypeUses`). */
+	static function registerTypes(session:TypingSession, type:CompilerType):Void {
+		var uses = compiler.types.typing.ProgramTypeUses.add(session, null, type);
+		if (uses != null)
+			uses.register(session, null);
 	}
 
 	static function expectComplexityLimit(session:TypingSession, argument:CompilerType):Void {
