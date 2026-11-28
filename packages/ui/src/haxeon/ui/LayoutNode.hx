@@ -39,6 +39,8 @@ class LayoutNode {
 	public var intrinsicContent:Null<LayoutContent>;
 	/** Where the layout places this node, absolutely positioned, after the flow solve; null places it at its position. */
 	public var anchor:Null<LayoutAnchor>;
+	/** For a scroll container's content, the offset layout moves it by; null for any other node. */
+	public var scroll:Null<LayoutScroll>;
 	/** Intrinsic input version. Sampled from an attached provider before submit; otherwise set by its caller. */
 	public var measureVersion:Int;
 	/** Paint/text revision consumed by native raster-cache identity. */
@@ -68,6 +70,7 @@ class LayoutNode {
 		hitChildren = true;
 		intrinsicContent = null;
 		anchor = null;
+		scroll = null;
 		measureVersion = 0;
 		contentRevision = 0;
 		geometryRevision = 0;

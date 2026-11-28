@@ -112,6 +112,7 @@ class UiContext implements Disposable {
 
 	var submittedInteractionRevision:Int;
 	var submittedRetainedEditRevision:Int = 0;
+	var submittedLayoutRequestRevision:Int = 0;
 	var submittedBindingRequestRevision:Int = 0;
 	var submittedStyleRevision:Int;
 	var submittedAnimationRevision:Int;
@@ -591,6 +592,7 @@ class UiContext implements Disposable {
 		var previousById = previousNodesById;
 		var nodesById = currentNodesById;
 		var nativeLayoutReused = !verifying && !styleInvalidation.nativeLayoutRequired
+			&& buildContext.layoutRequestRevision == submittedLayoutRequestRevision
 			&& submittedFrameWidth == frame.width && submittedFrameHeight == frame.height;
 		if (nativeLayoutReused) next.walk(function(node) {
 			var previous = previousById.get(node.id.value);
@@ -790,6 +792,7 @@ class UiContext implements Disposable {
 		submittedStyleRevision = buildContext.styleRevision;
 		submittedAnimationRevision = animations.revision;
 		submittedRetainedEditRevision = buildContext.retainedEditRevision;
+		submittedLayoutRequestRevision = buildContext.layoutRequestRevision;
 		submittedBindingRequestRevision = bindingAppliedRevision;
 		submittedGestureRevision = gestures.revision;
 		submittedNodeCount = nodeCount;
@@ -1225,6 +1228,7 @@ class UiContext implements Disposable {
 		// A build that read a changed state depends on it, so it is dirty; what is left is custom paint reading hover.
 		if (!steadyForInteractionReuse(cacheKey,
 			frame) || buildContext.hasRetainedEdits || buildContext.hasPendingRenderScopes()
+			|| buildContext.layoutRequestRevision != submittedLayoutRequestRevision
 			|| buildContext.bindingRequestRevision != submittedBindingRequestRevision) return -1;
 		var changes = interactionStates.changes();
 		for (change in changes) {
@@ -1336,6 +1340,8 @@ class UiContext implements Disposable {
 			| UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics
 			| UiDirtyFlag.NeedsHitGeometry;
 		if (animations.rebuildingCount > 0) result |= UiDirtyFlag.NeedsComposite;
+		if (buildContext.layoutRequestRevision != submittedLayoutRequestRevision) result |= UiDirtyFlag.NeedsLayout
+			| UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
 		if (buildContext.retainedEditRevision != submittedRetainedEditRevision) result |= UiDirtyFlag.NeedsStyle
 			| UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite
 			| UiDirtyFlag.NeedsHitGeometry;

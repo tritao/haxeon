@@ -25,13 +25,14 @@ enum {
     NKUI_LAYOUT_NODE_RECORD_BYTES = 336,
     NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16 * 1024 * 1024,
     NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96,
-    NKUI_LAYOUT_GEOMETRY_RECORD_BYTES = 36
+    NKUI_LAYOUT_GEOMETRY_RECORD_BYTES = 44
 };
 
 /**
  * Field offsets of one geometry record, as `nkui_layout_session_set_geometry` reads them: the node ID, then its laid-out
  * bounds in layout coordinates, then where its text goes relative to those bounds (a text node only), then its first
- * baseline in layout coordinates, NaN when it has none.
+ * baseline in layout coordinates, NaN when it has none, then how far a scroll container's content moves left and up,
+ * ahead of the node's own transform.
  */
 enum {
     NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET = 0,
@@ -42,7 +43,9 @@ enum {
     NKUI_LAYOUT_GEOMETRY_TEXT_X_OFFSET = 20,
     NKUI_LAYOUT_GEOMETRY_TEXT_Y_OFFSET = 24,
     NKUI_LAYOUT_GEOMETRY_TEXT_WIDTH_OFFSET = 28,
-    NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET = 32
+    NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET = 32,
+    NKUI_LAYOUT_GEOMETRY_SCROLL_X_OFFSET = 36,
+    NKUI_LAYOUT_GEOMETRY_SCROLL_Y_OFFSET = 40
 };
 
 /** Bit flags stored in each node's clip-flags field. */

@@ -2147,7 +2147,10 @@ extern "C" nkui_result nkui_layout_session_set_geometry(nkui_layout_session sess
             !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_TEXT_X_OFFSET, placement.text_x) ||
             !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_TEXT_Y_OFFSET, placement.text_y) ||
             !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_TEXT_WIDTH_OFFSET, placement.text_width) ||
-            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET, baseline)) {
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET, baseline) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_SCROLL_X_OFFSET, placement.scroll_x) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_SCROLL_Y_OFFSET, placement.scroll_y) ||
+            !std::isfinite(placement.scroll_x) || !std::isfinite(placement.scroll_y)) {
             placements.clear();
             return NKUI_ERROR_INVALID_ARGUMENT;
         }

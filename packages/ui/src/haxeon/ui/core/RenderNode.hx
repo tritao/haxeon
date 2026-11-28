@@ -347,6 +347,7 @@ class RenderNode {
 			prior.layout.measureVersion = layout.measureVersion;
 			prior.layout.intrinsicContent = layout.intrinsicContent;
 			prior.layout.anchor = layout.anchor;
+			prior.layout.scroll = layout.scroll;
 			layout.copyTextStylesTo(prior.layout);
 		}
 		prior.parent = parent;

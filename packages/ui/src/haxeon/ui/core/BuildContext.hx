@@ -622,6 +622,17 @@ class BuildContext implements Disposable {
 	/** Bumped by each first edit of a node between frames; a different value from the submitted one means a frame is due. */
 	public var retainedEditRevision(default, null):Int = 0;
 
+	/** Bumped by each request for a layout; a different value from the submitted one means a frame is due. */
+	public var layoutRequestRevision(default, null):Int = 0;
+
+	/**
+	 * Asks for the tree to be laid out again without changing it, because something layout reads outside it changed, such
+	 * as a scroll offset (`LayoutScroll`).
+	 */
+	public function requestLayout():Void {
+		layoutRequestRevision++;
+	}
+
 	/**
 	 * Call just before changing a node of the submitted tree in place, outside a build: its style, hit testing or paint. The next
 	 * frame compares the node against how it was now and lays out and paints the change, without rebuilding the view. Repeated

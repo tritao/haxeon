@@ -267,7 +267,7 @@ class LayoutNodeView {
 
 /**
  * Where the framework laid one node out (ADR 0009): its bounds in layout coordinates, where its text goes relative to
- * them, and its first baseline in layout coordinates when it has one.
+ * them, its first baseline in layout coordinates when it has one, and the scroll offset of a scroll container's content.
  */
 struct LayoutPlacement {
     uint32_t node_id = 0;
@@ -277,6 +277,9 @@ struct LayoutPlacement {
     float text_width = 0.0f;
     float baseline = 0.0f;
     bool has_baseline = false;
+    /** How far a scroll container's content moves left and up, ahead of its own transform. */
+    float scroll_x = 0.0f;
+    float scroll_y = 0.0f;
 };
 
 struct LayoutError {

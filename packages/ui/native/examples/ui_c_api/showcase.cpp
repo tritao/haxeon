@@ -831,7 +831,7 @@ struct WebShowcase {
             for (uint32_t index = 0; index < count; ++index) {
                 const uint32_t record = index * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
                 const float extent = index == 0 ? 64.0f : 128.0f;
-                const float values[] = {0.0f, 0.0f, extent, extent, 0.0f, 0.0f, 0.0f, NAN};
+                const float values[] = {0.0f, 0.0f, extent, extent, 0.0f, 0.0f, 0.0f, NAN, 0.0f, 0.0f};
                 const uint32_t id = index + 1;
                 std::memcpy(geometry.data() + record + NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET, &id, sizeof(id));
                 std::memcpy(geometry.data() + record + NKUI_LAYOUT_GEOMETRY_X_OFFSET, values, sizeof(values));

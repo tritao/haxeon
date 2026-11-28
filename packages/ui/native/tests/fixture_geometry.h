@@ -145,7 +145,7 @@ inline std::vector<uint8_t> geometry(const uint8_t *transaction, float width, fl
         const float none = std::nanf("");
         const float values[] = {box.x, box.y, box.width, box.height, box.pad_left, box.pad_top,
                                 box.text ? std::max(0.0f, box.width - box.pad_left - box.pad_right) : 0.0f,
-                                box.text ? box.y + box.pad_top + box.font_size : none};
+                                box.text ? box.y + box.pad_top + box.font_size : none, 0.0f, 0.0f};
         std::memcpy(record + NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET, &box.id, sizeof(box.id));
         std::memcpy(record + NKUI_LAYOUT_GEOMETRY_X_OFFSET, values, sizeof(values));
     }

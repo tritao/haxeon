@@ -7,7 +7,6 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.ResolvedLayoutItem;
-import haxeon.ui.Transform2D;
 import haxeon.ui.animation.AnimationScheduler;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
@@ -149,9 +148,10 @@ class ScrollView implements View {
 			contentStyle.width = axis
 				== ScrollAxis.Vertical ? LayoutAxis.stretch() : fillViewport ? LayoutAxis.grow() : LayoutAxis.fit();
 			contentStyle.height = axis == ScrollAxis.Horizontal || fillViewport ? LayoutAxis.grow() : LayoutAxis.fit();
-			contentStyle.transform = Transform2D.identity().translated(-controller.offsetX, -controller.offsetY);
 			var translatedContent = context.createNode(context.rootId("scroll-content"), LayoutVisualKind.Box,
 				contentStyle);
+			// Layout settles the offset against the viewport and the content, and moves the content by it.
+			translatedContent.layout.scroll = new ContentScroll(controller, contentExtentProvider);
 			var content = context.withStyleParent(computed, function() {
 				return context.withScope(new Key("content"), function() return child.build(context));
 			});
@@ -200,10 +200,7 @@ class ScrollView implements View {
 					lastOffsetY = controller.offsetY;
 					contentRevision.update(contentRevision.value + 1);
 				}
-				context.willEditRetained(translatedContent);
-				translatedContent.layout.style.transform = Transform2D.identity().translated(
-					-controller.offsetX,
-					-controller.offsetY);
+				context.requestLayout();
 				// The thumbs follow the offset now, from the extents of the last layout, so the layout after a scroll finds
 				// them in place and needs no second pass; only a change of extent moves them after layout.
 				if (scrollbar != null && overlaySize.width >= 0)
@@ -215,19 +212,7 @@ class ScrollView implements View {
 			});
 
 			translatedContent.onResolved(function(geometry) {
-				var viewportGeometry:ResolvedLayoutItem = cast viewport.resolved;
-				// The viewport's content bounds include the overlay scrollbar. Its
-				// previous track height can otherwise look like content overflow.
-				var contentWidth = Math.max(geometry.width, geometry.contentBounds.x + geometry.contentBounds.width);
-				var contentHeight = Math.max(geometry.height, geometry.contentBounds.y + geometry.contentBounds.height);
-				if (contentExtentProvider != null) {
-					var intrinsic = contentExtentProvider(viewportGeometry.width, viewportGeometry.height);
-					contentWidth = Math.max(viewportGeometry.width, intrinsic.width);
-					contentHeight = Math.max(viewportGeometry.height, intrinsic.height);
-				}
-				// Clamping notifies the binding and mutates the style; compare with the pre-clamp transform.
-				var transform = translatedContent.layout.style.transform;
-				controller.updateMetrics(viewportGeometry.width, viewportGeometry.height, contentWidth, contentHeight);
+				// Layout has settled the controller's metrics and offset (ContentScroll).
 				var materializedViewportChanged = (axis != ScrollAxis.Horizontal
 					&& builtViewportHeight != controller.viewportHeight)
 					|| (axis != ScrollAxis.Vertical && builtViewportWidth != controller.viewportWidth);
@@ -242,13 +227,6 @@ class ScrollView implements View {
 					// again after that rebuild; it is settled on the next frame rather than by unbounded rebuilds.
 					contentRevision.update(contentRevision.value + 1);
 					context.requestBuildFeedbackBeforeLayout();
-				}
-				if (transform.tx != -controller.offsetX || transform.ty != -controller.offsetY) {
-					context.willEditRetained(translatedContent);
-					translatedContent.layout.style.transform = Transform2D.identity().translated(
-						-controller.offsetX,
-						-controller.offsetY);
-					context.requestLayoutFeedback();
 				}
 				visibility.value.setAvailable(scrollbar != null && controller.maxScrollY > 0
 					&& controller.viewportHeight > 0);
@@ -646,4 +624,32 @@ internal class ScrollBinding implements Disposable {
 		if (controller != null) controller.unbind(this);
 		controller = null;
 	}
+}
+
+/**
+ * A scroll view's content offset, settled by layout: the controller learns the viewport's size and the content's (or the
+ * extent its provider gives for virtual content) and clamps its offset to them before the content is placed.
+ */
+private class ContentScroll implements LayoutScroll {
+	final controller:ScrollController;
+	final extent:Null<(Float, Float) -> {width:Float, height:Float}>;
+
+	public function new(controller:ScrollController, extent:Null<(Float, Float) -> {width:Float, height:Float}>) {
+		this.controller = controller;
+		this.extent = extent;
+	}
+
+	public function settle(viewportWidth:Float, viewportHeight:Float, contentWidth:Float, contentHeight:Float):Void {
+		var provider = extent;
+		if (provider != null) {
+			var intrinsic = provider(viewportWidth, viewportHeight);
+			contentWidth = Math.max(viewportWidth, intrinsic.width);
+			contentHeight = Math.max(viewportHeight, intrinsic.height);
+		}
+		@:privateAccess controller.updateMetrics(viewportWidth, viewportHeight, contentWidth, contentHeight);
+	}
+
+	public function scrollX():Float return controller.offsetX;
+
+	public function scrollY():Float return controller.offsetY;
 }

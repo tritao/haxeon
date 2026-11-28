@@ -196,6 +196,8 @@ class LayoutSolver {
 			output.setFloat(offset + 24, box.textY);
 			output.setFloat(offset + 28, box.textWidth);
 			output.setFloat(offset + 32, box.ownBaseline ? box.y + box.baseline : Math.NaN);
+			output.setFloat(offset + 36, box.scrollX);
+			output.setFloat(offset + 40, box.scrollY);
 			offset += record;
 		}
 		return length;
@@ -816,6 +818,24 @@ class LayoutSolver {
 			box.x += parent.x;
 			box.y += parent.y;
 		}
+		box.scrollX = box.scrollY = 0.0;
+		var scroll = box.node.scroll;
+		if (scroll != null && box.parent >= 0) {
+			// The content's extent: its own size, or as far as its children reach past it; they are still relative to it.
+			var parent = boxes[box.parent];
+			var style = box.node.style;
+			var right = box.width, bottom = box.height;
+			var child = index + 1;
+			for (_ in 0...box.node.children.length) {
+				var childBox = boxes[child];
+				right = Math.max(right, childBox.x - style.padding.left + childBox.width);
+				bottom = Math.max(bottom, childBox.y - style.padding.top + childBox.height);
+				child += childBox.size;
+			}
+			scroll.settle(parent.width, parent.height, right, bottom);
+			box.scrollX = scroll.scrollX();
+			box.scrollY = scroll.scrollY();
+		}
 		box.composeWorld(box.parent < 0 ? null : boxes[box.parent]);
 		var anchor = box.node.anchor;
 		if (anchor != null) placeAnchored(index, anchor);
@@ -1029,6 +1049,9 @@ private class LayoutBox {
 	public var measuredHeight:Float = 0.0;
 	public var contentBaseline:Float = 0.0;
 	public var contentHasBaseline:Bool = false;
+	/** How far a scroll container's content moves left and up, ahead of its own transform. */
+	public var scrollX:Float = 0.0;
+	public var scrollY:Float = 0.0;
 	/** The world transform: x' = wa x + wc y + wtx, y' = wb x + wd y + wty. */
 	public var wa:Float = 1.0;
 	public var wb:Float = 0.0;
@@ -1084,14 +1107,14 @@ private class LayoutBox {
 		}
 	}
 
-	/** The parent's world transform, then this node's own transform about its origin in its bounds. */
+	/** The parent's world transform, then this node's scroll offset, then its own transform about its origin. */
 	public function composeWorld(parent:Null<LayoutBox>):Void {
 		var style = node.style;
 		var transform = style.transform;
 		var originX = x + width * style.transformOriginX, originY = y + height * style.transformOriginY;
 		var la = transform.a, lb = transform.b, lc = transform.c, ld = transform.d;
-		var ltx = originX + transform.tx - (la * originX + lc * originY);
-		var lty = originY + transform.ty - (lb * originX + ld * originY);
+		var ltx = originX + transform.tx - (la * originX + lc * originY) - scrollX;
+		var lty = originY + transform.ty - (lb * originX + ld * originY) - scrollY;
 		if (parent == null) {
 			wa = la;
 			wb = lb;
