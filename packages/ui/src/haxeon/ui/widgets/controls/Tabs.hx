@@ -330,22 +330,20 @@ class Tabs implements ScopeView {
 		var viewport = scroll.build(context);
 		for (index in 0...items.length) if (items[index].key == active) {
 			var header = strip.children[index];
-			// ScrollView updates metrics before resolving the header. Geometry is
-			// untransformed here, so compare against the controller's current offset.
-			header.onResolved(function(tab) {
-				var bounds = viewport.resolved;
-				if (bounds == null) return;
-				var left = tab.x - bounds.x;
-				if (state.selected == active
-					&& state.width == bounds.width && state.left == left && state.tabWidth == tab.width) return;
+			// Layout scrolls the active tab into view as it settles the strip's offset: when it is newly active here, or
+			// after the strip was resized (seen after a layout, so it applies on the next one).
+			if (state.selected != active) {
 				state.selected = active;
+				state.controller.revealNode(false, header.layout.id);
+			}
+			header.onResolved(function(_) {
+				var bounds = viewport.resolved;
+				if (bounds == null || state.width == bounds.width) return;
+				var resized = state.width >= 0;
 				state.width = bounds.width;
-				state.left = left;
-				state.tabWidth = tab.width;
-				var next = state.controller.offsetX;
-				if (tab.width > bounds.width || left < next) next = left;
-				else if (left + tab.width > next + bounds.width) next = left + tab.width - bounds.width;
-				if (state.controller.jumpTo(next, 0)) context.requestLayoutFeedback();
+				if (!resized) return;
+				state.controller.revealNode(false, header.layout.id);
+				context.requestLayout();
 			});
 		}
 		return viewport;
@@ -523,8 +521,6 @@ private class TabsScrollState {
 	public final controller = new ScrollController();
 	public var selected:String = "";
 	public var width:Float = -1;
-	public var left:Float = -1;
-	public var tabWidth:Float = -1;
 	public function new() {}
 }
 

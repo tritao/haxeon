@@ -90,6 +90,49 @@ class ScrollController implements haxeon.ui.animation.Animation.RetainedAnimatio
 	}
 
 	/**
+	 * Scrolls `start` to `end` of the content along an axis into view when layout next settles the offset, against the
+	 * viewport it has then: to its start when it does not fit or lies before, else to its end when it lies after.
+	 */
+	public function revealRange(vertical:Bool, start:Float, end:Float):Void {
+		revealKind = 1;
+		revealVertical = vertical;
+		revealStart = start;
+		revealEnd = end;
+	}
+
+	/** Scrolls the content's node whose layout ID is `id` into view along an axis when layout next settles the offset. */
+	public function revealNode(vertical:Bool, id:Int):Void {
+		revealKind = 2;
+		revealVertical = vertical;
+		revealId = id;
+	}
+
+	var revealKind:Int = 0;
+	var revealVertical:Bool = false;
+	var revealStart:Float = 0.0;
+	var revealEnd:Float = 0.0;
+	var revealId:Int = 0;
+
+	/** Applies a pending reveal, once layout has set the metrics; `content` finds a node's box in the content. */
+	@:allow(haxeon.ui.widgets.scroll)
+	function settleReveal(content:haxeon.ui.LayoutScroll.LayoutLocator):Void {
+		var kind = revealKind;
+		if (kind == 0) return;
+		revealKind = 0;
+		var vertical = revealVertical, start = revealStart, end = revealEnd;
+		if (kind == 2) {
+			if (!content.locate(revealId)) return;
+			start = vertical ? content.y : content.x;
+			end = start + (vertical ? content.height : content.width);
+		}
+		var viewport = vertical ? viewportHeight : viewportWidth;
+		var current = vertical ? offsetY : offsetX, next = current;
+		if (end - start > viewport || start < current) next = start;
+		else if (end > current + viewport) next = end - viewport;
+		if (next != current) vertical ? jumpTo(offsetX, next) : jumpTo(next, offsetY);
+	}
+
+	/**
 	 * Starts momentum from a release velocity in px/s (positive scrolls toward larger offsets). The speed decays
 	 * exponentially, and an axis stops at its edge. Any other offset change ends the fling.
 	 */

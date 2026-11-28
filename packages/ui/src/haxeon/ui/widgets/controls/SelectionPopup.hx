@@ -209,25 +209,15 @@ internal class SelectionPopup implements ScopeView {
 				onScroll: ownWheel,
 				showScrollbar: false);
 			dropdown.add(scroll.build(context));
-			var reveal = function(index:Int) {
-				scrollState.activeIndex = index;
-				scrollState.revealPending = true;
-				if (controller.viewportHeight <= 0.0) return;
-				var position = visiblePosition(index);
+			// Layout scrolls a newly active option into view as it settles the list's offset.
+			if (scrollState.revealPending) {
 				scrollState.revealPending = false;
-				if (position < 0) return;
-				var optionTop = position * (rowHeight + 2.0);
-				var optionBottom = optionTop + rowHeight;
-				var target = controller.offsetY;
-				if (optionTop < target) target = optionTop;
-				else if (optionBottom > target + optionViewportHeight) target = optionBottom - optionViewportHeight;
-				if (target != controller.offsetY && controller.jumpTo(controller.offsetX,
-					target)) context.requestLayoutFeedback();
-			};
-			// ScrollView updates metrics on its translated content before this child resolves.
-			optionParent.onResolved(function(_) {
-				if (scrollState.revealPending) reveal(scrollState.activeIndex);
-			});
+				var position = visiblePosition(scrollState.activeIndex);
+				if (position >= 0) {
+					var optionTop = position * (rowHeight + 2.0);
+					controller.revealRange(true, optionTop, optionTop + rowHeight);
+				}
+			}
 		}
 
 		for (position in 0...visibleIndices.length) {

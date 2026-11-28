@@ -7,6 +7,7 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutContent;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutPlacer;
+import haxeon.ui.LayoutScroll;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
@@ -56,7 +57,22 @@ class LayoutSolver {
 	public var measureHits(default, null):Int = 0;
 	public var measureCalls(default, null):Int = 0;
 
-	public function new() {}
+	public function new() {
+		locator = new LayoutLocator(function(id:Int, out:LayoutLocator):Bool {
+			var index = indexOf.get(id);
+			var content = locatingIn;
+			if (content < 0 || index <= content || index >= content + boxes[content].size) return false;
+			var box = boxes[index];
+			var x = 0.0, y = 0.0, at = index;
+			while (at != content) {
+				x += boxes[at].x;
+				y += boxes[at].y;
+				at = boxes[at].parent;
+			}
+			out.set(x, y, box.width, box.height);
+			return true;
+		});
+	}
 
 	/** Text is measured with `session`'s fonts; Custom nodes without content of their own with `fallback`. */
 	public function attach(session:LayoutSession, fallback:Null<LayoutMeasureCallback>):Void {
@@ -872,7 +888,8 @@ class LayoutSolver {
 				bottom = Math.max(bottom, childBox.y - style.padding.top + childBox.height);
 				child += childBox.size;
 			}
-			scroll.settle(parent.width, parent.height, right, bottom);
+			locatingIn = index;
+			scroll.settle(parent.width, parent.height, right, bottom, locator);
 			box.scrollX = scroll.scrollX();
 			box.scrollY = scroll.scrollY();
 		}
@@ -882,6 +899,9 @@ class LayoutSolver {
 	}
 
 	final placement:LayoutPlacement = new LayoutPlacement();
+	/** The scroll content being settled, whose descendants `locator` finds; their positions are still relative there. */
+	var locatingIn:Int = -1;
+	final locator:LayoutLocator;
 	final placedLater:Array<Int> = [];
 	final target:AnchorRect = new AnchorRect();
 	final region:AnchorRect = new AnchorRect();

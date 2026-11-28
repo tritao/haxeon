@@ -588,7 +588,8 @@ private class ContentScroll implements LayoutScroll {
 		this.extent = extent;
 	}
 
-	public function settle(viewportWidth:Float, viewportHeight:Float, contentWidth:Float, contentHeight:Float):Void {
+	public function settle(viewportWidth:Float, viewportHeight:Float, contentWidth:Float, contentHeight:Float,
+			content:haxeon.ui.LayoutScroll.LayoutLocator):Void {
 		var provider = extent;
 		if (provider != null) {
 			var intrinsic = provider(viewportWidth, viewportHeight);
@@ -596,6 +597,7 @@ private class ContentScroll implements LayoutScroll {
 			contentHeight = Math.max(viewportHeight, intrinsic.height);
 		}
 		@:privateAccess controller.updateMetrics(viewportWidth, viewportHeight, contentWidth, contentHeight);
+		@:privateAccess controller.settleReveal(content);
 	}
 
 	public function scrollX():Float return controller.offsetX;
