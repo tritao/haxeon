@@ -97,24 +97,6 @@ class ComboBox<T> implements View {
 			var root = context.createNode(context.rootId("combo-box"), LayoutVisualKind.Box, rootStyle);
 			root.hitTestSelf = false;
 
-			var rootXState:State<Float> = context.state(context.id("root-x"), 0.0);
-			var rootYState:State<Float> = context.state(context.id("root-y"), 0.0);
-			var triggerXState:State<Float> = context.state(context.id("trigger-x"), 0.0);
-			var triggerYState:State<Float> = context.state(context.id("trigger-y"), 0.0);
-			var triggerWidthState:State<Float> = context.state(context.id("trigger-width"), triggerHeightFallback());
-			var triggerHeightState:State<Float> = context.state(context.id("trigger-height"), triggerHeightFallback());
-			var anchorKnownState:State<Bool> = context.state(context.id("anchor-known"), false);
-			var rememberFloat = function(state:State<Float>, value:Float) {
-				var current:Float = state.value;
-				if (!finite(current) || Math.abs(current - value) > 0.001) state.update(value);
-			};
-			root.onResolved(function(geometry) {
-				if (finite(geometry.x) && finite(geometry.y)) {
-					rememberFloat(rootXState, geometry.x);
-					rememberFloat(rootYState, geometry.y);
-				}
-			});
-
 			// The user's last choice, until the caller gives a different value.
 			var chosen = context.adopted("value", value);
 			value = chosen.value;
@@ -277,19 +259,9 @@ class ComboBox<T> implements View {
 			rowStyle.direction = LayoutDirection.LeftToRight;
 			var triggerRow = context.createNode(context.rootId("trigger-row"), LayoutVisualKind.Box, rowStyle);
 			triggerRow.hitTestSelf = false;
-			inputModifier.onResolved(function(geometry) {
-				if (finite(geometry.x) && finite(geometry.y)
-					&& finite(geometry.width) && finite(geometry.height) && geometry.width >= 0.0
-					&& geometry.height >= 0.0) {
-					rememberFloat(triggerXState, geometry.x);
-					rememberFloat(triggerYState, geometry.y);
-					rememberFloat(triggerWidthState, geometry.width);
-					rememberFloat(triggerHeightState, geometry.height);
-					if (anchorKnownState.value != true) anchorKnownState.update(true);
-				}
-			});
-			inputNode = context.withScope(new Key("input"), function() return context.build(input, inputModifier));
-			triggerRow.add(inputNode);
+			var builtInput = context.withScope(new Key("input"), function() return context.build(input, inputModifier));
+			inputNode = builtInput;
+			triggerRow.add(builtInput);
 			var anchorStyle = new LayoutStyle();
 			anchorStyle.width = LayoutAxis.percent(0);
 			anchorStyle.height = LayoutAxis.grow();
@@ -333,26 +305,10 @@ class ComboBox<T> implements View {
 
 			root.focusTrap = isOpen;
 			if (isOpen && filteredIndices.length > 0) {
-				var anchorKnown:Bool = anchorKnownState.value;
-				var popupRootX:Float = rootXState.value;
-				var popupRootY:Float = rootYState.value;
-				var popupTriggerX:Float = triggerXState.value;
-				var popupTriggerY:Float = triggerYState.value;
-				var popupTriggerWidth:Float = triggerWidthState.value;
-				var popupTriggerHeight:Float = triggerHeightState.value;
-				if (!anchorKnown) {
-					popupRootX = 0.0;
-					popupRootY = 0.0;
-					popupTriggerX = 0.0;
-					popupTriggerY = 0.0;
-					popupTriggerWidth = fallbackWidth();
-					popupTriggerHeight = triggerHeightFallback();
-				}
 				var popupOptions:Array<SelectOption<Dynamic>> = [];
 				for (option in options) popupOptions.push(cast option);
 				var popup = new SelectionPopup(popupOptions,
-					filteredIndices, value, active, popupRootX, popupRootY, popupTriggerX, popupTriggerY,
-					popupTriggerWidth, popupTriggerHeight, fallbackWidth(), triggerHeightFallback(), popupLink,
+					filteredIndices, value, active, builtInput.id, popupLink,
 					function(index:Int) {
 						selectOption(index);
 					}, close, function(index:Int) {
@@ -415,18 +371,11 @@ class ComboBox<T> implements View {
 		return index;
 	}
 
-	function triggerHeightFallback():Float return style.height.sizing == LayoutSizing.Fixed
-		&& style.height.value > 0.0 ? style.height.value : 40.0;
-
-	function fallbackWidth():Float return style.width.sizing == LayoutSizing.Fixed
-		&& style.width.value > 0.0 ? style.width.value : 240.0;
-
 	static function contains(values:Array<Int>, value:Int):Bool {
 		for (entry in values) if (entry == value) return true;
 		return false;
 	}
 
-	static inline function finite(value:Float):Bool return value == value && value - value == 0.0;
 
 	static function defaultStyle():LayoutStyle {
 		var result = new LayoutStyle();

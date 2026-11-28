@@ -162,18 +162,18 @@ class AccessibilityContract {
 		selectRoot = context.submit(selectView(), frame);
 		var openSelectSemantics:Semantics = cast selectRoot.children[0].semantics;
 		var optionListSemantics:Semantics = cast selectRoot.children[1].semantics;
-		var selectedOptionSemantics:Semantics = cast selectRoot.children[1].children[0].semantics;
+		var selectedOptionSemantics:Semantics = cast popupOptions(selectRoot.children[1])[0].semantics;
 		if (selectRoot.children.length != 2 || !selectRoot.focusTrap
 			|| shown(selectRoot) != "Öne" || !openSelectSemantics.states.contains(AccessibilityState.Expanded)
 			|| !openSelectSemantics.actions.contains(AccessibilityAction.Collapse) || optionListSemantics.role
 			!= AccessibilityRole.List || optionListSemantics.orientation != AccessibilityOrientation.Vertical
 			|| selectedOptionSemantics.setSize != 3 || selectedOptionSemantics.positionInSet != 1
 			|| !selectedOptionSemantics.states.contains(AccessibilityState.Selected)
-			|| selectRoot.children[1].children[1].enabled
+			|| popupOptions(selectRoot.children[1])[1].enabled
 			|| context.focus.focusedId == null || !context.focus.focusedId.equals(selectRoot.children[0].id)) return 20;
 		context.key(UiEventKind.KeyDown, UiKey.Down);
 		if (context.focus.focusedId == null
-			|| !context.focus.focusedId.equals(selectRoot.children[1].children[2].id)
+			|| !context.focus.focusedId.equals(popupOptions(selectRoot.children[1])[2].id)
 			|| shown(selectRoot) != "Öne" || selectChanges != 0) return 21;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
 		if (selectedSelectValue != "two" || selectChanges != 1
@@ -184,7 +184,7 @@ class AccessibilityContract {
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
 		selectRoot = context.submit(selectView(), frame);
 		if (selectRoot.children.length != 2) return 24;
-		var optionGeometry:ResolvedLayoutItem = cast selectRoot.children[1].children[0].resolved;
+		var optionGeometry:ResolvedLayoutItem = cast popupOptions(selectRoot.children[1])[0].resolved;
 		var optionX = optionGeometry.x + optionGeometry.width * 0.5;
 		var optionY = optionGeometry.y + optionGeometry.height * 0.5;
 		context.pointerDown(optionX, optionY, 0);
@@ -386,6 +386,10 @@ class AccessibilityContract {
 			&& context.focus.focusedId != null && context.focus.focusedId.equals(root.children[0].children[0].id);
 	}
 
+	/** A selection popup's option rows, inside its scroll view's content. */
+	static function popupOptions(dropdown:RenderNode):Array<RenderNode> return dropdown.children[0].children[0]
+		.children[0].children;
+
 	static function checkSelectOverlap(context:UiContext):Bool {
 		var selected = "compact";
 		var underlyingClicks = 0;
@@ -407,7 +411,7 @@ class AccessibilityContract {
 		root = context.submit(column, frame);
 		var selectRoot = root.children[0];
 		if (selectRoot.children.length != 2 || selectRoot.layout.style.zIndex <= 0) return false;
-		var option:ResolvedLayoutItem = cast selectRoot.children[1].children[0].resolved;
+		var option:ResolvedLayoutItem = cast popupOptions(selectRoot.children[1])[0].resolved;
 		var x = option.x + 3.0;
 		var y = option.y + option.height * 0.5;
 		if (!samePath(context.events.hitTestPath(x, y), HitTest.path(root, x, y))) return false;
@@ -547,8 +551,8 @@ class AccessibilityContract {
 		context.key(UiEventKind.KeyDown, UiKey.A, UiModifier.Control);
 		context.text(UiEventKind.TextInput, "Tw");
 		root = context.submit(combo, frame);
-		if (root.children.length != 2 || root.children[1].children.length != 1
-			|| (cast(root.children[1].children[0].semantics,
+		if (root.children.length != 2 || popupOptions(root.children[1]).length != 1
+			|| (cast(popupOptions(root.children[1])[0].semantics,
 			Semantics)).label != "Two") return false;
 		input = root.children[0].children[0];
 		context.key(UiEventKind.KeyDown, UiKey.A, UiModifier.Control);
@@ -571,10 +575,10 @@ class AccessibilityContract {
 		var listSemantics:Semantics = cast root.children[1].semantics;
 		if (root.children.length != 2 || !root.focusTrap || !semantics.states.contains(AccessibilityState.Expanded)
 			|| !semantics.actions.contains(AccessibilityAction.Collapse)
-			|| listSemantics.role != AccessibilityRole.List || root.children[1].children.length != 3) return false;
+			|| listSemantics.role != AccessibilityRole.List || popupOptions(root.children[1]).length != 3) return false;
 		context.key(UiEventKind.KeyDown, UiKey.Down);
 		if (context.focus.focusedId == null
-			|| !context.focus.focusedId.equals(root.children[1].children[1].id)) return false;
+			|| !context.focus.focusedId.equals(popupOptions(root.children[1])[1].id)) return false;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
 		if (selected != "two" || changes != 1) return false;
 		root = context.submit(comboView(), frame);

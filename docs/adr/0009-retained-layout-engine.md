@@ -4,8 +4,9 @@ Date: 2026-11-28
 
 ## Status
 
-Accepted. Decisions 1 and 2 have landed: `haxeon.ui.layout.LayoutSolver` lays every submitted tree out, NativeKit builds
-the scene from its geometry, and Clay is gone. Decisions 3 to 8 follow in the migration below. It supersedes the layout
+Accepted. Decisions 1, 2 and 5 to 8 have landed: `haxeon.ui.layout.LayoutSolver` lays every submitted tree out once a
+frame, NativeKit builds the scene from its geometry, Clay is gone, and nothing asks for layout feedback. Decisions 3
+(retention) and 4 (layout-time builders) remain; the migration below says what is left. It supersedes the layout
 half of [ADR 0002](0002-reactive-ui-model.md): decision 6 (floating nodes placed after the flow, two-phase layout) and the
 clause that kept Clay "an immediate full solver" until "measurements later show layout as the main remaining cost".
 Anchored placement (`LayoutAnchor`, landed with ADR 0002's decision 6) is kept and now runs in the solver.
@@ -63,11 +64,17 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
    subtrees only. The per-node records then go: the solver hands native one scene record per changed node.
 4. **Builders that run during layout.** A node may build its children from its constraints: a virtual list asks for the
    rows that fit, during the solve, and the window rebuild passes go.
-5. **Floating nodes after the flow**, placed by `LayoutAnchor`, which gains a size limit from the room beside its anchor.
-6. **Paint geometry with hit regions and semantics.** A painter declares the regions it hit-tests and the semantics it
-   exposes from the geometry it paints with. The scrollbar becomes one node per axis that paints its track and thumb from
-   its scroll controller; scroll metrics are reported during layout, so clamping and reveal need no pass.
-7. **Truncation in the text layout**: end and middle ellipsis as paragraph style, applied while measuring.
+5. **Floating nodes after the flow**, placed by `LayoutAnchor`, which can size its node from the anchor: at least as wide
+   as the anchor across its side (`matchAnchor`), at most as long as the room along it (`limitToRoom`). A selection popup
+   is placed and sized this way against its trigger, so it no longer records the trigger's geometry after layout.
+6. **Scrolling settles during layout.** A scroll container's content carries a `LayoutScroll`; layout settles the offset
+   once the viewport and content sizes are known, clamping it and applying a pending reveal (`ScrollController.revealRange`
+   and `revealNode`, finding nodes with a `LayoutLocator`), and the geometry record carries the offset. An absolute node
+   can carry a `LayoutPlacer`, run after the rest of the tree is placed, which places it (and can hide it) from state such
+   as a scroll controller: the scrollbar's track and thumb are placed so. Painted scrollbars with hit regions, as first
+   proposed here, were not needed.
+7. **Truncation during layout**: a text node declares end or middle truncation (`LayoutNode.truncation`), and the solver
+   picks the longest cut with an ellipsis that fits the width it gives the node, which NativeKit shows instead of the text.
 8. **No layout feedback.** With these, a geometry callback reads geometry and never edits the tree.
    `requestLayoutFeedback`, the pass loop in `UiContext` and, with ADR 0002's stage 7 (layers), `willEditRetained` and
    `RetainedAnimation` are deleted, and layout becomes one pure stage of the frame pipeline.
@@ -76,14 +83,15 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
 
 1. Done: the solver, the geometry hand-off and text measurement; Clay, its backend, its native tests, the native measure
    callback and the linear reference engine deleted; native tests place their fixtures with `tests/fixture_geometry.h`.
-2. Retained relayout with relayout boundaries and scene records; checked by comparing an incremental solve with a
-   from-scratch one on every frame in verify mode.
-3. Paint hit regions and semantics; the scrollbar on them; scroll metrics during layout.
-4. Truncation; `MiddleEllipsisText` on it. The anchor's size limit; `SelectionPopup` on it.
-5. Layout-time builders; the virtual collections on them. The state-writing callbacks, case by case.
-6. Delete the feedback loop; then stage 7's layers delete `willEditRetained`.
+2. Done: a frame's passes lay out in Haxe and publish to NativeKit once; the solver resolves the geometry callbacks read.
+3. Done: scroll offsets, reveals and scrollbars settle during layout; truncation (`LayoutNode.truncation`); the anchor's
+   sizing, with `SelectionPopup` on it; `requestLayoutFeedback` and the pass loop deleted.
+4. Left: layout-time builders for the virtual collections, whose window rebuilds are the build feedback that remains
+   (`requestBuildFeedbackBeforeLayout`); the other state-writing callbacks, case by case.
+5. Left: retained relayout with relayout boundaries and scene records, checked by comparing an incremental solve with a
+   from-scratch one in verify mode; then stage 7's layers delete `willEditRetained`.
 
-The frame count of solves (`UiFrameMetrics.layoutSolves`) falls to one on every smoke frame by the end.
+On the native explorer smoke, 40 of 46 frames lay out once; the others rebuild a virtual window.
 
 ## Consequences
 

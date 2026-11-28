@@ -77,24 +77,6 @@ class Select<T> implements View {
 			var root = context.createNode(context.rootId("select"), LayoutVisualKind.Box, rootStyle);
 			root.hitTestSelf = false;
 
-			var rootXState:State<Float> = context.state(context.id("root-x"), 0.0);
-			var rootYState:State<Float> = context.state(context.id("root-y"), 0.0);
-			var triggerXState:State<Float> = context.state(context.id("trigger-x"), 0.0);
-			var triggerYState:State<Float> = context.state(context.id("trigger-y"), 0.0);
-			var triggerWidthState:State<Float> = context.state(context.id("trigger-width"), triggerHeightFallback());
-			var triggerHeightState:State<Float> = context.state(context.id("trigger-height"), triggerHeightFallback());
-			var anchorKnownState:State<Bool> = context.state(context.id("anchor-known"), false);
-			var rememberFloat = function(state:State<Float>, value:Float) {
-				var current:Float = state.value;
-				if (!finite(current) || Math.abs(current - value) > 0.001) state.update(value);
-			};
-			root.onResolved(function(geometry) {
-				if (finite(geometry.x) && finite(geometry.y)) {
-					rememberFloat(rootXState, geometry.x);
-					rememberFloat(rootYState, geometry.y);
-				}
-			});
-
 			// The user's last choice, until the caller gives a different value.
 			var chosen = context.adopted("value", value);
 			value = chosen.value;
@@ -230,45 +212,19 @@ class Select<T> implements View {
 					return;
 				}
 			});
-			triggerModifier.onResolved(function(geometry) {
-				if (finite(geometry.x) && finite(geometry.y)
-					&& finite(geometry.width) && finite(geometry.height) && geometry.width >= 0.0
-					&& geometry.height >= 0.0) {
-					rememberFloat(triggerXState, geometry.x);
-					rememberFloat(triggerYState, geometry.y);
-					rememberFloat(triggerWidthState, geometry.width);
-					rememberFloat(triggerHeightState, geometry.height);
-					if (anchorKnownState.value != true) anchorKnownState.update(true);
-				}
-			});
-			triggerNode = context.withScope(new Key("trigger"),
+			var builtTrigger = context.withScope(new Key("trigger"),
 				function() return context.build(trigger, triggerModifier));
-			root.add(triggerNode);
+			triggerNode = builtTrigger;
+			root.add(builtTrigger);
 
 			root.focusTrap = isOpen;
 			if (isOpen) {
-				var anchorKnown:Bool = anchorKnownState.value;
-				var popupRootX:Float = rootXState.value;
-				var popupRootY:Float = rootYState.value;
-				var popupTriggerX:Float = triggerXState.value;
-				var popupTriggerY:Float = triggerYState.value;
-				var popupTriggerWidth:Float = triggerWidthState.value;
-				var popupTriggerHeight:Float = triggerHeightState.value;
-				if (!anchorKnown) {
-					popupRootX = 0.0;
-					popupRootY = 0.0;
-					popupTriggerX = 0.0;
-					popupTriggerY = 0.0;
-					popupTriggerWidth = fallbackWidth();
-					popupTriggerHeight = triggerHeightFallback();
-				}
 				var visibleIndices:Array<Int> = [];
 				for (index in 0...options.length) visibleIndices.push(index);
 				var popupOptions:Array<SelectOption<Dynamic>> = [];
 				for (option in options) popupOptions.push(cast option);
 				var popup = new SelectionPopup(popupOptions,
-					visibleIndices, value, active, popupRootX, popupRootY, popupTriggerX, popupTriggerY,
-					popupTriggerWidth, popupTriggerHeight, fallbackWidth(), triggerHeightFallback(), popupLink,
+					visibleIndices, value, active, builtTrigger.id, popupLink,
 					function(index:Int) {
 						selectOption(index);
 					}, close, function(index:Int) {
@@ -310,14 +266,6 @@ class Select<T> implements View {
 	}
 
 	function isEnabledIndex(index:Int):Bool return index >= 0 && index < options.length && options[index].enabled;
-
-	function triggerHeightFallback():Float return style.height.sizing == LayoutSizing.Fixed
-		&& style.height.value > 0.0 ? style.height.value : 36.0;
-
-	function fallbackWidth():Float return style.width.sizing == LayoutSizing.Fixed
-		&& style.width.value > 0.0 ? style.width.value : 220.0;
-
-	static inline function finite(value:Float):Bool return value == value && value - value == 0.0;
 
 	static function defaultStyle():LayoutStyle {
 		var result = new LayoutStyle();

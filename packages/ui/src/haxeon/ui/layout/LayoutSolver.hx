@@ -977,13 +977,33 @@ class LayoutSolver {
 		var right = region.x + region.width - margin, bottom = region.y + region.height - margin;
 		var vertical = anchor.side == AnchorSide.Below || anchor.side == AnchorSide.Above;
 		var x = target.x, y = target.y;
-		if (anchor.side != AnchorSide.Overlap) {
-			var side = anchor.side;
+		var side = anchor.side;
+		if (side != AnchorSide.Overlap) {
 			// The opposite side when the node overflows on its own and the opposite has more room.
 			var here = room(side, anchor.gap, left, top, right, bottom);
 			if (anchor.flip && here < (vertical ? h : w)
 				&& room(opposite(side), anchor.gap, left, top, right, bottom) > here)
 				side = opposite(side);
+		}
+		// Sized from the anchor: at least as wide across its side as the anchor, at most as long as the room along it.
+		var sizedWidth = w, sizedHeight = h;
+		if (anchor.matchAnchor) {
+			if (vertical || side == AnchorSide.Overlap) sizedWidth = Math.min(Math.max(w, target.width), right - left);
+			else sizedHeight = Math.min(Math.max(h, target.height), bottom - top);
+		}
+		if (anchor.limitToRoom && side != AnchorSide.Overlap) {
+			var space = Math.max(0.0, room(side, anchor.gap, left, top, right, bottom));
+			if (vertical) sizedHeight = Math.min(sizedHeight, space);
+			else sizedWidth = Math.min(sizedWidth, space);
+		}
+		if (sizedWidth != w || sizedHeight != h) {
+			layOut(index, Math.max(0.0, box.width + sizedWidth - w), Math.max(0.0, box.height + sizedHeight - h));
+			box.composeWorld(box.parent < 0 ? null : boxes[box.parent]);
+			worldBounds(index, current);
+			w = current.width;
+			h = current.height;
+		}
+		if (side != AnchorSide.Overlap) {
 			var along = switch side {
 				case AnchorSide.Below: target.y + target.height + anchor.gap;
 				case AnchorSide.Above: target.y - anchor.gap - h;

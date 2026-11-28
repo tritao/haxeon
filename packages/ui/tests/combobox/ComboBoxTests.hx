@@ -133,8 +133,9 @@ class ComboBoxTests {
 		ui.key(UiEventKind.KeyDown, UiKey.A, UiModifier.Control);
 		ui.text(UiEventKind.TextInput, "Tw");
 		build();
-		check(open() && root.children[1].children.length == 1, "Editing did not filter options");
-		var option:Semantics = cast root.children[1].children[0].semantics;
+		var filtered = root.children[1].children[0].children[0].children[0].children;
+		check(open() && filtered.length == 1, "Editing did not filter options");
+		var option:Semantics = cast filtered[0].semantics;
 		check(option.label == "Two", "Wrong filtered option");
 		click(arrow());
 		check(!open(), "Filtered list did not close");

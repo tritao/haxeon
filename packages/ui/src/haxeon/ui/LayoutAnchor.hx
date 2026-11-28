@@ -42,6 +42,12 @@ struct LayoutAnchor implements Equatable {
 
 	/** How far inside the region the node is kept. */
 	public final margin:Float = 0.0;
+
+	/** Whether the node is at least as wide as its anchor across its side (as tall, beside it), as a dropdown is. */
+	public final matchAnchor:Bool = false;
+
+	/** Whether the node is at most as long along its side as the room there, within the region, so its content scrolls. */
+	public final limitToRoom:Bool = false;
 }
 
 /** What an anchored node is placed against. */

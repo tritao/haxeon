@@ -468,6 +468,7 @@ private class PopupRig implements View {
 		style.clipToParent = false;
 		// The panel scope reserves its root identity for the node this returns.
 		var root = context.createNode(context.rootId("popup-anchor"), LayoutVisualKind.Box, style);
+		anchor = root.id;
 		root.on(UiEventKind.Scroll, _ -> backgroundWheels++);
 		root.onPointerDownOutside(event -> if (event.button == 0) closes++);
 		// The reference rig describes its host afresh too, so that it never keeps a body.
@@ -478,7 +479,7 @@ private class PopupRig implements View {
 	public function describe(context:BuildContext):ViewRoot {
 		hostBuilds++;
 		var popup = new haxeon.ui.widgets.controls.SelectionPopup(options, [for (index in 0...24) index],
-			chosenSignal.value, activeSignal.value, 0, 0, 8, 8, 150, 36, 150, 36, link, index -> {
+			chosenSignal.value, activeSignal.value, anchorId(), link, index -> {
 				chosenSignal.value = index;
 				activeSignal.value = index;
 				selections++;
@@ -495,6 +496,15 @@ private class PopupRig implements View {
 		modifier.add(added);
 		return context.build(popup, modifier);
 	}
+	/** The node the popup opens against: the rig's root, built before the popup. */
+	var anchor:Null<haxeon.ui.core.WidgetId> = null;
+
+	function anchorId():haxeon.ui.core.WidgetId {
+		var id = anchor;
+		if (id == null) throw "The popup's anchor is not built";
+		return id;
+	}
+
 	/** The popup's current root. */
 	public function menu():RenderNode {
 		var root = submitted;
