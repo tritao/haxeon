@@ -741,7 +741,8 @@ class ModuleCanonicalizer {
 						s) : stored(moduleMemberPath(name, module, entry, locals), aliases);
 				Call(resolved, [
 					for (index in 0...args.length)
-						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,
+						index == 1
+						&& StdlibNames.isTypeTest(name) ? canonicalTypeArgument(args[index], module, entry, locals,
 						aliases) : canonicalExpression(args[index], module, entry, locals, aliases)
 				], resolved == name ? s : compiler.core.Source.SourceSpan.reference(s.file, s.start, s.end,
 					s.isBareReference,
@@ -886,10 +887,6 @@ class ModuleCanonicalizer {
 			return null;
 		return resolveExpressionAlias(name, aliases);
 	}
-
-	static inline function isTypeTestCall(name:String):Bool
-		return name == StdlibNames.STD_IS_OF_TYPE || name == StdlibNames.STD_IS_EXACT_TYPE
-			|| name == StdlibNames.STD_DOWNCAST;
 
 	/**
 	 * The second argument of `Std.isOfType` and its siblings names a type. A bare name reaches here as an expression, so

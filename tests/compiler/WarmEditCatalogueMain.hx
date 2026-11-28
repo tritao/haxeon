@@ -365,6 +365,17 @@ class WarmEditCatalogueMain {
 				edit: ["Dog.hx" => swap(dog, "class Dog", "class Dog implements Named")]
 			},
 			{
+				kind: "implement an interface only an unchanged module's type test names",
+				files: [
+					"Named.hx" => named,
+					"Dog.hx" => dog,
+					"Probe.hx"
+						=> "class Probe { public static function of(x:Dynamic):Int return Std.isOfType(x, Named) ? 1 : 0; }",
+					"Main.hx" => "class Main { static function main():Int return Probe.of(new Dog()); }"
+				],
+				edit: ["Dog.hx" => swap(dog, "class Dog", "class Dog implements Named")]
+			},
+			{
 				kind: "change an interface an unchanged module tests for",
 				files: [
 					"Named.hx" => named,

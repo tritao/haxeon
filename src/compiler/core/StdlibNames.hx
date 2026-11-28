@@ -234,6 +234,10 @@ class StdlibNames {
 	public static function isIntrinsic(name:String):Bool
 		return intrinsics.exists(name);
 
+	/** Whether the call `name` is `Std.isOfType` or one of its siblings, whose second argument names a type. */
+	public static inline function isTypeTest(name:String):Bool
+		return name == STD_IS_OF_TYPE || name == STD_IS_EXACT_TYPE || name == STD_DOWNCAST;
+
 	/** The intrinsics the type `owner` declares, by member name. */
 	public static function intrinsicsOf(owner:String):Array<String>
 		return [

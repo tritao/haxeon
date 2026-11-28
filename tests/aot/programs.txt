@@ -286,6 +286,7 @@ interface-value-carriers
 interface-value-dispatch-table
 interface-variables
 is-of-type-unconstructed-class
+is-of-type-unnamed-interface
 iterator-index-loop
 iterator-replacement
 jit-boxed-allocation

@@ -212,6 +212,12 @@ class DependencyScanner {
 				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);
+				// The type a type test names may be named nowhere else, so its module is loaded for it.
+				if (args.length > 1 && StdlibNames.isTypeTest(name))
+					switch args[1] {
+						case Variable(typeName, _): scanAnnotation(NamedType(typeName), dependencies, typeParameters);
+						default:
+					}
 			case ClosureCall(callee, args, _):
 				scanExpression(callee, dependencies, typeParameters);
 				for (a in args)

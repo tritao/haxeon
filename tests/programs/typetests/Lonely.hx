@@ -1,0 +1,3 @@
+package typetests;
+
+interface Lonely {}
