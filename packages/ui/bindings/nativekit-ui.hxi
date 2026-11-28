@@ -9,7 +9,17 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	const NKUI_EFFECT_PROGRAM_MAX_OPS = 8;
 	const NKUI_GRADIENT_MAX_STOPS = 8;
 	const NKUI_LAYER_COMMAND_VERSION = 2;
-	const NKUI_LAYOUT_API_VERSION = 25;
+	const NKUI_LAYOUT_API_VERSION = 26;
+	const NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET = 32;
+	const NKUI_LAYOUT_GEOMETRY_HEIGHT_OFFSET = 16;
+	const NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET = 0;
+	const NKUI_LAYOUT_GEOMETRY_RECORD_BYTES = 36;
+	const NKUI_LAYOUT_GEOMETRY_TEXT_WIDTH_OFFSET = 28;
+	const NKUI_LAYOUT_GEOMETRY_TEXT_X_OFFSET = 20;
+	const NKUI_LAYOUT_GEOMETRY_TEXT_Y_OFFSET = 24;
+	const NKUI_LAYOUT_GEOMETRY_WIDTH_OFFSET = 12;
+	const NKUI_LAYOUT_GEOMETRY_X_OFFSET = 4;
+	const NKUI_LAYOUT_GEOMETRY_Y_OFFSET = 8;
 	const NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16777216;
 	/**
 	 * Per-child cross-axis alignment override; zero inherits the parent.
@@ -470,12 +480,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		NKUI_LAYOUT_DISTRIBUTION_SPACE_EVENLY = 5;
 	}
 	/**
-	 * Flags returned in nkui_layout_measure_result.flags.
-	 */
-	flags nkui_layout_measure_flags : u32 {
-		NKUI_LAYOUT_MEASURE_HAS_BASELINE = 1;
-	}
-	/**
 	 * Node flags stored at NKUI_LAYOUT_NODE_FLAGS_OFFSET.
 	 */
 	flags nkui_layout_node_flags : u32 {
@@ -869,13 +873,6 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		out_stats: ptr<nkui_layout_hit_test_stats> @out
 	) -> nkui_result;
 	/**
-	 * Returns cumulative intrinsic-measure counters and current cache occupancy.
-	 */
-	extern fn nkui_layout_session_get_measure_stats(
-		session: nkui_layout_session,
-		out_stats: ptr<nkui_layout_measure_stats> @out
-	) -> nkui_result;
-	/**
 	 * Copies resolved geometry in retained tree order. Full submits preserve submission order; patches use child-list preorder.
 	 *
 	 * The buffer contains `nkui_layout_item` records with `struct_size` set.
@@ -947,6 +944,18 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		out_count: ptr<u32> @out
 	) -> nkui_result;
 	/**
+	 * Measures `text` with the session's fonts: unwrapped when `width` is zero, else laid out at `width`. Laying it out at
+	 * the width its node is given also shapes it for that node's next submit.
+	 */
+	extern fn nkui_layout_session_measure_text(
+		session: nkui_layout_session,
+		text: nullable<utf8>,
+		width: f32,
+		text_style: ptr<const<nkui_text_style>>,
+		paragraph_style: ptr<const<nkui_paragraph_style>>,
+		out_measure: ptr<nkui_layout_text_measure> @out
+	) -> nkui_result;
+	/**
 	 * Executes the submitted layout through the existing NativeKit renderer.
 	 *
 	 * The retained UI surface uses on-demand scheduling; request another frame
@@ -1010,15 +1019,14 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		fonts: nkui_resource
 	) -> nkui_result;
 	/**
-	 * Installs or removes the synchronous intrinsic measurer for custom-visual
-	 * nodes. The callback is invoked during submit on the submitting thread. Its
-	 * user data is borrowed and the callback must be detached before its Haxe/C
-	 * callback handle is closed.
+	 * Sets the geometry the framework laid the next submit's tree out with (ADR 0009): one
+	 * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES record for every node of the tree after that submit, in any order. It stays until
+	 * it is set again, so every submit that changes geometry sets it first.
 	 */
-	extern fn nkui_layout_session_set_measure_callback(
+	extern fn nkui_layout_session_set_geometry(
 		session: nkui_layout_session,
-		callback: nkui_nullable_layout_measure_callback @retained,
-		user_data: nullable<ptr<void>>
+		geometry: ptr<const<u8>> @in_array("geometry_bytes"),
+		geometry_bytes: u32
 	) -> nkui_result;
 	/**
 	 * Submits one flat, Haxe-owned render/layout tree transaction.
@@ -1831,63 +1839,26 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		reserved: array<u32, 2>;
 	}
 	/**
-	 * Constraints supplied to an external intrinsic measurer for one custom node.
+	 * The size text takes, measured with a layout session's fonts.
 	 */
-	struct nkui_layout_measure_constraints {
+	struct nkui_layout_text_measure {
 		/**
-		 * Always sizeof(nkui_layout_measure_constraints) for this ABI.
+		 * Set to sizeof(nkui_layout_text_measure) when returned by the API.
 		 */
 		struct_size: u32 @struct_size;
-		min_width: f32;
-		max_width: f32;
-		min_height: f32;
-		max_height: f32;
-	}
-	/**
-	 * Optional metrics returned by an external intrinsic measurer.
-	 */
-	struct nkui_layout_measure_result {
 		/**
-		 * Set to sizeof(nkui_layout_measure_result) when returned.
+		 * Unwrapped: the advance rounded up to a whole pixel. At a width: that width.
 		 */
-		struct_size: u32 @struct_size;
 		width: f32;
+		/**
+		 * The line height when the paragraph sets one, else the text's height.
+		 */
 		height: f32;
+		/**
+		 * The first line's baseline from the top, when `has_baseline` is nonzero.
+		 */
 		baseline: f32;
-		flags: nkui_layout_measure_flags;
-	}
-	/**
-	 * Cumulative intrinsic-measure activity for one layout session.
-	 */
-	struct nkui_layout_measure_stats {
-		/**
-		 * Set to sizeof(nkui_layout_measure_stats) when returned by the API.
-		 */
-		struct_size: u32 @struct_size;
-		/**
-		 * Intrinsic-measure requests made by Clay.
-		 */
-		requests: u64;
-		/**
-		 * Requests served by the persistent exact-constraint cache.
-		 */
-		cache_hits: u64;
-		/**
-		 * Requests not found in the persistent cache.
-		 */
-		cache_misses: u64;
-		/**
-		 * Calls made to the external intrinsic-measure callback.
-		 */
-		callback_calls: u64;
-		/**
-		 * Current number of entries in the bounded cache.
-		 */
-		cache_entries: u64;
-		/**
-		 * Maximum number of entries retained by the cache.
-		 */
-		cache_capacity: u64;
+		has_baseline: u32;
 	}
 	/**
 	 * Descriptor for the source-alpha mask of an isolated layer.
@@ -2476,21 +2447,9 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	 */
 	handle nkui_display_list : u32;
 	/**
-	 * Synchronous intrinsic measurement callback for custom-visual nodes.
-	 *
-	 * The callback may use unrelated UI registries, but must not re-enter layout
-	 * session operations. Such re-entry returns NKUI_ERROR_INVALID_ARGUMENT.
-	 */
-	callback nkui_layout_measure_callback = fn(
-		arg0: u32,
-		arg1: nkui_layout_measure_constraints,
-		arg2: nullable<ptr<void>>
-	) -> nkui_layout_measure_result;
-	/**
 	 * Opaque retained layout session used by a Haxe-owned component tree.
 	 */
 	handle nkui_layout_session : u32;
-	type nkui_nullable_layout_measure_callback = nullable<nkui_layout_measure_callback>;
 	/**
 	 * Opaque handle for a renderer and its backend resources.
 	 */

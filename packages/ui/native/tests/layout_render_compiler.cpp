@@ -1,3 +1,4 @@
+#include "fixture_placements.h"
 #include "layout/layout_engine.h"
 #include "layout/layout_render_compiler.h"
 #include "render/render_plan_executor.h"
@@ -255,7 +256,7 @@ int main() {
 
     LayoutSnapshot snapshot;
     LayoutError layout_error;
-    if (!engine.layout(nodes, 320.0f, 200.0f, 1.0f / 60.0f, snapshot, &layout_error))
+    if (!engine.layout(nodes, fixture::placements(nodes, 320.0f, 200.0f), 320.0f, 200.0f, snapshot, &layout_error))
         return 4;
 
     LayoutRenderCompiler compiler;
@@ -404,7 +405,7 @@ int main() {
         rtl_nodes.push_back(rtl_text);
 
         LayoutSnapshot rtl_snapshot;
-        if (!engine.layout(rtl_nodes, 320.0f, 80.0f, 1.0f / 60.0f, rtl_snapshot, &layout_error))
+        if (!engine.layout(rtl_nodes, fixture::placements(rtl_nodes, 320.0f, 80.0f), 320.0f, 80.0f, rtl_snapshot, &layout_error))
             return 14;
         const auto rtl_primitive = std::find_if(
             rtl_snapshot.primitives.begin(), rtl_snapshot.primitives.end(),
@@ -533,7 +534,7 @@ int main() {
         return 291;
     // A horizontal scrollbar in a vertically scrolled code block is a normal
     // shape, not a custom painter. Its inherited clip must survive even when
-    // Clay emits it after the ancestor scissor ended. Text shares this rule.
+    // it is emitted after the ancestor scissor ended. Text shares this rule.
     for (float clip_width : {1.0f, 0.0f}) {
         auto floating_shapes = floating_snapshot;
         floating_shapes.primitives.erase(
@@ -558,7 +559,7 @@ int main() {
             }
         if (clipped_commands < 2) return 352;
     }
-    // Floating Clay scissors can retain pre-scroll coordinates. The resolved
+    // A floating scissor may carry pre-scroll coordinates. The resolved
     // scene clip already includes every ancestor in viewport space.
     auto stale_clip_snapshot = floating_snapshot;
     LayoutPrimitive stale_clip;
@@ -866,7 +867,7 @@ int main() {
     moved_nodes[0].style.transform.tx = 48.0f;
     moved_nodes[0].style.transform.ty = 24.0f;
     LayoutSnapshot moved_snapshot;
-    if (!engine.layout(moved_nodes, 320.0f, 200.0f, 1.0f / 60.0f, moved_snapshot,
+    if (!engine.layout(moved_nodes, fixture::placements(moved_nodes, 320.0f, 200.0f), 320.0f, 200.0f, moved_snapshot,
                        &layout_error))
         return 27;
     LayoutRenderFrame moved_subtree_frame;
@@ -959,7 +960,7 @@ int main() {
     std::vector<LayoutNode> content_changed_nodes = nodes;
     content_changed_nodes[0].content_revision = 7;
     LayoutSnapshot content_changed_snapshot;
-    if (!engine.layout(content_changed_nodes, 320.0f, 200.0f, 1.0f / 60.0f,
+    if (!engine.layout(content_changed_nodes, fixture::placements(content_changed_nodes, 320.0f, 200.0f), 320.0f, 200.0f,
                        content_changed_snapshot, &layout_error))
         return 128;
     LayoutRenderFrame content_changed_subtree_frame;
@@ -1007,7 +1008,7 @@ int main() {
     std::vector<LayoutNode> composite_changed_nodes = nodes;
     composite_changed_nodes[0].composite_revision = 9;
     LayoutSnapshot composite_changed_snapshot;
-    if (!engine.layout(composite_changed_nodes, 320.0f, 200.0f, 1.0f / 60.0f,
+    if (!engine.layout(composite_changed_nodes, fixture::placements(composite_changed_nodes, 320.0f, 200.0f), 320.0f, 200.0f,
                        composite_changed_snapshot, &layout_error))
         return 129;
     LayoutRenderFrame composite_changed_subtree_frame;

@@ -57,10 +57,10 @@ GPUI rebuilds and caches; we retain and patch.
 | Core model | `render()` makes a throwaway element tree; cached views replay prior layout and paint | one long-lived node tree, patched in place |
 | Invalidation | explicit `cx.notify()` | recorded reads, automatic |
 | Correctness check | none built in | verify mode in the gates |
-| Layout | Taffy, in-process | Clay, native, incremental bridge |
+| Layout | Taffy, in-process | `LayoutSolver` in Haxeon (ADR 0009); native builds the scene from its geometry |
 | Rendering | scene of primitives; cached views reuse their scene range | full render compile per changed frame (being made incremental) |
 
-GPUI is ahead on paint reuse, near-free per-frame allocation and the absence of a layout boundary, and in maturity. We are
+GPUI is ahead on paint reuse, near-free per-frame allocation and in maturity. We are
 ahead on automatic dependency tracking with verification, single-node updates, generated style code, accessibility and a
 Wasm target. Its scene-range reuse confirms the direction of the render work; its previous/current text-layout cache is
 worth comparing with ours.

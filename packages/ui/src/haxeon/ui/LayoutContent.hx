@@ -189,6 +189,7 @@ class LayoutMeasureConstraints {
 	/** The tallest it may be. */
 	public final maxHeight:Float;
 
+	@:allow(haxeon.ui.layout.LayoutSolver)
 	private function new(minWidth:Float, maxWidth:Float, minHeight:Float, maxHeight:Float) {
 		this.minWidth = minWidth;
 		this.maxWidth = maxWidth;
@@ -196,11 +197,6 @@ class LayoutMeasureConstraints {
 		this.maxHeight = maxHeight;
 	}
 
-	@:allow(haxeon.ui.LayoutSession)
-	private static function fromNative(value:nkui_layout_measure_constraints):LayoutMeasureConstraints {
-		return new LayoutMeasureConstraints(value.get_min_width(), value.get_max_width(),
-			value.get_min_height(), value.get_max_height());
-	}
 }
 
 /** Intrinsic size and optional baseline returned for a custom layout node. */
@@ -227,40 +223,20 @@ class LayoutMeasureResult {
 		this.hasBaseline = hasBaseline;
 	}
 
-	@:allow(haxeon.ui.LayoutSession)
-	private function nativeValue():nkui_layout_measure_result {
-		var result = new nkui_layout_measure_result();
-		result.set_width(width);
-		result.set_height(height);
-		result.set_baseline(baseline);
-		result.set_flags(NativeKitUI.NkuiLayoutMeasureFlags.fromRaw(hasBaseline ? 1 : 0));
-		return result;
-	}
 }
 
-/** Snapshot of intrinsic measurement and persistent-cache activity. */
+/** How content measurement went: what layout asked for, what earlier measurements answered, and what it measured. */
 class LayoutMeasureStats {
 	/** How many measurements layout asked for. */
-	public final requests:haxe.Int64;
-	/** How many the cache answered. */
-	public final cacheHits:haxe.Int64;
-	/** How many it did not. */
-	public final cacheMisses:haxe.Int64;
-	/** How many called a content's measure. */
-	public final callbackCalls:haxe.Int64;
-	/** How many results the cache holds. */
-	public final cacheEntries:haxe.Int64;
-	/** How many it can hold. */
-	public final cacheCapacity:haxe.Int64;
+	public final requests:Int;
+	/** How many an earlier measurement at the same version and constraints answered. */
+	public final cacheHits:Int;
+	/** How many called a content's measure, or the session's measure callback. */
+	public final callbackCalls:Int;
 
-	/** A snapshot of the counts. */
-	public function new(requests:haxe.Int64, cacheHits:haxe.Int64, cacheMisses:haxe.Int64,
-			callbackCalls:haxe.Int64, cacheEntries:haxe.Int64, cacheCapacity:haxe.Int64) {
+	public function new(requests:Int, cacheHits:Int, callbackCalls:Int) {
 		this.requests = requests;
 		this.cacheHits = cacheHits;
-		this.cacheMisses = cacheMisses;
 		this.callbackCalls = callbackCalls;
-		this.cacheEntries = cacheEntries;
-		this.cacheCapacity = cacheCapacity;
 	}
 }

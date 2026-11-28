@@ -1,4 +1,5 @@
 #include "nativekit_ui_layout.h"
+#include "../tests/fixture_geometry.h"
 
 #include <algorithm>
 #include <cassert>
@@ -184,7 +185,7 @@ void run(const Scenario &scenario) {
     nkui_layout_frame_input frame{sizeof(frame), static_cast<float>(kViewportWidth),
                                   static_cast<float>(kViewportHeight), 0.0f};
     const auto submit_status =
-        nkui_layout_session_submit(session, transaction.data(), transaction.size(), &frame);
+        fixture::submit(session, transaction.data(), transaction.size(), &frame);
     if (submit_status != NKUI_OK) {
         std::fprintf(stderr, "%s submit failed: %d (%zu nodes, %zu bytes)\n", scenario.name,
                      submit_status, scenario.nodes.size(), transaction.size());

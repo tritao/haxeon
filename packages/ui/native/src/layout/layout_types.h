@@ -126,8 +126,7 @@ struct LayoutAxis {
     LayoutSizing sizing = LayoutSizing::Fit;
     // Used by FIXED and PERCENT.
     float value = 0.0f;
-    // FIT/GROW constraints are passed directly to Clay. A zero max means
-    // unbounded, matching Clay's CLAY_SIZING_FIT/GROW convention.
+    // FIT/GROW limits; a zero max means unbounded.
     float min = 0.0f;
     float max = 0.0f;
     // Relative share of extra space for GROW sizing. Other sizing modes ignore
@@ -236,7 +235,6 @@ struct LayoutNode {
     /** Geometric hit policy supplied by the framework layer. */
     bool hit_self = true;
     bool hit_children = true;
-    // Changes invalidate persistent external intrinsic measurements for this node.
     uint32_t measure_version = 0;
     /** Paint/text revision supplied by the retained scene owner. */
     uint32_t content_revision = 0;
@@ -267,34 +265,19 @@ class LayoutNodeView {
     const std::vector<const LayoutNode *> &nodes_;
 };
 
-/** NativeKit-owned constraints for opaque external content measurement. */
-struct LayoutMeasureConstraints {
-    float min_width = 0.0f;
-    float max_width = 0.0f;
-    float min_height = 0.0f;
-    float max_height = 0.0f;
-};
-
-/** NativeKit-owned intrinsic metrics for opaque external content. */
-struct LayoutMeasureResult {
-    float width = 0.0f;
-    float height = 0.0f;
+/**
+ * Where the framework laid one node out (ADR 0009): its bounds in layout coordinates, where its text goes relative to
+ * them, and its first baseline in layout coordinates when it has one.
+ */
+struct LayoutPlacement {
+    uint32_t node_id = 0;
+    LayoutRect bounds{};
+    float text_x = 0.0f;
+    float text_y = 0.0f;
+    float text_width = 0.0f;
     float baseline = 0.0f;
     bool has_baseline = false;
 };
-
-/** Cumulative intrinsic-measure activity for one layout session. */
-struct LayoutMeasureStats {
-    uint64_t requests = 0;
-    uint64_t cache_hits = 0;
-    uint64_t cache_misses = 0;
-    uint64_t callback_calls = 0;
-    std::size_t cache_entries = 0;
-    std::size_t cache_capacity = 0;
-};
-
-using LayoutMeasureCallback =
-    std::function<LayoutMeasureResult(uint32_t, const LayoutMeasureConstraints &)>;
 
 struct LayoutError {
     std::size_t node_index = 0;

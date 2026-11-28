@@ -232,9 +232,9 @@ values changes, and updates the existing nodes. This record makes that idea the 
 5. **Interaction state is signals; style rules are derived values.** Hovered, pressed, focused and disabled are per-node
    signals. Stylesheet rules compile to derived values over them, so a pointer move recomputes only the properties whose
    rules read hover, on the two nodes involved. This replaces `InteractionStateSnapshot` and `hoverRebuilds`.
-6. **Floating nodes are placed after the flow, from declared anchors; incremental layout is an option.** *Proposed to be
-   superseded by [ADR 0009](0009-retained-layout-engine.md), a retained layout engine of our own with no layout feedback;
-   anchored placement stays.* *Revised 2026-11-28, superseding the local placement below:* an absolutely positioned node may declare an anchor (a rectangle
+6. **Floating nodes are placed after the flow, from declared anchors; incremental layout is an option.** *Superseded by
+   [ADR 0009](0009-retained-layout-engine.md): layout is solved in Haxeon, retained, with no layout feedback; anchored
+   placement stays, in the solver.* *Revised 2026-11-28, superseding the local placement below:* an absolutely positioned node may declare an anchor (a rectangle
    or another node, a preferred side, whether it flips, the margin it clamps to), and the backend places it after the flow
    solve from the anchor's bounds and its own size, so a popup, tooltip or selection popup needs no geometry callback and
    no feedback pass. Layout runs in two phases: the flow solve, then each floating subtree against its parent's solved

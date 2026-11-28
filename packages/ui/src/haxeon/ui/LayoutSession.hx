@@ -1,7 +1,6 @@
 package haxeon.ui;
 
 import NativeKitUI;
-import NativeKitUI.nkui_layout_measure_callbackCallback;
 import haxe.io.Bytes;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
@@ -16,6 +15,9 @@ import nativekit.ffi.NativeKitTypes;
 class LayoutSession implements Disposable {
 	static final measureCost:Bool = Sys.getEnv("HAXEON_UI_LAYOUT_COST") == "1";
 	static final EmptyBytes:Bytes = Bytes.alloc(0);
+	/** Lays each submitted tree out; native builds the scene from its geometry (ADR 0009). */
+	final solver:haxeon.ui.layout.LayoutSolver = new haxeon.ui.layout.LayoutSolver();
+	var geometryBytes:Bytes = Bytes.alloc(4096);
 	var value:nkui_layout_session;
 	var disposed:Bool;
 	final transaction:LayoutTransaction;
@@ -29,11 +31,8 @@ class LayoutSession implements Disposable {
 	var hitPathBytes:Bytes;
 	/** Reused native geometry output; only the returned prefix is valid after each submit. */
 	var resolvedUpdateBytes:Bytes;
-	var measureCallback:Null<nkui_layout_measure_callbackCallback>;
 	var measureFunction:Null<LayoutMeasureCallback>;
-	final measureContents:Map<Int, LayoutContent>;
 	final renderableContents:Map<Int, LayoutRenderableContent>;
-	var hasMeasureContents:Bool;
 
 	private function new(value:nkui_layout_session) {
 		this.value = value;
@@ -42,11 +41,8 @@ class LayoutSession implements Disposable {
 		resolved = [];
 		hitPathBytes = Bytes.alloc(64 * 4);
 		resolvedUpdateBytes = Bytes.alloc(1024);
-		measureCallback = null;
 		measureFunction = null;
-		measureContents = new Map();
 		renderableContents = new Map();
-		hasMeasureContents = false;
 	}
 
 	/** A new session, with its own native layout state. */
@@ -63,17 +59,24 @@ class LayoutSession implements Disposable {
 			fonts.nativeHandle()), "layoutSession.setFonts");
 	}
 
-	/**
-	 * Installs a fallback intrinsic measurer for Custom nodes without an
-	 * attached LayoutContent provider. The callback runs during submit and
-	 * remains retained by this session until replaced or cleared.
-	 */
+	/** Measures Custom nodes without content of their own while a submit lays them out; null measures none. */
 	public function setMeasureCallback(callback:Null<LayoutMeasureCallback>):Void {
 		ensureLive();
-		if (measureCallback != null)
-			detachMeasureCallback();
 		measureFunction = callback;
-		refreshMeasureCallback();
+	}
+
+	/** Measures `text` with this session's fonts into `out`: unwrapped when `width` is zero, else laid out at `width`. */
+	public function measureText(text:Null<String>, width:Float, textStyle:TextStyle, paragraphStyle:ParagraphStyle,
+			out:haxeon.ui.layout.TextMeasure):Void {
+		ensureLive();
+		var result = NativeKitUI.nkui_layout_session_measure_text(value, text == null ? "" : text, width,
+			TextLayout.nativeTextStyle(textStyle), TextLayout.nativeParagraphStyle(paragraphStyle));
+		UiResult.check(result.status, "layoutSession.measureText");
+		var measured = result.out_measure;
+		out.width = measured.get_width();
+		out.height = measured.get_height();
+		out.baseline = measured.get_baseline();
+		out.hasBaseline = measured.get_has_baseline() != 0;
 	}
 
 	/** Submits one render tree and returns geometry for the complete resolved frame. */
@@ -85,8 +88,20 @@ class LayoutSession implements Disposable {
 		var encodeStarted = measureCost ? Sys.time() : 0.0;
 		var transactionBytes:Bytes = transaction.encodeInto(root, forceFull ? null : changes);
 		var encodeFinished = measureCost ? Sys.time() : 0.0;
-		collectMeasureContents(root);
-		refreshMeasureCallback();
+		collectRenderableContents();
+		var solveStarted = measureCost ? Sys.time() : 0.0;
+		solver.attach(this, measureFunction);
+		solver.solve(root, frame.width, frame.height);
+		var geometryLength = solver.nodes * NativeKitUIConstants.NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
+		if (geometryLength > geometryBytes.length) {
+			var capacity = geometryBytes.length;
+			while (capacity < geometryLength) capacity *= 2;
+			geometryBytes = Bytes.alloc(capacity);
+		}
+		solver.encode(geometryBytes);
+		UiResult.check(NativeKitUI.nkui_layout_session_set_geometry_slice(value, geometryBytes, 0, geometryLength),
+			"layoutSession.setGeometry");
+		var solveFinished = measureCost ? Sys.time() : 0.0;
 		var nativeFrame = frame.nativeValue();
 		UiResult.check(NativeKitUI.nkui_layout_session_submit_slice(value, transactionBytes, 0,
 			transaction.byteLength(), nativeFrame),
@@ -138,6 +153,9 @@ class LayoutSession implements Disposable {
 		transaction.commit();
 		var commitSeconds = measureCost ? Sys.time() - commitStarted : 0.0;
 		if (measureCost) {
+			Sys.stderr().writeString("layout-cost solve nodes=" + solver.nodes + " solve=" + solver.solveSeconds
+				+ " text="
+				+ solver.textSeconds + " total=" + (solveFinished - solveStarted) + "\n");
 			Sys.stderr().writeString("layout-cost haxe nodes=" + resolved.length + " started=" + encodeStarted
 				+ " encode=" + (encodeFinished - encodeStarted + commitSeconds)
 				+ " decode=" + (decodeFinished - decodeStarted) + "\n");
@@ -208,15 +226,10 @@ class LayoutSession implements Disposable {
 		throw 'Layout item ${node.id} is not present in the latest resolved frame';
 	}
 
-	/** Returns cumulative intrinsic measurement and cache activity for this session. */
+	/** Content measurements this session's layout asked for, answered from earlier ones, and made. */
 	public function measureStats():LayoutMeasureStats {
 		ensureLive();
-		var result = NativeKitUI.nkui_layout_session_get_measure_stats(value);
-		UiResult.check(result.status, "layoutSession.measureStats");
-		var stats = result.out_stats;
-		return new LayoutMeasureStats(stats.get_requests(), stats.get_cache_hits(),
-			stats.get_cache_misses(), stats.get_callback_calls(), stats.get_cache_entries(),
-			stats.get_cache_capacity());
+		return new LayoutMeasureStats(solver.measureRequests, solver.measureHits, solver.measureCalls);
 	}
 
 	/** Removes all Haxe custom-paint display lists from this session. */
@@ -318,7 +331,6 @@ class LayoutSession implements Disposable {
 	public function dispose():Void {
 		if (disposed)
 			return;
-		detachMeasureCallback();
 		var status = NativeKitUI.nkui_layout_session_destroy(value);
 		disposed = true;
 		resolvedUpdateBytes = EmptyBytes;
@@ -334,44 +346,8 @@ class LayoutSession implements Disposable {
 			throw "Layout session has been disposed";
 	}
 
-	function refreshMeasureCallback():Void {
-		if (measureFunction == null && !hasMeasureContents) {
-			detachMeasureCallback();
-			return;
-		}
-		if (measureCallback != null)
-			return;
-		var nativeCallback = new nkui_layout_measure_callbackCallback(function(nodeId:Int,
-				constraints:nkui_layout_measure_constraints,
-				_userData:Null<hl.Abstract<"native_pointer">>) {
-					var measured = measureNode(nodeId, LayoutMeasureConstraints.fromNative(constraints));
-					if (measured == null)
-						throw "Layout measurement callback returned null";
-					return measured.nativeValue();
-				});
-		try {
-			UiResult.check(NativeKitUI.nkui_layout_session_set_measure_callback(value, nativeCallback,
-				null), "layoutSession.setMeasureCallback");
-		} catch (error:Dynamic) {
-			nativeCallback.close();
-			throw error;
-		}
-		measureCallback = nativeCallback;
-	}
-
-	function measureNode(nodeId:Int, constraints:LayoutMeasureConstraints):LayoutMeasureResult {
-		var content = measureContents.get(nodeId);
-		if (content != null)
-			return content.measure(constraints);
-		if (measureFunction != null)
-			return measureFunction(nodeId, constraints);
-		return new LayoutMeasureResult(0.0, 0.0);
-	}
-
-	function collectMeasureContents(root:LayoutNode):Void {
-		measureContents.clear();
+	function collectRenderableContents():Void {
 		renderableContents.clear();
-		hasMeasureContents = false;
 		// The transaction already visited every node in tree order and noted the ones with content.
 		for (node in transaction.nodesWithIntrinsicContent()) {
 			var content = node.intrinsicContent;
@@ -379,11 +355,9 @@ class LayoutSession implements Disposable {
 				continue;
 			if (node.visualKind != LayoutVisualKind.Custom)
 				throw "Intrinsic content requires a Custom layout node";
-			measureContents.set(node.id, content);
 			var renderable = content.asRenderable();
 			if (renderable != null)
 				renderableContents.set(node.id, renderable);
-			hasMeasureContents = true;
 		}
 	}
 
@@ -408,15 +382,6 @@ class LayoutSession implements Disposable {
 		}
 	}
 
-	function detachMeasureCallback():Void {
-		if (measureCallback == null)
-			return;
-		UiResult.check(NativeKitUI.nkui_layout_session_set_measure_callback(value, null, null),
-			"layoutSession.clearMeasureCallback");
-		var callback = measureCallback;
-		measureCallback = null;
-		callback.close();
-	}
 }
 
 /** Snapshot of native geometric hit-test traversal activity. */

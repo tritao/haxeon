@@ -17,14 +17,32 @@ extern "C" {
 
 /** Layout bridge and wire-format versions and fixed sizes. */
 enum {
-    NKUI_LAYOUT_API_VERSION = 25,
+    NKUI_LAYOUT_API_VERSION = 26,
     NKUI_LAYOUT_TRANSACTION_VERSION = 18,
     NKUI_LAYOUT_PATCH_VERSION = 19,
     NKUI_LAYOUT_PATCH_HEADER_BYTES = 32,
     NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16,
     NKUI_LAYOUT_NODE_RECORD_BYTES = 336,
     NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16 * 1024 * 1024,
-    NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96
+    NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96,
+    NKUI_LAYOUT_GEOMETRY_RECORD_BYTES = 36
+};
+
+/**
+ * Field offsets of one geometry record, as `nkui_layout_session_set_geometry` reads them: the node ID, then its laid-out
+ * bounds in layout coordinates, then where its text goes relative to those bounds (a text node only), then its first
+ * baseline in layout coordinates, NaN when it has none.
+ */
+enum {
+    NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET = 0,
+    NKUI_LAYOUT_GEOMETRY_X_OFFSET = 4,
+    NKUI_LAYOUT_GEOMETRY_Y_OFFSET = 8,
+    NKUI_LAYOUT_GEOMETRY_WIDTH_OFFSET = 12,
+    NKUI_LAYOUT_GEOMETRY_HEIGHT_OFFSET = 16,
+    NKUI_LAYOUT_GEOMETRY_TEXT_X_OFFSET = 20,
+    NKUI_LAYOUT_GEOMETRY_TEXT_Y_OFFSET = 24,
+    NKUI_LAYOUT_GEOMETRY_TEXT_WIDTH_OFFSET = 28,
+    NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET = 32
 };
 
 /** Bit flags stored in each node's clip-flags field. */
@@ -320,6 +338,19 @@ typedef struct nkui_layout_item {
     uint32_t reserved[2];
 } nkui_layout_item;
 
+/** The size text takes, measured with a layout session's fonts. */
+typedef struct nkui_layout_text_measure {
+    /** Set to sizeof(nkui_layout_text_measure) when returned by the API. */
+    uint32_t struct_size NK_STRUCT_SIZE;
+    /** Unwrapped: the advance rounded up to a whole pixel. At a width: that width. */
+    float width;
+    /** The line height when the paragraph sets one, else the text's height. */
+    float height;
+    /** The first line's baseline from the top, when `has_baseline` is nonzero. */
+    float baseline;
+    uint32_t has_baseline;
+} nkui_layout_text_measure;
+
 /** Per-submission logical viewport and layout timing. */
 typedef struct nkui_layout_frame_input {
     /** Set to sizeof(nkui_layout_frame_input) or a larger compatible size. */
@@ -328,48 +359,6 @@ typedef struct nkui_layout_frame_input {
     float height;
     float delta_seconds;
 } nkui_layout_frame_input;
-
-/** Constraints supplied to an external intrinsic measurer for one custom node. */
-typedef struct nkui_layout_measure_constraints {
-    /** Always sizeof(nkui_layout_measure_constraints) for this ABI. */
-    uint32_t struct_size NK_STRUCT_SIZE;
-    float min_width;
-    float max_width;
-    float min_height;
-    float max_height;
-} nkui_layout_measure_constraints;
-
-/** Flags returned in nkui_layout_measure_result.flags. */
-typedef uint32_t nkui_layout_measure_flags;
-enum NK_FLAGS(nkui_layout_measure_flags) { NKUI_LAYOUT_MEASURE_HAS_BASELINE = 1u << 0 };
-
-/** Optional metrics returned by an external intrinsic measurer. */
-typedef struct nkui_layout_measure_result {
-    /** Set to sizeof(nkui_layout_measure_result) when returned. */
-    uint32_t struct_size NK_STRUCT_SIZE;
-    float width;
-    float height;
-    float baseline;
-    nkui_layout_measure_flags flags;
-} nkui_layout_measure_result;
-
-/** Cumulative intrinsic-measure activity for one layout session. */
-typedef struct nkui_layout_measure_stats {
-    /** Set to sizeof(nkui_layout_measure_stats) when returned by the API. */
-    uint32_t struct_size NK_STRUCT_SIZE;
-    /** Intrinsic-measure requests made by Clay. */
-    uint64_t requests;
-    /** Requests served by the persistent exact-constraint cache. */
-    uint64_t cache_hits;
-    /** Requests not found in the persistent cache. */
-    uint64_t cache_misses;
-    /** Calls made to the external intrinsic-measure callback. */
-    uint64_t callback_calls;
-    /** Current number of entries in the bounded cache. */
-    uint64_t cache_entries;
-    /** Maximum number of entries retained by the cache. */
-    uint64_t cache_capacity;
-} nkui_layout_measure_stats;
 
 /** Cumulative geometric hit-test activity for one layout session. */
 typedef struct nkui_layout_hit_test_stats {
@@ -389,15 +378,6 @@ typedef struct nkui_layout_hit_test_stats {
     uint64_t hit_test_time_nanoseconds;
 } nkui_layout_hit_test_stats;
 
-/** Synchronous intrinsic measurement callback for custom-visual nodes.
- *
- * The callback may use unrelated UI registries, but must not re-enter layout
- * session operations. Such re-entry returns NKUI_ERROR_INVALID_ARGUMENT.
- */
-typedef nkui_layout_measure_result(NK_CALL *nkui_layout_measure_callback)(
-    uint32_t node_id, nkui_layout_measure_constraints constraints, void *NK_NULLABLE user_data);
-typedef nkui_layout_measure_callback NK_NULLABLE nkui_nullable_layout_measure_callback;
-
 /** Creates a private layout session. */
 NKUI_API nkui_result NK_CALL nkui_layout_session_create(nkui_layout_session *out_session NKUI_OUT);
 
@@ -409,18 +389,21 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_set_font_collection(nkui_layout
                                                                      nkui_resource fonts);
 
 /**
- * Installs or removes the synchronous intrinsic measurer for custom-visual
- * nodes. The callback is invoked during submit on the submitting thread. Its
- * user data is borrowed and the callback must be detached before its Haxe/C
- * callback handle is closed.
+ * Sets the geometry the framework laid the next submit's tree out with (ADR 0009): one
+ * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES record for every node of the tree after that submit, in any order. It stays until
+ * it is set again, so every submit that changes geometry sets it first.
  */
-NKUI_API nkui_result NK_CALL nkui_layout_session_set_measure_callback(
-    nkui_layout_session session, nkui_nullable_layout_measure_callback callback NK_RETAINED,
-    void *NK_NULLABLE user_data);
+NKUI_API nkui_result NK_CALL nkui_layout_session_set_geometry(
+    nkui_layout_session session, const uint8_t *geometry NKUI_IN_ARRAY(geometry_bytes), uint32_t geometry_bytes);
 
-/** Returns cumulative intrinsic-measure counters and current cache occupancy. */
-NKUI_API nkui_result NK_CALL nkui_layout_session_get_measure_stats(
-    nkui_layout_session session, nkui_layout_measure_stats *out_stats NKUI_OUT);
+/**
+ * Measures `text` with the session's fonts: unwrapped when `width` is zero, else laid out at `width`. Laying it out at
+ * the width its node is given also shapes it for that node's next submit.
+ */
+NKUI_API nkui_result NK_CALL nkui_layout_session_measure_text(
+    nkui_layout_session session, const char *text NKUI_NULLABLE_UTF8, float width,
+    const nkui_text_style *text_style, const nkui_paragraph_style *paragraph_style,
+    nkui_layout_text_measure *out_measure NKUI_OUT);
 
 /** Returns cumulative geometric hit-test counters for the session. */
 NKUI_API nkui_result NK_CALL nkui_layout_session_get_hit_test_stats(

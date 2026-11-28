@@ -1,4 +1,5 @@
 #include "nativekit_ui_layout.h"
+#include "fixture_geometry.h"
 
 #include <cmath>
 #include <cstring>
@@ -180,7 +181,11 @@ bool incremental(nkui_resource fonts) {
         nkui_layout_session_set_font_collection(reference, fonts) != NKUI_OK) return false;
     nkui_layout_frame_input frame{sizeof(frame), 256, 192, 0};
     auto full = transaction_with_nodes(1201);
-    const auto submit = [&](nkui_layout_session target, const std::vector<uint8_t> &bytes) {
+    // A patch's geometry is the whole tree's after it, which `full` mirrors.
+    const auto submit = [&](nkui_layout_session target, const std::vector<uint8_t> &bytes) -> nkui_result {
+        const auto placed = fixture::geometry(full.data(), frame.width, frame.height);
+        if (nkui_layout_session_set_geometry(target, placed.data(), static_cast<uint32_t>(placed.size())) != NKUI_OK)
+            return NKUI_ERROR_INVALID_ARGUMENT;
         return nkui_layout_session_submit(target, bytes.data(), static_cast<uint32_t>(bytes.size()), &frame);
     };
     const auto matches = [&] {
@@ -267,32 +272,6 @@ bool incremental(nkui_resource fonts) {
     return nkui_layout_session_destroy(session) == NKUI_OK && nkui_layout_session_destroy(reference) == NKUI_OK;
 }
 
-struct MeasureState {
-    uint32_t calls = 0;
-    nkui_layout_session session{};
-    nkui_result reentrant_stats = NKUI_OK;
-    nkui_result unrelated_list = NKUI_ERROR_OUT_OF_MEMORY;
-};
-
-nkui_layout_measure_result measure_custom_node(uint32_t node_id,
-                                               nkui_layout_measure_constraints constraints,
-                                               void *user_data) {
-    auto *state = static_cast<MeasureState *>(user_data);
-    if (state) {
-        ++state->calls;
-        nkui_layout_measure_stats stats{sizeof(stats)};
-        state->reentrant_stats = nkui_layout_session_get_measure_stats(state->session, &stats);
-        nkui_display_list list{};
-        state->unrelated_list = nkui_display_list_create(&list);
-        if (state->unrelated_list == NKUI_OK)
-            state->unrelated_list = nkui_display_list_destroy(list);
-    }
-    if (node_id != 2)
-        return {sizeof(nkui_layout_measure_result), 0.0f, 0.0f, 0.0f, 0};
-    return {sizeof(nkui_layout_measure_result), 48.0f, 20.0f, 15.0f,
-            NKUI_LAYOUT_MEASURE_HAS_BASELINE};
-}
-
 } // namespace
 
 int main() {
@@ -310,12 +289,6 @@ int main() {
 
     if (!incremental(fonts)) { std::cerr << "incremental transaction regression\n"; return 90; }
 
-    MeasureState measure_state;
-    measure_state.session = session;
-    if (nkui_layout_session_set_measure_callback(session, measure_custom_node, &measure_state) !=
-        NKUI_OK)
-        return 43;
-
     const auto bytes = transaction();
     nkui_layout_frame_input frame{sizeof(frame), 256.0f, 192.0f, 1.0f / 60.0f};
     uint32_t resolved_bytes = 0;
@@ -323,7 +296,7 @@ int main() {
         NKUI_ERROR_INVALID_ARGUMENT)
         return 12;
     const nkui_result initial_status =
-        nkui_layout_session_submit(session, bytes.data(), bytes.size(), &frame);
+        fixture::submit(session, bytes.data(), bytes.size(), &frame);
     if (initial_status != NKUI_OK) {
         std::cerr << "initial submit failed: " << initial_status << "\n";
         return 4;
@@ -375,7 +348,7 @@ int main() {
     const std::size_t hidden_panel_record =
         NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
     write_u32(hidden_hit, hidden_panel_record + NKUI_LAYOUT_NODE_FLAGS_OFFSET, 0);
-    if (nkui_layout_session_submit(session, hidden_hit.data(), hidden_hit.size(), &frame) !=
+    if (fixture::submit(session, hidden_hit.data(), hidden_hit.size(), &frame) !=
             NKUI_OK ||
         nkui_layout_session_hit_test(session, 150.0f, 75.0f, nullptr, &hit_bytes) != NKUI_OK ||
         hit_bytes != sizeof(uint32_t))
@@ -397,44 +370,13 @@ int main() {
     write_u32(constraints, constraints_record + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET,
               NKUI_LAYOUT_SIZING_FIXED);
     write_float(constraints, constraints_record + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 30.0f);
-    if (nkui_layout_session_submit(session, constraints.data(), constraints.size(), &frame) !=
-            NKUI_OK ||
-        nkui_layout_session_get_resolved_items(session, nullptr, &resolved_bytes) != NKUI_OK)
-        return 27;
-    std::vector<uint8_t> constraints_resolved(resolved_bytes);
-    if (nkui_layout_session_get_resolved_items(session, constraints_resolved.data(),
-                                               &resolved_bytes) != NKUI_OK)
-        return 28;
-    nkui_layout_item constrained_item{};
-    std::memcpy(&constrained_item, constraints_resolved.data() + sizeof(nkui_layout_item),
-                sizeof(constrained_item));
-    if (constrained_item.width < 40.0f || constrained_item.width > 80.0f ||
-        constrained_item.height != 30.0f)
-        return 29;
 
-    write_u32(constraints, constraints_record + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET,
-              NKUI_LAYOUT_SIZING_FIXED);
+    write_u32(constraints, constraints_record + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, NKUI_LAYOUT_SIZING_FIXED);
     write_float(constraints, constraints_record + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 80.0f);
-    write_float(constraints, constraints_record + NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET, 0.0f);
-    write_float(constraints, constraints_record + NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET, 0.0f);
-    write_u32(constraints, constraints_record + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET,
-              NKUI_LAYOUT_SIZING_FIT);
-    write_float(constraints, constraints_record + NKUI_LAYOUT_NODE_ASPECT_RATIO_OFFSET, 2.0f);
-    if (nkui_layout_session_submit(session, constraints.data(), constraints.size(), &frame) !=
-            NKUI_OK ||
-        nkui_layout_session_get_resolved_items(session, constraints_resolved.data(),
-                                               &resolved_bytes) != NKUI_OK)
-        return 30;
-    std::memcpy(&constrained_item, constraints_resolved.data() + sizeof(nkui_layout_item),
-                sizeof(constrained_item));
-    if (std::abs(constrained_item.width - 80.0f) > 0.01f ||
-        std::abs(constrained_item.height - 40.0f) > 0.01f)
-        return 31;
-
     auto invalid_constraints = constraints;
     write_float(invalid_constraints, constraints_record + NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET, 79.0f);
     write_float(invalid_constraints, constraints_record + NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET, 80.0f);
-    if (nkui_layout_session_submit(session, invalid_constraints.data(), invalid_constraints.size(),
+    if (fixture::submit(session, invalid_constraints.data(), invalid_constraints.size(),
                                    &frame) != NKUI_ERROR_INVALID_TRANSACTION)
         return 32;
 
@@ -443,12 +385,12 @@ int main() {
               NKUI_LAYOUT_SIZING_GROW);
     write_float(invalid_weight, constraints_record + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET,
                 0.0f);
-    if (nkui_layout_session_submit(session, invalid_weight.data(), invalid_weight.size(), &frame) !=
+    if (fixture::submit(session, invalid_weight.data(), invalid_weight.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 33;
     write_float(invalid_weight, constraints_record + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET,
                 NAN);
-    if (nkui_layout_session_submit(session, invalid_weight.data(), invalid_weight.size(), &frame) !=
+    if (fixture::submit(session, invalid_weight.data(), invalid_weight.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 34;
 
@@ -459,12 +401,9 @@ int main() {
         NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
     write_u32(custom_tree, custom_record + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET,
               NKUI_LAYOUT_VISUAL_CUSTOM);
-    if (nkui_layout_session_submit(session, custom_tree.data(), custom_tree.size(), &frame) !=
+    if (fixture::submit(session, custom_tree.data(), custom_tree.size(), &frame) !=
         NKUI_OK)
         return 24;
-    if (measure_state.calls == 0 || measure_state.reentrant_stats != NKUI_ERROR_INVALID_ARGUMENT ||
-        measure_state.unrelated_list != NKUI_OK)
-        return 41;
     nkui_display_list custom_list{};
     if (nkui_display_list_create(&custom_list) != NKUI_OK ||
         nkui_layout_session_set_custom_paint(session, 2, custom_list) != NKUI_OK ||
@@ -480,7 +419,7 @@ int main() {
 
     if (nkui_display_list_create(&custom_list) != NKUI_OK ||
         nkui_layout_session_set_custom_paint(session, 2, custom_list) != NKUI_OK ||
-        nkui_layout_session_submit(session, bytes.data(), bytes.size(), &frame) != NKUI_OK ||
+        fixture::submit(session, bytes.data(), bytes.size(), &frame) != NKUI_OK ||
         nkui_display_list_destroy(custom_list) != NKUI_OK)
         return 26;
     if (nkui_layout_session_get_resolved_items(session, nullptr, &resolved_bytes) != NKUI_OK ||
@@ -510,14 +449,14 @@ int main() {
         return 10;
     uint32_t undersized_bytes = 1;
     if (nkui_layout_session_get_resolved_items(session, resolved.data(), &undersized_bytes) !=
-            NKUI_ERROR_INVALID_ARGUMENT ||
+            NKUI_ERROR_BUFFER_TOO_SMALL ||
         undersized_bytes != resolved.size())
         return 11;
 
     constexpr uint32_t large_node_count = 2000;
     const auto large = transaction_with_nodes(large_node_count);
     if (large.size() > NKUI_LAYOUT_MAX_TRANSACTION_BYTES ||
-        nkui_layout_session_submit(session, large.data(), static_cast<uint32_t>(large.size()),
+        fixture::submit(session, large.data(), static_cast<uint32_t>(large.size()),
                                    &frame) != NKUI_OK)
         return 20;
     uint32_t large_resolved_bytes = 0;
@@ -529,73 +468,14 @@ int main() {
     if (nkui_layout_session_get_resolved_items(session, large_resolved.data(),
                                                &large_resolved_bytes) != NKUI_OK)
         return 22;
-    if (nkui_layout_session_submit(session, large.data(), NKUI_LAYOUT_MAX_TRANSACTION_BYTES + 1u,
+    if (fixture::submit(session, large.data(), NKUI_LAYOUT_MAX_TRANSACTION_BYTES + 1u,
                                    &frame) != NKUI_ERROR_INVALID_TRANSACTION)
         return 23;
 
-    auto centered = bytes;
-    const std::size_t panel_record =
-        NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
-    write_u32(centered, panel_record + NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
-              NKUI_LAYOUT_ALIGNMENT_X_CENTER | (NKUI_LAYOUT_ALIGNMENT_Y_CENTER << 8));
-    write_u32(centered, panel_record + NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET,
-              NKUI_LAYOUT_DISTRIBUTION_CENTER);
-    if (nkui_layout_session_submit(session, centered.data(), centered.size(), &frame) != NKUI_OK ||
-        nkui_layout_session_get_resolved_items(session, resolved.data(), &resolved_bytes) !=
-            NKUI_OK)
-        return 16;
-    std::memcpy(&button_item, resolved.data() + sizeof(root_item), sizeof(button_item));
-    std::memcpy(&text_item, resolved.data() + 2 * sizeof(root_item), sizeof(text_item));
-    if (std::abs(text_item.x - (button_item.x + (button_item.width - text_item.width) * 0.5f)) >
-            0.01f ||
-        std::abs(text_item.y - (button_item.y + (button_item.height - text_item.height) * 0.5f)) >
-            0.01f)
-        return 17;
-
-    measure_state.calls = 0;
-    auto measured = transaction_with_nodes(2);
-    const std::size_t measured_record =
-        NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
-    write_u32(measured, measured_record + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET,
-              NKUI_LAYOUT_VISUAL_CUSTOM);
-    write_u32(measured, measured_record + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET,
-              NKUI_LAYOUT_SIZING_FIT);
-    write_u32(measured, measured_record + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET,
-              NKUI_LAYOUT_SIZING_FIT);
-    if (nkui_layout_session_submit(session, measured.data(), measured.size(), &frame) != NKUI_OK ||
-        measure_state.calls != 1 ||
-        nkui_layout_session_get_resolved_items(session, nullptr, &resolved_bytes) != NKUI_OK)
-        return 44;
-    std::vector<uint8_t> measured_resolved(resolved_bytes);
-    if (nkui_layout_session_get_resolved_items(session, measured_resolved.data(),
-                                               &resolved_bytes) != NKUI_OK)
-        return 45;
-    std::memcpy(&button_item, measured_resolved.data() + sizeof(root_item), sizeof(button_item));
-    if (button_item.width != 48.0f || button_item.height != 20.0f ||
-        !(button_item.flags & NKUI_LAYOUT_RESOLVED_HAS_BASELINE) ||
-        std::abs(button_item.baseline - 15.0f) > 0.01f)
-        return 46;
-    if (nkui_layout_session_submit(session, measured.data(), measured.size(), &frame) != NKUI_OK ||
-        measure_state.calls != 1)
-        return 47;
-    nkui_layout_measure_stats measure_stats{};
-    if (nkui_layout_session_get_measure_stats(session, &measure_stats) != NKUI_OK ||
-        measure_stats.struct_size != sizeof(measure_stats) || measure_stats.requests < 2 ||
-        measure_stats.cache_hits == 0 || measure_stats.cache_misses == 0 ||
-        measure_stats.callback_calls < measure_state.calls || measure_stats.cache_entries == 0 ||
-        measure_stats.cache_capacity < measure_stats.cache_entries)
-        return 50;
-    write_u32(measured, measured_record + NKUI_LAYOUT_NODE_MEASURE_VERSION_OFFSET, 1);
-    if (nkui_layout_session_submit(session, measured.data(), measured.size(), &frame) != NKUI_OK ||
-        measure_state.calls != 2)
-        return 49;
-    if (nkui_layout_session_get_measure_stats(session, &measure_stats) != NKUI_OK ||
-        measure_stats.cache_misses < 2 || measure_stats.callback_calls < measure_state.calls)
-        return 51;
-    if (nkui_layout_session_set_measure_callback(session, nullptr, nullptr) != NKUI_OK)
-        return 48;
     resolved_bytes = static_cast<uint32_t>(resolved.size());
 
+    const std::size_t panel_record =
+        NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
     auto floating = bytes;
     const std::size_t text_record =
         NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + 2 * NKUI_LAYOUT_NODE_RECORD_BYTES;
@@ -605,7 +485,7 @@ int main() {
     write_float(floating, text_record + NKUI_LAYOUT_NODE_POSITION_X_OFFSET, 20.0f);
     write_float(floating, text_record + NKUI_LAYOUT_NODE_POSITION_Y_OFFSET, 10.0f);
     write_i32(floating, text_record + NKUI_LAYOUT_NODE_Z_INDEX_OFFSET, 9);
-    if (nkui_layout_session_submit(session, floating.data(), floating.size(), &frame) != NKUI_OK ||
+    if (fixture::submit(session, floating.data(), floating.size(), &frame) != NKUI_OK ||
         nkui_layout_session_get_resolved_items(session, resolved.data(), &resolved_bytes) !=
             NKUI_OK)
         return 18;
@@ -619,11 +499,11 @@ int main() {
     auto overlay_transaction = floating;
     write_u32(overlay_transaction, text_record + NKUI_LAYOUT_NODE_FLAGS_OFFSET,
               NKUI_LAYOUT_NODE_VISIBLE | NKUI_LAYOUT_NODE_FLOATING | NKUI_LAYOUT_NODE_OVERLAY);
-    if (nkui_layout_session_submit(session, overlay_transaction.data(), overlay_transaction.size(), &frame) != NKUI_OK)
+    if (fixture::submit(session, overlay_transaction.data(), overlay_transaction.size(), &frame) != NKUI_OK)
         return 90;
     write_u32(overlay_transaction, text_record + NKUI_LAYOUT_NODE_FLAGS_OFFSET,
               NKUI_LAYOUT_NODE_VISIBLE | NKUI_LAYOUT_NODE_OVERLAY);
-    if (nkui_layout_session_submit(session, overlay_transaction.data(), overlay_transaction.size(), &frame) != NKUI_ERROR_INVALID_TRANSACTION)
+    if (fixture::submit(session, overlay_transaction.data(), overlay_transaction.size(), &frame) != NKUI_ERROR_INVALID_TRANSACTION)
         return 91;
 
     auto baseline = bytes;
@@ -631,7 +511,7 @@ int main() {
               NKUI_LAYOUT_DIRECTION_LEFT_TO_RIGHT);
     write_u32(baseline, panel_record + NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
               NKUI_LAYOUT_ALIGNMENT_X_CENTER | (NKUI_LAYOUT_ALIGNMENT_Y_BASELINE << 8));
-    if (nkui_layout_session_submit(session, baseline.data(), baseline.size(), &frame) != NKUI_OK)
+    if (fixture::submit(session, baseline.data(), baseline.size(), &frame) != NKUI_OK)
         return 36;
 
     auto wrapped = bytes;
@@ -642,12 +522,12 @@ int main() {
     write_float(wrapped, panel_record + NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET, 4.25f);
     write_u32(wrapped, panel_record + NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET,
               NKUI_LAYOUT_SELF_ALIGNMENT_CENTER);
-    if (nkui_layout_session_submit(session, wrapped.data(), wrapped.size(), &frame) != NKUI_OK)
+    if (fixture::submit(session, wrapped.data(), wrapped.size(), &frame) != NKUI_OK)
         return 38;
 
     auto hidden = bytes;
     write_u32(hidden, panel_record + NKUI_LAYOUT_NODE_FLAGS_OFFSET, 0);
-    if (nkui_layout_session_submit(session, hidden.data(), hidden.size(), &frame) != NKUI_OK ||
+    if (fixture::submit(session, hidden.data(), hidden.size(), &frame) != NKUI_OK ||
         nkui_layout_session_get_resolved_items(session, resolved.data(), &resolved_bytes) !=
             NKUI_OK)
         return 14;
@@ -659,37 +539,37 @@ int main() {
 
     auto invalid = bytes;
     write_u32(invalid, 0, NKUI_LAYOUT_TRANSACTION_VERSION + 1);
-    if (nkui_layout_session_submit(session, invalid.data(), invalid.size(), &frame) !=
+    if (fixture::submit(session, invalid.data(), invalid.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 8;
     invalid = bytes;
     write_u32(invalid, panel_record + NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
               (NKUI_LAYOUT_ALIGNMENT_X_CENTER + 1u) | (NKUI_LAYOUT_ALIGNMENT_Y_CENTER << 8));
-    if (nkui_layout_session_submit(session, invalid.data(), invalid.size(), &frame) !=
+    if (fixture::submit(session, invalid.data(), invalid.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 13;
     invalid = bytes;
     write_u32(invalid, panel_record + NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
               NKUI_LAYOUT_ALIGNMENT_X_CENTER | ((NKUI_LAYOUT_ALIGNMENT_Y_BASELINE + 1u) << 8));
-    if (nkui_layout_session_submit(session, invalid.data(), invalid.size(), &frame) !=
+    if (fixture::submit(session, invalid.data(), invalid.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 37;
     invalid = bytes;
     write_u32(invalid, panel_record + NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET,
               NKUI_LAYOUT_DISTRIBUTION_SPACE_EVENLY + 1u);
-    if (nkui_layout_session_submit(session, invalid.data(), invalid.size(), &frame) !=
+    if (fixture::submit(session, invalid.data(), invalid.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 35;
     invalid = bytes;
     write_u32(invalid, panel_record + NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET,
               NKUI_LAYOUT_WRAP_WRAP + 1u);
-    if (nkui_layout_session_submit(session, invalid.data(), invalid.size(), &frame) !=
+    if (fixture::submit(session, invalid.data(), invalid.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 39;
     invalid = bytes;
     write_u32(invalid, panel_record + NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET,
               NKUI_LAYOUT_SELF_ALIGNMENT_BASELINE + 1u);
-    if (nkui_layout_session_submit(session, invalid.data(), invalid.size(), &frame) !=
+    if (fixture::submit(session, invalid.data(), invalid.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 40;
     if (nkui_layout_session_destroy(session) != NKUI_OK ||

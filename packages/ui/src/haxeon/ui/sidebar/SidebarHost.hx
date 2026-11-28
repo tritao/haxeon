@@ -49,8 +49,8 @@ class SidebarHost implements View {
 		style.height = LayoutAxis.grow();
 		style.clipHorizontal = true;
 		// The tab stack must shrink its page to the available height. Vertical
-		// clipping here makes Clay treat the whole stack as scroll content and
-		// leaves the page at its intrinsic height instead of sizing its viewport.
+		// clipping here would make the whole stack scroll content and leave
+		// the page at its intrinsic height instead of sizing its viewport.
 		// Each destination owns its vertical clipping and scrolling.
 		var tabs = new Tabs(key, items, selected.id, onSelect, style, selectionMode: TabsSelectionMode.Controlled,
 			headerTrailing: headerActions == null ? null : headerActions(selected.id));

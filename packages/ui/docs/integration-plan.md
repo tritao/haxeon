@@ -13,16 +13,17 @@ NativeUI owns layout, text, and rendering mechanics. It does not own widgets,
 input routing, focus, scrolling policy, accessibility semantics, or retained
 interaction state. NativeKit provides raw input, IME, clipboard, platform
 accessibility, and graphics surfaces; Haxe owns the UI framework, state, and
-interaction policy. Clay, Skribidi, NanoVG, and Sokol remain private.
+interaction policy. Skribidi, NanoVG, and Sokol remain private. Since ADR 0009
+Haxe also owns layout: it solves the tree and hands NativeKit each node's bounds.
 
-The first private layout slice is implemented in `src/layout/`. It pins Clay
-behind a NativeKit-owned `LayoutEngine`, measures text through Skribidi, and
-produces NativeKit-owned geometry and rendering primitives. The Haxe-facing
+The scene builder is implemented in `src/layout/`. It takes the geometry Haxe
+solved, shapes text through Skribidi at the widths it was given, and produces
+NativeKit-owned resolved items and rendering primitives. The Haxe-facing
 layout bridge uses a versioned, validated batch render-tree transaction; the
 resolved geometry for all submitted nodes returns in one snapshot, including
 inherited clipping, visibility, affine transforms, baselines, and child content
-extents. Clipped subtrees currently require axis-aligned transforms. Clay and
-Skribidi remain private implementation details.
+extents. Clipped subtrees currently require axis-aligned transforms. Skribidi
+remains a private implementation detail.
 
 An interactive frame flows through these stages:
 
@@ -61,8 +62,8 @@ authority, and ordinary images bypass NanoVG entirely.
    font candidates, size, weight, spacing, alignment, and spans. Return stable
    internal layout IDs plus width, height, and baseline metrics.
 4. Make intrinsic measurement and paragraph layout callbacks of box layout.
-   Skribidi returns line records and an opaque text-layout ID; Clay only
-   consumes the resulting line dimensions and forwards the ID/line index.
+   Skribidi returns line records and an opaque text-layout ID; the scene builder
+   places the lines and forwards the ID/line index.
    Cache by text/style/font generation/width/scale so repeated layout passes do
    not reshape text.
 5. Translate Skribidi glyph atlas creation and dirty rectangles into Sokol
@@ -85,8 +86,8 @@ passes on representative screens. Only optimize after those numbers exist.
 
 ## Stage 4: layout and resolved geometry
 
-The private Clay adapter provides intrinsic measurement and external paragraph
-layout through Skribidi. It returns layout geometry only. Haxe consumes a batch
+`nkui_layout_session_measure_text` measures text for the Haxe solver through
+Skribidi, and the scene builder shapes it at the solved widths. Haxe consumes a batch
 of resolved node bounds, clip/visibility data, transforms, baselines, and
 content extents to implement hit testing, scrolling, focus, and accessibility.
 The render compiler consumes the same snapshot and applies its transforms and

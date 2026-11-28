@@ -59,8 +59,6 @@ static_assert(sizeof(nkui_text_rect) == 5 * sizeof(uint32_t));
 static_assert(sizeof(nkui_text_style) == 4 * sizeof(uint32_t));
 static_assert(sizeof(nkui_paragraph_style) == 6 * sizeof(uint32_t));
 static_assert(sizeof(nkui_layout_frame_input) == 4 * sizeof(uint32_t));
-static_assert(sizeof(nkui_layout_measure_constraints) == 5 * sizeof(uint32_t));
-static_assert(sizeof(nkui_layout_measure_result) == 5 * sizeof(uint32_t));
 static_assert(sizeof(nkui_path_element) == 7 * sizeof(uint32_t));
 static_assert(sizeof(nkui_color) == 4 * sizeof(uint32_t));
 static_assert(sizeof(nkui_gradient_stop) == 5 * sizeof(uint32_t));
@@ -337,8 +335,8 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
     std::vector<uint32_t> hit_test_traversal_path;
     std::vector<uint32_t> hit_test_candidate_path;
     nkui_layout_hit_test_stats hit_test_stats{};
-    nkui_nullable_layout_measure_callback measure_callback = nullptr;
-    void *measure_user_data = nullptr;
+    /* The framework's geometry for the tree, set before each submit (ADR 0009). */
+    std::vector<nkui::LayoutPlacement> placements;
     bool fonts_configured = false;
     bool submitted = false;
     /* Counts the layout results this session has published; a render plan built from one snapshot stays valid until it
@@ -373,42 +371,6 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
     /* Hash of the snapshot the last submit produced; the epoch moves only when a submit changes it. */
     uint64_t snapshot_hash = 0;
 };
-
-thread_local LayoutSessionState *active_measure_session = nullptr;
-
-struct MeasureCallbackScope {
-    LayoutSessionState *previous = nullptr;
-
-    explicit MeasureCallbackScope(LayoutSessionState *session) : previous(active_measure_session) {
-        active_measure_session = session;
-    }
-
-    ~MeasureCallbackScope() { active_measure_session = previous; }
-};
-
-void configure_layout_measure_callback(LayoutSessionState &state) {
-    const auto callback = state.measure_callback;
-    void *const user_data = state.measure_user_data;
-    if (!callback) {
-        state.engine->set_measure_callback({});
-        return;
-    }
-    state.engine->set_measure_callback([callback, user_data, session = &state](
-                                           uint32_t node_id,
-                                           const nkui::LayoutMeasureConstraints &constraints) {
-        nkui_layout_measure_constraints native_constraints{};
-        native_constraints.struct_size = sizeof(native_constraints);
-        native_constraints.min_width = constraints.min_width;
-        native_constraints.max_width = constraints.max_width;
-        native_constraints.min_height = constraints.min_height;
-        native_constraints.max_height = constraints.max_height;
-        MeasureCallbackScope callback_scope(session);
-        const nkui_layout_measure_result measured =
-            callback(node_id, native_constraints, user_data);
-        return nkui::LayoutMeasureResult{measured.width, measured.height, measured.baseline,
-                                         (measured.flags & NKUI_LAYOUT_MEASURE_HAS_BASELINE) != 0};
-    });
-}
 
 struct LayoutSessionSlot {
     std::shared_ptr<LayoutSessionState> session;
@@ -2125,8 +2087,6 @@ extern "C" nkui_result nkui_layout_session_create(nkui_layout_session *out_sessi
 }
 
 extern "C" nkui_result nkui_layout_session_destroy(nkui_layout_session session) {
-    if (active_measure_session)
-        return NKUI_ERROR_INVALID_ARGUMENT;
     std::scoped_lock lock(layout_sessions_mutex, lists_mutex);
     const uint16_t slot_index = static_cast<uint16_t>(session.id);
     auto *state = resolve(session);
@@ -2143,8 +2103,6 @@ extern "C" nkui_result nkui_layout_session_destroy(nkui_layout_session session) 
 
 extern "C" nkui_result nkui_layout_session_set_font_collection(nkui_layout_session session,
                                                                nkui_resource fonts) {
-    if (active_measure_session)
-        return NKUI_ERROR_INVALID_ARGUMENT;
     std::scoped_lock lock(layout_sessions_mutex, resources_mutex);
     auto *state = resolve(session);
     auto *font_slot = resolve(fonts, nkui::ResourceKind::FontCollection);
@@ -2160,47 +2118,89 @@ extern "C" nkui_result nkui_layout_session_set_font_collection(nkui_layout_sessi
         state->compiler.set_font_collection(shared_fonts);
         ++state->render_epoch;
         state->reusable_plan = {};
-        configure_layout_measure_callback(*state);
         state->fonts_configured = true;
     }
     return NKUI_OK;
 }
 
-extern "C" nkui_result nkui_layout_session_set_measure_callback(
-    nkui_layout_session session, nkui_nullable_layout_measure_callback callback, void *user_data) {
-    if (active_measure_session)
+extern "C" nkui_result nkui_layout_session_set_geometry(nkui_layout_session session, const uint8_t *geometry,
+                                                       uint32_t geometry_bytes) {
+    if ((!geometry && geometry_bytes) || geometry_bytes % NKUI_LAYOUT_GEOMETRY_RECORD_BYTES)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(layout_sessions_mutex);
     auto *state = resolve(session);
     if (!state)
         return NKUI_ERROR_INVALID_HANDLE;
-    {
-        state->measure_callback = callback;
-        state->measure_user_data = callback ? user_data : nullptr;
-        configure_layout_measure_callback(*state);
+    std::lock_guard<std::mutex> session_lock(state->mutex);
+    const std::size_t count = geometry_bytes / NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
+    auto &placements = state->placements;
+    placements.resize(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        const std::size_t record = index * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
+        auto &placement = placements[index];
+        float baseline = 0.0f;
+        if (!read_u32(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET, placement.node_id) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_X_OFFSET, placement.bounds.x) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_Y_OFFSET, placement.bounds.y) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_WIDTH_OFFSET, placement.bounds.width) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_HEIGHT_OFFSET, placement.bounds.height) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_TEXT_X_OFFSET, placement.text_x) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_TEXT_Y_OFFSET, placement.text_y) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_TEXT_WIDTH_OFFSET, placement.text_width) ||
+            !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET, baseline)) {
+            placements.clear();
+            return NKUI_ERROR_INVALID_ARGUMENT;
+        }
+        placement.has_baseline = std::isfinite(baseline);
+        placement.baseline = placement.has_baseline ? baseline : 0.0f;
     }
     return NKUI_OK;
 }
 
-extern "C" nkui_result nkui_layout_session_get_measure_stats(nkui_layout_session session,
-                                                             nkui_layout_measure_stats *out_stats) {
-    if (!out_stats)
-        return NKUI_ERROR_INVALID_ARGUMENT;
-    if (active_measure_session)
+extern "C" nkui_result nkui_layout_session_measure_text(nkui_layout_session session, const char *text,
+                                                       float width, const nkui_text_style *text_style,
+                                                       const nkui_paragraph_style *paragraph_style,
+                                                       nkui_layout_text_measure *out_measure) {
+    nkui::TextLayoutOptions options;
+    if (!out_measure || !std::isfinite(width) || width < 0.0f ||
+        !text_options_from_api(text_style, paragraph_style, options))
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(layout_sessions_mutex);
     auto *state = resolve(session);
-    if (!state || !state->engine)
+    if (!state)
         return NKUI_ERROR_INVALID_HANDLE;
-    const auto stats = state->engine->measure_stats();
-    *out_stats = {};
-    out_stats->struct_size = sizeof(*out_stats);
-    out_stats->requests = stats.requests;
-    out_stats->cache_hits = stats.cache_hits;
-    out_stats->cache_misses = stats.cache_misses;
-    out_stats->callback_calls = stats.callback_calls;
-    out_stats->cache_entries = stats.cache_entries;
-    out_stats->cache_capacity = stats.cache_capacity;
+    std::lock_guard<std::mutex> session_lock(state->mutex);
+    auto *engine = state->engine->text_engine();
+    if (!engine)
+        return NKUI_ERROR_INVALID_HANDLE;
+    const char *value = text ? text : "";
+    nkui_layout_text_measure result{};
+    result.struct_size = sizeof(result);
+    const bool fixed_lines = options.line_height > 0.0f;
+    if (width == 0.0f) {
+        options.wrap = nkui::TextWrapMode::None;
+        nkui::TextIntrinsicMetrics metrics;
+        if (*value && !engine->measure_intrinsic_utf8(value, options, &metrics))
+            return NKUI_ERROR_INVALID_ARGUMENT;
+        // A requirement for the box, not ink bounds: rounded outwards, so padding cannot leave the text a fraction short.
+        result.width = *value ? std::ceil(metrics.bounds.width) : 0.0f;
+        result.height = fixed_lines ? options.line_height : (*value ? metrics.bounds.height : 0.0f);
+        result.has_baseline = *value && metrics.has_baseline && std::isfinite(metrics.baseline);
+        result.baseline = result.has_baseline ? metrics.baseline : 0.0f;
+    } else {
+        result.width = width;
+        result.height = fixed_lines ? options.line_height : 0.0f;
+        if (*value) {
+            nkui::TextLayoutResult shaped;
+            if (!engine->layout_utf8(value, width, options, &shaped) || shaped.id == 0)
+                return NKUI_ERROR_INVALID_ARGUMENT;
+            result.height = shaped.bounds.height;
+            const float baseline = engine->caret({0, 0}).y;
+            result.has_baseline = std::isfinite(baseline);
+            result.baseline = result.has_baseline ? baseline : 0.0f;
+        }
+    }
+    *out_measure = result;
     return NKUI_OK;
 }
 
@@ -2220,8 +2220,6 @@ nkui_layout_session_get_hit_test_stats(nkui_layout_session session,
 }
 
 extern "C" nkui_result nkui_layout_session_clear_custom_paints(nkui_layout_session session) {
-    if (active_measure_session)
-        return NKUI_ERROR_INVALID_ARGUMENT;
     std::scoped_lock lock(layout_sessions_mutex, lists_mutex);
     auto *state = resolve(session);
     if (!state)
@@ -2232,7 +2230,7 @@ extern "C" nkui_result nkui_layout_session_clear_custom_paints(nkui_layout_sessi
 
 extern "C" nkui_result
 nkui_layout_session_clear_custom_paint(nkui_layout_session session, uint32_t node_id) {
-    if (active_measure_session || !node_id)
+    if (!node_id)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::scoped_lock lock(layout_sessions_mutex, lists_mutex);
     auto *state = resolve(session);
@@ -2245,7 +2243,7 @@ nkui_layout_session_clear_custom_paint(nkui_layout_session session, uint32_t nod
 
 extern "C" nkui_result
 nkui_layout_session_clear_custom_paint_composite(nkui_layout_session session, uint32_t node_id) {
-    if (active_measure_session || !node_id)
+    if (!node_id)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::scoped_lock lock(layout_sessions_mutex, lists_mutex);
     auto *state = resolve(session);
@@ -2258,8 +2256,6 @@ nkui_layout_session_clear_custom_paint_composite(nkui_layout_session session, ui
 extern "C" nkui_result nkui_layout_session_set_custom_paint(nkui_layout_session session,
                                                             uint32_t node_id,
                                                             nkui_display_list display_list) {
-    if (active_measure_session)
-        return NKUI_ERROR_INVALID_ARGUMENT;
     if (!node_id || !display_list.id)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::scoped_lock lock(layout_sessions_mutex, lists_mutex);
@@ -2292,8 +2288,6 @@ extern "C" nkui_result nkui_layout_session_set_custom_paint(nkui_layout_session 
 
 extern "C" nkui_result nkui_layout_session_set_custom_paint_composite(
     nkui_layout_session session, uint32_t node_id, nkui_display_list display_list) {
-    if (active_measure_session)
-        return NKUI_ERROR_INVALID_ARGUMENT;
     if (!node_id || !display_list.id)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::scoped_lock lock(layout_sessions_mutex, lists_mutex);
@@ -2436,7 +2430,7 @@ void hit_test(const nkui::LayoutSnapshot &snapshot, float x, float y,
 extern "C" nkui_result
 nkui_layout_session_set_custom_paint_cache_policy(nkui_layout_session session, uint32_t node_id,
                                                   nkui_layout_cache_policy policy) {
-    if (active_measure_session || !node_id || policy > NKUI_LAYOUT_CACHE_RASTER)
+    if (!node_id || policy > NKUI_LAYOUT_CACHE_RASTER)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(layout_sessions_mutex);
     return set_cache_policy(resolve(session), node_id, policy, true);
@@ -2445,7 +2439,7 @@ nkui_layout_session_set_custom_paint_cache_policy(nkui_layout_session session, u
 extern "C" nkui_result nkui_layout_session_set_cache_policy(nkui_layout_session session,
                                                             uint32_t node_id,
                                                             nkui_layout_cache_policy policy) {
-    if (active_measure_session || !node_id || policy > NKUI_LAYOUT_CACHE_RASTER)
+    if (!node_id || policy > NKUI_LAYOUT_CACHE_RASTER)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(layout_sessions_mutex);
     return set_cache_policy(resolve(session), node_id, policy, false);
@@ -2742,8 +2736,6 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
                                                   const nkui_layout_frame_input *frame) {
     if (!frame || frame->struct_size < sizeof(*frame))
         return NKUI_ERROR_INVALID_ARGUMENT;
-    if (active_measure_session)
-        return NKUI_ERROR_INVALID_ARGUMENT;
     std::shared_ptr<LayoutSessionState> pinned_state;
     {
         std::lock_guard<std::mutex> lock(layout_sessions_mutex);
@@ -2775,7 +2767,7 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     }
     nkui::LayoutSnapshot snapshot;
     nkui::LayoutError error{};
-    if (!state->engine->layout(nodes, frame->width, frame->height, frame->delta_seconds, snapshot,
+    if (!state->engine->layout(nodes, state->placements, frame->width, frame->height, snapshot,
                                &error, &mutation.changes)) {
         std::fprintf(stderr, "UIKit layout rejected node %zu: %s\n", error.node_index,
                      error.message ? error.message : "unknown layout error");
@@ -2868,7 +2860,6 @@ extern "C" nkui_result nkui_layout_session_get_resolved_items(nkui_layout_sessio
 
 extern "C" nkui_result nkui_layout_session_verify_tree(nkui_layout_session session,
                                                        const uint8_t *transaction, uint32_t bytes) {
-    if (active_measure_session) return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(layout_sessions_mutex);
     auto *state = resolve(session);
     if (!state) return NKUI_ERROR_INVALID_HANDLE;
@@ -2913,7 +2904,7 @@ void update_resolved_records(LayoutSessionState &state) {
 
 extern "C" nkui_result nkui_layout_session_get_resolved_updates(nkui_layout_session session,
                                                                uint8_t *out_buffer, uint32_t *inout_bytes) {
-    if (!inout_bytes || active_measure_session) return NKUI_ERROR_INVALID_ARGUMENT;
+    if (!inout_bytes) return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(layout_sessions_mutex);
     auto *state = resolve(session);
     if (!state) return NKUI_ERROR_INVALID_HANDLE;

@@ -12,9 +12,9 @@ class TextEngine;
 class FontCollection;
 
 /**
- * Private NativeKit layout boundary. Clay and its types are deliberately
- * hidden in the implementation; callers submit NativeKit-owned nodes and
- * receive a NativeKit-owned layout snapshot.
+ * Builds a retained session's scene from nodes the framework has laid out (ADR 0009): resolves transforms, clips,
+ * content and hit bounds from their placements, shapes their text at the widths it was given, and emits the paint
+ * primitives in paint order.
  */
 class LayoutEngine {
   public:
@@ -33,18 +33,13 @@ class LayoutEngine {
                             FontFamily family = FontFamily::Default);
     bool add_system_fallbacks();
 
-    /** Installs a NativeKit-owned synchronous measurer for external content. */
-    void set_measure_callback(LayoutMeasureCallback callback);
-
-    /** Returns cumulative intrinsic-measure activity and current cache occupancy. */
-    LayoutMeasureStats measure_stats() const;
-
-    bool layout(const LayoutNodeView &nodes, float width, float height,
-                float delta_seconds, LayoutSnapshot &out, LayoutError *error = nullptr,
+    /** Builds `out` from `nodes`, each placed by the entry of `placements` with its ID, in a `width` by `height` viewport. */
+    bool layout(const LayoutNodeView &nodes, const std::vector<LayoutPlacement> &placements, float width,
+                float height, LayoutSnapshot &out, LayoutError *error = nullptr,
                 const LayoutInputChanges *changes = nullptr);
 
-    bool layout(const std::vector<LayoutNode> &nodes, float width, float height,
-                float delta_seconds, LayoutSnapshot &out, LayoutError *error = nullptr,
+    bool layout(const std::vector<LayoutNode> &nodes, const std::vector<LayoutPlacement> &placements,
+                float width, float height, LayoutSnapshot &out, LayoutError *error = nullptr,
                 const LayoutInputChanges *changes = nullptr);
 
   private:

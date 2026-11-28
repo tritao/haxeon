@@ -47,9 +47,6 @@ endif()
 option(NKUI_ENABLE_SECTION_GC
     "Compile UI code into discardable sections and garbage-collect unused sections"
     ON)
-option(NKUI_ENABLE_CLAY_DEBUG
-    "Keep Clay's internal debug view in the NativeKit UI build"
-    OFF)
 option(NKUI_ENABLE_BUDOUX
     "Enable Skribidi's language-specific BudouX word-break models"
     OFF)
@@ -63,7 +60,7 @@ add_library(nativekit_ui ${NK_LIBRARY_TYPE}
     src/compositor/compositor.cpp
     src/compositor/render_plan.cpp
     src/display_list/display_list.cpp
-    src/layout/clay_layout_backend.cpp
+    src/layout/layout_scene.cpp
     src/layout/layout_render_compiler.cpp
     src/prepare/nanovg_path.cpp
     src/prepare/text_engine.cpp
@@ -97,7 +94,6 @@ target_include_directories(nativekit_ui
         $<BUILD_INTERFACE:${NKUI_NATIVEKIT_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE src)
-target_include_directories(nativekit_ui PRIVATE "${NKUI_VENDOR_DIR}/clay")
 target_include_directories(nativekit_ui PRIVATE "${NKUI_VENDOR_DIR}/nanovg/src")
 target_include_directories(nativekit_ui PRIVATE "${NKUI_NATIVEKIT_DIR}/src")
 target_include_directories(nativekit_ui PRIVATE "${NKUI_NATIVEKIT_DIR}/modules/gpu/src")
@@ -119,9 +115,6 @@ elseif(APPLE)
     target_link_libraries(nativekit_ui PRIVATE "-framework CoreText" "-framework CoreFoundation")
 endif()
 target_compile_definitions(nativekit_ui PRIVATE NKUI_BUILDING_LIBRARY)
-if(NOT NKUI_ENABLE_CLAY_DEBUG)
-    target_compile_definitions(nativekit_ui PRIVATE CLAY_DISABLE_DEBUG)
-endif()
 if(NK_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(nativekit_ui PRIVATE
         -fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -276,68 +269,9 @@ if(NK_BUILD_TESTS)
     target_link_libraries(nativekit_ui_frame_resources_test PRIVATE
         nkui_nanovg_core NativeKit::nativekit)
     add_test(NAME nativekit_ui_frame_resources COMMAND nativekit_ui_frame_resources_test)
-    add_executable(nativekit_ui_layout_engine_test
-        tests/layout_engine.cpp
-        src/layout/clay_layout_backend.cpp
-        src/prepare/text_engine.cpp
-        src/prepare/system_fonts.cpp)
-    target_include_directories(nativekit_ui_layout_engine_test PRIVATE
-        src "${NKUI_VENDOR_DIR}/clay")
-    target_compile_definitions(nativekit_ui_layout_engine_test PRIVATE
-        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
-    target_link_libraries(nativekit_ui_layout_engine_test PRIVATE nkui_skribidi nkui_sheenbidi)
-    add_test(NAME nativekit_ui_layout_engine COMMAND nativekit_ui_layout_engine_test)
-    add_executable(nativekit_ui_clay_measure_element_test
-        "${NKUI_VENDOR_DIR}/clay/tests/measure_element.cpp")
-    target_compile_features(nativekit_ui_clay_measure_element_test PRIVATE cxx_std_20)
-    target_include_directories(nativekit_ui_clay_measure_element_test PRIVATE
-        "${NKUI_VENDOR_DIR}/clay")
-    add_test(NAME nativekit_ui_clay_measure_element
-        COMMAND nativekit_ui_clay_measure_element_test)
-    add_executable(nativekit_ui_clay_external_text_positions_test
-        "${NKUI_VENDOR_DIR}/clay/tests/external_text_positions.cpp")
-    target_compile_features(nativekit_ui_clay_external_text_positions_test PRIVATE cxx_std_20)
-    target_include_directories(nativekit_ui_clay_external_text_positions_test PRIVATE "${NKUI_VENDOR_DIR}/clay")
-    add_test(NAME nativekit_ui_clay_external_text_positions COMMAND nativekit_ui_clay_external_text_positions_test)
-    add_executable(nativekit_ui_clay_floating_order_test
-        "${NKUI_VENDOR_DIR}/clay/tests/floating_order.cpp")
-    target_compile_features(nativekit_ui_clay_floating_order_test PRIVATE cxx_std_20)
-    target_include_directories(nativekit_ui_clay_floating_order_test PRIVATE
-        "${NKUI_VENDOR_DIR}/clay")
-    add_test(NAME nativekit_ui_clay_floating_order
-        COMMAND nativekit_ui_clay_floating_order_test)
-    # Clay's public single-header interface must also remain valid C.
-    add_library(nativekit_ui_clay_c_compile OBJECT
-        "${NKUI_VENDOR_DIR}/clay/tests/c_compile.c")
-    target_compile_features(nativekit_ui_clay_c_compile PRIVATE c_std_11)
-    target_include_directories(nativekit_ui_clay_c_compile PRIVATE "${NKUI_VENDOR_DIR}/clay")
-    add_executable(nativekit_ui_clay_state_capacity_test
-        "${NKUI_VENDOR_DIR}/clay/tests/state_capacity.cpp")
-    target_compile_features(nativekit_ui_clay_state_capacity_test PRIVATE cxx_std_20)
-    target_include_directories(nativekit_ui_clay_state_capacity_test PRIVATE
-        "${NKUI_VENDOR_DIR}/clay")
-    add_test(NAME nativekit_ui_clay_state_capacity COMMAND nativekit_ui_clay_state_capacity_test)
-    add_executable(nativekit_ui_clay_layout_benchmark
-        "${NKUI_VENDOR_DIR}/clay/tests/layout_benchmark.cpp")
-    target_compile_features(nativekit_ui_clay_layout_benchmark PRIVATE cxx_std_20)
-    target_include_directories(nativekit_ui_clay_layout_benchmark PRIVATE
-        "${NKUI_VENDOR_DIR}/clay")
-    add_test(NAME nativekit_ui_clay_layout_benchmark
-        COMMAND nativekit_ui_clay_layout_benchmark)
-    add_executable(nativekit_ui_layout_invariants_test
-        tests/layout_invariants.cpp
-        src/layout/clay_layout_backend.cpp
-        src/prepare/text_engine.cpp
-        src/prepare/system_fonts.cpp)
-    target_include_directories(nativekit_ui_layout_invariants_test PRIVATE
-        src "${NKUI_VENDOR_DIR}/clay")
-    target_compile_definitions(nativekit_ui_layout_invariants_test PRIVATE
-        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
-    target_link_libraries(nativekit_ui_layout_invariants_test PRIVATE nkui_skribidi nkui_sheenbidi)
-    add_test(NAME nativekit_ui_layout_invariants COMMAND nativekit_ui_layout_invariants_test)
     add_executable(nativekit_ui_layout_render_compiler_test
         tests/layout_render_compiler.cpp
-        src/layout/clay_layout_backend.cpp
+        src/layout/layout_scene.cpp
         src/layout/layout_render_compiler.cpp
         src/display_list/display_list.cpp
         src/prepare/nanovg_path.cpp
@@ -349,26 +283,13 @@ if(NK_BUILD_TESTS)
     src/compositor/compositor.cpp
     src/compositor/render_plan.cpp)
     target_include_directories(nativekit_ui_layout_render_compiler_test PRIVATE
-        src "${NKUI_NATIVEKIT_DIR}/include" "${NKUI_NATIVEKIT_DIR}/modules/gpu/include"
-        "${NKUI_VENDOR_DIR}/clay")
+        src include "${NKUI_NATIVEKIT_DIR}/include" "${NKUI_NATIVEKIT_DIR}/modules/gpu/include")
     target_compile_definitions(nativekit_ui_layout_render_compiler_test PRIVATE
         NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
     target_link_libraries(nativekit_ui_layout_render_compiler_test PRIVATE
         nkui_nanovg_core nkui_skribidi nkui_sheenbidi NativeKit::nativekit)
     add_test(NAME nativekit_ui_layout_render_compiler
         COMMAND nativekit_ui_layout_render_compiler_test)
-    add_executable(nativekit_ui_layout_snapshot_index_test
-        tests/layout_snapshot_index.cpp
-        tests/linear_layout_engine.cpp
-        src/layout/clay_layout_backend.cpp
-        src/prepare/text_engine.cpp
-        src/prepare/system_fonts.cpp)
-    target_include_directories(nativekit_ui_layout_snapshot_index_test PRIVATE
-        src include "${NKUI_VENDOR_DIR}/clay")
-    target_compile_definitions(nativekit_ui_layout_snapshot_index_test PRIVATE
-        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
-    target_link_libraries(nativekit_ui_layout_snapshot_index_test PRIVATE nkui_skribidi nkui_sheenbidi NativeKit::nativekit)
-    add_test(NAME nativekit_ui_layout_snapshot_index COMMAND nativekit_ui_layout_snapshot_index_test)
     add_executable(nativekit_ui_layout_session_test
         tests/layout_session.cpp)
     target_compile_definitions(nativekit_ui_layout_session_test PRIVATE
@@ -479,11 +400,8 @@ if(NK_BUILD_TESTS)
         nativekit_ui_system_fonts_test
         nativekit_ui_compositor_test
         nativekit_ui_frame_resources_test
-        nativekit_ui_layout_engine_test
-        nativekit_ui_layout_invariants_test
         nativekit_ui_layout_render_compiler_test
         nativekit_ui_layout_session_test
-        nativekit_ui_layout_snapshot_index_test
         nativekit_ui_public_renderer_smoke_test
         nativekit_ui_path_cache_retention_test
         nativekit_ui_session_render_smoke_test)
@@ -493,11 +411,7 @@ if(NK_BUILD_TESTS)
     endforeach()
     if(NK_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         foreach(target IN ITEMS
-            nativekit_ui_clay_state_capacity_test
-            nativekit_ui_layout_engine_test
-            nativekit_ui_layout_invariants_test
-            nativekit_ui_layout_session_test
-            nativekit_ui_layout_snapshot_index_test)
+            nativekit_ui_layout_session_test)
             if(TARGET ${target})
                 target_compile_options(${target} PRIVATE
                     -fsanitize=address,undefined -fno-omit-frame-pointer)

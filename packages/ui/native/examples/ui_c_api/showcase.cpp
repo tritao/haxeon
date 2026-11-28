@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -825,6 +826,18 @@ struct WebShowcase {
                                                   float(target.height), 0.0f};
             const nkui_frame_info info{sizeof(info), layout.width, layout.height,
                                        target.width, target.height, 1.0f};
+            // A C host lays its tree out itself and gives the session each node's bounds.
+            std::array<uint8_t, count * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES> geometry{};
+            for (uint32_t index = 0; index < count; ++index) {
+                const uint32_t record = index * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
+                const float extent = index == 0 ? 64.0f : 128.0f;
+                const float values[] = {0.0f, 0.0f, extent, extent, 0.0f, 0.0f, 0.0f, NAN};
+                const uint32_t id = index + 1;
+                std::memcpy(geometry.data() + record + NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET, &id, sizeof(id));
+                std::memcpy(geometry.data() + record + NKUI_LAYOUT_GEOMETRY_X_OFFSET, values, sizeof(values));
+            }
+            if (nkui_layout_session_set_geometry(session, geometry.data(), geometry.size()) != NKUI_OK)
+                return false;
             const auto submitted = nkui_layout_session_submit(session, tree.data(), tree.size(), &layout);
             if (submitted != NKUI_OK) {
                 EM_ASM({ console.error("Shared frame layout submission", $0); }, submitted);

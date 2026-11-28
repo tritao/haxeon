@@ -3,6 +3,7 @@
 #include "nativekit_gpu.h"
 #include "nativekit_ui.h"
 #include "nativekit_ui_layout.h"
+#include "fixture_geometry.h"
 #include "nativekit_window.h"
 #include "surface_frame.h"
 
@@ -197,7 +198,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
         transaction(framebuffer_width / pixel_scale, framebuffer_height / pixel_scale);
     nkui_layout_frame_input frame{sizeof(frame), framebuffer_width / pixel_scale,
                                   framebuffer_height / pixel_scale, 1.0f / 60.0f};
-    const nkui_result submit_result = nkui_layout_session_submit(
+    const nkui_result submit_result = fixture::submit(
         session, bytes.data(), static_cast<uint32_t>(bytes.size()), &frame);
     if (submit_result != NKUI_OK) {
         std::fprintf(stderr, "session submit returned %d\n", static_cast<int>(submit_result));
@@ -262,7 +263,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
         const std::size_t root_record = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
         write_float(moved, root_record + NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET, 32.0f);
         write_float(moved, root_record + NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET, 16.0f);
-        if (nkui_layout_session_submit(session, moved.data(), static_cast<uint32_t>(moved.size()),
+        if (fixture::submit(session, moved.data(), static_cast<uint32_t>(moved.size()),
                                        &frame) != NKUI_OK ||
             nkui_layout_session_render_frame(renderer, session, surface, &frame_info, 0) !=
                 NKUI_OK ||
@@ -275,7 +276,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
     }
 
     if (!result &&
-        nkui_layout_session_submit(session, bytes.data(), static_cast<uint32_t>(bytes.size()),
+        fixture::submit(session, bytes.data(), static_cast<uint32_t>(bytes.size()),
                                    &frame) != NKUI_OK)
         result = 19;
 
@@ -373,7 +374,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
             if (nkui_display_list_submit(custom_list, custom_commands.data(),
                                          static_cast<uint32_t>(custom_commands.size())) !=
                     NKUI_OK ||
-                nkui_layout_session_submit(session, custom_tree.data(),
+                fixture::submit(session, custom_tree.data(),
                                            static_cast<uint32_t>(custom_tree.size()),
                                            &frame) != NKUI_OK ||
                 nkui_layout_session_set_custom_paint(session, 2, custom_list) != NKUI_OK ||
@@ -558,7 +559,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
                                                text_layout, 0.0f, 0.0f, 0.0f, 0.0f});
             if (nkui_display_list_submit(text_list, text_commands.data(),
                                          static_cast<uint32_t>(text_commands.size())) != NKUI_OK ||
-                nkui_layout_session_submit(session, text_tree.data(),
+                fixture::submit(session, text_tree.data(),
                                            static_cast<uint32_t>(text_tree.size()),
                                            &frame) != NKUI_OK ||
                 nkui_layout_session_set_custom_paint(session, 2, text_list) != NKUI_OK ||
@@ -983,7 +984,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
                                                 framebuffer_height / zoom, 0};
             const nkui_frame_info info{sizeof(info), framebuffer_width / zoom, framebuffer_height / zoom,
                                        framebuffer_width, framebuffer_height, zoom};
-            const auto submitted = nkui_layout_session_submit(session, tree.data(), tree.size(), &input);
+            const auto submitted = fixture::submit(session, tree.data(), tree.size(), &input);
             const auto painted = nkui_layout_session_set_custom_paint(session, 2, border_list);
             const auto composited = nkui_layout_session_set_custom_paint_composite(session, 2, composite_list);
             const auto rendered = nkui_layout_session_render_frame(renderer, session, surface, &info, 0);
@@ -1070,7 +1071,7 @@ static int run_composite_test(nk_window window, nk_surface surface, int width, i
             for (uint32_t node = 0; node < 2; ++node)
                 write_u32(tree, NKUI_LAYOUT_TRANSACTION_HEADER_BYTES +
                     node * NKUI_LAYOUT_NODE_RECORD_BYTES + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, tree.size());
-            if (nkui_layout_session_submit(session, tree.data(), tree.size(), &layout) != NKUI_OK ||
+            if (fixture::submit(session, tree.data(), tree.size(), &layout) != NKUI_OK ||
                 nkui_frame_step_layout(ui, session, frame, &info, 1, &steps[1]) != NKUI_OK)
                 return 113;
             if (fail_ui_step) {

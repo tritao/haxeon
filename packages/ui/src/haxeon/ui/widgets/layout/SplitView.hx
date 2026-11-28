@@ -332,9 +332,7 @@ class SplitView implements View {
 	}
 
 	static function extentAxis(paneExtent:Float):LayoutAxis {
-		// Clay's fixed-size representation treats zero as an open upper bound.
-		// Percent zero is the unambiguous collapsed extent.
-		return paneExtent <= 0.0 ? LayoutAxis.percent(0.0) : LayoutAxis.fixed(paneExtent);
+		return LayoutAxis.fixed(Math.max(0.0, paneExtent));
 	}
 
 	function bounded(value:Float):Float {

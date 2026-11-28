@@ -74,36 +74,29 @@ views. The same story IDs can be selected by interactive desktop hosts or
 deterministic screenshot runners, keeping component development and visual
 regression coverage on one definition.
 
-Clay, Skribidi, and NanoVG remain private implementation dependencies. Clay's
-custom render command carries the custom node identity and participates in its
-normal ordering. Haxe paint callbacks record one retained display list per
-custom node; the layout compiler inserts those commands at the matching marker
-so custom drawing shares the same transforms, clipping, and sibling order as
-boxes, text, and images. Clay remains pinned as a private dependency; this
-branch carries only small layout-kernel fixes intended to be upstreamable.
-
-UIKit disables Clay's persistent native scroll tracking: clipping remains active,
-while Haxe `ScrollController` owns offsets and input. Clipped labels therefore
-consume no Clay scroll records. Standalone Clay users retain native scrolling by
-default. Scroll/transition state capacities scale with the declared element
-capacity, including overlap between consecutive layouts. State exhaustion reports
-the table, capacity and element ID and rejects the frame without writing into a
-fallback record. Stale scroll records retire before scroll-target selection.
+Layout is solved in Haxe by `haxeon.ui.layout.LayoutSolver` (ADR 0009), and each submit hands
+NativeKit the bounds of every node and where its text goes. NativeKit builds the scene from them:
+transforms, clips, content and hit bounds, text shaped at the width it was given, and the paint
+primitives in paint order. Skribidi and NanoVG remain private implementation dependencies. Haxe
+paint callbacks record one retained display list per custom node; the layout compiler inserts those
+commands at the node's marker so custom drawing shares the same transforms, clipping, and sibling
+order as boxes, text, and images. `ScrollController` owns scroll offsets and input; layout only
+clips.
 
 The C layout bridge uses a versioned transaction with fixed node records of
 `NKUI_LAYOUT_NODE_RECORD_BYTES` bytes and a 16 MiB transaction bound. Node
 capacity grows with submitted data rather than imposing a small framework node
 limit. Resolved geometry is returned as one dynamically sized snapshot. The
 bridge validates record sizes, transaction bounds, text ranges, IDs, and
-geometry before replacing the submitted snapshot. FIT/GROW axes carry Clay's
-existing minimum and maximum constraints, and nodes can opt into Clay's
-existing aspect-ratio sizing with `aspectRatio`; NativeKit does not reimplement
-either rule.
+geometry before replacing the submitted snapshot. Geometry arrives beside it as
+`NKUI_LAYOUT_GEOMETRY_RECORD_BYTES` records from `nkui_layout_session_set_geometry`,
+and text is measured for layout with `nkui_layout_session_measure_text`, on the
+session's fonts.
 
 Custom nodes can provide intrinsic dimensions and an optional baseline through
-the synchronous measurement callback. NativeKit caches successful results by
-node ID, the node's application-defined measurement version, and the exact
-four-axis constraints; changing the version invalidates only that node's
+their `LayoutContent`, or the session's measure callback. The solver keeps each
+node's last measurements while the same content at the same version measures it
+with the same constraints; changing the version invalidates only that node's
 measurements. Haxe callers can use `LayoutNode.custom` with
 `LayoutMeasuredContent` for canvas, native-view, and editor surfaces, or
 `LayoutImageContent` for immutable image dimensions. For content that also
@@ -121,15 +114,15 @@ FIT/GROW axis policy, including `min`, `max`, and `growWeight`.
 GROW axes also accept a positive `growWeight`. Equal weights preserve the
 normal equal-share behavior; for example, `LayoutAxis.grow(0.0, 0.0, 4.0)`
 receives four times the unconstrained space of a sibling with weight `1.0`.
-Clay redistributes space when a weighted child reaches its maximum.
+Space a weighted child cannot take past its maximum goes to the other growing children.
 Main-axis free space is controlled with `LayoutStyle.childDistribution`, which
 supports start, center, end, space-between, space-around, and space-evenly.
 `childAlignX` and `childAlignY` now describe cross-axis alignment; distribution
 owns the axis selected by `direction`.
 `childAlignX` uses `LayoutAlignmentX` and `childAlignY` uses `LayoutAlignmentY`;
 `LayoutAlignmentY.Baseline` is available for `childAlignY` in horizontal rows;
-NativeKit aligns text baselines and explicitly bottom-aligns children without
-baseline metrics.
+the solver aligns text baselines and bottom-aligns children without baseline
+metrics.
 Set `LayoutStyle.wrapMode` to `LayoutWrapMode.Wrap` to flow children onto
 additional rows or columns. `rowGap` and `columnGap` keep the two axes
 unambiguous; wrapping distributes main-axis free space independently per line.
@@ -137,9 +130,8 @@ Set `LayoutStyle.alignSelf` to override the parent cross-axis alignment for an
 individual child; `LayoutSelfAlignment.Baseline` is meaningful in horizontal
 rows.
 
-The layout facade keeps Clay types private and uses its external paragraph
-layout callback: Skribidi provides shaping, bidirectional text, line breaks,
-and glyph atlases; Clay contributes box constraints and line placement.
+Skribidi provides shaping, bidirectional text, line breaks, and glyph atlases;
+the solver places each text block, and NativeKit shapes it at that width.
 `LayoutRenderCompiler` turns the resolved snapshot and attached custom paints
 into one ordered render plan. `UiRenderer` owns UI-specific drawing vocabulary
 such as paths, glyphs, images, and image composition, while NativeKit GPU owns
@@ -469,9 +461,7 @@ Set `NKUI_ENABLE_HARFBUZZ_MINI=OFF` when those font formats are required.
 Release builds also compile the private HarfBuzz copy with size-focused
 optimization by default; set `NKUI_ENABLE_HARFBUZZ_SIZE_OPTIMIZATION=OFF` when
 shaping throughput is preferred over binary size.
-NativeKit does not expose Clay's internal debug view, so it is excluded by
-default as well. Set `NKUI_ENABLE_CLAY_DEBUG=ON` when developing against that
-private Clay API. NativeKit also does not currently expose Skribidi language
+NativeKit does not currently expose Skribidi language
 attributes, so its embedded BudouX word-break models are excluded by default;
 set `NKUI_ENABLE_BUDOUX=ON` when integrating language-specific attributes
 through the private Skribidi path.

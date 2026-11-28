@@ -134,8 +134,8 @@ private class HitTestState {
 
 	function consider(owner:Null<RenderNode>, ownerOrder:Int, candidateOrder:Int):Void {
 		var layerZ:Int = cast layers.get(owner == null ? path[0].id.value : owner.id.value);
-		// Clay's base flow root is emitted before floating roots at the same
-		// z-index. Negative/positive z-index values still compare normally.
+		// The flow root paints before floating roots at the same z-index.
+		// Negative/positive z-index values still compare normally.
 		var layerKind = owner == null ? 0 : 1;
 		if (bestPath == null || layerZ > bestLayerZ
 			|| (layerZ == bestLayerZ && (layerKind > bestLayerKind || (layerKind == bestLayerKind && (ownerOrder

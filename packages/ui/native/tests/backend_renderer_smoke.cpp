@@ -4,6 +4,7 @@
 #include "nativekit_time.h"
 #include "nativekit_ui.h"
 #include "nativekit_ui_layout.h"
+#include "fixture_geometry.h"
 #include "nativekit_window.h"
 #include "adapter_internal.h"
 #include "core/executor.hpp"
@@ -333,7 +334,7 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
         write(node + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
         write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 160.0f);
         const nkui_layout_frame_input layout_frame{sizeof(layout_frame), 256.0f, 192.0f, 0.0f};
-        if (!check(nkui_layout_session_submit(session, transaction.data(),
+        if (!check(fixture::submit(session, transaction.data(),
                                               static_cast<uint32_t>(transaction.size()),
                                               &layout_frame) == NKUI_OK &&
                        nkui_layout_session_set_custom_paint(session, 1, list) == NKUI_OK,
@@ -533,7 +534,7 @@ bool check_plan_reuse(nk_window window, nk_surface surface) {
         write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 160.0f);
         const nkui_layout_frame_input layout_frame{sizeof(layout_frame), 256.0f, 192.0f, 0.0f};
         const auto submit_layout = [&]() {
-            return nkui_layout_session_submit(session, transaction.data(),
+            return fixture::submit(session, transaction.data(),
                                               static_cast<uint32_t>(transaction.size()),
                                               &layout_frame) == NKUI_OK;
         };

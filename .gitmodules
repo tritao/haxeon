@@ -19,10 +19,6 @@
 [submodule "packages/ui/vendor/budouxc"]
 	path = packages/ui/native/vendor/budouxc
 	url = https://github.com/memononen/budouxc.git
-[submodule "packages/ui/vendor/clay"]
-	path = packages/ui/native/vendor/clay
-	url = https://github.com/tritao/clay.git
-	branch = nativekit
 [submodule "packages/ui/vendor/harfbuzz"]
 	path = packages/ui/native/vendor/harfbuzz
 	url = https://github.com/harfbuzz/harfbuzz.git

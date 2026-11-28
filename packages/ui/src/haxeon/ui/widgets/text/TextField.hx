@@ -480,7 +480,7 @@ class TextField implements ScopeView {
 		if (showsPlaceholder) textNode.layout.text = placeholder;
 		else if (useTextNode) textNode.layout.text = editor.layoutText();
 		else {
-			// Clay orders absolute paint layers independently of flow content.
+			// Absolute nodes paint in their own layers, after flow content.
 			// Keep glyphs above decoration/selection layers, while a separate
 			// measurement-only node supplies their shared intrinsic size.
 			textNodeStyle.positioning = LayoutPositioning.Absolute;

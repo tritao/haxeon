@@ -129,6 +129,7 @@ class TextLayout extends NativeKitUIResource {
 		text = nextText;
 	}
 
+	@:allow(haxeon.ui.LayoutSession)
 	static function nativeTextStyle(style:TextStyle):nkui_text_style {
 		var result = new nkui_text_style();
 		result.set_family(style.font);
@@ -137,6 +138,7 @@ class TextLayout extends NativeKitUIResource {
 		return result;
 	}
 
+	@:allow(haxeon.ui.LayoutSession)
 	static function nativeParagraphStyle(style:ParagraphStyle):nkui_paragraph_style {
 		var result = new nkui_paragraph_style();
 		result.set_line_height(style.lineHeight == null ? 0.0 : style.lineHeight);

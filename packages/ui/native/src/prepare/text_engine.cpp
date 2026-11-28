@@ -82,6 +82,43 @@ struct TextEngine::State {
     uint64_t layout_use_sequence = 0;
     uint64_t line_revision_sequence = 0;
     std::unordered_map<TextLayoutId, std::unique_ptr<RetainedLayout>> layouts;
+    // The cached layouts by their text, styles and fonts, so a lookup compares a few candidates instead of every layout.
+    std::unordered_multimap<uint64_t, TextLayoutId> layout_index;
+
+    static uint64_t layout_key(const std::string &text, const TextLayoutOptions &options, uint64_t font_generation) {
+        uint64_t hash = 1469598103934665603ull;
+        const auto mix = [&](const void *data, std::size_t size) {
+            const auto *bytes = static_cast<const unsigned char *>(data);
+            for (std::size_t index = 0; index < size; ++index) {
+                hash ^= bytes[index];
+                hash *= 1099511628211ull;
+            }
+        };
+        mix(text.data(), text.size());
+        mix(&options.font_size, sizeof(options.font_size));
+        mix(&options.letter_spacing, sizeof(options.letter_spacing));
+        mix(&options.line_height, sizeof(options.line_height));
+        mix(&options.tab_width, sizeof(options.tab_width));
+        mix(&options.family, sizeof(options.family));
+        mix(&options.wrap, sizeof(options.wrap));
+        mix(&options.alignment, sizeof(options.alignment));
+        mix(&options.direction, sizeof(options.direction));
+        mix(&font_generation, sizeof(font_generation));
+        return hash;
+    }
+
+    void index_layout(TextLayoutId id, const RetainedLayout &layout) {
+        layout_index.emplace(layout_key(layout.text, layout.options, layout.font_generation), id);
+    }
+
+    void unindex_layout(TextLayoutId id, const RetainedLayout &layout) {
+        auto [first, last] = layout_index.equal_range(layout_key(layout.text, layout.options, layout.font_generation));
+        for (auto entry = first; entry != last; ++entry)
+            if (entry->second == id) {
+                layout_index.erase(entry);
+                return;
+            }
+    }
     // Intrinsic (unwrapped) measurements by text and style. Layout asks for every text node on every frame, and shaping
     // a paragraph to answer is most of the cost of a layout in which nothing changed. Invalidated with the fonts.
     std::unordered_map<std::string, TextIntrinsicMetrics> intrinsic_cache;
@@ -623,6 +660,7 @@ TextEngine::TextEngine(std::shared_ptr<FontCollection> fonts) : state_(new State
 
 TextEngine::~TextEngine() {
     state_->layouts.clear();
+    state_->layout_index.clear();
     if (state_->atlas)
         skb_image_atlas_destroy(state_->atlas);
     if (state_->rasterizer)
@@ -771,7 +809,14 @@ bool TextEngine::layout_utf8(const char *text, float width, const TextLayoutOpti
     }
     TextScratchScope scratch(state_->temporary);
     const uint64_t font_generation = state_->font_collection->generation();
-    for (auto &entry : state_->layouts) {
+    const std::string key_text(text);
+    auto [first_candidate, last_candidate] =
+        state_->layout_index.equal_range(State::layout_key(key_text, options, font_generation));
+    for (auto candidate = first_candidate; candidate != last_candidate; ++candidate) {
+        const auto found = state_->layouts.find(candidate->second);
+        if (found == state_->layouts.end())
+            continue;
+        auto &entry = *found;
         auto &cached = *entry.second;
         // A left-aligned, unwrapped LTR paragraph has no width-dependent glyph
         // positions. Keep its shaping when a splitter changes the containing
@@ -876,6 +921,7 @@ bool TextEngine::layout_utf8(const char *text, float width, const TextLayoutOpti
     state_->active_layout_id = layout_id;
     if (result)
         *result = retained->result;
+    state_->index_layout(layout_id, *retained);
     state_->layouts.emplace(layout_id, std::move(retained));
     ++state_->layout_builds;
     return true;
@@ -959,8 +1005,10 @@ bool TextEngine::edit_utf8(int32_t start, int32_t end, const char *replacement,
                                      start, end, replacement, -1), state_->font_collection);
     if (edited_layout) {
         current->layout = std::move(edited_layout);
+        state_->unindex_layout(state_->active_layout_id, *current);
         std::string previous_text = std::move(current->text);
         current->text = std::move(edited);
+        state_->index_layout(state_->active_layout_id, *current);
         current->last_used = ++state_->layout_use_sequence;
         auto &layout_result = current->result;
         const skb_rect2_t bounds = skb_layout_get_bounds(current->layout.get());
@@ -1064,8 +1112,10 @@ void TextEngine::prune_layout_cache(const std::vector<TextLayoutId> &retained_id
 
     for (auto entry = state_->layouts.begin(); entry != state_->layouts.end();) {
         if (entry->second->font_generation != font_generation &&
-            retained.find(entry->first) == retained.end())
+            retained.find(entry->first) == retained.end()) {
+            state_->unindex_layout(entry->first, *entry->second);
             entry = state_->layouts.erase(entry);
+        }
         else
             ++entry;
     }
@@ -1081,6 +1131,7 @@ void TextEngine::prune_layout_cache(const std::vector<TextLayoutId> &retained_id
         }
         if (oldest == state_->layouts.end())
             break;
+        state_->unindex_layout(oldest->first, *oldest->second);
         state_->layouts.erase(oldest);
     }
 }
