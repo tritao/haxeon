@@ -2139,6 +2139,7 @@ extern "C" nkui_result nkui_layout_session_set_geometry(nkui_layout_session sess
         const std::size_t record = index * NKUI_LAYOUT_GEOMETRY_RECORD_BYTES;
         auto &placement = placements[index];
         float baseline = 0.0f;
+        uint32_t flags = 0;
         if (!read_u32(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET, placement.node_id) ||
             !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_X_OFFSET, placement.bounds.x) ||
             !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_Y_OFFSET, placement.bounds.y) ||
@@ -2150,10 +2151,13 @@ extern "C" nkui_result nkui_layout_session_set_geometry(nkui_layout_session sess
             !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET, baseline) ||
             !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_SCROLL_X_OFFSET, placement.scroll_x) ||
             !read_float(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_SCROLL_Y_OFFSET, placement.scroll_y) ||
+            !read_u32(geometry, geometry_bytes, record + NKUI_LAYOUT_GEOMETRY_FLAGS_OFFSET, flags) ||
+            (flags & ~uint32_t{NKUI_LAYOUT_GEOMETRY_HIDDEN}) != 0 ||
             !std::isfinite(placement.scroll_x) || !std::isfinite(placement.scroll_y)) {
             placements.clear();
             return NKUI_ERROR_INVALID_ARGUMENT;
         }
+        placement.hidden = (flags & NKUI_LAYOUT_GEOMETRY_HIDDEN) != 0;
         placement.has_baseline = std::isfinite(baseline);
         placement.baseline = placement.has_baseline ? baseline : 0.0f;
     }

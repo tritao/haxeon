@@ -382,7 +382,7 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, const std::vector<L
         const LayoutTransform transform =
             compose(parent_transform, compose(translated(-node_placements[index]->scroll_x, -node_placements[index]->scroll_y),
                                               local_transform(node, node_bounds[index])));
-        const bool visible = parent_visible && node.style.visible;
+        const bool visible = parent_visible && node.style.visible && !node_placements[index]->hidden;
         const LayoutRect transformed = transform_bounds(node_bounds[index], transform);
         LayoutRect item_clip = parent_clip;
         if (node.style.positioning == LayoutPositioning::Absolute) {

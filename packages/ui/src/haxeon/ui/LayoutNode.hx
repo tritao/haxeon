@@ -41,6 +41,8 @@ class LayoutNode {
 	public var anchor:Null<LayoutAnchor>;
 	/** For a scroll container's content, the offset layout moves it by; null for any other node. */
 	public var scroll:Null<LayoutScroll>;
+	/** For an absolutely positioned node, what places it during layout instead of its position and sizes; or null. */
+	public var placer:Null<LayoutPlacer>;
 	/** Intrinsic input version. Sampled from an attached provider before submit; otherwise set by its caller. */
 	public var measureVersion:Int;
 	/** Paint/text revision consumed by native raster-cache identity. */
@@ -71,6 +73,7 @@ class LayoutNode {
 		intrinsicContent = null;
 		anchor = null;
 		scroll = null;
+		placer = null;
 		measureVersion = 0;
 		contentRevision = 0;
 		geometryRevision = 0;

@@ -6,6 +6,7 @@ import haxeon.ui.LayoutAnchor;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutContent;
 import haxeon.ui.LayoutNode;
+import haxeon.ui.LayoutPlacer;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
@@ -81,24 +82,20 @@ class LayoutSolver {
 			measureContent(box, -1.0);
 		}
 		var rootBox = boxes[0];
-		var index = count - 1;
-		while (index >= 0) fitAxis(index--, true);
-		rootBox.width = rootSize(root.style.width, rootBox.fitWidth, rootBox.minWidth, width);
-		for (index in 0...count) assignAxis(index, true);
-		for (index in 0...count) {
-			var box = boxes[index];
-			if (box.text != null) layoutText(box);
-			else if (box.measured && box.measuredWidth != box.width) measureContent(box, box.width);
-		}
-		index = count - 1;
-		while (index >= 0) fitAxis(index--, false);
-		rootBox.height = rootSize(root.style.height, rootBox.fitHeight, rootBox.minHeight, height);
-		for (index in 0...count) assignAxis(index, false);
-		index = count - 1;
-		while (index >= 0) arrange(index--);
+		layOut(0, -1.0, -1.0);
 		rootBox.x = 0.0;
 		rootBox.y = 0.0;
-		for (index in 0...count) place(index);
+		// Placed subtrees go after everything else, so their placers read scroll offsets settled anywhere in the tree.
+		placedLater.resize(0);
+		var index = 0;
+		while (index < count) {
+			var box = boxes[index];
+			if (index > 0 && box.node.placer != null && box.node.style.positioning == LayoutPositioning.Absolute) {
+				placedLater.push(index);
+				index += box.size;
+			} else place(index++);
+		}
+		for (first in placedLater) for (each in first...first + boxes[first].size) place(each);
 		solveSeconds = Sys.time() - started - textSeconds;
 	}
 
@@ -113,7 +110,7 @@ class LayoutSolver {
 			var box = boxes[index];
 			var style = box.node.style;
 			var parent = box.parent < 0 ? null : boxes[box.parent];
-			box.visible = (parent == null || parent.visible) && style.visible;
+			box.visible = (parent == null || parent.visible) && style.visible && !box.hidden;
 			// The inherited clip: the viewport at the root, the parent's clip for its children, and for a floating node
 			// the parent's own clip and bounds when it is clipped to its parent, else nothing but the viewport.
 			if (parent == null) box.setClip(0.0, 0.0, viewportWidth, viewportHeight);
@@ -198,9 +195,35 @@ class LayoutSolver {
 			output.setFloat(offset + 32, box.ownBaseline ? box.y + box.baseline : Math.NaN);
 			output.setFloat(offset + 36, box.scrollX);
 			output.setFloat(offset + 40, box.scrollY);
+			output.setInt32(offset + 44, box.hidden ? 1 : 0);
 			offset += record;
 		}
 		return length;
+	}
+
+	/**
+	 * Sizes and arranges the subtree at `first`: the whole tree in the viewport, or a placed node's subtree at the
+	 * `width` by `height` its placer gave it.
+	 */
+	function layOut(first:Int, width:Float, height:Float):Void {
+		var end = first + boxes[first].size;
+		var top = boxes[first];
+		var index = end - 1;
+		while (index >= first) fitAxis(index--, true);
+		top.width = width >= 0.0 ? width : rootSize(top.node.style.width, top.fitWidth, top.minWidth, viewportWidth);
+		for (index in first...end) assignAxis(index, true);
+		for (index in first...end) {
+			var box = boxes[index];
+			if (box.text != null) layoutText(box);
+			else if (box.measured && box.measuredWidth != box.width) measureContent(box, box.width);
+		}
+		index = end - 1;
+		while (index >= first) fitAxis(index--, false);
+		top.height = height >= 0.0 ? height : rootSize(top.node.style.height, top.fitHeight, top.minHeight,
+			viewportHeight);
+		for (index in first...end) assignAxis(index, false);
+		index = end - 1;
+		while (index >= first) arrange(index--);
 	}
 
 	function collect(node:LayoutNode, parent:Int):Void {
@@ -311,10 +334,12 @@ class LayoutSolver {
 		var fallback = this.fallbackMeasure;
 		if (content == null && (fallback == null || node.visualKind != LayoutVisualKind.Custom)) return;
 		var style = node.style;
-		var minWidth = width > 0.0 ? width : limit(style.width, true);
-		var maxWidth = width > 0.0 ? width : limit(style.width, false);
-		var constraints = new LayoutMeasureConstraints(minWidth, maxWidth, limit(style.height, true),
-			limit(style.height, false));
+		// Unconstrained by a parent, content is still bounded by the viewport, so content that takes all the room it is
+		// given reports a width it can have.
+		var minWidth = width > 0.0 ? width : limit(style.width, true, viewportWidth);
+		var maxWidth = width > 0.0 ? width : limit(style.width, false, viewportWidth);
+		var constraints = new LayoutMeasureConstraints(minWidth, maxWidth, limit(style.height, true, viewportHeight),
+			limit(style.height, false, viewportHeight));
 		var version = content != null ? content.getVersion() : node.measureVersion;
 		var cached = contents.get(node.id);
 		if (cached == null) {
@@ -331,7 +356,8 @@ class LayoutSolver {
 			else if (fallback != null) result = fallback(node.id, constraints);
 			if (result != null) cached.keep(source, version, constraints, result);
 		}
-		if (result == null || !(result.width >= 0.0) || !(result.height >= 0.0)) return;
+		if (result == null || !(result.width >= 0.0) || !(result.height >= 0.0) || !Math.isFinite(result.width)
+			|| !Math.isFinite(result.height)) return;
 		box.measured = true;
 		box.measuredWidth = clampRange(result.width, minWidth, maxWidth);
 		box.measuredHeight = clampRange(result.height, constraints.minHeight, constraints.maxHeight);
@@ -339,12 +365,13 @@ class LayoutSolver {
 		box.contentHasBaseline = result.hasBaseline;
 	}
 
-	static function limit(axis:LayoutAxis, minimum:Bool):Float {
+	/** An axis's least or greatest size for measuring content, no greater than `available` unless it is fixed. */
+	static function limit(axis:LayoutAxis, minimum:Bool, available:Float):Float {
+		var least = Math.min(Math.max(0.0, axis.min), available);
 		return switch axis.sizing {
 			case LayoutSizing.Fixed: axis.value;
-			case LayoutSizing.Percent: minimum ? 0.0 : Math.POSITIVE_INFINITY;
-			default: minimum ? Math.max(0.0, axis.min) : axis.max > 0.0 ? Math.max(axis.max,
-				axis.min) : Math.POSITIVE_INFINITY;
+			case LayoutSizing.Percent: minimum ? 0.0 : available;
+			default: minimum ? least : axis.max > 0.0 ? Math.max(Math.min(axis.max, available), least) : available;
 		}
 	}
 
@@ -813,6 +840,19 @@ class LayoutSolver {
 	 */
 	function place(index:Int):Void {
 		var box = boxes[index];
+		var placer = box.node.placer;
+		box.hidden = box.parent >= 0 && boxes[box.parent].hidden;
+		if (placer != null && box.parent >= 0 && box.node.style.positioning == LayoutPositioning.Absolute) {
+			var parent = boxes[box.parent];
+			placement.x = placement.y = placement.width = placement.height = 0.0;
+			placement.shown = true;
+			placer.place(parent.width, parent.height, placement);
+			if (!placement.shown) box.hidden = true;
+			if (placement.width != box.width || placement.height != box.height)
+				layOut(index, Math.max(0.0, placement.width), Math.max(0.0, placement.height));
+			box.x = placement.x;
+			box.y = placement.y;
+		}
 		if (box.parent >= 0) {
 			var parent = boxes[box.parent];
 			box.x += parent.x;
@@ -841,6 +881,8 @@ class LayoutSolver {
 		if (anchor != null) placeAnchored(index, anchor);
 	}
 
+	final placement:LayoutPlacement = new LayoutPlacement();
+	final placedLater:Array<Int> = [];
 	final target:AnchorRect = new AnchorRect();
 	final region:AnchorRect = new AnchorRect();
 	final current:AnchorRect = new AnchorRect();
@@ -1049,6 +1091,8 @@ private class LayoutBox {
 	public var measuredHeight:Float = 0.0;
 	public var contentBaseline:Float = 0.0;
 	public var contentHasBaseline:Bool = false;
+	/** Whether a placer hid it or an ancestor. */
+	public var hidden:Bool = false;
 	/** How far a scroll container's content moves left and up, ahead of its own transform. */
 	public var scrollX:Float = 0.0;
 	public var scrollY:Float = 0.0;

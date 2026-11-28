@@ -5891,7 +5891,8 @@ class FrameworkSmoke {
 			ScrollAxis.Vertical,
 			controller);
 		root = context.submit(view, frame);
-		scrollbarCheck(!root.children[1].layout.style.visible && context.animations.activeCount == 0,
+		var hiddenTrack = root.children[1].resolved;
+		scrollbarCheck(hiddenTrack != null && !hiddenTrack.visible && context.animations.activeCount == 0,
 			"no hover animation without overflow");
 		content.height = LayoutAxis.fixed(600);
 		view = new ScrollView("visibility-regression",

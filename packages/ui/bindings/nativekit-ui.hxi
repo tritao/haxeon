@@ -11,9 +11,10 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 	const NKUI_LAYER_COMMAND_VERSION = 2;
 	const NKUI_LAYOUT_API_VERSION = 26;
 	const NKUI_LAYOUT_GEOMETRY_BASELINE_OFFSET = 32;
+	const NKUI_LAYOUT_GEOMETRY_FLAGS_OFFSET = 44;
 	const NKUI_LAYOUT_GEOMETRY_HEIGHT_OFFSET = 16;
 	const NKUI_LAYOUT_GEOMETRY_NODE_ID_OFFSET = 0;
-	const NKUI_LAYOUT_GEOMETRY_RECORD_BYTES = 44;
+	const NKUI_LAYOUT_GEOMETRY_RECORD_BYTES = 48;
 	const NKUI_LAYOUT_GEOMETRY_SCROLL_X_OFFSET = 36;
 	const NKUI_LAYOUT_GEOMETRY_SCROLL_Y_OFFSET = 40;
 	const NKUI_LAYOUT_GEOMETRY_TEXT_WIDTH_OFFSET = 28;
@@ -480,6 +481,15 @@ interface NativeKitUI @target("portable") @library("nativekit_ui") @depends("Nat
 		NKUI_LAYOUT_DISTRIBUTION_SPACE_BETWEEN = 3;
 		NKUI_LAYOUT_DISTRIBUTION_SPACE_AROUND = 4;
 		NKUI_LAYOUT_DISTRIBUTION_SPACE_EVENLY = 5;
+	}
+	/**
+	 * Flags of a geometry record.
+	 */
+	flags nkui_layout_geometry_flags : u32 {
+		/**
+		 * Layout hid the node, as a placer hides a scrollbar with nothing to scroll: it is neither drawn nor hit.
+		 */
+		NKUI_LAYOUT_GEOMETRY_HIDDEN = 1;
 	}
 	/**
 	 * Node flags stored at NKUI_LAYOUT_NODE_FLAGS_OFFSET.

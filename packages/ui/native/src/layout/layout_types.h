@@ -280,6 +280,8 @@ struct LayoutPlacement {
     /** How far a scroll container's content moves left and up, ahead of its own transform. */
     float scroll_x = 0.0f;
     float scroll_y = 0.0f;
+    /** Whether layout hid it: it is neither drawn nor hit. */
+    bool hidden = false;
 };
 
 struct LayoutError {
