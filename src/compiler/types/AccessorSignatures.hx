@@ -47,6 +47,7 @@ class AccessorSignatures {
 			name: classDecl.name,
 			isStruct: classDecl.isStruct,
 			isExtern: classDecl.isExtern,
+			isAbstract: classDecl.isAbstract,
 			typeParameters: classDecl.typeParameters,
 			typeConstraints: classDecl.typeConstraints,
 			visibility: classDecl.visibility,

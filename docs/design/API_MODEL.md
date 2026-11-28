@@ -67,7 +67,7 @@ kind has them (`ApiJsonWriter` writes them field by field, so the output is this
 | --- | --- |
 | Root | `version` (integer, `1`), `described` (the module paths described), `modules`, `types` |
 | Module | `path`, `package`, `file` (its source), `members` (its public top-level variables and functions) |
-| Declaration | `path`, `module`, `package`, `kind` (`class`, `interface`, `enum`, `abstract`, `typedef`, `extern`), `isExtern`, `source`, `typeParameters`, `supertypes`, `interfaces`, `underlying` (type or null), `from`, `to`, `members` |
+| Declaration | `path`, `module`, `package`, `kind` (`class`, `interface`, `enum`, `abstract`, `typedef`, `extern`), `isExtern`, `isAbstract` (an `abstract class`), `source`, `typeParameters`, `supertypes`, `interfaces`, `underlying` (type or null), `from`, `to`, `members` |
 | Source | `visibility` (`public`, or `internal` for a declaration written `internal`, which only its own package may use), `position` (`file`, with `/` separators, and one-based `line`), `metadata` (`{name, arguments}`, arguments as source text), `documentation` (null or `{markdown, tags}`) |
 
 `package` is the name of the package whose sources hold the declaration (`--source-package=NAME=DIRECTORY`; `haxeon doc`
@@ -78,7 +78,7 @@ relative to the directory `stdlib` is in, the SDK's or the repository's (`stdlib
 relative to its source root. No path in the model is this machine's.
 | Tag | `name` (`param`, `return`, `throws`, `see`, `deprecated`, `since`), `parameter` (the name for `param`, otherwise null), `text` |
 | Type parameter | `name`, `constraints` (types) |
-| Member | `name`, `kind`, `isStatic`, `source`, then by kind: `field` has `isFinal`, `type`, `overrides` and `inherited`, `enumValue` has `type`; `property` has `type`, `get` and `set` (`default`, `null`, `never`, `get`, `set`, `dynamic`), `overrides` and `inherited`; `constructor`, `method`, `function` (a module's), `enumConstructor`, `conversion` and `operator` have `typeParameters`, `arguments` and `result`, with `overrides` and `inherited` for a method, `operatorText` for an operator, `conversion` (`from` or `to`) for a conversion, and `constants` for a case of an enum with per-case constants (each `name`, `value` as written, `isDefault` when the case leaves it at its default) |
+| Member | `name`, `kind`, `isStatic`, `source`, then by kind: `field` has `isFinal`, `type`, `overrides` and `inherited`, `enumValue` has `type`; `property` has `type`, `get` and `set` (`default`, `null`, `never`, `get`, `set`, `dynamic`), `overrides` and `inherited`; `constructor`, `method`, `function` (a module's), `enumConstructor`, `conversion` and `operator` have `typeParameters`, `arguments` and `result`, with `isAbstract`, `overrides` and `inherited` for a method, `operatorText` for an operator, `conversion` (`from` or `to`) for a conversion, and `constants` for a case of an enum with per-case constants (each `name`, `value` as written, `isDefault` when the case leaves it at its default) |
 | Argument | `name` (null for an unnamed enum payload), `type`, `optional`, `defaultValue` (source text or null) |
 
 A declaration written `internal` (docs/reference/LANGUAGE_SUPPORT.md) is described, with `visibility` `internal`: the

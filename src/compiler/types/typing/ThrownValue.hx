@@ -20,13 +20,20 @@ class ThrownValue {
 	public static function of(session:TypingSession, bodyTyper:BodyTyping, value:TypedExpression,
 			span:SourceSpan):TypedExpression {
 		session.nullSafety.checkThrow(value, span);
-		if (!isException(session, value.type))
+		if (!isException(session, value.type) && !inAbstractMethod(session))
 			session.output.records.nonExceptionThrows.push({
 				span: span,
 				thrown: SemanticSignature.display(Monomorphs.follow(value.type))
 			});
 		return TypeRelations.equals(value.type, TNull) ? bodyTyper.coerce(value, TDynamic, "thrown value",
 			DiagnosticCode.COVERAGE_THROW_OR_EXTERN) : value;
+	}
+
+	/** Whether the body is an abstract method's, whose throw the parser wrote, not its author. */
+	static function inAbstractMethod(session:TypingSession):Bool {
+		var context = session.currentContext;
+		var declared = context == null ? null : session.signatures.get(context.sourceFunctionName);
+		return declared != null && declared.isAbstract == true;
 	}
 
 	/**

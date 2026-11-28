@@ -692,7 +692,7 @@ class DeclarationIndex {
 				optional: field.optional,
 				isFinal: field.isFinal
 			}];
-		fields.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		fields.sort((left, right) -> Reflect.compare(left.name, right.name));
 		for (i in 1...fields.length)
 			if (fields[i - 1].name == fields[i].name)
 				fail('Duplicate anonymous field "${fields[i].name}"', span);
@@ -1199,6 +1199,8 @@ class DeclarationIndex {
 	 * is checked once the typer can give that signature (`validateInferredOverrides`), as Haxe checks an override on the typed body.
 	 */
 	function validateInheritedMethods(program:AstProgram):Void {
+		for (decl in program.classes)
+			validateAbstractMethods(decl);
 		for (decl in program.classes) {
 			var own = declarationSubstitutions(decl.name, decl.typeParameters);
 			var overrides:Map<String, String> = [], dynamicOverrides:Map<String, Bool> = [];
@@ -1247,6 +1249,32 @@ class DeclarationIndex {
 					|| overridden != null && !dynamicBase && method.isDynamic == true)
 					fail('Field ${method.name} has different property access than in superclass', method.span);
 			}
+		}
+	}
+
+	/**
+	 * A concrete class writes every abstract method it inherits, itself or through a class between it and the abstract one:
+	 * walking up from it, an abstract method not yet written below is missing.
+	 */
+	function validateAbstractMethods(decl:compiler.syntax.Ast.AstClass):Void {
+		if (decl.isAbstract == true || decl.isExtern == true)
+			return;
+		var written:Map<String, Bool> = [], current:Null<compiler.syntax.Ast.AstClass> = decl;
+		var substitutions = declarationSubstitutions(decl.name, decl.typeParameters);
+		while (current != null) {
+			for (method in current.methods)
+				if (!method.isStatic && method.name != "new") {
+					if (method.isAbstract != true)
+						written.set(method.name, true);
+					else if (!written.exists(method.name))
+						fail('Class "${decl.name}" must write abstract method "${current.name}.${method.name}"',
+							decl.span);
+				}
+			var base = current.base == null ? null : resolve(current.base, current.span, substitutions),
+				baseName = base == null ? null : NominalInheritance.name(base);
+			current = baseName == null ? null : classes.get(baseName);
+			if (base != null)
+				substitutions = inheritance.substitutions(base);
 		}
 	}
 

@@ -2623,6 +2623,8 @@ class CallResolver {
 			method = session.signatures.get(methodKey);
 		if (method == null || method.isExtern == true)
 			fail(DiagnosticCode.DECLARATION_OR_MODIFIER, 'Missing body for base method "$methodKey"', span);
+		if (method.isAbstract == true)
+			fail(DiagnosticCode.DECLARATION_OR_MODIFIER, 'Cannot call super.$name: "$methodKey" is abstract', span);
 		MemberAccess.method(session, methodInfo.owner, name, span);
 		if (DynamicMethods.isDynamic(session, method, methodInfo.owner))
 			fail(DiagnosticCode.DECLARATION_OR_MODIFIER, 'Cannot call super.$name since it\'s a dynamic method', span);
@@ -3861,6 +3863,9 @@ class CallResolver {
 		MemberAccess.method(session, typeName, "new", span);
 		if (session.declarations.abstracts.exists(typeName))
 			return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope, expectedType);
+		if (session.classDecls.exists(typeName) && session.classDecls.required(typeName).isAbstract == true)
+			fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
+				'Class "$typeName" is abstract: construct one of its subclasses', span);
 		if (hasExplicitTypeArguments) {
 			if (!session.classDecls.exists(typeName) || session.interfaceDecls.exists(typeName))
 				throw new CompileError(Diagnostic.unresolved(DiagnosticCode.DECLARATION_OR_MODIFIER,

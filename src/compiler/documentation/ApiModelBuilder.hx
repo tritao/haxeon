@@ -192,7 +192,7 @@ class ApiModelBuilder {
 			members = fields(owner, decl.fields, publicByDefault);
 		addMethods(members, owner, decl.methods, publicByDefault);
 		return declaration(owner, isExtern ? "extern" : "class", decl.metadata, isExtern, members,
-			decl.base == null ? [] : [decl.base], decl.interfaces);
+			decl.base == null ? [] : [decl.base], decl.interfaces, null, null, null, decl.isAbstract == true);
 	}
 
 	function interfaceDeclaration(decl:AstInterface):ApiDeclaration {
@@ -355,7 +355,7 @@ class ApiModelBuilder {
 
 	function declaration(owner:ApiOwner, kind:String, metadata:Null<Array<AstMetadata>>, isExtern:Bool,
 			members:Array<ApiMember>, ?supertypes:Array<AstType>, ?interfaces:Array<AstType>, ?underlying:AstType,
-			?from:Array<AstType>, ?to:Array<AstType>):ApiDeclaration {
+			?from:Array<AstType>, ?to:Array<AstType>, isAbstract:Bool = false):ApiDeclaration {
 		// Members stay in the order the source declares them, which is how their author grouped them.
 		var scope = parametersIn(owner.name, owner.typeParameters);
 		return {
@@ -365,6 +365,7 @@ class ApiModelBuilder {
 			packageName: locate(owner.span.file, moduleName(owner.span)).name,
 			kind: kind,
 			isExtern: isExtern,
+			isAbstract: isAbstract,
 			typeParameters: parameters(owner.typeParameters, owner.typeConstraints, scope),
 			supertypes: resolveAll(supertypes, owner.span, scope),
 			interfaces: resolveAll(interfaces, owner.span, scope),
@@ -461,6 +462,7 @@ class ApiModelBuilder {
 			kind: kind,
 			name: name,
 			isStatic: isStatic,
+			isAbstract: method.isAbstract == true ? true : null,
 			arguments: [for (index in 0...method.arguments.length) {
 				var argument = method.arguments[index], optional = AstPredicates.isOptionalArgument(argument);
 				{

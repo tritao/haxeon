@@ -44,6 +44,7 @@ class ApiJsonWriter {
 		output.field("package", () -> value.packageName == null ? output.nothing() : output.scalar(value.packageName));
 		output.string("kind", value.kind);
 		output.boolean("isExtern", value.isExtern);
+		output.boolean("isAbstract", value.isAbstract);
 		output.field("source", () -> source(output, value.source));
 		output.list("typeParameters", value.typeParameters, typeParameter);
 		output.list("supertypes", value.supertypes, type);
@@ -118,8 +119,10 @@ class ApiJsonWriter {
 					output.string("operatorText", required(value.operatorText, value.kind, "operatorText"));
 				if (value.kind == "conversion")
 					output.string("conversion", required(value.conversion, value.kind, "conversion"));
-				if (value.kind == "method")
+				if (value.kind == "method") {
+					output.boolean("isAbstract", value.isAbstract == true);
 					overrides(output, value);
+				}
 				if (value.kind == "enumConstructor" && value.rawValue != null)
 					output.string("rawValue", value.rawValue);
 				if (value.kind == "enumConstructor" && value.constants != null)

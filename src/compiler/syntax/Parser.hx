@@ -330,7 +330,13 @@ class Parser {
 						enums.push(parseEnum(start, metadata, declared));
 				} else if (check(TokenKind.Interface))
 					interfaces.push(parseInterface(metadata, declared));
-				else if (check(TokenKind.Class) || check(TokenKind.Struct)) {
+				else if (check(TokenKind.Identifier) && textOf(current()) == "abstract"
+					&& peekKind(1) == TokenKind.Class) {
+					if (externDeclaration)
+						fail(current(), "An abstract class cannot be declared extern");
+					advance();
+					classes.push(parseClass(declared, metadata, false, false, true));
+				} else if (check(TokenKind.Class) || check(TokenKind.Struct)) {
 					var isStruct = check(TokenKind.Struct);
 					if (isStruct && externDeclaration)
 						fail(current(), "A struct cannot be declared extern");
@@ -1090,13 +1096,13 @@ class Parser {
 			isExtern:Bool = false,
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false,
 			visibility:AstVisibility = AstVisibility.Unwritten, isOverride:Bool = false,
-			isDynamic:Bool = false):AstFunction {
+			isDynamic:Bool = false, isAbstract:Bool = false):AstFunction {
 		var outer = enterLambdaMember(name);
 		// Error recovery resumes outside this declaration, so the numbering is restored on errors too.
 		var parsed:AstFunction;
 		try {
 			parsed = parseFunctionDeclaration(start, name, allowMissingReturn, isStatic, isExtern, metadata, isInline,
-				visibility, isOverride, isDynamic);
+				visibility, isOverride, isDynamic, isAbstract);
 		} catch (error:CompileError) {
 			leaveLambdaMember(outer);
 			throw error;
@@ -1108,7 +1114,7 @@ class Parser {
 	function parseFunctionDeclaration(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool,
 			isExtern:Bool,
 			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool, visibility:AstVisibility,
-			isOverride:Bool, isDynamic:Bool):AstFunction {
+			isOverride:Bool, isDynamic:Bool, isAbstract:Bool = false):AstFunction {
 		var typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -1137,7 +1143,19 @@ class Parser {
 		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn
 			&& name == "new" ? VoidType : InferredType;
 		var statements = [], end:SourceSpan;
-		if (isExtern) {
+		if (isAbstract) {
+			// Nothing gives an abstract method's types but its declaration.
+			if (result == InferredType)
+				fail(previous(), 'Abstract method "$name" needs its return type written');
+			for (argument in arguments)
+				if (argument.type == InferredType)
+					fail(current(), 'Abstract method "$name" needs the type of argument "${argument.name}" written');
+			end = spanOf(consume(TokenKind.Semicolon));
+			// A body no instance reaches, since every concrete subclass writes its own: each stage sees an ordinary method.
+			// A string, which needs no standard-library class.
+			statements.push(AstStatement.Throw(AstExpression.StringLiteral('Abstract method "$name" was called', start),
+				start));
+		} else if (isExtern) {
 			end = spanOf(consume(TokenKind.Semicolon));
 		} else if (match(TokenKind.LeftBrace)) {
 			var bodyStart = position;
@@ -1169,6 +1187,7 @@ class Parser {
 			visibility: visibility,
 			isOverride: isOverride,
 			isDynamic: isDynamic,
+			isAbstract: isAbstract ? true : null,
 			// A function with `@:hlNative` is the native, as Haxe compiles it on HashLink: an extern one, whose body (if it has one)
 			// is typed but never runs (`ProgramTyper.checkNativeBoundBodies`). Haxeon binds it on Wasm too, as it binds an extern's
 			// `@:hlNative` there (the Wasm runtime provides `haxeon_runtime`'s natives).
@@ -1263,7 +1282,7 @@ class Parser {
 
 	function parseClass(visibility:AstVisibility, metadata:Array<compiler.syntax.Ast.AstMetadata>,
 			isExtern:Bool = false,
-			isStruct:Bool = false):AstClass {
+			isStruct:Bool = false, isAbstract:Bool = false):AstClass {
 		var start = spanOf(consume(isStruct ? TokenKind.Struct : TokenKind.Class)),
 			name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<AstTypeConstraint> = [],
@@ -1296,9 +1315,15 @@ class Parser {
 					isFinal = false,
 					isOverride = false,
 					isExternMember = false,
-					isDynamic = false;
+					isDynamic = false,
+					isAbstractMember = false;
 				var isPublic:Null<Bool> = null, isInternalMember = false;
 				while (true) {
+					if (isAbstractMemberModifier()) {
+						isAbstractMember = true;
+						advance();
+						continue;
+					}
 					if (isDynamicModifier()) {
 						isDynamic = true;
 						advance();
@@ -1337,12 +1362,23 @@ class Parser {
 					}
 				}
 				var memberVisibility = writtenVisibility(isInternalMember, isPublic, modifierStart);
+				if (isAbstractMember) {
+					if (!check(TokenKind.Function))
+						fail(current(), "Only a method can be abstract");
+					if (!isAbstract)
+						failAt(modifierStart,
+							'Class "$name" has an abstract method, so it must be declared abstract class');
+					if (isStatic || isInline || isFinal || isDynamic || isExternMember)
+						failAt(modifierStart, "An abstract method cannot be static, inline, final, dynamic or extern");
+				}
 				if (match(TokenKind.Function)) {
 					var functionStart = spanOf(previous()),
 						methodName = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
+					if (isAbstractMember && methodName == "new")
+						fail(previous(), "A constructor cannot be abstract");
 					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic,
 						externBody(isExtern, isExternMember, isInline), memberMetadata, isInline, memberVisibility,
-						isOverride, isDynamic));
+						isOverride, isDynamic, isAbstractMember));
 				} else {
 					var field = parseField(memberMetadata, memberVisibility, isStatic, isInline, isFinal, null,
 						modifierStart);
@@ -1361,6 +1397,7 @@ class Parser {
 			name: name,
 			isStruct: isStruct,
 			isExtern: isExtern,
+			isAbstract: isAbstract ? true : null,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
 			visibility: visibility,
@@ -1499,6 +1536,18 @@ class Parser {
 	 * Whether a method has no body: every method of an extern type, and, as in Haxe, an `extern` member that is not inline (a
 	 * native, `@:hlNative(...) static extern function f():Int;`). An `extern inline` member has a body, which is always inlined.
 	 */
+	/** `abstract` before a method's other modifiers or `function`, not a member named so. */
+	function isAbstractMemberModifier():Bool {
+		if (!(check(TokenKind.Identifier) && textOf(current()) == "abstract"))
+			return false;
+		return switch peekKind(1) {
+			case TokenKind.Function | TokenKind.Var | TokenKind.Public | TokenKind.Private | TokenKind.Static
+				| TokenKind.Inline | TokenKind.Final: true;
+			case TokenKind.Identifier: ["override", "internal", "dynamic", "extern"].indexOf(textOf(ahead(1))) >= 0;
+			case _: false;
+		};
+	}
+
 	static function externBody(externType:Bool, externMember:Bool, isInline:Bool):Bool
 		return externType || externMember && !isInline;
 
@@ -4020,7 +4069,10 @@ class Parser {
 	}
 
 	function fail(token:TokenId, message:String):Void
-		throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, spanOf(token)));
+		failAt(spanOf(token), message);
+
+	function failAt(span:SourceSpan, message:String):Void
+		throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, span));
 
 	function parseIntegerToken(token:TokenId, negative:Bool = false):Int {
 		var hexadecimal = isHexIntegerToken(token),

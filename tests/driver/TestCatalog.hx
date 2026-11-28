@@ -131,6 +131,7 @@ class TestCatalog {
 		"MemberInitializerAccessMain",
 		"AbstractPropertiesMain",
 		"ClassPropertiesMain",
+		"AbstractClassesMain",
 		"InterfacePropertiesMain",
 		"AbstractUncalledMembersMain",
 		"ModuleVariablesMain",

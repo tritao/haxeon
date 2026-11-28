@@ -31,6 +31,9 @@ typedef ApiDeclaration = {
 	final packageName:Null<String>;
 	final kind:String;
 	final isExtern:Bool;
+
+	/** A class declared `abstract class`, which only its subclasses are constructed as. */
+	final isAbstract:Bool;
 	final typeParameters:Array<ApiTypeParameter>;
 	final supertypes:Array<ApiType>;
 	final interfaces:Array<ApiType>;
@@ -69,6 +72,9 @@ typedef ApiMember = {
 
 	/** A field written `final`: set once, by its declaration or the constructor. */
 	final ?isFinal:Bool;
+
+	/** A method declared `abstract`, which each concrete subclass writes. */
+	final ?isAbstract:Bool;
 
 	final ?get:String;
 	final ?set:String;

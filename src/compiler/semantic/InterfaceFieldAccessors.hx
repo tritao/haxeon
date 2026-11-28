@@ -288,6 +288,7 @@ class InterfaceFieldAccessors {
 			name: declaration.name,
 			isStruct: declaration.isStruct,
 			isExtern: declaration.isExtern,
+			isAbstract: declaration.isAbstract,
 			typeParameters: declaration.typeParameters,
 			typeConstraints: declaration.typeConstraints,
 			visibility: declaration.visibility,

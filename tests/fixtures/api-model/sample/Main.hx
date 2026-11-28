@@ -24,6 +24,14 @@ class Base {
 	}
 }
 
+/** A shape, whose area each kind of shape gives. */
+abstract class Shape {
+	public function new() {}
+
+	/** Its area, in square units. */
+	public abstract function area():Int;
+}
+
 /** Shared by the package's own modules: described as internal. */
 internal class Cache {
 	internal static var size = 0;

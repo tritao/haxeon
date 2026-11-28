@@ -903,6 +903,8 @@ class CanonicalComparison {
 			return false;
 		if (!(left.isExtern == right.isExtern))
 			return false;
+		if (!(left.isAbstract == right.isAbstract))
+			return false;
 		if (!(sameValues(left.typeParameters, right.typeParameters)))
 			return false;
 		if (!(optionalArray(left.typeConstraints, right.typeConstraints, astTypeConstraint)))
@@ -1124,6 +1126,8 @@ class CanonicalComparison {
 
 	function astFunction(left:AstFunction, right:AstFunction):Bool {
 		if (!(left.isDynamic == right.isDynamic))
+			return false;
+		if (!(left.isAbstract == right.isAbstract))
 			return false;
 		if (!(left.isOverride == right.isOverride))
 			return false;

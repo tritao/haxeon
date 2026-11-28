@@ -64,7 +64,8 @@ class ApiText {
 			case "conversion":
 				'@:${value.conversion} (' + arguments() + "):" + result();
 			case _:
-				statically + "function " + value.name + typeParameters(value.typeParameters ?? []) + "(" + arguments()
+				statically + (value.isAbstract == true ? "abstract " : "") + "function " + value.name
+					+ typeParameters(value.typeParameters ?? []) + "(" + arguments()
 					+ "):"
 					+ result();
 		};
@@ -84,7 +85,8 @@ class ApiText {
 			case "enum": 'enum $name' + list("implements", value.interfaces);
 			case "extern": 'extern class $name' + list("extends", value.supertypes) + list("implements",
 				value.interfaces);
-			case _: 'class $name' + list("extends", value.supertypes) + list("implements", value.interfaces);
+			case _: (value.isAbstract ? "abstract " : "") + 'class $name' + list("extends", value.supertypes)
+				+ list("implements", value.interfaces);
 		};
 	}
 

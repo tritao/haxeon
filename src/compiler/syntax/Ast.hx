@@ -145,6 +145,9 @@ typedef AstClass = {
 	final ?isStruct:Bool;
 
 	final ?isExtern:Bool;
+
+	/** Declared `abstract class`: never constructed itself, and its abstract methods are its subclasses' to write. */
+	final ?isAbstract:Bool;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final metadata:Array<AstMetadata>;
@@ -554,6 +557,12 @@ typedef AstFunction = {
 	/** Explicit override modifier, checked against inherited instance methods. */
 	final ?isOverride:Bool;
 	final ?isDynamic:Bool;
+
+	/**
+	 * Declared `abstract function` in an abstract class: written without a body, for each concrete subclass to write. Its
+	 * statements are the parser's, a throw of its message no instance reaches, so every stage sees an ordinary method.
+	 */
+	final ?isAbstract:Bool;
 	final name:String;
 	final isStatic:Bool;
 

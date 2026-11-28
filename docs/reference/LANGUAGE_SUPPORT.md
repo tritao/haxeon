@@ -17,6 +17,10 @@ The current subset includes:
 - `Int`, `Bool`, `Float`, `String`, nullable values, and dynamic values
 - Local variables, functions, methods, recursion, and expression statements
 - Classes, interfaces, anonymous structures, enums, and enum abstracts
+- Abstract classes, as Haxe 4.2 has them: an `abstract class` is never constructed itself, only its subclasses are,
+  and its `abstract function`s are declared without a body, with their argument and return types written. Every
+  concrete subclass writes each abstract method it inherits, without `override`, and `super` cannot call one. An
+  abstract class that implements an interface declares the interface methods it leaves to its subclasses as abstract.
 - An enum declares methods and static members as a class does (a Haxeon extension, so stock Haxe rejects it): instance
   methods take the value as `this`, named or implicit (`switch this`, `components()`), static methods and `static var` or
   `final` fields belong to the enum (`Kind.parse("pair")`, `Kind.ALL`), and members are private unless written `public` or

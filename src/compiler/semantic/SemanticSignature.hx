@@ -165,6 +165,7 @@ class SemanticSignature {
 		return fn.name
 			+ (fn.isDynamic == true ? " dynamic" : "")
 			+ (fn.isOverride == true ? " override" : "")
+			+ (fn.isAbstract == true ? " abstract" : "")
 			+ (fn.isInline == true ? " inline" : "")
 			+ (fn.visibility == AstVisibility.Unwritten ? "" : " " + fn.visibility.modifier())
 			+ (typeParameters == null
