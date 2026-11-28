@@ -3854,6 +3854,10 @@ class CallResolver {
 	public function typeConstruction(typeName:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, hasExplicitTypeArguments:Bool):TypedExpression {
+		var alias = session.declarations.aliases.get(typeName);
+		if (alias != null)
+			return typeAliasConstruction(alias, typeArguments, arguments, span, scope, expectedType,
+				hasExplicitTypeArguments);
 		MemberAccess.method(session, typeName, "new", span);
 		if (session.declarations.abstracts.exists(typeName))
 			return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope, expectedType);
@@ -3907,6 +3911,35 @@ class CallResolver {
 		return nativeConstructor == null
 			? new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType,
 			span) : new TypedExpression(TCall(nativeConstructor, typed), valueType, span);
+	}
+
+	/**
+	 * `new` through a typedef constructs the type it names, as in Haxe. Type arguments written on the typedef are put into its
+	 * target; when a generic typedef is written without them, the target's are inferred as for the target itself.
+	 */
+	function typeAliasConstruction(alias:compiler.syntax.Ast.AstTypeAlias, typeArguments:Array<AstType>,
+			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
+			hasExplicitTypeArguments:Bool):TypedExpression {
+		var target = alias.type, inferred = !hasExplicitTypeArguments && alias.typeParameters.length > 0;
+		if (hasExplicitTypeArguments) {
+			// Checks the arguments against the typedef's parameters and constraints before they reach the target.
+			session.declarations.resolve(AppliedType(alias.name, typeArguments), span,
+				session.currentContext.typeSubstitutions);
+			target = compiler.semantic.ImplicitConstructors.substitute(target, [
+				for (index in 0...typeArguments.length)
+					alias.typeParameters[index] => typeArguments[index]
+			]);
+		}
+		return switch target {
+			case NamedType(name): typeConstruction(name, [], arguments, span, scope, expectedType, false);
+			case AppliedType(name, _) if (inferred): typeConstruction(name, [], arguments, span, scope, expectedType,
+				false);
+			case AppliedType(name, targetArguments): typeConstruction(name, targetArguments, arguments, span, scope,
+				expectedType, true);
+			default:
+				throw new CompileError(Diagnostic.unresolved(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					UnresolvedNameKind.WantedClass, alias.name, span));
+		};
 	}
 
 	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>,

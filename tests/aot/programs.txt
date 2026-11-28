@@ -629,6 +629,7 @@ try-typed-interface
 try-typed-mismatch
 type-annotation
 type-enum-index
+typedef-class-constructor
 typeinfo-generic
 typeinfo-mixed-layout
 uninitialized-local-inference

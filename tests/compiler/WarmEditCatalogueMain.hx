@@ -484,22 +484,19 @@ class WarmEditCatalogueMain {
 				edit: ["Count.hx" => "typedef Count = Float;"]
 			},
 			{
-				kind: "change the class a typedef names, which an unchanged module calls through",
+				kind: "change the class a typedef names, which unchanged modules construct and call through",
 				files: [
 					"Shape.hx" => "typedef Shape = Square;",
 					"Square.hx"
 						=> "class Square { final n:Int; public function new(n:Int) this.n = n; public function area():Int return n * n; }",
 					"Circle.hx"
 						=> "class Circle { final n:Int; public function new(n:Int) this.n = n; public function area():Int return 3 * n * n; }",
-					"Make.hx" => "class Make { public static function shape(n:Int):Shape return new Square(n); }",
+					"Make.hx" => "class Make { public static function shape(n:Int):Shape return new Shape(n); }",
 					"Area.hx" => "class Area { public static function of(s:Shape):Int return s.area(); }",
 					"Main.hx"
 						=> "class Main { static function main():Int return Area.of(Make.shape(2)) + new Circle(1).area() + new Square(1).area(); }"
 				],
-				edit: [
-					"Shape.hx" => "typedef Shape = Circle;",
-					"Make.hx" => "class Make { public static function shape(n:Int):Shape return new Circle(n); }"
-				]
+				edit: ["Shape.hx" => "typedef Shape = Circle;"]
 			},
 			{
 				kind: "change an abstract's underlying type, which an unchanged module uses",
