@@ -181,6 +181,9 @@ set_target_properties(haxeon_pinned_libffi PROPERTIES
 set(HAXEON_RUNTIME_SYSTEM_LIBRARIES ${CMAKE_DL_LIBS})
 if(WIN32)
   list(APPEND HAXEON_RUNTIME_SYSTEM_LIBRARIES advapi32 bcrypt ws2_32)
+elseif(APPLE)
+  # The directory watcher's FSEvents backend (native/watch/watch.c).
+  list(APPEND HAXEON_RUNTIME_SYSTEM_LIBRARIES "-framework CoreServices")
 endif()
 target_link_libraries(haxeon_runtime_objects PRIVATE haxeon_pinned_libffi)
 if(MSVC)

@@ -31,7 +31,7 @@
 #include "runtime/reactive.c"
 #include "runtime/bytes.c"
 #include "runtime/sha256.c"
-#include "watch/haxeon_watch.c"
+#include "watch/watch.c"
 #include "runtime/dir_watch.c"
 /* Dynamic array views preserve the backing representation when performing structural operations. */
 HL_PRIM bool HL_NAME(__value_array_is)(varray *array);

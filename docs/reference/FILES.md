@@ -83,6 +83,40 @@ function serve(workspace:String, request:String):Result<String, std.fs.FileError
 - A root holds its directory open until `close`, which a `scoped` binding calls at the end of its scope. Using it
   after that throws.
 
+## Watching directories
+
+A `Watcher` reports what changes under the directories it watches: inotify on Linux, ReadDirectoryChangesW on Windows,
+FSEvents on macOS. Elsewhere, and on Wasm, `Watcher.open()` is `Err(Unsupported)`.
+
+```haxe
+import std.fs.Watcher;
+
+function follow(directory:String):Result<Void, std.fs.FileError> {
+	scoped var watcher = try Watcher.open();
+	_ = try watcher.add(directory, true);
+	for (event in watcher.wait(5))
+		switch event {
+			case Changed(path, kind): trace('$path: $kind');
+			case Rescan: trace("changes were lost; compare the tree again");
+		}
+	return Ok();
+}
+```
+
+| Call | Does | Fails with |
+| --- | --- | --- |
+| `add(path, recursive)` | watches a directory, with every directory under it when `recursive`, those created later included | `NotFound`, `NotADirectory`, `PermissionDenied`, `Io` (the system's limit) |
+| `remove(path)` | stops watching a directory added before, and what it watched under it | `NotFound` |
+| `exclude(path)` | leaves a subtree out of the recursive registrations | |
+| `wait(seconds)` | the changes since the last wait, in order: `Changed(path, kind)` (`Added`, `Removed`, `Modified`), and `Rescan` when some were lost | |
+| `wake()` | from any thread, makes a wait in progress return now | |
+
+- A path is reported under the path its directory was added with. A rename is the old path `Removed` and the new one
+  `Added`; a directory created under a recursive one is `Added`, then what was already in it when its own watch began.
+- Links are not followed, and a subdirectory that cannot be read is skipped.
+- A watcher is used from one thread at a time, but `wake`: an app with an event loop waits on a thread of its own, as
+  the platform package's `FileWatch` does. Close it when no wait is in progress.
+
 ## Not yet
 
 - Open files (streams, seeking) and the working directory: `sys.io.File` and `Sys` still provide them.

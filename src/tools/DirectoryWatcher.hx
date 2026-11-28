@@ -36,10 +36,11 @@ class DirectoryWatcher {
 	var handle:Null<WatchHandle>;
 	#end
 
-	/** The watcher's backend on this platform (native/watch/haxeon_watch.c), which the watch loop names. */
+	/** The watcher's backend on this platform (native/watch/watch.c), which the watch loop names. */
 	public static final BACKEND = switch Sys.systemName() {
 		case "Windows": "ReadDirectoryChangesW";
 		case "Linux": "inotify";
+		case "Mac": "FSEvents";
 		case _: "none";
 	};
 
@@ -101,6 +102,6 @@ class DirectoryWatcher {
 }
 
 #if hl
-/** The runtime's watch (native/watch/haxeon_watch.h), opaque here. */
-private typedef WatchHandle = hl.Abstract<"haxeon_watch">;
+/** The runtime's watch (native/watch/watch.h), opaque here. */
+private typedef WatchHandle = hl.Abstract<"realtime_watch">;
 #end
