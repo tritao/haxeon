@@ -4,10 +4,9 @@ Date: 2026-11-28
 
 ## Status
 
-Accepted. Decisions 1, 2 and 5 to 8 have landed: `haxeon.ui.layout.LayoutSolver` lays every submitted tree out once a
-frame and answers hit tests, NativeKit builds the scene from its geometry, Clay is gone, and nothing asks for layout
-feedback. Decisions 3
-(retention) and 4 (layout-time builders) remain; the migration below says what is left. It supersedes the layout
+Accepted. Decisions 1 to 3 and 5 to 8 have landed: `haxeon.ui.layout.LayoutSolver` lays each submitted tree out once a
+frame, again only where it changed, and answers hit tests; NativeKit builds the scene from its geometry, Clay is gone,
+and nothing asks for layout feedback. Decision 4 (layout-time builders) remains; the migration below says what is left. It supersedes the layout
 half of [ADR 0002](0002-reactive-ui-model.md): decision 6 (floating nodes placed after the flow, two-phase layout) and the
 clause that kept Clay "an immediate full solver" until "measurements later show layout as the main remaining cost".
 Anchored placement (`LayoutAnchor`, landed with ADR 0002's decision 6) is kept and now runs in the solver.
@@ -64,9 +63,14 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
    The C API keeps no layout: a C host supplies its own geometry, as `native/examples/ui_c_api` does. Hit testing is
    the solver's too (`LayoutSession.hitTest`): the topmost node under a point in paint order, from the geometry it
    resolved, so native keeps no picker and no hit flags.
-3. **Retained and incremental.** Each node keeps its last constraints and result; a change marks it and its ancestors
-   dirty up to a relayout boundary, a node whose size does not depend on its children. A frame lays out the dirty
-   subtrees only. The per-node records then go: the solver hands native one scene record per changed node.
+3. **Retained and incremental.** Each node keeps its layout from the last solve. A node is changed when the frame
+   comparison reports its inputs or children changed, or its text, content version or children did; one sized against
+   another node (an anchor's `matchAnchor` or `limitToRoom`) always is. A subtree with no change keeps its widths, text
+   and fitted heights when it is given the width it had, and its arrangement when given the height too, so a change is
+   laid out up to the nearest node whose size did not change. Placement (scroll offsets, placers, anchors, transforms)
+   runs on every solve, since it reads state from outside the subtree. A new viewport or fonts lay everything out.
+   Native hears of the nodes whose scene record changed. Verify mode (or `HAXEON_UI_VERIFY_LAYOUT=1`) compares every
+   retained solve with a full one; `UiFrameMetrics.layoutNodesLaidOut` counts what a frame laid out again.
 4. **Builders that run during layout.** A node may build its children from its constraints: a virtual list asks for the
    rows that fit, during the solve, and the window rebuild passes go.
 5. **Floating nodes after the flow**, placed by `LayoutAnchor`, which can size its node from the anchor: at least as wide
@@ -95,14 +99,15 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
    sizing, with `SelectionPopup` on it; `requestLayoutFeedback` and the pass loop deleted.
 4. Left: layout-time builders for the virtual collections, whose window rebuilds are the build feedback that remains
    (`requestBuildFeedbackBeforeLayout`); the other state-writing callbacks, case by case.
-5. Left: retained relayout with relayout boundaries and scene records, checked by comparing an incremental solve with a
-   from-scratch one in verify mode; then stage 7's layers delete `willEditRetained`.
+5. Done: retained relayout, checked against a full solve in verify mode; geometry callbacks only read, which verify mode
+   checks. Left: stage 7's layers delete `willEditRetained`.
 
 On the native explorer smoke, 40 of 46 frames lay out once; the others rebuild a virtual window.
 
 ## Consequences
 
-- Layout costs a fraction of a millisecond on the measured trees, and will follow what changed once retained.
+- Layout costs a fraction of a millisecond on the measured trees, and follows what changed: on the native explorer
+  smoke, 39 of 40 solves laid part of the tree out again, 38% of its nodes in all.
 - Text is measured by the solver and shaped by the scene builder; both use the text engine's layout cache, so text is
   shaped once per text, style and width.
 - Layout semantics are tested in Haxe (`LayoutSessionSmoke`, the framework and showcase suites, the web visual suite);

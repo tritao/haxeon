@@ -53,8 +53,9 @@ class LayoutSolver {
 	/** Seconds the last solve spent measuring text. */
 	public var textSeconds(default, null):Float = 0.0;
 
-	/** Nodes the last solve laid out. */
+	/** Nodes in the tree the last solve laid out, and those of them it laid out again; the rest kept their layout. */
 	public var nodes(default, null):Int = 0;
+	public var nodesLaidOut(default, null):Int = 0;
 
 	/** Content measurements asked for, answered from earlier ones, and made, since the solver was made. */
 	public var measureRequests(default, null):Int = 0;
@@ -69,8 +70,8 @@ class LayoutSolver {
 			var box = boxes[index];
 			var x = 0.0, y = 0.0, at = index;
 			while (at != content) {
-				x += boxes[at].x;
-				y += boxes[at].y;
+				x += boxes[at].relX;
+				y += boxes[at].relY;
 				at = boxes[at].parent;
 			}
 			out.set(x, y, box.width, box.height);
@@ -84,27 +85,38 @@ class LayoutSolver {
 		this.fallbackMeasure = fallback;
 	}
 
-	/** Lays `root` out in a `width` by `height` viewport. */
-	public function solve(root:LayoutNode, width:Float, height:Float):Void {
+	/**
+	 * Lays `root` out in a `width` by `height` viewport. With `changes`, the nodes whose inputs changed since the last
+	 * solve (the frame comparison's), it lays out again only what they reach (ADR 0009, decision 3): a subtree none of
+	 * whose nodes changed keeps its sizes when it is given the size it had, and its arrangement when given both. Without
+	 * them, or when the viewport or fonts changed, it lays everything out.
+	 */
+	internal function solve(root:LayoutNode, width:Float, height:Float, ?changes:LayoutChanges):Void {
 		textSeconds = 0.0;
 		var started = Sys.time();
+		everything = changes == null || everythingNext || width != viewportWidth || height != viewportHeight;
+		everythingNext = false;
+		changed = changes;
 		viewportWidth = width;
 		viewportHeight = height;
+		solveStamp++;
+		nodesLaidOut = 0;
 		count = 0;
 		collect(root, -1);
+		changed = null;
 		nodes = count;
+		if (retainedBoxes.length > count) prune();
 		indexOf.clear();
 		for (index in 0...count) {
 			var box = boxes[index];
 			indexOf.set(box.node.id, index);
-			if (box.node.visualKind == LayoutVisualKind.Text) measureUnwrapped(box);
-			else box.text = null;
-			measureContent(box, -1.0);
+			// Content is measured unconstrained where sizes are fitted again: in subtrees with a change.
+			if (box.subtreeDirty) measureContent(box, -1.0);
 		}
 		var rootBox = boxes[0];
-		layOut(0, -1.0, -1.0);
-		rootBox.x = 0.0;
-		rootBox.y = 0.0;
+		layOut(0, -1.0, -1.0, true);
+		rootBox.relX = 0.0;
+		rootBox.relY = 0.0;
 		// Placed subtrees go after everything else, so their placers read scroll offsets settled anywhere in the tree.
 		placedLater.resize(0);
 		var index = 0;
@@ -116,7 +128,61 @@ class LayoutSolver {
 			} else place(index++);
 		}
 		for (first in placedLater) for (each in first...first + boxes[first].size) place(each);
+		for (index in 0...count) {
+			var box = boxes[index];
+			box.laidOut = true;
+			box.lastWidth = box.width;
+			box.lastHeight = box.height;
+		}
 		solveSeconds = Sys.time() - started - textSeconds;
+	}
+
+	/** Lays everything out on the next solve: what measures text changed, as fonts do. */
+	public function invalidate():Void everythingNext = true;
+
+	/** How the last solve differs from `reference`'s, a full solve of the same tree; null when it does not. */
+	internal function differenceFrom(reference:LayoutSolver):Null<String> {
+		if (count != reference.count) return "it laid out " + count + " nodes, a full solve " + reference.count;
+		for (index in 0...count) {
+			var a = boxes[index], b = reference.boxes[index];
+			var aShown = a.text == null ? null : a.text.shown, bShown = b.text == null ? null : b.text.shown;
+			var field = a.node.id != b.node.id ? "node" : a.x != b.x ? "x" : a.y != b.y ? "y" : a.width != b.width
+				? "width" : a.height
+				!= b.height ? "height" : a.textX != b.textX ? "text x" : a.textY != b.textY ? "text y" : a.textWidth
+				!= b.textWidth ? "text width" : a.hasBaseline != b.hasBaseline
+				|| (a.hasBaseline && a.baseline != b.baseline) ? "baseline" : a.scrollX != b.scrollX
+				|| a.scrollY != b.scrollY ? "scroll" : a.hidden != b.hidden ? "hidden" : aShown
+				!= bShown ? "shown text" : null;
+			if (field != null)
+				return "node " + a.node.id + " (" + index + ") differs in " + field + ": " + a.x + "," + a.y + " "
+					+ a.width
+					+ "x" + a.height + ", a full solve " + b.x + "," + b.y + " " + b.width + "x" + b.height;
+		}
+		return null;
+	}
+
+	/** Boxes kept between solves by node ID, every one of them, and the solve that collects them now. */
+	final retainedById:IntIndex = new IntIndex();
+	final retainedBoxes:Array<LayoutBox> = [];
+	var solveStamp:Int = 0;
+	/** Whether this solve lays everything out, the next one must, and the changes this one follows. */
+	var everything:Bool = true;
+	var everythingNext:Bool = false;
+	var changed:Null<LayoutChanges> = null;
+	/** The boxes a layout pass sizes, in tree order: their widths, and then their heights. */
+	final fitted:Array<Int> = [];
+	final widthsAssigned:Array<Int> = [];
+	final heightsAssigned:Array<Int> = [];
+
+	/** Forgets the boxes of nodes the last solve did not collect. */
+	function prune():Void {
+		var kept = 0;
+		retainedById.clear();
+		for (box in retainedBoxes) if (box.seen == solveStamp) {
+			retainedById.set(box.node.id, kept);
+			retainedBoxes[kept++] = box;
+		}
+		retainedBoxes.resize(kept);
 	}
 
 	/**
@@ -408,40 +474,105 @@ class LayoutSolver {
 
 	/**
 	 * Sizes and arranges the subtree at `first`: the whole tree in the viewport, or a placed node's subtree at the
-	 * `width` by `height` its placer gave it.
+	 * `width` by `height` its placer gave it. With `retain`, a subtree with no change keeps what it had when given the
+	 * same size: its widths, text and fitted heights for the same width, its arrangement for the same height too.
 	 */
-	function layOut(first:Int, width:Float, height:Float):Void {
+	function layOut(first:Int, width:Float, height:Float, retain:Bool):Void {
 		var end = first + boxes[first].size;
 		var top = boxes[first];
-		var index = end - 1;
-		while (index >= first) fitAxis(index--, true);
+		fitted.resize(0);
+		for (index in first...end) if (!retain || boxes[index].subtreeDirty) fitted.push(index);
+		var index = fitted.length - 1;
+		while (index >= 0) fitAxis(fitted[index--], true);
 		top.width = width >= 0.0 ? width : rootSize(top.node.style.width, top.fitWidth, top.minWidth, viewportWidth);
-		for (index in first...end) assignAxis(index, true);
-		for (index in first...end) {
+		widthsAssigned.resize(0);
+		index = first;
+		while (index < end) {
+			var box = boxes[index];
+			box.widthKept = retain && !box.subtreeDirty && box.laidOut && box.width == box.lastWidth;
+			if (box.widthKept) {
+				index += box.size;
+				continue;
+			}
+			assignAxis(index, true);
+			widthsAssigned.push(index++);
+		}
+		for (index in widthsAssigned) {
 			var box = boxes[index];
 			if (box.text != null) layoutText(box);
 			else if (box.measured && box.measuredWidth != box.width) measureContent(box, box.width);
 		}
-		index = end - 1;
-		while (index >= first) fitAxis(index--, false);
+		index = widthsAssigned.length - 1;
+		while (index >= 0) fitAxis(widthsAssigned[index--], false);
 		top.height = height >= 0.0 ? height : rootSize(top.node.style.height, top.fitHeight, top.minHeight,
 			viewportHeight);
-		for (index in first...end) assignAxis(index, false);
-		index = end - 1;
-		while (index >= first) arrange(index--);
+		heightsAssigned.resize(0);
+		// Inside a subtree that kept its widths, a node with the height it had keeps its subtree's arrangement.
+		var keptUntil = -1;
+		index = first;
+		while (index < end) {
+			var box = boxes[index];
+			if (box.widthKept && index + box.size > keptUntil) keptUntil = index + box.size;
+			if (index < keptUntil && box.height == box.lastHeight) {
+				index += box.size;
+				continue;
+			}
+			assignAxis(index, false);
+			heightsAssigned.push(index++);
+		}
+		index = heightsAssigned.length - 1;
+		while (index >= 0) arrange(heightsAssigned[index--]);
+		nodesLaidOut += heightsAssigned.length;
 	}
 
+	/**
+	 * Collects `node`'s subtree into `boxes`, each node's box kept from the last solve, and finds what changed in it:
+	 * what the frame comparison reported, new nodes, text, content versions and children; and nodes always laid out
+	 * again, those whose size follows another node's (a popup sized against its anchor).
+	 */
 	function collect(node:LayoutNode, parent:Int):Void {
 		var index = count++;
-		if (index == boxes.length) boxes.push(new LayoutBox());
-		var box = boxes[index];
+		var at = retainedById.get(node.id);
+		var box:LayoutBox;
+		if (at < 0) {
+			box = new LayoutBox();
+			retainedById.set(node.id, retainedBoxes.length);
+			retainedBoxes.push(box);
+		} else box = retainedBoxes[at];
+		if (box.seen == solveStamp) throw "Layout node IDs must be unique";
+		box.seen = solveStamp;
+		if (index == boxes.length) boxes.push(box);
+		else boxes[index] = box;
 		box.node = node;
 		box.parent = parent;
 		box.flowChildren = 0;
+		var changes = changed;
+		var dirty = everything || !box.laidOut
+			|| (changes != null && (changes.inputs.get(node.id) >= 0 || changes.children.get(node.id) >= 0));
+		if (node.visualKind == LayoutVisualKind.Text) {
+			if (measureUnwrapped(box)) dirty = true;
+		} else box.text = null;
+		var content = node.intrinsicContent;
+		var version = content != null ? content.getVersion() : node.measureVersion;
+		if (version != box.contentVersion) {
+			box.contentVersion = version;
+			dirty = true;
+		}
+		var anchor = node.anchor;
+		if (anchor != null && (anchor.matchAnchor || anchor.limitToRoom)) dirty = true;
+		var signature = node.children.length, below = false;
 		for (child in node.children) {
 			if (child.style.positioning != LayoutPositioning.Absolute) box.flowChildren++;
+			signature = signature * 31 + child.id;
+			var childIndex = count;
 			collect(child, index);
+			if (boxes[childIndex].subtreeDirty) below = true;
 		}
+		if (signature != box.childSignature) {
+			box.childSignature = signature;
+			dirty = true;
+		}
+		box.subtreeDirty = dirty || below;
 		box.size = count - index;
 	}
 
@@ -484,11 +615,12 @@ class LayoutSolver {
 		return size;
 	}
 
-	function measureUnwrapped(box:LayoutBox):Void {
+	/** Measures a text node's unwrapped text, unless it was measured for the same text and styles; returns whether it was. */
+	function measureUnwrapped(box:LayoutBox):Bool {
 		var node = box.node;
 		var size = textSize(node);
 		box.text = size;
-		if (size.measured) return;
+		if (size.measured) return false;
 		var started = Sys.time();
 		var session = this.session;
 		if (session == null) {
@@ -501,6 +633,7 @@ class LayoutSolver {
 		}
 		size.measured = true;
 		textSeconds += Sys.time() - started;
+		return true;
 	}
 
 	/** Lays the text out at the width its node gives it, for its height and baseline. */
@@ -969,7 +1102,7 @@ class LayoutSolver {
 			var childBox = boxes[index + 1];
 			if (childBox.hasBaseline) {
 				box.hasBaseline = true;
-				box.baseline = childBox.y + childBox.baseline;
+				box.baseline = childBox.relY + childBox.baseline;
 			}
 		}
 	}
@@ -1002,19 +1135,19 @@ class LayoutSolver {
 			var childBox = boxes[child];
 			var childStyle = childBox.node.style;
 			if (childStyle.positioning == LayoutPositioning.Absolute) {
-				childBox.x = childStyle.positionX;
-				childBox.y = childStyle.positionY;
+				childBox.relX = childStyle.positionX;
+				childBox.relY = childStyle.positionY;
 			} else if (horizontal) {
-				childBox.x = style.padding.left + cursor;
+				childBox.relX = style.padding.left + cursor;
 				var align = alignmentY(childStyle.alignSelf, style.childAlignY);
-				childBox.y = style.padding.top
+				childBox.relY = style.padding.top
 					+ (align == LayoutAlignmentY.Baseline
 					? baseline - (childBox.hasBaseline ? childBox.baseline : childBox.height) : alignY(align,
 					innerHeight - childBox.height));
 				cursor += childBox.width + gap;
 			} else {
-				childBox.y = style.padding.top + cursor;
-				childBox.x = style.padding.left
+				childBox.relY = style.padding.top + cursor;
+				childBox.relX = style.padding.left
 					+ alignX(alignmentX(childStyle.alignSelf, style.childAlignX), innerWidth - childBox.width);
 				cursor += childBox.height + gap;
 			}
@@ -1040,8 +1173,8 @@ class LayoutSolver {
 			var childBox = boxes[child];
 			var childStyle = childBox.node.style;
 			if (childStyle.positioning == LayoutPositioning.Absolute) {
-				childBox.x = childStyle.positionX;
-				childBox.y = childStyle.positionY;
+				childBox.relX = childStyle.positionX;
+				childBox.relY = childStyle.positionY;
 			}
 			child += childBox.size;
 		}
@@ -1068,16 +1201,16 @@ class LayoutSolver {
 				var childStyle = childBox.node.style;
 				if (childStyle.positioning != LayoutPositioning.Absolute && childBox.line == each) {
 					if (horizontal) {
-						childBox.x = style.padding.left + cursor;
+						childBox.relX = style.padding.left + cursor;
 						var align = alignmentY(childStyle.alignSelf, style.childAlignY);
-						childBox.y = style.padding.top + crossOffset
+						childBox.relY = style.padding.top + crossOffset
 							+ (align == LayoutAlignmentY.Baseline
 							? baseline - (childBox.hasBaseline ? childBox.baseline : childBox.height) : alignY(align,
 							cross - childBox.height));
 						cursor += childBox.width + gap;
 					} else {
-						childBox.y = style.padding.top + cursor;
-						childBox.x = style.padding.left + crossOffset
+						childBox.relY = style.padding.top + cursor;
+						childBox.relX = style.padding.left + crossOffset
 							+ alignX(alignmentX(childStyle.alignSelf, style.childAlignX), cross - childBox.width);
 						cursor += childBox.height + gap;
 					}
@@ -1096,6 +1229,8 @@ class LayoutSolver {
 		var box = boxes[index];
 		var placer = box.node.placer;
 		box.hidden = box.parent >= 0 && boxes[box.parent].hidden;
+		box.x = box.relX;
+		box.y = box.relY;
 		if (placer != null && box.parent >= 0 && box.node.style.positioning == LayoutPositioning.Absolute) {
 			var parent = boxes[box.parent];
 			placement.x = placement.y = placement.width = placement.height = 0.0;
@@ -1103,7 +1238,7 @@ class LayoutSolver {
 			placer.place(parent.width, parent.height, placement);
 			if (!placement.shown) box.hidden = true;
 			if (placement.width != box.width || placement.height != box.height)
-				layOut(index, Math.max(0.0, placement.width), Math.max(0.0, placement.height));
+				layOut(index, Math.max(0.0, placement.width), Math.max(0.0, placement.height), false);
 			box.x = placement.x;
 			box.y = placement.y;
 		}
@@ -1122,8 +1257,8 @@ class LayoutSolver {
 			var child = index + 1;
 			for (_ in 0...box.node.children.length) {
 				var childBox = boxes[child];
-				right = Math.max(right, childBox.x - style.padding.left + childBox.width);
-				bottom = Math.max(bottom, childBox.y - style.padding.top + childBox.height);
+				right = Math.max(right, childBox.relX - style.padding.left + childBox.width);
+				bottom = Math.max(bottom, childBox.relY - style.padding.top + childBox.height);
 				child += childBox.size;
 			}
 			locatingIn = index;
@@ -1187,7 +1322,8 @@ class LayoutSolver {
 			else sizedWidth = Math.min(sizedWidth, space);
 		}
 		if (sizedWidth != w || sizedHeight != h) {
-			layOut(index, Math.max(0.0, box.width + sizedWidth - w), Math.max(0.0, box.height + sizedHeight - h));
+			layOut(index, Math.max(0.0, box.width + sizedWidth - w), Math.max(0.0, box.height + sizedHeight - h),
+				false);
 			box.composeWorld(box.parent < 0 ? null : boxes[box.parent]);
 			worldBounds(index, current);
 			w = current.width;
@@ -1348,9 +1484,25 @@ private class LayoutBox {
 	public var minHeight:Float = 0.0;
 	public var width:Float = 0.0;
 	public var height:Float = 0.0;
-	/** Relative to the parent while arranging, then in layout coordinates. */
+	/** Where its parent arranged it, relative to the parent's origin. */
+	public var relX:Float = 0.0;
+	public var relY:Float = 0.0;
+	/** Where it is, in layout coordinates. */
 	public var x:Float = 0.0;
 	public var y:Float = 0.0;
+	/**
+	 * Retention: the solve it was last collected in; whether it was ever laid out, and its size then; whether anything in
+	 * its subtree changed; whether this solve kept its subtree's widths; and what its inputs
+	 * were that the frame comparison does not report (its content's version, its children).
+	 */
+	public var seen:Int = 0;
+	public var laidOut:Bool = false;
+	public var lastWidth:Float = 0.0;
+	public var lastHeight:Float = 0.0;
+	public var subtreeDirty:Bool = true;
+	public var widthKept:Bool = false;
+	public var contentVersion:Int = 0;
+	public var childSignature:Int = 0;
 	public var baseline:Float = 0.0;
 	public var hasBaseline:Bool = false;
 	/** Whether the baseline is its text's or its content's own, not taken from a child. */

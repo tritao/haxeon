@@ -65,6 +65,9 @@ class UiFrameMetrics {
 	 */
 	public final layoutSolves:Int;
 
+	/** Nodes the frame's layout solves laid out again; the others kept their layout from the frame before (ADR 0009). */
+	public var layoutNodesLaidOut(default, null):Int = 0;
+
 	/** How long submitting the frame took, building through native layout. */
 	public final submitSeconds:Float;
 
@@ -185,6 +188,8 @@ class UiFrameMetrics {
 		renderSeconds = seconds < 0.0 ? 0.0 : seconds;
 		totalSeconds = submitSeconds + renderSeconds;
 	}
+
+	internal function setLayoutWork(nodesLaidOut:Int):Void layoutNodesLaidOut = nodesLaidOut;
 
 	internal function setSubmitPhases(view:Float, treeAndStyle:Float, nativeLayout:Float,
 			reconcile:Float):Void {

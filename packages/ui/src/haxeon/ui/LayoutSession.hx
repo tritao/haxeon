@@ -24,6 +24,14 @@ class LayoutSession implements Disposable {
 	final referenceTransaction:LayoutTransaction = new LayoutTransaction();
 	/** Compare the retained native tree with a full encode after every submit while retention verification is enabled. */
 	public var verifyTransactions:Bool = false;
+
+	/** Compare each retained solve with a full one of the same tree, throwing where they differ. */
+	public var verifyLayout:Bool = false;
+
+	var referenceSolver:Null<haxeon.ui.layout.LayoutSolver> = null;
+
+	/** Nodes the last solve laid out again; the others kept their layout from the solve before. */
+	public var lastNodesLaidOut(default, null):Int = 0;
 	var measureFunction:Null<LayoutMeasureCallback>;
 	final renderableContents:Map<Int, LayoutRenderableContent>;
 
@@ -48,6 +56,7 @@ class LayoutSession implements Disposable {
 		ensureLive();
 		UiResult.check(NativeKitUI.nkui_layout_session_set_font_collection(value,
 			fonts.nativeHandle()), "layoutSession.setFonts");
+		solver.invalidate();
 	}
 
 	/** Measures Custom nodes without content of their own while a submit lays them out; null measures none. */
@@ -72,17 +81,29 @@ class LayoutSession implements Disposable {
 
 	/**
 	 * Lays `root` out and returns its resolved geometry, in tree order, without telling NativeKit: a frame may lay its tree
-	 * out several times while geometry callbacks settle, and `publish` sends the one it settles on.
+	 * out several times while geometry callbacks settle, and `publish` sends the one it settles on. With `changes`, the
+	 * nodes the frame comparison found changed since the last solve, only what they reach is laid out again.
 	 */
-	internal function solve(root:LayoutNode, frame:LayoutFrame):Array<ResolvedLayoutItem> {
+	internal function solve(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges):Array<ResolvedLayoutItem> {
 		ensureLive();
 		if (frame == null) throw "Layout session frame cannot be null";
 		var started = measureCost ? Sys.time() : 0.0;
 		solver.attach(this, measureFunction);
-		solver.solve(root, frame.width, frame.height);
+		solver.solve(root, frame.width, frame.height, changes);
+		if (verifyLayout && changes != null) {
+			var reference = referenceSolver;
+			if (reference == null) referenceSolver = reference = new haxeon.ui.layout.LayoutSolver();
+			reference.attach(this, measureFunction);
+			reference.solve(root, frame.width, frame.height);
+			reference.takeChanged(null);
+			var difference = solver.differenceFrom(reference);
+			if (difference != null) throw "The retained layout differs from a full solve: " + difference;
+		}
+		lastNodesLaidOut = solver.nodesLaidOut;
 		resolved = solver.resolve();
 		if (measureCost)
-			Sys.stderr().writeString("layout-cost solve nodes=" + solver.nodes + " solve=" + solver.solveSeconds
+			Sys.stderr().writeString("layout-cost solve nodes=" + solver.nodes + " laidOut=" + solver.nodesLaidOut
+				+ " solve=" + solver.solveSeconds
 				+ " text="
 				+ solver.textSeconds + " total=" + (Sys.time() - started) + "\n");
 		return resolved;

@@ -41,6 +41,7 @@ class UiContext implements Disposable {
 	final session:LayoutSession;
 	/** Native layout solves of the frame being submitted, over its build passes (`UiFrameMetrics.layoutSolves`). */
 	var frameLayoutSolves:Int = 0;
+	var frameNodesLaidOut:Int = 0;
 	/** Whether the tree laid out last differs from the one NativeKit has: passes lay out in Haxe, and a frame publishes once. */
 	var unpublished:Bool = false;
 	final layoutChanges:LayoutChanges = new LayoutChanges();
@@ -341,6 +342,12 @@ class UiContext implements Disposable {
 	 */
 	public var verifyRetentionEvery:Int = 0;
 
+	/**
+	 * Whether each retained layout solve is compared with a full one, also outside retention verification; the
+	 * `HAXEON_UI_VERIFY_LAYOUT` environment variable turns it on.
+	 */
+	public var verifyLayout:Bool = Sys.getEnv("HAXEON_UI_VERIFY_LAYOUT") == "1";
+
 	/** Called with the difference when a check fails; by default the check throws it. */
 	public var onRetentionMismatch:Null<String->Void> = null;
 
@@ -511,7 +518,10 @@ class UiContext implements Disposable {
 		ensureLive();
 		if (frame == null || build == null) throw "A UI frame requires a view and layout frame";
 		@:privateAccess buildContext.buildFeedbackPass = buildFeedbackPass;
-		if (buildFeedbackPass == 0) frameLayoutSolves = 0;
+		if (buildFeedbackPass == 0) {
+			frameLayoutSolves = 0;
+			frameNodesLaidOut = 0;
+		}
 		// Consume the request before running user getters so a failed effect can schedule a later retry.
 		var bindingAppliedRevision = buildContext.consumeBindingFrameRequest();
 		ReactiveRuntime.flushEffects();
@@ -627,9 +637,12 @@ class UiContext implements Disposable {
 				if (previousResolved != null) resolved.push(previousResolved);
 			});
 		} else {
-			resolved = session.solve(next.layout, frame);
+			session.verifyLayout = verifyLayout || verifyRetentionEvery > 0;
+			// A fresh build for verification lays everything out, as a reference must.
+			resolved = session.solve(next.layout, frame, verifying ? null : layoutChanges);
 			unpublished = true;
 			frameLayoutSolves++;
+			frameNodesLaidOut += session.lastNodesLaidOut;
 		}
 		diagnosticStage = 6;
 		var nodeCount = 0;
@@ -850,6 +863,7 @@ class UiContext implements Disposable {
 			resolvedGeometryChangedNodes,
 			resolvedGeometryReusedNodes,
 			buildFeedbackPass + 1, frameLayoutSolves);
+		lastFrameMetrics.setLayoutWork(frameNodesLaidOut);
 		lastFrameMetrics.setSubmitPhases(viewBuiltAt - viewStartedAt,
 			nativeLayoutStartedAt - viewBuiltAt,
 			nativeLayoutEndedAt - nativeLayoutStartedAt,

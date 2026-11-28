@@ -1137,6 +1137,7 @@ private class PopupHost implements View {
 		ui.dispose();
 		Sys.println("PASS verify: an honest cache passes; a key missing an input is reported, also by the automatic check");
 		geometryCallbackEdits(fonts);
+		retainedLayout(fonts);
 		observedReads(fonts);
 	}
 
@@ -1179,6 +1180,51 @@ private class PopupHost implements View {
 		check(threw, "A geometry callback announced an edit to a placed node");
 		ui.dispose();
 		Sys.println("PASS geometry callbacks: verify mode reports edits; afterBuild may write state");
+	}
+
+	/**
+	 * Layout lays out again only what a change reaches: a changed row and its ancestors, not its siblings; each solve is
+	 * checked against a full one. A new viewport lays everything out.
+	 */
+	static function retainedLayout(fonts:FontCollection):Void {
+		var ui = new UiContext(null, fonts);
+		ui.verifyLayout = true;
+		var frame = new LayoutFrame(320.0, 2000.0);
+		var label = new Signal("row 7");
+		var build = () -> new NodeView(context -> {
+			var columnStyle = new LayoutStyle();
+			columnStyle.direction = haxeon.ui.LayoutStyle.LayoutDirection.TopToBottom;
+			// A fixed width, so a wider label does not widen every row.
+			columnStyle.width = LayoutAxis.fixed(300.0);
+			var column = new RenderNode(context.id("rows"), haxeon.ui.LayoutNode.LayoutVisualKind.Box, columnStyle);
+			for (index in 0...40) {
+				var rowStyle = new LayoutStyle();
+				rowStyle.width = LayoutAxis.grow();
+				rowStyle.height = LayoutAxis.fixed(24.0);
+				var row = new RenderNode(context.id("row-" + index), haxeon.ui.LayoutNode.LayoutVisualKind.Box,
+					rowStyle);
+				var text = index == 7 ? label.value : "row " + index;
+				row.add(context.withScope(new haxeon.ui.core.Key("row-" + index),
+					() -> new haxeon.ui.widgets.text.Text(text).build(context)));
+				column.add(row);
+			}
+			return column;
+		});
+		function laidOut():Int {
+			var metrics = ui.frameMetrics;
+			return metrics == null ? -1 : metrics.layoutNodesLaidOut;
+		}
+		ui.submit(build(), frame);
+		var all = laidOut();
+		check(all >= 81, "The first frame did not lay out every node: " + all);
+		label.value = "row seven, renamed";
+		ui.submit(build(), frame);
+		var some = laidOut();
+		check(some > 0 && some <= 6, "A changed row laid out " + some + " nodes, not only its row and ancestors");
+		ui.submit(build(), new LayoutFrame(300.0, 2000.0));
+		check(laidOut() >= 81, "A new viewport did not lay everything out");
+		ui.dispose();
+		Sys.println("PASS retained layout: a change lays out its path only, matching a full solve");
 	}
 
 	/** A tracked scope follows observable fields, including reads nested under another scope. */
