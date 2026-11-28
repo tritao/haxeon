@@ -32,14 +32,15 @@ can parse them.
 ## Typed events
 
 `Runtime.events` is the managed owner of the native event queue. Each
-`events.poll()` performs one native poll, decodes and releases that event, routes
-request completions, then notifies event listeners. It returns `false` when the
+`events.poll()` performs one native poll, decodes and releases that event, and
+either settles the request it answers (`Requests`) or notifies event listeners. It returns `false` when the
 queue is empty, so an application can drain events with `while (events.poll())`.
 The low-level `NativeEvent` wrapper still provides `release()`, `take()`,
 `payload()`, and `snapshot()` for code that already owns a raw event value.
 
-Known WebView, notification, dialog, clipboard, and drop payloads project to typed
-`PlatformEvent` cases. Unknown kinds project to `Raw`, preserving metadata
+Known WebView, notification and drop payloads project to typed `PlatformEvent`
+cases, and clipboard, dialog, task and resource answers to the futures of their
+requests. Unknown kinds project to `Raw`, preserving metadata
 and copied payload data for forward compatibility. Malformed packed payloads
 throw instead of allowing out-of-bounds reads.
 

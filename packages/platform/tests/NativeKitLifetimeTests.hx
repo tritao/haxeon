@@ -5,6 +5,7 @@ import haxeon.platform.RuntimeOptions;
 import haxeon.platform.SurfaceOptions;
 import haxeon.platform.WebViewOptions;
 import haxeon.platform.WindowOptions;
+import haxeon.platform.async.Completion;
 import haxeon.platform.async.Requests;
 import haxeon.platform.async.Task;
 import haxeon.platform.dialog.FileDialogFilter;
@@ -18,6 +19,10 @@ import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 
 /** Synthetic task events test routing without installing a managed worker callback. */
 class NativeKitLifetimeTests {
+	/** A completion with no typed case, as `trackNative` follows, carrying `text`. */
+	static function rawAnswer(id:haxe.Int64, text:String):PlatformEvent
+		return Raw(EventKind.ResourceDataComplete, new Handle(0), id, Result.Ok, 0, 0, haxe.io.Bytes.ofString(text));
+
 	static var shutdownCompleted:Bool = false;
 	static var secondShutdownCompleted:Bool = false;
 
@@ -32,11 +37,11 @@ class NativeKitLifetimeTests {
 			case Success(Ok(length)): value = length;
 			case _: value = -1;
 		});
-		var progress = requests.handle(TaskProgress(source, haxe.io.Bytes.alloc(0)));
+		var progress = requests.complete(TaskProgress(source, haxe.io.Bytes.alloc(0)));
 		if (!progress || future.isComplete() || requests.pending() != 1) return false;
-		if (!requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(7)))) return false;
+		if (!requests.complete(TaskComplete(source, haxe.io.Bytes.alloc(7)))) return false;
 		if (value != 7 || !future.isComplete() || requests.pending() != 0) return false;
-		if (requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(7)))) return false;
+		if (requests.complete(TaskComplete(source, haxe.io.Bytes.alloc(7)))) return false;
 
 		// A decoder that throws has a bug: the future stops, and the exception reaches the event pump.
 		var decodingFailed = false, badStopped = false;
@@ -47,7 +52,7 @@ class NativeKitLifetimeTests {
 			case Stopped: badStopped = true;
 			case _:
 		});
-		try requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(0))) catch (error:haxe.Exception)
+		try requests.complete(TaskComplete(source, haxe.io.Bytes.alloc(0))) catch (error:haxe.Exception)
 			decodingFailed = error.message == "bad payload";
 		if (!decodingFailed || !badStopped || requests.pending() != 0) return false;
 
@@ -57,7 +62,7 @@ class NativeKitLifetimeTests {
 			case Cancelled: cancelled = true;
 			case _:
 		});
-		requests.handle(TaskCancelled(source, Result.ErrorCancelled, haxe.io.Bytes.alloc(0)));
+		requests.complete(TaskCancelled(source));
 		if (!cancelled || !cancelling.isComplete() || requests.pending() != 0) return false;
 
 		// A failed native cancellation must propagate and leave completion retryable.
@@ -66,7 +71,7 @@ class NativeKitLifetimeTests {
 		try retry.cancel() catch (_:Dynamic) cancellationFailed = true;
 		if (!cancellationFailed || retry.isComplete() || retry.isCancellationRequested()
 			|| !retry.canCancel()) return false;
-		requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(1)));
+		requests.complete(TaskComplete(source, haxe.io.Bytes.alloc(1)));
 		if (!retry.isComplete()) return false;
 
 		// Stop observation is independent of native cancellation, including for tasks.
@@ -78,13 +83,13 @@ class NativeKitLifetimeTests {
 		});
 		if (!stoppedTask.stopObserving() || !taskStopped || stoppedTask.isCancellationRequested()
 			|| requests.pending() != 0) return false;
-		if (requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(1)))) return false;
+		if (requests.complete(TaskComplete(source, haxe.io.Bytes.alloc(1)))) return false;
 
 		// Request IDs and task handles occupy different namespaces in the same registry.
 		var id = haxe.Int64.ofInt(source.rawValue);
 		var rawValue = 0;
 		var raw = requests.trackNative(id, function(event):Outcome<Int> switch event {
-			case ClipboardText(_, result, text): Success(text.length);
+			case Raw(_, _, _, _, _, _, data): Success(data.length);
 			case _: Cancelled;
 		});
 		raw.onComplete(function(outcome) switch outcome {
@@ -98,9 +103,9 @@ class NativeKitLifetimeTests {
 		}
 		var sameNumberTask = requests.trackTask(task, function(bytes) return bytes.length);
 		if (!duplicateRejected || requests.pending() != 2) return false;
-		requests.handle(ClipboardText(id, Result.Ok, "abc"));
+		requests.handle(rawAnswer(id, "abc"));
 		if (rawValue != 3 || requests.pending() != 1 || sameNumberTask.isComplete()) return false;
-		requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(2)));
+		requests.complete(TaskComplete(source, haxe.io.Bytes.alloc(2)));
 		if (!sameNumberTask.isComplete() || requests.pending() != 0) return false;
 
 		// Native cancellation is idempotent, awaits acknowledgement, and tolerates a completion race.
@@ -110,7 +115,7 @@ class NativeKitLifetimeTests {
 		});
 		if (!racing.cancel() || racing.cancel() || calls != 1 || racing.isComplete()
 			|| !racing.isCancellationRequested()) return false;
-		requests.handle(ClipboardText(id, Result.Ok, "done"));
+		requests.handle(rawAnswer(id, "done"));
 		if (!racing.isComplete() || racing.cancel() || requests.pending() != 0) return false;
 
 		// A decoder's exception reaches the event pump as it was thrown.
@@ -119,7 +124,7 @@ class NativeKitLifetimeTests {
 		var malformed = requests.trackNative(id, function(_):Outcome<Int> {
 			throw expectedError;
 		});
-		try requests.handle(ClipboardText(id, Result.Ok, "bad")) catch (error:haxeon.platform.BindingError)
+		try requests.handle(rawAnswer(id, "bad")) catch (error:haxeon.platform.BindingError)
 			errorPreserved = error == expectedError;
 		if (!errorPreserved || !malformed.isComplete() || requests.pending() != 0) return false;
 
@@ -131,9 +136,9 @@ class NativeKitLifetimeTests {
 			previous.stopObserving();
 			return Success(1);
 		});
-		requests.handle(ClipboardText(id, Result.Ok, "first"));
+		requests.handle(rawAnswer(id, "first"));
 		if (!previous.isComplete() || replacement.isComplete() || requests.pending() != 1) return false;
-		requests.handle(ClipboardText(id, Result.Ok, "second"));
+		requests.handle(rawAnswer(id, "second"));
 		if (!replacement.isComplete() || requests.pending() != 0) return false;
 
 		// One throwing observer must not starve other completion observers.

@@ -1,7 +1,9 @@
+import haxeon.platform.async.Completion;
 import haxeon.platform.event.EventBytes;
 import haxeon.platform.event.EventSnapshot;
 import haxeon.platform.event.InputEventDecoder;
 import haxeon.platform.event.NativeEvent;
+import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.event.ResourceEventDecoder;
 import haxeon.platform.event.WindowEventDecoder;
 
@@ -10,6 +12,13 @@ import nativekit.ffi.NativeKitTypes;
 
 /** Synthetic payload tests for decoder validation and fallback behavior. */
 class NativeKitEventDecoderTests {
+	/** What `context` decodes to when it is something that happened, else null. */
+	static function happened(context:EventSnapshot):Null<PlatformEvent>
+		return switch NativeEvent.decodeSnapshot(context) {
+			case Happened(event): event;
+			case _: null;
+		};
+
 	public static function run():Bool {
 		var zeroInt = 0;
 		// Request IDs are Int64; this also covers the core signed widening conversion.
@@ -19,7 +28,7 @@ class NativeKitEventDecoderTests {
 		});
 		var unknown = new EventSnapshot(EventKind.PluginEvent, handle(7), zero, Result.ErrorInvalidArgument, 3, 4,
 			empty);
-		var rawOk = switch NativeEvent.decodeSnapshot(unknown) {
+		var rawOk = switch happened(unknown) {
 			case Raw(kind, source, _, result, flags, count, data): kind == EventKind.PluginEvent && source.rawValue
 				== 7 && result == Result.ErrorInvalidArgument && flags == 3 && count == 4 && data == empty;
 			case _: false;
@@ -46,7 +55,7 @@ class NativeKitEventDecoderTests {
 		var messageContext = new EventSnapshot(EventKind.DialogMessageComplete, handle(0), zero, Result.Ok, 4, 0,
 			messagePayload);
 		var messageOk = switch NativeEvent.decodeSnapshot(messageContext) {
-			case DialogMessage(_, Result.Ok, MessageResult.Yes, false): true;
+			case Answered(DialogMessage(_, Ok(button))): button == MessageResult.Yes;
 			case _: false;
 		};
 		var checkedPayload = haxe.io.Bytes.alloc(8);
@@ -55,7 +64,14 @@ class NativeKitEventDecoderTests {
 		var checkedContext = new EventSnapshot(EventKind.DialogMessageComplete, handle(0), zero, Result.Ok, 4, 0,
 			checkedPayload);
 		messageOk = messageOk && switch NativeEvent.decodeSnapshot(checkedContext) {
-			case DialogMessage(_, Result.Ok, MessageResult.Yes, true): true;
+			case Answered(DialogMessage(_, Ok(button))): button == MessageResult.Yes;
+			case _: false;
+		};
+		// No button is a dialog the user dismissed.
+		var dismissed = new EventSnapshot(EventKind.DialogMessageComplete, handle(0), zero, Result.Ok, 4, 0,
+			haxe.io.Bytes.alloc(4));
+		messageOk = messageOk && switch NativeEvent.decodeSnapshot(dismissed) {
+			case Answered(DialogMessage(_, Err(Cancelled))): true;
 			case _: false;
 		};
 		var resourcesPayload = haxe.io.Bytes.alloc(16);
@@ -63,15 +79,15 @@ class NativeKitEventDecoderTests {
 		putU32(resourcesPayload, 12, 16);
 		var resourcesContext = new EventSnapshot(EventKind.DialogResourcesComplete, handle(0), zero, Result.Ok, 5, 0,
 			resourcesPayload);
+		// A resource dialog the user did not accept answers Cancelled.
 		var resourcesOk = switch NativeEvent.decodeSnapshot(resourcesContext) {
-			case Resources(kind, _, result, accepted, items): kind == EventKind.DialogResourcesComplete
-				&& result == Result.Ok && !accepted && items.length == 0;
+			case Answered(DialogResources(_, Err(Cancelled))): true;
 			case _: false;
 		};
 		var resourceCacheEventsOk = switch [
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.ResourceCacheReady,
+			happened(new EventSnapshot(EventKind.ResourceCacheReady,
 				handle(24), haxe.Int64.ofInt(25), Result.Ok, 0, 0, empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.ResourceCacheLoadFailed,
+			happened(new EventSnapshot(EventKind.ResourceCacheLoadFailed,
 				handle(25), haxe.Int64.ofInt(26), Result.ErrorUnknown, 0, 0, empty))
 		] {
 			case [ResourceAssetReady(source, request), ResourceAssetLoadFailed(failedSource, failedRequest, result)]:
@@ -94,7 +110,7 @@ class NativeKitEventDecoderTests {
 		editPayload.set(48, 0xc3);
 		editPayload.set(49, 0xa9);
 		var editContext = new EventSnapshot(EventKind.TextEdit, handle(9), zero, Result.Ok, 0, 0, editPayload);
-		var editOk = switch NativeEvent.decodeSnapshot(editContext) {
+		var editOk = switch happened(editContext) {
 			case TextEdit(source, edit): source.rawValue == 9 && edit.action == TextEditAction.Compose
 				&& edit.text == "é" && edit.replaceStart == 1 && edit.compositionEnd == 2 && edit.selectionAffinity == 1
 				&& edit.historyKind == nativekit.ffi.NativeKitTypes.TextEditHistoryKind.Composition;
@@ -122,7 +138,7 @@ class NativeKitEventDecoderTests {
 		accessibilityPayload.set(33, 0x6b);
 		var accessibilityContext = new EventSnapshot(EventKind.AccessibilityAction,
 			handle(15), zero, Result.Ok, 0, 0, accessibilityPayload);
-		var accessibilityOk = switch NativeEvent.decodeSnapshot(accessibilityContext) {
+		var accessibilityOk = switch happened(accessibilityContext) {
 			case AccessibilityAction(source, nodeId, action, value, selectionStart, selectionEnd, granularity):
 				source.rawValue == 15 && nodeId == 77 && action == NativeKitTypes.AccessibilityAction.Activate
 					&& value == "ok" && selectionStart == -1
@@ -132,7 +148,7 @@ class NativeKitEventDecoderTests {
 		// An action code newer than the binding keeps the event, as a Raw one.
 		var newerAccessibilityPayload = accessibilityPayload.sub(0, accessibilityPayload.length);
 		putU32(newerAccessibilityPayload, 4, 999);
-		var newerAccessibilityOk = switch NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AccessibilityAction,
+		var newerAccessibilityOk = switch happened(new EventSnapshot(EventKind.AccessibilityAction,
 			handle(15), zero, Result.Ok, 0, 0, newerAccessibilityPayload)) {
 				case Raw(kind, _, _, _, _, _, _): kind == EventKind.AccessibilityAction;
 				case _: false;
@@ -147,7 +163,7 @@ class NativeKitEventDecoderTests {
 		putU32(keyPayload, 8, InputAction.Press.rawValue);
 		putU32(keyPayload, 12, Modifiers.Control.rawValue | (1 << 30));
 		var keyContext = new EventSnapshot(EventKind.Key, handle(12), zero, Result.Ok, 0, 0, keyPayload);
-		var typedKeyOk = switch NativeEvent.decodeSnapshot(keyContext) {
+		var typedKeyOk = switch happened(keyContext) {
 			case Key(source, key, scancode, action, modifiers):
 				source.rawValue == 12 && key == Key.Escape && scancode == 41 && action == InputAction.Press
 					&& modifiers == Modifiers.Control;
@@ -161,7 +177,7 @@ class NativeKitEventDecoderTests {
 			putU32(payload, 0, code);
 			putU32(payload, 4, InputAction.Press.rawValue);
 			var snapshot = new EventSnapshot(EventKind.PointerButton, handle(12), zero, Result.Ok, 0, 0, payload);
-			extraButtonsOk = extraButtonsOk && switch NativeEvent.decodeSnapshot(snapshot) {
+			extraButtonsOk = extraButtonsOk && switch happened(snapshot) {
 				case PointerButton(_, button, action, _, _, _): button.rawValue == code
 					&& action == InputAction.Press;
 				case _: false;
@@ -174,7 +190,7 @@ class NativeKitEventDecoderTests {
 		putU32(hatPayload, 0, 2);
 		putU32(hatPayload, 4, (JoystickHatFlags.Up | JoystickHatFlags.Left).rawValue);
 		var hatContext = new EventSnapshot(EventKind.JoystickHat, handle(13), zero, Result.Ok, 0, 0, hatPayload);
-		var typedHatOk = switch NativeEvent.decodeSnapshot(hatContext) {
+		var typedHatOk = switch happened(hatContext) {
 			case JoystickHat(source, hat, value):
 				source.rawValue == 13 && hat == 2 && value.contains(JoystickHatFlags.Up)
 					&& value.contains(JoystickHatFlags.Left);
@@ -182,7 +198,7 @@ class NativeKitEventDecoderTests {
 		};
 		var navigationContext = new EventSnapshot(EventKind.WebviewNavigationFailed, handle(14), zero, Result.Ok,
 			NavigationError.NotFound.rawValue, 0, empty);
-		var typedNavigationOk = switch NativeEvent.decodeSnapshot(navigationContext) {
+		var typedNavigationOk = switch happened(navigationContext) {
 			case WebViewNavigationFailed(source, category, _): source.rawValue == 14
 				&& category == NavigationError.NotFound;
 			case _: false;
@@ -192,22 +208,21 @@ class NativeKitEventDecoderTests {
 		var taskContext = new EventSnapshot(EventKind.TaskComplete, handle(21), zero, Result.Ok,
 			0, 1, taskPayload);
 		var taskOk = switch NativeEvent.decodeSnapshot(taskContext) {
-			case TaskComplete(source, result, data): source.rawValue == 21 && result == Result.Ok
-				&& data == taskPayload;
+			case Answered(TaskComplete(source, data)): source.rawValue == 21 && data == taskPayload;
 			case _: false;
 		};
 		var audioContext = new EventSnapshot(EventKind.AudioVoiceComplete,
 			handle(16), zero, Result.Ok, 0, 0, empty);
-		var audioOk = switch NativeEvent.decodeSnapshot(audioContext) {
+		var audioOk = switch happened(audioContext) {
 			case AudioVoiceComplete(source): source.rawValue == 16;
 			case _: false;
 		};
 		var audioTransitionEventsOk = switch [
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioVoiceStolen,
+			happened(new EventSnapshot(EventKind.AudioVoiceStolen,
 				handle(21), zero, Result.Ok, 0, 0, empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioVoiceVirtualized,
+			happened(new EventSnapshot(EventKind.AudioVoiceVirtualized,
 				handle(22), zero, Result.Ok, 0, 0, empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioVoiceResumed,
+			happened(new EventSnapshot(EventKind.AudioVoiceResumed,
 				handle(23), zero, Result.Ok, 0, 0, empty))
 		] {
 			case [AudioVoiceStolen(stolen), AudioVoiceVirtualized(virtualized), AudioVoiceResumed(resumed)]:
@@ -216,48 +231,48 @@ class NativeKitEventDecoderTests {
 		};
 		var audioReadyContext = new EventSnapshot(EventKind.AudioVoiceReady,
 			handle(17), zero, Result.Ok, 0, 0, empty);
-		var audioReadyOk = switch NativeEvent.decodeSnapshot(audioReadyContext) {
+		var audioReadyOk = switch happened(audioReadyContext) {
 			case AudioVoiceReady(source): source.rawValue == 17;
 			case _: false;
 		};
 		var audioFailedContext = new EventSnapshot(EventKind.AudioVoiceLoadFailed,
 			handle(18), zero, Result.ErrorUnknown, 0, 0, empty);
-		var audioFailedOk = switch NativeEvent.decodeSnapshot(audioFailedContext) {
+		var audioFailedOk = switch happened(audioFailedContext) {
 			case AudioVoiceLoadFailed(source, result):
 				source.rawValue == 18 && result == Result.ErrorUnknown;
 			case _: false;
 		};
 		var audioClipReadyContext = new EventSnapshot(EventKind.AudioClipReady,
 			handle(19), haxe.Int64.ofInt(19), Result.Ok, 0, 0, empty);
-		var audioClipReadyOk = switch NativeEvent.decodeSnapshot(audioClipReadyContext) {
+		var audioClipReadyOk = switch happened(audioClipReadyContext) {
 			case AudioClipReady(source, request):
 				source.rawValue == 19 && Std.string(request) == "19";
 			case _: false;
 		};
 		var audioClipFailedContext = new EventSnapshot(EventKind.AudioClipLoadFailed,
 			handle(20), haxe.Int64.ofInt(20), Result.ErrorUnknown, 0, 0, empty);
-		var audioClipFailedOk = switch NativeEvent.decodeSnapshot(audioClipFailedContext) {
+		var audioClipFailedOk = switch happened(audioClipFailedContext) {
 			case AudioClipLoadFailed(source, request, result):
 				source.rawValue == 20 && Std.string(request) == "20" && result == Result.ErrorUnknown;
 			case _: false;
 		};
 		var audioStreamFailedContext = new EventSnapshot(EventKind.AudioVoiceStreamFailed,
 			handle(24), zero, Result.ErrorUnknown, 0, 0, empty);
-		var audioStreamFailedOk = switch NativeEvent.decodeSnapshot(audioStreamFailedContext) {
+		var audioStreamFailedOk = switch happened(audioStreamFailedContext) {
 			case AudioVoiceStreamFailed(source, result):
 				source.rawValue == 24 && result == Result.ErrorUnknown;
 			case _: false;
 		};
 		var audioDeviceEventsOk = switch [
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceStarted, handle(0), zero, Result.Ok, 0, 0,
+			happened(new EventSnapshot(EventKind.AudioDeviceStarted, handle(0), zero, Result.Ok, 0, 0,
 				empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceStopped, handle(0), zero, Result.Ok, 0, 0,
+			happened(new EventSnapshot(EventKind.AudioDeviceStopped, handle(0), zero, Result.Ok, 0, 0,
 				empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceRerouted, handle(0), zero, Result.Ok, 0,
+			happened(new EventSnapshot(EventKind.AudioDeviceRerouted, handle(0), zero, Result.Ok, 0,
 				0, empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceInterruptionBegan, handle(0), zero,
+			happened(new EventSnapshot(EventKind.AudioDeviceInterruptionBegan, handle(0), zero,
 				Result.Ok, 0, 0, empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceInterruptionEnded, handle(0), zero,
+			happened(new EventSnapshot(EventKind.AudioDeviceInterruptionEnded, handle(0), zero,
 				Result.Ok, 0, 0, empty))
 		] {
 			case [

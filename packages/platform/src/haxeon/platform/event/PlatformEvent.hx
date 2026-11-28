@@ -19,25 +19,17 @@ import nativekit.ffi.NativeKitTypes.TouchAction;
 import nativekit.ffi.NativeKitTypes.TouchTool;
 import nativekit.ffi.NativeKitTypes.WindowStateFlags;
 
-/** Everything NativeKit reports, decoded into managed values. */
+/**
+ * What happens that NativeKit reports, decoded into managed values: input, windows, surfaces, web views, audio and the
+ * like. The answer to a request the app made (a clipboard read, a dialog, a task) is not one of these: it settles the
+ * request's future (`Requests`), so only the caller sees it.
+ */
 enum PlatformEvent {
-	/** No event. */
-	None;
-
-	/** Text read from the clipboard for `request`. */
-	ClipboardText(request:haxe.Int64, result:Result, text:String);
-
-	/** File paths read from the clipboard for `request`. */
-	ClipboardFiles(request:haxe.Int64, result:Result, paths:Array<String>);
-
 	/** Text dropped on a window. */
 	DropText(source:Handle, text:String);
 
 	/** Files dropped on a window. */
 	DropFiles(source:Handle, paths:Array<String>);
-
-	/** A message dialog closed with `button`. */
-	DialogMessage(request:haxe.Int64, result:Result, button:MessageResult, checkboxChecked:Bool);
 
 	/** A web view finished loading `url`. */
 	WebViewNavigated(source:Handle, url:String);
@@ -47,9 +39,6 @@ enum PlatformEvent {
 
 	/** A web view's page changed its title. */
 	WebViewTitleChanged(source:Handle, title:String);
-
-	/** A script evaluated in a web view returned `json`. */
-	WebViewEvaluation(source:Handle, request:haxe.Int64, result:Result, json:String);
 
 	/** A web view failed to load a page. */
 	WebViewNavigationFailed(source:Handle, category:NavigationError, message:String);
@@ -62,18 +51,6 @@ enum PlatformEvent {
 
 	/** A notification could not be shown. */
 	NotificationFailed(request:haxe.Int64, message:String);
-
-	/** A native task reported progress. */
-	TaskProgress(source:Handle, data:haxe.io.Bytes);
-
-	/** A native task finished. */
-	TaskComplete(source:Handle, result:Result, data:haxe.io.Bytes);
-
-	/** A native task failed. */
-	TaskFailed(source:Handle, result:Result, data:haxe.io.Bytes);
-
-	/** A native task was cancelled. */
-	TaskCancelled(source:Handle, result:Result, data:haxe.io.Bytes);
 
 	/** An HTTP response's status and headers arrived. */
 	HttpHeaders(source:Handle, request:haxe.Int64, result:Result, response:HttpResponse);
@@ -168,17 +145,14 @@ enum PlatformEvent {
 	/** A submitted surface frame finished. */
 	SurfaceFrameComplete(source:Handle, frameToken:haxe.Int64, result:Result);
 
-	/** Resources a request picked, opened or received. */
-	Resources(kind:EventKind, request:haxe.Int64, result:Result, accepted:Bool, items:Array<Resource>);
+	/** The system opened resources with the app, as when the user opens a file with it. */
+	ResourcesOpened(items:Array<Resource>);
 
 	/** Content shared to the app. */
 	ShareReceived(text:Null<String>, subject:Null<String>, items:Array<Resource>);
 
 	/** Resources dropped on a window. */
 	ResourceDrop(source:Handle, x:Float, y:Float, text:Null<String>, items:Array<Resource>);
-
-	/** A resource save finished. */
-	ResourceCommit(request:haxe.Int64, result:Result, downloadInitiated:Bool);
 
 	/** A resource cache asset loaded. */
 	ResourceAssetReady(source:Handle, request:haxe.Int64);

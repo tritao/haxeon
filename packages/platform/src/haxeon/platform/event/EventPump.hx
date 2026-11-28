@@ -22,19 +22,22 @@ class EventPump {
 		requests = new Requests();
 	}
 
-	/** Polls and releases one native event, then routes its managed snapshot. */
+	/**
+	 * Polls and releases one native event, then routes its managed snapshot: a request's answer settles its future
+	 * (`requests`), anything else reaches the listeners. Returns false when the queue was empty.
+	 */
 	public function poll():Bool {
 		ensureLive();
 		var polled = NativeKit.nk_poll_event_checked(new Event());
-		var event = new NativeEvent(polled);
-		var value = event.take();
-		var hasEvent = switch value {
-			case None: false;
-			case _: true;
+		return switch new NativeEvent(polled).take() {
+			case Nothing: false;
+			case Happened(value):
+				dispatch(value);
+				true;
+			case Answered(completion):
+				requests.complete(completion);
+				true;
 		};
-		if (hasEvent)
-			dispatch(value);
-		return hasEvent;
 	}
 
 	/** Pumps native events and waits until input or the timeout expires. */
@@ -97,12 +100,6 @@ class EventPump {
 		ensureLive();
 		if (value == null)
 			return;
-		switch value {
-			case None:
-				return;
-			case _:
-		}
-
 		var snapshot = listeners.copy();
 		var failure:Dynamic = null;
 		try {

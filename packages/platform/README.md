@@ -60,7 +60,10 @@ runtime.events.requests.messageDialog(window, dialog).onComplete(function(outcom
 
 Request methods return `Future<Result<T, NativeKitError>>`, with one terminal
 `Success`, `Cancelled`, or `Stopped` outcome; a request NativeKit fails settles
-`Success(Err(error))`. All operations share one
+`Success(Err(error))`, and one cancelled or dismissed by the user (a dialog closed
+without a choice) settles `Cancelled`. A request's answer reaches only its future:
+event listeners see what happens (input, windows, surfaces, web views, audio), not
+the answers to what the app asked for. All operations share one
 tracking registry; request IDs and task handles have separate key namespaces.
 
 `canCancel()` reports whether native cancellation can currently be requested.
@@ -74,12 +77,11 @@ Keep pumping events after requesting cancellation.
 
 `stopObserving()` explicitly detaches tracking and settles as `Stopped`, without
 cancelling native work. It returns false once the future has completed. This is
-also available for operations which cannot be cancelled natively. Late native
-events remain visible to event listeners but do not complete a stopped future
-again. The caller still owns any native task or stream associated with the work.
+also available for operations which cannot be cancelled natively. A late answer
+settles nothing. The caller still owns any native task or stream associated with the work.
 
 A decoder that throws has a bug: its future settles as `Stopped`, and the
-exception propagates from `Requests.handle` to the event pump. All completion observers run even if one throws; the first
+exception propagates to the event pump. All completion observers run even if one throws; the first
 observer exception is propagated after the remaining observers run. Observer
 exceptions do not replace an operation's already settled outcome.
 
@@ -93,8 +95,9 @@ windows, surfaces, renderers, resources, or consumed builders. Adapter code usin
 Interop callers can use `startNative`, `createWindowNative`,
 `createSurfaceNative`, `createWebViewNative`, `setDecorationRegionsNative`, and `WebView.createNative`
 with generated records. `commitResourceNative` accepts a raw resource stream.
-`trackNative(id, decoder, cancelNative)` adapts a custom native request to the
-same future lifecycle; the decoder returns a typed `Outcome<T>`
+`trackNative(id, decoder, cancelNative)` adapts a custom native request, one whose
+answer has no typed case and arrives as a `Raw` event, to the same future lifecycle;
+the decoder returns a typed `Outcome<T>`
 and the native cancellation callback is optional. `trackTask(task, decoder)`
 uses the same registry and retains caller ownership of the task. The old
 `*Callback`, ID-based `track`, `forget`, and `cancelDialog` APIs have been removed;

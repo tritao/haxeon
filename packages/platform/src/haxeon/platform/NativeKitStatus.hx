@@ -43,6 +43,14 @@ class NativeKitStatus {
 		return meaning(status, diagnostic);
 	}
 
+	/**
+	 * The `NativeKitError` a failure `status` reported by an event is. An event has no call to throw from, so a code
+	 * that would be the program's mistake is `Failed(code, reason)` here rather than a `BindingError`.
+	 */
+	public static function reported(status:NativeResult, diagnostic:Null<String>):NativeKitError
+		return misuse(status) == null ? meaning(status, diagnostic)
+			: Failed(status.rawValue, explanation(status, diagnostic));
+
 	static function misuse(status:NativeResult):Null<BindingErrorKind>
 		return switch status {
 			case NativeResult.ErrorInvalidArgument, NativeResult.ErrorBufferTooSmall: InvalidArgument;

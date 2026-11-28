@@ -43,6 +43,7 @@ internal class UiSurfaceBinding implements Disposable {
 			binding.windowAttached = true;
 		}
 		binding.input.attach(events, redrawOnInput);
+		context.clipboard.attach(events.requests);
 		context.onAnimationFrameRequested = requestFrame == null ? surface.requestFrame : requestFrame;
 		if (managedWindow != null)
 			binding.owner = managedWindow.registerDependent(binding.dispose);
@@ -73,6 +74,7 @@ internal class UiSurfaceBinding implements Disposable {
 		defer context.detachPlatformSurface(surface);
 		defer if (windowAttached) context.detachPlatformWindow();
 		input.detach();
+		context.clipboard.detach();
 	}
 }
 

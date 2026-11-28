@@ -44,23 +44,25 @@ internal class NativeEvent {
 			kind == EventKind.None ? haxe.io.Bytes.alloc(0) : payload());
 
 	/** Decodes a managed event snapshot without retaining native memory. */
-	public static function decodeSnapshot(context:EventSnapshot):PlatformEvent {
+	public static function decodeSnapshot(context:EventSnapshot):Delivery {
 		if (context.kind == EventKind.None)
-			return None;
+			return Nothing;
+		var answer = ServiceEventDecoder.decode(context);
+		if (answer == null) answer = ResourceEventDecoder.decode(context);
+		if (answer != null)
+			return answer;
 		var value = WindowEventDecoder.decode(context);
 		if (value == null) value = InputEventDecoder.decode(context);
 		if (value == null) value = AudioEventDecoder.decode(context);
-		if (value == null) value = ServiceEventDecoder.decode(context);
-		if (value == null) value = ResourceEventDecoder.decode(context);
-		return value != null ? value : Raw(context.kind, context.source, context.request,
-			context.result, context.flags, context.dataCount, context.data);
+		return Happened(value != null ? value : Raw(context.kind, context.source, context.request,
+			context.result, context.flags, context.dataCount, context.data));
 	}
 
 	/** Decodes known event formats without releasing this event. */
-	public function decode():PlatformEvent {
+	public function decode():Delivery {
 		if (kind == EventKind.HttpHeaders || kind == EventKind.HttpComplete || kind == EventKind.HttpDataAvailable
 			|| kind == EventKind.HttpProgress)
-			return HttpEventDecoder.decode(this);
+			return Happened(HttpEventDecoder.decode(this));
 		return decodeSnapshot(snapshot());
 	}
 
@@ -71,8 +73,8 @@ internal class NativeEvent {
 	}
 
 	/** Decodes and releases the event, including when decoding throws. */
-	public function take():PlatformEvent {
-		var value:PlatformEvent;
+	public function take():Delivery {
+		var value:Delivery;
 		try value = decode() catch (error:Dynamic) {
 			release();
 			throw error;

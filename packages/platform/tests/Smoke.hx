@@ -79,7 +79,7 @@ class Smoke {
 		} catch (_:Dynamic) {}
 		var payloadOk = true;
 		if (NativeKit.nk_clipboard_set_text("nativekit ffi") == Result.Ok) {
-			var completed = false, requestSeenByListener = false;
+			var completed = false;
 			var requests = events.requests;
 			var future = requests.readClipboardText();
 			future.onComplete(function(outcome) {
@@ -89,8 +89,10 @@ class Smoke {
 				};
 				completed = true;
 			});
+			// The read's answer settles its future and no listener: listeners see what happens, not answers.
+			var leaked = false;
 			var subscription = events.listen(function(value) switch value {
-				case ClipboardText(_, _, _): requestSeenByListener = completed;
+				case Raw(kind, _, _, _, _, _, _) if (kind == EventKind.ClipboardTextComplete): leaked = true;
 				case _:
 			});
 			payloadOk = payloadOk && !future.canCancel() && !future.cancel() && !future.isComplete()
@@ -100,28 +102,22 @@ class Smoke {
 				if (completed) break;
 			}
 			subscription.dispose();
-			payloadOk = payloadOk && completed && requestSeenByListener && requests.pending() == 0
+			payloadOk = payloadOk && completed && !leaked && requests.pending() == 0
 				&& !future.stopObserving();
 
 			var stopped = requests.readClipboardText();
-			var stoppedCount = 0, successAfterStop = false, lateEventSeen = false;
+			var stoppedCount = 0, successAfterStop = false;
 			stopped.onComplete(function(outcome) switch outcome {
 				case Stopped: stoppedCount++;
 				case Success(_): successAfterStop = true;
 				case _:
 			});
-			var lateSubscription = events.listen(function(value) switch value {
-				case ClipboardText(_, _, _): lateEventSeen = true;
-				case _:
-			});
 			payloadOk = payloadOk && stopped.stopObserving() && !stopped.stopObserving() && !stopped.cancel()
 				&& stopped.isComplete() && stoppedCount == 1 && requests.pending() == 0;
-			for (_ in 0...1000) {
+			// The stopped read's answer still arrives, and settles nothing.
+			for (_ in 0...1000)
 				events.poll();
-				if (lateEventSeen) break;
-			}
-			lateSubscription.dispose();
-			payloadOk = payloadOk && lateEventSeen && !successAfterStop && stoppedCount == 1;
+			payloadOk = payloadOk && !successAfterStop && stoppedCount == 1;
 
 		}
 		var fileArrayResult = NativeKit.nk_clipboard_set_files(["/tmp/nativekit-a", "/tmp/nativekit-b"]);

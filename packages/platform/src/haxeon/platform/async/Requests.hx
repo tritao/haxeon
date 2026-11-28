@@ -5,12 +5,13 @@ import haxeon.async.Outcome;
 import haxeon.async.Promise;
 import haxeon.platform.BindingError;
 import haxeon.platform.NativeKitError;
-import haxeon.platform.NativeKitStatus;
 import haxeon.platform.WebView;
 import haxeon.platform.Window;
 import haxeon.platform.async.Task;
 import haxeon.platform.dialog.FileDialogOptions;
 import haxeon.platform.dialog.MessageDialogOptions;
+import haxeon.platform.async.Completion;
+import haxeon.platform.event.Delivery;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.resource.Resource;
@@ -19,7 +20,6 @@ import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.MessageResult;
 import nativekit.ffi.NativeKitTypes.ResourceStreamHandle;
-import nativekit.ffi.NativeKitTypes.Result as NativeResult;
 
 /** One registry owns completion, cancellation, and detachment for every request and task. */
 class Requests {
@@ -33,7 +33,7 @@ class Requests {
 	public function readClipboardText():Future<Result<String, NativeKitError>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_clipboard_read_text_checked(), function(value, _) switch value {
-			case ClipboardText(_, result, text): resultOutcome(result, text, "Requests.readClipboardText");
+			case Answered(ClipboardText(_, text)): settled(text);
 			case _: wrongEvent("clipboard text read");
 		});
 	}
@@ -42,7 +42,7 @@ class Requests {
 	public function readClipboardFiles():Future<Result<Array<String>, NativeKitError>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_clipboard_read_files_checked(), function(value, _) switch value {
-			case ClipboardFiles(_, result, paths): resultOutcome(result, paths, "Requests.readClipboardFiles");
+			case Answered(ClipboardFiles(_, paths)): settled(paths);
 			case _: wrongEvent("clipboard file read");
 		});
 	}
@@ -51,7 +51,7 @@ class Requests {
 	public function readClipboardResources():Future<Result<Array<Resource>, NativeKitError>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_clipboard_read_resources_checked(), function(value, _) switch value {
-			case Resources(_, _, result, _, items): resultOutcome(result, items, "Requests.readClipboardResources");
+			case Answered(ClipboardResources(_, items)): settled(items);
 			case _: wrongEvent("clipboard resource read");
 		});
 	}
@@ -90,8 +90,7 @@ class Requests {
 	public function commitResourceNative(stream:ResourceStreamHandle):Future<Result<Bool, NativeKitError>> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_resource_commit_checked(stream), function(value, _) switch value {
-			case ResourceCommit(_, result, downloadInitiated): resultOutcome(result, downloadInitiated,
-				"Requests.commitResourceNative");
+			case Answered(ResourceCommit(_, downloadInitiated)): settled(downloadInitiated);
 			case _: wrongEvent("resource commit");
 		});
 	}
@@ -105,7 +104,7 @@ class Requests {
 		var request = NativeKit.nk_dialog_message_checked(new Handle(parent.nativeHandle().rawValue),
 			options.nativeValue());
 		return registerRequest(request, function(value, cancellationRequested) switch value {
-			case DialogMessage(_, result, button, _): messageOutcome(result, button, cancellationRequested);
+			case Answered(DialogMessage(_, button)): cancellationRequested ? Outcome.Cancelled : settled(button);
 			case _: wrongEvent("message dialog");
 		}, function() NativeKit.nk_dialog_cancel_checked(request));
 	}
@@ -117,8 +116,7 @@ class Requests {
 			"WebView and script cannot be null");
 		return registerRequest(NativeKit.nk_webview_eval_checked(webview.nativeHandle(), script),
 			function(value, _) switch value {
-				case WebViewEvaluation(_, _, result, json): resultOutcome(result, json, "Requests.evaluateWebView",
-					result == NativeResult.Ok ? null : json);
+				case Answered(WebViewEvaluation(_, json)): settled(json);
 				case _: wrongEvent("WebView evaluation");
 			});
 	}
@@ -131,7 +129,10 @@ class Requests {
 			?cancelNative:Void->Void):Future<T> {
 		ensureLive();
 		if (decode == null) throw BindingError.invalidArgument("Requests.trackNative", "Decoder cannot be null");
-		return registerRequest(request, function(value, _) return decode(value), cancelNative);
+		return registerRequest(request, function(value, _) return switch value {
+			case Happened(event): decode(event);
+			case _: wrongEvent("native request");
+		}, cancelNative);
 	}
 
 	/** Observes a native task without installing a managed worker callback. The caller owns the task. */
@@ -140,33 +141,29 @@ class Requests {
 		if (task == null || decode == null) throw BindingError.invalidArgument("Requests.trackTask",
 			"Task and decoder cannot be null");
 		return register("task:" + Std.string(task.nativeHandle().rawValue), function(value, _) switch value {
-			case TaskComplete(_, result, data):
-				// register() catches decoder exceptions separately from completion-observer exceptions.
-				if (result == NativeResult.Ok) Success(Ok(decode(data)));
-				else if (result == NativeResult.ErrorCancelled) Cancelled;
-				else Success(Err(NativeKitStatus.error(result, "Requests.trackTask", null)));
-			case TaskFailed(_, result, _): Success(Err(NativeKitStatus.error(result, "Requests.trackTask", null)));
-			case TaskCancelled(_, _, _): Cancelled;
+			// register() catches decoder exceptions separately from completion-observer exceptions.
+			case Answered(TaskComplete(_, data)): Success(Ok(decode(data)));
+			case Answered(TaskFailed(_, error, _)): settled(Err(error));
+			case Answered(TaskCancelled(_)): Outcome.Cancelled;
 			case _: wrongEvent("task");
 		}, task.cancel);
 	}
 
 	function resourceDialog(request:haxe.Int64):Future<Result<Array<Resource>, NativeKitError>> {
 		return registerRequest(request, function(value, _) switch value {
-			case Resources(EventKind.DialogResourcesComplete, _, result, accepted, items): acceptedOutcome(result,
-				accepted, items);
+			case Answered(DialogResources(_, items)): settled(items);
 			case _: wrongEvent("resource dialog");
 		}, function() NativeKit.nk_dialog_cancel_checked(request));
 	}
 
-	function registerRequest<T>(request:haxe.Int64, decode:PlatformEvent->Bool->Outcome<T>,
+	function registerRequest<T>(request:haxe.Int64, decode:Delivery->Bool->Outcome<T>,
 			?cancelNative:Void->Void):Future<T> {
 		if (request == haxe.Int64.ofInt(0)) throw BindingError.invalidArgument("Requests.registerRequest",
 			"Request ID cannot be zero");
 		return register("request:" + Std.string(request), decode, cancelNative);
 	}
 
-	function register<T>(key:String, decode:PlatformEvent->Bool->Outcome<T>,
+	function register<T>(key:String, decode:Delivery->Bool->Outcome<T>,
 			cancelNative:Null<Void->Void>):Future<T> {
 		ensureLive();
 		if (entries.exists(key)) throw BindingError.invalidState("Requests.register", "Operation is already tracked");
@@ -191,19 +188,34 @@ class Requests {
 		return promise.future;
 	}
 
-	/** Detaches a terminal entry before invoking observers, allowing safe reentrant tracking. */
+	/**
+	 * Settles the request `completion` answers, detaching its entry before invoking observers so tracking again from
+	 * one is safe. Returns false when no request awaits it.
+	 */
+	@:allow(haxeon.platform.event.EventPump)
+	internal function complete(completion:Completion):Bool {
+		ensureLive();
+		var key = completionKey(completion);
+		var entry = entries.get(key);
+		if (entry == null) return false;
+		switch completion {
+			case TaskProgress(_, _): return true;
+			case _:
+		}
+		entries.remove(key);
+		entry.receive(Answered(completion));
+		return true;
+	}
+
+	/** Settles the request a native event answers that only `trackNative` follows. */
 	public function handle(value:PlatformEvent):Bool {
 		ensureLive();
 		var key = eventKey(value);
 		if (key == null) return false;
 		var entry = entries.get(key);
 		if (entry == null) return false;
-		switch value {
-			case TaskProgress(_, _): return true;
-			case _:
-		}
 		entries.remove(key);
-		entry.receive(value);
+		entry.receive(Happened(value));
 		return true;
 	}
 
@@ -231,50 +243,35 @@ class Requests {
 		if (disposed) throw BindingError.disposed("Requests", "Requests have been disposed with their runtime");
 	}
 
+	static function completionKey(completion:Completion):String
+		return switch completion {
+			case TaskProgress(task, _) | TaskComplete(task, _) | TaskFailed(task, _, _) | TaskCancelled(task):
+				"task:" + Std.string(task.rawValue);
+			case ClipboardText(id, _) | ClipboardFiles(id, _) | ClipboardResources(id, _) | DialogResources(id, _)
+				| DialogMessage(id, _) | WebViewEvaluation(id, _) | ResourceCommit(id, _):
+				"request:" + Std.string(id);
+		};
+
 	static function eventKey(value:PlatformEvent):Null<String> {
 		var key:Null<String> = switch value {
-			case TaskProgress(source, _) | TaskComplete(source, _, _) | TaskFailed(source, _, _) | TaskCancelled(source,
-				_, _):
-				return "task:" + Std.string(source.rawValue);
-			case ClipboardText(id, _, _): Std.string(id);
-			case ClipboardFiles(id, _, _): Std.string(id);
-			case DialogMessage(id, _, _, _): Std.string(id);
-			case WebViewEvaluation(_, id, _, _): Std.string(id);
 			case WebViewNavigationRequest(_, id, _): Std.string(id);
 			case NotificationActivated(id, _): Std.string(id);
 			case NotificationFailed(id, _): Std.string(id);
-			case Resources(_, id, _, _, _): Std.string(id);
 			case ResourceAssetReady(_, id): Std.string(id);
 			case ResourceAssetLoadFailed(_, id, _): Std.string(id);
-			case ResourceCommit(id, _, _): Std.string(id);
-			// nk_resource_load_async completes with the loaded bytes in a raw event.
-			case Raw(kind, _, id, _, _, _, _) if (kind == EventKind.ResourceDataComplete): Std.string(id);
+			// A completion with no typed case, such as nk_resource_load_async's loaded bytes.
+			case Raw(_, _, id, _, _, _, _): Std.string(id);
 			case _: null;
 		};
 		return key == null || key == "0" ? null : "request:" + key;
 	}
 
-	static function resultOutcome<T>(result:NativeResult, value:T, operation:String,
-			?message:Null<String>):Outcome<Result<T, NativeKitError>> {
-		return result == NativeResult.Ok ? Success(Ok(value)) : result == NativeResult.ErrorCancelled
-			? Cancelled : Success(Err(NativeKitStatus.error(result, operation, message)));
-	}
-
-	static function acceptedOutcome<T>(result:NativeResult, accepted:Bool,
-			value:T):Outcome<Result<T, NativeKitError>> {
-		if (result == NativeResult.ErrorCancelled) return Cancelled;
-		if (result != NativeResult.Ok)
-			return Success(Err(NativeKitStatus.error(result, "Requests.resourceDialog", null)));
-		return accepted ? Success(Ok(value)) : Cancelled;
-	}
-
-	static function messageOutcome(result:NativeResult, button:MessageResult,
-			cancellationRequested:Bool):Outcome<Result<MessageResult, NativeKitError>> {
-		if (result == NativeResult.ErrorCancelled) return Cancelled;
-		if (result != NativeResult.Ok)
-			return Success(Err(NativeKitStatus.error(result, "Requests.messageDialog", null)));
-		return cancellationRequested || button == MessageResult.None ? Cancelled : Success(Ok(button));
-	}
+	/** A request's answer as its future's outcome: `Cancelled` when it was cancelled or the user dismissed it. */
+	static function settled<T>(answer:Result<T, NativeKitError>):Outcome<Result<T, NativeKitError>>
+		return switch answer {
+			case Err(NativeKitError.Cancelled): Outcome.Cancelled;
+			case _: Success(answer);
+		};
 
 	@:noReturn
 	static function wrongEvent<T>(name:String):Outcome<T>
@@ -283,10 +280,10 @@ class Requests {
 
 /** The registry owns one delivery path and one shutdown path per operation. */
 private class NativeRequestEntry {
-	public final receive:PlatformEvent->Void;
+	public final receive:Delivery->Void;
 	public final shutdown:Void->Void;
 
-	public function new(receive:PlatformEvent->Void, shutdown:Void->Void) {
+	public function new(receive:Delivery->Void, shutdown:Void->Void) {
 		this.receive = receive;
 		this.shutdown = shutdown;
 	}
