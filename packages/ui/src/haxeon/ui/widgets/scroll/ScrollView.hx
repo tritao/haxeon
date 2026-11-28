@@ -169,25 +169,6 @@ class ScrollView implements View {
 			viewport.onTargetBubble(UiEventKind.HoverLeave, function(event) {
 				if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false);
 			});
-			var lastOffsetX = controller.offsetX, lastOffsetY = controller.offsetY;
-			binding.value.attach(controller, context.animations, function(_) {
-				// A scroll from input or an animation moves the window: tell the owner. An offset set while a view is
-				// building (an owner keeping its anchor or a selection in view) is already in the window being built,
-				// and writing state there is forbidden; the resolved-geometry check below covers any later change.
-				if (contentRevision != null && !haxeon.reactive.ReactiveRuntime.isTracking()
-					&& (lastOffsetX != controller.offsetX || lastOffsetY != controller.offsetY)) {
-					lastOffsetX = controller.offsetX;
-					lastOffsetY = controller.offsetY;
-					contentRevision.update(contentRevision.value + 1);
-				}
-				context.willEditRetained(translatedContent);
-				translatedContent.layout.style.transform = Transform2D.identity().translated(
-					-controller.offsetX,
-					-controller.offsetY);
-				visibility.value.reveal();
-				horizontalVisibility.value.reveal();
-			});
-
 			viewport.add(translatedContent);
 			var overlayHost = scrollbarOverlayHost == null ? viewport : scrollbarOverlayHost;
 			// The overlay host can differ from the viewport; the size it had at the last layout seeds a rebuilt scrollbar.
@@ -208,6 +189,31 @@ class ScrollView implements View {
 				horizontalVisibility.value,
 				false,
 				overlaySize) : null;
+			var lastOffsetX = controller.offsetX, lastOffsetY = controller.offsetY;
+			binding.value.attach(controller, context.animations, function(_) {
+				// A scroll from input or an animation moves the window: tell the owner. An offset set while a view is
+				// building (an owner keeping its anchor or a selection in view) is already in the window being built,
+				// and writing state there is forbidden; the resolved-geometry check below covers any later change.
+				if (contentRevision != null && !haxeon.reactive.ReactiveRuntime.isTracking()
+					&& (lastOffsetX != controller.offsetX || lastOffsetY != controller.offsetY)) {
+					lastOffsetX = controller.offsetX;
+					lastOffsetY = controller.offsetY;
+					contentRevision.update(contentRevision.value + 1);
+				}
+				context.willEditRetained(translatedContent);
+				translatedContent.layout.style.transform = Transform2D.identity().translated(
+					-controller.offsetX,
+					-controller.offsetY);
+				// The thumbs follow the offset now, from the extents of the last layout, so the layout after a scroll finds
+				// them in place and needs no second pass; only a change of extent moves them after layout.
+				if (scrollbar != null && overlaySize.width >= 0)
+					updateScrollbar(scrollbar, overlaySize.width, overlaySize.height, true, context);
+				if (horizontal != null && overlaySize.width >= 0)
+					updateScrollbar(horizontal, overlaySize.width, overlaySize.height, false, context);
+				visibility.value.reveal();
+				horizontalVisibility.value.reveal();
+			});
+
 			translatedContent.onResolved(function(geometry) {
 				var viewportGeometry:ResolvedLayoutItem = cast viewport.resolved;
 				// The viewport's content bounds include the overlay scrollbar. Its
@@ -541,10 +547,19 @@ class ScrollView implements View {
 		var along = maximum <= 0 ? 0 : offset / maximum * Math.max(0, length - thumbLength);
 		var cross = Math.max(0, (vertical ? width : height) - ScrollbarHitWidth - ScrollbarInset);
 		var visible = maximum > 0 && viewportExtent > 0;
+		// A hundredth of a pixel is no change: layout's float noise would otherwise cost another solve.
+		inline function differs(left:Float, right:Float):Bool return Math.abs(left - right) > 0.01;
 		var changed = trackStyle.visible != visible
-			|| (vertical ? trackStyle.height.value != length || thumbStyle.height.value != thumbLength
-			|| thumbStyle.positionY != along || trackStyle.positionX != cross : trackStyle.width.value != length
-			|| thumbStyle.width.value != thumbLength || thumbStyle.positionX != along || trackStyle.positionY != cross);
+			|| (vertical ? differs(trackStyle.height.value, length) || differs(thumbStyle.height.value, thumbLength)
+			|| differs(thumbStyle.positionY, along)
+			|| differs(trackStyle.positionX, cross) : differs(trackStyle.width.value,
+			length) || differs(thumbStyle.width.value, thumbLength) || differs(thumbStyle.positionX, along)
+			|| differs(trackStyle.positionY, cross));
+		var semantics:Semantics = cast thumb.semantics;
+		semantics.numericMaximum = maximum;
+		semantics.numericValue = offset;
+		// Unchanged geometry is left as it is, so nothing is edited without being announced.
+		if (!changed && trackStyle.width.sizing == LayoutSizing.Fixed) return false;
 		if (changed && context != null) {
 			context.willEditRetained(track);
 			context.willEditRetained(thumb);
@@ -561,9 +576,6 @@ class ScrollView implements View {
 		thumbStyle.positionX = vertical ? 0 : along;
 		thumbStyle.positionY = vertical ? along : 0;
 		trackStyle.visible = thumbStyle.visible = thumb.focusable = visible;
-		var semantics:Semantics = cast thumb.semantics;
-		semantics.numericMaximum = maximum;
-		semantics.numericValue = offset;
 		return changed;
 	}
 }

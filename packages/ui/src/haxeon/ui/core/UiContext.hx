@@ -39,6 +39,8 @@ import haxeon.ui.core.UiEvent;
 /** Owns the frame-local render tree and the Haxe-side UI subsystems. */
 class UiContext implements Disposable {
 	final session:LayoutSession;
+	/** Native layout solves of the frame being submitted, over its build passes (`UiFrameMetrics.layoutSolves`). */
+	var frameLayoutSolves:Int = 0;
 	final layoutChanges:LayoutChanges = new LayoutChanges();
 	final comparisonFrame:TreeDiffFrame;
 
@@ -489,6 +491,7 @@ class UiContext implements Disposable {
 		ensureLive();
 		if (frame == null || build == null) throw "A UI frame requires a view and layout frame";
 		@:privateAccess buildContext.buildFeedbackPass = buildFeedbackPass;
+		if (buildFeedbackPass == 0) frameLayoutSolves = 0;
 		// Consume the request before running user getters so a failed effect can schedule a later retry.
 		var bindingAppliedRevision = buildContext.consumeBindingFrameRequest();
 		ReactiveRuntime.flushEffects();
@@ -604,6 +607,7 @@ class UiContext implements Disposable {
 		} else {
 			session.verifyTransactions = verifyRetentionEvery > 0;
 			resolved = session.submit(next.layout, frame, layoutChanges, verifying);
+			frameLayoutSolves++;
 		}
 		layoutChanges.clear();
 		diagnosticStage = 6;
@@ -669,6 +673,7 @@ class UiContext implements Disposable {
 				layoutChanges);
 			buildContext.endPatchFrame();
 			resolved = session.submit(next.layout, frame, layoutChanges, verifying);
+			frameLayoutSolves++;
 			layoutChanges.clear();
 			layoutPass++;
 		}
@@ -700,7 +705,7 @@ class UiContext implements Disposable {
 				nativeLayoutStartedAt,
 				nativeLayoutEndedAt,
 				Sys.time(),
-				nodeCount);
+				nodeCount, frameLayoutSolves);
 			return submitInternal(frame, cacheKey, build, reconcileNewFocus, buildFeedbackPass + 1);
 		}
 		syncWindowDecorations(next);
@@ -807,7 +812,7 @@ class UiContext implements Disposable {
 				nativeLayoutStartedAt,
 				nativeLayoutEndedAt,
 				Sys.time(),
-				nodeCount);
+				nodeCount, frameLayoutSolves);
 			// Re-run the original factory: its conditional reads decide which views exist.
 			// A constant view here would replace root subscriptions with only View.build's
 			// reads, leaving later model changes unable to invalidate the cached tree.
@@ -839,7 +844,7 @@ class UiContext implements Disposable {
 			nativeLayoutReused,
 			resolvedGeometryChangedNodes,
 			resolvedGeometryReusedNodes,
-			buildFeedbackPass + 1);
+			buildFeedbackPass + 1, frameLayoutSolves);
 		lastFrameMetrics.setSubmitPhases(viewBuiltAt - viewStartedAt,
 			nativeLayoutStartedAt - viewBuiltAt,
 			nativeLayoutEndedAt - nativeLayoutStartedAt,
@@ -857,7 +862,7 @@ class UiContext implements Disposable {
 			nativeLayoutStartedAt,
 			nativeLayoutEndedAt,
 			submitEndedAt,
-			nodeCount);
+			nodeCount, frameLayoutSolves);
 		diagnosticStage = 0;
 		return next;
 	}
@@ -1398,7 +1403,7 @@ class UiContext implements Disposable {
 				false,
 				true,
 				0,
-				submittedNodeCount);
+				submittedNodeCount, 1, 0);
 			lastFrameMetrics.markReusedSubmission();
 			if (reusedMetricsHoverNodes >= 0) lastFrameMetrics.hoverPaintUpdatedNodes = reusedMetricsHoverNodes;
 			pendingReusedMetrics = false;

@@ -59,6 +59,12 @@ class UiFrameMetrics {
 	/** Internal submit passes used to settle geometry, reactive state, and interaction feedback. */
 	public final buildPasses:Int;
 
+	/**
+	 * Native layout solves the frame took: one, and one more for each pass that laid out again after a geometry callback
+	 * edited the tree or a build pass rebuilt it; zero for a frame that reused the last layout.
+	 */
+	public final layoutSolves:Int;
+
 	/** How long submitting the frame took, building through native layout. */
 	public final submitSeconds:Float;
 
@@ -139,7 +145,7 @@ class UiFrameMetrics {
 			nativeLayoutReused:Bool = false,
 			resolvedGeometryChangedNodes:Int = 0,
 			resolvedGeometryReusedNodes:Int = 0,
-			buildPasses:Int = 1) {
+			buildPasses:Int = 1, layoutSolves:Int = 1) {
 		this.frameNumber = frameNumber;
 		this.nodeCount = nodeCount;
 		this.styleResolutions = styleResolutions;
@@ -160,6 +166,7 @@ class UiFrameMetrics {
 		this.resolvedGeometryChangedNodes = resolvedGeometryChangedNodes;
 		this.resolvedGeometryReusedNodes = resolvedGeometryReusedNodes;
 		this.buildPasses = buildPasses;
+		this.layoutSolves = layoutSolves;
 		this.submitSeconds = submitSeconds;
 		paintedNodes = 0;
 		paintSkippedNodes = 0;
@@ -240,6 +247,21 @@ internal class RenderCost {
 	public static var encode = 0.0;
 	public static var renderable = 0.0;
 	public static var nativeCall = 0.0;
+	/** The node types edited in place since the last submit line, which ask for another solve. */
+	public static final edits:Array<String> = [];
+	/** Who asked for another layout pass since the last submit line: the caller of `requestLayoutFeedback`. */
+	public static final requesters:Array<String> = [];
+
+	public static function requested(stack:Array<haxe.CallStack.StackItem>):Void {
+		for (index in 1...stack.length)
+			switch stack[index] {
+				case FilePos(_, file, line, _):
+					var name = file.substr(file.lastIndexOf("/") + 1) + ":" + line;
+					if (requesters.indexOf(name) < 0) requesters.push(name);
+					return;
+				default:
+			}
+	}
 
 	public static inline function time():Float return enabled ? Sys.time() : 0.0;
 
@@ -249,10 +271,13 @@ internal class RenderCost {
 	}
 
 	public static function submit(started:Float, viewStarted:Float, nativeStarted:Float,
-			nativeEnded:Float, ended:Float, nodes:Int):Void {
+			nativeEnded:Float, ended:Float, nodes:Int, solves:Int):Void {
 		if (!enabled) return;
 		Sys.stderr().writeString('render-cost submit started=$started nodes=$nodes build=${nativeStarted - viewStarted}'
-			+ ' layout=${nativeEnded - nativeStarted} other=${viewStarted - started + ended - nativeEnded}\n');
+			+ ' layout=${nativeEnded - nativeStarted} other=${viewStarted - started + ended - nativeEnded}'
+			+ ' solves=$solves edits=${edits.join(",")} requesters=${requesters.join(",")}\n');
+		edits.resize(0);
+		requesters.resize(0);
 	}
 
 	public static function render(started:Float, nativeStarted:Float, ended:Float, nodes:Int):Void {

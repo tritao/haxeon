@@ -404,7 +404,10 @@ class BuildContext implements Disposable {
 	}
 
 	/** Asks for the frame to be built again after layout, for a widget whose content depends on its laid-out size. */
-	public function requestLayoutFeedback():Void layoutFeedbackRequested = true;
+	public function requestLayoutFeedback():Void {
+		layoutFeedbackRequested = true;
+		if (RenderCost.enabled) RenderCost.requested(haxe.CallStack.callStack());
+	}
 
 	internal function consumeLayoutFeedback():Bool {
 		var requested = layoutFeedbackRequested;
@@ -626,6 +629,7 @@ class BuildContext implements Disposable {
 	 */
 	public function willEditRetained(node:RenderNode):Void {
 		if (retainedEdits.indexOf(node) >= 0) return;
+		if (RenderCost.enabled) RenderCost.edits.push(node.styleType == null ? "node" : node.styleType);
 		retainedEdits.push(node);
 		retainedEditPriors.push(captureEditPrior(node, retainedEditEpoch));
 		retainedEditRevision++;

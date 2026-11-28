@@ -1639,6 +1639,15 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    (overlay placement) and makes the rest cheap (scrollbar geometry) without new rendering machinery; then stage 7's layer properties, which remove the scroll and fade edits and with them
    `willEditRetained` and `RetainedAnimation`. Text that a placement reflows (tooltip width, ellipsis) keeps a solve.
 
+   Measured (2026-11-28, the native explorer smoke, `HAXEON_UI_RENDER_COST=1` and `HAXEON_UI_LAYOUT_COST=1`, whose
+   submit lines now give each frame's `solves` and who asked for another pass): 28 of 46 frames took two or three solves,
+   32 extra in all. 20 of them came from the scrollbar's geometry after layout (a new scrollbar's first size, a content
+   extent that changed), 8 from virtual windows rebuilding. A Clay solve of these 200 to 2,000-node trees took about
+   3.3 ms of a frame's layout, against 0.7 ms of snapshot and under 0.5 ms of encode and decode; a frame of one solve
+   spent 3.9 ms in layout, one of two 10.8 ms. So phase two pays: a feedback pass that changes only floating subtrees
+   should re-solve those and reuse the flow. The scrollbar's thumbs now follow the offset before layout, so scrolling
+   takes no second pass, and a change under a hundredth of a pixel is none.
+
    Content bounds need no exclusion: a scroll view takes its extent from its content node (`translatedContent`), and the
    scrollbar's parts are that node's siblings, so they never count as overflow. A scroll view of absolutely placed items
    (a diagram) keeps counting them.
