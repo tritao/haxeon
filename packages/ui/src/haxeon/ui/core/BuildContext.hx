@@ -603,7 +603,7 @@ class BuildContext implements Disposable {
 		for (child in node.children) recordPriors(child, root, skipRoot);
 	}
 
-	/** Nodes of the submitted tree changed directly since it was submitted, with how each looked before; see willEditRetained. */
+	/** Nodes of the submitted tree changed directly since it was submitted, with how each looked before; see recordPrior. */
 	final retainedEdits:Array<RenderNode> = [];
 
 	var retainedEditEpoch:Int = 0;
@@ -637,13 +637,13 @@ class BuildContext implements Disposable {
 	@:allow(haxeon.ui.core.UiContext) var inGeometryCallbacks:Bool = false;
 
 	/**
-	 * Call just before changing a node of the submitted tree in place, outside a build: its style, hit testing or paint. The next
-	 * frame compares the node against how it was now and lays out and paints the change, without rebuilding the view. Repeated
-	 * calls for the same node before that frame keep the first state.
+	 * Keeps how a node of the submitted tree looks before the framework changes it in place, as when a kept component's
+	 * root takes its caller's new modifier, so the next frame compares the change. Views never change submitted nodes:
+	 * they build them again, a scope at a time. Repeated calls before that frame keep the first state.
 	 */
-	public function willEditRetained(node:RenderNode):Void {
+	function recordPrior(node:RenderNode):Void {
 		if (inGeometryCallbacks)
-			throw "A geometry callback edited a render node; edit it while building, or in afterBuild";
+			throw "A geometry callback changed a render node; change it while building, or in afterBuild";
 		if (retainedEdits.indexOf(node) >= 0) return;
 		if (RenderCost.enabled) RenderCost.edits.push(node.styleType == null ? "node" : node.styleType);
 		retainedEdits.push(node);
@@ -664,8 +664,9 @@ class BuildContext implements Disposable {
 		return cache.capture(node, epoch);
 	}
 
-	/** Whether `node` was announced with willEditRetained since the last frame. */
-	public function editAnnounced(node:RenderNode):Bool return retainedEdits.indexOf(node) >= 0;
+	/** Whether the framework recorded `node`'s prior since the last frame (recordPrior). */
+	@:allow(haxeon.ui.core.UiContext) function editAnnounced(node:RenderNode):Bool return retainedEdits.indexOf(node)
+		>= 0;
 
 	internal var hasRetainedEdits(get, never):Bool;
 
@@ -829,7 +830,7 @@ class BuildContext implements Disposable {
 			// The body's subtree keeps its IDs; the new modifier's children were claimed as the caller built them.
 			var root = previous.root;
 			// Swapping the modifier edits a submitted root: announce it so the frame compares it with what was shown.
-			if (previous.hasModifier() || modifier != null) willEditRetained(root);
+			if (previous.hasModifier() || modifier != null) recordPrior(root);
 			previous.setModifier(null);
 			root.detach();
 			claimRetainedTree(root);

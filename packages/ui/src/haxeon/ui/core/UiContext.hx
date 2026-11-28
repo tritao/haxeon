@@ -428,7 +428,7 @@ class UiContext implements Disposable {
 	}
 
 	/**
-	 * Finds nodes of the submitted tree that are still in the new one and were changed in between without willEditRetained
+	 * Finds nodes of the submitted tree that are still in the new one and were changed in between outside a build, without recordPrior
 	 * or a patch: a frame cannot see such a change, so it is shown only by chance. Reported like a retention mismatch.
 	 */
 	function checkUnannouncedEdits(tree:RenderNode):Void {
@@ -442,7 +442,7 @@ class UiContext implements Disposable {
 				&& found.length < 5) found.push(stateStoreDescription(node));
 		});
 		if (found.length == 0) return;
-		var difference = "Nodes of the submitted tree changed without willEditRetained:\n  " + found.join("\n  ");
+		var difference = "Nodes of the submitted tree changed outside a build:\n  " + found.join("\n  ");
 		var report = onRetentionMismatch;
 		if (report == null) throw difference;
 		report(difference);

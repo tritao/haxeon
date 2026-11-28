@@ -5717,7 +5717,7 @@ class FrameworkSmoke {
 	static function scrollbarVisibilityValid(context:UiContext):Bool {
 		var clock = new AnimationScheduler();
 		var visibility = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
-		visibility.attach(clock, () -> {});
+		visibility.attach(clock);
 		visibility.setAvailable(true);
 		scrollbarCheck(visibility.opacity == 0, "new scrollbar is hidden");
 		visibility.reveal();
@@ -5812,8 +5812,8 @@ class FrameworkSmoke {
 		var coarseClock = new AnimationScheduler(), fineClock = new AnimationScheduler();
 		var coarse = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
 		var fine = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
-		coarse.attach(coarseClock, () -> {});
-		fine.attach(fineClock, () -> {});
+		coarse.attach(coarseClock);
+		fine.attach(fineClock);
 		coarse.setAvailable(true);
 		fine.setAvailable(true);
 		coarseClock.advance(0);

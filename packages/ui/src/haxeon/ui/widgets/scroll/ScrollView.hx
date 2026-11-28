@@ -1,4 +1,5 @@
 package haxeon.ui.widgets.scroll;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.ViewRoot;
 import haxeon.ui.style.StyleIdentity;
 
@@ -126,8 +127,7 @@ class ScrollView implements View {
 			var visibility = context.resourceState(context.id("scrollbar-visibility"),
 				() -> new ScrollbarVisibilityController(),
 				value -> value.dispose());
-			// The scrollbar, when there is one, attaches its own callback, which edits its nodes in place (see addScrollbar).
-			visibility.value.attach(context.animations, () -> {});
+			visibility.value.attach(context.animations);
 			visibility.value.bindSource(controller);
 			var policy:ScrollbarVisibility = scrollbarVisibility == null
 				? context.environment.scrollbarVisibility : scrollbarVisibility;
@@ -160,6 +160,7 @@ class ScrollView implements View {
 			var horizontalVisibility = context.resourceState(context.id("horizontal-scrollbar-visibility"),
 				() -> new ScrollbarVisibilityController(),
 				value -> value.dispose());
+			horizontalVisibility.value.attach(context.animations);
 			horizontalVisibility.value.bindSource(controller);
 			horizontalVisibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden,
 				context.environment.reducedMotion);
@@ -172,17 +173,9 @@ class ScrollView implements View {
 			});
 			viewport.add(translatedContent);
 			var overlayHost = scrollbarOverlayHost == null ? viewport : scrollbarOverlayHost;
-			var scrollbar = showScrollbar
-				&& policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Horizontal ? addScrollbar(context,
-				overlayHost,
-				visibility.value,
-				true) : null;
-
-			var horizontal = showScrollbar
-				&& policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Vertical ? addScrollbar(context,
-				overlayHost,
-				horizontalVisibility.value,
-				false) : null;
+			// Added last, once the handlers an outside host forwards exist.
+			var scrollbar = showScrollbar && policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Horizontal;
+			var horizontal = showScrollbar && policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Vertical;
 			var lastOffsetX = controller.offsetX, lastOffsetY = controller.offsetY;
 			binding.value.attach(controller, context.animations, _ -> {
 				// A scroll from input or an animation moves the window: tell the owner. An offset set while a view is
@@ -217,9 +210,9 @@ class ScrollView implements View {
 					contentRevision.update(contentRevision.value + 1);
 					context.requestBuildFeedbackBeforeLayout();
 				}
-				visibility.value.setAvailable(scrollbar != null && controller.maxScrollY > 0
+				visibility.value.setAvailable(scrollbar && controller.maxScrollY > 0
 					&& controller.viewportHeight > 0);
-				horizontalVisibility.value.setAvailable(horizontal != null
+				horizontalVisibility.value.setAvailable(horizontal
 					&& controller.maxScrollX > 0 && controller.viewportWidth > 0);
 			});
 			viewport.on(UiEventKind.Scroll, event -> {
@@ -317,23 +310,37 @@ class ScrollView implements View {
 			};
 			viewport.on(UiEventKind.KeyDown, handleKey);
 			viewport.on(UiEventKind.KeyRepeat, handleKey);
-			if (scrollbar != null && overlayHost != viewport) {
-				scrollbar.on(UiEventKind.KeyDown, handleKey);
-				scrollbar.on(UiEventKind.KeyRepeat, handleKey);
-				scrollbar.on(UiEventKind.Scroll, event -> {
+			// A scrollbar hosted outside the viewport forwards its keys and wheel to the scroll view.
+			function forwardTo(track:RenderNode):Void {
+				track.on(UiEventKind.KeyDown, handleKey);
+				track.on(UiEventKind.KeyRepeat, handleKey);
+				track.on(UiEventKind.Scroll, event -> {
 					visibility.value.reveal();
 					if (controller.scrollBy(0, event.deltaY)) event.stopPropagation();
 				});
 			}
+			var forward = overlayHost == viewport ? null : forwardTo;
+			if (scrollbar) addScrollbar(context, overlayHost, visibility.value, true, forward);
+			if (horizontal) addScrollbar(context, overlayHost, horizontalVisibility.value, false);
 			return viewport;
 		});
 	}
 
-	/** One scrollbar implementation shares painting, capture and accessibility for both axes. */
-	function addScrollbar(context:BuildContext,
-			viewport:RenderNode,
-			visibility:ScrollbarVisibilityController,
-			vertical:Bool):RenderNode {
+	/**
+	 * Adds a scrollbar to `host`, in a scope of its own that reads the visibility's changes: a fade or hover runs it
+	 * again alone, without rebuilding the scroll view. `forward` adds handlers to its track. One implementation
+	 * shares painting, capture and accessibility for both axes.
+	 */
+	function addScrollbar(context:BuildContext, host:RenderNode, visibility:ScrollbarVisibilityController,
+			vertical:Bool, ?forward:RenderNode->Void):Void {
+		var name = vertical ? "vertical" : "horizontal";
+		host.add(context.build(new TrackedScope(name + "-scrollbar",
+			() -> new ScrollbarBody(c -> buildScrollbar(c, visibility, vertical, forward)))));
+	}
+
+	function buildScrollbar(context:BuildContext, visibility:ScrollbarVisibilityController, vertical:Bool,
+			forward:Null<RenderNode->Void>):RenderNode {
+		visibility.changes.value;
 		var name = vertical ? "vertical" : "horizontal";
 		var trackStyle = new LayoutStyle();
 		trackStyle.positioning = LayoutPositioning.Absolute;
@@ -377,7 +384,6 @@ class ScrollView implements View {
 		visual.hitTestSelf = false;
 		thumb.add(visual);
 		track.add(thumb);
-		viewport.add(track);
 		var maximum = () -> vertical ? controller.maxScrollY : controller.maxScrollX;
 		var offset = () -> vertical ? controller.offsetY : controller.offsetX;
 		var extent = () -> vertical ? controller.viewportHeight : controller.viewportWidth;
@@ -390,7 +396,7 @@ class ScrollView implements View {
 			return Math.max(0.0, vertical ? trackGeometry.height - thumbGeometry.height : trackGeometry.width
 				- thumbGeometry.width);
 		};
-		var updatePaint = () -> {
+		{
 			var opacity = visibility.opacity;
 			var active = visibility.hovered || visibility.dragging || visibility.focused;
 			var color = context.theme.tokens.textSecondary;
@@ -414,16 +420,7 @@ class ScrollView implements View {
 				color.blue,
 				color.alpha * opacity * (visibility.dragging ? 0.85 : active ? 0.65 : 0.4));
 			thumb.hitTestSelf = opacity > 0;
-		};
-		// Fades and hover change only these nodes, so they are edited in place: the frame lays them out and paints them
-		// without rebuilding the view or any cache around it.
-		visibility.attach(context.animations, () -> {
-			context.willEditRetained(track);
-			context.willEditRetained(thumb);
-			context.willEditRetained(visual);
-			updatePaint();
-		});
-		updatePaint();
+		}
 		track.onTargetBubble(UiEventKind.HoverEnter, event -> {
 			if (event.target.equals(track.id)) visibility.setHovered(true);
 		});
@@ -494,6 +491,7 @@ class ScrollView implements View {
 				Math.min(travel(), pointer - thumbExtent * 0.5)) / travel() * maximum());
 			event.preventDefault();
 		});
+		if (forward != null) forward(track);
 		return track;
 	}
 
@@ -654,4 +652,13 @@ private class ScrollbarRange implements haxeon.ui.semantics.Semantics.SemanticsR
 	public function semanticsRangeValue():Float return vertical ? controller.offsetY : controller.offsetX;
 
 	public function semanticsRangeMaximum():Float return vertical ? controller.maxScrollY : controller.maxScrollX;
+}
+
+/** The scrollbar's nodes, built by the scroll view inside the scrollbar's own scope. */
+private class ScrollbarBody implements View {
+	final make:BuildContext->RenderNode;
+
+	public function new(make:BuildContext->RenderNode) this.make = make;
+
+	public function build(context:BuildContext):ViewRoot return make(context);
 }

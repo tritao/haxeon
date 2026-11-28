@@ -134,14 +134,14 @@ class NativeScopeFeedbackMain {
 		source.value = "another value";
 		var rejected = false;
 		try ui.submitCached(() -> view, frame, "live") catch (error:Dynamic) {
-			rejected = Std.string(error).indexOf("changed without willEditRetained") >= 0;
+			rejected = Std.string(error).indexOf("changed outside a build") >= 0;
 		}
 		mounted.layout.style.width = width;
 		mounted.layout.text = "unannounced text";
 		ui.buildContext.requestBindingFrame();
 		var textRejected = false;
 		try ui.submitCached(() -> view, frame, "live") catch (error:Dynamic) {
-			textRejected = Std.string(error).indexOf("changed without willEditRetained") >= 0;
+			textRejected = Std.string(error).indexOf("changed outside a build") >= 0;
 		}
 		ui.dispose();
 		session.dispose();

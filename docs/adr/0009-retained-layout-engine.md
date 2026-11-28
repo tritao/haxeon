@@ -100,7 +100,7 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
 4. Left: layout-time builders for the virtual collections, whose window rebuilds are the build feedback that remains
    (`requestBuildFeedbackBeforeLayout`); the other state-writing callbacks, case by case.
 5. Done: retained relayout, checked against a full solve in verify mode; geometry callbacks only read, which verify mode
-   checks. Left: stage 7's layers delete `willEditRetained`.
+   checks. Stage 7's Haxe half deleted `willEditRetained` and `RetainedAnimation` (ADR 0002).
 
 On the native explorer smoke, 40 of 46 frames lay out once; the others rebuild a virtual window.
 

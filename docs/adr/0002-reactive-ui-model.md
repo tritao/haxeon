@@ -1617,6 +1617,13 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 7. **Retained rendering and layers.** Per-node display-list segments and layer properties; delete `willEditRetained` and
    `RetainedAnimation`.
 
+   Done (2026-11-28), the Haxe half: `willEditRetained` and `RetainedAnimation` are gone. The scheduler rebuilds nothing by
+   itself; an animation changes the view through what it writes (signals and state, a scroll offset layout settles,
+   custom paint reading it), and a style transition step bumps the style revision. The scroll offset settles in layout
+   (ADR 0009) and the scrollbar's fade and hover rerun the scrollbar's own scope. The framework records a node's prior
+   only for its own in-place change, a kept component's root taking a new modifier (`recordPrior`, internal). Left:
+   the native half, layer properties the compositor keeps between frames, so a scroll or fade re-records nothing.
+
    **Survey of in-place edits (2026-11-28).** Every `willEditRetained` call and every `RetainedAnimation`, by what replaces it:
 
    | Edit | Where | What it changes | Replaced by |

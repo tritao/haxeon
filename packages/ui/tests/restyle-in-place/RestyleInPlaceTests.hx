@@ -1142,8 +1142,8 @@ private class PopupHost implements View {
 	}
 
 	/**
-	 * Verify mode reports a geometry callback that edits a node layout already placed, and a callback may not announce an
-	 * edit; reading geometry, or writing state in `afterBuild`, passes.
+	 * Verify mode reports a geometry callback that edits a node layout already placed; reading geometry, or writing state
+	 * in `afterBuild`, passes.
 	 */
 	static function geometryCallbackEdits(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts);
@@ -1162,7 +1162,6 @@ private class PopupHost implements View {
 			node.onResolved(geometry -> {
 				seen = geometry.width;
 				if (mode == "edit") node.layout.style.width = LayoutAxis.fixed(geometry.width + 1.0);
-				if (mode == "announce") context.willEditRetained(node);
 			});
 			context.afterBuild(() -> if (written.value == 0) written.value = 1);
 			return node;
@@ -1174,10 +1173,6 @@ private class PopupHost implements View {
 		ui.submit(build(), frame);
 		check(reported != null && reported.indexOf("Geometry callbacks edited") >= 0,
 			"Verification missed a geometry callback that edited its node: " + reported);
-		mode = "announce";
-		var threw = false;
-		try ui.submit(build(), frame) catch (error:Dynamic) threw = Std.string(error).indexOf("geometry callback") >= 0;
-		check(threw, "A geometry callback announced an edit to a placed node");
 		ui.dispose();
 		Sys.println("PASS geometry callbacks: verify mode reports edits; afterBuild may write state");
 	}
@@ -1279,7 +1274,7 @@ private class PopupHost implements View {
 		unannouncedEdits(fonts);
 	}
 
-	/** With verification on, a node of the submitted tree changed between frames must be announced with willEditRetained. */
+	/** With verification on, a node of the submitted tree changed between frames, outside a build, is reported. */
 	static function unannouncedEdits(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts);
 		var frame = new LayoutFrame(240.0, 120.0);
@@ -1301,15 +1296,10 @@ private class PopupHost implements View {
 		var node:RenderNode = cast text;
 		node.layout.style.positionX = 7.0;
 		submit();
-		check(reported != null && reported.indexOf("without willEditRetained") >= 0,
-			"An unannounced edit was not reported: " + reported);
-		reported = null;
-		ui.buildContext.willEditRetained(node);
-		node.layout.style.positionX = 9.0;
-		submit();
-		check(reported == null, "An announced edit was reported: " + reported);
+		check(reported != null && reported.indexOf("changed outside a build") >= 0,
+			"A change outside a build was not reported: " + reported);
 		ui.dispose();
-		Sys.println("PASS edits: a change to the submitted tree is reported unless announced with willEditRetained");
+		Sys.println("PASS edits: a change to the submitted tree outside a build is reported");
 	}
 
 	/**
@@ -1642,14 +1632,14 @@ private class PopupHost implements View {
 		var root = ui.submitCached(build, frame, "edited-composite");
 		var label = gauge.label(root);
 		gauge.offset = 20;
-		ui.buildContext.willEditRetained(label);
+		@:privateAccess ui.buildContext.recordPrior(label);
 		label.layout.style.transform = haxeon.ui.Transform2D.identity().translated(0, -gauge.offset);
 		// The component runs again in the same frame as the announced edit to its child.
 		gauge.level.value = 2;
 		ui.submitCached(build, frame, "edited-composite");
-		check(ui.verifyRetention(build, frame) == null, "Announced child edit was lost when its component ran again");
+		check(ui.verifyRetention(build, frame) == null, "A recorded child edit was lost when its component ran again");
 		ui.dispose();
-		Sys.println("PASS editing: an announced child edit keeps its original prior when its component also runs again");
+		Sys.println("PASS editing: a recorded child prior survives its component running again");
 	}
 
 	public static function main():Int {

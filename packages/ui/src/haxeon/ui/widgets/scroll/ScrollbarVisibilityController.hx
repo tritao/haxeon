@@ -1,13 +1,14 @@
 package haxeon.ui.widgets.scroll;
 
+import haxeon.reactive.ReactiveRuntime;
+import haxeon.reactive.Signal;
 import haxeon.ui.animation.Animation;
 import haxeon.ui.animation.AnimationScheduler;
 
 import haxeon.ui.widgets.scroll.ScrollView;
 /**
- * Mount-owned scrollbar visibility, independent of scroll geometry and paint. Its changes edit the scrollbar's nodes in place
- * (BuildContext.willEditRetained), so its frames rebuild nothing; they happen at animation ticks and on input, never
- * while geometry callbacks run.
+ * Mount-owned scrollbar visibility, independent of scroll geometry and paint. Its changes, at animation ticks and on
+ * input, bump `changes`, which the scrollbar's own scope reads: a fade frame runs that scope again alone.
  */
 internal class ScrollbarVisibilityController implements DelayedAnimation implements Disposable {
 	static inline var FadeInSeconds:Float = 0.3;
@@ -26,16 +27,23 @@ internal class ScrollbarVisibilityController implements DelayedAnimation impleme
 	var targetOpacity:Float = 0.0;
 	var idleRemaining:Float = 0.0;
 	var scheduler:Null<AnimationScheduler>;
-	var changed:Null<Void->Void>;
+	/**
+	 * Bumped when its opacity or the scrollbar's styling changes outside a build. A change made while the scroll view
+	 * builds needs none: the scrollbar is built again in that same pass.
+	 */
+	public final changes:Signal<Int> = new Signal(0);
 	var source:Null<ScrollController>;
 
 	public function new() {}
 
-	public function attach(clock:AnimationScheduler, notify:Void->Void):Void {
+	public function attach(clock:AnimationScheduler):Void {
 		if (scheduler != null && scheduler != clock) scheduler.remove(this);
 		scheduler = clock;
-		changed = notify;
 		updateAnimation();
+	}
+
+	function notifyChanged():Void {
+		if (!ReactiveRuntime.isTracking()) changes.value = changes.value + 1;
 	}
 
 	public function bindSource(value:ScrollController):Void {
@@ -151,7 +159,7 @@ internal class ScrollbarVisibilityController implements DelayedAnimation impleme
 			updateAnimation();
 		}
 		// Track styling can change independently of the visibility animation.
-		if (opacity == previousOpacity && changed != null) changed();
+		if (opacity == previousOpacity) notifyChanged();
 	}
 
 	function held():Bool return viewportHovered || hovered || dragging || focused;
@@ -212,13 +220,12 @@ internal class ScrollbarVisibilityController implements DelayedAnimation impleme
 	function setOpacity(value:Float):Void {
 		if (value == opacity) return;
 		opacity = value;
-		if (changed != null) changed();
+		notifyChanged();
 	}
 
 	public function dispose():Void {
 		if (scheduler != null) scheduler.remove(this);
 		scheduler = null;
-		changed = null;
 		source = null;
 	}
 }

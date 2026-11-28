@@ -13,7 +13,7 @@ frame, and the framework skips what it can prove unchanged.
   changed; `TrackedScope` makes one from a plain body. The dock's pane and panel caches reuse built subtrees while
   their recorded dependencies match: widget-state values and tracked reads, interaction states included.
 - Components run alone when something their body read changes, and keep their body while their parent describes them
-  with equal inputs; controller edits are announced with `willEditRetained`. A frame with only these builds no view.
+  with equal inputs; nothing changes a submitted node outside a build. A frame with only these builds no view.
   (Self-updating widgets and `RenderNode.reconcile`, the earlier mechanism, are deleted.)
 - Verify mode rebuilds from scratch and compares, so a missed dependency fails the gates instead of showing stale UI.
 - Layout is incremental across the native boundary: only changed nodes are sent and only changed geometry returns.

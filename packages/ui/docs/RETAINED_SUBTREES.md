@@ -63,27 +63,28 @@ states some rule for the node selects on). A body run builds a new root that rep
 never edit a view's root: a build returns a read-only `ViewRoot`, and callers pass a `RootModifier`. Callbacks a body installs call the newest description
 through `BuildContext.latestOf`. Every widget is a component or a plain view built by one.
 
-**In place**: `BuildContext.willEditRetained(node)` before changing a node of the submitted tree directly (scrollbar fades,
-scrolled content, fitted text): the next frame compares it with how it was and lays it out without a rebuild. Animations
-whose frames only do this implement `RetainedAnimation` and do not count as rebuild work. A scroll offset or a fade changes
-every frame from a controller, and running the component (and its state) for it would cost far more than the edit; the
-frame comparison needs only the stand-in of how the node was. Custom paint that reads a node's states as it paints is
-repainted when they change, without a build (`UiContext`: `patchFramePaintNodes`).
+**Nothing changes a submitted node in place.** What changes every frame lives where it is read: a scroll offset settles
+in layout (`LayoutScroll`), a scrollbar's fade and hover rerun the scrollbar's own small scope, and custom paint reads
+animated values as it paints. An animation changes the view only through what it writes (ADR 0002, stage 7); the
+scheduler rebuilds nothing by itself. Custom paint that reads a node's states as it paints is repainted when they
+change, without a build (`UiContext`: `patchFramePaintNodes`). The framework itself records a node's prior when it
+changes one outside a build (a kept component's root taking a new modifier; `BuildContext.recordPrior`, internal).
 
-A frame where only components ran and edits were applied keeps the submitted tree and does not build the view.
+A frame where only components ran keeps the submitted tree and does not build the view.
 
 **Verify mode** is the safety net: `UiContext.verifyRetention` builds the view again with every cache, patch and edit
 bypassed and compares the trees. `verifyRetentionEvery` or `HAXEON_UI_VERIFY_RETENTION=N` runs it every N frames that did work
 and throws on a difference; `app/tools/check-ui-retention.py` runs the editor scenarios that way. While it is on, every node
-is also fingerprinted at the end of a frame, and a node still in the next tree whose fingerprint changed without
-`willEditRetained` or a component run is reported. A stale cache key, quiet update or unannounced edit shows up as a failure instead
-of old UI.
+is also fingerprinted at the end of a frame, and a node still in the next tree whose fingerprint changed outside a build
+is reported, as is a geometry callback that changed a node layout had placed. A stale cache key, quiet update or edit
+outside a build shows up as a failure instead of old UI.
 
 Rules that keep it working:
 
 - Read data a retained build depends on, outside widget state, through signals or `Observable` fields.
 - Read signals directly; reads are tracked and equal writes do not invalidate their readers.
-- Change a node of the submitted tree only after `willEditRetained`, or inside its own component's body.
+- Change a node only while building it, in its own component's body; state a view keeps in line with what it built
+  goes in `BuildContext.afterBuild`, and geometry callbacks only read.
 - Do not write a signal or `State` that already has tracked readers while a tracked build, derived value or effect is running.
 - Dock panels opt into caching with `DockPanelContent.observing`; the cache captures their tracked reads. All editor
   panels declare their external dependencies; `panel-flows` covers them under verify mode.
