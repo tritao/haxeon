@@ -738,7 +738,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			refreshing:Map<String, Bool>):Array<TypedClass> {
 		var parsedByName = [for (decl in parsed) decl.name => decl];
 		return [for (cachedClass in cached) {
-			if (!refreshing.exists(cachedClass.name)) cachedClass else {
+			if (!refreshing.exists(cachedClass.name)) {
+				// A kept class extends what it extended, so the base specialization it names is asked for again.
+				var declaration = parsedByName.get(cachedClass.name);
+				if (declaration != null)
+					requestBaseOwner(declaration, session.representation.erasedNominalSubstitutions(declaration.name));
+				cachedClass;
+			} else {
 				var refreshed = typeClass(parsedByName.get(cachedClass.name), selected),
 					cachedMethods = [for (method in cachedClass.methods) method.name => method];
 				var methods = [
@@ -763,6 +769,19 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				};
 			}
 		}];
+	}
+
+	/**
+	 * The name of the class `classDecl` extends, asked for as a generic owner specialization when its base is one (`class
+	 * Stream extends Source<Failure>`), so its inherited methods are built at those arguments; null without a base.
+	 */
+	function requestBaseOwner(classDecl:AstClass, substitutions:Map<String, CompilerType>):Null<String> {
+		var parsedBase = classDecl.base;
+		if (parsedBase == null)
+			return null;
+		var baseType = session.declarations.resolve(parsedBase, classDecl.span, substitutions),
+			baseSpecialization = session.representation.genericOwner(baseType);
+		return baseSpecialization != null ? baseSpecialization.name : BodyTyper.inheritanceName(parsedBase);
 	}
 
 	static function hasInferredField(declaration:AstClass):Bool {
@@ -983,14 +1002,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		validateDeclaredConformance(classDecl, declaredType, classSemanticSubstitutions);
 		if (specialization == null)
 			session.declarations.validateInferredOverrides(classDecl);
-		var parsedBase = classDecl.base, baseName:Null<String> = null;
-		if (parsedBase != null) {
-			baseName = BodyTyper.inheritanceName(parsedBase);
-			var baseType = session.declarations.resolve(parsedBase, classDecl.span, erasedSubstitutions),
-				baseSpecialization = session.representation.genericOwner(baseType);
-			if (baseSpecialization != null)
-				baseName = baseSpecialization.name;
-		}
+		var baseName = requestBaseOwner(classDecl, erasedSubstitutions);
 		return {
 			name: specialization == null ? classDecl.name : specialization.name,
 			genericParameters: specialization == null ? classDecl.typeParameters : [],
