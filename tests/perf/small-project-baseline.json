@@ -19,7 +19,7 @@
 			"raise_reason": "the VM compiles the whole compile server at startup, and the server program grew 4.8% from a6e8ed9a1 to d0d30ce1c (module-sections writer and linking, query-engine kinds and frames, slice-3 walks, smaller steps over ~200 commits); measured back to back on the recording machine, where d1586e828 and a6e8ed9a1 still reproduce the old baselines within 0.4%; making the module sections the default adds no instructions"
 		},
 		"vm_check_allocated_bytes": {
-			"value": 55596056,
+			"value": 52806432,
 			"tolerance": 0.02,
 			"why": "What the compile server on the VM allocated for the check: deterministic for a given compiler and project."
 		},
@@ -45,7 +45,7 @@
 			"why": "As aot_build_instructions, for a check, which types the project without writing a module."
 		},
 		"aot_check_allocated_bytes": {
-			"value": 32532608,
+			"value": 31392064,
 			"tolerance": 0.02,
 			"why": "What the compile server with haxeon-aot allocated for the check: deterministic for a given compiler and project."
 		},
