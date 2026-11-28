@@ -6,7 +6,8 @@ Date: 2026-11-28
 
 Accepted. Decisions 1 to 3 and 5 to 8 have landed: `haxeon.ui.layout.LayoutSolver` lays each submitted tree out once a
 frame, again only where it changed, and answers hit tests; NativeKit builds the scene from its geometry, Clay is gone,
-and nothing asks for layout feedback. Decision 4 (layout-time builders) remains; the migration below says what is left. It supersedes the layout
+and nothing asks for layout feedback. Decision 4 (layout-time builders) is deferred: measured after retention, the
+build passes it would remove cost about 3% of submit time; the migration below has the numbers. It supersedes the layout
 half of [ADR 0002](0002-reactive-ui-model.md): decision 6 (floating nodes placed after the flow, two-phase layout) and the
 clause that kept Clay "an immediate full solver" until "measurements later show layout as the main remaining cost".
 Anchored placement (`LayoutAnchor`, landed with ADR 0002's decision 6) is kept and now runs in the solver.
@@ -97,8 +98,13 @@ the JIT and allocated nothing, against Clay's 3.3 ms, with sizes differing from 
    and answers hit tests, and the native picker and the render-tree one are deleted.
 3. Done: scroll offsets, reveals and scrollbars settle during layout; truncation (`LayoutNode.truncation`); the anchor's
    sizing, with `SelectionPopup` on it; `requestLayoutFeedback` and the pass loop deleted.
-4. Left: layout-time builders for the virtual collections, whose window rebuilds are the build feedback that remains
-   (`requestBuildFeedbackBeforeLayout`); the other state-writing callbacks, case by case.
+4. Deferred: layout-time builders for the virtual collections, whose window rebuilds are the build feedback that remains
+   (`requestBuildFeedbackBeforeLayout`). They would call the build system during a solve: build rows in the list's saved
+   scope, track their reads to its component, and compare the new subtree after the solve. Measured once layout was
+   retained (2026-11-28, the native explorer smoke, `HAXEON_UI_RENDER_COST=1`, whose submit lines now give each pass):
+   15 extra build passes over 34 frames, each about 0.3 ms to build and 0.1 to 0.4 ms to lay out, 2.8% of submit time
+   warm and 4% cold. Retention made the pass cheap, since it lays out only the list again; builders wait until that
+   share is worth calling into builds mid-solve. The state-writing callbacks moved to `BuildContext.afterBuild`.
 5. Done: retained relayout, checked against a full solve in verify mode; geometry callbacks only read, which verify mode
    checks. Stage 7's Haxe half deleted `willEditRetained` and `RetainedAnimation` (ADR 0002).
 

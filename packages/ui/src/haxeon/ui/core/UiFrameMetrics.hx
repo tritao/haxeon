@@ -263,9 +263,10 @@ internal class RenderCost {
 	}
 
 	public static function submit(started:Float, viewStarted:Float, nativeStarted:Float,
-			nativeEnded:Float, ended:Float, nodes:Int, solves:Int):Void {
+			nativeEnded:Float, ended:Float, nodes:Int, solves:Int, pass:Int):Void {
 		if (!enabled) return;
-		Sys.stderr().writeString('render-cost submit started=$started nodes=$nodes build=${nativeStarted - viewStarted}'
+		Sys.stderr()
+			.writeString('render-cost submit started=$started pass=$pass nodes=$nodes build=${nativeStarted - viewStarted}'
 			+ ' layout=${nativeEnded - nativeStarted} other=${viewStarted - started + ended - nativeEnded}'
 			+ ' solves=$solves edits=${edits.join(",")}\n');
 		edits.resize(0);

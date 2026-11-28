@@ -714,7 +714,7 @@ class UiContext implements Disposable {
 				nativeLayoutStartedAt,
 				nativeLayoutEndedAt,
 				Sys.time(),
-				nodeCount, frameLayoutSolves);
+				nodeCount, frameLayoutSolves, buildFeedbackPass);
 			return submitInternal(frame, cacheKey, build, reconcileNewFocus, buildFeedbackPass + 1);
 		}
 		if (unpublished) {
@@ -827,7 +827,7 @@ class UiContext implements Disposable {
 				nativeLayoutStartedAt,
 				nativeLayoutEndedAt,
 				Sys.time(),
-				nodeCount, frameLayoutSolves);
+				nodeCount, frameLayoutSolves, buildFeedbackPass);
 			// Re-run the original factory: its conditional reads decide which views exist.
 			// A constant view here would replace root subscriptions with only View.build's
 			// reads, leaving later model changes unable to invalidate the cached tree.
@@ -878,7 +878,7 @@ class UiContext implements Disposable {
 			nativeLayoutStartedAt,
 			nativeLayoutEndedAt,
 			submitEndedAt,
-			nodeCount, frameLayoutSolves);
+			nodeCount, frameLayoutSolves, buildFeedbackPass);
 		diagnosticStage = 0;
 		return next;
 	}
